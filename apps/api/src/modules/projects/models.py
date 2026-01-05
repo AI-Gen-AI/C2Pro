@@ -27,8 +27,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.modules.documents.models import Document
+    from src.modules.documents.models import Document, Clause
     from src.modules.analysis.models import Analysis, Alert
+    from src.modules.stakeholders.models import Stakeholder, WBSItem, BOMItem
 
 
 class ProjectStatus(str, Enum):
@@ -121,18 +122,40 @@ class Project(Base):
         lazy="selectin",
         cascade="all, delete-orphan"
     )
-    
+
     analyses: Mapped[list["Analysis"]] = relationship(
         "Analysis",
         back_populates="project",
         lazy="selectin",
         cascade="all, delete-orphan"
     )
-    
+
     alerts: Mapped[list["Alert"]] = relationship(
         "Alert",
         back_populates="project",
         lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+
+    # New relationships (v2.4.0)
+    stakeholders: Mapped[list["Stakeholder"]] = relationship(
+        "Stakeholder",
+        foreign_keys="Stakeholder.project_id",
+        lazy="select",
+        cascade="all, delete-orphan"
+    )
+
+    wbs_items: Mapped[list["WBSItem"]] = relationship(
+        "WBSItem",
+        foreign_keys="WBSItem.project_id",
+        lazy="select",
+        cascade="all, delete-orphan"
+    )
+
+    bom_items: Mapped[list["BOMItem"]] = relationship(
+        "BOMItem",
+        foreign_keys="BOMItem.project_id",
+        lazy="select",
         cascade="all, delete-orphan"
     )
     
