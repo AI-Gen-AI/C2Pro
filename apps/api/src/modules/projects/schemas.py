@@ -311,3 +311,84 @@ class ProjectErrorResponse(BaseModel):
             }
         }
     )
+
+# ===========================================
+# WBS-RELATED SCHEMAS
+# ===========================================
+
+class WBSItemBase(BaseModel):
+    code: str = Field(..., description="WBS code, e.g., '1.1.2'")
+    name: str = Field(..., description="Name of the WBS item")
+    description: str | None = None
+    level: int = Field(..., description="Level in the WBS hierarchy")
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    cost: float | None = None
+
+class WBSItemCreate(WBSItemBase):
+    project_id: UUID
+    parent_id: UUID | None = None
+
+class WBSItemUpdate(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    description: str | None = None
+    level: int | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    cost: float | None = None
+    parent_id: UUID | None = None
+
+class WBSItemResponse(WBSItemBase):
+    id: UUID
+    project_id: UUID
+    parent_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# ===========================================
+# BOM-RELATED SCHEMAS
+# ===========================================
+
+class BOMItemBase(BaseModel):
+    item_code: str | None = Field(None, description="Internal code for the BOM item")
+    item_name: str = Field(..., description="Name of the BOM item")
+    description: str | None = None
+    quantity: float
+    unit: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+    supplier: str | None = None
+    lead_time_days: int | None = None
+    required_on_site_date: datetime | None = None
+
+class BOMItemCreate(BOMItemBase):
+    project_id: UUID
+    wbs_item_id: UUID | None = None
+    contract_clause_id: UUID | None = None
+
+class BOMItemUpdate(BaseModel):
+    item_code: str | None = None
+    item_name: str | None = None
+    description: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+    supplier: str | None = None
+    lead_time_days: int | None = None
+    required_on_site_date: datetime | None = None
+    wbs_item_id: UUID | None = None
+    contract_clause_id: UUID | None = None
+
+class BOMItemResponse(BOMItemBase):
+    id: UUID
+    project_id: UUID
+    wbs_item_id: UUID | None = None
+    contract_clause_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

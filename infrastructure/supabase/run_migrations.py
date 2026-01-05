@@ -225,19 +225,26 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Cargar variables de entorno
-    env_file = f".env.{args.env}" if args.env != "local" else ".env"
+    # Cargar variables de entorno desde la raíz del proyecto
+    project_root = Path(__file__).parent.parent.parent
+    env_file = project_root / (f".env.{args.env}" if args.env != "local" else ".env")
+
+    if not env_file.exists():
+        print(f"ERROR: Archivo de configuracion no encontrado: {env_file}")
+        sys.exit(1)
+
     load_dotenv(env_file)
 
     # Validar confirmación para producción
     if args.env == "production" and not args.confirm:
-        print("❌ ERROR: Se requiere --confirm para ejecutar migraciones en producción")
+        print("ERROR: Se requiere --confirm para ejecutar migraciones en produccion")
         sys.exit(1)
 
     # Obtener database URL
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
-        print("❌ ERROR: DATABASE_URL no está configurado")
+        print("ERROR: DATABASE_URL no esta configurado")
+        print(f"Buscado en: {env_file}")
         sys.exit(1)
 
     # Convertir a asyncpg format si es necesario
@@ -260,17 +267,17 @@ async def main():
     try:
         await runner.connect()
 
-        print(f"\n🚀 Ejecutando migraciones en entorno: {args.env}")
-        print(f"📁 Directorio de migraciones: {migrations_dir}")
+        print(f"\n[*] Ejecutando migraciones en entorno: {args.env}")
+        print(f"[*] Directorio de migraciones: {migrations_dir}")
         print("")
 
         await runner.run_all_pending()
 
-        print("\n✅ Migraciones completadas exitosamente")
+        print("\n[OK] Migraciones completadas exitosamente")
 
     except Exception as e:
         logger.error("migration_error", error=str(e))
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n[ERROR] {e}")
         sys.exit(1)
 
     finally:
