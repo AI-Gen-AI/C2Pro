@@ -1,6 +1,18 @@
-# C2Pro - Contract-to-Procurement Intelligence
+# C2Pro - Contract Intelligence Platform
 
 > Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
+
+## 🎉 Estado Actual: Sprint 1 Completado ✅
+
+**Backend MVP funcional** con autenticación, gestión de proyectos y base de datos configurada.
+
+### 🚀 Comenzar Ahora
+
+**¿Primera vez aquí?** Lee la [Guía de Inicio Rápido](./QUICK_START.md) para poner en marcha el backend en 5 minutos.
+
+**Desarrollador?** Ve a [apps/api/README.md](./apps/api/README.md) para documentación técnica completa.
+
+---
 
 ## 🎯 Problema que Resolvemos
 
@@ -41,13 +53,38 @@ c2pro/
 
 ## 🚀 Quick Start
 
+### Sprint 1 - Backend Foundation (✅ Completado)
+
+```bash
+# 1. Configurar .env con tus credenciales de Supabase
+cp .env.example .env
+# Edita .env y añade tu DATABASE_URL
+
+# 2. Opción A: Script automático (Windows)
+.\scripts\init-backend.bat
+
+# 2. Opción B: Script automático (Linux/Mac)
+chmod +x scripts/init-backend.sh
+./scripts/init-backend.sh
+
+# 2. Opción C: Manual
+cd apps/api
+pip install -r requirements.txt
+python setup.py
+python dev.py
+```
+
+**Accede a:**
+- API: http://localhost:8000
+- Documentación: http://localhost:8000/docs
+- Guía completa: [QUICK_START.md](./QUICK_START.md)
+
 ### Prerrequisitos
 
 - Python 3.11+
-- Node.js 20+
-- Docker & Docker Compose
 - Cuenta en Supabase (free tier)
-- API Key de Anthropic
+- Node.js 20+ (para frontend, próximo sprint)
+- Docker & Docker Compose (opcional, para desarrollo local)
 
 ### 1. Clonar y configurar
 

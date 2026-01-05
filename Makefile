@@ -32,8 +32,19 @@ help: ## Mostrar esta ayuda
 # ===========================================
 # SETUP
 # ===========================================
-setup: ## Setup inicial completo
+setup: ## Setup inicial completo (Supabase)
 	@echo "$(CYAN)🚀 Configurando C2PRO...$(RESET)"
+	@make setup-env
+	@make setup-backend-supabase
+	@echo "$(GREEN)✅ Setup completado!$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Próximos pasos:$(RESET)"
+	@echo "  1. Configura DATABASE_URL en .env con tu password de Supabase"
+	@echo "  2. Ejecuta: make backend-init"
+	@echo "  3. Ejecuta: make backend-dev"
+
+setup-local: ## Setup con Docker local
+	@echo "$(CYAN)🚀 Configurando C2PRO (Docker)...$(RESET)"
 	@make setup-env
 	@make setup-backend
 	@make setup-frontend
@@ -48,10 +59,15 @@ setup-env: ## Crear archivo .env desde ejemplo
 		echo "$(GREEN)✓ Archivo .env ya existe$(RESET)"; \
 	fi
 
-setup-backend: ## Instalar dependencias del backend
+setup-backend: ## Instalar dependencias del backend (Docker)
 	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
-	cd apps/api && python -m venv venv
-	cd apps/api && . venv/bin/activate && pip install -r requirements.txt
+	cd apps/api && python -m venv .venv
+	cd apps/api && . .venv/bin/activate && pip install -r requirements.txt
+
+setup-backend-supabase: ## Instalar dependencias (Supabase cloud)
+	@echo "$(CYAN)📦 Instalando dependencias del backend...$(RESET)"
+	cd apps/api && pip install -r requirements.txt
+	@echo "$(GREEN)✅ Dependencias instaladas$(RESET)"
 
 setup-frontend: ## Instalar dependencias del frontend
 	@echo "$(CYAN)📦 Instalando dependencias del frontend...$(RESET)"
@@ -67,7 +83,7 @@ setup-infra: ## Iniciar servicios de infraestructura
 # ===========================================
 # DEVELOPMENT
 # ===========================================
-dev: ## Iniciar entorno de desarrollo completo
+dev: ## Iniciar entorno de desarrollo (Docker local)
 	@echo "$(CYAN)🚀 Iniciando desarrollo...$(RESET)"
 	@make dev-infra
 	@echo ""
@@ -80,6 +96,14 @@ dev: ## Iniciar entorno de desarrollo completo
 	@echo "  Terminal 1: make dev-api"
 	@echo "  Terminal 2: make dev-web"
 
+backend-init: ## Inicializar backend (setup + migraciones)
+	@echo "$(CYAN)🔧 Inicializando backend...$(RESET)"
+	cd apps/api && python setup.py
+
+backend-dev: ## Iniciar backend en desarrollo (Supabase)
+	@echo "$(CYAN)🚀 Iniciando backend...$(RESET)"
+	cd apps/api && python dev.py
+
 dev-infra: ## Iniciar solo infraestructura
 	docker-compose up -d postgres redis minio
 
@@ -90,13 +114,19 @@ dev-web: ## Iniciar frontend en modo desarrollo
 	cd apps/web && npm run dev
 
 # ===========================================
-# DATABASE
+# DATABASE (Supabase Cloud)
 # ===========================================
 db-migrate: ## Aplicar migraciones
-	cd apps/api && . venv/bin/activate && alembic upgrade head
+	cd apps/api && python migrate.py upgrade
 
 db-migrate-create: ## Crear nueva migración (uso: make db-migrate-create MSG="descripcion")
-	cd apps/api && . venv/bin/activate && alembic revision --autogenerate -m "$(MSG)"
+	cd apps/api && python migrate.py create "$(MSG)"
+
+db-migrate-status: ## Ver estado de migraciones
+	cd apps/api && python migrate.py current
+
+db-migrate-history: ## Ver historial de migraciones
+	cd apps/api && python migrate.py history
 
 db-reset: ## Resetear base de datos (⚠️ destruye datos)
 	docker-compose down -v postgres

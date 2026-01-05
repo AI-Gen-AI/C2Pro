@@ -1,0 +1,23 @@
+{
+  "name": "package.json",
+  "version": "1.0.0",
+  "description": "> Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.",
+  "homepage": "https://github.com/AI-Gen-AI/C2Pro#readme",
+  "bugs": {
+    "url": "https://github.com/AI-Gen-AI/C2Pro/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AI-Gen-AI/C2Pro.git"
+  },
+  "license": "ISC",
+  "author": "AI-Gen",
+  "type": "commonjs",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

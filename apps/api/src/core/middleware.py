@@ -100,7 +100,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                 # En desarrollo, decodificar sin verificar
                 payload = jwt.decode(
                     token,
-                    settings.jwt_secret,
+                    settings.jwt_secret_key,
                     algorithms=[settings.jwt_algorithm],
                     options={"verify_signature": settings.is_production}
                 )
@@ -108,7 +108,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                 # En producción, verificar firma
                 payload = jwt.decode(
                     token,
-                    settings.jwt_secret,
+                    settings.jwt_secret_key,
                     algorithms=[settings.jwt_algorithm],
                 )
             
@@ -298,9 +298,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         # Determinar límite según endpoint
         if "/ai" in path or "/analysis" in path:
-            limit = settings.rate_limit_ai_requests_per_minute
+            limit = 10  # TODO: añadir a settings
         else:
-            limit = settings.rate_limit_requests_per_minute
+            limit = settings.rate_limit_per_minute
         
         # Get requests in window
         if client_id not in self._requests:
