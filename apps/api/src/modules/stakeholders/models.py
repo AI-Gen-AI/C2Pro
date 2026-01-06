@@ -156,8 +156,8 @@ class Stakeholder(Base):
         nullable=True
     )
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Stakeholder Metadata (custom data)
+    stakeholder_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -188,6 +188,7 @@ class Stakeholder(Base):
 
     extracted_from_document: Mapped["Document"] = relationship(
         "Document",
+        back_populates="extracted_stakeholders",
         foreign_keys=[extracted_from_document_id],
         lazy="select"
     )
@@ -302,8 +303,8 @@ class WBSItem(Base):
         index=True  # Cláusula que financia este WBS
     )
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # WBS Metadata (custom data)
+    wbs_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -327,6 +328,7 @@ class WBSItem(Base):
 
     parent: Mapped["WBSItem"] = relationship(
         "WBSItem",
+        back_populates="children",
         remote_side=[id],
         foreign_keys=[parent_id],
         lazy="select"
@@ -341,6 +343,7 @@ class WBSItem(Base):
 
     funded_by_clause: Mapped["Clause"] = relationship(
         "Clause",
+        back_populates="wbs_items",
         foreign_keys=[funded_by_clause_id],
         lazy="selectin"  # Cargar para trazabilidad
     )
@@ -461,8 +464,8 @@ class BOMItem(Base):
         index=True
     )
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # BOM Metadata (custom data)
+    bom_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -492,6 +495,7 @@ class BOMItem(Base):
 
     contract_clause: Mapped["Clause"] = relationship(
         "Clause",
+        back_populates="bom_items",
         foreign_keys=[contract_clause_id],
         lazy="selectin"  # Cargar para trazabilidad
     )

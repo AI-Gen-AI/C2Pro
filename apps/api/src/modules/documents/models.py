@@ -121,8 +121,8 @@ class Document(Base):
     # Retention (ROADMAP §6.1)
     retention_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Document Metadata (custom data)
+    document_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Audit
     created_by: Mapped[UUID | None] = mapped_column(
@@ -160,6 +160,13 @@ class Document(Base):
         back_populates="document",
         lazy="select",
         cascade="all, delete-orphan"
+    )
+
+    extracted_stakeholders: Mapped[list["Stakeholder"]] = relationship(
+        "Stakeholder",
+        back_populates="extracted_from_document",
+        foreign_keys="Stakeholder.extracted_from_document_id",
+        lazy="select"
     )
 
     # Indexes
@@ -304,6 +311,20 @@ class Clause(Base):
         lazy="select"
     )
 
+    wbs_items: Mapped[list["WBSItem"]] = relationship(
+        "WBSItem",
+        back_populates="funded_by_clause",
+        foreign_keys="WBSItem.funded_by_clause_id",
+        lazy="select"
+    )
+
+    bom_items: Mapped[list["BOMItem"]] = relationship(
+        "BOMItem",
+        back_populates="contract_clause",
+        foreign_keys="BOMItem.contract_clause_id",
+        lazy="select"
+    )
+
     # Constraints e Indexes
     __table_args__ = (
         Index("ix_clauses_project", "project_id"),
@@ -314,7 +335,6 @@ class Clause(Base):
         # Constraint único: solo una cláusula con mismo código por documento
         {
             "info": {"rls_policy": "tenant_isolation"},
-            "postgresql_where": None  # Para permitir partial indexes en el futuro
         },
     )
 
@@ -354,4 +374,6 @@ class Clause(Base):
         return (
             len(self.alerts) > 0
             or len(self.stakeholders) > 0
+            or len(self.wbs_items) > 0
+            or len(self.bom_items) > 0
         )
