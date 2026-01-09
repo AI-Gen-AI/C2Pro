@@ -4,22 +4,26 @@ C2Pro - Authentication Models
 Modelos SQLAlchemy para usuarios y tenants (multi-tenancy).
 """
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column,
-    String,
     Boolean,
     DateTime,
     Float,
     ForeignKey,
-    Enum as SQLEnum,
     Index,
+    String,
+    event,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
 
 class SubscriptionPlan(str, Enum):
     """Planes de suscripción disponibles."""
+
     FREE = "free"
     STARTER = "starter"
     PROFESSIONAL = "professional"
@@ -38,10 +43,11 @@ class SubscriptionPlan(str, Enum):
 
 class UserRole(str, Enum):
     """Roles de usuario."""
-    ADMIN = "admin"          # Administrador del tenant
-    USER = "user"            # Usuario estándar
-    VIEWER = "viewer"        # Solo lectura
-    API = "api"              # Usuario para integraciones API
+
+    ADMIN = "admin"  # Administrador del tenant
+    USER = "user"  # Usuario estándar
+    VIEWER = "viewer"  # Solo lectura
+    API = "api"  # Usuario para integraciones API
 
 
 class Tenant(Base):
@@ -55,68 +61,33 @@ class Tenant(Base):
     __tablename__ = "tenants"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Basic info
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        unique=True,
-        index=True
-    )
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
 
     # Subscription
     subscription_plan: Mapped[SubscriptionPlan] = mapped_column(
-        SQLEnum(SubscriptionPlan),
-        default=SubscriptionPlan.FREE
+        SQLEnum(SubscriptionPlan, values_callable=lambda obj: [e.value for e in obj]),
+        default=SubscriptionPlan.FREE,
     )
     subscription_status: Mapped[str] = mapped_column(
         String(50),
-        default="active"  # active, suspended, cancelled
+        default="active",  # active, suspended, cancelled
     )
-    subscription_started_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True
-    )
-    subscription_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True
-    )
+    subscription_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # AI Budget Control
-    ai_budget_monthly: Mapped[float] = mapped_column(
-        Float,
-        default=50.0,
-        nullable=False
-    )
-    ai_spend_current: Mapped[float] = mapped_column(
-        Float,
-        default=0.0,
-        nullable=False
-    )
-    ai_spend_last_reset: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True
-    )
+    ai_budget_monthly: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    ai_spend_current: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    ai_spend_last_reset: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Usage limits (basados en plan)
-    max_projects: Mapped[int] = mapped_column(
-        default=5,
-        nullable=False
-    )
-    max_users: Mapped[int] = mapped_column(
-        default=3,
-        nullable=False
-    )
-    max_storage_gb: Mapped[int] = mapped_column(
-        default=10,
-        nullable=False
-    )
+    max_projects: Mapped[int] = mapped_column(default=5, nullable=False)
+    max_users: Mapped[int] = mapped_column(default=3, nullable=False)
+    max_storage_gb: Mapped[int] = mapped_column(default=10, nullable=False)
 
     # Settings
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -125,31 +96,18 @@ class Tenant(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
     users: Mapped[list["User"]] = relationship(
-        "User",
-        back_populates="tenant",
-        lazy="selectin",
-        cascade="all, delete-orphan"
+        "User", back_populates="tenant", lazy="selectin", cascade="all, delete-orphan"
     )
 
     projects: Mapped[list["Project"]] = relationship(
-        "Project",
-        foreign_keys="Project.tenant_id",
-        lazy="select",
-        cascade="all, delete-orphan"
+        "Project", foreign_keys="Project.tenant_id", lazy="select", cascade="all, delete-orphan"
     )
 
     # Indexes
@@ -195,41 +153,29 @@ class User(Base):
     __tablename__ = "users"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Tenant relationship (CRÍTICO para multi-tenancy)
     tenant_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Authentication
-    email: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        unique=True,
-        index=True
-    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     hashed_password: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=True  # Nullable si usa OAuth
+        nullable=True,  # Nullable si usa OAuth
     )
 
     # OAuth (opcional - para integración futura)
     oauth_provider: Mapped[str | None] = mapped_column(
         String(50),
-        nullable=True  # google, github, etc.
+        nullable=True,  # google, github, etc.
     )
-    oauth_id: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
-    )
+    oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Profile
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -239,17 +185,13 @@ class User(Base):
 
     # Role & Permissions
     role: Mapped[UserRole] = mapped_column(
-        SQLEnum(UserRole),
-        default=UserRole.USER
+        SQLEnum(UserRole, values_callable=lambda obj: [e.value for e in obj]), default=UserRole.USER
     )
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    email_verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True
-    )
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Activity tracking
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -260,24 +202,13 @@ class User(Base):
     preferences: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
-    tenant: Mapped["Tenant"] = relationship(
-        "Tenant",
-        back_populates="users",
-        lazy="selectin"
-    )
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users", lazy="selectin")
 
     # Indexes
     __table_args__ = (
@@ -331,3 +262,25 @@ class User(Base):
     def update_last_activity(self) -> None:
         """Actualiza el timestamp de última actividad."""
         self.last_activity = datetime.utcnow()
+
+
+# Event listeners
+def _generate_slug_from_name(name: str) -> str:
+    """
+    Genera un slug válido a partir de un nombre.
+
+    - Convierte a minúsculas
+    - Reemplaza espacios y caracteres especiales con guiones
+    - Elimina guiones múltiples
+    """
+    slug = name.lower()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[-\s]+", "-", slug)
+    return slug.strip("-")
+
+
+@event.listens_for(Tenant, "before_insert")
+def generate_tenant_slug(mapper, connection, target):
+    """Auto-genera el slug si no se proporciona."""
+    if not target.slug:
+        target.slug = _generate_slug_from_name(target.name)

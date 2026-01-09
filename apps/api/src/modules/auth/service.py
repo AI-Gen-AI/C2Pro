@@ -4,35 +4,33 @@ C2Pro - Authentication Service
 Lógica de negocio para autenticación y gestión de usuarios.
 """
 
-from datetime import datetime, timedelta
-from typing import Tuple
-from uuid import UUID
 import secrets
 import string
+from datetime import datetime, timedelta
+from uuid import UUID
 
-from passlib.context import CryptContext
+import structlog
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
 from src.config import settings
 from src.core.exceptions import (
     AuthenticationError,
-    ValidationError,
-    NotFoundError,
     ConflictError,
+    NotFoundError,
 )
-from src.modules.auth.models import User, Tenant, UserRole, SubscriptionPlan
+from src.modules.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.modules.auth.schemas import (
-    RegisterRequest,
     LoginRequest,
+    LoginResponse,
+    RegisterRequest,
+    RegisterResponse,
+    TenantResponse,
+    TokenPayload,
     TokenResponse,
     UserResponse,
-    TenantResponse,
-    LoginResponse,
-    RegisterResponse,
-    TokenPayload,
 )
 
 logger = structlog.get_logger()
@@ -42,9 +40,7 @@ logger = structlog.get_logger()
 # ===========================================
 
 pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=settings.bcrypt_rounds
+    schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.bcrypt_rounds
 )
 
 
@@ -79,12 +75,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT TOKEN GENERATION
 # ===========================================
 
+
 def create_access_token(
     user_id: UUID,
     tenant_id: UUID,
     email: str,
     role: UserRole,
-    expires_delta: timedelta | None = None
+    expires_delta: timedelta | None = None,
 ) -> str:
     """
     Crea JWT access token.
@@ -111,24 +108,21 @@ def create_access_token(
         "role": role.value,
         "exp": expire,
         "iat": datetime.utcnow(),
-        "type": "access"
+        "type": "access",
     }
 
-    encoded_jwt = jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm
-    )
+    encoded_jwt = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
     return encoded_jwt
 
 
-def create_refresh_token(user_id: UUID) -> str:
+def create_refresh_token(user_id: UUID, tenant_id: UUID) -> str:
     """
     Crea JWT refresh token.
 
     Args:
         user_id: ID del usuario
+        tenant_id: ID del tenant (necesario para generar nuevos access tokens)
 
     Returns:
         Token JWT firmado
@@ -138,16 +132,13 @@ def create_refresh_token(user_id: UUID) -> str:
 
     payload = {
         "sub": str(user_id),
+        "tenant_id": str(tenant_id),
         "exp": expire,
         "iat": datetime.utcnow(),
-        "type": "refresh"
+        "type": "refresh",
     }
 
-    encoded_jwt = jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm
-    )
+    encoded_jwt = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
     return encoded_jwt
 
@@ -166,11 +157,7 @@ def decode_token(token: str) -> TokenPayload:
         AuthenticationError: Si el token es inválido
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
 
         user_id = UUID(payload.get("sub"))
         tenant_id = UUID(payload.get("tenant_id"))
@@ -180,12 +167,7 @@ def decode_token(token: str) -> TokenPayload:
         iat = datetime.fromtimestamp(payload.get("iat"))
 
         return TokenPayload(
-            sub=user_id,
-            tenant_id=tenant_id,
-            email=email,
-            role=role,
-            exp=exp,
-            iat=iat
+            sub=user_id, tenant_id=tenant_id, email=email, role=role, exp=exp, iat=iat
         )
 
     except JWTError as e:
@@ -199,6 +181,7 @@ def decode_token(token: str) -> TokenPayload:
 # ===========================================
 # HELPER FUNCTIONS
 # ===========================================
+
 
 def generate_tenant_slug(name: str) -> str:
     """
@@ -226,8 +209,7 @@ def generate_tenant_slug(name: str) -> str:
 
     # Añadir random suffix para unicidad
     random_suffix = "".join(
-        secrets.choice(string.ascii_lowercase + string.digits)
-        for _ in range(6)
+        secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6)
     )
 
     return f"{slug}-{random_suffix}"
@@ -244,9 +226,7 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     Returns:
         Usuario si existe, None si no
     """
-    result = await db.execute(
-        select(User).where(User.email == email)
-    )
+    result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
 
 
@@ -261,9 +241,7 @@ async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
     Returns:
         Usuario si existe, None si no
     """
-    result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
 
 
@@ -271,14 +249,12 @@ async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
 # AUTHENTICATION SERVICE
 # ===========================================
 
+
 class AuthService:
     """Servicio de autenticación."""
 
     @staticmethod
-    async def register(
-        db: AsyncSession,
-        request: RegisterRequest
-    ) -> RegisterResponse:
+    async def register(db: AsyncSession, request: RegisterRequest) -> RegisterResponse:
         """
         Registra nuevo usuario y crea tenant.
 
@@ -337,27 +313,21 @@ class AuthService:
             await db.refresh(tenant)
 
             logger.info(
-                "user_registered",
-                user_id=str(user.id),
-                tenant_id=str(tenant.id),
-                email=user.email
+                "user_registered", user_id=str(user.id), tenant_id=str(tenant.id), email=user.email
             )
 
             # 3. Generar tokens
             access_token = create_access_token(
-                user_id=user.id,
-                tenant_id=tenant.id,
-                email=user.email,
-                role=user.role
+                user_id=user.id, tenant_id=tenant.id, email=user.email, role=user.role
             )
 
-            refresh_token = create_refresh_token(user_id=user.id)
+            refresh_token = create_refresh_token(user_id=user.id, tenant_id=tenant.id)
 
             tokens = TokenResponse(
                 access_token=access_token,
                 token_type="bearer",
                 expires_in=settings.jwt_access_token_expire_minutes * 60,
-                refresh_token=refresh_token
+                refresh_token=refresh_token,
             )
 
             # 4. Actualizar last_login
@@ -368,7 +338,7 @@ class AuthService:
                 user=UserResponse.model_validate(user),
                 tenant=TenantResponse.model_validate(tenant),
                 tokens=tokens,
-                message="Registration successful. Please verify your email."
+                message="Registration successful. Please verify your email.",
             )
 
         except Exception as e:
@@ -377,10 +347,7 @@ class AuthService:
             raise
 
     @staticmethod
-    async def login(
-        db: AsyncSession,
-        request: LoginRequest
-    ) -> LoginResponse:
+    async def login(db: AsyncSession, request: LoginRequest) -> LoginResponse:
         """
         Autentica usuario y retorna tokens.
 
@@ -422,19 +389,16 @@ class AuthService:
 
         # 5. Generar tokens
         access_token = create_access_token(
-            user_id=user.id,
-            tenant_id=user.tenant_id,
-            email=user.email,
-            role=user.role
+            user_id=user.id, tenant_id=user.tenant_id, email=user.email, role=user.role
         )
 
-        refresh_token = create_refresh_token(user_id=user.id)
+        refresh_token = create_refresh_token(user_id=user.id, tenant_id=user.tenant_id)
 
         tokens = TokenResponse(
             access_token=access_token,
             token_type="bearer",
             expires_in=settings.jwt_access_token_expire_minutes * 60,
-            refresh_token=refresh_token
+            refresh_token=refresh_token,
         )
 
         # 6. Actualizar last_login
@@ -446,14 +410,11 @@ class AuthService:
         return LoginResponse(
             user=UserResponse.model_validate(user),
             tenant=TenantResponse.model_validate(user.tenant),
-            tokens=tokens
+            tokens=tokens,
         )
 
     @staticmethod
-    async def get_current_user(
-        db: AsyncSession,
-        user_id: UUID
-    ) -> User:
+    async def get_current_user(db: AsyncSession, user_id: UUID) -> User:
         """
         Obtiene usuario actual por ID.
 
@@ -482,10 +443,7 @@ class AuthService:
         return user
 
     @staticmethod
-    async def refresh_access_token(
-        db: AsyncSession,
-        refresh_token: str
-    ) -> TokenResponse:
+    async def refresh_access_token(db: AsyncSession, refresh_token: str) -> TokenResponse:
         """
         Refresca access token usando refresh token.
 
@@ -497,41 +455,74 @@ class AuthService:
             Nuevos tokens
 
         Raises:
-            AuthenticationError: Si el token es inválido
+            AuthenticationError: Si el token es inválido o expirado
         """
         try:
-            # Decodificar refresh token
+            # Decodificar y VERIFICAR refresh token
+            # Esto valida automáticamente la firma y expiración
             payload = jwt.decode(
                 refresh_token,
                 settings.jwt_secret_key,
-                algorithms=[settings.jwt_algorithm]
+                algorithms=[settings.jwt_algorithm],
+                options={"verify_signature": True, "verify_exp": True},
             )
 
-            if payload.get("type") != "refresh":
-                raise AuthenticationError("Invalid token type")
+            # Verificar que sea un refresh token
+            token_type = payload.get("type")
+            if token_type != "refresh":
+                logger.warning("wrong_token_type", type=token_type)
+                raise AuthenticationError("Invalid token type, expected 'refresh'")
 
+            # Extraer user_id y tenant_id
             user_id = UUID(payload.get("sub"))
+            tenant_id = UUID(payload.get("tenant_id"))
 
-            # Obtener usuario
+            # Obtener usuario y validar
             user = await get_user_by_id(db, user_id)
 
-            if not user or not user.is_active:
+            if not user:
+                logger.warning("user_not_found", user_id=str(user_id))
+                raise AuthenticationError("User not found")
+
+            if not user.is_active:
+                logger.warning("user_inactive", user_id=str(user_id))
+                raise AuthenticationError("User account is inactive")
+
+            # Verificar que tenant_id del token coincida con el del usuario
+            if user.tenant_id != tenant_id:
+                logger.warning(
+                    "tenant_mismatch", token_tenant=str(tenant_id), user_tenant=str(user.tenant_id)
+                )
                 raise AuthenticationError("Invalid token")
 
-            # Generar nuevo access token
+            # Verificar que el tenant esté activo
+            if not user.tenant or not user.tenant.is_active:
+                logger.warning("tenant_inactive", tenant_id=str(tenant_id))
+                raise AuthenticationError("Organization account is inactive")
+
+            # Generar nuevo access token y refresh token (token rotation)
             access_token = create_access_token(
-                user_id=user.id,
-                tenant_id=user.tenant_id,
-                email=user.email,
-                role=user.role
+                user_id=user.id, tenant_id=user.tenant_id, email=user.email, role=user.role
             )
+
+            # También generar nuevo refresh token (best practice: token rotation)
+            new_refresh_token = create_refresh_token(user_id=user.id, tenant_id=user.tenant_id)
+
+            logger.info("access_token_refreshed", user_id=str(user_id), tenant_id=str(tenant_id))
 
             return TokenResponse(
                 access_token=access_token,
                 token_type="bearer",
-                expires_in=settings.jwt_access_token_expire_minutes * 60
+                expires_in=settings.jwt_access_token_expire_minutes * 60,
+                refresh_token=new_refresh_token,
             )
 
+        except jwt.ExpiredSignatureError:
+            logger.warning("refresh_token_expired")
+            raise AuthenticationError("Token has expired")
         except JWTError as e:
-            logger.warning("refresh_token_error", error=str(e))
-            raise AuthenticationError("Invalid refresh token")
+            logger.warning("refresh_token_invalid", error=str(e))
+            raise AuthenticationError("Invalid authentication credentials")
+        except ValueError as e:
+            logger.warning("invalid_uuid_in_token", error=str(e))
+            raise AuthenticationError("Invalid token format")

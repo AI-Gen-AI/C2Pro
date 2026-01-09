@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(PYTHONPATH=. timeout 60 pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker --version:*)",
+      "Bash(docker info:*)",
+      "Bash(pip install:*)",
+      "Bash(python run_migrations.py:*)",
+      "Bash(docker exec:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

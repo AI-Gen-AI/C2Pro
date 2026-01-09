@@ -40,10 +40,11 @@ structlog==24.1.0
 prometheus-client==0.19.0
 
 # HTTP Client
-httpx==0.26.0
+httpx==0.28.1
 
 # Utilities
 lark==1.1.9
+pyyaml==6.0.1 # For Coherence Engine rules
 python-dotenv==1.0.1
 orjson==3.9.13
 tenacity==8.2.3  # Retry logic
@@ -52,8 +53,8 @@ tenacity==8.2.3  # Retry logic
 pytest==8.0.0
 pytest-asyncio==0.23.4
 pytest-cov==4.1.0
-httpx==0.26.0  # For TestClient
 factory-boy==3.3.0
+Faker==40.1.0  # For factory-boy
 
 # Linting & Formatting
 ruff==0.2.1
@@ -62,3 +63,4 @@ mypy==1.8.0
 # Type stubs
 types-redis==4.6.0.20240106
 types-passlib==1.7.7.20240106
+asgi-lifespan==2.1.0

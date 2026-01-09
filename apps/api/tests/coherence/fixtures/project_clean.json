@@ -1,0 +1,33 @@
+{
+  "id": "project-clean-001",
+  "clauses": [
+    {
+      "id": "clause-b-001",
+      "text": "The project budget is 100,000 USD, with current spend at 95,000 USD.",
+      "data": {
+        "planned": 100000,
+        "current": 95000,
+        "currency": "USD",
+        "type": "budget_summary"
+      }
+    },
+    {
+      "id": "clause-s-001",
+      "text": "Project schedule status: on-track. End date: 2025-12-31.",
+      "data": {
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31",
+        "status": "on-track",
+        "type": "schedule_summary"
+      }
+    },
+    {
+      "id": "clause-c-001",
+      "text": "Last contract review was on 2025-11-15.",
+      "data": {
+        "last_review_date": "2025-11-15",
+        "type": "contract_terms"
+      }
+    }
+  ]
+}

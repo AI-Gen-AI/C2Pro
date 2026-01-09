@@ -4,28 +4,27 @@ C2Pro - Projects Router
 Endpoints para gestión de proyectos.
 """
 
-from typing import Annotated
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
-from src.core.security import CurrentUserId, CurrentTenantId
-from src.core.exceptions import NotFoundError, ConflictError, ValidationError
-from src.modules.projects.service import ProjectService
+from src.core.exceptions import ConflictError, NotFoundError, ValidationError
+from src.core.security import CurrentTenantId, CurrentUserId
+from src.core.validation import sanitize_search_query
+from src.modules.projects.models import ProjectStatus, ProjectType
 from src.modules.projects.schemas import (
     ProjectCreateRequest,
-    ProjectUpdateRequest,
     ProjectDetailResponse,
+    ProjectErrorResponse,
+    ProjectFilters,
     ProjectListResponse,
     ProjectStatsResponse,
-    ProjectFilters,
-    ProjectErrorResponse,
+    ProjectUpdateRequest,
 )
-from src.modules.projects.models import ProjectStatus, ProjectType
-
-import structlog
+from src.modules.projects.service import ProjectService
 
 logger = structlog.get_logger()
 
@@ -39,18 +38,19 @@ router = APIRouter(
     responses={
         401: {
             "description": "Unauthorized - Authentication required",
-            "model": ProjectErrorResponse
+            "model": ProjectErrorResponse,
         },
         404: {
             "description": "Not Found - Project doesn't exist or access denied",
-            "model": ProjectErrorResponse
-        }
-    }
+            "model": ProjectErrorResponse,
+        },
+    },
 )
 
 # ===========================================
 # ENDPOINTS
 # ===========================================
+
 
 @router.post(
     "",
@@ -71,45 +71,68 @@ router = APIRouter(
     responses={
         201: {"description": "Project created successfully"},
         409: {"description": "Project with this code already exists"},
-        422: {"description": "Validation error"}
-    }
+        422: {"description": "Validation error"},
+    },
 )
 async def create_project(
     request: ProjectCreateRequest,
     tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Crea nuevo proyecto para la organización del usuario autenticado.
     """
     try:
         project = await ProjectService.create_project(
-            db=db,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            request=request
+            db=db, tenant_id=tenant_id, user_id=user_id, request=request
         )
 
         logger.info(
             "project_created_via_api",
             project_id=str(project.id),
             tenant_id=str(tenant_id),
-            user_id=str(user_id)
+            user_id=str(user_id),
         )
 
         return ProjectDetailResponse.model_validate(project)
 
     except ConflictError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+async def _list_projects_impl(
+    tenant_id: CurrentTenantId,
+    db: AsyncSession,
+    page: int,
+    page_size: int,
+    search: str | None,
+    status: ProjectStatus | None,
+    project_type: ProjectType | None,
+    min_coherence_score: int | None,
+    max_coherence_score: int | None,
+):
+    """
+    Implementación compartida para list_projects.
+    """
+    # Sanitizar búsqueda para prevenir SQL injection
+    sanitized_search = sanitize_search_query(search) if search else None
+
+    filters = ProjectFilters(
+        search=sanitized_search,
+        status=status,
+        project_type=project_type,
+        min_coherence_score=min_coherence_score,
+        max_coherence_score=max_coherence_score,
+    )
+
+    response = await ProjectService.list_projects(
+        db=db, tenant_id=tenant_id, page=page, page_size=page_size, filters=filters
+    )
+
+    return response
 
 
 @router.get(
@@ -130,9 +153,7 @@ async def create_project(
     - Default page size: 20
     - Maximum page size: 100
     """,
-    responses={
-        200: {"description": "Projects retrieved successfully"}
-    }
+    responses={200: {"description": "Projects retrieved successfully"}},
 )
 async def list_projects(
     tenant_id: CurrentTenantId,
@@ -148,23 +169,52 @@ async def list_projects(
     """
     Lista proyectos con paginación y filtros.
     """
-    filters = ProjectFilters(
-        search=search,
-        status=status,
-        project_type=project_type,
-        min_coherence_score=min_coherence_score,
-        max_coherence_score=max_coherence_score
+    return await _list_projects_impl(
+        tenant_id,
+        db,
+        page,
+        page_size,
+        search,
+        status,
+        project_type,
+        min_coherence_score,
+        max_coherence_score,
     )
 
-    response = await ProjectService.list_projects(
-        db=db,
-        tenant_id=tenant_id,
-        page=page,
-        page_size=page_size,
-        filters=filters
-    )
 
-    return response
+@router.get(
+    "/",
+    response_model=ProjectListResponse,
+    summary="List projects (with trailing slash)",
+    description="Same as GET /projects but accepts trailing slash.",
+    responses={200: {"description": "Projects retrieved successfully"}},
+    include_in_schema=False,  # Hide from docs to avoid duplication
+)
+async def list_projects_slash(
+    tenant_id: CurrentTenantId,
+    db: AsyncSession = Depends(get_session),
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(default=None, description="Search in name, description, code"),
+    status: ProjectStatus | None = Query(default=None, description="Filter by status"),
+    project_type: ProjectType | None = Query(default=None, description="Filter by type"),
+    min_coherence_score: int | None = Query(default=None, ge=0, le=100),
+    max_coherence_score: int | None = Query(default=None, ge=0, le=100),
+):
+    """
+    Lista proyectos con paginación y filtros (con trailing slash).
+    """
+    return await _list_projects_impl(
+        tenant_id,
+        db,
+        page,
+        page_size,
+        search,
+        status,
+        project_type,
+        min_coherence_score,
+        max_coherence_score,
+    )
 
 
 @router.get(
@@ -180,14 +230,9 @@ async def list_projects(
     - Average coherence score
     - Total alerts by severity
     """,
-    responses={
-        200: {"description": "Statistics retrieved successfully"}
-    }
+    responses={200: {"description": "Statistics retrieved successfully"}},
 )
-async def get_project_stats(
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session)
-):
+async def get_project_stats(tenant_id: CurrentTenantId, db: AsyncSession = Depends(get_session)):
     """
     Obtiene estadísticas de proyectos de la organización.
     """
@@ -211,31 +256,24 @@ async def get_project_stats(
     """,
     responses={
         200: {"description": "Project retrieved successfully"},
-        404: {"description": "Project not found or access denied"}
-    }
+        404: {"description": "Project not found or access denied"},
+    },
 )
 async def get_project(
-    project_id: UUID,
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session)
+    project_id: UUID, tenant_id: CurrentTenantId, db: AsyncSession = Depends(get_session)
 ):
     """
     Obtiene detalles de un proyecto específico.
     """
     try:
         project = await ProjectService.get_project(
-            db=db,
-            project_id=project_id,
-            tenant_id=tenant_id
+            db=db, project_id=project_id, tenant_id=tenant_id
         )
 
         return ProjectDetailResponse.model_validate(project)
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put(
@@ -254,49 +292,33 @@ async def get_project(
         200: {"description": "Project updated successfully"},
         404: {"description": "Project not found or access denied"},
         409: {"description": "Project code conflict"},
-        422: {"description": "Validation error"}
-    }
+        422: {"description": "Validation error"},
+    },
 )
 async def update_project(
     project_id: UUID,
     request: ProjectUpdateRequest,
     tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Actualiza un proyecto existente.
     """
     try:
         project = await ProjectService.update_project(
-            db=db,
-            project_id=project_id,
-            tenant_id=tenant_id,
-            request=request
+            db=db, project_id=project_id, tenant_id=tenant_id, request=request
         )
 
-        logger.info(
-            "project_updated_via_api",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_updated_via_api", project_id=str(project_id), tenant_id=str(tenant_id))
 
         return ProjectDetailResponse.model_validate(project)
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.delete(
@@ -313,13 +335,11 @@ async def update_project(
     """,
     responses={
         204: {"description": "Project deleted successfully"},
-        404: {"description": "Project not found or access denied"}
-    }
+        404: {"description": "Project not found or access denied"},
+    },
 )
 async def delete_project(
-    project_id: UUID,
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session)
+    project_id: UUID, tenant_id: CurrentTenantId, db: AsyncSession = Depends(get_session)
 ):
     """
     Elimina un proyecto permanentemente.
@@ -327,30 +347,20 @@ async def delete_project(
     ADVERTENCIA: Esta acción no se puede deshacer.
     """
     try:
-        await ProjectService.delete_project(
-            db=db,
-            project_id=project_id,
-            tenant_id=tenant_id
-        )
+        await ProjectService.delete_project(db=db, project_id=project_id, tenant_id=tenant_id)
 
-        logger.info(
-            "project_deleted_via_api",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_deleted_via_api", project_id=str(project_id), tenant_id=str(tenant_id))
 
         return None
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ===========================================
 # STATUS MANAGEMENT
 # ===========================================
+
 
 @router.patch(
     "/{project_id}/status",
@@ -371,14 +381,14 @@ async def delete_project(
     responses={
         200: {"description": "Status updated successfully"},
         404: {"description": "Project not found or access denied"},
-        422: {"description": "Invalid status transition"}
-    }
+        422: {"description": "Invalid status transition"},
+    },
 )
 async def update_project_status(
     project_id: UUID,
     new_status: ProjectStatus,
     tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Actualiza solo el estado de un proyecto.
@@ -386,57 +396,45 @@ async def update_project_status(
     try:
         # Obtener proyecto
         project = await ProjectService.get_project(
-            db=db,
-            project_id=project_id,
-            tenant_id=tenant_id
+            db=db, project_id=project_id, tenant_id=tenant_id
         )
 
         # Validaciones de transición
         if new_status == ProjectStatus.ACTIVE:
             if not project.has_contract:
-                raise ValidationError(
-                    "Cannot activate project without contract document"
-                )
+                raise ValidationError("Cannot activate project without contract document")
 
         # Actualizar estado
         request = ProjectUpdateRequest(status=new_status)
         updated_project = await ProjectService.update_project(
-            db=db,
-            project_id=project_id,
-            tenant_id=tenant_id,
-            request=request
+            db=db, project_id=project_id, tenant_id=tenant_id, request=request
         )
 
         logger.info(
             "project_status_updated",
             project_id=str(project_id),
             old_status=project.status.value,
-            new_status=new_status.value
+            new_status=new_status.value,
         )
 
         return ProjectDetailResponse.model_validate(updated_project)
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 # ===========================================
 # HEALTH CHECK
 # ===========================================
 
+
 @router.get(
     "/health",
     summary="Health check",
     description="Simple health check endpoint for projects service",
-    include_in_schema=False
+    include_in_schema=False,
 )
 async def health():
     """Health check para el servicio de proyectos."""

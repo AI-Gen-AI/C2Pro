@@ -1,0 +1,28 @@
+{
+  "id": "calibration-minor-002",
+  "clauses": [
+    {
+      "id": "clause-b-min-001",
+      "text": "The project budget is 120,000 EUR, with current spend at 110,000 EUR.",
+      "data": {
+        "planned": 120000,
+        "current": 110000,
+        "currency": "EUR"
+      }
+    },
+    {
+      "id": "clause-s-min-001",
+      "text": "Project schedule status: delayed. Revised end date: 2025-11-30.",
+      "data": {
+        "status": "delayed"
+      }
+    },
+    {
+      "id": "clause-c-min-001",
+      "text": "Last contract review was on 2024-03-01.",
+      "data": {
+        "last_review_date": "2024-03-01"
+      }
+    }
+  ]
+}

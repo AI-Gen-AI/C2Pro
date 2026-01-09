@@ -6,37 +6,39 @@ TODOS incluyen FKs a clauses para trazabilidad legal (ROADMAP §4.5, §5.3).
 """
 
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
-from decimal import Decimal
 
 from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    Integer,
-    Numeric,
     Boolean,
     DateTime,
     ForeignKey,
-    Enum as SQLEnum,
     Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.modules.projects.models import Project
-    from src.modules.documents.models import Clause, Document
     from src.modules.auth.models import User
-    from src.modules.analysis.models import Alert
+    from src.modules.documents.models import Clause, Document
+    from src.modules.projects.models import Project
 
 
 class PowerLevel(str, Enum):
     """Nivel de poder del stakeholder."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -44,6 +46,7 @@ class PowerLevel(str, Enum):
 
 class InterestLevel(str, Enum):
     """Nivel de interés del stakeholder."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -51,22 +54,25 @@ class InterestLevel(str, Enum):
 
 class StakeholderQuadrant(str, Enum):
     """Cuadrante poder/interés (ROADMAP §4.5)."""
-    KEY_PLAYER = "key_player"           # high/high
-    KEEP_SATISFIED = "keep_satisfied"   # high/low
-    KEEP_INFORMED = "keep_informed"     # low/high
-    MONITOR = "monitor"                 # low/low
+
+    KEY_PLAYER = "key_player"  # high/high
+    KEEP_SATISFIED = "keep_satisfied"  # high/low
+    KEEP_INFORMED = "keep_informed"  # low/high
+    MONITOR = "monitor"  # low/low
 
 
 class RACIRole(str, Enum):
     """Roles RACI."""
-    RESPONSIBLE = "R"   # Ejecuta
-    ACCOUNTABLE = "A"   # Responsable final
-    CONSULTED = "C"     # Consultado
-    INFORMED = "I"      # Informado
+
+    RESPONSIBLE = "R"  # Ejecuta
+    ACCOUNTABLE = "A"  # Responsable final
+    CONSULTED = "C"  # Consultado
+    INFORMED = "I"  # Informado
 
 
 class WBSItemType(str, Enum):
     """Tipos de item WBS."""
+
     DELIVERABLE = "deliverable"
     WORK_PACKAGE = "work_package"
     ACTIVITY = "activity"
@@ -74,6 +80,7 @@ class WBSItemType(str, Enum):
 
 class BOMCategory(str, Enum):
     """Categorías de items BOM."""
+
     MATERIAL = "material"
     EQUIPMENT = "equipment"
     SERVICE = "service"
@@ -82,6 +89,7 @@ class BOMCategory(str, Enum):
 
 class ProcurementStatus(str, Enum):
     """Estados de procurement."""
+
     PENDING = "pending"
     REQUESTED = "requested"
     ORDERED = "ordered"
@@ -101,18 +109,14 @@ class Stakeholder(Base):
     __tablename__ = "stakeholders"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Identificación
@@ -122,22 +126,16 @@ class Stakeholder(Base):
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Clasificación (ROADMAP §4.5)
-    power_level: Mapped[PowerLevel] = mapped_column(
-        SQLEnum(PowerLevel),
-        default=PowerLevel.MEDIUM
-    )
+    power_level: Mapped[PowerLevel] = mapped_column(SQLEnum(PowerLevel), default=PowerLevel.MEDIUM)
     interest_level: Mapped[InterestLevel] = mapped_column(
-        SQLEnum(InterestLevel),
-        default=InterestLevel.MEDIUM
+        SQLEnum(InterestLevel), default=InterestLevel.MEDIUM
     )
     quadrant: Mapped[StakeholderQuadrant | None] = mapped_column(
-        SQLEnum(StakeholderQuadrant),
-        nullable=True,
-        index=True
+        SQLEnum(StakeholderQuadrant), nullable=True
     )
 
     # Contacto
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # TRAZABILIDAD LEGAL (ROADMAP §4.5)
@@ -145,52 +143,41 @@ class Stakeholder(Base):
         PGUUID(as_uuid=True),
         ForeignKey("clauses.id"),
         nullable=True,
-        index=True  # FK a cláusula que menciona al stakeholder
+        index=True,  # FK a cláusula que menciona al stakeholder
     )
 
     # Extracción
     extraction_confidence: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
     extracted_from_document_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("documents.id"),
-        nullable=True
+        PGUUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
     )
 
     # Stakeholder Metadata (custom data)
     stakeholder_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
     project: Mapped["Project"] = relationship(
-        "Project",
-        foreign_keys=[project_id],
-        lazy="selectin"
+        "Project", back_populates="stakeholders", foreign_keys=[project_id], lazy="selectin"
     )
 
     source_clause: Mapped["Clause"] = relationship(
         "Clause",
         back_populates="stakeholders",
         foreign_keys=[source_clause_id],
-        lazy="selectin"  # Cargar para trazabilidad
+        lazy="selectin",  # Cargar para trazabilidad
     )
 
     extracted_from_document: Mapped["Document"] = relationship(
         "Document",
         back_populates="extracted_stakeholders",
         foreign_keys=[extracted_from_document_id],
-        lazy="select"
+        lazy="select",
     )
 
     # RACI assignments
@@ -198,7 +185,7 @@ class Stakeholder(Base):
         "StakeholderWBSRaci",
         back_populates="stakeholder",
         lazy="select",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     # Indexes
@@ -247,18 +234,14 @@ class WBSItem(Base):
     __tablename__ = "wbs_items"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Jerarquía
@@ -266,24 +249,21 @@ class WBSItem(Base):
         PGUUID(as_uuid=True),
         ForeignKey("wbs_items.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Identificación
     wbs_code: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        index=True  # "1.2.3.4"
+        index=True,  # "1.2.3.4"
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     level: Mapped[int] = mapped_column(Integer, nullable=False)  # Nivel en jerarquía
 
     # Clasificación
-    item_type: Mapped[WBSItemType | None] = mapped_column(
-        SQLEnum(WBSItemType),
-        nullable=True
-    )
+    item_type: Mapped[WBSItemType | None] = mapped_column(SQLEnum(WBSItemType), nullable=True)
 
     # Financial
     budget_allocated: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
@@ -300,30 +280,21 @@ class WBSItem(Base):
         PGUUID(as_uuid=True),
         ForeignKey("clauses.id"),
         nullable=True,
-        index=True  # Cláusula que financia este WBS
+        index=True,  # Cláusula que financia este WBS
     )
 
     # WBS Metadata (custom data)
     wbs_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
     project: Mapped["Project"] = relationship(
-        "Project",
-        foreign_keys=[project_id],
-        lazy="selectin"
+        "Project", back_populates="wbs_items", foreign_keys=[project_id], lazy="selectin"
     )
 
     parent: Mapped["WBSItem"] = relationship(
@@ -331,37 +302,28 @@ class WBSItem(Base):
         back_populates="children",
         remote_side=[id],
         foreign_keys=[parent_id],
-        lazy="select"
+        lazy="select",
     )
 
     children: Mapped[list["WBSItem"]] = relationship(
-        "WBSItem",
-        back_populates="parent",
-        lazy="select",
-        cascade="all, delete-orphan"
+        "WBSItem", back_populates="parent", lazy="select", cascade="all, delete-orphan"
     )
 
     funded_by_clause: Mapped["Clause"] = relationship(
         "Clause",
         back_populates="wbs_items",
         foreign_keys=[funded_by_clause_id],
-        lazy="selectin"  # Cargar para trazabilidad
+        lazy="selectin",  # Cargar para trazabilidad
     )
 
     # RACI assignments
     raci_assignments: Mapped[list["StakeholderWBSRaci"]] = relationship(
-        "StakeholderWBSRaci",
-        back_populates="wbs_item",
-        lazy="select",
-        cascade="all, delete-orphan"
+        "StakeholderWBSRaci", back_populates="wbs_item", lazy="select", cascade="all, delete-orphan"
     )
 
     # BOM items
     bom_items: Mapped[list["BOMItem"]] = relationship(
-        "BOMItem",
-        back_populates="wbs_item",
-        lazy="select",
-        cascade="all, delete-orphan"
+        "BOMItem", back_populates="wbs_item", lazy="select", cascade="all, delete-orphan"
     )
 
     # Indexes
@@ -405,35 +367,27 @@ class BOMItem(Base):
     __tablename__ = "bom_items"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     wbs_item_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("wbs_items.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Identificación
     item_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     item_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    category: Mapped[BOMCategory | None] = mapped_column(
-        SQLEnum(BOMCategory),
-        nullable=True,
-        index=True
-    )
+    category: Mapped[BOMCategory | None] = mapped_column(SQLEnum(BOMCategory), nullable=True)
 
     # Quantity
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
@@ -454,50 +408,37 @@ class BOMItem(Base):
         PGUUID(as_uuid=True),
         ForeignKey("clauses.id"),
         nullable=True,
-        index=True  # Cláusula contractual que define/requiere este material
+        index=True,  # Cláusula contractual que define/requiere este material
     )
 
     # Status
     procurement_status: Mapped[ProcurementStatus] = mapped_column(
-        SQLEnum(ProcurementStatus),
-        default=ProcurementStatus.PENDING,
-        index=True
+        SQLEnum(ProcurementStatus), default=ProcurementStatus.PENDING, index=True
     )
 
     # BOM Metadata (custom data)
     bom_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
     project: Mapped["Project"] = relationship(
-        "Project",
-        foreign_keys=[project_id],
-        lazy="selectin"
+        "Project", back_populates="bom_items", foreign_keys=[project_id], lazy="selectin"
     )
 
     wbs_item: Mapped["WBSItem"] = relationship(
-        "WBSItem",
-        back_populates="bom_items",
-        lazy="selectin"
+        "WBSItem", back_populates="bom_items", lazy="selectin"
     )
 
     contract_clause: Mapped["Clause"] = relationship(
         "Clause",
         back_populates="bom_items",
         foreign_keys=[contract_clause_id],
-        lazy="selectin"  # Cargar para trazabilidad
+        lazy="selectin",  # Cargar para trazabilidad
     )
 
     # Indexes
@@ -524,7 +465,7 @@ class BOMItem(Base):
         return self.procurement_status in {
             ProcurementStatus.ORDERED,
             ProcurementStatus.IN_TRANSIT,
-            ProcurementStatus.DELIVERED
+            ProcurementStatus.DELIVERED,
         }
 
 
@@ -538,80 +479,54 @@ class StakeholderWBSRaci(Base):
     __tablename__ = "stakeholder_wbs_raci"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     stakeholder_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("stakeholders.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     wbs_item_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("wbs_items.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # RACI Role
-    raci_role: Mapped[RACIRole] = mapped_column(
-        SQLEnum(RACIRole),
-        nullable=False,
-        index=True
-    )
+    raci_role: Mapped[RACIRole] = mapped_column(SQLEnum(RACIRole), nullable=False, index=True)
 
     # Metadata
     generated_automatically: Mapped[bool] = mapped_column(Boolean, default=True)
     manually_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verified_by: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=True
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    project: Mapped["Project"] = relationship(
-        "Project",
-        foreign_keys=[project_id],
-        lazy="selectin"
-    )
+    project: Mapped["Project"] = relationship("Project", foreign_keys=[project_id], lazy="selectin")
 
     stakeholder: Mapped["Stakeholder"] = relationship(
-        "Stakeholder",
-        back_populates="raci_assignments",
-        lazy="selectin"
+        "Stakeholder", back_populates="raci_assignments", lazy="selectin"
     )
 
     wbs_item: Mapped["WBSItem"] = relationship(
-        "WBSItem",
-        back_populates="raci_assignments",
-        lazy="selectin"
+        "WBSItem", back_populates="raci_assignments", lazy="selectin"
     )
 
-    verifier: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[verified_by],
-        lazy="select"
-    )
+    verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
 
     # Indexes
     __table_args__ = (

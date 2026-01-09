@@ -1,0 +1,466 @@
+...................EEEEEEEEEE
+=================================== ERRORS ====================================
+_________ ERROR at setup of test_register_new_user_and_tenant_success _________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:04 [info     ] application_configured
+2026-01-06 19:41:04 [info     ] application_configured
+__________ ERROR at setup of test_register_user_with_existing_email ___________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:04 [info     ] application_configured
+________ ERROR at setup of test_register_user_invalid_password[short] _________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:04 [info     ] application_configured
+______ ERROR at setup of test_register_user_invalid_password[nopassword] ______
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:05 [info     ] application_configured
+____ ERROR at setup of test_register_user_invalid_password[NOUPPERCASE1!] _____
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:05 [info     ] application_configured
+______ ERROR at setup of test_register_user_invalid_password[no_digit!] _______
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:05 [info     ] application_configured
+____________________ ERROR at setup of test_login_success _____________________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:105: in db_engine
+    async with engine.connect() as conn:
+               ^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3285: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:143: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3309: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:447: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:711: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:177: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:175: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:388: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:673: in __init__
+    self.__connect()
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:899: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:895: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py:661: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py:630: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:955: in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py:2443: in connect
+    return await connect_utils._connect(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1218: in _connect
+    conn = await _connect_addr(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1054: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1102: in __connect_addr
+    await connected
+E   asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "test"
+______________ ERROR at setup of test_login_invalid_credentials _______________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:105: in db_engine
+    async with engine.connect() as conn:
+               ^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3285: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:143: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3309: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:447: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:711: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:177: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:175: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:388: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:673: in __init__
+    self.__connect()
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:899: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:895: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py:661: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py:630: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:955: in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py:2443: in connect
+    return await connect_utils._connect(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1218: in _connect
+    conn = await _connect_addr(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1054: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1102: in __connect_addr
+    await connected
+E   asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "test"
+_______________ ERROR at setup of test_login_non_existent_user ________________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:172: in client
+    transport=ASGITransport(app=app, lifespan="on"),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ASGITransport.__init__() got an unexpected keyword argument 'lifespan'
+---------------------------- Captured stdout setup ----------------------------
+2026-01-06 19:41:07 [info     ] application_configured
+____________________ ERROR at setup of test_get_me_success ____________________
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:458: in setup
+    return super().setup()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytest_asyncio\plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:105: in db_engine
+    async with engine.connect() as conn:
+               ^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3285: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:143: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py:3309: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:447: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:711: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:177: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py:175: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:388: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:673: in __init__
+    self.__connect()
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:899: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py:895: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py:661: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py:630: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:955: in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py:2443: in connect
+    return await connect_utils._connect(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1218: in _connect
+    conn = await _connect_addr(
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1054: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\esus_\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py:1102: in __connect_addr
+    await connected
+E   asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "test"
+=========================== short test summary info ===========================
+ERROR tests/auth/test_identity.py::test_register_new_user_and_tenant_success
+ERROR tests/auth/test_identity.py::test_register_user_with_existing_email - T...
+ERROR tests/auth/test_identity.py::test_register_user_invalid_password[short]
+ERROR tests/auth/test_identity.py::test_register_user_invalid_password[nopassword]
+ERROR tests/auth/test_identity.py::test_register_user_invalid_password[NOUPPERCASE1!]
+ERROR tests/auth/test_identity.py::test_register_user_invalid_password[no_digit!]
+ERROR tests/auth/test_identity.py::test_login_success - asyncpg.exceptions.In...
+ERROR tests/auth/test_identity.py::test_login_invalid_credentials - asyncpg.e...
+ERROR tests/auth/test_identity.py::test_login_non_existent_user - TypeError: ...
+ERROR tests/auth/test_identity.py::test_get_me_success - asyncpg.exceptions.I...
+!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 10 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
