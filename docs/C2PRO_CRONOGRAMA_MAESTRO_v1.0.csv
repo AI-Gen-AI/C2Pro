@@ -12,7 +12,7 @@ CE-S2-010,Wireframes 6 Vistas Core,Sprint 2,Semana 2,2026-01-09,2026-01-09,1,P0,
 CE-S2-011,Setup Next.js 14 + Tailwind + shadcn/ui,Sprint 2,Semana 2,2026-01-10,2026-01-10,1,P0,Pendiente,Frontend,N/A,Ninguna,Frontend Lead,Proyecto configurado componentes base app renderiza,Bajo,apps/web/,2
 CE-S2-012,GitHub Actions CI Completo,Sprint 2,Semana 2,2026-01-09,2026-01-09,1,P0,Pendiente,DevOps,N/A,Ninguna,DevOps,Lint/test/build cada PR bloqueados sin CI verde,Bajo,.github/workflows/ci.yml,2
 CE-S2-013,Auto-deploy Staging on Merge Main,Sprint 2,Semana 2,2026-01-10,2026-01-10,0.5,P0,Pendiente,DevOps,N/A,CE-S2-012,DevOps,Railway + Vercel webhooks merge deploy <5 min,Bajo,.github/workflows/deploy-staging.yml,1
-CE-S2-014,Benchmark Baseline Endpoints,Sprint 2,Semana 2,2026-01-11,2026-01-11,0.5,P1,Pendiente,Performance,N/A,Ninguna,Backend Lead,Latencia P50/P95/P99 métricas baseline documentadas,Bajo,docs/performance/baseline.md,1
+CE-S2-014,Benchmark Baseline Endpoints,Sprint 2,Semana 2,2026-01-11,2026-01-11,0.5,P1,Completado,Performance,N/A,Ninguna,Backend Lead,Latencia P50/P95/P99 métricas baseline documentadas,Bajo,docs/performance/baseline.md,1
 CE-S2-015,Golden Dataset v1.0 (10 proyectos),Sprint 2,Semana 2,2026-01-09,2026-01-10,2,P0,Pendiente,Testing,Gate 5,Ninguna,QA Lead,10 proyectos sintéticos anotados README incluido,Medio,tests/golden/,3
 CE-S2-016,Tests Regresión Accuracy CI,Sprint 2,Semana 2,2026-01-11,2026-01-11,1,P0,Pendiente,Testing,Gate 5,CE-S2-015,QA Lead,CI compara accuracy vs baseline falla si <85%,Medio,tests/accuracy/,2
 CE-S3-001,Parser PDF con PyMuPDF,Sprint 3,Semana 3,2026-01-13,2026-01-15,3,P0,Pendiente,Backend,Gate 4,Ninguna,Backend Lead,Extracción texto posiciones offsets 10 PDFs test,Medio,apps/api/src/parsers/pdf_parser.py,5
