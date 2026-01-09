@@ -5,23 +5,68 @@ on:
     branches:
       - main
 
+# Concurrency control to ensure only one deployment runs at a time for this workflow.
+# 'staging' is the environment name, and cancel-in-progress will cancel older runs.
+concurrency:
+  group: staging
+  cancel-in-progress: true
+
 jobs:
-  deploy-backend:
-    name: Deploy Backend to Railway
+  # This job consolidates all CI checks.
+  # Deployment jobs will depend on this job's success.
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Backend Checks
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r apps/api/requirements.txt
+      - name: Run backend linters and tests
+        run: |
+          pip install ruff mypy pytest
+          ruff check apps/api --verbose
+          ruff format apps/api --check
+          mypy apps/api/src/
+          pytest apps/api/
+
+      # Frontend Checks
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Run frontend linter and build
+        working-directory: apps/web
+        run: |
+          npm run lint
+          npm run build
+
+  deploy-backend:
+    name: Deploy Backend to Railway
+    needs: build-and-test # This job will only run if build-and-test is successful
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Deploy to Railway
         uses: railway/cli@v2
         with:
-          # This command links the local repository to the Railway project
-          # and then deploys the latest version.
+          # This command links and deploys the latest version to Railway.
           # The RAILWAY_TOKEN secret must be set in the repository secrets.
           # The project ID can be found in your Railway project settings.
-          # You should replace 'your-railway-project-id' with your actual Railway project ID.
           command: |
             railway link your-railway-project-id
             railway up --detach
@@ -30,21 +75,20 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
+    needs: build-and-test # This job will only run if build-and-test is successful
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
+        uses: amondnet/vercel-action@v25 # Pinning to a specific version is a good practice
         with:
-          # These secrets must be set in the repository settings.
-          # VERCEL_ORG_ID and VERCEL_PROJECT_ID can be found in your Vercel project settings.
-          # VERCEL_TOKEN is your Vercel personal access token.
+          # These secrets must be configured in your repository's secrets.
+          # VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID are required.
+          # The 'scope' and 'working-directory' are important for monorepos.
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod" # This will deploy to production (Vercel's equivalent of staging for the main branch)
+          vercel-args: "--prod" # Deploy to the production environment in Vercel
           scope: ${{ secrets.VERCEL_ORG_ID }}
           working-directory: apps/web
