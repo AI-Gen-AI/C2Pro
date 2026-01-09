@@ -4,9 +4,9 @@ C2Pro API - Development Server
 Script para ejecutar el servidor de desarrollo con hot-reload.
 """
 
-import os
 import sys
 from pathlib import Path
+
 
 def main():
     """Run development server."""

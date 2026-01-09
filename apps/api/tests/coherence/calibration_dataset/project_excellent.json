@@ -1,0 +1,28 @@
+{
+  "id": "calibration-excellent-001",
+  "clauses": [
+    {
+      "id": "clause-b-exc-001",
+      "text": "The project budget is 100,000 USD, with current spend at 95,000 USD.",
+      "data": {
+        "planned": 100000,
+        "current": 95000,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "clause-s-exc-001",
+      "text": "Project schedule status: on-track. End date: 2025-12-31.",
+      "data": {
+        "status": "on-track"
+      }
+    },
+    {
+      "id": "clause-c-exc-001",
+      "text": "Last contract review was on 2025-11-15.",
+      "data": {
+        "last_review_date": "2025-11-15"
+      }
+    }
+  ]
+}

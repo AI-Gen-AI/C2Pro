@@ -1,0 +1,22 @@
+# Initial set of Coherence Engine rules (v0)
+
+- id: project-budget-overrun-10
+  description: Detects if the project budget is projected to be more than 10% over actual planned budget.
+  inputs: ["project.budget.current", "project.budget.planned"]
+  detection_logic: "project.budget.current > project.budget.planned * 1.1"
+  severity: high
+  evidence_fields: ["project.budget.current", "project.budget.planned"]
+
+- id: project-schedule-delayed
+  description: Identifies if the project schedule status indicates a delay.
+  inputs: ["project.schedule.status"]
+  detection_logic: "project.schedule.status == 'delayed'"
+  severity: medium
+  evidence_fields: ["project.schedule.status"]
+
+- id: project-contract-review-overdue
+  description: Checks if the last contract review date is older than 6 months.
+  inputs: ["project.contract.last_review_date", "current_date"]
+  detection_logic: "current_date - project.contract.last_review_date > 180_days"
+  severity: low
+  evidence_fields: ["project.contract.last_review_date"]

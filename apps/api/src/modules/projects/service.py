@@ -4,25 +4,23 @@ C2Pro - Projects Service
 Lógica de negocio para gestión de proyectos.
 """
 
-from datetime import datetime
-from typing import Sequence
-from uuid import UUID
 import math
+from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import select, func, or_
-from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import NotFoundError, ValidationError, ConflictError
-from src.modules.projects.models import Project, ProjectStatus, ProjectType
+from src.core.exceptions import ConflictError, NotFoundError
+from src.modules.projects.models import Project, ProjectStatus
 from src.modules.projects.schemas import (
     ProjectCreateRequest,
-    ProjectUpdateRequest,
-    ProjectDetailResponse,
+    ProjectFilters,
     ProjectListItemResponse,
     ProjectListResponse,
     ProjectStatsResponse,
-    ProjectFilters,
+    ProjectUpdateRequest,
 )
 
 logger = structlog.get_logger()
@@ -32,11 +30,8 @@ logger = structlog.get_logger()
 # HELPER FUNCTIONS
 # ===========================================
 
-async def get_project_by_id(
-    db: AsyncSession,
-    project_id: UUID,
-    tenant_id: UUID
-) -> Project | None:
+
+async def get_project_by_id(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> Project | None:
     """
     Obtiene proyecto por ID verificando tenant.
 
@@ -49,18 +44,12 @@ async def get_project_by_id(
         Proyecto si existe y pertenece al tenant, None si no
     """
     result = await db.execute(
-        select(Project)
-        .where(Project.id == project_id)
-        .where(Project.tenant_id == tenant_id)
+        select(Project).where(Project.id == project_id).where(Project.tenant_id == tenant_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_project_by_code(
-    db: AsyncSession,
-    code: str,
-    tenant_id: UUID
-) -> Project | None:
+async def get_project_by_code(db: AsyncSession, code: str, tenant_id: UUID) -> Project | None:
     """
     Obtiene proyecto por código dentro del tenant.
 
@@ -73,9 +62,7 @@ async def get_project_by_code(
         Proyecto si existe, None si no
     """
     result = await db.execute(
-        select(Project)
-        .where(Project.code == code)
-        .where(Project.tenant_id == tenant_id)
+        select(Project).where(Project.code == code).where(Project.tenant_id == tenant_id)
     )
     return result.scalar_one_or_none()
 
@@ -84,15 +71,13 @@ async def get_project_by_code(
 # PROJECT SERVICE
 # ===========================================
 
+
 class ProjectService:
     """Servicio de gestión de proyectos."""
 
     @staticmethod
     async def create_project(
-        db: AsyncSession,
-        tenant_id: UUID,
-        user_id: UUID,
-        request: ProjectCreateRequest
+        db: AsyncSession, tenant_id: UUID, user_id: UUID, request: ProjectCreateRequest
     ) -> Project:
         """
         Crea nuevo proyecto.
@@ -139,17 +124,13 @@ class ProjectService:
             project_id=str(project.id),
             tenant_id=str(tenant_id),
             user_id=str(user_id),
-            name=project.name
+            name=project.name,
         )
 
         return project
 
     @staticmethod
-    async def get_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID
-    ) -> Project:
+    async def get_project(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> Project:
         """
         Obtiene proyecto por ID.
 
@@ -177,7 +158,7 @@ class ProjectService:
         tenant_id: UUID,
         page: int = 1,
         page_size: int = 20,
-        filters: ProjectFilters | None = None
+        filters: ProjectFilters | None = None,
     ) -> ProjectListResponse:
         """
         Lista proyectos con paginación y filtros.
@@ -212,7 +193,7 @@ class ProjectService:
                     or_(
                         Project.name.ilike(search_term),
                         Project.description.ilike(search_term),
-                        Project.code.ilike(search_term)
+                        Project.code.ilike(search_term),
                     )
                 )
 
@@ -265,15 +246,12 @@ class ProjectService:
             page_size=page_size,
             total_pages=total_pages,
             has_next=has_next,
-            has_prev=has_prev
+            has_prev=has_prev,
         )
 
     @staticmethod
     async def update_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID,
-        request: ProjectUpdateRequest
+        db: AsyncSession, project_id: UUID, tenant_id: UUID, request: ProjectUpdateRequest
     ) -> Project:
         """
         Actualiza proyecto.
@@ -335,20 +313,12 @@ class ProjectService:
         await db.commit()
         await db.refresh(project)
 
-        logger.info(
-            "project_updated",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_updated", project_id=str(project_id), tenant_id=str(tenant_id))
 
         return project
 
     @staticmethod
-    async def delete_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID
-    ) -> None:
+    async def delete_project(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> None:
         """
         Elimina proyecto.
 
@@ -365,17 +335,10 @@ class ProjectService:
         await db.delete(project)
         await db.commit()
 
-        logger.info(
-            "project_deleted",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_deleted", project_id=str(project_id), tenant_id=str(tenant_id))
 
     @staticmethod
-    async def get_project_stats(
-        db: AsyncSession,
-        tenant_id: UUID
-    ) -> ProjectStatsResponse:
+    async def get_project_stats(db: AsyncSession, tenant_id: UUID) -> ProjectStatsResponse:
         """
         Obtiene estadísticas de proyectos del tenant.
 
@@ -390,9 +353,7 @@ class ProjectService:
         base_query = select(Project).where(Project.tenant_id == tenant_id)
 
         # Total
-        total_result = await db.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
+        total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
         total = total_result.scalar_one()
 
         # Por estado
@@ -444,5 +405,5 @@ class ProjectService:
             archived_projects=archived,
             avg_coherence_score=float(avg_score) if avg_score else None,
             total_critical_alerts=total_critical_alerts,
-            total_high_alerts=total_high_alerts
+            total_high_alerts=total_high_alerts,
         )

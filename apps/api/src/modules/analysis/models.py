@@ -11,30 +11,33 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column,
+    ARRAY,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
-    Integer,
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Enum as SQLEnum,
-    Index,
-    ARRAY,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.modules.projects.models import Project
-    from src.modules.documents.models import Clause
     from src.modules.auth.models import User
+    from src.modules.documents.models import Clause
+    from src.modules.projects.models import Project
 
 
 class AnalysisType(str, Enum):
     """Tipos de análisis disponibles."""
+
     COHERENCE = "coherence"
     RISK = "risk"
     COST = "cost"
@@ -44,6 +47,7 @@ class AnalysisType(str, Enum):
 
 class AnalysisStatus(str, Enum):
     """Estados de un análisis."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -53,14 +57,16 @@ class AnalysisStatus(str, Enum):
 
 class AlertSeverity(str, Enum):
     """Severidad de una alerta."""
+
     CRITICAL = "critical"  # Bloquea ejecución
-    HIGH = "high"         # Requiere acción inmediata
-    MEDIUM = "medium"     # Requiere atención
-    LOW = "low"          # Informativo
+    HIGH = "high"  # Requiere acción inmediata
+    MEDIUM = "medium"  # Requiere atención
+    LOW = "low"  # Informativo
 
 
 class AlertStatus(str, Enum):
     """Estados de una alerta."""
+
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
@@ -78,31 +84,26 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Analysis type
     analysis_type: Mapped[AnalysisType] = mapped_column(
-        SQLEnum(AnalysisType),
-        default=AnalysisType.COHERENCE
+        SQLEnum(AnalysisType, values_callable=lambda obj: [e.value for e in obj]),
+        default=AnalysisType.COHERENCE,
     )
 
     # Status
     status: Mapped[AnalysisStatus] = mapped_column(
-        SQLEnum(AnalysisStatus),
+        SQLEnum(AnalysisStatus, values_callable=lambda obj: [e.value for e in obj]),
         default=AnalysisStatus.PENDING,
-        index=True
     )
 
     # Results
@@ -111,12 +112,12 @@ class Analysis(Base):
     # Coherence Score (ROADMAP §12)
     coherence_score: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=True
+        nullable=True,
         # CHECK constraint definido en migración: BETWEEN 0 AND 100
     )
     coherence_breakdown: Mapped[dict | None] = mapped_column(
         JSONB,
-        nullable=True  # Detalle por regla
+        nullable=True,  # Detalle por regla
     )
 
     # Alerts count
@@ -126,24 +127,14 @@ class Analysis(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-        index=True
+        DateTime, default=datetime.utcnow, nullable=False, index=True
     )
 
     # Relationships
-    project: Mapped["Project"] = relationship(
-        "Project",
-        back_populates="analyses",
-        lazy="selectin"
-    )
+    project: Mapped["Project"] = relationship("Project", back_populates="analyses", lazy="selectin")
 
     alerts: Mapped[list["Alert"]] = relationship(
-        "Alert",
-        back_populates="analysis",
-        lazy="select",
-        cascade="all, delete-orphan"
+        "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
     )
 
     # Indexes
@@ -155,7 +146,9 @@ class Analysis(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Analysis(id={self.id}, type={self.analysis_type.value}, status={self.status.value})>"
+        return (
+            f"<Analysis(id={self.id}, type={self.analysis_type.value}, status={self.status.value})>"
+        )
 
     @property
     def is_completed(self) -> bool:
@@ -191,130 +184,98 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     analysis_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("analyses.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Classification
     severity: Mapped[AlertSeverity] = mapped_column(
-        SQLEnum(AlertSeverity),
-        nullable=False,
-        index=True
+        SQLEnum(AlertSeverity, values_callable=lambda obj: [e.value for e in obj]), nullable=False
     )
-    type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     rule_id: Mapped[str | None] = mapped_column(
-        String(20),
-        nullable=True  # Referencia a regla de coherencia (ej: "R1", "R5")
+        String(100),
+        nullable=True,  # Referencia a regla de coherencia (ej: "R1", "R5")
     )
 
     # Content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    suggested_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # TRAZABILIDAD LEGAL (ROADMAP §5.3)
     source_clause_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("clauses.id"),
         nullable=True,
-        index=True  # FK a cláusula que origina la alerta
+        index=True,  # FK a cláusula que origina la alerta
     )
 
-    # Affected entities (arrays de UUIDs)
-    affected_document_ids: Mapped[list[UUID]] = mapped_column(
-        ARRAY(PGUUID(as_uuid=True)),
-        default=list
-    )
-    affected_wbs_ids: Mapped[list[UUID]] = mapped_column(
-        ARRAY(PGUUID(as_uuid=True)),
-        default=list
-    )
-    affected_bom_ids: Mapped[list[UUID]] = mapped_column(
-        ARRAY(PGUUID(as_uuid=True)),
-        default=list
+    # Related clause IDs (array of UUIDs)
+    related_clause_ids: Mapped[list[UUID] | None] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=True
     )
 
-    # Evidence
-    evidence_json: Mapped[dict | None] = mapped_column(
+    # Affected entities (stored as JSONB)
+    affected_entities: Mapped[dict] = mapped_column(
         JSONB,
-        nullable=True  # Evidencia estructurada completa
+        default=dict,  # {"documents": [], "wbs": [], "bom": []}
     )
+
+    # Impact level
+    impact_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # Metadata (includes evidence and other data)
+    alert_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Status
     status: Mapped[AlertStatus] = mapped_column(
-        SQLEnum(AlertStatus),
+        SQLEnum(AlertStatus, values_callable=lambda obj: [e.value for e in obj]),
         default=AlertStatus.OPEN,
-        index=True
-    )
-    requires_human_review: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False  # ROADMAP §2.2: Human-in-the-loop
     )
 
     # Resolution
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_by: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=True
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-        index=True
+        DateTime, default=datetime.utcnow, nullable=False, index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
-    project: Mapped["Project"] = relationship(
-        "Project",
-        back_populates="alerts",
-        lazy="selectin"
-    )
+    project: Mapped["Project"] = relationship("Project", back_populates="alerts", lazy="selectin")
 
     analysis: Mapped["Analysis"] = relationship(
-        "Analysis",
-        back_populates="alerts",
-        lazy="selectin"
+        "Analysis", back_populates="alerts", lazy="selectin"
     )
 
     source_clause: Mapped["Clause"] = relationship(
         "Clause",
         back_populates="alerts",
         foreign_keys=[source_clause_id],
-        lazy="selectin"  # IMPORTANTE: Cargar siempre para trazabilidad
+        lazy="selectin",  # IMPORTANTE: Cargar siempre para trazabilidad
     )
 
-    resolver: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[resolved_by],
-        lazy="select"
-    )
+    resolver: Mapped["User"] = relationship("User", foreign_keys=[resolved_by], lazy="select")
 
     # Indexes
     __table_args__ = (
@@ -328,7 +289,9 @@ class Alert(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Alert(id={self.id}, severity={self.severity.value}, title='{self.title[:30]}...')>"
+        return (
+            f"<Alert(id={self.id}, severity={self.severity.value}, title='{self.title[:30]}...')>"
+        )
 
     @property
     def is_open(self) -> bool:
@@ -404,25 +367,21 @@ class Extraction(Base):
     __tablename__ = "extractions"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Document relationship
     document_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("documents.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Extraction metadata
     extraction_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-        index=True  # contract_metadata, milestones, budget_items
+        index=True,  # contract_metadata, milestones, budget_items
     )
 
     # Data
@@ -435,17 +394,11 @@ class Extraction(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     document: Mapped["Document"] = relationship(
-        "Document",
-        foreign_keys=[document_id],
-        lazy="selectin"
+        "Document", foreign_keys=[document_id], lazy="selectin"
     )
 
     # Indexes

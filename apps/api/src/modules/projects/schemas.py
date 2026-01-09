@@ -5,20 +5,20 @@ Schemas Pydantic para validación y serialización de proyectos.
 """
 
 from datetime import datetime
-from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.modules.projects.models import ProjectStatus, ProjectType
-
 
 # ===========================================
 # BASE SCHEMAS
 # ===========================================
 
+
 class ProjectBase(BaseModel):
     """Schema base para Project."""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=5000)
     code: str | None = Field(None, max_length=50)
@@ -30,6 +30,7 @@ class ProjectBase(BaseModel):
 # ===========================================
 # REQUEST SCHEMAS (Input)
 # ===========================================
+
 
 class ProjectCreateRequest(BaseModel):
     """Request para crear nuevo proyecto."""
@@ -54,7 +55,7 @@ class ProjectCreateRequest(BaseModel):
                 "estimated_budget": 1500000.00,
                 "currency": "EUR",
                 "start_date": "2024-01-15T00:00:00",
-                "end_date": "2024-12-31T23:59:59"
+                "end_date": "2024-12-31T23:59:59",
             }
         }
     )
@@ -88,7 +89,7 @@ class ProjectUpdateRequest(BaseModel):
             "example": {
                 "name": "Construcción Edificio Oficinas - Actualizado",
                 "status": "active",
-                "estimated_budget": 1600000.00
+                "estimated_budget": 1600000.00,
             }
         }
     )
@@ -97,6 +98,7 @@ class ProjectUpdateRequest(BaseModel):
 # ===========================================
 # RESPONSE SCHEMAS (Output)
 # ===========================================
+
 
 class ProjectListItemResponse(BaseModel):
     """Response para item en lista de proyectos (versión resumida)."""
@@ -206,6 +208,7 @@ class ProjectStatsResponse(BaseModel):
 # DOCUMENT-RELATED SCHEMAS
 # ===========================================
 
+
 class DocumentListResponse(BaseModel):
     """Response básico de documento en lista."""
 
@@ -233,6 +236,7 @@ class ProjectWithDocumentsResponse(ProjectDetailResponse):
 # BULK OPERATIONS
 # ===========================================
 
+
 class ProjectBulkDeleteRequest(BaseModel):
     """Request para eliminación masiva de proyectos."""
 
@@ -250,11 +254,12 @@ class ProjectBulkStatusUpdateRequest(BaseModel):
 # PAGINATION
 # ===========================================
 
+
 class ProjectListResponse(BaseModel):
     """Response paginado de lista de proyectos."""
 
     items: list[ProjectListItemResponse]
-    total: int
+    total: int = Field(..., serialization_alias="total_count")
     page: int
     page_size: int
     total_pages: int
@@ -262,23 +267,25 @@ class ProjectListResponse(BaseModel):
     has_prev: bool
 
     model_config = ConfigDict(
+        populate_by_name=True,  # Allow both 'total' and 'total_count'
         json_schema_extra={
             "example": {
                 "items": [],
-                "total": 42,
+                "total_count": 42,
                 "page": 1,
                 "page_size": 20,
                 "total_pages": 3,
                 "has_next": True,
-                "has_prev": False
+                "has_prev": False,
             }
-        }
+        },
     )
 
 
 # ===========================================
 # FILTERS
 # ===========================================
+
 
 class ProjectFilters(BaseModel):
     """Filtros para búsqueda de proyectos."""
@@ -297,6 +304,7 @@ class ProjectFilters(BaseModel):
 # ERROR SCHEMAS
 # ===========================================
 
+
 class ProjectErrorResponse(BaseModel):
     """Response de error de proyectos."""
 
@@ -305,16 +313,15 @@ class ProjectErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "detail": "Project not found",
-                "error_code": "PROJECT_NOT_FOUND"
-            }
+            "example": {"detail": "Project not found", "error_code": "PROJECT_NOT_FOUND"}
         }
     )
+
 
 # ===========================================
 # WBS-RELATED SCHEMAS
 # ===========================================
+
 
 class WBSItemBase(BaseModel):
     code: str = Field(..., description="WBS code, e.g., '1.1.2'")
@@ -325,9 +332,11 @@ class WBSItemBase(BaseModel):
     end_date: datetime | None = None
     cost: float | None = None
 
+
 class WBSItemCreate(WBSItemBase):
     project_id: UUID
     parent_id: UUID | None = None
+
 
 class WBSItemUpdate(BaseModel):
     code: str | None = None
@@ -339,6 +348,7 @@ class WBSItemUpdate(BaseModel):
     cost: float | None = None
     parent_id: UUID | None = None
 
+
 class WBSItemResponse(WBSItemBase):
     id: UUID
     project_id: UUID
@@ -348,9 +358,11 @@ class WBSItemResponse(WBSItemBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # ===========================================
 # BOM-RELATED SCHEMAS
 # ===========================================
+
 
 class BOMItemBase(BaseModel):
     item_code: str | None = Field(None, description="Internal code for the BOM item")
@@ -364,10 +376,12 @@ class BOMItemBase(BaseModel):
     lead_time_days: int | None = None
     required_on_site_date: datetime | None = None
 
+
 class BOMItemCreate(BOMItemBase):
     project_id: UUID
     wbs_item_id: UUID | None = None
     contract_clause_id: UUID | None = None
+
 
 class BOMItemUpdate(BaseModel):
     item_code: str | None = None
@@ -382,6 +396,7 @@ class BOMItemUpdate(BaseModel):
     required_on_site_date: datetime | None = None
     wbs_item_id: UUID | None = None
     contract_clause_id: UUID | None = None
+
 
 class BOMItemResponse(BOMItemBase):
     id: UUID

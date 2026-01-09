@@ -154,12 +154,12 @@ ALTER TABLE wbs_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bom_items ENABLE ROW LEVEL SECURITY;
 
 -- Policies for tenants
-CREATE POLICY "Allow individual tenant access" ON tenants FOR SELECT USING (id = auth.jwt() ->> 'tenant_id');
+CREATE POLICY "Allow individual tenant access" ON tenants FOR SELECT USING (id = (auth.jwt() ->> 'tenant_id')::UUID);
 
 -- Policies for users
 CREATE POLICY "Allow users to see themselves" ON users FOR SELECT USING (id = auth.uid());
 CREATE POLICY "Allow admins to see all users in their tenant" ON users FOR SELECT
-    USING (tenant_id = auth.jwt() ->> 'tenant_id' AND (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+    USING (tenant_id = (auth.jwt() ->> 'tenant_id')::UUID AND (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
 
 -- Helper function to check project membership
 CREATE OR REPLACE FUNCTION is_project_member(p_project_id UUID)

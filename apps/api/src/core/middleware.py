@@ -5,15 +5,18 @@ Middlewares críticos para seguridad, logging y rate limiting.
 """
 
 import time
-from typing import Callable
+from collections.abc import Callable
 from uuid import UUID
 
 import structlog
 from fastapi import Request, Response
-from jose import jwt, JWTError
+from jose import JWTError, jwt
+from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
+from src.core.database import get_raw_session
+from src.modules.auth.models import Tenant
 
 logger = structlog.get_logger()
 
@@ -22,15 +25,16 @@ logger = structlog.get_logger()
 # TENANT ISOLATION MIDDLEWARE
 # ===========================================
 
+
 class TenantIsolationMiddleware(BaseHTTPMiddleware):
     """
     Middleware que extrae y valida el tenant_id del JWT.
-    
+
     CRÍTICO PARA SEGURIDAD:
     - Sin este middleware, no hay aislamiento entre tenants
     - Todas las rutas protegidas DEBEN pasar por aquí
     """
-    
+
     # Rutas que no requieren autenticación
     PUBLIC_PATHS = [
         "/health",
@@ -40,135 +44,185 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         "/api/auth/login",
         "/api/auth/register",
         "/api/auth/refresh",
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/refresh",
     ]
-    
-    async def dispatch(
-        self, 
-        request: Request, 
-        call_next: Callable
-    ) -> Response:
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Permitir rutas públicas
         if self._is_public_path(request.url.path):
             return await call_next(request)
-        
+
         # Extraer y validar token
-        tenant_id = self._extract_tenant_id(request)
-        
+        tenant_id, error_message = self._extract_tenant_id(request)
+
         if tenant_id is None:
+            # Use specific error message if provided, otherwise generic one
+            message = error_message or "Invalid authentication credentials"
             logger.warning(
                 "authentication_failed",
                 path=request.url.path,
-                reason="missing_or_invalid_token"
+                reason="missing_or_invalid_token",
+                error=message,
             )
             return Response(
-                content='{"detail": "Not authenticated"}',
+                content=f'{{"detail": "{message}"}}',
                 status_code=401,
-                media_type="application/json"
+                media_type="application/json",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
+        # Validar que el tenant existe en la base de datos
+        tenant_exists = await self._validate_tenant_exists(tenant_id)
+        if not tenant_exists:
+            logger.warning(
+                "authentication_failed",
+                path=request.url.path,
+                reason="tenant_not_found",
+                tenant_id=str(tenant_id),
+            )
+            return Response(
+                content='{"detail": "Invalid authentication context"}',
+                status_code=401,
+                media_type="application/json",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Inyectar tenant_id en request state
         request.state.tenant_id = tenant_id
         request.state.user_id = self._extract_user_id(request)
-        
+
         # Bind to structured logging context
         structlog.contextvars.bind_contextvars(
             tenant_id=str(tenant_id),
             user_id=str(request.state.user_id) if request.state.user_id else None,
         )
-        
+
         return await call_next(request)
-    
+
     def _is_public_path(self, path: str) -> bool:
         """Verifica si la ruta es pública."""
         return any(path.startswith(p) for p in self.PUBLIC_PATHS)
-    
-    def _extract_tenant_id(self, request: Request) -> UUID | None:
-        """Extrae tenant_id del JWT en el header Authorization."""
+
+    def _extract_tenant_id(self, request: Request) -> tuple[UUID | None, str | None]:
+        """
+        Extrae y valida tenant_id del JWT en el header Authorization.
+
+        Valida:
+        - Firma del JWT
+        - Expiración del token
+        - Tipo de token (debe ser 'access')
+        - Presencia de tenant_id
+
+        Returns:
+            Tuple of (tenant_id, error_message)
+            - (tenant_id, None) if successful
+            - (None, error_message) if authentication failed
+        """
         auth_header = request.headers.get("Authorization", "")
-        
+
         if not auth_header.startswith("Bearer "):
-            return None
-        
+            return None, None
+
         token = auth_header[7:]
-        
+
         try:
-            # En producción, Supabase valida el JWT
-            # Aquí solo extraemos el payload
-            # Para validación completa, usar supabase.auth.get_user()
-            
-            if settings.is_development:
-                # En desarrollo, decodificar sin verificar
-                payload = jwt.decode(
-                    token,
-                    settings.jwt_secret_key,
-                    algorithms=[settings.jwt_algorithm],
-                    options={"verify_signature": settings.is_production}
-                )
-            else:
-                # En producción, verificar firma
-                payload = jwt.decode(
-                    token,
-                    settings.jwt_secret_key,
-                    algorithms=[settings.jwt_algorithm],
-                )
-            
-            # Supabase incluye el user_id como 'sub'
-            # El tenant_id puede ser un claim custom o igual al user_id
-            tenant_id = payload.get("tenant_id") or payload.get("sub")
-            
-            if tenant_id:
-                return UUID(tenant_id)
-            
-            return None
-            
-        except (JWTError, ValueError) as e:
-            logger.debug("jwt_decode_failed", error=str(e))
-            return None
-    
+            # Decodificar y VERIFICAR SIEMPRE la firma
+            # Esto valida automáticamente la expiración (exp claim)
+            payload = jwt.decode(
+                token,
+                settings.jwt_secret_key,
+                algorithms=[settings.jwt_algorithm],
+                options={"verify_signature": True, "verify_exp": True},
+            )
+
+            # Verificar que sea un access token (no refresh token)
+            token_type = payload.get("type")
+            if token_type != "access":
+                logger.debug("invalid_token_type", type=token_type)
+                return None, "Invalid token type"
+
+            # Extraer tenant_id (required para access tokens)
+            tenant_id_str = payload.get("tenant_id")
+            if not tenant_id_str:
+                logger.debug("missing_tenant_id")
+                return None, "Missing tenant_id in token"
+
+            return UUID(tenant_id_str), None
+
+        except jwt.ExpiredSignatureError:
+            logger.debug("jwt_expired")
+            return None, "Token has expired"
+        except JWTError as e:
+            logger.debug("jwt_invalid", error=str(e))
+            return None, "Invalid authentication credentials"
+        except ValueError as e:
+            logger.debug("invalid_uuid_format", error=str(e))
+            return None, "Invalid authentication credentials"
+
     def _extract_user_id(self, request: Request) -> UUID | None:
         """Extrae user_id del JWT."""
         auth_header = request.headers.get("Authorization", "")
-        
+
         if not auth_header.startswith("Bearer "):
             return None
-        
+
         token = auth_header[7:]
-        
+
         try:
             payload = jwt.decode(
                 token,
-                options={"verify_signature": False}
+                settings.jwt_secret_key,
+                algorithms=[settings.jwt_algorithm],
+                options={"verify_signature": False},
             )
             user_id = payload.get("sub")
             return UUID(user_id) if user_id else None
         except (JWTError, ValueError):
             return None
 
+    async def _validate_tenant_exists(self, tenant_id: UUID) -> bool:
+        """
+        Valida que el tenant existe en la base de datos.
+
+        Args:
+            tenant_id: UUID del tenant a validar
+
+        Returns:
+            True si el tenant existe y está activo, False en caso contrario
+        """
+        try:
+            async with get_raw_session() as session:
+                result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+                tenant = result.scalar_one_or_none()
+                return tenant is not None
+        except Exception as e:
+            logger.error("tenant_validation_error", error=str(e), tenant_id=str(tenant_id))
+            return False
+
 
 # ===========================================
 # REQUEST LOGGING MIDDLEWARE
 # ===========================================
 
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware para logging estructurado de todas las requests.
     """
-    
-    async def dispatch(
-        self, 
-        request: Request, 
-        call_next: Callable
-    ) -> Response:
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Generar request ID
         request_id = request.headers.get("X-Request-ID", str(time.time_ns()))
         request.state.request_id = request_id
-        
+
         # Bind to logging context
         structlog.contextvars.bind_contextvars(request_id=request_id)
-        
+
         # Log request start
         start_time = time.perf_counter()
-        
+
         logger.info(
             "request_started",
             method=request.method,
@@ -176,7 +230,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             query=str(request.query_params) if request.query_params else None,
             client_ip=self._get_client_ip(request),
         )
-        
+
         # Process request
         try:
             response = await call_next(request)
@@ -191,10 +245,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 error=str(e),
             )
             raise
-        
+
         # Log request completion
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         log_method = logger.info if response.status_code < 400 else logger.warning
         log_method(
             "request_completed",
@@ -203,27 +257,27 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
         )
-        
+
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
-    
+
     def _get_client_ip(self, request: Request) -> str:
         """Obtiene IP del cliente, considerando proxies."""
         # Check common proxy headers
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
             return forwarded_for.split(",")[0].strip()
-        
+
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip
-        
+
         # Fallback to direct connection
         if request.client:
             return request.client.host
-        
+
         return "unknown"
 
 
@@ -231,31 +285,28 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # RATE LIMIT MIDDLEWARE
 # ===========================================
 
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     Middleware simple de rate limiting.
-    
+
     Para producción, considerar usar Redis para estado distribuido.
     """
-    
+
     def __init__(self, app):
         super().__init__(app)
         # Simple in-memory store (no distribuido)
         # Para producción, usar Redis
         self._requests: dict[str, list[float]] = {}
-    
-    async def dispatch(
-        self, 
-        request: Request, 
-        call_next: Callable
-    ) -> Response:
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip rate limiting for health checks
         if request.url.path.startswith("/health"):
             return await call_next(request)
-        
+
         # Get client identifier
         client_id = self._get_client_identifier(request)
-        
+
         # Check rate limit
         if self._is_rate_limited(client_id, request.url.path):
             logger.warning(
@@ -267,64 +318,58 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content='{"detail": "Rate limit exceeded. Try again later."}',
                 status_code=429,
                 media_type="application/json",
-                headers={"Retry-After": "60"}
+                headers={"Retry-After": "60"},
             )
-        
+
         # Record request
         self._record_request(client_id)
-        
+
         return await call_next(request)
-    
+
     def _get_client_identifier(self, request: Request) -> str:
         """Genera identificador único para el cliente."""
         # Preferir tenant_id si está autenticado
         if hasattr(request.state, "tenant_id") and request.state.tenant_id:
             return f"tenant:{request.state.tenant_id}"
-        
+
         # Fallback a IP
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
             return f"ip:{forwarded_for.split(',')[0].strip()}"
-        
+
         if request.client:
             return f"ip:{request.client.host}"
-        
+
         return "unknown"
-    
+
     def _is_rate_limited(self, client_id: str, path: str) -> bool:
         """Verifica si el cliente ha excedido el rate limit."""
         now = time.time()
         window_start = now - 60  # Ventana de 1 minuto
-        
+
         # Determinar límite según endpoint
         if "/ai" in path or "/analysis" in path:
             limit = 10  # TODO: añadir a settings
         else:
             limit = settings.rate_limit_per_minute
-        
+
         # Get requests in window
         if client_id not in self._requests:
             return False
-        
-        recent_requests = [
-            ts for ts in self._requests[client_id]
-            if ts > window_start
-        ]
-        
+
+        recent_requests = [ts for ts in self._requests[client_id] if ts > window_start]
+
         return len(recent_requests) >= limit
-    
+
     def _record_request(self, client_id: str) -> None:
         """Registra una request para el cliente."""
         now = time.time()
-        
+
         if client_id not in self._requests:
             self._requests[client_id] = []
-        
+
         self._requests[client_id].append(now)
-        
+
         # Cleanup old entries (keep last 5 minutes)
         cutoff = now - 300
-        self._requests[client_id] = [
-            ts for ts in self._requests[client_id]
-            if ts > cutoff
-        ]
+        self._requests[client_id] = [ts for ts in self._requests[client_id] if ts > cutoff]
