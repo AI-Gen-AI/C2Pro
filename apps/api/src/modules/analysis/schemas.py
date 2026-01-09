@@ -75,3 +75,15 @@ class ProjectAlertResponse(ProjectAlertCreate):
     resolved_by: UUID | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CoherenceScoreResponse(BaseModel):
+    """Schema for returning the coherence score and its breakdown."""
+
+    coherence_score: int = Field(
+        ..., ge=0, le=100, description="Overall coherence score from 0 to 100"
+    )
+    breakdown: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Detailed breakdown of the coherence score by categories or rules",
+    )

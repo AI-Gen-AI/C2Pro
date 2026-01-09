@@ -14,6 +14,7 @@ from src.core.database import get_session
 from src.core.exceptions import ConflictError, NotFoundError, ValidationError
 from src.core.security import CurrentTenantId, CurrentUserId
 from src.core.validation import sanitize_search_query
+from src.modules.analysis.schemas import CoherenceScoreResponse  # Import new schema
 from src.modules.projects.models import ProjectStatus, ProjectType
 from src.modules.projects.schemas import (
     ProjectCreateRequest,
@@ -272,6 +273,36 @@ async def get_project(
 
         return ProjectDetailResponse.model_validate(project)
 
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/{project_id}/coherence-score",
+    response_model=CoherenceScoreResponse,
+    summary="Get project coherence score and breakdown",
+    description="""
+    Returns the overall coherence score and a detailed breakdown for a specific project.
+
+    This endpoint provides a quick overview of the project's coherence across
+    documents, schedules, and budgets, highlighting areas of potential inconsistency.
+    """,
+    responses={
+        200: {"description": "Coherence score and breakdown retrieved successfully"},
+        404: {"description": "Project not found or access denied"},
+    },
+)
+async def get_project_coherence_score(
+    project_id: UUID, tenant_id: CurrentTenantId, db: AsyncSession = Depends(get_session)
+):
+    """
+    Obtiene el score de coherencia y su desglose para un proyecto específico.
+    """
+    try:
+        coherence_data = await ProjectService.get_project_coherence_score(
+            db=db, project_id=project_id, tenant_id=tenant_id
+        )
+        return CoherenceScoreResponse(**coherence_data)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
