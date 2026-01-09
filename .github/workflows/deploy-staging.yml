@@ -1,0 +1,50 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to Railway
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        uses: railway/cli@v2
+        with:
+          # This command links the local repository to the Railway project
+          # and then deploys the latest version.
+          # The RAILWAY_TOKEN secret must be set in the repository secrets.
+          # The project ID can be found in your Railway project settings.
+          # You should replace 'your-railway-project-id' with your actual Railway project ID.
+          command: |
+            railway link your-railway-project-id
+            railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          # These secrets must be set in the repository settings.
+          # VERCEL_ORG_ID and VERCEL_PROJECT_ID can be found in your Vercel project settings.
+          # VERCEL_TOKEN is your Vercel personal access token.
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod" # This will deploy to production (Vercel's equivalent of staging for the main branch)
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          working-directory: apps/web
