@@ -164,8 +164,8 @@ def create_application() -> FastAPI:
         """Handler para errores de autenticación."""
         logger.warning("authentication_error", path=request.url.path, error=str(exc))
         return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": str(exc)},
+            status_code=exc.status_code,
+            content=exc.to_dict(),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -174,27 +174,25 @@ def create_application() -> FastAPI:
         """Handler para tenant no encontrado."""
         logger.warning("tenant_not_found", path=request.url.path, error=str(exc))
         return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Invalid authentication context"},
+            status_code=exc.status_code,
+            content=exc.to_dict(),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     @app.exception_handler(NotFoundError)
     async def not_found_error_handler(request: Request, exc: NotFoundError):
         """Handler para recursos no encontrados."""
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
+        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
     @app.exception_handler(ConflictError)
     async def conflict_error_handler(request: Request, exc: ConflictError):
         """Handler para conflictos (duplicados, etc)."""
-        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError):
         """Handler para errores de validación de negocio."""
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": str(exc)}
-        )
+        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_error_handler(request: Request, exc: RequestValidationError):
