@@ -22,6 +22,9 @@ class ProjectAnalysisBase(BaseModel):
     coherence_score: int | None = Field(
         None, ge=0, le=100, description="Coherence score from 0 to 100"
     )
+    evidence_json: dict[str, Any] = Field(
+        default_factory=dict, description="JSON object containing evidence details for the analysis"
+    )
 
 
 class ProjectAnalysisCreate(ProjectAnalysisBase):
@@ -53,6 +56,9 @@ class ProjectAlertBase(BaseModel):
     )
     status: str = Field(
         default="open", description="Status of the alert (e.g., 'open', 'resolved')"
+    )
+    evidence_json: dict[str, Any] = Field(
+        default_factory=dict, description="JSON object containing evidence details for the alert"
     )
 
 
