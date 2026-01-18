@@ -179,16 +179,17 @@ class TestTenantIsolationMiddleware:
 
     def test_extract_tenant_id_missing_claim(self):
         """
-        Should return None when tenant_id claim is missing from JWT.
+        Should return None when both tenant_id and sub claims are missing from JWT.
+        Note: tenant_id falls back to 'sub' if not present, so both must be missing.
         """
         import jwt
         from src.config import settings
 
         middleware = TenantIsolationMiddleware(app=Mock())
 
-        # Create token without tenant_id claim
+        # Create token without tenant_id OR sub claim
         token = jwt.encode(
-            {"sub": str(uuid4()), "email": "test@example.com"},
+            {"email": "test@example.com", "role": "user"},
             settings.jwt_secret_key,
             algorithm=settings.jwt_algorithm
         )
@@ -566,8 +567,8 @@ class TestSecurityDependencies:
         Should raise TenantNotFoundError when tenant_id not in state.
         """
         request = Mock(spec=Request)
-        request.state = Mock()
-        # No tenant_id attribute
+        # Create a state object without tenant_id attribute
+        request.state = Mock(spec=['user_id'])  # Only has user_id, not tenant_id
 
         with pytest.raises(TenantNotFoundError):
             await get_current_tenant_id(request)
@@ -592,8 +593,8 @@ class TestSecurityDependencies:
         Should raise AuthenticationError when user_id not in state.
         """
         request = Mock(spec=Request)
-        request.state = Mock()
-        # No user_id attribute
+        # Create a state object without user_id attribute
+        request.state = Mock(spec=['tenant_id'])  # Only has tenant_id, not user_id
 
         with pytest.raises(AuthenticationError, match="User not authenticated"):
             await get_current_user_id(request)
@@ -618,7 +619,8 @@ class TestSecurityDependencies:
         Should return None when user_id not present (no exception).
         """
         request = Mock(spec=Request)
-        request.state = Mock()
+        # Create a state object without user_id attribute
+        request.state = Mock(spec=['tenant_id'])  # Only has tenant_id, not user_id
 
         result = await get_optional_user_id(request)
 

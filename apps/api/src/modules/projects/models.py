@@ -99,8 +99,12 @@ class Project(Base):
     coherence_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_analysis_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Metadata (using project_metadata to avoid SQLAlchemy reserved name)
+    project_metadata: Mapped[dict] = mapped_column(
+        "metadata",  # Column name in database
+        JSONB,
+        default=dict
+    )
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
