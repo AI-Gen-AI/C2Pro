@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from mimetypes import guess_type
 from pathlib import Path
 from uuid import UUID
@@ -10,6 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.core.database import get_session_with_tenant
 from src.modules.documents.models import Document, DocumentStatus, DocumentType
+from src.modules.documents.parsers.bc3_parser import BC3ParsingError, parse_bc3_file
+from src.modules.documents.parsers.excel_parser import (
+    ExcelParsingError,
+    parse_budget_from_excel,
+    parse_schedule_from_excel,
+)
+from src.modules.documents.parsers.pdf_parser import PDFParsingError, extract_text_and_offsets
 from src.modules.projects.models import Project
 from src.shared.storage import StorageService
 
@@ -84,6 +92,96 @@ class DocumentService:
             await tenant_db.commit()
             await tenant_db.refresh(new_document)
             return new_document
+
+    async def mark_document_parsing(self, document_id: UUID, tenant_id: UUID) -> None:
+        async with get_session_with_tenant(tenant_id) as tenant_db:
+            document_result = await tenant_db.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            document = document_result.scalar_one_or_none()
+            if not document:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Document not found."
+                )
+            document.upload_status = DocumentStatus.PARSING
+            document.parsing_error = None
+            await tenant_db.commit()
+
+    async def _parse_document_file(self, document: Document, file_path: Path) -> dict:
+        file_format = (document.file_format or "").lower()
+        parsed_payload: dict = {"file_format": file_format, "document_type": document.document_type}
+
+        if file_format == ".pdf":
+            parsed_payload["text_blocks"] = extract_text_and_offsets(file_path)
+            return parsed_payload
+
+        if file_format in {".xlsx", ".xls"}:
+            if document.document_type == DocumentType.SCHEDULE:
+                parsed_payload["schedule"] = parse_schedule_from_excel(file_path)
+                return parsed_payload
+            if document.document_type == DocumentType.BUDGET:
+                parsed_payload["budget"] = parse_budget_from_excel(file_path)
+                return parsed_payload
+            raise ValueError(
+                "Excel parsing is only supported for schedule or budget document types."
+            )
+
+        if file_format == ".bc3":
+            parsed_payload["budget"] = parse_bc3_file(file_path)
+            return parsed_payload
+
+        raise ValueError(f"No parser available for file format: {file_format}")
+
+    async def parse_document(self, document_id: UUID, user_id: UUID) -> None:
+        document = await self.get_document(document_id, user_id)
+        tenant_id = await self._get_project_tenant_id(document.project_id)
+        await self.mark_document_parsing(document_id, tenant_id)
+
+        try:
+            file_name_in_storage = document.storage_url.split("/")[-1]
+            file_path = await self.storage_service.download_file(file_name_in_storage)
+            parsed_payload = await self._parse_document_file(document, file_path)
+
+            async with get_session_with_tenant(tenant_id) as tenant_db:
+                document_result = await tenant_db.execute(
+                    select(Document).where(Document.id == document_id)
+                )
+                document = document_result.scalar_one_or_none()
+                if not document:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Document not found during parsing update.",
+                    )
+                metadata = dict(document.document_metadata or {})
+                metadata["parsed_content"] = parsed_payload
+                metadata["parsed_at"] = datetime.utcnow().isoformat()
+                document.document_metadata = metadata
+                document.upload_status = DocumentStatus.PARSED
+                document.parsed_at = datetime.utcnow()
+                document.parsing_error = None
+                await tenant_db.commit()
+        except (PDFParsingError, ExcelParsingError, BC3ParsingError, ValueError) as e:
+            async with get_session_with_tenant(tenant_id) as tenant_db:
+                document_result = await tenant_db.execute(
+                    select(Document).where(Document.id == document_id)
+                )
+                document = document_result.scalar_one_or_none()
+                if document:
+                    document.upload_status = DocumentStatus.ERROR
+                    document.parsing_error = str(e)
+                    await tenant_db.commit()
+            raise
+        except Exception as e:
+            async with get_session_with_tenant(tenant_id) as tenant_db:
+                document_result = await tenant_db.execute(
+                    select(Document).where(Document.id == document_id)
+                )
+                document = document_result.scalar_one_or_none()
+                if document:
+                    document.upload_status = DocumentStatus.ERROR
+                    document.parsing_error = f"Unexpected parsing error: {e}"
+                    await tenant_db.commit()
+            raise
 
     async def get_document(self, document_id: UUID, user_id: UUID) -> Document:
         """
