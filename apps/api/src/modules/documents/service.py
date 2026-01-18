@@ -1,5 +1,7 @@
 import os
+import re
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from mimetypes import guess_type
 from pathlib import Path
 from uuid import UUID
@@ -19,6 +21,7 @@ from src.modules.documents.parsers.excel_parser import (
 )
 from src.modules.documents.parsers.pdf_parser import PDFParsingError, extract_text_and_offsets
 from src.modules.projects.models import Project
+from src.modules.stakeholders.models import BOMItem, Stakeholder, WBSItem, WBSItemType
 from src.shared.storage import StorageService
 
 
@@ -78,7 +81,7 @@ class DocumentService:
                 file_size_bytes=file.size,
                 upload_status=DocumentStatus.UPLOADED,
                 created_by=user_id,
-                metadata=metadata,
+                document_metadata=metadata,
             )
             tenant_db.add(new_document)
             await tenant_db.flush()  # Flush to get new_document.id
@@ -107,9 +110,37 @@ class DocumentService:
             document.parsing_error = None
             await tenant_db.commit()
 
+    def _parse_datetime_value(self, value: object) -> datetime | None:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def _parse_decimal(self, value: object) -> Decimal | None:
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+
+    def _normalize_name_from_email(self, email: str) -> str:
+        local_part = email.split("@")[0]
+        cleaned = re.sub(r"[._-]+", " ", local_part).strip()
+        return cleaned.title() if cleaned else email
+
     async def _parse_document_file(self, document: Document, file_path: Path) -> dict:
         file_format = (document.file_format or "").lower()
-        parsed_payload: dict = {"file_format": file_format, "document_type": document.document_type}
+        parsed_payload: dict = {
+            "file_format": file_format,
+            "document_type": document.document_type.value,
+        }
 
         if file_format == ".pdf":
             parsed_payload["text_blocks"] = extract_text_and_offsets(file_path)
@@ -132,6 +163,138 @@ class DocumentService:
 
         raise ValueError(f"No parser available for file format: {file_format}")
 
+    async def _extract_entities(
+        self, document: Document, parsed_payload: dict, tenant_id: UUID
+    ) -> dict[str, int]:
+        extraction_summary = {"stakeholders": 0, "wbs_items": 0, "bom_items": 0}
+
+        async with get_session_with_tenant(tenant_id) as tenant_db:
+            if document.document_type == DocumentType.CONTRACT:
+                text_blocks = parsed_payload.get("text_blocks", [])
+                emails = set()
+                for block in text_blocks:
+                    text = block.get("text", "")
+                    if not isinstance(text, str):
+                        continue
+                    for email in re.findall(r"[\w\.-]+@[\w\.-]+\.\w+", text):
+                        emails.add(email.lower())
+
+                for email in emails:
+                    existing = await tenant_db.scalar(
+                        select(Stakeholder).where(
+                            Stakeholder.project_id == document.project_id,
+                            Stakeholder.email == email,
+                        )
+                    )
+                    if existing:
+                        continue
+                    stakeholder = Stakeholder(
+                        project_id=document.project_id,
+                        name=self._normalize_name_from_email(email),
+                        email=email,
+                        extracted_from_document_id=document.id,
+                        stakeholder_metadata={"source_document_id": str(document.id)},
+                    )
+                    tenant_db.add(stakeholder)
+                    extraction_summary["stakeholders"] += 1
+
+            if document.document_type == DocumentType.SCHEDULE:
+                for index, task in enumerate(parsed_payload.get("schedule", []), start=1):
+                    task_name = task.get("task")
+                    if not task_name:
+                        continue
+                    wbs_code = f"SCH-{index:03d}"
+                    existing = await tenant_db.scalar(
+                        select(WBSItem).where(
+                            WBSItem.project_id == document.project_id,
+                            WBSItem.wbs_code == wbs_code,
+                        )
+                    )
+                    if existing:
+                        continue
+                    wbs_item = WBSItem(
+                        project_id=document.project_id,
+                        wbs_code=wbs_code,
+                        name=str(task_name),
+                        description=None,
+                        level=1,
+                        item_type=WBSItemType.ACTIVITY,
+                        planned_start=self._parse_datetime_value(task.get("start_date")),
+                        planned_end=self._parse_datetime_value(task.get("end_date")),
+                        wbs_metadata={"source_document_id": str(document.id)},
+                    )
+                    tenant_db.add(wbs_item)
+                    extraction_summary["wbs_items"] += 1
+
+            if document.document_type == DocumentType.BUDGET:
+                budget_payload = parsed_payload.get("budget")
+                if isinstance(budget_payload, list):
+                    for index, item in enumerate(budget_payload, start=1):
+                        item_name = item.get("item")
+                        quantity = self._parse_decimal(item.get("quantity"))
+                        if not item_name or quantity is None:
+                            continue
+                        item_code = f"BUD-{index:04d}"
+                        existing = await tenant_db.scalar(
+                            select(BOMItem).where(
+                                BOMItem.project_id == document.project_id,
+                                BOMItem.item_name == item_name,
+                                BOMItem.unit == item.get("unit"),
+                            )
+                        )
+                        if existing:
+                            continue
+                        bom_item = BOMItem(
+                            project_id=document.project_id,
+                            item_code=item_code,
+                            item_name=str(item_name),
+                            quantity=quantity,
+                            unit=item.get("unit"),
+                            unit_price=self._parse_decimal(item.get("unit_price")),
+                            total_price=self._parse_decimal(item.get("total")),
+                            currency="EUR",
+                            bom_metadata={"source_document_id": str(document.id)},
+                        )
+                        tenant_db.add(bom_item)
+                        extraction_summary["bom_items"] += 1
+                elif isinstance(budget_payload, dict):
+                    for chapter in budget_payload.get("chapters", []):
+                        for unit in chapter.get("units", []):
+                            item_name = unit.get("description")
+                            quantity = self._parse_decimal(unit.get("quantity"))
+                            if not item_name or quantity is None:
+                                continue
+                            item_code = unit.get("code")
+                            existing = await tenant_db.scalar(
+                                select(BOMItem).where(
+                                    BOMItem.project_id == document.project_id,
+                                    BOMItem.item_name == item_name,
+                                    BOMItem.unit == unit.get("unit"),
+                                )
+                            )
+                            if existing:
+                                continue
+                            bom_item = BOMItem(
+                                project_id=document.project_id,
+                                item_code=item_code,
+                                item_name=str(item_name),
+                                quantity=quantity,
+                                unit=unit.get("unit"),
+                                unit_price=self._parse_decimal(unit.get("price")),
+                                total_price=self._parse_decimal(unit.get("total")),
+                                currency="EUR",
+                                bom_metadata={
+                                    "source_document_id": str(document.id),
+                                    "chapter_code": chapter.get("code"),
+                                },
+                            )
+                            tenant_db.add(bom_item)
+                            extraction_summary["bom_items"] += 1
+
+            if any(extraction_summary.values()):
+                await tenant_db.commit()
+            return extraction_summary
+
     async def parse_document(self, document_id: UUID, user_id: UUID) -> None:
         document = await self.get_document(document_id, user_id)
         tenant_id = await self._get_project_tenant_id(document.project_id)
@@ -141,6 +304,11 @@ class DocumentService:
             file_name_in_storage = document.storage_url.split("/")[-1]
             file_path = await self.storage_service.download_file(file_name_in_storage)
             parsed_payload = await self._parse_document_file(document, file_path)
+            extraction_summary = await self._extract_entities(
+                document=document,
+                parsed_payload=parsed_payload,
+                tenant_id=tenant_id,
+            )
 
             async with get_session_with_tenant(tenant_id) as tenant_db:
                 document_result = await tenant_db.execute(
@@ -155,6 +323,7 @@ class DocumentService:
                 metadata = dict(document.document_metadata or {})
                 metadata["parsed_content"] = parsed_payload
                 metadata["parsed_at"] = datetime.utcnow().isoformat()
+                metadata["extraction_summary"] = extraction_summary
                 document.document_metadata = metadata
                 document.upload_status = DocumentStatus.PARSED
                 document.parsed_at = datetime.utcnow()
