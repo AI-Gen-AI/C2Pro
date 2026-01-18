@@ -240,7 +240,7 @@ class TestProjectServiceCreate:
         assert project.currency == "EUR"
         assert project.start_date == start_date
         assert project.end_date == end_date
-        assert project.metadata == {"client": "ACME Corp", "priority": "high"}
+        assert project.project_metadata == {"client": "ACME Corp", "priority": "high"}
 
     @pytest.mark.asyncio
     async def test_create_project_duplicate_code_same_tenant(self, db, test_tenant, test_user):
