@@ -143,3 +143,11 @@ class UploadFileResponse(BaseModel):
     filename: str = Field(..., description="Name of the uploaded file")
     message: str = Field(..., description="Status message")
     document_id: UUID = Field(..., description="ID of the created document record")
+
+
+class DocumentUploadResponse(BaseModel):
+    """Response schema for document parsing completion."""
+
+    document_id: UUID = Field(..., description="ID of the document record")
+    status: DocumentStatus = Field(..., description="Parsing status for the document")
+    message: str = Field(..., description="Status message")

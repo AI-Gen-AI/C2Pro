@@ -11,10 +11,11 @@ from src.core.database import get_session, get_session_with_tenant
 from src.core.security import (  # Assuming CurrentTenantId is also available
     CurrentUserId,
 )
-from src.modules.documents.models import Document, DocumentType
+from src.modules.documents.models import Document, DocumentStatus, DocumentType
 from src.modules.documents.schemas import (
     DocumentDetailResponse,
     DocumentResponse,
+    DocumentUploadResponse,
     UploadFileResponse,
 )
 from src.modules.documents.service import DocumentService
@@ -224,4 +225,34 @@ async def list_documents_for_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list documents for project: {e}",
+        )
+
+
+@router.post(
+    "/{document_id}/parse",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Parse a document by ID",
+    description="Parses the uploaded document and stores parsed metadata.",
+)
+async def parse_document_endpoint(
+    document_id: UUID,
+    user_id: CurrentUserId,
+    document_service: DocumentService = Depends(get_document_service),
+):
+    try:
+        await document_service.parse_document(document_id, user_id)
+        logger.info("document_parsed", document_id=str(document_id), user_id=str(user_id))
+        return DocumentUploadResponse(
+            document_id=document_id,
+            status=DocumentStatus.PARSED,
+            message="Document parsed successfully",
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error("document_parse_error", document_id=str(document_id), error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse document: {e}",
         )
