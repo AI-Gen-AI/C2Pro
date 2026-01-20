@@ -31,8 +31,8 @@ BEGIN;
 -- =====================================================
 -- TEST PLAN
 -- =====================================================
--- We'll run 15 tests total
-SELECT plan(15);
+-- We'll run 14 tests total
+SELECT plan(14);
 
 -- =====================================================
 -- HELPER FUNCTIONS FOR AUTH SIMULATION
@@ -88,6 +88,10 @@ DELETE FROM projects WHERE tenant_id IN (
 DELETE FROM users WHERE tenant_id IN (
     SELECT id FROM tenants WHERE slug LIKE 'test-tenant-%'
 );
+DELETE FROM auth.users WHERE id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid
+);
 DELETE FROM tenants WHERE slug LIKE 'test-tenant-%';
 
 -- Create Tenant A
@@ -114,30 +118,36 @@ VALUES (
     true
 );
 
--- Create User Alice in Tenant A
--- NOTE: In production, users are created via Supabase Auth
--- Here we insert directly for testing
-INSERT INTO users (id, tenant_id, email, first_name, last_name, role, is_active)
+-- Create User Alice in Tenant A (via auth.users to satisfy FK + trigger)
+INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role)
 VALUES (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
-    '11111111-1111-1111-1111-111111111111'::uuid,
     'alice@tenant-a.com',
-    'Alice',
-    'Anderson',
-    'owner',
-    true
+    jsonb_build_object(
+        'tenant_id', '11111111-1111-1111-1111-111111111111',
+        'first_name', 'Alice',
+        'last_name', 'Anderson',
+        'role', 'owner'
+    ),
+    jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+    'authenticated',
+    'authenticated'
 );
 
--- Create User Bob in Tenant B
-INSERT INTO users (id, tenant_id, email, first_name, last_name, role, is_active)
+-- Create User Bob in Tenant B (via auth.users to satisfy FK + trigger)
+INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role)
 VALUES (
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
-    '22222222-2222-2222-2222-222222222222'::uuid,
     'bob@tenant-b.com',
-    'Bob',
-    'Baker',
-    'owner',
-    true
+    jsonb_build_object(
+        'tenant_id', '22222222-2222-2222-2222-222222222222',
+        'first_name', 'Bob',
+        'last_name', 'Baker',
+        'role', 'owner'
+    ),
+    jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+    'authenticated',
+    'authenticated'
 );
 
 -- Create Project A1 in Tenant A
@@ -193,7 +203,12 @@ SELECT is(
 );
 
 SELECT is(
-    (SELECT COUNT(*)::int FROM projects WHERE name LIKE 'Project %'),
+    (
+        SELECT COUNT(*)::int
+        FROM projects
+        WHERE tenant_id IN (SELECT id FROM tenants WHERE slug LIKE 'test-tenant-%')
+          AND name LIKE 'Project %'
+    ),
     2,
     'Test 1.3: Two test projects created'
 );
@@ -315,32 +330,45 @@ SELECT is(
     'Test 4.2: Anonymous user sees 0 projects (RLS blocks all access)'
 );
 
+-- Reset role to run identity tests with admin privileges
+RESET ROLE;
+
 -- =====================================================
 -- TEST 5: GATE 2 - IDENTITY MODEL
 -- =====================================================
 -- Verify UNIQUE(tenant_id, email) constraint
 
 -- Test 5.1: Same email in DIFFERENT tenants (should succeed)
-BEGIN;
-    INSERT INTO users (id, tenant_id, email, first_name, last_name, role, is_active)
+SAVEPOINT identity_test;
+    INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role, is_sso_user)
     VALUES (
         'cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid,
-        '11111111-1111-1111-1111-111111111111'::uuid,  -- Tenant A
         'admin@company.com',
-        'Charlie',
-        'Chen',
-        'admin',
+        jsonb_build_object(
+            'tenant_id', '11111111-1111-1111-1111-111111111111',
+            'first_name', 'Charlie',
+            'last_name', 'Chen',
+            'role', 'admin'
+        ),
+        jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+        'authenticated',
+        'authenticated',
         true
     );
 
-    INSERT INTO users (id, tenant_id, email, first_name, last_name, role, is_active)
+    INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role, is_sso_user)
     VALUES (
         'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid,
-        '22222222-2222-2222-2222-222222222222'::uuid,  -- Tenant B
         'admin@company.com',  -- SAME email, DIFFERENT tenant
-        'Diana',
-        'Davis',
-        'admin',
+        jsonb_build_object(
+            'tenant_id', '22222222-2222-2222-2222-222222222222',
+            'first_name', 'Diana',
+            'last_name', 'Davis',
+            'role', 'admin'
+        ),
+        jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+        'authenticated',
+        'authenticated',
         true
     );
 
@@ -349,19 +377,25 @@ BEGIN;
         2,
         'Test 5.1: Same email in DIFFERENT tenants is allowed (B2B enterprise support)'
     );
-ROLLBACK;
+ROLLBACK TO SAVEPOINT identity_test;
+RELEASE SAVEPOINT identity_test;
 
 -- Test 5.2: Same email in SAME tenant (should fail)
 SELECT throws_ok(
     $$
-        INSERT INTO users (id, tenant_id, email, first_name, last_name, role, is_active)
+        INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role, is_sso_user)
         VALUES (
             'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
-            '11111111-1111-1111-1111-111111111111'::uuid,  -- Tenant A
             'alice@tenant-a.com',  -- DUPLICATE email in SAME tenant
-            'Evil',
-            'Alice',
-            'member',
+            jsonb_build_object(
+                'tenant_id', '11111111-1111-1111-1111-111111111111',
+                'first_name', 'Evil',
+                'last_name', 'Alice',
+                'role', 'member'
+            ),
+            jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+            'authenticated',
+            'authenticated',
             true
         );
     $$,
@@ -384,6 +418,10 @@ DELETE FROM projects WHERE tenant_id IN (
 );
 DELETE FROM users WHERE tenant_id IN (
     SELECT id FROM tenants WHERE slug LIKE 'test-tenant-%'
+);
+DELETE FROM auth.users WHERE id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid
 );
 DELETE FROM tenants WHERE slug LIKE 'test-tenant-%';
 

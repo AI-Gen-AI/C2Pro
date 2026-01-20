@@ -262,8 +262,9 @@ DECLARE
     v_count INTEGER;
     v_failed BOOLEAN := FALSE;
 BEGIN
-    -- Resetear role para simular usuario sin autenticación
-    RESET ROLE;
+    -- Forzar rol anon y RLS activa para simular usuario sin autenticación
+    PERFORM set_config('role', 'anon', true);
+    PERFORM set_config('row_security', 'on', true);
 
     -- Intentar contar tenants (debe retornar 0)
     SELECT COUNT(*) INTO v_count FROM tenants;
@@ -306,7 +307,10 @@ BEGIN
     ELSE
         RAISE NOTICE '✅ TEST 7 PASADO: RLS impide acceso sin autenticación';
     END IF;
-END $$;
+
+    -- Restaurar rol original
+    RESET ROLE;
+  END $$;
 
 \echo ''
 
