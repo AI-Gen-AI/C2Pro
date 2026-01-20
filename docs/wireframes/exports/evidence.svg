@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="436">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="20" y="34" font-family="Courier New, monospace" font-size="14" fill="#111111">
+# Wireframe - Evidence Viewer
+</text><text x="20" y="52" font-family="Courier New, monospace" font-size="14" fill="#111111">
+</text><text x="20" y="70" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="88" font-family="Courier New, monospace" font-size="14" fill="#111111">| Evidence Viewer                                                               |
+</text><text x="20" y="106" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="124" font-family="Courier New, monospace" font-size="14" fill="#111111">| [Project v] [Alert v] [Clause v] [Search.................]                     |
+</text><text x="20" y="142" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="160" font-family="Courier New, monospace" font-size="14" fill="#111111">| Left: Alerts List                     | Center: Document Viewer               |
+</text><text x="20" y="178" font-family="Courier New, monospace" font-size="14" fill="#111111">| +------------------------------+      | +-----------------------------------+ |
+</text><text x="20" y="196" font-family="Courier New, monospace" font-size="14" fill="#111111">| | High: Schedule mismatch      |      | | Document: Contract.pdf            | |
+</text><text x="20" y="214" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Med: Missing milestone       |      | | Page 12/58                        | |
+</text><text x="20" y="232" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Low: Budget variance         |      | |                                   | |
+</text><text x="20" y="250" font-family="Courier New, monospace" font-size="14" fill="#111111">| +------------------------------+      | | [Highlighted clause block]        | |
+</text><text x="20" y="268" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                       | |                                   | |
+</text><text x="20" y="286" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                       | +-----------------------------------+ |
+</text><text x="20" y="304" font-family="Courier New, monospace" font-size="14" fill="#111111">+---------------------------------------+-----------------------------------------+
+</text><text x="20" y="322" font-family="Courier New, monospace" font-size="14" fill="#111111">| Right: Traceability Panel                                                    |
+</text><text x="20" y="340" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Clause: 4.2.1 (Penalty)                                                     |
+</text><text x="20" y="358" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Linked WBS: WBS-3.1, WBS-3.2                                                |
+</text><text x="20" y="376" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Linked BOM: BOM-12, BOM-18                                                  |
+</text><text x="20" y="394" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Related Docs: Schedule.xlsx, Budget.xlsx                                    |
+</text><text x="20" y="412" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text></svg>

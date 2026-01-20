@@ -16,9 +16,12 @@ Version: 1.0.0
 """
 
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 import structlog
-from pydantic import BaseModel, Field
+import yaml
+from pydantic import BaseModel, Field, ValidationError
 
 from src.config import settings
 
@@ -30,14 +33,38 @@ logger = structlog.get_logger()
 # ===========================================
 
 
-class TaskType(str, Enum):
+class AITaskType(str, Enum):
     """
-    Tipos de tareas para routing de modelos.
+    Tipos de tareas de IA para routing de modelos (ROADMAP §3.2).
 
     FLASH (Haiku): Tareas rápidas, bajo costo
     STANDARD (Sonnet): Tareas normales, balanceado
     COMPLEX (Opus): Tareas complejas, alto costo
+    VISION (Sonnet Vision): Tareas multimodales con imágenes
     """
+
+    # ===========================================
+    # ROADMAP §3.2 - Core Task Types
+    # ===========================================
+
+    # STANDARD (Sonnet) - High precision, long context
+    CONTRACT_EXTRACTION = "contract_extraction"  # Extracción de cláusulas contractuales
+
+    # FLASH (Haiku) - High volume, simple task
+    STAKEHOLDER_CLASSIFICATION = "stakeholder_classification"  # Clasificación de stakeholders
+
+    # FLASH (Haiku) - Deterministic rules, speed
+    COHERENCE_CHECK = "coherence_check"  # Verificación de coherencia con reglas
+
+    # STANDARD (Sonnet) - Complex reasoning
+    RACI_GENERATION = "raci_generation"  # Generación de matriz RACI
+
+    # VISION (Sonnet Vision) - Multimodal with images
+    MULTIMODAL_EXPEDITING = "multimodal_expediting"  # Análisis de imágenes para expediting
+
+    # ===========================================
+    # Additional Task Types
+    # ===========================================
 
     # FLASH - Claude Haiku 4
     CLASSIFICATION = "classification"  # Clasificar documentos
@@ -47,7 +74,7 @@ class TaskType(str, Enum):
 
     # STANDARD - Claude Sonnet 4
     COMPLEX_EXTRACTION = "complex_extraction"  # Extraer stakeholders, cláusulas
-    COHERENCE_ANALYSIS = "coherence_analysis"  # Análisis de coherencia
+    COHERENCE_ANALYSIS = "coherence_analysis"  # Análisis de coherencia completo
     RELATIONSHIP_MAPPING = "relationship_mapping"  # Mapear relaciones en grafo
     SUMMARIZATION_LONG = "summarization_long"  # Resúmenes largos
     CONTRACT_PARSING = "contract_parsing"  # Parsear contratos completos
@@ -58,6 +85,10 @@ class TaskType(str, Enum):
     MULTI_DOCUMENT_ANALYSIS = "multi_document_analysis"  # Análisis multi-documento
     WBS_GENERATION = "wbs_generation"  # Generar WBS completa
     BOM_GENERATION = "bom_generation"  # Generar BOM completa
+
+
+# Backward compatibility alias
+TaskType = AITaskType
 
 
 class ModelTier(str, Enum):
@@ -81,10 +112,225 @@ class ModelConfig(BaseModel):
 
 
 # ===========================================
-# MODEL CONFIGURATIONS
+# YAML CONFIGURATION LOADER
 # ===========================================
 
-MODEL_CONFIGS = {
+
+def load_routing_config(config_path: Path | str | None = None) -> dict[str, Any]:
+    """
+    Carga la configuración de routing desde el archivo YAML.
+
+    Args:
+        config_path: Path al archivo YAML (si None, usa default)
+
+    Returns:
+        Dict con la configuración parseada
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe
+        yaml.YAMLError: Si el YAML es inválido
+    """
+    if config_path is None:
+        # Default path: mismo directorio que este archivo
+        config_path = Path(__file__).parent / "model_routing.yaml"
+    else:
+        config_path = Path(config_path)
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    logger.info("loading_routing_config", config_path=str(config_path))
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+
+        # Validate configuration
+        warnings = validate_routing_config(config)
+
+        # Log warnings if any
+        for warning in warnings:
+            logger.warning("routing_config_warning", warning=warning)
+
+        logger.info(
+            "routing_config_loaded",
+            models_count=len(config["models"]),
+            tasks_count=len(config["task_routing"]),
+            warnings_count=len(warnings),
+        )
+
+        return config
+
+    except yaml.YAMLError as e:
+        logger.error("yaml_parse_error", error=str(e))
+        raise
+
+
+def build_model_configs_from_yaml(yaml_config: dict[str, Any]) -> dict[ModelTier, ModelConfig]:
+    """
+    Construye los ModelConfigs desde la configuración YAML.
+
+    Args:
+        yaml_config: Configuración cargada del YAML
+
+    Returns:
+        Dict de ModelTier → ModelConfig
+    """
+    configs = {}
+
+    for tier_name, model_data in yaml_config["models"].items():
+        try:
+            tier = ModelTier(tier_name)
+            config = ModelConfig(
+                name=model_data["name"],
+                tier=tier,
+                cost_per_1m_input=model_data["cost_per_1m_input"],
+                cost_per_1m_output=model_data["cost_per_1m_output"],
+                max_tokens=model_data["max_tokens"],
+                speed_factor=model_data["speed_factor"],
+                recommended_for=model_data.get("recommended_for", []),
+            )
+            configs[tier] = config
+        except (KeyError, ValueError, ValidationError) as e:
+            logger.error("invalid_model_config", tier=tier_name, error=str(e))
+            raise ValueError(f"Invalid model config for {tier_name}: {e}")
+
+    return configs
+
+
+def build_task_routing_from_yaml(yaml_config: dict[str, Any]) -> dict[TaskType, ModelTier]:
+    """
+    Construye el mapeo TaskType → ModelTier desde la configuración YAML.
+
+    Args:
+        yaml_config: Configuración cargada del YAML
+
+    Returns:
+        Dict de TaskType → ModelTier
+    """
+    routing = {}
+
+    for task_name, tier_name in yaml_config["task_routing"].items():
+        try:
+            task = TaskType(task_name)
+            tier = ModelTier(tier_name)
+            routing[task] = tier
+        except ValueError as e:
+            logger.error("invalid_task_routing", task=task_name, tier=tier_name, error=str(e))
+            raise ValueError(f"Invalid task routing {task_name} → {tier_name}: {e}")
+
+    return routing
+
+
+def validate_routing_config(yaml_config: dict[str, Any]) -> list[str]:
+    """
+    Valida la configuración de routing y retorna lista de warnings.
+
+    Args:
+        yaml_config: Configuración cargada del YAML
+
+    Returns:
+        Lista de warnings (vacía si todo OK)
+
+    Raises:
+        ValueError: Si hay errores críticos en la configuración
+    """
+    warnings = []
+
+    # Validate models section
+    if "models" not in yaml_config:
+        raise ValueError("Missing 'models' section in config")
+
+    required_tiers = {"flash", "standard", "powerful"}
+    available_tiers = set(yaml_config["models"].keys())
+
+    if not required_tiers.issubset(available_tiers):
+        missing = required_tiers - available_tiers
+        raise ValueError(f"Missing required model tiers: {missing}")
+
+    # Validate model configurations
+    for tier_name, model_data in yaml_config["models"].items():
+        required_fields = [
+            "name",
+            "tier",
+            "cost_per_1m_input",
+            "cost_per_1m_output",
+            "max_tokens",
+            "speed_factor",
+        ]
+        for field in required_fields:
+            if field not in model_data:
+                raise ValueError(f"Model '{tier_name}' missing required field: {field}")
+
+        # Validate numeric values are positive
+        numeric_fields = ["cost_per_1m_input", "cost_per_1m_output", "max_tokens", "speed_factor"]
+        for field in numeric_fields:
+            value = model_data.get(field)
+            if value is not None and value <= 0:
+                raise ValueError(f"Model '{tier_name}' has invalid {field}: {value} (must be > 0)")
+
+    # Validate task_routing section
+    if "task_routing" not in yaml_config:
+        raise ValueError("Missing 'task_routing' section in config")
+
+    # Check all TaskTypes are mapped
+    all_tasks = {task.value for task in TaskType}
+    mapped_tasks = set(yaml_config["task_routing"].keys())
+
+    if mapped_tasks != all_tasks:
+        missing = all_tasks - mapped_tasks
+        if missing:
+            warnings.append(f"Some tasks not mapped in task_routing: {missing}")
+
+        extra = mapped_tasks - all_tasks
+        if extra:
+            warnings.append(f"Unknown tasks in task_routing: {extra}")
+
+    # Validate task_routing values reference valid tiers
+    for task_name, tier_name in yaml_config["task_routing"].items():
+        if tier_name not in available_tiers:
+            raise ValueError(
+                f"Task '{task_name}' references unknown tier: {tier_name}. "
+                f"Available tiers: {available_tiers}"
+            )
+
+    # Validate fallback_rules structure
+    if "fallback_rules" in yaml_config:
+        fallback_rules = yaml_config["fallback_rules"]
+
+        if "budget" in fallback_rules:
+            budget_rule = fallback_rules["budget"]
+            if "threshold_usd" in budget_rule and budget_rule["threshold_usd"] < 0:
+                raise ValueError("fallback_rules.budget.threshold_usd must be >= 0")
+
+        if "size" in fallback_rules:
+            size_rule = fallback_rules["size"]
+            if "threshold_tokens" in size_rule and size_rule["threshold_tokens"] < 0:
+                raise ValueError("fallback_rules.size.threshold_tokens must be >= 0")
+
+    # Validate settings structure
+    if "settings" in yaml_config:
+        settings = yaml_config["settings"]
+
+        if "default_tier" in settings:
+            default_tier = settings["default_tier"]
+            if default_tier not in available_tiers:
+                raise ValueError(
+                    f"settings.default_tier '{default_tier}' not in available tiers: {available_tiers}"
+                )
+
+    logger.info("routing_config_validated", warnings_count=len(warnings))
+
+    return warnings
+
+
+# ===========================================
+# MODEL CONFIGURATIONS (Fallback - deprecated)
+# ===========================================
+# NOTA: Estos valores se mantienen como fallback si falla la carga del YAML
+# En producción, usa el archivo model_routing.yaml
+
+_FALLBACK_MODEL_CONFIGS = {
     ModelTier.FLASH: ModelConfig(
         name=settings.ai_model_fast,  # "claude-haiku-4-20250514"
         tier=ModelTier.FLASH,
@@ -131,25 +377,33 @@ MODEL_CONFIGS = {
 }
 
 
-# Task Type → Model Tier mapping
-TASK_TO_TIER = {
+# Task Type → Model Tier mapping (Fallback - deprecated)
+_FALLBACK_TASK_TO_TIER = {
+    # ROADMAP §3.2 - Core Task Types
+    AITaskType.CONTRACT_EXTRACTION: ModelTier.STANDARD,  # High precision
+    AITaskType.STAKEHOLDER_CLASSIFICATION: ModelTier.FLASH,  # High volume
+    AITaskType.COHERENCE_CHECK: ModelTier.FLASH,  # Deterministic rules
+    AITaskType.RACI_GENERATION: ModelTier.STANDARD,  # Complex reasoning
+    AITaskType.MULTIMODAL_EXPEDITING: ModelTier.STANDARD,  # Vision (use sonnet-vision)
+
+    # Additional Task Types
     # FLASH tasks
-    TaskType.CLASSIFICATION: ModelTier.FLASH,
-    TaskType.SIMPLE_EXTRACTION: ModelTier.FLASH,
-    TaskType.VALIDATION: ModelTier.FLASH,
-    TaskType.SUMMARIZATION_SHORT: ModelTier.FLASH,
+    AITaskType.CLASSIFICATION: ModelTier.FLASH,
+    AITaskType.SIMPLE_EXTRACTION: ModelTier.FLASH,
+    AITaskType.VALIDATION: ModelTier.FLASH,
+    AITaskType.SUMMARIZATION_SHORT: ModelTier.FLASH,
     # STANDARD tasks
-    TaskType.COMPLEX_EXTRACTION: ModelTier.STANDARD,
-    TaskType.COHERENCE_ANALYSIS: ModelTier.STANDARD,
-    TaskType.RELATIONSHIP_MAPPING: ModelTier.STANDARD,
-    TaskType.SUMMARIZATION_LONG: ModelTier.STANDARD,
-    TaskType.CONTRACT_PARSING: ModelTier.STANDARD,
+    AITaskType.COMPLEX_EXTRACTION: ModelTier.STANDARD,
+    AITaskType.COHERENCE_ANALYSIS: ModelTier.STANDARD,
+    AITaskType.RELATIONSHIP_MAPPING: ModelTier.STANDARD,
+    AITaskType.SUMMARIZATION_LONG: ModelTier.STANDARD,
+    AITaskType.CONTRACT_PARSING: ModelTier.STANDARD,
     # POWERFUL tasks (Fase 2+)
-    TaskType.IMPLICIT_NEEDS: ModelTier.POWERFUL,
-    TaskType.LEGAL_INTERPRETATION: ModelTier.POWERFUL,
-    TaskType.MULTI_DOCUMENT_ANALYSIS: ModelTier.POWERFUL,
-    TaskType.WBS_GENERATION: ModelTier.POWERFUL,
-    TaskType.BOM_GENERATION: ModelTier.POWERFUL,
+    AITaskType.IMPLICIT_NEEDS: ModelTier.POWERFUL,
+    AITaskType.LEGAL_INTERPRETATION: ModelTier.POWERFUL,
+    AITaskType.MULTI_DOCUMENT_ANALYSIS: ModelTier.POWERFUL,
+    AITaskType.WBS_GENERATION: ModelTier.POWERFUL,
+    AITaskType.BOM_GENERATION: ModelTier.POWERFUL,
 }
 
 
@@ -181,16 +435,181 @@ class ModelRouter:
         print(f"Cost estimate: ${router.estimate_cost(model, 50000, 2000):.4f}")
     """
 
-    def __init__(self):
-        self.configs = MODEL_CONFIGS
-        logger.info(
-            "model_router_initialized",
-            available_models=[config.name for config in self.configs.values()],
-        )
+    def __init__(self, config_path: Path | str | None = None, use_fallback: bool = False):
+        """
+        Inicializa el Model Router.
+
+        Args:
+            config_path: Path al archivo de configuración YAML (si None, usa default)
+            use_fallback: Si True, usa configuración hardcodeada en lugar de YAML
+        """
+        if use_fallback:
+            logger.warning("model_router_using_fallback", reason="use_fallback=True")
+            self.configs = _FALLBACK_MODEL_CONFIGS
+            self.task_routing = _FALLBACK_TASK_TO_TIER
+            self.yaml_config = None
+        else:
+            try:
+                # Load YAML config
+                self.yaml_config = load_routing_config(config_path)
+                self.configs = build_model_configs_from_yaml(self.yaml_config)
+                self.task_routing = build_task_routing_from_yaml(self.yaml_config)
+
+                # Extract fallback rules and settings
+                self.fallback_rules = self.yaml_config.get("fallback_rules", {})
+                self.settings = self.yaml_config.get("settings", {})
+
+                logger.info(
+                    "model_router_initialized",
+                    available_models=[config.name for config in self.configs.values()],
+                    config_source="yaml",
+                    config_path=str(config_path) if config_path else "default",
+                )
+
+            except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
+                logger.error(
+                    "yaml_config_load_failed",
+                    error=str(e),
+                    fallback="using hardcoded config",
+                )
+                # Fallback to hardcoded config
+                self.configs = _FALLBACK_MODEL_CONFIGS
+                self.task_routing = _FALLBACK_TASK_TO_TIER
+                self.yaml_config = None
+                self.fallback_rules = {}
+                self.settings = {}
 
     # ===========================================
     # MODEL SELECTION
     # ===========================================
+
+    def select_model_with_budget_mode(
+        self,
+        task_type: AITaskType | str,
+        low_budget_mode: bool = False,
+        input_token_estimate: int = 0,
+        force_tier: ModelTier | None = None,
+    ) -> ModelConfig:
+        """
+        Selecciona el modelo con soporte para modo de bajo presupuesto (ROADMAP §3.2).
+
+        Esta es la interfaz principal recomendada que implementa lógica de degradación
+        inteligente basada en el presupuesto disponible.
+
+        Args:
+            task_type: Tipo de tarea a realizar
+            low_budget_mode: Si True, degradar a modelos más económicos cuando sea viable
+            input_token_estimate: Estimación de tokens de entrada
+            force_tier: Forzar un tier específico (override)
+
+        Returns:
+            ModelConfig del modelo seleccionado
+
+        Raises:
+            ValueError: Si el tipo de tarea no es válido
+
+        Estrategia de degradación en low_budget_mode:
+        - STANDARD → FLASH: Para tareas que no requieren alta precisión
+        - POWERFUL → STANDARD: Para tareas complejas pero no críticas
+        - NO degradar: Tareas críticas que requieren alta precisión
+
+        Tareas que NO se degradan (críticas):
+        - contract_extraction: Requiere alta precisión para cláusulas contractuales
+        - raci_generation: Razonamiento complejo necesario
+        - legal_interpretation: Interpretación legal no puede comprometerse
+        - wbs_generation: Generación de WBS requiere razonamiento profundo
+        - bom_generation: BOM requiere precisión en especificaciones
+        """
+        # Convert string to AITaskType if needed
+        if isinstance(task_type, str):
+            try:
+                task_type = AITaskType(task_type)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid task_type: {task_type}. Must be one of: {[t.value for t in AITaskType]}"
+                )
+
+        # Force tier if specified
+        if force_tier:
+            logger.info(
+                "model_forced",
+                task_type=task_type.value,
+                forced_tier=force_tier.value,
+                low_budget_mode=low_budget_mode,
+            )
+            return self.configs[force_tier]
+
+        # Get recommended tier for task
+        recommended_tier = self.task_routing.get(task_type)
+        if recommended_tier is None:
+            # Fallback to default tier if task not found
+            default_tier_name = self.settings.get("default_tier", "standard")
+            recommended_tier = ModelTier(default_tier_name)
+            logger.warning(
+                "task_type_not_in_routing",
+                task_type=task_type.value,
+                using_default=recommended_tier.value,
+            )
+
+        # Define critical tasks that should NOT be downgraded
+        # These tasks require high precision and complex reasoning
+        CRITICAL_TASKS = {
+            AITaskType.CONTRACT_EXTRACTION,  # High precision required
+            AITaskType.RACI_GENERATION,  # Complex reasoning needed
+            AITaskType.LEGAL_INTERPRETATION,  # Legal accuracy critical
+            AITaskType.WBS_GENERATION,  # Deep reasoning for WBS structure
+            AITaskType.BOM_GENERATION,  # Precision in specifications
+            AITaskType.MULTI_DOCUMENT_ANALYSIS,  # Complex multi-doc reasoning
+        }
+
+        # Apply low budget mode degradation
+        if low_budget_mode:
+            # Check if task is critical (cannot be downgraded)
+            is_critical = task_type in CRITICAL_TASKS
+
+            if is_critical:
+                logger.info(
+                    "low_budget_mode_no_downgrade",
+                    task_type=task_type.value,
+                    tier=recommended_tier.value,
+                    reason="critical_task_requires_precision",
+                )
+            else:
+                # Downgrade non-critical tasks to save costs
+                original_tier = recommended_tier
+
+                if recommended_tier == ModelTier.POWERFUL:
+                    recommended_tier = ModelTier.STANDARD
+                    logger.info(
+                        "low_budget_mode_downgrade",
+                        task_type=task_type.value,
+                        original_tier=original_tier.value,
+                        new_tier=recommended_tier.value,
+                        reason="budget_optimization",
+                    )
+                elif recommended_tier == ModelTier.STANDARD:
+                    recommended_tier = ModelTier.FLASH
+                    logger.info(
+                        "low_budget_mode_downgrade",
+                        task_type=task_type.value,
+                        original_tier=original_tier.value,
+                        new_tier=recommended_tier.value,
+                        reason="budget_optimization",
+                    )
+                # FLASH stays as FLASH (already cheapest)
+
+        selected = self.configs[recommended_tier]
+
+        logger.info(
+            "model_selected_with_budget_mode",
+            task_type=task_type.value,
+            model=selected.name,
+            tier=selected.tier.value,
+            low_budget_mode=low_budget_mode,
+            input_tokens=input_token_estimate,
+        )
+
+        return selected
 
     def select_model(
         self,
@@ -233,7 +652,16 @@ class ModelRouter:
             return self.configs[force_tier]
 
         # Get recommended tier for task
-        recommended_tier = TASK_TO_TIER[task_type]
+        recommended_tier = self.task_routing.get(task_type)
+        if recommended_tier is None:
+            # Fallback to default tier if task not found
+            default_tier_name = self.settings.get("default_tier", "standard")
+            recommended_tier = ModelTier(default_tier_name)
+            logger.warning(
+                "task_type_not_in_routing",
+                task_type=task_type.value,
+                using_default=recommended_tier.value,
+            )
 
         # Budget-based downgrade
         if budget_remaining_usd is not None and budget_remaining_usd < 1.0:
@@ -348,10 +776,9 @@ class ModelRouter:
         """Lista todas las tareas disponibles."""
         return [task.value for task in TaskType]
 
-    @staticmethod
-    def get_tasks_for_tier(tier: ModelTier) -> list[str]:
+    def get_tasks_for_tier(self, tier: ModelTier) -> list[str]:
         """Lista tareas recomendadas para un tier."""
-        return [task.value for task, task_tier in TASK_TO_TIER.items() if task_tier == tier]
+        return [task.value for task, task_tier in self.task_routing.items() if task_tier == tier]
 
 
 # ===========================================

@@ -22,6 +22,8 @@ node_modules/
 
 # Environment files
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -39,15 +41,26 @@ Thumbs.db
 
 # Testing
 /coverage
+.pytest_cache/
+__pycache__/
+*.pyc
 
 # Misc
 .cache/
 *.tgz
+credentials.json
+Captura de pantalla*.png
+zzz- capturas/
 
 # Supabase specific
 *.bin
 
 # Custom ignores
+.claude/settings.local.json
+.gemini-clipboard/
+mi-gemini/
 docs/DATABASE_CONNECTION_ISSUE.md
 infrastructure/supabase/test_connection.py
 nul
+SECRETS.md
+claves postgre.txt

@@ -1,6 +1,10 @@
-from typing import Any
+from typing import Any, Literal
+from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+# Define valid alert categories as a type
+AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality"]
 
 
 class Clause(BaseModel):
@@ -52,8 +56,38 @@ class Alert(BaseModel):
     severity: str = Field(
         ..., description="The severity of the triggered alert (e.g., critical, high, medium, low)."
     )
+    category: AlertCategory = Field(
+        ..., description="The category of the alert (legal, financial, technical, schedule, scope)."
+    )
     message: str = Field(..., description="A descriptive message for the alert.")
     evidence: Evidence = Field(..., description="Structured evidence supporting the alert.")
+
+
+class SeverityCount(BaseModel):
+    """
+    Represents the count of alerts by severity level.
+    """
+
+    critical: int = Field(default=0, description="Number of critical alerts.")
+    high: int = Field(default=0, description="Number of high severity alerts.")
+    medium: int = Field(default=0, description="Number of medium severity alerts.")
+    low: int = Field(default=0, description="Number of low severity alerts.")
+
+
+class CategoryBreakdown(BaseModel):
+    """
+    Represents the coherence score breakdown for a specific category.
+    """
+
+    category: AlertCategory = Field(..., description="The alert category.")
+    score: float = Field(..., description="The coherence score for this category (0-100).")
+    alert_count: int = Field(..., description="Total number of alerts in this category.")
+    severity_breakdown: SeverityCount = Field(
+        ..., description="Breakdown of alerts by severity within this category."
+    )
+    impact_percentage: float = Field(
+        ..., description="Percentage of impact this category has on the overall score."
+    )
 
 
 class CoherenceResult(BaseModel):
@@ -61,5 +95,13 @@ class CoherenceResult(BaseModel):
     Represents the complete result of a coherence evaluation, including alerts and the final score.
     """
 
+    overall_score: float = Field(..., description="The overall calculated coherence score for the project.")
     alerts: list[Alert] = Field(..., description="List of alerts generated during the evaluation.")
-    score: float = Field(..., description="The calculated coherence score for the project.")
+    category_breakdown: list[CategoryBreakdown] = Field(
+        default_factory=list,
+        description="Breakdown of the score by alert category."
+    )
+    calculated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the score was calculated."
+    )

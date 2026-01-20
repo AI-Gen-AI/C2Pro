@@ -1,166 +1,237 @@
 """
-C2Pro - PII Anonymizer Service
+C2Pro - PII Anonymizer Service (Presidio Implementation)
 
-This module provides functionalities to detect and anonymize Personally Identifiable Information (PII)
-from text, ensuring data privacy before processing by external services or AI models.
-It focuses on Spanish DNI, email addresses, phone numbers, and IBANs.
+This module provides a robust service to detect and anonymize PII using
+Microsoft Presidio and SpaCy, ensuring data privacy before processing by
+external services like Large Language Models (LLMs).
+
+It implements a Singleton pattern to ensure the heavy NLP models are loaded only once.
 """
 
+import logging
 import re
+from typing import List, Dict, NamedTuple, Optional, Callable
+from collections import defaultdict
 
+# Presidio and Spacy imports
+import spacy
+from presidio_analyzer import AnalyzerEngine, RecognizerResult, EntityRecognizer
+from presidio_analyzer.nlp_engine import NlpEngineProvider
+from presidio_anonymizer import AnonymizerEngine, Operator, OperatorResult
+from presidio_anonymizer.entities import OperatorConfig
 
-class AnonymizerError(Exception):
-    """Custom exception for anonymizer service errors."""
+from src.core.exceptions import SecurityException
 
-    pass
+# --- Custom Recognizer for Spanish DNI/NIE ---
 
-
-def _hash_pii(pii_type: str) -> str:
-    """Hashes a piece of PII and returns a type-prefixed placeholder."""
-    # Using SHA256 for hashing, but actual hashing strategy might vary
-    # For a placeholder, a simple type prefix is sufficient.
-    return f"[{pii_type.upper()}_HASH]"
-
-
-def detect_dni(text: str) -> list[tuple[str, str]]:
-    """Detects Spanish DNI/NIE patterns in text. Returns (found_text, pii_type)."""
-    # Spanish DNI/NIE pattern: 8 digits + 1 letter, or X/Y/Z + 7 digits + 1 letter
-    # This regex is a simplification; real DNI validation includes checksum logic.
-    patterns = [
-        re.compile(r"\b(\d{8}[A-Z])\b", re.IGNORECASE),  # DNI (8 digits + 1 letter)
-        re.compile(r"\b([XYZ]\d{7}[A-Z])\b", re.IGNORECASE),  # NIE (X/Y/Z + 7 digits + 1 letter)
-    ]
-    found_pii = []
-    for pattern in patterns:
-        for match in pattern.finditer(text):
-            found_pii.append((match.group(0), "DNI"))
-    return found_pii
-
-
-def detect_email(text: str) -> list[tuple[str, str]]:
-    """Detects email addresses in text. Returns (found_text, pii_type)."""
-    # Standard email regex pattern
-    pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
-    found_pii = []
-    for match in pattern.finditer(text):
-        found_pii.append((match.group(0), "EMAIL"))
-    return found_pii
-
-
-def detect_phone(text: str) -> list[tuple[str, str]]:
-    """Detects Spanish phone numbers in text. Returns (found_text, pii_type)."""
-    # Spanish phone numbers typically start with 6, 7, 8, 9 and have 9 digits.
-    # Also considering international format +34.
-    patterns = [
-        re.compile(r"\b(?:\+34|0034)?(?:6|7|8|9)\d{8}\b"),  # +34 or 0034 optional, 9 digits
-        re.compile(r"\b(?:\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{2})\b"),  # 9 digits with separators
-    ]
-    found_pii = []
-    for pattern in patterns:
-        for match in pattern.finditer(text):
-            # Basic filtering to avoid common numbers like years
-            if len(match.group(0).replace("-", "").replace(" ", "")) >= 9:
-                found_pii.append((match.group(0), "PHONE"))
-    return found_pii
-
-
-def detect_iban(text: str) -> list[tuple[str, str]]:
-    """Detects IBANs (International Bank Account Numbers) in text. Returns (found_text, pii_type)."""
-    # IBAN pattern: 2 letters (country code) + 2 digits (checksum) + up to 30 alphanumeric characters
-    # This regex is simplified and might capture false positives or miss some edge cases.
-    pattern = re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[0-9A-Z]{4}){4,7}(?:[ ]?[0-9A-Z]{1,2})?\b")
-    found_pii = []
-    for match in pattern.finditer(text):
-        found_pii.append((match.group(0), "IBAN"))
-    return found_pii
-
-
-def anonymize_text(text: str) -> str:
+class AnonymizedPayload(NamedTuple):
     """
-    Detects and anonymizes PII (DNI, email, phone, IBAN) in the given text.
-
-    Args:
-        text: The input text potentially containing PII.
-
-    Returns:
-        The text with detected PII replaced by hashed placeholders.
+    Defines the output structure for the anonymization service.
+    
+    - text: The anonymized text safe to send to third parties.
+    - deanonymization_map: A dictionary to restore the original PII.
     """
-    anonymized_text = text
-
-    # Store detected PII and their types to process them
-    all_pii_detections: list[tuple[str, str]] = []
-
-    all_pii_detections.extend(detect_dni(anonymized_text))
-    all_pii_detections.extend(detect_email(anonymized_text))
-    all_pii_detections.extend(detect_phone(anonymized_text))
-    all_pii_detections.extend(detect_iban(anonymized_text))
-
-    # Sort matches by their starting position to avoid issues with overlapping replacements
-    # (though current regexes are designed to avoid this for distinct PII types)
-    # This step is crucial if patterns can overlap. For simple regexes, order might not matter as much.
-
-    # Replace PII from longest match to shortest to prevent partial replacements
-    # For now, given simple distinct regexes, just iterating and replacing is fine.
-    # To avoid regex issues and ensure each instance is replaced, we can iterate and replace
-    # while keeping track of replaced segments. However, a simpler direct replace can work
-    # if regexes are well-behaved.
-
-    # A more robust way would be to get start/end indices for each match and build the
-    # anonymized string part by part. For simplicity and given the task context,
-    # we'll use re.sub directly for each PII type.
-
-    # Replace DNI
-    for pii_text, pii_type in detect_dni(anonymized_text):
-        anonymized_text = anonymized_text.replace(pii_text, _hash_pii(pii_text, pii_type))
-
-    # Replace Email
-    for pii_text, pii_type in detect_email(anonymized_text):
-        anonymized_text = anonymized_text.replace(pii_text, _hash_pii(pii_text, pii_type))
-
-    # Replace Phone
-    for pii_text, pii_type in detect_phone(anonymized_text):
-        anonymized_text = anonymized_text.replace(pii_text, _hash_pii(pii_text, pii_type))
-
-    # Replace IBAN
-    for pii_text, pii_type in detect_iban(anonymized_text):
-        anonymized_text = anonymized_text.replace(pii_text, _hash_pii(pii_text, pii_type))
-
-    return anonymized_text
+    text: str
+    deanonymization_map: Dict[str, str]
 
 
-# Example Usage (for testing purposes, if run directly)
-if __name__ == "__main__":
-    test_text_1 = "El DNI de Juan es 12345678A y su email es juan.perez@example.com. Su teléfono es +34612345678. También tiene el IBAN ES00 0000 0000 0000 0000 0000."
-    test_text_2 = "Otro ejemplo con NIE Y1234567B y email test@mail.co.uk. Teléfono: 912 34 56 78 y IBAN ES123456789012345678901234."
-    test_text_3 = "No PII here, just some normal text. The year is 2026."
-    test_text_4 = (
-        "Multiple emails: one@example.com, two@example.org. Multiple phones: 600112233, 931234567."
-    )
-    test_text_5 = "DNI 12345678A y telefono 666778899"
+class EsNifRecognizer(EntityRecognizer):
+    """
+    Custom Presidio recognizer for Spanish DNI (Documento Nacional de Identidad)
+    and NIE (Número de Identificación de Extranjero).
 
-    print("---" + " Anonymizer Service PII Tests " + "---")
+    This recognizer uses a combination of regex for pattern matching and a
+    checksum validation for accuracy.
+    """
+    ENTITIES = ["ES_NIF"]
+    # Regex to find potential DNI/NIE formats
+    # Covers: 8N+L, X/Y/Z + 7N+L
+    NIF_REGEX = re.compile(r"\b([XYZxyz]?\d{7,8}[A-Za-z])\b")
+    CHECKSUM_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
 
-    print("\nOriginal Text 1:")
-    print(test_text_1)
-    print("Anonymized Text 1:")
-    print(anonymize_text(test_text_1))
+    def load(self) -> None:
+        """No models to load for this recognizer."""
+        pass
 
-    print("\nOriginal Text 2:")
-    print(test_text_2)
-    print("Anonymized Text 2:")
-    print(anonymize_text(test_text_2))
+    def analyze(self, text: str, entities: List[str], nlp_artifacts) -> List[RecognizerResult]:
+        results = []
+        for match in self.NIF_REGEX.finditer(text):
+            nif_value = match.group(0).upper()
+            if self._is_valid_nif(nif_value):
+                result = RecognizerResult(
+                    entity_type="ES_NIF",
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.95  # High confidence due to checksum validation
+                )
+                results.append(result)
+        return results
 
-    print("\nOriginal Text 3:")
-    print(test_text_3)
-    print("Anonymized Text 3:")
-    print(anonymize_text(test_text_3))
+    def _is_valid_nif(self, nif: str) -> bool:
+        """Validates a DNI or NIE using the checksum algorithm."""
+        nif = nif.upper()
+        if len(nif) != 9:
+            return False
+        
+        letter = nif[-1]
+        number_part = nif[:-1]
 
-    print("\nOriginal Text 4:")
-    print(test_text_4)
-    print("Anonymized Text 4:")
-    print(anonymize_text(test_text_4))
+        if nif.startswith(('X', 'Y', 'Z')):
+            # For NIE, replace leading letter with a number
+            if nif.startswith('Y'):
+                number_part = '1' + number_part[1:]
+            elif nif.startswith('Z'):
+                number_part = '2' + number_part[1:]
+            else: # X
+                number_part = '0' + number_part[1:]
 
-    print("\nOriginal Text 5:")
-    print(test_text_5)
-    print("Anonymized Text 5:")
-    print(anonymize_text(test_text_5))
+        try:
+            dni_number = int(number_part)
+            return self.CHECKSUM_LETTERS[dni_number % 23] == letter
+        except (ValueError, IndexError):
+            return False
+
+# --- Custom Anonymizer Operator ---
+
+def create_custom_replace_operator() -> Callable:
+    """
+    Factory to create a stateful custom replace operator.
+    This ensures consistent tokenization within a single `anonymize` call.
+    """
+    # State for a single anonymization call
+    pii_map: Dict[str, str] = {} # Maps original PII value to its token
+    counters: Dict[str, int] = defaultdict(int)
+
+    def custom_replace(text: str, params: Dict[str, any]) -> str:
+        entity_type = params.get("entity_type")
+        
+        # If we've seen this exact PII value before, return its token
+        if text in pii_map:
+            return pii_map[text]
+        
+        # If it's a new PII value, create a new token
+        counters[entity_type] += 1
+        new_token = f"<{entity_type}_{counters[entity_type]}>"
+        pii_map[text] = new_token
+        return new_token
+        
+    return custom_replace
+
+
+# --- Singleton PII Anonymizer Service ---
+
+class PiiAnonymizerService:
+    """
+    A singleton service that loads Presidio and its NLP model only once.
+    """
+    _instance: Optional['PiiAnonymizerService'] = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(PiiAnonymizerService, cls).__new__(cls)
+            cls._instance._initialize()
+        return cls._instance
+
+    def _initialize(self) -> None:
+        """
+        Initializes the Presidio Analyzer and Anonymizer engines.
+        This is a heavy operation and should only be run once.
+        """
+        logging.info("Initializing PiiAnonymizerService singleton...")
+        try:
+            # 1. Create a Spacy NLP engine for Spanish
+            provider = NlpEngineProvider()
+            nlp_config = {"nlp_engine_name": "spacy", "models": [{"lang_code": "es", "model_name": "es_core_news_lg"}]}
+            nlp_engine = provider.create_engine(nlp_config)
+            
+            # 2. Add our custom NIF recognizer to the registry
+            nif_recognizer = EsNifRecognizer(supported_entities=["ES_NIF"])
+            
+            # 3. Create the AnalyzerEngine
+            self.analyzer = AnalyzerEngine(
+                nlp_engine=nlp_engine,
+                supported_languages=["es"],
+                registry=None
+            )
+            self.analyzer.registry.add_recognizer(nif_recognizer)
+            self.analyzer.registry.load_predefined_recognizers(
+                languages=["es"],
+                recognizers_names=["EsPhoneNumberRecognizer", "EmailRecognizer", "IbanRecognizer"]
+            )
+
+            # 4. Create the AnonymizerEngine and register our custom operator
+            self.anonymizer = AnonymizerEngine()
+            self.anonymizer.add_operator("custom_replace", Operator(operator_logic=None)) # Logic is stateful per-call
+            
+            logging.info("PiiAnonymizerService initialized successfully.")
+
+        except OSError as e:
+            logging.error(f"Failed to load NLP model for PiiAnonymizerService: {e}")
+            raise SecurityException(
+                message="PII anonymization model is not available. "
+                        "Please run 'python -m spacy download es_core_news_lg'.",
+                component="PiiAnonymizerService"
+            )
+        except Exception as e:
+            logging.error(f"A critical error occurred during PiiAnonymizerService initialization: {e}")
+            raise SecurityException(
+                message="A critical error occurred initializing the PII anonymizer.",
+                component="PiiAnonymizerService"
+            )
+
+    def anonymize(self, text: str) -> AnonymizedPayload:
+        """
+        Analyzes and anonymizes PII in a given text with consistent, reversible tokens.
+        """
+        if not text:
+            return AnonymizedPayload(text="", deanonymization_map={})
+
+        try:
+            analyzer_results = self.analyzer.analyze(
+                text=text,
+                entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "IBAN_CODE", "ES_NIF"],
+                language="es"
+            )
+
+            # Create a new stateful operator for this specific call
+            custom_operator_logic = create_custom_replace_operator()
+            
+            anonymizer_config = {
+                "DEFAULT": OperatorConfig("custom_replace")
+            }
+            
+            # Temporarily update the operator logic for this call
+            self.anonymizer.operators["custom_replace"].operator_logic = custom_operator_logic
+
+            anonymized_result = self.anonymizer.anonymize(
+                text=text,
+                analyzer_results=analyzer_results,
+                operators=anonymizer_config
+            )
+
+            # Build the deanonymization map from the tokens and original values
+            deanonymization_map = {}
+            for original_item, anonymized_item in zip(analyzer_results, anonymized_result.items):
+                original_value = text[original_item.start:original_item.end]
+                token = anonymized_item.text
+                # The map should be token -> original_value
+                if token not in deanonymization_map:
+                    deanonymization_map[token] = original_value
+            
+            # Clean up operator logic reference
+            self.anonymizer.operators["custom_replace"].operator_logic = None
+
+            return AnonymizedPayload(
+                text=anonymized_result.text,
+                deanonymization_map=deanonymization_map
+            )
+        except Exception as e:
+            logging.error(f"Anonymization process failed: {e}")
+            raise SecurityException(
+                message="An error occurred during the PII anonymization process.",
+                component="PiiAnonymizerService"
+            )
+
+def get_pii_anonymizer_service() -> PiiAnonymizerService:
+    """Returns the singleton instance of the PiiAnonymizerService."""
+    return PiiAnonymizerService()

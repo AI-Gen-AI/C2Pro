@@ -5,8 +5,10 @@ Configura variables de entorno y fixtures compartidos.
 """
 
 import os
+import sys
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,6 +16,26 @@ from asgi_lifespan import LifespanManager
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+# ===========================================
+# OPTIONAL DEPENDENCY STUBS
+# ===========================================
+
+if "celery" not in sys.modules:
+    class _DummyCelery:
+        def __init__(self, *args, **kwargs) -> None:
+            self.conf = {}
+
+        def task(self, *args, **kwargs):
+            def decorator(fn):
+                fn.delay = lambda *a, **k: SimpleNamespace(id="test-task")
+                return fn
+            return decorator
+
+        def start(self):
+            return None
+
+    sys.modules["celery"] = SimpleNamespace(Celery=_DummyCelery)
 
 # ===========================================
 # ENVIRONMENT SETUP

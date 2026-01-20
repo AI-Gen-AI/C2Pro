@@ -2,13 +2,42 @@
 C2Pro - Custom Exceptions
 
 Excepciones de dominio para manejo consistente de errores.
+
+Este módulo define la jerarquía de excepciones de C2Pro siguiendo el esquema
+de error unificado para garantizar respuestas consistentes al frontend.
+
+Formato de error estándar:
+{
+    "status_code": 400,
+    "error_code": "INVALID_INPUT",
+    "message": "Descripción legible para humanos",
+    "details": {...},
+    "timestamp": "ISO-8601",
+    "path": "/api/v1/..."
+}
+
+Version: 1.0.0
+Date: 2026-01-13
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 
 class C2ProException(Exception):
-    """Base exception para todas las excepciones de C2Pro."""
+    """
+    Base exception para todas las excepciones de C2Pro.
+
+    Esta clase proporciona el formato de error unificado que se usa
+    en toda la aplicación. Los campos timestamp y path se agregan
+    automáticamente en los exception handlers.
+
+    Attributes:
+        message: Mensaje legible para humanos
+        code: Código de error (ej: "VALIDATION_ERROR", "RESOURCE_NOT_FOUND")
+        status_code: Código HTTP (400, 404, 500, etc.)
+        details: Detalles adicionales del error (opcional)
+    """
 
     def __init__(
         self,
@@ -23,12 +52,32 @@ class C2ProException(Exception):
         self.details = details or {}
         super().__init__(message)
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "code": self.code,
+    def to_dict(self, path: str | None = None) -> dict[str, Any]:
+        """
+        Convierte la excepción a diccionario con formato estándar.
+
+        Args:
+            path: Ruta del endpoint donde ocurrió el error (ej: "/api/v1/projects")
+
+        Returns:
+            Diccionario con formato de error unificado
+        """
+        error_dict = {
+            "status_code": self.status_code,
+            "error_code": self.code,
             "message": self.message,
-            "details": self.details,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+        # Solo incluir details si no está vacío
+        if self.details:
+            error_dict["details"] = self.details
+
+        # Solo incluir path si se proporciona
+        if path:
+            error_dict["path"] = path
+
+        return error_dict
 
 
 # ===========================================
@@ -48,6 +97,29 @@ class AuthorizationError(C2ProException):
 
     def __init__(self, message: str = "Permission denied"):
         super().__init__(message=message, code="AUTHORIZATION_ERROR", status_code=403)
+
+
+class PermissionDeniedException(C2ProException):
+    """
+    Permiso denegado.
+
+    Alias más explícito de AuthorizationError para casos donde el usuario
+    está autenticado pero no tiene permisos para realizar la acción.
+    """
+
+    def __init__(
+        self, message: str = "Permission denied", required_permission: str | None = None
+    ):
+        details = {}
+        if required_permission:
+            details["required_permission"] = required_permission
+
+        super().__init__(
+            message=message,
+            code="PERMISSION_DENIED",
+            status_code=403,
+            details=details,
+        )
 
 
 class TenantNotFoundError(C2ProException):
@@ -105,7 +177,7 @@ ConflictError = ResourceAlreadyExistsError
 
 
 # ===========================================
-# VALIDATION
+# VALIDATION & BUSINESS LOGIC
 # ===========================================
 
 
@@ -120,6 +192,28 @@ class ValidationError(C2ProException):
             code="VALIDATION_ERROR",
             status_code=422,
             details={"errors": errors or []},
+        )
+
+
+class BusinessLogicException(C2ProException):
+    """
+    Error de lógica de negocio.
+
+    Para violaciones de reglas de negocio que no son errores de validación
+    de esquema pero sí son errores lógicos (ej: no se puede eliminar un
+    proyecto con documentos, no se puede cambiar estado de un contrato cerrado).
+    """
+
+    def __init__(self, message: str, rule_violated: str | None = None):
+        details = {}
+        if rule_violated:
+            details["rule_violated"] = rule_violated
+
+        super().__init__(
+            message=message,
+            code="BUSINESS_LOGIC_ERROR",
+            status_code=400,
+            details=details,
         )
 
 
@@ -185,6 +279,42 @@ class DocumentParsingError(C2ProException):
         )
 
 
+class DocumentEncryptedError(DocumentParsingError):
+    """Error para PDFs encriptados."""
+
+    def __init__(self, filename: str | None = None):
+        super().__init__(
+            message="Document is encrypted and cannot be processed.",
+            document_type="pdf",
+            filename=filename,
+        )
+        self.code = "DOCUMENT_ENCRYPTED"
+
+
+class ScannedDocumentError(DocumentParsingError):
+    """Error para PDFs sin capa de texto (escaneados)."""
+
+    def __init__(self, filename: str | None = None):
+        super().__init__(
+            message="Document is a scanned image and requires OCR.",
+            document_type="pdf",
+            filename=filename,
+        )
+        self.code = "OCR_REQUIRED"
+
+
+class InvalidFileFormatException(DocumentParsingError):
+    """Error para archivos que no cumplen con el formato esperado."""
+
+    def __init__(self, message: str, document_type: str, filename: str | None = None):
+        super().__init__(
+            message=message,
+            document_type=document_type,
+            filename=filename,
+        )
+        self.code = "INVALID_FILE_FORMAT"
+
+
 # ===========================================
 # RATE LIMITING
 # ===========================================
@@ -199,6 +329,63 @@ class RateLimitExceededError(C2ProException):
             code="RATE_LIMIT_EXCEEDED",
             status_code=429,
             details={"retry_after": retry_after},
+        )
+
+
+class QuotaExceededException(C2ProException):
+    """
+    Cuota o límite de uso excedido.
+
+    Para control de costes y límites de uso (ej: budget de IA, límite de
+    documentos, límite de proyectos, etc.).
+    """
+
+    def __init__(
+        self,
+        message: str = "Usage quota exceeded",
+        quota_type: str = "general",
+        current_value: float | None = None,
+        limit_value: float | None = None,
+    ):
+        details: dict[str, Any] = {"quota_type": quota_type}
+
+        if current_value is not None:
+            details["current_value"] = current_value
+
+        if limit_value is not None:
+            details["limit_value"] = limit_value
+
+        super().__init__(
+            message=message,
+            code="QUOTA_EXCEEDED",
+            status_code=429,
+            details=details,
+        )
+
+
+# ===========================================
+# SECURITY
+# ===========================================
+
+
+class SecurityException(C2ProException):
+    """
+    Error en un componente crítico de seguridad.
+
+    Se usa para fallos en componentes como el anonimizador de PII.
+    Implementa una política "fail-closed" por defecto (status 500).
+    """
+
+    def __init__(self, message: str, component: str | None = None):
+        details = {}
+        if component:
+            details["component"] = component
+
+        super().__init__(
+            message=message,
+            code="SECURITY_FAILURE",
+            status_code=500,  # Internal Server Error, as it's a configuration/system issue
+            details=details,
         )
 
 

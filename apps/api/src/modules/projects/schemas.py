@@ -5,6 +5,7 @@ Schemas Pydantic para validación y serialización de proyectos.
 """
 
 from datetime import datetime
+from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -209,17 +210,24 @@ class ProjectStatsResponse(BaseModel):
 # ===========================================
 
 
+class DocumentPollingStatus(str, Enum):
+    """Estado del documento para polling en UI."""
+
+    QUEUED = "QUEUED"
+    PROCESSING = "PROCESSING"
+    PARSED = "PARSED"
+    ERROR = "ERROR"
+
+
 class DocumentListResponse(BaseModel):
     """Response básico de documento en lista."""
 
     id: UUID
-    document_type: str
     filename: str
-    file_format: str | None
-    file_size_bytes: int | None
-    upload_status: str
-    parsed_at: datetime | None
-    created_at: datetime
+    status: DocumentPollingStatus
+    error_message: str | None
+    uploaded_at: datetime
+    file_size_bytes: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -407,3 +415,53 @@ class BOMItemResponse(BOMItemBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===========================================
+# COHERENCE-RELATED SCHEMAS
+# ===========================================
+
+
+class CoherenceScoreResponse(BaseModel):
+    """
+    Response model for a project's coherence score.
+    Represents the data needed by frontend dashboard widgets.
+    """
+    project_id: UUID
+    score: int | None = Field(None, ge=0, le=100, description="Coherence score from 0 to 100.")
+    status: str = Field(..., description="Calculation status (e.g., 'CALCULATED', 'PENDING', 'NOT_FOUND')")
+    calculated_at: datetime | None = Field(None, description="Timestamp of the last calculation.")
+    
+    breakdown: dict[str, int] = Field(
+        default_factory=lambda: {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        description="Dictionary with the count of alerts by severity."
+    )
+    top_drivers: list[str] = Field(
+        default_factory=list,
+        description="Top 3 reasons or rules that most impacted the score."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example_calculated": {
+                "project_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                "score": 85,
+                "status": "CALCULATED",
+                "calculated_at": "2026-01-15T10:30:00Z",
+                "breakdown": {"critical": 1, "high": 3, "medium": 5, "low": 2},
+                "top_drivers": [
+                    "Missing budget information for WBS item 1.2.3",
+                    "Schedule dates conflict with contract milestones",
+                    "Ambiguous liability clause in contract section 8.4"
+                ]
+            },
+            "example_pending": {
+                "project_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                "score": None,
+                "status": "PENDING",
+                "calculated_at": None,
+                "breakdown": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                "top_drivers": []
+            }
+        }
+    )

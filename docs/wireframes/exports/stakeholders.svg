@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="712" height="436">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="20" y="34" font-family="Courier New, monospace" font-size="14" fill="#111111">
+# Wireframe - Stakeholders
+</text><text x="20" y="52" font-family="Courier New, monospace" font-size="14" fill="#111111">
+</text><text x="20" y="70" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="88" font-family="Courier New, monospace" font-size="14" fill="#111111">| Stakeholders                                                                   |
+</text><text x="20" y="106" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="124" font-family="Courier New, monospace" font-size="14" fill="#111111">| Filters: [Project v] [Quadrant v] [Role v] [Search.................]           |
+</text><text x="20" y="142" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="160" font-family="Courier New, monospace" font-size="14" fill="#111111">| Left: Stakeholder List                 | Right: Power/Interest Matrix          |
+</text><text x="20" y="178" font-family="Courier New, monospace" font-size="14" fill="#111111">| +------------------------------+       | +-----------------------------------+ |
+</text><text x="20" y="196" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Alice  (Owner)   KEY_PLAYER  |       | |   HIGH POWER                       | |
+</text><text x="20" y="214" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Bob    (Vendor)  KEEP_SAT    |       | |   +-----------+-----------+         | |
+</text><text x="20" y="232" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Carla  (QA)      KEEP_INF    |       | |   | KEY       | KEEP      |         | |
+</text><text x="20" y="250" font-family="Courier New, monospace" font-size="14" fill="#111111">| | Diego  (Legal)   MONITOR     |       | |   | PLAYER    | SATISFIED |         | |
+</text><text x="20" y="268" font-family="Courier New, monospace" font-size="14" fill="#111111">| +------------------------------+       | |   +-----------+-----------+         | |
+</text><text x="20" y="286" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                        | |   | KEEP      | MONITOR   |         | |
+</text><text x="20" y="304" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                        | |   | INFORMED  |           |         | |
+</text><text x="20" y="322" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                        | |   +-----------+-----------+         | |
+</text><text x="20" y="340" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                        | |   LOW POWER                    HIGH | |
+</text><text x="20" y="358" font-family="Courier New, monospace" font-size="14" fill="#111111">|                                        | +-----------------------------------+ |
+</text><text x="20" y="376" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="394" font-family="Courier New, monospace" font-size="14" fill="#111111">| Detail Panel: Contact, Clause refs, Notes                                      |
+</text><text x="20" y="412" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text></svg>
