@@ -31,6 +31,14 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r apps/api/requirements.txt
       - name: Run backend linters and tests
+        env:
+          DATABASE_URL: ${{ secrets.POSTGRES_DB_URL }}
+          POSTGRES_DB_URL: ${{ secrets.POSTGRES_DB_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           pip install ruff mypy pytest
           ruff check apps/api --verbose
@@ -72,6 +80,13 @@ jobs:
             railway up --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          DATABASE_URL: ${{ secrets.POSTGRES_DB_URL }}
+          POSTGRES_DB_URL: ${{ secrets.POSTGRES_DB_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
@@ -92,3 +107,6 @@ jobs:
           vercel-args: "--prod" # Deploy to the production environment in Vercel
           scope: ${{ secrets.VERCEL_ORG_ID }}
           working-directory: apps/web
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

@@ -232,6 +232,8 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
+            if not v.strip():  # Handle empty string
+                return []
             return [origin.strip() for origin in v.split(",")]
         return v
 

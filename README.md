@@ -166,9 +166,10 @@ Ver `.env.example` para la lista completa. Las críticas son:
 
 | Variable | Descripción |
 |----------|-------------|
+| `DATABASE_URL` | Connection string de PostgreSQL (Supabase o local) |
 | `SUPABASE_URL` | URL de tu proyecto Supabase |
 | `SUPABASE_ANON_KEY` | Key pública de Supabase |
-| `SUPABASE_SERVICE_KEY` | Key de servicio (solo backend) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Key de servicio (solo backend) |
 | `ANTHROPIC_API_KEY` | API key de Claude |
 | `UPSTASH_REDIS_URL` | URL de Redis |
 | `R2_ACCOUNT_ID` | Account ID de Cloudflare |

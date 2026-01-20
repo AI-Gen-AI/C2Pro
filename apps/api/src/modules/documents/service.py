@@ -427,3 +427,113 @@ class DocumentService:
             # Delete document record from database
             await tenant_db.delete(document)
             await tenant_db.commit()
+
+    async def create_and_queue_document(
+        self,
+        project_id: UUID,
+        file: UploadFile,
+        document_type: DocumentType,
+        user_id: UUID,
+    ) -> Document:
+        """
+        Creates a document record with QUEUED status.
+        This is the first, synchronous step in the async processing workflow.
+        """
+        tenant_id = await self._get_project_tenant_id(project_id)
+        
+        async with get_session_with_tenant(tenant_id) as tenant_db:
+            file_extension = os.path.splitext(file.filename)[1].lower()
+            
+            new_document = Document(
+                project_id=project_id,
+                document_type=document_type,
+                filename=file.filename,
+                file_format=file_extension,
+                file_size_bytes=file.size,
+                upload_status=DocumentStatus.QUEUED,
+                created_by=user_id,
+                tenant_id=tenant_id,
+            )
+            tenant_db.add(new_document)
+            await tenant_db.commit()
+            await tenant_db.refresh(new_document)
+            
+            return new_document
+
+    async def update_storage_path(self, document_id: UUID, path: str):
+        """Updates the storage_url for a document within the correct tenant context."""
+        doc_result = await self.db_session.execute(select(Document.tenant_id).where(Document.id == document_id))
+        tenant_id = doc_result.scalar_one_or_none()
+        if not tenant_id:
+            return
+
+        async with get_session_with_tenant(tenant_id) as db:
+            doc_to_update = await db.get(Document, document_id)
+            if doc_to_update:
+                doc_to_update.storage_url = path
+                await db.commit()
+
+    async def update_status(self, document_id: UUID, status: DocumentStatus):
+        """Updates the status for a document within the correct tenant context."""
+        doc_result = await self.db_session.execute(select(Document.tenant_id).where(Document.id == document_id))
+        tenant_id = doc_result.scalar_one_or_none()
+        if not tenant_id:
+            return
+
+        async with get_session_with_tenant(tenant_id) as db:
+            doc_to_update = await db.get(Document, document_id)
+            if doc_to_update:
+                doc_to_update.upload_status = status
+                await db.commit()
+
+    async def create_and_queue_document(
+        self,
+        project_id: UUID,
+        file: UploadFile,
+        document_type: DocumentType,
+        user_id: UUID,
+    ) -> Document:
+        """
+        Creates a document record with QUEUED status and saves the file.
+        This is the first step in the async processing workflow.
+        """
+        tenant_id = await self._get_project_tenant_id(project_id)
+        
+        async with get_session_with_tenant(tenant_id) as tenant_db:
+            file_extension = os.path.splitext(file.filename)[1].lower()
+            
+            # Create a new document record with QUEUED status
+            new_document = Document(
+                project_id=project_id,
+                document_type=document_type,
+                filename=file.filename,
+                file_format=file_extension,
+                file_size_bytes=file.size,
+                upload_status=DocumentStatus.QUEUED, # Start as QUEUED
+                created_by=user_id,
+                tenant_id=tenant_id,
+            )
+            tenant_db.add(new_document)
+            await tenant_db.commit()
+            await tenant_db.refresh(new_document)
+            
+            return new_document
+
+    async def update_storage_path(self, document_id: UUID, path: str):
+        """Updates the storage_url for a document."""
+        # This requires a new session as it might be called from a different context
+        async with get_session_with_tenant() as db:
+            result = await db.execute(select(Document).where(Document.id == document_id))
+            document = result.scalar_one_or_none()
+            if document:
+                document.storage_url = path
+                await db.commit()
+
+    async def update_status(self, document_id: UUID, status: DocumentStatus):
+        """Updates the status for a document."""
+        async with get_session_with_tenant() as db:
+            result = await db.execute(select(Document).where(Document.id == document_id))
+            document = result.scalar_one_or_none()
+            if document:
+                document.upload_status = status
+                await db.commit()

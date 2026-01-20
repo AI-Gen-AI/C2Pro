@@ -14,13 +14,16 @@ from src.core.security import (  # Assuming CurrentTenantId is also available
 from src.modules.documents.models import Document, DocumentStatus, DocumentType
 from src.modules.documents.schemas import (
     DocumentDetailResponse,
+    DocumentQueuedResponse, # New response model
     DocumentResponse,
     DocumentUploadResponse,
     UploadFileResponse,
 )
 from src.modules.documents.service import DocumentService
 from src.modules.projects.models import Project
-from src.shared.storage import StorageService  # Import StorageService
+from src.shared.storage import StorageService
+from src.config import settings
+import pathlib
 
 logger = structlog.get_logger()
 
@@ -34,65 +37,121 @@ router = APIRouter(
     },
 )
 
+# Allowed MIME types for validation
+ALLOWED_MIME_TYPES = {
+    ".pdf": "application/pdf",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".bc3": "text/plain", # BC3 is a plain text format
+    ".xer": "text/plain", # Primavera P6 XER are often text/xml or text/plain
+    ".mpp": "application/vnd.ms-project",
+}
+
 
 # Dependency for DocumentService
 async def get_document_service(
     db: AsyncSession = Depends(get_session),
-    storage_service: StorageService = Depends(StorageService),  # Inject StorageService
+    storage_service: StorageService = Depends(StorageService),
 ) -> DocumentService:
     return DocumentService(db_session=db, storage_service=storage_service)
 
 
 @router.post(
-    "/projects/{project_id}/upload",
-    response_model=UploadFileResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Upload a new document for a project",
+    "/projects/{project_id}/documents",
+    response_model=DocumentQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload a document for asynchronous processing",
     description="""
-    Uploads a new document file and creates its record for a specific project.
-    Supports various document types and performs basic file validation.
+    Accepts a document, validates it, saves it to storage, and queues it for
+    background processing. Responds immediately with a task ID.
     """,
 )
-async def upload_document_endpoint(
+async def upload_document_for_processing(
     project_id: UUID,
-    user_id: CurrentUserId,  # Get user_id from auth token
-    document_type: DocumentType = Form(..., description="Type of the document"),
-    file: UploadFile = File(..., description="The document file to upload"),
+    user_id: CurrentUserId,
+    document_type: DocumentType = Form(...),
+    file: UploadFile = File(...),
     document_service: DocumentService = Depends(get_document_service),
+    db: AsyncSession = Depends(get_session),
 ):
-    try:
-        new_document = await document_service.upload_document(
-            project_id=project_id,
-            file=file,
-            document_type=document_type,
-            user_id=user_id,  # Pass user_id for created_by
-        )
-        logger.info(
-            "document_uploaded",
-            document_id=str(new_document.id),
-            project_id=str(project_id),
-            filename=new_document.filename,
-            user_id=str(user_id),
-        )
-        return UploadFileResponse(
-            filename=new_document.filename,
-            message="Document uploaded successfully",
-            document_id=new_document.id,
-        )
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(
-            "document_upload_error",
-            project_id=str(project_id),
-            filename=file.filename,
-            error=str(e),
-            exc_info=True,
-        )
+    """
+    Handles the asynchronous upload and queuing of a document.
+    """
+    # 1. Validation
+    # Check file size
+    if file.size > settings.max_upload_size_bytes:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload document: {e}",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB."
         )
+    
+    # Check file extension
+    file_extension = pathlib.Path(file.filename).suffix.lower()
+    if file_extension not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type '{file_extension}' is not allowed."
+        )
+
+    # Check MIME type using python-magic
+    file_content = await file.read()
+    await file.seek(0) # Reset file pointer after reading
+    
+    import magic
+    detected_mime = magic.from_buffer(file_content, mime=True)
+    if detected_mime != ALLOWED_MIME_TYPES[file_extension]:
+         # Be a bit lenient for text-based formats
+        if not (file_extension in [".bc3", ".xer"] and "text" in detected_mime):
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file format. Expected {ALLOWED_MIME_TYPES[file_extension]}, but got {detected_mime}."
+            )
+
+    # 2. Check if project exists and user has access (implicitly done by service)
+    project_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = project_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    # 3. Create document record in DB with QUEUED status
+    try:
+        new_document = await document_service.create_document_record(
+            project_id=project_id,
+            filename=file.filename,
+            file_size=file.size,
+            file_format=file_extension,
+            document_type=document_type,
+            user_id=user_id,
+            status="QUEUED"
+        )
+    except Exception as e:
+        logger.error("document_db_creation_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create document record.")
+
+    # 4. Save file to storage
+    try:
+        # Use the new document's ID as the unique name to avoid collisions
+        storage_path = await document_service.storage_service.upload_file(
+            file_content=file.file, file_id=new_document.id, file_extension=file_extension
+        )
+        # Update record with final storage path
+        await document_service.update_storage_path(document_id=new_document.id, path=storage_path)
+    except Exception as e:
+        logger.error("document_storage_failed", error=str(e))
+        await document_service.update_status(document_id=new_document.id, status="ERROR")
+        raise HTTPException(status_code=500, detail="Failed to save document to storage.")
+
+    # 5. Dispatch Celery task (lazy import to avoid heavy deps at startup)
+    from src.tasks.ingestion_tasks import process_document_async
+    task = process_document_async.delay(document_id=new_document.id)
+    logger.info("document_processing_queued", document_id=str(new_document.id), task_id=task.id)
+
+    # 6. Return 202 Accepted response
+    # We need to manually construct the response as Pydantic can't validate the hybrid model
+    response_data = DocumentResponse.model_validate(new_document).model_dump()
+    response_data['task_id'] = task.id
+    
+    return DocumentQueuedResponse(**response_data)
 
 
 @router.get(

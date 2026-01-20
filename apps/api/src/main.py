@@ -8,21 +8,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from src.config import settings
+from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
-from src.core.exceptions import (
-    AuthenticationError,
-    ConflictError,
-    NotFoundError,
-    TenantNotFoundError,
-    ValidationError,
-)
+from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
@@ -35,6 +27,7 @@ from src.modules.coherence.router import router as coherence_router
 from src.modules.documents.router import router as documents_router
 from src.modules.observability.router import router as observability_router
 from src.modules.projects.router import router as projects_router
+from src.routers.health import router as health_router
 
 logger = structlog.get_logger()
 
@@ -62,7 +55,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await init_db()
     logger.info("database_initialized")
 
-    # TODO: Inicializar Redis/cache cuando esté implementado
+    await init_cache()
+    logger.info("cache_initialized")
+
     # TODO: Inicializar Sentry cuando esté configurado
 
     logger.info("application_started")
@@ -76,7 +71,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await close_db()
     logger.info("database_closed")
 
-    # TODO: Cerrar conexiones Redis
+    await close_cache()
+    logger.info("cache_closed")
+
     # TODO: Flush Sentry events
 
     logger.info("application_stopped")
@@ -159,83 +156,13 @@ def create_application() -> FastAPI:
     # EXCEPTION HANDLERS
     # ===========================================
 
-    @app.exception_handler(AuthenticationError)
-    async def authentication_error_handler(request: Request, exc: AuthenticationError):
-        """Handler para errores de autenticación."""
-        logger.warning("authentication_error", path=request.url.path, error=str(exc))
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=exc.to_dict(),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    @app.exception_handler(TenantNotFoundError)
-    async def tenant_not_found_handler(request: Request, exc: TenantNotFoundError):
-        """Handler para tenant no encontrado."""
-        logger.warning("tenant_not_found", path=request.url.path, error=str(exc))
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=exc.to_dict(),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    @app.exception_handler(NotFoundError)
-    async def not_found_error_handler(request: Request, exc: NotFoundError):
-        """Handler para recursos no encontrados."""
-        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
-
-    @app.exception_handler(ConflictError)
-    async def conflict_error_handler(request: Request, exc: ConflictError):
-        """Handler para conflictos (duplicados, etc)."""
-        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
-
-    @app.exception_handler(ValidationError)
-    async def validation_error_handler(request: Request, exc: ValidationError):
-        """Handler para errores de validación de negocio."""
-        return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
-
-    @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
-        """Handler para errores de validación de Pydantic."""
-        logger.warning("validation_error", path=request.url.path, errors=exc.errors())
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder({"detail": exc.errors()}),
-        )
-
-    @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
-        """Handler para errores no capturados."""
-        logger.error(
-            "unhandled_exception",
-            path=request.url.path,
-            method=request.method,
-            error=str(exc),
-            exc_info=True,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error" if settings.is_production else str(exc)},
-        )
+    # Registrar todos los exception handlers globales
+    # Ver src/core/handlers.py para detalles de implementación
+    register_exception_handlers(app)
 
     # ===========================================
     # ROUTERS
     # ===========================================
-
-    # Health check
-    @app.get("/health", tags=["Health"])
-    async def health_check():
-        """
-        Health check endpoint.
-
-        Returns basic application status and version.
-        """
-        return {
-            "status": "ok",
-            "app": settings.app_name,
-            "version": settings.app_version,
-            "environment": settings.environment,
-        }
 
     # Root
     @app.get("/", tags=["Root"])
@@ -254,6 +181,8 @@ def create_application() -> FastAPI:
 
     # API v1 routers
     api_v1_prefix = settings.api_v1_prefix
+
+    app.include_router(health_router)
 
     app.include_router(
         auth_router,

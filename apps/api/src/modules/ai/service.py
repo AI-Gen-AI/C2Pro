@@ -14,19 +14,27 @@ Características:
 Version: 1.0.0
 """
 
+import json
 import time
+from typing import Any
 from uuid import UUID
 
 import anthropic
 import structlog
 from anthropic import Anthropic
 from anthropic.types import Message, TextBlock
+from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.config import settings
+from src.core.cache import get_cache_service
+from src.core.exceptions import AIServiceError
 from src.modules.ai.model_router import (
     ModelTier,
     TaskType,
     get_model_router,
+)
+from src.modules.ai.prompt_cache import (
+    get_prompt_cache_service,
 )
 
 logger = structlog.get_logger()
@@ -48,6 +56,9 @@ class AIRequest:
         max_tokens: int | None = None,
         temperature: float = 0.0,
         force_model_tier: ModelTier | None = None,
+        document_hash: str | None = None,
+        use_cache: bool = True,
+        prompt_version: str | None = None,  # Para tracking (ai_usage_logs)
     ):
         self.prompt = prompt
         self.task_type = task_type
@@ -55,6 +66,9 @@ class AIRequest:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.force_model_tier = force_model_tier
+        self.document_hash = document_hash
+        self.use_cache = use_cache
+        self.prompt_version = prompt_version
 
 
 class AIResponse:
@@ -69,6 +83,7 @@ class AIResponse:
         cost_usd: float,
         cached: bool = False,
         execution_time_ms: float = 0,
+        prompt_version: str | None = None,  # Versión del template usado
     ):
         self.content = content
         self.model = model
@@ -77,6 +92,7 @@ class AIResponse:
         self.cost_usd = cost_usd
         self.cached = cached
         self.execution_time_ms = execution_time_ms
+        self.prompt_version = prompt_version
 
 
 # ===========================================
@@ -117,6 +133,7 @@ class AIService:
         anthropic_api_key: str | None = None,
         tenant_id: UUID | None = None,
         budget_remaining_usd: float | None = None,
+        wrapper: Any | None = None,
     ):
         """
         Inicializa el servicio de AI.
@@ -135,11 +152,19 @@ class AIService:
 
         self.client = Anthropic(api_key=self.api_key)
         self.router = get_model_router()
+        self.prompt_cache = get_prompt_cache_service()
+        if wrapper is None:
+            from src.modules.ai.anthropic_wrapper import get_anthropic_wrapper
+
+            self.wrapper = get_anthropic_wrapper()
+        else:
+            self.wrapper = wrapper
 
         logger.info(
             "ai_service_initialized",
             tenant_id=str(tenant_id) if tenant_id else None,
             budget_remaining=budget_remaining_usd,
+            cache_enabled=self.prompt_cache.enabled if self.prompt_cache else False,
         )
 
     # ===========================================
@@ -151,7 +176,12 @@ class AIService:
         request: AIRequest,
     ) -> AIResponse:
         """
-        Genera respuesta usando Claude API.
+        Genera respuesta usando Claude API con caché automático.
+
+        Orden de caché:
+        1. Prompt cache (hash SHA-256 del input completo)
+        2. Document extraction cache (por document_hash + task_type)
+        3. API call (si ambos caches fallan)
 
         Args:
             request: Parámetros de la request
@@ -164,6 +194,85 @@ class AIService:
             anthropic.APIError: Si hay error en la API
         """
         start_time = time.perf_counter()
+
+        # ===========================================
+        # CACHE LAYER 1: Prompt Cache (SHA-256)
+        # ===========================================
+        # Intenta obtener del caché de prompts idénticos
+        if request.use_cache and self.prompt_cache and self.prompt_cache.enabled:
+            # Necesitamos el modelo para el hash, pero aún no lo hemos seleccionado
+            # Usamos una selección preliminar para el hash
+            input_token_estimate = self._estimate_tokens(request.prompt)
+            preliminary_model = self.router.select_model(
+                task_type=request.task_type,
+                input_token_estimate=input_token_estimate,
+                budget_remaining_usd=self.budget_remaining_usd,
+                force_tier=request.force_model_tier,
+            )
+
+            cached_response = await self.prompt_cache.get_cached_response(
+                prompt=request.prompt,
+                system_prompt=request.system_prompt,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                model=preliminary_model.name,
+            )
+
+            if cached_response:
+                # Cache HIT - retornar respuesta inmediata
+                execution_time_ms = (time.perf_counter() - start_time) * 1000
+                logger.info(
+                    "prompt_cache_used",
+                    tenant_id=str(self.tenant_id) if self.tenant_id else None,
+                    cached_age_seconds=cached_response.get_age_seconds(),
+                    saved_cost_usd=cached_response.cost_usd,
+                    saved_time_ms=cached_response.original_execution_time_ms - execution_time_ms,
+                )
+                return AIResponse(
+                    content=cached_response.content,
+                    model=cached_response.model,
+                    input_tokens=cached_response.input_tokens,
+                    output_tokens=cached_response.output_tokens,
+                    cost_usd=0.0,  # No cost porque es cached
+                    cached=True,
+                    execution_time_ms=round(execution_time_ms, 2),
+                    prompt_version=request.prompt_version,
+                )
+
+        # ===========================================
+        # CACHE LAYER 2: Document Extraction Cache
+        # ===========================================
+        cache_service = get_cache_service()
+        task_value = (
+            request.task_type.value
+            if isinstance(request.task_type, TaskType)
+            else str(request.task_type)
+        )
+        if (
+            cache_service
+            and request.document_hash
+            and task_value in (TaskType.SIMPLE_EXTRACTION.value, TaskType.COMPLEX_EXTRACTION.value)
+        ):
+            cached_payload = await cache_service.get_extraction(
+                request.document_hash,
+                task_value,
+            )
+            if cached_payload:
+                execution_time_ms = (time.perf_counter() - start_time) * 1000
+                return AIResponse(
+                    content=cached_payload.get("content", ""),
+                    model=cached_payload.get("model", ""),
+                    input_tokens=cached_payload.get("input_tokens", 0),
+                    output_tokens=cached_payload.get("output_tokens", 0),
+                    cost_usd=cached_payload.get("cost_usd", 0.0),
+                    cached=True,
+                    execution_time_ms=round(execution_time_ms, 2),
+                    prompt_version=request.prompt_version,
+                )
+
+        # ===========================================
+        # NO CACHE - Llamar API
+        # ===========================================
 
         # 1. Select model
         input_token_estimate = self._estimate_tokens(request.prompt)
@@ -248,14 +357,59 @@ class AIService:
             if isinstance(request.task_type, str)
             else request.task_type.value,
             model=model_config.name,
+            prompt_version=request.prompt_version,  # CRÍTICO para auditoría
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             cost_usd=actual_cost,
             execution_time_ms=round(execution_time_ms, 2),
         )
 
+        # 8. Save to prompt cache (SHA-256)
+        if request.use_cache and self.prompt_cache and self.prompt_cache.enabled:
+            await self.prompt_cache.set_cached_response(
+                prompt=request.prompt,
+                response_content=content,
+                model=model_config.name,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cost_usd=actual_cost,
+                execution_time_ms=execution_time_ms,
+                system_prompt=request.system_prompt,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            )
+
+        # 9. Save to document extraction cache
+        if (
+            cache_service
+            and request.document_hash
+            and task_value in (TaskType.SIMPLE_EXTRACTION.value, TaskType.COMPLEX_EXTRACTION.value)
+        ):
+            await cache_service.set_extraction(
+                request.document_hash,
+                task_value,
+                {
+                    "content": content,
+                    "model": model_config.name,
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens,
+                    "cost_usd": actual_cost,
+                },
+            )
+
         # TODO: Guardar en tabla ai_usage_logs
-        # await self._save_usage_log(...)
+        # await self._save_usage_log(
+        #     tenant_id=self.tenant_id,
+        #     project_id=None,  # Obtener del contexto si está disponible
+        #     model=model_config.name,
+        #     operation=request.task_type,
+        #     prompt_version=request.prompt_version,  # ¡CRÍTICO para auditoría!
+        #     input_tokens=response.usage.input_tokens,
+        #     output_tokens=response.usage.output_tokens,
+        #     cost_usd=actual_cost,
+        #     cached=False,
+        #     latency_ms=round(execution_time_ms, 2),
+        # )
 
         return AIResponse(
             content=content,
@@ -263,9 +417,66 @@ class AIService:
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             cost_usd=actual_cost,
-            cached=False,  # TODO: implementar cache
+            cached=False,
             execution_time_ms=round(execution_time_ms, 2),
+            prompt_version=request.prompt_version,
         )
+
+    # ===========================================
+    # GENERIC EXTRACTION (WRAPPER + RETRY + PARSING)
+    # ===========================================
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.APIError)),
+        reraise=True,
+    )
+    async def _call_wrapper(self, system_prompt: str, user_content: str) -> Any:
+        from src.modules.ai.anthropic_wrapper import AIRequest as WrapperRequest
+        from src.modules.ai.model_router import AITaskType
+
+        request = WrapperRequest(
+            prompt=user_content,
+            system_prompt=system_prompt,
+            task_type=AITaskType.COMPLEX_EXTRACTION,
+            tenant_id=self.tenant_id,
+            use_cache=True,
+        )
+        return await self.wrapper.generate(request)
+
+    async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
+        """
+        Runs an LLM extraction with retries, robust JSON parsing, and usage logging.
+
+        Returns:
+            Parsed JSON content (dict or list).
+        """
+        start_time = time.perf_counter()
+        try:
+            response = await self._call_wrapper(system_prompt, user_content)
+        except RetryError as exc:
+            raise AIServiceError(
+                message="AI service temporarily unavailable. Please retry shortly."
+            ) from exc
+        except anthropic.APIError as exc:
+            raise AIServiceError(
+                message="AI service temporarily unavailable. Please retry shortly."
+            ) from exc
+
+        parsed = self._parse_json_response(response.content)
+
+        latency_ms = response.latency_ms or (time.perf_counter() - start_time) * 1000
+        logger.info(
+            "ai_usage_logged",
+            timestamp=time.time(),
+            model_used=response.model_used,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            latency_ms=round(latency_ms, 2),
+        )
+
+        return parsed
 
     # ===========================================
     # HELPER METHODS
@@ -286,6 +497,50 @@ class AIService:
                 return block.text
 
         return ""
+
+    def _parse_json_response(self, raw: str) -> Any:
+        """
+        Robust JSON parsing for LLM responses with extra chatter.
+        """
+        raw = raw.strip()
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+        candidate = self._extract_json_block(raw)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            raise AIServiceError(message="Failed to parse AI JSON response.") from exc
+
+    def _extract_json_block(self, raw: str) -> str:
+        """
+        Extracts the first JSON block (object or array) from a string.
+        """
+        start_idx = None
+        stack = []
+        for i, ch in enumerate(raw):
+            if ch in "{[":
+                if start_idx is None:
+                    start_idx = i
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]":
+                if stack and ch == stack[-1]:
+                    stack.pop()
+                    if not stack and start_idx is not None:
+                        return raw[start_idx : i + 1]
+
+        # Fallback: best-effort slice using first/last braces.
+        first = min(
+            (idx for idx in (raw.find("{"), raw.find("[")) if idx != -1),
+            default=-1,
+        )
+        last = max(raw.rfind("}"), raw.rfind("]"))
+        if first != -1 and last != -1 and last > first:
+            return raw[first : last + 1]
+
+        raise AIServiceError(message="No JSON block found in AI response.")
 
     # ===========================================
     # BATCH PROCESSING

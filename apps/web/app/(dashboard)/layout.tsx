@@ -1,26 +1,25 @@
-import React from 'react';
-import Link from 'next/link'; // Import Link for Next.js navigation
+'use client';
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+import type { ReactNode } from "react";
+import { AppSidebar } from "@/components/layout/AppSidebar";
+import { AppHeader } from "@/components/layout/AppHeader";
+// TEMPORALMENTE DESACTIVADO: import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+// TEMPORALMENTE DESACTIVADO: import { useAuth } from "@/contexts/AuthContext";
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  // TEMPORALMENTE DESACTIVADO: const { user, tenant, logout } = useAuth();
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm p-4 border-b border-gray-200">
-        <nav className="flex space-x-4">
-          <Link href="/dashboard" className="text-blue-600 hover:text-blue-800 font-medium">Dashboard</Link>
-          <Link href="/dashboard/projects" className="text-blue-600 hover:text-blue-800 font-medium">Projects</Link>
-          <Link href="/dashboard/observability" className="text-blue-600 hover:text-blue-800 font-medium">Observability</Link>
-        </nav>
-      </header>
-      <main className="flex-grow p-4">
-        {children}
-      </main>
-      <footer className="bg-white shadow-sm p-4 border-t border-gray-200 text-center text-gray-500 text-sm">
-        <p>&copy; {new Date().getFullYear()} C2Pro</p>
-      </footer>
-    </div>
+    // TEMPORALMENTE DESACTIVADO: <ProtectedRoute>
+      <div className="flex h-screen overflow-hidden">
+        <AppSidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <AppHeader />
+          <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
+            {children}
+          </main>
+        </div>
+      </div>
+    // TEMPORALMENTE DESACTIVADO: </ProtectedRoute>
   );
 }

@@ -1,0 +1,66 @@
+{
+  "project_metadata": {
+    "id": "project_001",
+    "name": "Planta Fotovoltaica Solar Alpha",
+    "type": "Industrial",
+    "complexity": "Medium",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "El presente contrato establece los términos para la construcción de la 'Planta Fotovoltaica Solar Alpha'. El **Contratista Principal**, 'EnerBuild S.A.', se compromete a la entrega completa y operativa de la planta a más tardar el **1 de Julio de 2026**. Cualquier retraso en la entrega final incurrirá en una penalización del 5% sobre el valor total del contrato.\n\nEl **Supervisor de Obra**, designado por el cliente 'FuturoVerde Corp', será responsable de validar los hitos semanales y asegurar el cumplimiento de los estándares de calidad. La comunicación oficial entre las partes se gestionará a través del Supervisor.\n\nSe realizarán pagos parciales contra la finalización de los hitos definidos en el Anexo B. El pago final quedará condicionado a la recepción satisfactoria de la planta y la confirmación por parte del Supervisor de Obra de que no existen defectos mayores. El Contratista Principal deberá presentar informes de avance quincenales.",
+    "schedule_summary": {
+      "project_end_date": "2026-07-15",
+      "milestones": {
+        "Foundation": "2026-03-01",
+        "Panel_Installation": "2026-05-15",
+        "Commissioning": "2026-07-10"
+      }
+    },
+    "budget_summary": {
+      "total_value_eur": 10000000,
+      "risk_contingency_pct": 0.0,
+      "line_items": [ { "name": "Civil Works", "cost": 3000000 }, { "name": "PV Modules & Inverters", "cost": 5000000 }, { "name": "Labor", "cost": 2000000 } ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "entrega completa y operativa de la planta a más tardar el 1 de Julio de 2026",
+        "metadata": { "date": "2026-07-01" }
+      },
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "Cualquier retraso en la entrega final incurrirá en una penalización del 5% sobre el valor total del contrato.",
+        "metadata": { "percentage": 5.0, "condition": "retraso en la entrega final" }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Contratista Principal",
+        "mention": "EnerBuild S.A.",
+        "role": "Ejecutor del Proyecto",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Supervisor de Obra",
+        "mention": "FuturoVerde Corp",
+        "role": "Validador de Hitos y Calidad",
+        "quadrant": "Accountable"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "SCH-CTR-01",
+        "severity": "critical",
+        "description": "La fecha de finalización del cronograma (15-Jul-2026) es posterior a la fecha límite contractual (01-Jul-2026).",
+        "conflicting_elements": [
+          { "source": "contract_text", "identifier": "CL-DEADLINE-01" },
+          { "source": "schedule_summary", "identifier": "project_end_date" }
+        ]
+      }
+    ]
+  }
+}

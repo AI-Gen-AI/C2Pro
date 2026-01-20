@@ -1,0 +1,118 @@
+/* React-PDF styles */
+
+/* PDF Document container */
+.pdf-document {
+  display: flex;
+  justify-content: center;
+}
+
+/* PDF Page customization */
+.react-pdf__Page {
+  position: relative;
+}
+
+.react-pdf__Page__canvas {
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  border-radius: 0.25rem;
+}
+
+/* Text Layer - for text selection */
+.react-pdf__Page__textContent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.react-pdf__Page__textContent span {
+  color: transparent;
+  cursor: text;
+}
+
+/* Annotation Layer - for links and interactive elements */
+.react-pdf__Page__annotations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* PDF Link styles */
+.react-pdf__Page__annotations .linkAnnotation > a {
+  opacity: 0;
+  position: absolute;
+  cursor: pointer;
+  border: 1px solid rgb(59 130 246 / 0.5);
+  background-color: rgb(59 130 246 / 0.1);
+  transition: opacity 0.2s;
+}
+
+.react-pdf__Page__annotations .linkAnnotation > a:hover {
+  opacity: 1;
+  background-color: rgb(59 130 246 / 0.2);
+}
+
+/* Loading states */
+.pdf-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+/* Error states */
+.pdf-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+/* Highlight layer */
+.pdf-highlight-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.pdf-highlight {
+  position: absolute;
+  background-color: rgb(254 240 138 / 0.3);
+  border: 2px solid rgb(250 204 21);
+  border-radius: 0.25rem;
+  transition: opacity 0.2s;
+}
+
+.pdf-highlight:hover {
+  background-color: rgb(254 240 138 / 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .react-pdf__Page__canvas {
+    max-width: 100%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .react-pdf__Page__annotations .linkAnnotation > a {
+    border-color: rgb(96 165 250 / 0.5);
+    background-color: rgb(96 165 250 / 0.1);
+  }
+
+  .react-pdf__Page__annotations .linkAnnotation > a:hover {
+    background-color: rgb(96 165 250 / 0.2);
+  }
+}
