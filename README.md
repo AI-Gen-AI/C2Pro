@@ -2,9 +2,14 @@
 
 > Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
 
-## 🎉 Estado Actual: Sprint 1 Completado ✅
+## 🎉 Estado Actual: Sprint S2 en Progreso (65%)
 
-**Backend MVP funcional** con autenticación, gestión de proyectos y base de datos configurada.
+**CTO Gates 1-4 Validados** ✅ | **Security Foundation Production Ready**
+
+- ✅ 19 tablas con RLS desplegadas en staging
+- ✅ 42 tests de seguridad implementados
+- ✅ Frontend type safety 95%
+- 🟡 Sprint S2: Wireframes + Coherence Engine
 
 ### 🚀 Comenzar Ahora
 
@@ -43,12 +48,25 @@ C2Pro cruza automáticamente estos documentos y detecta incoherencias antes de q
 ```
 c2pro/
 ├── apps/
-│   ├── web/              # Frontend Next.js
-│   └── api/              # Backend FastAPI
-├── packages/             # Shared packages (futuro)
-├── infrastructure/       # Supabase migrations, scripts
-├── docs/                 # Documentación técnica
-└── docker-compose.yml    # Desarrollo local
+│   ├── web/                  # Frontend Next.js
+│   └── api/                  # Backend FastAPI
+├── packages/                 # Shared packages (futuro)
+├── infrastructure/           # Supabase migrations, scripts
+├── scripts/                  # Scripts de utilidad
+├── docs/
+│   ├── DEVELOPMENT_STATUS.md # Estado principal del desarrollo
+│   ├── ROADMAP_v2.4.0.md     # Roadmap actual
+│   ├── archive/              # Documentos completados
+│   │   ├── tasks/            # Tareas CE-xxx finalizadas
+│   │   ├── sprints/          # Sprints cerrados
+│   │   ├── migrations/       # Reportes de migraciones
+│   │   └── roadmaps/         # Versiones anteriores
+│   ├── planning/             # Planes futuros
+│   ├── specifications/       # Especificaciones técnicas
+│   ├── runbooks/             # Guías operativas
+│   ├── architecture/         # Decisiones arquitectónicas
+│   └── wireframes/           # Diseños UI
+└── docker-compose.yml        # Desarrollo local
 ```
 
 ## 🚀 Quick Start
@@ -185,21 +203,35 @@ Ver `.env.example` para la lista completa. Las críticas son:
 
 ## 📚 Documentación
 
-- [Arquitectura](docs/architecture/README.md)
-- [API Reference](docs/api/README.md)
-- [Runbooks](docs/runbooks/README.md)
-- [ADRs](docs/architecture/decisions/README.md)
+- [Estado del Desarrollo](docs/DEVELOPMENT_STATUS.md) - Estado actual y progreso
+- [Roadmap v2.4.0](docs/ROADMAP_v2.4.0.md) - Plan completo del proyecto
+- [Arquitectura](docs/architecture/) - Decisiones arquitectónicas (ADRs)
+- [Runbooks](docs/runbooks/) - Guías operativas y configuración
+- [Especificaciones](docs/specifications/) - Documentación técnica
+- [Wireframes](docs/wireframes/) - Diseños de interfaz
 
 ## 🛣️ Roadmap
 
-- [x] **Fase 1**: Auditoría Tridimensional (MVP)
-- [ ] **Fase 2**: Copiloto de Compras
-- [ ] **Fase 3**: Control de Ejecución
-- [ ] **Fase 4**: Integraciones (Procore, SAP)
+### CTO Gates (Seguridad)
+- [x] **Gate 1**: Multi-tenant Isolation (RLS) ✅
+- [x] **Gate 2**: Identity Model (UNIQUE constraint) ✅
+- [x] **Gate 3**: MCP Security (23/23 tests) ✅
+- [x] **Gate 4**: Legal Traceability (clauses + FKs) ✅
+- [ ] **Gate 5**: Coherence Score Formal (en progreso)
+- [ ] **Gate 6**: Human-in-the-loop
+- [ ] **Gate 7**: Observability
+- [ ] **Gate 8**: Document Security
+
+### Fases del Producto
+- [x] **Fase 1**: Platform Foundation (Sprint 1) ✅
+- [x] **Fase 1.5**: Security Foundation (Sprints P0) ✅
+- [ ] **Fase 2**: Coherence Engine MVP (Sprint S2 - 65%)
+- [ ] **Fase 3**: Copiloto de Compras
+- [ ] **Fase 4**: Control de Ejecución
 
 ## 📄 Licencia
 
-Propietario - © 2024 C2Pro
+Propietario - © 2025-2026 C2Pro
 
 ## 🤝 Contribuir
 
