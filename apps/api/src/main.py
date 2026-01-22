@@ -27,7 +27,9 @@ from src.modules.coherence.router import router as coherence_router
 from src.modules.documents.router import router as documents_router
 from src.modules.observability.router import router as observability_router
 from src.modules.projects.router import router as projects_router
+from src.modules.analysis.router import router as analysis_router
 from src.routers.health import router as health_router
+from src.routers.alerts import router as alerts_router
 
 logger = structlog.get_logger()
 
@@ -209,11 +211,20 @@ def create_application() -> FastAPI:
         prefix=api_v1_prefix,
     )
 
+    app.include_router(
+        analysis_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        alerts_router,
+        prefix=api_v1_prefix,
+    )
+
     # Coherence Engine v0 router (no v1 prefix)
     app.include_router(coherence_router)
 
     # TODO: Añadir más routers conforme se implementen
-    # app.include_router(analysis_router, prefix=api_v1_prefix)
     # app.include_router(stakeholders_router, prefix=api_v1_prefix)
 
     logger.info("application_configured")

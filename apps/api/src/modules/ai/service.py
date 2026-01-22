@@ -22,7 +22,7 @@ from uuid import UUID
 import anthropic
 import structlog
 from anthropic import Anthropic
-from anthropic.types import Message, TextBlock
+from anthropic.types import Message
 from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.config import settings
@@ -493,8 +493,9 @@ class AIService:
     def _extract_content(self, message: Message) -> str:
         """Extrae contenido de texto de la respuesta."""
         for block in message.content:
-            if isinstance(block, TextBlock):
-                return block.text
+            text = getattr(block, "text", None)
+            if isinstance(text, str):
+                return text
 
         return ""
 
