@@ -1,8 +1,8 @@
 # Revisión Wireframes 6 Vistas Core - CE-S2-010
 
-**Fecha**: 2026-01-21
+**Fecha**: 2026-01-22 (Actualizado)
 **Ticket**: CE-S2-010 - Wireframes 6 Vistas Core
-**Estado**: 🟡 EN PROGRESO - 75% Completado
+**Estado**: ✅ COMPLETADO - 92%
 **Prioridad**: P0 (Crítico)
 **Sprint**: S2 Semana 2
 **Story Points**: 2
@@ -12,18 +12,25 @@
 
 ## 📋 Resumen Ejecutivo
 
-La implementación de wireframes y componentes frontend para las 6 vistas core de C2Pro ha avanzado significativamente, con **5 de 6 sub-tareas completadas** y múltiples features implementadas en la vista Evidence Viewer.
+La implementación de wireframes y componentes frontend para las 6 vistas core de C2Pro está **prácticamente completada**, con todas las vistas implementadas y funcionales.
 
-### Estado General:
+### Estado General de las 6 Vistas:
 
-- 🟢 **PDF Viewer Implementation**: 100% COMPLETADO
-- 🟢 **Highlight Sync**: 100% COMPLETADO
-- 🟢 **Highlight Search**: 100% COMPLETADO
-- 🟢 **Keyboard Navigation**: 100% COMPLETADO (parcial)
-- 🟡 **Multiple Documents**: 80% COMPLETADO
-- 🔴 **OCR Backend Integration**: 0% NO INICIADO
+| Vista | Estado | Componentes |
+|-------|--------|-------------|
+| 🟢 **Project Dashboard** | 95% | GaugeChart, KPI Cards, Activity Timeline, Alerts |
+| 🟢 **Evidence Viewer** | 90% | PDF Split View, Entity Cards, Highlight Search |
+| 🟢 **Alerts Center** | 90% | DataTable, Filtros, Severity Badges, Status |
+| 🟢 **Stakeholder Map** | 95% | Matriz 4 cuadrantes, Drag-and-Drop (dnd-kit) |
+| 🟢 **RACI Matrix** | 90% | DataTable, Leyenda RACI, Export button |
+| 🟢 **Project List** | 95% | Stats Cards, Filtros, Score Trends, Progress |
 
-**Progreso Total CE-S2-010**: **75%** (de 0% → 75%)
+**Progreso Total CE-S2-010**: **92%**
+
+### Pendiente (8%):
+
+- 🟡 OCR Backend Integration (0%)
+- 🟡 Human-in-the-loop dialogs (Gate 6)
 
 ---
 
@@ -234,52 +241,74 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 
 ---
 
-### 3. Alerts Center 🔴 NO IMPLEMENTADO
+### 3. Alerts Center ✅ 90% Completado
 
-**Estado**: 0% - Especificaciones completas, implementación pendiente
+**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/alerts/page.tsx`
 
-**Componentes Planificados**:
-- DataTable con filtros avanzados
-- Severity badges (Critical/High/Medium/Low)
-- Status tracking (Open/In Progress/Resolved)
+**Componentes Implementados**:
+- ✅ DataTable con filtros avanzados (search, severity, status)
+- ✅ Severity badges (Critical/High/Medium/Low) con colores
+- ✅ Status tracking (Open/In Progress/Resolved)
+- ✅ Checkbox para selección múltiple
+- ✅ Actions: View, Check
+
+**Pendiente**:
 - Timeline de resolución
 - Assignment a usuarios
+- Bulk actions
 
 ---
 
-### 4. Stakeholder Map 🔴 NO IMPLEMENTADO
+### 4. Stakeholder Map ✅ 95% Completado
 
-**Estado**: 0% - Especificaciones completas, implementación pendiente
+**Estado**: IMPLEMENTADO - `apps/web/components/stakeholders/StakeholderMatrix.tsx`
 
-**Componentes Planificados**:
-- Matriz Poder-Interés (4 cuadrantes)
-- Nodos interactivos
-- Force-directed graph (opcional, con D3.js)
-- Filtros por rol
+**Componentes Implementados**:
+- ✅ Matriz Poder-Interés (4 cuadrantes con gradientes)
+- ✅ Drag-and-Drop interactivo (dnd-kit)
+- ✅ Stakeholder cards con iniciales y badges
+- ✅ Responsive grid (2 columnas en desktop)
+- ✅ API integration con hooks (useStakeholders, useUpdateStakeholder)
 
----
-
-### 5. RACI Matrix Viewer 🔴 NO IMPLEMENTADO
-
-**Estado**: 0% - Especificaciones completas, implementación pendiente
-
-**Componentes Planificados**:
-- DataTable con filas (tasks) y columnas (stakeholders)
-- Cells con R/A/C/I badges
-- Editable inline (doble-click)
-- Export a CSV
+**Pendiente**:
+- Force-directed graph alternativo (opcional)
 
 ---
 
-### 6. Project List 🔴 NO IMPLEMENTADO
+### 5. RACI Matrix Viewer ✅ 90% Completado
 
-**Estado**: 0% - Especificaciones completas, implementación pendiente
+**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/raci/page.tsx`
 
-**Componentes Planificados**:
-- DataTable con filtros y sorting
-- Status badges
-- Coherence Score column
-- Quick actions (View/Edit/Archive)
+**Componentes Implementados**:
+- ✅ DataTable con actividades y roles
+- ✅ R/A/C/I badges con colores distintivos
+- ✅ Leyenda visual del sistema RACI
+- ✅ Búsqueda de actividades
+- ✅ Filtro por proyecto
+- ✅ Botón Export (UI lista)
+
+**Pendiente**:
+- Edición inline (doble-click)
+- Export real a CSV
+
+---
+
+### 6. Project List ✅ 95% Completado
+
+**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/projects/page.tsx`
+
+**Componentes Implementados**:
+- ✅ DataTable con filtros (search, status)
+- ✅ Status badges con colores
+- ✅ Coherence Score con trend indicators
+- ✅ Progress bars
+- ✅ Critical alerts badges
+- ✅ Stats cards (Total, Active, Alerts, Critical)
+- ✅ Links a detalle de proyecto
+
+**Pendiente**:
+- Actions dropdown (Edit/Archive)
+- Pagination real
 
 ---
 
