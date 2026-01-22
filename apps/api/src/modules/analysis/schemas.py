@@ -296,3 +296,76 @@ class ProjectAlertResponse(ProjectAlertCreate):
     resolved_by: Optional[UUID]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===========================================
+# EXTRACTION SCHEMAS
+# ===========================================
+
+
+class ExtractionBase(BaseModel):
+    """Base schema for extraction attributes."""
+
+    extraction_type: Optional[str] = Field(
+        None, max_length=50, description="Type of extraction (contract_metadata, milestones, budget_items)"
+    )
+    data_json: Dict[str, Any] = Field(
+        ..., description="Extracted data as JSON object"
+    )
+    confidence_score: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
+    )
+
+
+class ExtractionCreate(ExtractionBase):
+    """Schema for creating a new extraction."""
+
+    document_id: UUID = Field(..., description="ID of the document this extraction belongs to")
+
+    # AI tracking (ROADMAP §6.2)
+    model_version: Optional[str] = Field(
+        None, max_length=50, description="Version of AI model used for extraction"
+    )
+    tokens_used: Optional[int] = Field(None, ge=0, description="Number of tokens used")
+    cost_usd: Optional[float] = Field(None, ge=0, description="Cost in USD for this extraction")
+
+
+class ExtractionUpdate(BaseModel):
+    """Schema for updating an existing extraction."""
+
+    extraction_type: Optional[str] = Field(None, max_length=50)
+    data_json: Optional[Dict[str, Any]] = None
+    confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExtractionResponse(ExtractionBase):
+    """Schema for extraction response."""
+
+    id: UUID = Field(..., description="Unique ID of the extraction")
+    document_id: UUID = Field(..., description="ID of the document")
+
+    # AI tracking
+    model_version: Optional[str] = Field(None, description="AI model version")
+    tokens_used: Optional[int] = Field(None, description="Tokens used")
+    cost_usd: Optional[float] = Field(None, description="Cost in USD")
+
+    # Computed property
+    confidence_level: str = Field(
+        "unknown", description="Confidence level (high, medium, low, unknown)"
+    )
+
+    created_at: datetime = Field(..., description="Timestamp of creation")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExtractionListResponse(BaseModel):
+    """Schema for list of extractions with pagination."""
+
+    items: List[ExtractionResponse] = Field(
+        default_factory=list, description="List of extractions"
+    )
+    total: int = Field(..., description="Total number of extractions")
+    document_id: UUID = Field(..., description="Document ID these extractions belong to")
