@@ -15,12 +15,9 @@ from src.core.exceptions import ConflictError, NotFoundError, ValidationError
 from src.core.security import CurrentTenantId, CurrentUserId
 from src.core.validation import sanitize_search_query
 from src.modules.coherence.service import CoherenceService, get_coherence_service
-from src.modules.documents.models import Document
 from src.modules.projects.models import ProjectStatus, ProjectType
 from src.modules.projects.schemas import (
     CoherenceScoreResponse,
-    DocumentListResponse,
-    DocumentPollingStatus,
     ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectErrorResponse,
@@ -281,86 +278,6 @@ async def get_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get(
-    "/{project_id}/documents",
-    response_model=list[DocumentListResponse],
-    summary="List documents for a project",
-    description="""
-    Retrieves a paginated list of all documents associated with a specific project.
-    The list is ordered by creation date, with the most recent documents first.
-    This endpoint is designed for polling document statuses after an async upload.
-    """,
-    tags=["Projects", "Documents"],
-)
-async def list_project_documents(
-    project_id: UUID,
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session),
-    skip: int = Query(0, ge=0, description="Number of documents to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Number of documents to return"),
-):
-    """
-    Lists all documents for a given project, ensuring the user has access
-    via their tenant and providing pagination.
-    """
-    def _normalize_status(status: object) -> DocumentPollingStatus:
-        raw_value = status.value if hasattr(status, "value") else str(status or "").lower()
-        raw_value = raw_value.lower()
-        if raw_value in {"queued", "uploaded"}:
-            return DocumentPollingStatus.QUEUED
-        if raw_value in {"processing", "parsing"}:
-            return DocumentPollingStatus.PROCESSING
-        if raw_value == "parsed":
-            return DocumentPollingStatus.PARSED
-        if raw_value == "error":
-            return DocumentPollingStatus.ERROR
-        return DocumentPollingStatus.PROCESSING
-
-    # 1. Security Check: Verify project exists and belongs to the user's tenant.
-    try:
-        await ProjectService.get_project(db=db, project_id=project_id, tenant_id=tenant_id)
-    except NotFoundError:
-        # Raise 404 if project doesn't exist or doesn't belong to the tenant.
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
-
-    # 2. Query Documents: Fetch the paginated list of documents.
-    from sqlalchemy import func, select
-    query = (
-        select(
-            Document.id,
-            Document.filename,
-            Document.upload_status,
-            Document.parsing_error,
-            Document.created_at,
-            func.coalesce(Document.file_size_bytes, 0).label("file_size_bytes"),
-        )
-        .where(Document.project_id == project_id)
-        .order_by(Document.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    result = await db.execute(query)
-    rows = result.all()
-
-    response_items: list[DocumentListResponse] = []
-    for row in rows:
-        normalized_status = _normalize_status(row.upload_status)
-        response_items.append(
-            DocumentListResponse(
-                id=row.id,
-                filename=row.filename,
-                status=normalized_status,
-                error_message=row.parsing_error
-                if normalized_status == DocumentPollingStatus.ERROR
-                else None,
-                uploaded_at=row.created_at,
-                file_size_bytes=row.file_size_bytes,
-            )
-        )
-    return response_items
 
 
 @router.get(

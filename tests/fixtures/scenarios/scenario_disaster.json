@@ -1,0 +1,40 @@
+{
+  "project_id": "scenario_disaster",
+  "contract": {
+    "total_amount": 100000
+  },
+  "budget_items": [
+    {
+      "amount": 80000
+    },
+    {
+      "amount": 60000
+    }
+  ],
+  "schedule_items": [
+    {
+      "id": "task-1",
+      "name": "Excavation",
+      "start_date": "2020-01-01T00:00:00",
+      "end_date": "2020-01-10T00:00:00",
+      "predecessor_id": null
+    },
+    {
+      "id": "task-2",
+      "name": "Concrete Pour",
+      "start_date": "2020-01-05T00:00:00",
+      "end_date": "2020-01-08T00:00:00",
+      "predecessor_id": "task-1"
+    }
+  ],
+  "bom_items": [
+    {
+      "item_name": "Facade Panels",
+      "required_on_site_date": "2020-02-01T00:00:00",
+      "lead_time_days": 45,
+      "budget_item_id": null
+    }
+  ],
+  "wbs_items": [],
+  "clauses": []
+}

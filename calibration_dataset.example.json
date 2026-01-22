@@ -1,0 +1,48 @@
+[
+  {
+    "project_id": "calibration-sample-001",
+    "human_score": 82,
+    "project": {
+      "contract": {
+        "total_amount": 120000
+      },
+      "budget_items": [
+        {
+          "amount": 60000
+        },
+        {
+          "amount": 70000
+        }
+      ],
+      "schedule_items": [
+        {
+          "id": "task-1",
+          "name": "Foundations",
+          "start_date": "2030-01-01T00:00:00",
+          "end_date": "2030-01-10T00:00:00",
+          "predecessor_id": null
+        },
+        {
+          "id": "task-2",
+          "name": "Structure",
+          "start_date": "2030-01-05T00:00:00",
+          "end_date": "2030-01-12T00:00:00",
+          "predecessor_id": "task-1"
+        }
+      ],
+      "bom_items": [
+        {
+          "item_name": "Valve X",
+          "required_on_site_date": "2030-02-01T00:00:00",
+          "lead_time_days": 30,
+          "budget_item_id": "budget-1"
+        }
+      ],
+      "clauses": [
+        {
+          "text": "Se requiere permiso de obra antes de iniciar el proyecto."
+        }
+      ]
+    }
+  }
+]

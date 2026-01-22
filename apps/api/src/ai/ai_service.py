@@ -1,21 +1,17 @@
-"""
-AI Service Orchestrator.
-
-High-level service that adds resilience, robust JSON parsing, and usage logging
-on top of the Anthropic wrapper.
-"""
-
 from __future__ import annotations
 
 import json
 import os
 import time
 from typing import Any
+from uuid import UUID
 
 import structlog
 from anthropic import APIError, RateLimitError
+from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
 from src.modules.ai.anthropic_wrapper import AIRequest as WrapperRequest
 from src.modules.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
@@ -24,17 +20,39 @@ from src.modules.ai.model_router import AITaskType
 logger = structlog.get_logger()
 
 
+def _get_cost_controller():
+    if os.getenv("C2PRO_TEST_LIGHT") == "1":
+        return None, None
+    from src.ai.cost_controller import BudgetExceededException, CostControllerService
+
+    return CostControllerService, BudgetExceededException
+
+
 class AIService:
     """
     Orchestrator for AI calls with retry, parsing, and observability.
     """
 
-    def __init__(self, wrapper: AnthropicWrapper | None = None, tenant_id: str | None = None) -> None:
+    def __init__(
+        self,
+        wrapper: AnthropicWrapper | None = None,
+        tenant_id: str | None = None,
+        db: AsyncSession | None = None,
+    ) -> None:
         if os.getenv("C2PRO_AI_MOCK") == "1":
             self.wrapper = wrapper
         else:
             self.wrapper = wrapper or get_anthropic_wrapper()
         self.tenant_id = tenant_id
+        self.db = db
+        self._cost_controller_class, self._budget_exception = _get_cost_controller()
+        if self.db and self._cost_controller_class:
+            self.cost_controller = self._cost_controller_class(self.db)
+        else:
+            # In a real scenario, we might want to prevent the service from even starting
+            # without a DB connection, but for now, we'll allow it and let it fail at runtime.
+            self.cost_controller = None
+            logger.warning("AIService initialized without a database session. Cost control will be disabled.")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -69,6 +87,34 @@ class AIService:
             )
             return parsed
 
+        if not self.cost_controller:
+            if os.getenv("C2PRO_TEST_LIGHT") == "1":
+                logger.warning("Cost controller disabled in light test mode.")
+            else:
+                logger.error("Cost controller not initialized, cannot proceed with AI call.")
+                raise AIServiceError(message="El control de costes no está configurado.")
+
+        tenant_uuid = UUID(self.tenant_id)
+
+        # Before making the call, check the budget
+        estimated_cost = 0.01  # A small amount to represent a potential call
+        try:
+            async with get_session_with_tenant(tenant_uuid) as db_session:
+                if self._cost_controller_class:
+                    cost_controller = self._cost_controller_class(db_session)
+                    await cost_controller.check_budget_availability(
+                        tenant_uuid, estimated_cost
+                    )
+        except Exception as exc:
+            if self._budget_exception and isinstance(exc, self._budget_exception):
+                raise AIServiceError(message=exc.message) from exc
+            if os.getenv("C2PRO_TEST_LIGHT") == "1" and self._budget_exception is None:
+                logger.warning("budget_check_skipped_light_mode")
+            else:
+                logger.exception("budget_check_failed")
+                # Fail-closed: If budget check fails for any reason, block the call.
+                raise AIServiceError("Error al verificar el presupuesto.") from exc
+
         try:
             response = await self._call_wrapper(system_prompt, user_content)
         except RetryError as exc:
@@ -79,6 +125,24 @@ class AIService:
             raise AIServiceError(
                 message="El servicio de IA está temporalmente no disponible."
             ) from exc
+
+        # After the call, track the actual usage
+        try:
+            async with get_session_with_tenant(tenant_uuid) as db_session:
+                if self._cost_controller_class:
+                    cost_controller = self._cost_controller_class(db_session)
+                    actual_cost = cost_controller.calculate_cost(
+                        model=response.model_used,
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                    )
+                    await cost_controller.track_usage(tenant_uuid, actual_cost)
+        except Exception:
+            if os.getenv("C2PRO_TEST_LIGHT") != "1":
+                logger.exception("track_usage_failed")
+            # If tracking fails, we log the error but don't fail the request,
+            # as the user has already received the response.
+            # This is a trade-off. We could also have a retry mechanism for tracking.
 
         parsed = self._parse_json_response(response.content)
 
