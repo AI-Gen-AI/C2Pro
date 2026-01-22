@@ -14,13 +14,14 @@ from src.core.security import (  # Assuming CurrentTenantId is also available
 from src.modules.documents.models import Document, DocumentStatus, DocumentType
 from src.modules.documents.schemas import (
     DocumentDetailResponse,
-    DocumentQueuedResponse, # New response model
+    DocumentQueuedResponse,
     DocumentResponse,
     DocumentUploadResponse,
     UploadFileResponse,
 )
 from src.modules.documents.service import DocumentService
-from src.modules.projects.models import Project
+from src.modules.projects.schemas import DocumentListResponse, DocumentPollingStatus
+from src.modules.projects.service import ProjectService
 from src.shared.storage import StorageService
 from src.config import settings
 import pathlib
@@ -28,7 +29,7 @@ import pathlib
 logger = structlog.get_logger()
 
 router = APIRouter(
-    prefix="/documents",
+    prefix="",
     tags=["Documents"],
     responses={
         401: {"description": "Unauthorized"},
@@ -37,14 +38,11 @@ router = APIRouter(
     },
 )
 
-# Allowed MIME types for validation
-ALLOWED_MIME_TYPES = {
-    ".pdf": "application/pdf",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".xls": "application/vnd.ms-excel",
-    ".bc3": "text/plain", # BC3 is a plain text format
-    ".xer": "text/plain", # Primavera P6 XER are often text/xml or text/plain
-    ".mpp": "application/vnd.ms-project",
+# Allowed extensions for validation (CE-S4-010)
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".xlsx",
+    ".bc3",
 }
 
 
@@ -69,6 +67,7 @@ async def get_document_service(
 async def upload_document_for_processing(
     project_id: UUID,
     user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     document_type: DocumentType = Form(...),
     file: UploadFile = File(...),
     document_service: DocumentService = Depends(get_document_service),
@@ -87,46 +86,27 @@ async def upload_document_for_processing(
     
     # Check file extension
     file_extension = pathlib.Path(file.filename).suffix.lower()
-    if file_extension not in ALLOWED_MIME_TYPES:
+    if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File type '{file_extension}' is not allowed."
         )
 
-    # Check MIME type using python-magic
-    file_content = await file.read()
-    await file.seek(0) # Reset file pointer after reading
-    
-    import magic
-    detected_mime = magic.from_buffer(file_content, mime=True)
-    if detected_mime != ALLOWED_MIME_TYPES[file_extension]:
-         # Be a bit lenient for text-based formats
-        if not (file_extension in [".bc3", ".xer"] and "text" in detected_mime):
-             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file format. Expected {ALLOWED_MIME_TYPES[file_extension]}, but got {detected_mime}."
-            )
-
-    # 2. Check if project exists and user has access (implicitly done by service)
-    project_result = await db.execute(select(Project).where(Project.id == project_id))
-    project = project_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    # 2. Check if project exists and user has access
+    await ProjectService.get_project(db=db, project_id=project_id, tenant_id=tenant_id)
 
     # 3. Create document record in DB with QUEUED status
-    try:
-        new_document = await document_service.create_document_record(
-            project_id=project_id,
-            filename=file.filename,
-            file_size=file.size,
-            file_format=file_extension,
-            document_type=document_type,
-            user_id=user_id,
-            status="QUEUED"
-        )
-    except Exception as e:
-        logger.error("document_db_creation_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to create document record.")
+    new_document = Document(
+        project_id=project_id,
+        document_type=document_type,
+        filename=file.filename,
+        file_format=file_extension,
+        file_size_bytes=file.size,
+        upload_status=DocumentStatus.UPLOADED,
+        created_by=user_id,
+    )
+    db.add(new_document)
+    await db.flush()
 
     # 4. Save file to storage
     try:
@@ -135,10 +115,14 @@ async def upload_document_for_processing(
             file_content=file.file, file_id=new_document.id, file_extension=file_extension
         )
         # Update record with final storage path
-        await document_service.update_storage_path(document_id=new_document.id, path=storage_path)
+        new_document.storage_url = storage_path
+        await db.commit()
+        await db.refresh(new_document)
     except Exception as e:
         logger.error("document_storage_failed", error=str(e))
-        await document_service.update_status(document_id=new_document.id, status="ERROR")
+        new_document.upload_status = DocumentStatus.ERROR
+        new_document.parsing_error = "Failed to save document to storage."
+        await db.commit()
         raise HTTPException(status_code=500, detail="Failed to save document to storage.")
 
     # 5. Dispatch Celery task (lazy import to avoid heavy deps at startup)
@@ -147,7 +131,6 @@ async def upload_document_for_processing(
     logger.info("document_processing_queued", document_id=str(new_document.id), task_id=task.id)
 
     # 6. Return 202 Accepted response
-    # We need to manually construct the response as Pydantic can't validate the hybrid model
     response_data = DocumentResponse.model_validate(new_document).model_dump()
     response_data['task_id'] = task.id
     
@@ -155,7 +138,7 @@ async def upload_document_for_processing(
 
 
 @router.get(
-    "/{document_id}",
+    "/documents/{document_id}",
     response_model=DocumentDetailResponse,
     summary="Get document details by ID",
     description="Retrieves metadata and clauses for a specific document.",
@@ -191,7 +174,7 @@ async def get_document_endpoint(
 
 
 @router.get(
-    "/{document_id}/download",
+    "/documents/{document_id}/download",
     summary="Download document file by ID",
     description="Downloads the physical file content of a specific document.",
 )
@@ -219,7 +202,7 @@ async def download_document_endpoint(
 
 
 @router.delete(
-    "/{document_id}",
+    "/documents/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a document by ID",
     description="Deletes a document record and its associated file from storage.",
@@ -245,38 +228,68 @@ async def delete_document_endpoint(
         )
 
 
-# Endpoint to list documents for a project (needed for UI)
 @router.get(
-    "/projects/{project_id}",
-    response_model=list[DocumentResponse],
+    "/projects/{project_id}/documents",
+    response_model=list[DocumentListResponse],
     summary="List documents for a project",
-    description="Retrieves a list of all documents associated with a specific project.",
+    description="Retrieves document metadata for polling upload status.",
 )
 async def list_documents_for_project(
     project_id: UUID,
-    user_id: CurrentUserId,  # Ensure user is authenticated
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     db: AsyncSession = Depends(get_session),
 ):
+    def _normalize_status(status: object) -> DocumentPollingStatus:
+        raw_value = status.value if hasattr(status, "value") else str(status or "").lower()
+        raw_value = raw_value.lower()
+        if raw_value in {"queued", "uploaded"}:
+            return DocumentPollingStatus.QUEUED
+        if raw_value in {"processing", "parsing"}:
+            return DocumentPollingStatus.PROCESSING
+        if raw_value == "parsed":
+            return DocumentPollingStatus.PARSED
+        if raw_value == "error":
+            return DocumentPollingStatus.ERROR
+        return DocumentPollingStatus.PROCESSING
+
     try:
-        # Use get_session_with_tenant to ensure RLS and fetch documents
-        project_result = await db.execute(select(Project).where(Project.id == project_id))
-        project = project_result.scalar_one_or_none()
+        await ProjectService.get_project(db=db, project_id=project_id, tenant_id=tenant_id)
 
-        if not project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-
-        async with get_session_with_tenant(project.tenant_id) as tenant_db:
+        async with get_session_with_tenant(tenant_id) as tenant_db:
             documents_result = await tenant_db.execute(
-                select(Document).where(Document.project_id == project_id)
+                select(
+                    Document.id,
+                    Document.filename,
+                    Document.upload_status,
+                    Document.parsing_error,
+                    Document.created_at,
+                    Document.file_size_bytes,
+                )
+                .where(Document.project_id == project_id)
+                .order_by(Document.created_at.desc())
             )
-            documents = documents_result.scalars().all()
+            documents = documents_result.all()
             logger.info(
                 "documents_listed",
                 project_id=str(project_id),
                 user_id=str(user_id),
                 count=len(documents),
             )
-            return [DocumentResponse.model_validate(doc) for doc in documents]
+            response_items: list[DocumentListResponse] = []
+            for row in documents:
+                normalized = _normalize_status(row.upload_status)
+                response_items.append(
+                    DocumentListResponse(
+                        id=row.id,
+                        filename=row.filename,
+                        status=normalized,
+                        error_message=row.parsing_error if normalized == DocumentPollingStatus.ERROR else None,
+                        uploaded_at=row.created_at,
+                        file_size_bytes=row.file_size_bytes or 0,
+                    )
+                )
+            return response_items
     except HTTPException as e:
         raise e
     except Exception as e:

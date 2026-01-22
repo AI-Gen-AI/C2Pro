@@ -15,6 +15,8 @@ try:
     import pyfiebdc
     from pyfiebdc.exceptions import InvalidFileException
 except ImportError:
+    from types import SimpleNamespace
+
     # This mock class simulates the necessary parts of pyfiebdc for demonstration
     class MockInvalidFileException(Exception):
         pass
@@ -88,6 +90,7 @@ except ImportError:
                 ],
             }
 
+    pyfiebdc = SimpleNamespace()
     pyfiebdc.Fiebdc = MockFiebdc
     InvalidFileException = MockInvalidFileException  # Assign mock exception
 
