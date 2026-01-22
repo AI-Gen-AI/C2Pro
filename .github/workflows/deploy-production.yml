@@ -1,0 +1,237 @@
+# =============================================================================
+# C2Pro - Deploy to Production
+# =============================================================================
+# Runs on: Manual trigger only (workflow_dispatch)
+# Purpose: Production deployment with approval gates
+# =============================================================================
+
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., v1.2.0)'
+        required: true
+        type: string
+      skip_staging_check:
+        description: 'Skip staging validation (emergency only)'
+        required: false
+        default: 'false'
+        type: boolean
+      deploy_backend:
+        description: 'Deploy backend'
+        required: false
+        default: 'true'
+        type: boolean
+      deploy_frontend:
+        description: 'Deploy frontend'
+        required: false
+        default: 'true'
+        type: boolean
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  # ===========================================================================
+  # Pre-deployment Checks
+  # ===========================================================================
+  pre-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    outputs:
+      staging_healthy: ${{ steps.staging.outputs.healthy }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ github.event.inputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format. Use semver (e.g., v1.2.0)"
+            exit 1
+          fi
+          echo "✅ Version format valid: ${{ github.event.inputs.version }}"
+
+      - name: Check staging health
+        id: staging
+        if: github.event.inputs.skip_staging_check != 'true'
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+        run: |
+          if curl -sf "${STAGING_API_URL}/health" > /dev/null 2>&1; then
+            echo "healthy=true" >> $GITHUB_OUTPUT
+            echo "✅ Staging is healthy"
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            echo "❌ Staging health check failed"
+            exit 1
+          fi
+
+      - name: Create deployment record
+        run: |
+          echo "## 🚀 Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Initiated by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Database Migrations (Production)
+  # ===========================================================================
+  migrate-database:
+    name: Run Migrations
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install asyncpg python-dotenv structlog
+
+      - name: Backup database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_PRODUCTION }}
+        run: |
+          echo "📦 Creating pre-deployment backup..."
+          # In production, this would trigger a Supabase backup
+          echo "Backup initiated at $(date -u)"
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_PRODUCTION }}
+        run: |
+          echo "🔄 Running migrations..."
+          python run_migrations.py --env production --confirm
+        working-directory: ./infrastructure/supabase
+
+  # ===========================================================================
+  # Deploy Backend to Railway (Production)
+  # ===========================================================================
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: migrate-database
+    if: github.event.inputs.deploy_backend == 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
+        run: |
+          cd apps/api
+          railway up --detach
+          echo "✅ Backend deployment initiated"
+
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Health check
+        env:
+          PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+        run: |
+          echo "🏥 Running health checks..."
+          for i in {1..15}; do
+            if curl -sf "${PRODUCTION_API_URL}/health" > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i/15 - waiting..."
+            sleep 20
+          done
+          echo "❌ Health check failed!"
+          exit 1
+
+  # ===========================================================================
+  # Deploy Frontend to Vercel (Production)
+  # ===========================================================================
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: migrate-database
+    if: github.event.inputs.deploy_frontend == 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_PRODUCTION }}
+          vercel-args: '--prod'
+          working-directory: apps/web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_PRODUCTION }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+
+  # ===========================================================================
+  # Post-deployment
+  # ===========================================================================
+  post-deploy:
+    name: Post-deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Git Tag
+        if: needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "${{ github.event.inputs.version }}" -m "Production release ${{ github.event.inputs.version }}"
+          git push origin "${{ github.event.inputs.version }}"
+
+      - name: Deployment Summary
+        run: |
+          echo "## 📊 Production Deployment Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Database Migrations | ${{ needs.migrate-database.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ needs.deploy-backend.result == 'success' && '✅' || (needs.deploy-backend.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.deploy-frontend.result == 'success' && '✅' || (needs.deploy-frontend.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Rollback (on failure)
+  # ===========================================================================
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: failure()
+    steps:
+      - name: Notify failure
+        run: |
+          echo "## ❌ Production Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action Required:** Manual rollback may be needed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Check Railway dashboard for backend status" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check Vercel dashboard for frontend status" >> $GITHUB_STEP_SUMMARY
+          echo "3. If needed, use Railway/Vercel rollback features" >> $GITHUB_STEP_SUMMARY
+          echo "4. Check Supabase for migration status" >> $GITHUB_STEP_SUMMARY

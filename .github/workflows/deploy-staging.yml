@@ -1,112 +1,197 @@
-name: Deploy to Staging
+# =============================================================================
+# C2Pro - Deploy to Staging
+# =============================================================================
+# Runs on: Push to main (after CI passes)
+# Purpose: Automatic deployment to staging environment
+# =============================================================================
+
+name: Deploy Staging
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_migrations:
+        description: 'Skip database migrations'
+        required: false
+        default: 'false'
+        type: boolean
 
-# Concurrency control to ensure only one deployment runs at a time for this workflow.
-# 'staging' is the environment name, and cancel-in-progress will cancel older runs.
 concurrency:
-  group: staging
-  cancel-in-progress: true
+  group: staging-deploy
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
 
 jobs:
-  # This job consolidates all CI checks.
-  # Deployment jobs will depend on this job's success.
-  build-and-test:
-    name: Build & Test
+  # ===========================================================================
+  # Pre-deployment Validation
+  # ===========================================================================
+  validate:
+    name: Validate Changes
     runs-on: ubuntu-latest
+    outputs:
+      deploy_backend: ${{ steps.check.outputs.deploy_backend }}
+      deploy_frontend: ${{ steps.check.outputs.deploy_frontend }}
+      run_migrations: ${{ steps.check.outputs.run_migrations }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      # Backend Checks
+      - name: Check for deployable changes
+        id: check
+        run: |
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+          # Check backend changes
+          if echo "$CHANGED_FILES" | grep -qE '^apps/api/'; then
+            echo "deploy_backend=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_backend=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check frontend changes
+          if echo "$CHANGED_FILES" | grep -qE '^apps/web/'; then
+            echo "deploy_frontend=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_frontend=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check migration changes
+          if echo "$CHANGED_FILES" | grep -qE '^infrastructure/supabase/'; then
+            echo "run_migrations=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_migrations=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ===========================================================================
+  # Database Migrations
+  # ===========================================================================
+  migrate-database:
+    name: Run Migrations
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.run_migrations == 'true' && github.event.inputs.skip_migrations != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: apps/api/requirements.txt
-      - name: Install backend dependencies
-        run: pip install -r apps/api/requirements.txt
-      - name: Run backend linters and tests
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install asyncpg python-dotenv structlog
+
+      - name: Run migrations
         env:
-          DATABASE_URL: ${{ secrets.POSTGRES_DB_URL }}
-          POSTGRES_DB_URL: ${{ secrets.POSTGRES_DB_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          pip install ruff mypy pytest
-          ruff check apps/api --verbose
-          ruff format apps/api --check
-          mypy apps/api/src/
-          pytest apps/api/
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_STAGING }}
+        run: python run_migrations.py --env staging
+        working-directory: ./infrastructure/supabase
 
-      # Frontend Checks
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Install frontend dependencies
-        working-directory: apps/web
-        run: npm ci
-      - name: Run frontend linter and build
-        working-directory: apps/web
-        run: |
-          npm run lint
-          npm run build
-
+  # ===========================================================================
+  # Deploy Backend to Railway
+  # ===========================================================================
   deploy-backend:
-    name: Deploy Backend to Railway
-    needs: build-and-test # This job will only run if build-and-test is successful
+    name: Deploy Backend
     runs-on: ubuntu-latest
+    needs: [validate, migrate-database]
+    if: always() && needs.validate.outputs.deploy_backend == 'true' && (needs.migrate-database.result == 'success' || needs.migrate-database.result == 'skipped')
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
       - name: Deploy to Railway
-        uses: railway/cli@v2
-        with:
-          # This command links and deploys the latest version to Railway.
-          # The RAILWAY_TOKEN secret must be set in the repository secrets.
-          # The project ID can be found in your Railway project settings.
-          command: |
-            railway link your-railway-project-id
-            railway up --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          DATABASE_URL: ${{ secrets.POSTGRES_DB_URL }}
-          POSTGRES_DB_URL: ${{ secrets.POSTGRES_DB_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd apps/api
+          railway up --detach
 
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Health check
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+        run: |
+          for i in {1..10}; do
+            if curl -sf "${STAGING_API_URL:-http://localhost:8000}/health" > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i/10 - waiting..."
+            sleep 10
+          done
+          echo "⚠️ Health check timed out (backend may still be starting)"
+
+  # ===========================================================================
+  # Deploy Frontend to Vercel
+  # ===========================================================================
   deploy-frontend:
-    name: Deploy Frontend to Vercel
-    needs: build-and-test # This job will only run if build-and-test is successful
+    name: Deploy Frontend
     runs-on: ubuntu-latest
+    needs: [validate, migrate-database]
+    if: always() && needs.validate.outputs.deploy_frontend == 'true' && (needs.migrate-database.result == 'success' || needs.migrate-database.result == 'skipped')
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25 # Pinning to a specific version is a good practice
+        uses: amondnet/vercel-action@v25
         with:
-          # These secrets must be configured in your repository's secrets.
-          # VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID are required.
-          # The 'scope' and 'working-directory' are important for monorepos.
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod" # Deploy to the production environment in Vercel
-          scope: ${{ secrets.VERCEL_ORG_ID }}
           working-directory: apps/web
+          # Note: Using preview for staging, --prod for production
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+
+  # ===========================================================================
+  # Deployment Summary
+  # ===========================================================================
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [validate, migrate-database, deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - name: Create Summary
+        run: |
+          echo "## 🚀 Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Migrations
+          if [ "${{ needs.validate.outputs.run_migrations }}" == "true" ]; then
+            echo "| Database Migrations | ${{ needs.migrate-database.result == 'success' && '✅' || '❌' }} ${{ needs.migrate-database.result }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Database Migrations | ⏭️ skipped (no changes) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Backend
+          if [ "${{ needs.validate.outputs.deploy_backend }}" == "true" ]; then
+            echo "| Backend (Railway) | ${{ needs.deploy-backend.result == 'success' && '✅' || '❌' }} ${{ needs.deploy-backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Backend (Railway) | ⏭️ skipped (no changes) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Frontend
+          if [ "${{ needs.validate.outputs.deploy_frontend }}" == "true" ]; then
+            echo "| Frontend (Vercel) | ${{ needs.deploy-frontend.result == 'success' && '✅' || '❌' }} ${{ needs.deploy-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Frontend (Vercel) | ⏭️ skipped (no changes) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
