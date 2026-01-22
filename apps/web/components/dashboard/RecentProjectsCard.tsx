@@ -17,6 +17,7 @@ const statusConfig: Record<
   ProjectStatus,
   { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }
 > = {
+  draft: { label: 'Draft', variant: 'outline' },
   active: { label: 'Active', variant: 'default' },
   on_hold: { label: 'On Hold', variant: 'outline' },
   completed: { label: 'Completed', variant: 'secondary' },
@@ -63,6 +64,12 @@ export function RecentProjectsCard({ projects, className }: RecentProjectsCardPr
                     <Badge variant={status.variant} className="text-xs">
                       {status.label}
                     </Badge>
+                    {/* Alerts */}
+                    {project.critical_alerts && project.critical_alerts > 0 && (
+                      <Badge variant="destructive" className="animate-pulse-critical">
+                        {project.critical_alerts} Critical
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-sm font-medium">{project.name}</p>
                 </div>
@@ -70,23 +77,16 @@ export function RecentProjectsCard({ projects, className }: RecentProjectsCardPr
                 {/* Score */}
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className={cn('text-lg font-bold', getScoreColor(project.coherence_score))}>
-                      {project.coherence_score}
+                    <div className={cn('text-lg font-bold', project.coherence_score !== undefined ? getScoreColor(project.coherence_score) : 'text-muted-foreground')}>
+                      {project.coherence_score ?? '--'}
                     </div>
                     <div className="text-xs text-muted-foreground">Score</div>
                   </div>
                   <Progress
-                    value={project.coherence_score}
+                    value={project.coherence_score ?? 0}
                     className="h-2 w-16"
                   />
                 </div>
-
-                {/* Alerts */}
-                {project.critical_alerts > 0 && (
-                  <Badge variant="destructive" className="animate-pulse-critical">
-                    {project.critical_alerts} Critical
-                  </Badge>
-                )}
               </Link>
             );
           })}
