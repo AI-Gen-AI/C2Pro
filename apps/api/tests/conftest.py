@@ -1,19 +1,23 @@
 """
-Configuración global de pytest para todos los tests.
+C2Pro - Test Configuration
 
-Configura variables de entorno y fixtures compartidos.
+Pytest fixtures for testing the C2Pro API.
+Provides test database, authenticated clients, and test data.
 """
 
+import asyncio
 import os
 import sys
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from typing import Callable
 from uuid import UUID, uuid4
 
 import pytest
-from asgi_lifespan import LifespanManager
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -42,11 +46,10 @@ if "celery" not in sys.modules:
 # ===========================================
 
 # Configurar variables de entorno antes de importar la app
-os.environ.setdefault("ENVIRONMENT", "development")
+os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
 
-# Database (usa PostgreSQL de test si está disponible, fallback a SQLite)
-# IMPORTANT: Use nonsuperuser instead of test to properly enforce RLS in tests
+# Database
 os.environ.setdefault("DATABASE_URL", "postgresql://nonsuperuser:test@localhost:5433/c2pro_test")
 
 # Supabase
@@ -74,11 +77,14 @@ os.environ.setdefault("RATE_LIMIT_ENABLED", "true")
 os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 
 # ===========================================
-# IMPORT ALL MODELS (CRITICAL FOR SQLALCHEMY)
+# IMPORTS AFTER ENV SETUP
 # ===========================================
-# Import all models here to ensure they are registered with SQLAlchemy
-# before any tests try to use them. This prevents relationship resolution errors.
-from src.modules.auth.models import Tenant, User
+
+from src.config import settings
+from src.core.database import Base, get_session
+from src.main import create_application
+from src.modules.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.modules.auth.service import hash_password
 
 # ===========================================
 # PYTEST CONFIGURATION
@@ -107,8 +113,18 @@ def anyio_backend():
 
 
 # Configuración de pytest-asyncio para estabilidad
-# Esto asegura que cada test tenga su propio event loop
 pytest_plugins = ("pytest_asyncio",)
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create an instance of the event loop for the entire test session.
+    This ensures all async tests share the same event loop.
+    """
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
 # ===========================================
@@ -116,50 +132,38 @@ pytest_plugins = ("pytest_asyncio",)
 # ===========================================
 
 
-@pytest.fixture(scope="function")
-async def db_engine():
+@pytest_asyncio.fixture(scope="session")
+async def test_engine():
     """
-    Crea engine de base de datos para tests.
-
-    Usa SQLite en memoria si PostgreSQL no está disponible.
-
-    Scope: function - evita problemas de event loop entre tests.
-    Cada test recibe un engine limpio.
+    Create a test database engine.
+    Uses a separate test database to avoid polluting development data.
     """
     from sqlalchemy.exc import OperationalError
 
-    from src.config import settings
-
-    # Intentar conectar a PostgreSQL
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     try:
-        if database_url.startswith("sqlite"):
-            engine = create_async_engine(
-                database_url,
-                echo=False,
-            )
-            # Crear tablas en SQLite in-memory
-            from src.core.database import Base
+        engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+        )
 
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-        else:
-            engine = create_async_engine(
-                database_url,
-                echo=False,
-                pool_pre_ping=True,
-                pool_size=5,
-                max_overflow=10,
-            )
-
-            # Test connection
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
+        # Test connection and create tables
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.run_sync(Base.metadata.create_all)
 
         yield engine
+
+        # Cleanup: Drop all tables after tests
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+
         await engine.dispose()
 
     except (OperationalError, OSError):
@@ -173,9 +177,6 @@ async def db_engine():
             echo=False,
         )
 
-        # Crear todas las tablas
-        from src.core.database import Base
-
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
@@ -183,77 +184,152 @@ async def db_engine():
         await engine.dispose()
 
 
-@pytest.fixture
-async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
+@pytest_asyncio.fixture(scope="session")
+async def test_session_factory(test_engine):
     """
-    Crea sesión de base de datos para cada test.
-
-    Usa transacciones anidadas con SAVEPOINT para aislar cada test.
-    Al final hace rollback de todo, asegurando que los tests no interfieran entre sí.
+    Create a session factory for tests.
     """
-    # Crear conexión
-    async with db_engine.connect() as connection:
-        # Iniciar transacción externa
-        transaction = await connection.begin()
+    return async_sessionmaker(
+        bind=test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
-        # Crear sesión enlazada a esta transacción
-        async_session = async_sessionmaker(
-            bind=connection,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autocommit=False,
-            autoflush=False,
-        )
 
-        async with async_session() as session:
-            # Crear SAVEPOINT para transacción anidada
-            nested = await connection.begin_nested()
+@pytest_asyncio.fixture
+async def db(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Provides a database session for tests with automatic rollback.
 
-            try:
-                yield session
-            finally:
-                # Rollback de SAVEPOINT (descarta cambios del test)
-                if nested.is_active:
-                    await nested.rollback()
+    Each test gets a fresh session that is rolled back after the test,
+    ensuring test isolation.
+    """
+    async with test_session_factory() as session:
+        async with session.begin():
+            yield session
+            await session.rollback()
 
-                # Rollback de transacción externa
-                await transaction.rollback()
+
+# Alias for compatibility
+@pytest_asyncio.fixture
+async def db_session(db) -> AsyncGenerator[AsyncSession, None]:
+    """Alias for db fixture for compatibility."""
+    yield db
 
 
 # ===========================================
-# HTTP CLIENT FIXTURES
+# TEST DATA FIXTURES
 # ===========================================
 
 
-@pytest.fixture(scope="function")
-async def client() -> AsyncGenerator[AsyncClient, None]:
+@pytest_asyncio.fixture
+async def test_tenant(db: AsyncSession) -> Tenant:
     """
-    Cliente HTTP AsyncClient para tests de API.
-
-    Usa la app FastAPI sin inicializar BD (para tests unitarios).
-    Para tests de integración, usar client_with_db.
-
-    Scope: function - se crea un cliente nuevo para cada test.
+    Creates a test tenant for multi-tenant testing.
     """
-    from httpx import ASGITransport
+    tenant = Tenant(
+        id=uuid4(),
+        name="Test Company",
+        slug=f"test-company-{uuid4().hex[:8]}",
+        subscription_plan=SubscriptionPlan.PROFESSIONAL,
+        subscription_status="active",
+        ai_budget_monthly=100.0,
+        ai_spend_current=0.0,
+        max_projects=50,
+        max_users=10,
+        max_storage_gb=100,
+        is_active=True,
+    )
 
-    from src.main import create_application
+    db.add(tenant)
+    await db.commit()
+    await db.refresh(tenant)
 
-    app = create_application()
+    return tenant
 
-    # LifespanManager maneja startup/shutdown events correctamente
-    async with LifespanManager(app):
-        # ASGITransport sin parámetro lifespan - manejado por LifespanManager
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-            timeout=30.0,  # Timeout generoso para tests
-        ) as ac:
-            yield ac
+
+@pytest_asyncio.fixture
+async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
+    """
+    Creates a test user associated with test_tenant.
+
+    Default credentials:
+        - Email: test@example.com
+        - Password: TestPassword123!
+    """
+    user = User(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        email="test@example.com",
+        hashed_password=hash_password("TestPassword123!"),
+        first_name="Test",
+        last_name="User",
+        role=UserRole.ADMIN,
+        is_active=True,
+        is_verified=True,
+    )
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return user
+
+
+@pytest_asyncio.fixture
+async def test_tenant_2(db: AsyncSession) -> Tenant:
+    """
+    Creates a second test tenant for testing tenant isolation.
+    """
+    tenant = Tenant(
+        id=uuid4(),
+        name="Test Company 2",
+        slug=f"test-company-2-{uuid4().hex[:8]}",
+        subscription_plan=SubscriptionPlan.STARTER,
+        subscription_status="active",
+        ai_budget_monthly=50.0,
+        ai_spend_current=0.0,
+        max_projects=10,
+        max_users=5,
+        max_storage_gb=50,
+        is_active=True,
+    )
+
+    db.add(tenant)
+    await db.commit()
+    await db.refresh(tenant)
+
+    return tenant
+
+
+@pytest_asyncio.fixture
+async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
+    """
+    Creates a user in the second tenant for isolation testing.
+    """
+    user = User(
+        id=uuid4(),
+        tenant_id=test_tenant_2.id,
+        email="test2@example.com",
+        hashed_password=hash_password("TestPassword123!"),
+        first_name="Test",
+        last_name="User 2",
+        role=UserRole.USER,
+        is_active=True,
+        is_verified=True,
+    )
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return user
 
 
 # ===========================================
-# AUTH FIXTURES
+# SIMPLE ID FIXTURES (for unit tests)
 # ===========================================
 
 
@@ -281,59 +357,51 @@ def test_document_id():
     return uuid4()
 
 
+# ===========================================
+# JWT TOKEN UTILITIES
+# ===========================================
+
+
 @pytest.fixture
-def create_test_token():
+def generate_token() -> Callable:
     """
-    Factory fixture para crear JWTs de test.
+    Factory fixture to generate JWT tokens with custom properties.
 
-    Uso:
-        token = create_test_token(user_id=user_id, tenant_id=tenant_id)
-        refresh_token = create_test_token(user_id=user_id, tenant_id=tenant_id, token_type="refresh")
-        token_expired = create_test_token(
-            user_id=user_id,
-            tenant_id=tenant_id,
-            expires_delta=timedelta(seconds=-60)
-        )
+    Useful for testing various token scenarios:
+    - Expired tokens
+    - Invalid signatures
+    - Missing claims
+    - Tokens for non-existent tenants
     """
-    from jose import jwt
-
-    from src.config import settings
-
-    def _create_token(
-        user_id: UUID,
-        tenant_id: UUID,
+    def _generate_token(
+        user_id: UUID | None = None,
+        tenant_id: UUID | None = None,
         email: str = "test@example.com",
         role: str = "admin",
+        expires_delta_seconds: int | None = None,
         secret_key: str | None = None,
-        expires_delta: timedelta | None = None,
-        token_type: str = "access",  # New parameter
+        algorithm: str | None = None,
+        extra_claims: dict | None = None,
+        token_type: str = "access",
     ) -> str:
         """
-        Crea un JWT para tests.
-
-        Args:
-            user_id: ID del usuario
-            tenant_id: ID del tenant
-            email: Email del usuario
-            role: Rol del usuario (admin, member)
-            secret_key: Secret key custom (para tests de firma inválida)
-            expires_delta: Delta de expiración (negativo para tokens expirados)
-            token_type: Tipo de token (access o refresh)
-
-        Returns:
-            JWT string
+        Generate a JWT token with custom properties.
         """
-        if token_type == "access":
-            if expires_delta is None:
-                expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
-        elif token_type == "refresh":
-            if expires_delta is None:
-                expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
+        if user_id is None:
+            user_id = uuid4()
+        if tenant_id is None:
+            tenant_id = uuid4()
+
+        # Calculate expiration
+        if expires_delta_seconds is None:
+            if token_type == "access":
+                expire = datetime.utcnow() + timedelta(hours=24)
+            else:
+                expire = datetime.utcnow() + timedelta(days=7)
         else:
-            raise ValueError("Invalid token_type. Must be 'access' or 'refresh'.")
+            expire = datetime.utcnow() + timedelta(seconds=expires_delta_seconds)
 
-        expire = datetime.utcnow() + expires_delta
-
+        # Build payload
         payload = {
             "sub": str(user_id),
             "tenant_id": str(tenant_id),
@@ -341,49 +409,67 @@ def create_test_token():
             "role": role,
             "exp": expire,
             "iat": datetime.utcnow(),
-            "type": token_type,  # Use the token_type parameter
+            "type": token_type,
         }
 
-        key = secret_key or settings.jwt_secret_key
+        # Add extra claims if provided
+        if extra_claims:
+            payload.update(extra_claims)
 
-        return jwt.encode(payload, key, algorithm=settings.jwt_algorithm)
+        # Use custom or default secret key
+        key = secret_key if secret_key is not None else settings.jwt_secret_key
+        algo = algorithm if algorithm is not None else settings.jwt_algorithm
 
+        # Encode token
+        encoded_jwt = jwt.encode(payload, key, algorithm=algo)
+        return encoded_jwt
+
+    return _generate_token
+
+
+# Alias for compatibility
+@pytest.fixture
+def create_test_token(generate_token) -> Callable:
+    """Alias for generate_token for compatibility."""
+    def _create_token(
+        user_id: UUID,
+        tenant_id: UUID,
+        email: str = "test@example.com",
+        role: str = "admin",
+        secret_key: str | None = None,
+        expires_delta: timedelta | None = None,
+        token_type: str = "access",
+    ) -> str:
+        expires_seconds = int(expires_delta.total_seconds()) if expires_delta else None
+        return generate_token(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            email=email,
+            role=role,
+            secret_key=secret_key,
+            expires_delta_seconds=expires_seconds,
+            token_type=token_type,
+        )
     return _create_token
 
 
-@pytest.fixture
-def get_auth_headers(create_test_token, test_user_id, test_tenant_id):
+@pytest_asyncio.fixture
+async def get_auth_headers(test_user: User, test_tenant: Tenant, generate_token: Callable) -> Callable:
     """
-    Factory fixture para crear headers de autenticación.
-
-    Uso:
-        headers = get_auth_headers()
-        headers_custom = get_auth_headers(user_id=custom_user_id)
+    Factory fixture to generate authentication headers for API requests.
     """
-
-    def _get_headers(
-        user_id: UUID | None = None,
-        tenant_id: UUID | None = None,
-        email: str = "test@example.com",
-        role: str = "admin",
+    async def _get_headers(
+        user: User | None = None,
+        tenant: Tenant | None = None,
     ) -> dict[str, str]:
-        """
-        Genera headers de autenticación con JWT válido.
+        u = user or test_user
+        t = tenant or test_tenant
 
-        Args:
-            user_id: ID del usuario (usa test_user_id por defecto)
-            tenant_id: ID del tenant (usa test_tenant_id por defecto)
-            email: Email del usuario
-            role: Rol del usuario
-
-        Returns:
-            Dict con headers incluyendo Authorization
-        """
-        token = create_test_token(
-            user_id=user_id or test_user_id,
-            tenant_id=tenant_id or test_tenant_id,
-            email=email,
-            role=role,
+        token = generate_token(
+            user_id=u.id,
+            tenant_id=t.id,
+            email=u.email,
+            role=u.role.value if hasattr(u.role, 'value') else u.role,
         )
 
         return {"Authorization": f"Bearer {token}"}
@@ -391,38 +477,61 @@ def get_auth_headers(create_test_token, test_user_id, test_tenant_id):
     return _get_headers
 
 
+# Simple sync version for unit tests
 @pytest.fixture
-async def create_test_user_and_tenant(db_session):
+def get_auth_headers_simple(generate_token, test_user_id, test_tenant_id):
     """
-    Factory fixture para crear un Tenant y un User asociados en la base de datos.
-
-    Uso:
-        user, tenant = await create_test_user_and_tenant("Test Tenant", "test@user.com")
-        user2, tenant2 = await create_test_user_and_tenant("Another Tenant", "another@user.com")
+    Simple sync factory fixture for auth headers (unit tests).
     """
-
-    async def _create(tenant_name: str, user_email: str) -> (User, Tenant):
-        tenant_id = uuid4()
-        user_id = uuid4()
-
-        tenant = Tenant(id=tenant_id, name=tenant_name)
-        db_session.add(tenant)
-        await db_session.commit()
-        await db_session.refresh(tenant)
-
-        user = User(
-            id=user_id,
-            email=user_email,
-            tenant_id=tenant_id,
-            hashed_password="hashedpassword",  # Dummy password for test user
+    def _get_headers(
+        user_id: UUID | None = None,
+        tenant_id: UUID | None = None,
+        email: str = "test@example.com",
+        role: str = "admin",
+    ) -> dict[str, str]:
+        token = generate_token(
+            user_id=user_id or test_user_id,
+            tenant_id=tenant_id or test_tenant_id,
+            email=email,
+            role=role,
         )
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+        return {"Authorization": f"Bearer {token}"}
 
-        return user, tenant
+    return _get_headers
 
-    return _create
+
+# ===========================================
+# HTTP CLIENT FIXTURES
+# ===========================================
+
+
+@pytest_asyncio.fixture
+async def app():
+    """
+    Creates a FastAPI application for testing.
+    """
+    return create_application()
+
+
+@pytest_asyncio.fixture
+async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Creates an HTTP client for testing API endpoints.
+    """
+    async def override_get_session():
+        yield db
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=30.0,
+    ) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
 
 
 # ===========================================
@@ -434,23 +543,12 @@ async def create_test_user_and_tenant(db_session):
 async def superuser_cleanup_engine():
     """
     Create a database engine using the SUPERUSER account for test cleanup.
-
-    This engine is used ONLY for cleanup operations in finally blocks.
-    It bypasses RLS policies to ensure complete cleanup of test data.
-
-    IMPORTANT: Test execution uses 'nonsuperuser' to properly enforce RLS.
-               Cleanup uses 'test' (superuser) to bypass RLS restrictions.
-
-    Scope: function - created fresh for each test to avoid event loop issues
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    # Use superuser 'test' for cleanup operations
     cleanup_engine = create_async_engine(
         "postgresql+asyncpg://test:test@localhost:5433/c2pro_test",
         echo=False,
         pool_pre_ping=True,
-        pool_size=2,  # Small pool for cleanup only
+        pool_size=2,
         max_overflow=0,
     )
 
@@ -462,49 +560,21 @@ async def superuser_cleanup_engine():
 async def cleanup_database(superuser_cleanup_engine):
     """
     Helper fixture to clean up test data using superuser connection.
-
-    Usage in tests:
-        async with cleanup_database() as cleanup:
-            await cleanup(
-                projects=[project_id],
-                users=[user_a_id, user_b_id],
-                tenants=[tenant_id]
-            )
-
-    Args:
-        superuser_cleanup_engine: Engine with superuser permissions
-
-    Yields:
-        Async context manager for cleanup operations
     """
-    from sqlalchemy import text
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     async def _cleanup(**entity_ids):
-        """
-        Clean up test data by entity type.
-
-        Args:
-            **entity_ids: Dictionary of entity_type -> list of IDs
-                          e.g., projects=[id1, id2], users=[id3]
-        """
         async with AsyncSession(superuser_cleanup_engine) as session:
-            # Cleanup order: respect foreign key constraints
             cleanup_order = ["documents", "projects", "users", "tenants"]
 
             for table in cleanup_order:
                 ids = entity_ids.get(table, [])
                 if ids:
-                    # Convert single ID to list
                     if not isinstance(ids, list):
                         ids = [ids]
 
-                    # Build parameterized query
                     if len(ids) == 1:
                         query = text(f"DELETE FROM {table} WHERE id = :id")
                         await session.execute(query, {"id": ids[0]})
                     else:
-                        # Use ANY for multiple IDs
                         placeholders = ", ".join([f":id_{i}" for i in range(len(ids))])
                         query = text(f"DELETE FROM {table} WHERE id IN ({placeholders})")
                         params = {f"id_{i}": id_val for i, id_val in enumerate(ids)}
@@ -513,3 +583,67 @@ async def cleanup_database(superuser_cleanup_engine):
             await session.commit()
 
     return _cleanup
+
+
+# ===========================================
+# UTILITY FIXTURES
+# ===========================================
+
+
+@pytest.fixture
+def clean_tables() -> list[str]:
+    """
+    Returns list of tables to clean between tests.
+    """
+    return [
+        "users",
+        "tenants",
+        "projects",
+        "documents",
+        "clauses",
+        "analyses",
+        "inconsistencies",
+    ]
+
+
+@pytest_asyncio.fixture
+async def clean_db(db: AsyncSession, clean_tables: list[str]):
+    """
+    Cleans specified tables before test execution.
+    """
+    for table in clean_tables:
+        try:
+            await db.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            pass
+
+
+@pytest.fixture
+async def create_test_user_and_tenant(db):
+    """
+    Factory fixture para crear un Tenant y un User asociados en la base de datos.
+    """
+    async def _create(tenant_name: str, user_email: str):
+        tenant_id = uuid4()
+        user_id = uuid4()
+
+        tenant = Tenant(id=tenant_id, name=tenant_name)
+        db.add(tenant)
+        await db.commit()
+        await db.refresh(tenant)
+
+        user = User(
+            id=user_id,
+            email=user_email,
+            tenant_id=tenant_id,
+            hashed_password="hashedpassword",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        return user, tenant
+
+    return _create
