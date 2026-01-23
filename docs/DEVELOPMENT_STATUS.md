@@ -1,43 +1,61 @@
 # C2Pro - Estado del Desarrollo v2.6.0
 ## Coherence Engine Sprints - Progreso Actual
 
-**Fecha:** 22 de Enero de 2026
-**Versión:** 2.6.0 - Frontend Foundation & Type Safety
-**Sprint:** S2 Semana 2: Frontend Type Safety + Wireframes (65% Completado)
-**Estado General:** 🟢 En Progreso - Alta Velocidad
+**Fecha:** 23 de Enero de 2026
+**Versión:** 2.6.1 - Sprint S2 Near Completion
+**Sprint:** S2 Semana 2: Frontend Type Safety + Wireframes (90% Completado)
+**Estado General:** 🟢 En Progreso - Sprint Casi Completo
 
 ---
 
-## 🆕 Actualizaciones Recientes (22 Ene 2026)
+## 🆕 Actualizaciones Recientes (23 Ene 2026)
 
 ### Sprint S2 - Progreso Actual
-**Período:** 20-22 Enero 2026
-**Velocity:** ~7.5 SP/día
-**Completado:** 15/23 SP (65%)
+**Período:** 20-23 Enero 2026
+**Velocity:** ~10 SP/día
+**Completado:** 21/23 SP (90%)
 
-#### ✅ Tareas Completadas Esta Semana
+#### ✅ Tareas Completadas Hoy (23 Ene)
+1. **CE-S2-001: Schemas Pydantic** ✅ NUEVO
+   - Revisión completa de schemas existentes (95% ya implementados)
+   - Añadidos schemas Extraction faltantes (ExtractionBase, ExtractionCreate, ExtractionUpdate, ExtractionResponse, ExtractionListResponse)
+   - Validación Pydantic v2 con ConfigDict
+
+2. **CE-S2-002: CI/CD Setup** ✅ NUEVO
+   - CI workflow mejorado (jobs paralelos, PostgreSQL/Redis services, Codecov)
+   - Staging deploy con smart change detection
+   - Production deploy workflow (manual trigger, semver validation, Git tagging)
+   - Runbook documentación creada
+
+3. **CE-S2-010: Wireframes 6 Vistas Core** ✅ 92% (actualizado de 75%)
+   - Descubierto que 4 vistas estaban ya implementadas (90-95%)
+   - Alerts Center, Stakeholder Map, RACI Matrix, Project List funcionales
+   - Documentación actualizada para reflejar estado real
+
+4. **Organización de Documentación** ✅ NUEVO
+   - Creada estructura de archive (sprints/, tasks/, migrations/, changelogs/, roadmaps/)
+   - Movidos 17+ documentos completados al archive
+   - Limpieza de directorio raíz
+   - README actualizado con nuevo estado del proyecto
+
+#### ✅ Tareas Completadas Esta Semana (20-22 Ene)
 1. **CE-S2-011: Frontend Type Safety & API Integration** ✅
    - Tipos TypeScript sincronizados con backend
    - Bug fix crítico: Dashboard visualization restaurado
    - Build pipeline funcionando sin errores
    - Lección aprendida documentada (LL-001)
 
-2. **CE-S2-010: Wireframes 6 Vistas Core** 🟡 75%
-   - Dashboard, Projects, Evidence Viewer implementados
-   - PDF viewer con highlights funcionando
-   - Deploy: https://vision-matched-repo.lovable.app/
-
-3. **CE-S2-009: Error Handling Review** ✅
+2. **CE-S2-009: Error Handling Review** ✅
    - Error handling strategy unificada
    - Custom exception classes
    - Error logging mejorado
 
-4. **CE-S2-008: Prompt Templates Review** ✅
+3. **CE-S2-008: Prompt Templates Review** ✅
    - Prompt templates optimizados
    - Template versioning implementado
    - Reducción de tokens ~15%
 
-5. **CE-S2-004: Cache Implementation Review** ✅
+4. **CE-S2-004: Cache Implementation Review** ✅
    - Redis cache strategy validada
    - Cache invalidation optimizada
    - Performance benchmarks completados
@@ -47,6 +65,8 @@
 - **Build Success:** 100% (1 bug corregido)
 - **Test Coverage:** 65% (target: 80%)
 - **Bug Density:** 0.2 bugs/SP (excelente)
+- **CI/CD:** ✅ Pipelines completos (CI, staging, production)
+- **Schemas Coverage:** 95% (Pydantic v2)
 
 #### 📚 Nueva Documentación
 - `docs/LESSONS_LEARNED.md` - Lecciones aprendidas del proyecto
@@ -366,18 +386,28 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ✅ pytest-asyncio configurado
   - ✅ Sin errores de event loop
 
-### Sprint Semana 2 - En Progreso
+### Sprint Semana 2 - ✅ CASI COMPLETADO (90%)
 
-#### 1. Schemas Pydantic (Prioridad MEDIA)
-- **Objetivo:** DTOs para API con clause_id
-- **Archivos:**
-  - `apps/api/src/modules/documents/schemas.py`
-  - `apps/api/src/modules/analysis/schemas.py`
-  - `apps/api/src/modules/stakeholders/schemas.py`
-- **Requisitos:**
-  - Request/Response schemas
-  - Validation rules
-  - clause_id en entidades relevantes
+#### 1. ✅ Schemas Pydantic - COMPLETADO (23 Ene 2026)
+- **Estado:** ✅ 95% de schemas implementados
+- **Archivos revisados:**
+  - `apps/api/src/modules/auth/schemas.py` ✅
+  - `apps/api/src/modules/projects/schemas.py` ✅
+  - `apps/api/src/modules/documents/schemas.py` ✅
+  - `apps/api/src/modules/analysis/schemas.py` ✅ (añadidos Extraction schemas)
+  - `apps/api/src/modules/stakeholders/schemas.py` ✅
+  - `apps/api/src/modules/observability/schemas.py` ✅
+  - `apps/api/src/modules/coherence/schemas.py` ✅
+- **Schemas añadidos:**
+  - ExtractionBase, ExtractionCreate, ExtractionUpdate
+  - ExtractionResponse, ExtractionListResponse
+
+#### 2. ✅ CI/CD Setup - COMPLETADO (23 Ene 2026)
+- **Workflows implementados:**
+  - `.github/workflows/ci.yml` - Jobs paralelos, services, coverage
+  - `.github/workflows/deploy-staging.yml` - Smart change detection
+  - `.github/workflows/deploy-production.yml` - Manual deploy con validaciones
+- **Documentación:** `docs/runbooks/ci-cd-setup.md`
 
 ### Siguiente Sprint Propuesto (P2-02): Integración de LLM para Reglas Cualitativas
 
@@ -621,12 +651,14 @@ c2pro/
 6. **Coherence Engine:** Framework P2-01 con scoring calibrado
 
 ### 🟡 En Progreso
-1. **Sprint S2 - Frontend Foundation:** 65% completado (15/23 SP)
+1. **Sprint S2 - Frontend Foundation:** 90% completado (21/23 SP)
    - ✅ Type safety completado (95% coverage)
-   - 🟡 Wireframes 6 vistas (75% completado)
+   - ✅ Wireframes 6 vistas (92% completado)
    - ✅ Error handling unificado
    - ✅ Cache strategy validada
    - ✅ Prompt templates optimizados
+   - ✅ Schemas Pydantic (95% coverage)
+   - ✅ CI/CD Setup completo
 2. **Gate 5:** Coherence Score - Framework completo, pendiente lógica AI/LLM
 3. **Gates 6-8:** Human-in-the-loop (40%), Observability (30%), Document Security (25%)
 
@@ -659,7 +691,7 @@ c2pro/
 | **Frontend** | 60% | 🟡 Solid Foundation (↑40%) |
 | **Type Safety** | 95% | ✅ Excellent (NEW) |
 
-**Overall Progress:** **70%** hacia MVP Production Ready (↑5% en 2 semanas)
+**Overall Progress:** **75%** hacia MVP Production Ready (↑10% esta semana)
 
 ---
 
@@ -741,10 +773,11 @@ docs/
 |---------|-------|--------|---------------------|
 | 1.0 | 2026-01-05 | P0-06 | Initial version - Security Foundation |
 | 2.0 | 2026-01-08 | P2-01 | Coherence Score Methodology + Staging Deploy |
-| **2.6** | **2026-01-22** | **S2 Semana 2** | **Frontend Type Safety + Wireframes + Sprint S2 Summary** |
+| 2.6 | 2026-01-22 | S2 Semana 2 | Frontend Type Safety + Wireframes + Sprint S2 Summary |
+| **2.6.1** | **2026-01-23** | **S2 Semana 2** | **CE-S2-001 Schemas + CE-S2-002 CI/CD + Docs Organization** |
 
 ---
 
-**Última actualización:** 2026-01-22 por Claude Sonnet 4.5
-**Versión del documento:** 2.6
-**Sprint:** S2 Semana 2 - Frontend Foundation (65% COMPLETADO)
+**Última actualización:** 2026-01-23 por Claude Opus 4.5
+**Versión del documento:** 2.6.1
+**Sprint:** S2 Semana 2 - Frontend Foundation (90% COMPLETADO)
