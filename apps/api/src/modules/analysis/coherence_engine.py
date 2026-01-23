@@ -7,6 +7,9 @@ from sqlalchemy.orm import selectinload
 
 from src.core.database import get_session_with_tenant
 from src.modules.documents.models import Clause, Document
+from src.modules.analysis.models import Alert, AlertSeverity, Analysis, AnalysisStatus, AnalysisType
+from src.modules.coherence.rules_engine.context_rules import CoherenceRuleResult
+from src.services.alerts.generator import AlertGeneratorService
 from src.modules.projects.models import Project
 from src.modules.stakeholders.models import BOMItem, WBSItem
 
@@ -480,50 +483,54 @@ class CoherenceEngine:
             print(f"Created Analysis record with ID: {new_analysis.id}")
 
             # 2. Create Alert records
-            for alert_data in alerts:
-                # Extract affected entities from the alert_data dictionary
-                affected_document_ids = [
-                    UUID(e["id"])
-                    for e in alert_data.get("affected_entities", [])
-                    if e["type"] == "document"
-                ]
-                affected_wbs_ids = [
-                    UUID(e["id"])
-                    for e in alert_data.get("affected_entities", [])
-                    if e["type"] == "wbs"
-                ]
-                affected_bom_ids = [
-                    UUID(e["id"])
-                    for e in alert_data.get("affected_entities", [])
-                    if e["type"] == "bom"
-                ]
-                source_clause_id = next(
-                    (
-                        UUID(e["id"])
-                        for e in alert_data.get("affected_entities", [])
-                        if e["type"] == "clause"
-                    ),
-                    None,
-                )
-
-                new_alert = Alert(
+            if alerts and isinstance(alerts[0], CoherenceRuleResult):
+                generator_service = AlertGeneratorService(tenant_db)
+                await generator_service.process_rule_results(
                     project_id=project_id,
+                    rule_results=alerts,
                     analysis_id=new_analysis.id,
-                    severity=AlertSeverity[alert_data.get("severity", "LOW").upper()],
-                    rule_id=alert_data.get("rule_id"),
-                    title=f"Inconsistency Detected: {alert_data.get('rule_id')}",  # A more descriptive title can be generated
-                    message=alert_data.get("message", "No message provided."),
-                    suggested_action=alert_data.get("suggested_action"),
-                    source_clause_id=source_clause_id,
-                    affected_document_ids=affected_document_ids,
-                    affected_wbs_ids=affected_wbs_ids,
-                    affected_bom_ids=affected_bom_ids,
-                    requires_human_review=(
-                        alert_data.get("severity", "LOW").upper() in ["CRITICAL", "HIGH"]
-                    ),
+                    auto_resolve=False,
                 )
-                tenant_db.add(new_alert)
-            print(f"Created {len(alerts)} Alert records.")
+                print(f"Processed {len(alerts)} rule results via AlertGeneratorService.")
+            else:
+                for alert_data in alerts:
+                    affected_entities = alert_data.get("affected_entities", [])
+                    affected_document_ids = [
+                        UUID(e["id"]) for e in affected_entities if e["type"] == "document"
+                    ]
+                    affected_wbs_ids = [
+                        UUID(e["id"]) for e in affected_entities if e["type"] == "wbs"
+                    ]
+                    affected_bom_ids = [
+                        UUID(e["id"]) for e in affected_entities if e["type"] == "bom"
+                    ]
+                    source_clause_id = next(
+                        (
+                            UUID(e["id"])
+                            for e in affected_entities
+                            if e["type"] == "clause"
+                        ),
+                        None,
+                    )
+
+                    new_alert = Alert(
+                        project_id=project_id,
+                        analysis_id=new_analysis.id,
+                        severity=AlertSeverity[alert_data.get("severity", "LOW").upper()],
+                        rule_id=alert_data.get("rule_id"),
+                        title=f"Inconsistency Detected: {alert_data.get('rule_id')}",
+                        description=alert_data.get("message", "No message provided."),
+                        recommendation=alert_data.get("suggested_action"),
+                        source_clause_id=source_clause_id,
+                        affected_entities={
+                            "documents": affected_document_ids,
+                            "wbs": affected_wbs_ids,
+                            "bom": affected_bom_ids,
+                        },
+                        alert_metadata={"raw": alert_data},
+                    )
+                    tenant_db.add(new_alert)
+                print(f"Created {len(alerts)} Alert records.")
 
             # 3. Update Project with latest coherence score
             project.coherence_score = int(coherence_score)

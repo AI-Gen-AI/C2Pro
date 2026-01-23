@@ -17,8 +17,9 @@ from collections import defaultdict
 import spacy
 from presidio_analyzer import AnalyzerEngine, RecognizerResult, EntityRecognizer
 from presidio_analyzer.nlp_engine import NlpEngineProvider
-from presidio_anonymizer import AnonymizerEngine, Operator, OperatorResult
+from presidio_anonymizer import AnonymizerEngine, OperatorResult
 from presidio_anonymizer.entities import OperatorConfig
+from presidio_anonymizer.operators import Operator, OperatorType
 
 from src.core.exceptions import SecurityException
 
@@ -118,6 +119,32 @@ def create_custom_replace_operator() -> Callable:
     return custom_replace
 
 
+class CustomReplaceOperator(Operator):
+    """
+    Custom Presidio operator using a stateful callable set per anonymize call.
+    """
+
+    _operator_logic: Optional[Callable[[str, Dict[str, any]], str]] = None
+
+    @classmethod
+    def set_operator_logic(cls, logic: Optional[Callable[[str, Dict[str, any]], str]]) -> None:
+        cls._operator_logic = logic
+
+    def operate(self, text: str, params: Dict = None) -> str:
+        if not self._operator_logic:
+            return text
+        return self._operator_logic(text, params or {})
+
+    def validate(self, params: Dict = None) -> None:
+        return None
+
+    def operator_name(self) -> str:
+        return "custom_replace"
+
+    def operator_type(self) -> OperatorType:
+        return OperatorType.Anonymize
+
+
 # --- Singleton PII Anonymizer Service ---
 
 class PiiAnonymizerService:
@@ -140,9 +167,12 @@ class PiiAnonymizerService:
         logging.info("Initializing PiiAnonymizerService singleton...")
         try:
             # 1. Create a Spacy NLP engine for Spanish
-            provider = NlpEngineProvider()
-            nlp_config = {"nlp_engine_name": "spacy", "models": [{"lang_code": "es", "model_name": "es_core_news_lg"}]}
-            nlp_engine = provider.create_engine(nlp_config)
+            nlp_config = {
+                "nlp_engine_name": "spacy",
+                "models": [{"lang_code": "es", "model_name": "es_core_news_md"}],
+            }
+            provider = NlpEngineProvider(nlp_configuration=nlp_config)
+            nlp_engine = provider.create_engine()
             
             # 2. Add our custom NIF recognizer to the registry
             nif_recognizer = EsNifRecognizer(supported_entities=["ES_NIF"])
@@ -156,12 +186,12 @@ class PiiAnonymizerService:
             self.analyzer.registry.add_recognizer(nif_recognizer)
             self.analyzer.registry.load_predefined_recognizers(
                 languages=["es"],
-                recognizers_names=["EsPhoneNumberRecognizer", "EmailRecognizer", "IbanRecognizer"]
+                nlp_engine=nlp_engine,
             )
 
             # 4. Create the AnonymizerEngine and register our custom operator
             self.anonymizer = AnonymizerEngine()
-            self.anonymizer.add_operator("custom_replace", Operator(operator_logic=None)) # Logic is stateful per-call
+            self.anonymizer.add_anonymizer(CustomReplaceOperator)
             
             logging.info("PiiAnonymizerService initialized successfully.")
 
@@ -169,7 +199,7 @@ class PiiAnonymizerService:
             logging.error(f"Failed to load NLP model for PiiAnonymizerService: {e}")
             raise SecurityException(
                 message="PII anonymization model is not available. "
-                        "Please run 'python -m spacy download es_core_news_lg'.",
+                        "Please install 'es_core_news_md' for spaCy.",
                 component="PiiAnonymizerService"
             )
         except Exception as e:
@@ -201,7 +231,7 @@ class PiiAnonymizerService:
             }
             
             # Temporarily update the operator logic for this call
-            self.anonymizer.operators["custom_replace"].operator_logic = custom_operator_logic
+            CustomReplaceOperator.set_operator_logic(custom_operator_logic)
 
             anonymized_result = self.anonymizer.anonymize(
                 text=text,
@@ -219,7 +249,7 @@ class PiiAnonymizerService:
                     deanonymization_map[token] = original_value
             
             # Clean up operator logic reference
-            self.anonymizer.operators["custom_replace"].operator_logic = None
+            CustomReplaceOperator.set_operator_logic(None)
 
             return AnonymizedPayload(
                 text=anonymized_result.text,

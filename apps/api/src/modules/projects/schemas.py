@@ -343,7 +343,8 @@ class WBSItemBase(BaseModel):
 
 class WBSItemCreate(WBSItemBase):
     project_id: UUID
-    parent_id: UUID | None = None
+    parent_code: str | None = Field(None, description="The code of the parent WBS item.")
+    source_clause_id: UUID | None = Field(None, description="The ID of the contract clause that justifies this WBS item.")
 
 
 class WBSItemUpdate(BaseModel):
@@ -361,6 +362,7 @@ class WBSItemResponse(WBSItemBase):
     id: UUID
     project_id: UUID
     parent_id: UUID | None = None
+    parent_code: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -381,7 +383,9 @@ class BOMItemBase(BaseModel):
     unit_price: float | None = None
     total_price: float | None = None
     supplier: str | None = None
-    lead_time_days: int | None = None
+    production_time_days: int | None = Field(None, description="Estimated time in days for manufacturing the item.")
+    transit_time_days: int | None = Field(None, description="Estimated time in days for transporting the item.")
+    lead_time_days: int | None = Field(None, description="Total estimated lead time (production + transit + buffer).")
     required_on_site_date: datetime | None = None
 
 
@@ -389,6 +393,7 @@ class BOMItemCreate(BOMItemBase):
     project_id: UUID
     wbs_item_id: UUID | None = None
     contract_clause_id: UUID | None = None
+    budget_item_id: UUID | None = Field(None, description="The ID of the budget item that funds this material.")
 
 
 class BOMItemUpdate(BaseModel):
