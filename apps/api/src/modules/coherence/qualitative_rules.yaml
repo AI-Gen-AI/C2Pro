@@ -1,0 +1,243 @@
+# Qualitative Rules for Coherence Engine (CE-24)
+# These rules use LLM for evaluation instead of deterministic code.
+# The detection_logic field contains natural language instructions for the LLM.
+
+# ===========================================
+# SCOPE RULES
+# ===========================================
+
+- id: R-SCOPE-CLARITY-01
+  name: "Scope Clarity Check"
+  description: "El alcance del trabajo debe estar claramente definido sin términos ambiguos"
+  evaluator_type: llm
+  category: scope
+  severity: high
+  detection_logic: |
+    Verifica que el alcance del trabajo NO contenga:
+
+    1. TÉRMINOS VAGOS como:
+       - "según sea necesario"
+       - "cuando corresponda"
+       - "razonable" / "razonablemente"
+       - "apropiado" / "apropiadamente"
+       - "oportuno" / "oportunamente"
+       - "suficiente" / "suficientemente"
+       - "adecuado" / "adecuadamente"
+       - "aproximadamente"
+
+    2. FRASES ABIERTAS como:
+       - "y otros trabajos relacionados"
+       - "incluyendo pero no limitado a"
+       - "entre otros"
+       - "y similares"
+       - "etc."
+
+    3. REFERENCIAS INDEFINIDAS como:
+       - "según las necesidades del proyecto"
+       - "a satisfacción del cliente"
+       - "de acuerdo a los estándares aplicables" (sin especificar cuáles)
+       - "conforme a las buenas prácticas" (sin definir)
+
+    4. CANTIDADES NO ESPECIFICADAS:
+       - "suficiente cantidad"
+       - "las necesarias"
+       - "según requerimiento"
+
+    Si encuentra CUALQUIERA de estos elementos, la regla está VIOLADA.
+
+    La severidad depende de:
+    - critical: Si afecta el alcance principal del contrato
+    - high: Si afecta entregables importantes
+    - medium: Si afecta aspectos secundarios
+    - low: Si es en contexto de flexibilidad aceptable
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+# ===========================================
+# FINANCIAL RULES
+# ===========================================
+
+- id: R-PAYMENT-CLARITY-01
+  name: "Payment Terms Clarity"
+  description: "Las condiciones de pago deben especificar montos, plazos y condiciones exactas"
+  evaluator_type: llm
+  category: financial
+  severity: high
+  detection_logic: |
+    Verifica que las condiciones de pago especifiquen CLARAMENTE:
+
+    1. MONTOS:
+       - Valores exactos en números (no solo palabras)
+       - O porcentajes específicos (30%, 50%, etc.)
+       - Moneda claramente indicada (USD, MXN, EUR)
+
+    2. PLAZOS:
+       - Días calendario específicos (15 días, 30 días)
+       - NO usar "oportuno", "razonable", "a la brevedad"
+       - Fecha de inicio del plazo claramente definida
+
+    3. CONDICIONES:
+       - Qué debe cumplirse para facturar (entregable, hito, aprobación)
+       - Documentación requerida (factura, reporte, certificado)
+       - Proceso de aprobación si aplica
+
+    4. FORMA DE PAGO:
+       - Método especificado (transferencia, cheque, etc.)
+       - Datos bancarios o referencia a dónde encontrarlos
+
+    Si FALTA alguno de estos elementos o usa términos vagos, la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+# ===========================================
+# LEGAL RULES
+# ===========================================
+
+- id: R-RESPONSIBILITY-01
+  name: "Responsibility Assignment"
+  description: "Las responsabilidades deben asignarse claramente a una parte específica"
+  evaluator_type: llm
+  category: legal
+  severity: medium
+  detection_logic: |
+    Verifica que las responsabilidades:
+
+    1. SE ASIGNEN A UNA PARTE ESPECÍFICA:
+       - "El Contratista deberá..."
+       - "El Cliente proporcionará..."
+       - NO usar "las partes" para obligaciones específicas
+       - NO usar voz pasiva sin sujeto ("se realizará", "será entregado")
+
+    2. TENGAN VERBOS CLAROS DE ACCIÓN:
+       - "deberá", "realizará", "proporcionará", "entregará"
+       - NO usar "podrá", "podría", "debería" para obligaciones
+
+    3. NO CONTENGAN RESPONSABILIDADES COMPARTIDAS AMBIGUAS:
+       - "ambas partes colaborarán" sin especificar cómo
+       - "conjuntamente" sin roles definidos
+
+    4. ESPECIFIQUEN EL ALCANCE DE LA RESPONSABILIDAD:
+       - Qué incluye y qué no incluye
+       - Límites claros
+
+    Si las responsabilidades son AMBIGUAS o NO están claramente asignadas,
+    la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+- id: R-TERMINATION-01
+  name: "Termination Conditions"
+  description: "Las condiciones de terminación deben ser específicas y balanceadas"
+  evaluator_type: llm
+  category: legal
+  severity: high
+  detection_logic: |
+    Verifica que las condiciones de terminación:
+
+    1. ESPECIFIQUEN CAUSALES CLARAS:
+       - NO solo "por incumplimiento" sin definir qué constituye incumplimiento
+       - Listar causales específicas (falta de pago, retraso > X días, etc.)
+       - Distinguir entre terminación con causa y sin causa
+
+    2. INCLUYAN PERÍODO DE NOTIFICACIÓN:
+       - Días específicos de anticipación (30 días, 60 días)
+       - NO usar "con anticipación razonable"
+       - Formato de notificación (escrita, certificada, etc.)
+
+    3. DESCRIBAN CONSECUENCIAS:
+       - Qué pasa con trabajos en progreso
+       - Cómo se liquidan pagos pendientes
+       - Devolución de materiales/información
+
+    4. SEAN BALANCEADAS:
+       - Ambas partes deben poder terminar en condiciones similares
+       - NO permitir terminación solo a una parte sin justa causa
+
+    5. INCLUYAN PROCEDIMIENTO:
+       - Pasos a seguir para terminar
+       - Período de cura para incumplimientos subsanables
+
+    Si las condiciones son VAGAS, DESBALANCEADAS o INCOMPLETAS,
+    la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+# ===========================================
+# QUALITY RULES
+# ===========================================
+
+- id: R-QUALITY-STANDARDS-01
+  name: "Quality Standards Definition"
+  description: "Los estándares de calidad deben referenciarse específicamente"
+  evaluator_type: llm
+  category: quality
+  severity: medium
+  detection_logic: |
+    Verifica que los estándares de calidad:
+
+    1. REFERENCIEN NORMAS ESPECÍFICAS:
+       - ISO con número completo (ISO 9001:2015, ISO 14001)
+       - ASTM con designación (ASTM A36, ASTM D6400)
+       - NOM/NMX con número (NOM-001-SEDE-2012)
+       - Otras normas aplicables con referencia completa
+
+    2. NO USEN SOLO REFERENCIAS GENÉRICAS:
+       - "buenas prácticas de la industria" sin especificar cuáles
+       - "estándares internacionales" sin nombrarlos
+       - "normas aplicables" sin listarlas
+       - "calidad aceptable" sin criterios
+
+    3. INCLUYAN CRITERIOS DE ACEPTACIÓN:
+       - Tolerancias numéricas donde aplique
+       - Parámetros medibles
+       - Método de verificación
+
+    4. ESPECIFIQUEN PROCEDIMIENTOS DE INSPECCIÓN:
+       - Quién inspecciona
+       - Frecuencia de inspección
+       - Documentación requerida
+
+    Si los estándares son VAGOS o NO REFERENCIADOS específicamente,
+    la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+# ===========================================
+# SCHEDULE RULES
+# ===========================================
+
+- id: R-SCHEDULE-CLARITY-01
+  name: "Schedule Terms Clarity"
+  description: "Los plazos y cronogramas deben estar claramente definidos"
+  evaluator_type: llm
+  category: schedule
+  severity: high
+  detection_logic: |
+    Verifica que los términos de cronograma:
+
+    1. ESPECIFIQUEN FECHAS O DURACIONES CONCRETAS:
+       - Fechas específicas (15 de enero de 2026)
+       - O duraciones en días/semanas/meses calendario
+       - NO usar "a la brevedad", "lo antes posible", "oportunamente"
+
+    2. DEFINAN CLARAMENTE LOS HITOS:
+       - Nombre del hito
+       - Criterio de cumplimiento
+       - Fecha o plazo
+
+    3. ESTABLEZCAN PUNTO DE INICIO:
+       - Cuándo empieza a contar el plazo
+       - Evento disparador claro (firma, anticipo, notificación)
+
+    4. INDIQUEN CONSECUENCIAS DE RETRASO:
+       - Penalizaciones si aplican (monto específico)
+       - Procedimiento para extensiones
+       - Causales de fuerza mayor
+
+    5. MANEJEN DEPENDENCIAS:
+       - Si un plazo depende de otro, especificar la relación
+       - Responsabilidad por retrasos causados por la otra parte
+
+    Si los plazos son AMBIGUOS o INCOMPLETOS, la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
