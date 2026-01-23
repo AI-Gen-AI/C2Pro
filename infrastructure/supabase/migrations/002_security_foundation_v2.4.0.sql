@@ -45,11 +45,34 @@ BEGIN
 END $$;
 
 -- =====================================================
--- SECCIÓN 2: TABLA CLAUSES (NUEVA - CRÍTICA)
+-- SECCIÓN 2: DROP TABLAS EXISTENTES PARA RECREAR
+-- =====================================================
+-- Drop tablas que serán recreadas con esquemas mejorados
+-- CASCADE eliminará también las dependencias (FKs, índices, políticas RLS)
+
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS knowledge_graph_edges CASCADE;
+DROP TABLE IF EXISTS knowledge_graph_nodes CASCADE;
+DROP TABLE IF EXISTS procurement_plan_snapshots CASCADE;
+DROP TABLE IF EXISTS bom_revisions CASCADE;
+DROP TABLE IF EXISTS stakeholder_alerts CASCADE;
+DROP TABLE IF EXISTS stakeholder_wbs_raci CASCADE;
+DROP TABLE IF EXISTS bom_items CASCADE;
+DROP TABLE IF EXISTS wbs_items CASCADE;
+DROP TABLE IF EXISTS stakeholders CASCADE;
+DROP TABLE IF EXISTS ai_usage_logs CASCADE;
+DROP TABLE IF EXISTS project_alerts CASCADE;  -- Renombrado a alerts
+DROP TABLE IF EXISTS project_analysis CASCADE;  -- Renombrado a analyses
+DROP TABLE IF EXISTS document_extractions CASCADE;  -- Renombrado a extractions
+DROP TABLE IF EXISTS clauses CASCADE;
+-- documents se mantiene pero se modifica schema
+
+-- =====================================================
+-- SECCIÓN 3: TABLA CLAUSES (NUEVA - CRÍTICA)
 -- =====================================================
 -- ROADMAP §5.3: Entidad propia para trazabilidad legal
 
-CREATE TABLE IF NOT EXISTS clauses (
+CREATE TABLE clauses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -94,7 +117,10 @@ CREATE INDEX IF NOT EXISTS idx_clauses_verified ON clauses(manually_verified, ve
 -- =====================================================
 
 -- 3.1 Documents
-CREATE TABLE IF NOT EXISTS documents (
+-- Recrear tabla documents con schema mejorado
+DROP TABLE IF EXISTS documents CASCADE;
+
+CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -131,7 +157,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(upload_status);
 CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at DESC);
 
 -- 3.2 Extractions
-CREATE TABLE IF NOT EXISTS extractions (
+CREATE TABLE extractions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
 
@@ -151,7 +177,7 @@ CREATE INDEX IF NOT EXISTS idx_extractions_document ON extractions(document_id);
 CREATE INDEX IF NOT EXISTS idx_extractions_type ON extractions(extraction_type);
 
 -- 3.3 Analyses
-CREATE TABLE IF NOT EXISTS analyses (
+CREATE TABLE analyses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -177,7 +203,7 @@ CREATE INDEX IF NOT EXISTS idx_analyses_status ON analyses(status);
 CREATE INDEX IF NOT EXISTS idx_analyses_created ON analyses(created_at DESC);
 
 -- 3.4 Alerts (CON FK A CLAUSES)
-CREATE TABLE IF NOT EXISTS alerts (
+CREATE TABLE alerts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     analysis_id UUID REFERENCES analyses(id) ON DELETE CASCADE,
@@ -220,7 +246,7 @@ CREATE INDEX IF NOT EXISTS idx_alerts_clause ON alerts(source_clause_id);  -- NU
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
 
 -- 3.5 AI Usage Logs (ROADMAP §6.2)
-CREATE TABLE IF NOT EXISTS ai_usage_logs (
+CREATE TABLE ai_usage_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id),
@@ -257,7 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_logs_input_hash ON ai_usage_logs(input_hash); 
 -- =====================================================
 
 -- 4.1 Stakeholders (CON FK A CLAUSES)
-CREATE TABLE IF NOT EXISTS stakeholders (
+CREATE TABLE stakeholders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -296,7 +322,7 @@ CREATE INDEX IF NOT EXISTS idx_stakeholders_clause ON stakeholders(source_clause
 CREATE INDEX IF NOT EXISTS idx_stakeholders_email ON stakeholders(email);
 
 -- 4.2 WBS Items (CON FK A CLAUSES)
-CREATE TABLE IF NOT EXISTS wbs_items (
+CREATE TABLE wbs_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES wbs_items(id) ON DELETE CASCADE,  -- Para jerarquía
@@ -338,7 +364,7 @@ CREATE INDEX IF NOT EXISTS idx_wbs_items_code ON wbs_items(wbs_code);
 CREATE INDEX IF NOT EXISTS idx_wbs_items_clause ON wbs_items(funded_by_clause_id);  -- NUEVO
 
 -- 4.3 BOM Items (CON FK A CLAUSES)
-CREATE TABLE IF NOT EXISTS bom_items (
+CREATE TABLE bom_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     wbs_item_id UUID REFERENCES wbs_items(id) ON DELETE CASCADE,
@@ -383,7 +409,7 @@ CREATE INDEX IF NOT EXISTS idx_bom_items_clause ON bom_items(contract_clause_id)
 CREATE INDEX IF NOT EXISTS idx_bom_items_status ON bom_items(procurement_status);
 
 -- 4.4 Stakeholder WBS RACI
-CREATE TABLE IF NOT EXISTS stakeholder_wbs_raci (
+CREATE TABLE stakeholder_wbs_raci (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     stakeholder_id UUID NOT NULL REFERENCES stakeholders(id) ON DELETE CASCADE,
@@ -408,7 +434,7 @@ CREATE INDEX IF NOT EXISTS idx_raci_wbs ON stakeholder_wbs_raci(wbs_item_id);
 CREATE INDEX IF NOT EXISTS idx_raci_role ON stakeholder_wbs_raci(raci_role);
 
 -- 4.5 Stakeholder Alerts
-CREATE TABLE IF NOT EXISTS stakeholder_alerts (
+CREATE TABLE stakeholder_alerts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     stakeholder_id UUID NOT NULL REFERENCES stakeholders(id) ON DELETE CASCADE,
@@ -434,7 +460,7 @@ CREATE INDEX IF NOT EXISTS idx_stakeholder_alerts_alert ON stakeholder_alerts(al
 -- =====================================================
 
 -- 5.1 BOM Revisions (versionado)
-CREATE TABLE IF NOT EXISTS bom_revisions (
+CREATE TABLE bom_revisions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     bom_item_id UUID NOT NULL REFERENCES bom_items(id) ON DELETE CASCADE,
@@ -458,7 +484,7 @@ CREATE INDEX IF NOT EXISTS idx_bom_revisions_item ON bom_revisions(bom_item_id);
 CREATE INDEX IF NOT EXISTS idx_bom_revisions_created ON bom_revisions(created_at DESC);
 
 -- 5.2 Procurement Plan Snapshots
-CREATE TABLE IF NOT EXISTS procurement_plan_snapshots (
+CREATE TABLE procurement_plan_snapshots (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -478,7 +504,7 @@ CREATE INDEX IF NOT EXISTS idx_procurement_snapshots_created ON procurement_plan
 -- =====================================================
 
 -- 6.1 Knowledge Graph Nodes (CON INTEGRIDAD REFERENCIAL)
-CREATE TABLE IF NOT EXISTS knowledge_graph_nodes (
+CREATE TABLE knowledge_graph_nodes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -499,7 +525,7 @@ CREATE INDEX IF NOT EXISTS idx_kg_nodes_type ON knowledge_graph_nodes(entity_typ
 CREATE INDEX IF NOT EXISTS idx_kg_nodes_entity ON knowledge_graph_nodes(entity_id);
 
 -- 6.2 Knowledge Graph Edges (CON FKs A NODES)
-CREATE TABLE IF NOT EXISTS knowledge_graph_edges (
+CREATE TABLE knowledge_graph_edges (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
@@ -525,7 +551,7 @@ CREATE INDEX IF NOT EXISTS idx_kg_edges_rel ON knowledge_graph_edges(relationshi
 -- SECCIÓN 7: AUDIT LOGGING (ROADMAP §6.5)
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS audit_logs (
+CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id),
@@ -557,12 +583,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(created_at DESC);
 -- =====================================================
 -- ROADMAP §6.1: RLS completo en todas las tablas con tenant/project
 -- CTO GATE 1: Multi-tenant Isolation
-
--- Función auxiliar para obtener tenant_id del JWT
-CREATE OR REPLACE FUNCTION auth.jwt()
-RETURNS JSONB AS $$
-    SELECT current_setting('request.jwt.claims', true)::jsonb;
-$$ LANGUAGE SQL STABLE;
+-- NOTA: auth.jwt() y auth.uid() ya existen en Supabase, no es necesario crearlas
 
 -- 8.1 Tenants (self-only)
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
@@ -797,7 +818,6 @@ SELECT
     p.id,
     p.tenant_id,
     p.name,
-    p.code,
     p.status,
     p.coherence_score,
     COUNT(DISTINCT d.id) as document_count,

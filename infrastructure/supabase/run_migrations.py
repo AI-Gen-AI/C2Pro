@@ -35,7 +35,8 @@ class MigrationRunner:
     async def connect(self) -> None:
         """Conecta a la base de datos."""
         logger.info("connecting_to_database")
-        self.conn = await asyncpg.connect(self.database_url)
+        # statement_cache_size=0 para compatibilidad con pgbouncer de Supabase
+        self.conn = await asyncpg.connect(self.database_url, statement_cache_size=0)
         logger.info("connected_to_database")
 
     async def disconnect(self) -> None:

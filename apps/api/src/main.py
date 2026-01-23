@@ -4,32 +4,32 @@ C2Pro - FastAPI Application
 Aplicación principal de la API de C2Pro.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
-from src.core.database import init_db, close_db
-from src.core.exceptions import (
-    AuthenticationError,
-    NotFoundError,
-    ConflictError,
-    ValidationError,
-    TenantNotFoundError,
-)
+from src.core.cache import close_cache, init_cache
+from src.core.database import close_db, init_db
+from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
 )
+from src.mcp.router import router as mcp_router
 
 # Import routers
 from src.modules.auth.router import router as auth_router
+from src.modules.coherence.router import router as coherence_router
+from src.modules.documents.router import router as documents_router
+from src.modules.observability.router import router as observability_router
 from src.modules.projects.router import router as projects_router
+from src.modules.analysis.router import router as analysis_router
+from src.routers.health import router as health_router
+from src.routers.alerts import router as alerts_router
 
 logger = structlog.get_logger()
 
@@ -37,6 +37,7 @@ logger = structlog.get_logger()
 # ===========================================
 # LIFESPAN CONTEXT MANAGER
 # ===========================================
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
@@ -50,17 +51,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         None durante la ejecución de la aplicación
     """
     # STARTUP
-    logger.info(
-        "application_starting",
-        environment=settings.environment,
-        debug=settings.debug
-    )
+    logger.info("application_starting", environment=settings.environment, debug=settings.debug)
 
     # Inicializar base de datos
     await init_db()
     logger.info("database_initialized")
 
-    # TODO: Inicializar Redis/cache cuando esté implementado
+    await init_cache()
+    logger.info("cache_initialized")
+
     # TODO: Inicializar Sentry cuando esté configurado
 
     logger.info("application_started")
@@ -74,7 +73,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await close_db()
     logger.info("database_closed")
 
-    # TODO: Cerrar conexiones Redis
+    await close_cache()
+    logger.info("cache_closed")
+
     # TODO: Flush Sentry events
 
     logger.info("application_stopped")
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 # ===========================================
 # CREATE APPLICATION
 # ===========================================
+
 
 def create_application() -> FastAPI:
     """
@@ -132,6 +134,7 @@ def create_application() -> FastAPI:
         openapi_url=f"{settings.api_v1_prefix}/openapi.json",
         lifespan=lifespan,
         debug=settings.debug,
+        redirect_slashes=False,  # Disable automatic slash redirects for security tests
     )
 
     # ===========================================
@@ -155,109 +158,13 @@ def create_application() -> FastAPI:
     # EXCEPTION HANDLERS
     # ===========================================
 
-    @app.exception_handler(AuthenticationError)
-    async def authentication_error_handler(request: Request, exc: AuthenticationError):
-        """Handler para errores de autenticación."""
-        logger.warning(
-            "authentication_error",
-            path=request.url.path,
-            error=str(exc)
-        )
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": str(exc)},
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    @app.exception_handler(TenantNotFoundError)
-    async def tenant_not_found_handler(request: Request, exc: TenantNotFoundError):
-        """Handler para tenant no encontrado."""
-        logger.warning(
-            "tenant_not_found",
-            path=request.url.path,
-            error=str(exc)
-        )
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Invalid authentication context"},
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    @app.exception_handler(NotFoundError)
-    async def not_found_error_handler(request: Request, exc: NotFoundError):
-        """Handler para recursos no encontrados."""
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc)}
-        )
-
-    @app.exception_handler(ConflictError)
-    async def conflict_error_handler(request: Request, exc: ConflictError):
-        """Handler para conflictos (duplicados, etc)."""
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc)}
-        )
-
-    @app.exception_handler(ValidationError)
-    async def validation_error_handler(request: Request, exc: ValidationError):
-        """Handler para errores de validación de negocio."""
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"detail": str(exc)}
-        )
-
-    @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
-        """Handler para errores de validación de Pydantic."""
-        logger.warning(
-            "validation_error",
-            path=request.url.path,
-            errors=exc.errors()
-        )
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Validation error",
-                "errors": exc.errors()
-            }
-        )
-
-    @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
-        """Handler para errores no capturados."""
-        logger.error(
-            "unhandled_exception",
-            path=request.url.path,
-            method=request.method,
-            error=str(exc),
-            exc_info=True
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": "Internal server error" if settings.is_production else str(exc)
-            }
-        )
+    # Registrar todos los exception handlers globales
+    # Ver src/core/handlers.py para detalles de implementación
+    register_exception_handlers(app)
 
     # ===========================================
     # ROUTERS
     # ===========================================
-
-    # Health check
-    @app.get("/health", tags=["Health"])
-    async def health_check():
-        """
-        Health check endpoint.
-
-        Returns basic application status and version.
-        """
-        return {
-            "status": "ok",
-            "app": settings.app_name,
-            "version": settings.app_version,
-            "environment": settings.environment
-        }
 
     # Root
     @app.get("/", tags=["Root"])
@@ -271,11 +178,13 @@ def create_application() -> FastAPI:
             "message": f"Welcome to {settings.app_name} API",
             "version": settings.app_version,
             "docs": "/docs",
-            "health": "/health"
+            "health": "/health",
         }
 
     # API v1 routers
     api_v1_prefix = settings.api_v1_prefix
+
+    app.include_router(health_router)
 
     app.include_router(
         auth_router,
@@ -287,9 +196,35 @@ def create_application() -> FastAPI:
         prefix=api_v1_prefix,
     )
 
+    app.include_router(
+        mcp_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        observability_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        documents_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        analysis_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        alerts_router,
+        prefix=api_v1_prefix,
+    )
+
+    # Coherence Engine v0 router (no v1 prefix)
+    app.include_router(coherence_router)
+
     # TODO: Añadir más routers conforme se implementen
-    # app.include_router(documents_router, prefix=api_v1_prefix)
-    # app.include_router(analysis_router, prefix=api_v1_prefix)
     # app.include_router(stakeholders_router, prefix=api_v1_prefix)
 
     logger.info("application_configured")

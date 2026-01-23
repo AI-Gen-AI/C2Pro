@@ -6,27 +6,26 @@ Funcionalidades compartidas: database, security, middleware, etc.
 
 from src.core.database import (
     Base,
+    close_db,
     get_session,
     get_session_with_tenant,
-    TenantSession,
     init_db,
-    close_db,
+)
+from src.core.exceptions import (
+    AIBudgetExceededError,
+    AIServiceError,
+    AuthenticationError,
+    AuthorizationError,
+    C2ProException,
+    ResourceNotFoundError,
+    ValidationError,
 )
 from src.core.security import (
-    get_current_tenant_id,
-    get_current_user_id,
     CurrentTenantId,
     CurrentUserId,
     Permissions,
-)
-from src.core.exceptions import (
-    C2ProException,
-    AuthenticationError,
-    AuthorizationError,
-    ResourceNotFoundError,
-    ValidationError,
-    AIServiceError,
-    AIBudgetExceededError,
+    get_current_tenant_id,
+    get_current_user_id,
 )
 
 __all__ = [
@@ -34,7 +33,6 @@ __all__ = [
     "Base",
     "get_session",
     "get_session_with_tenant",
-    "TenantSession",
     "init_db",
     "close_db",
     # Security

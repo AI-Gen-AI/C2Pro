@@ -1,6 +1,7 @@
 # C2Pro Product Roadmap
 **Contract Intelligence Platform - Master Development Plan**
 
+
 **Versión:** 2.4.0
 **Última actualización:** 05 de Enero de 2026
 **Autor:** Jesús - Strategic Procurement Director

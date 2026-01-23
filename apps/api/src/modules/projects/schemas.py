@@ -5,20 +5,21 @@ Schemas Pydantic para validación y serialización de proyectos.
 """
 
 from datetime import datetime
-from typing import Annotated
+from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.modules.projects.models import ProjectStatus, ProjectType
-
 
 # ===========================================
 # BASE SCHEMAS
 # ===========================================
 
+
 class ProjectBase(BaseModel):
     """Schema base para Project."""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=5000)
     code: str | None = Field(None, max_length=50)
@@ -30,6 +31,7 @@ class ProjectBase(BaseModel):
 # ===========================================
 # REQUEST SCHEMAS (Input)
 # ===========================================
+
 
 class ProjectCreateRequest(BaseModel):
     """Request para crear nuevo proyecto."""
@@ -54,7 +56,7 @@ class ProjectCreateRequest(BaseModel):
                 "estimated_budget": 1500000.00,
                 "currency": "EUR",
                 "start_date": "2024-01-15T00:00:00",
-                "end_date": "2024-12-31T23:59:59"
+                "end_date": "2024-12-31T23:59:59",
             }
         }
     )
@@ -88,7 +90,7 @@ class ProjectUpdateRequest(BaseModel):
             "example": {
                 "name": "Construcción Edificio Oficinas - Actualizado",
                 "status": "active",
-                "estimated_budget": 1600000.00
+                "estimated_budget": 1600000.00,
             }
         }
     )
@@ -97,6 +99,7 @@ class ProjectUpdateRequest(BaseModel):
 # ===========================================
 # RESPONSE SCHEMAS (Output)
 # ===========================================
+
 
 class ProjectListItemResponse(BaseModel):
     """Response para item en lista de proyectos (versión resumida)."""
@@ -206,17 +209,25 @@ class ProjectStatsResponse(BaseModel):
 # DOCUMENT-RELATED SCHEMAS
 # ===========================================
 
+
+class DocumentPollingStatus(str, Enum):
+    """Estado del documento para polling en UI."""
+
+    QUEUED = "QUEUED"
+    PROCESSING = "PROCESSING"
+    PARSED = "PARSED"
+    ERROR = "ERROR"
+
+
 class DocumentListResponse(BaseModel):
     """Response básico de documento en lista."""
 
     id: UUID
-    document_type: str
     filename: str
-    file_format: str | None
-    file_size_bytes: int | None
-    upload_status: str
-    parsed_at: datetime | None
-    created_at: datetime
+    status: DocumentPollingStatus
+    error_message: str | None
+    uploaded_at: datetime
+    file_size_bytes: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -232,6 +243,7 @@ class ProjectWithDocumentsResponse(ProjectDetailResponse):
 # ===========================================
 # BULK OPERATIONS
 # ===========================================
+
 
 class ProjectBulkDeleteRequest(BaseModel):
     """Request para eliminación masiva de proyectos."""
@@ -250,11 +262,12 @@ class ProjectBulkStatusUpdateRequest(BaseModel):
 # PAGINATION
 # ===========================================
 
+
 class ProjectListResponse(BaseModel):
     """Response paginado de lista de proyectos."""
 
     items: list[ProjectListItemResponse]
-    total: int
+    total: int = Field(..., serialization_alias="total_count")
     page: int
     page_size: int
     total_pages: int
@@ -262,23 +275,25 @@ class ProjectListResponse(BaseModel):
     has_prev: bool
 
     model_config = ConfigDict(
+        populate_by_name=True,  # Allow both 'total' and 'total_count'
         json_schema_extra={
             "example": {
                 "items": [],
-                "total": 42,
+                "total_count": 42,
                 "page": 1,
                 "page_size": 20,
                 "total_pages": 3,
                 "has_next": True,
-                "has_prev": False
+                "has_prev": False,
             }
-        }
+        },
     )
 
 
 # ===========================================
 # FILTERS
 # ===========================================
+
 
 class ProjectFilters(BaseModel):
     """Filtros para búsqueda de proyectos."""
@@ -297,6 +312,7 @@ class ProjectFilters(BaseModel):
 # ERROR SCHEMAS
 # ===========================================
 
+
 class ProjectErrorResponse(BaseModel):
     """Response de error de proyectos."""
 
@@ -305,16 +321,15 @@ class ProjectErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "detail": "Project not found",
-                "error_code": "PROJECT_NOT_FOUND"
-            }
+            "example": {"detail": "Project not found", "error_code": "PROJECT_NOT_FOUND"}
         }
     )
+
 
 # ===========================================
 # WBS-RELATED SCHEMAS
 # ===========================================
+
 
 class WBSItemBase(BaseModel):
     code: str = Field(..., description="WBS code, e.g., '1.1.2'")
@@ -325,9 +340,12 @@ class WBSItemBase(BaseModel):
     end_date: datetime | None = None
     cost: float | None = None
 
+
 class WBSItemCreate(WBSItemBase):
     project_id: UUID
-    parent_id: UUID | None = None
+    parent_code: str | None = Field(None, description="The code of the parent WBS item.")
+    source_clause_id: UUID | None = Field(None, description="The ID of the contract clause that justifies this WBS item.")
+
 
 class WBSItemUpdate(BaseModel):
     code: str | None = None
@@ -339,18 +357,22 @@ class WBSItemUpdate(BaseModel):
     cost: float | None = None
     parent_id: UUID | None = None
 
+
 class WBSItemResponse(WBSItemBase):
     id: UUID
     project_id: UUID
     parent_id: UUID | None = None
+    parent_code: str | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # ===========================================
 # BOM-RELATED SCHEMAS
 # ===========================================
+
 
 class BOMItemBase(BaseModel):
     item_code: str | None = Field(None, description="Internal code for the BOM item")
@@ -361,13 +383,18 @@ class BOMItemBase(BaseModel):
     unit_price: float | None = None
     total_price: float | None = None
     supplier: str | None = None
-    lead_time_days: int | None = None
+    production_time_days: int | None = Field(None, description="Estimated time in days for manufacturing the item.")
+    transit_time_days: int | None = Field(None, description="Estimated time in days for transporting the item.")
+    lead_time_days: int | None = Field(None, description="Total estimated lead time (production + transit + buffer).")
     required_on_site_date: datetime | None = None
+
 
 class BOMItemCreate(BOMItemBase):
     project_id: UUID
     wbs_item_id: UUID | None = None
     contract_clause_id: UUID | None = None
+    budget_item_id: UUID | None = Field(None, description="The ID of the budget item that funds this material.")
+
 
 class BOMItemUpdate(BaseModel):
     item_code: str | None = None
@@ -383,6 +410,7 @@ class BOMItemUpdate(BaseModel):
     wbs_item_id: UUID | None = None
     contract_clause_id: UUID | None = None
 
+
 class BOMItemResponse(BOMItemBase):
     id: UUID
     project_id: UUID
@@ -392,3 +420,53 @@ class BOMItemResponse(BOMItemBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===========================================
+# COHERENCE-RELATED SCHEMAS
+# ===========================================
+
+
+class CoherenceScoreResponse(BaseModel):
+    """
+    Response model for a project's coherence score.
+    Represents the data needed by frontend dashboard widgets.
+    """
+    project_id: UUID
+    score: int | None = Field(None, ge=0, le=100, description="Coherence score from 0 to 100.")
+    status: str = Field(..., description="Calculation status (e.g., 'CALCULATED', 'PENDING', 'NOT_FOUND')")
+    calculated_at: datetime | None = Field(None, description="Timestamp of the last calculation.")
+    
+    breakdown: dict[str, int] = Field(
+        default_factory=lambda: {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        description="Dictionary with the count of alerts by severity."
+    )
+    top_drivers: list[str] = Field(
+        default_factory=list,
+        description="Top 3 reasons or rules that most impacted the score."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example_calculated": {
+                "project_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                "score": 85,
+                "status": "CALCULATED",
+                "calculated_at": "2026-01-15T10:30:00Z",
+                "breakdown": {"critical": 1, "high": 3, "medium": 5, "low": 2},
+                "top_drivers": [
+                    "Missing budget information for WBS item 1.2.3",
+                    "Schedule dates conflict with contract milestones",
+                    "Ambiguous liability clause in contract section 8.4"
+                ]
+            },
+            "example_pending": {
+                "project_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                "score": None,
+                "status": "PENDING",
+                "calculated_at": None,
+                "breakdown": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                "top_drivers": []
+            }
+        }
+    )

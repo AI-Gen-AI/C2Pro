@@ -1,0 +1,28 @@
+{
+  "id": "calibration-major-003",
+  "clauses": [
+    {
+      "id": "clause-b-maj-001",
+      "text": "The project budget is 200,000 USD, with current spend at 250,000 USD.",
+      "data": {
+        "planned": 200000,
+        "current": 250000,
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "clause-s-maj-001",
+      "text": "Project schedule status: delayed. Revised end date: 2025-11-30.",
+      "data": {
+        "status": "delayed"
+      }
+    },
+    {
+      "id": "clause-c-maj-001",
+      "text": "Last contract review was on 2023-01-01.",
+      "data": {
+        "last_review_date": "2023-01-01"
+      }
+    }
+  ]
+}

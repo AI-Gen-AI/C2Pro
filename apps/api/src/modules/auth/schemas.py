@@ -5,32 +5,33 @@ Schemas Pydantic para validación y serialización de autenticación.
 """
 
 from datetime import datetime
-from typing import Annotated
 from uuid import UUID
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     EmailStr,
     Field,
     field_validator,
-    ConfigDict,
 )
 
-from src.modules.auth.models import UserRole, SubscriptionPlan
-
+from src.modules.auth.models import SubscriptionPlan, UserRole
 
 # ===========================================
 # BASE SCHEMAS
 # ===========================================
 
+
 class TenantBase(BaseModel):
     """Schema base para Tenant."""
+
     name: str = Field(..., min_length=1, max_length=255)
     slug: str | None = Field(None, min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
 
 
 class UserBase(BaseModel):
     """Schema base para User."""
+
     email: EmailStr
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
@@ -39,6 +40,7 @@ class UserBase(BaseModel):
 # ===========================================
 # REQUEST SCHEMAS (Input)
 # ===========================================
+
 
 class RegisterRequest(BaseModel):
     """Request para registro de nuevo usuario."""
@@ -49,7 +51,12 @@ class RegisterRequest(BaseModel):
     # User info
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
-    password_confirm: str = Field(..., min_length=8, max_length=100)
+    password_confirm: str | None = Field(
+        None,
+        min_length=8,
+        max_length=100,
+        description="Opcional; si se envía debe coincidir con password",
+    )
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
 
@@ -65,7 +72,7 @@ class RegisterRequest(BaseModel):
                 "password_confirm": "Password123!",
                 "first_name": "Juan",
                 "last_name": "Pérez",
-                "accept_terms": True
+                "accept_terms": True,
             }
         }
     )
@@ -90,8 +97,10 @@ class RegisterRequest(BaseModel):
 
     @field_validator("password_confirm")
     @classmethod
-    def validate_passwords_match(cls, v: str, info) -> str:
-        """Valida que las contraseñas coincidan."""
+    def validate_passwords_match(cls, v: str | None, info) -> str | None:
+        """Valida coincidencia solo si se envía confirmación."""
+        if v is None:
+            return v
         if "password" in info.data and v != info.data["password"]:
             raise ValueError("Passwords do not match")
         return v
@@ -112,12 +121,7 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1)
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "usuario@ejemplo.com",
-                "password": "Password123!"
-            }
-        }
+        json_schema_extra={"example": {"email": "usuario@ejemplo.com", "password": "Password123!"}}
     )
 
 
@@ -157,11 +161,13 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     """Request para solicitar reset de contraseña."""
+
     email: EmailStr
 
 
 class PasswordResetConfirm(BaseModel):
     """Request para confirmar reset de contraseña."""
+
     token: str
     new_password: str = Field(..., min_length=8, max_length=100)
     new_password_confirm: str = Field(..., min_length=8, max_length=100)
@@ -170,6 +176,7 @@ class PasswordResetConfirm(BaseModel):
 # ===========================================
 # RESPONSE SCHEMAS (Output)
 # ===========================================
+
 
 class TenantResponse(BaseModel):
     """Response con información de Tenant."""
@@ -251,7 +258,7 @@ class TokenResponse(BaseModel):
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
                 "expires_in": 86400,
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
             }
         }
     )
@@ -272,18 +279,18 @@ class LoginResponse(BaseModel):
                     "email": "usuario@ejemplo.com",
                     "first_name": "Juan",
                     "last_name": "Pérez",
-                    "role": "admin"
+                    "role": "admin",
                 },
                 "tenant": {
                     "id": "550e8400-e29b-41d4-a716-446655440001",
                     "name": "Constructora Ejemplo S.L.",
-                    "subscription_plan": "free"
+                    "subscription_plan": "free",
                 },
                 "tokens": {
                     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "token_type": "bearer",
-                    "expires_in": 86400
-                }
+                    "expires_in": 86400,
+                },
             }
         }
     )
@@ -300,11 +307,13 @@ class RegisterResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Request para refrescar token."""
+
     refresh_token: str
 
 
 class MeResponse(BaseModel):
     """Response para endpoint /me."""
+
     user: UserResponse
     tenant: TenantResponse
 
@@ -312,6 +321,7 @@ class MeResponse(BaseModel):
 # ===========================================
 # UPDATE SCHEMAS
 # ===========================================
+
 
 class UserUpdateRequest(BaseModel):
     """Request para actualizar perfil de usuario."""
@@ -324,11 +334,7 @@ class UserUpdateRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "first_name": "Juan",
-                "last_name": "Pérez",
-                "phone": "+34 600 000 000"
-            }
+            "example": {"first_name": "Juan", "last_name": "Pérez", "phone": "+34 600 000 000"}
         }
     )
 
@@ -343,6 +349,7 @@ class TenantUpdateRequest(BaseModel):
 # ===========================================
 # JWT PAYLOAD SCHEMAS
 # ===========================================
+
 
 class TokenPayload(BaseModel):
     """Payload decodificado del JWT."""
@@ -361,6 +368,7 @@ class TokenPayload(BaseModel):
 # ERROR SCHEMAS
 # ===========================================
 
+
 class AuthErrorResponse(BaseModel):
     """Response de error de autenticación."""
 
@@ -369,9 +377,6 @@ class AuthErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "detail": "Invalid credentials",
-                "error_code": "INVALID_CREDENTIALS"
-            }
+            "example": {"detail": "Invalid credentials", "error_code": "INVALID_CREDENTIALS"}
         }
     )

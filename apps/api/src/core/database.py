@@ -5,10 +5,12 @@ SQLAlchemy async setup con Supabase PostgreSQL.
 Incluye Row Level Security (RLS) para multi-tenancy.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 from uuid import UUID
 
+import structlog
+from fastapi import Request  # Import Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,7 +19,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-import structlog
 
 from src.config import settings
 
@@ -26,6 +27,7 @@ logger = structlog.get_logger()
 
 class Base(DeclarativeBase):
     """Base class para todos los modelos SQLAlchemy."""
+
     pass
 
 
@@ -40,20 +42,31 @@ async def init_db() -> None:
     Llamar en startup de la aplicación.
     """
     global _engine, _session_factory
-    
+
+    # Import all models to register them with SQLAlchemy
+    # This is necessary for relationship resolution
+
+    logger.debug("models_imported")
+
     # Convertir URL a async
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    
-    _engine = create_async_engine(
-        database_url,
-        echo=settings.debug,
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
-    )
-    
+
+    if database_url.startswith("sqlite"):
+        _engine = create_async_engine(
+            database_url,
+            echo=settings.debug,
+        )
+    else:
+        _engine = create_async_engine(
+            database_url,
+            echo=settings.debug,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+        )
+
     _session_factory = async_sessionmaker(
         bind=_engine,
         class_=AsyncSession,
@@ -61,7 +74,7 @@ async def init_db() -> None:
         autocommit=False,
         autoflush=False,
     )
-    
+
     logger.info("database_engine_created", url=database_url[:50] + "...")
 
 
@@ -71,116 +84,106 @@ async def close_db() -> None:
     Llamar en shutdown de la aplicación.
     """
     global _engine
-    
+
     if _engine:
         await _engine.dispose()
         _engine = None
         logger.info("database_engine_closed")
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency para obtener sesión de base de datos.
-    
-    Uso en FastAPI:
-        async def endpoint(db: AsyncSession = Depends(get_session)):
-            ...
+
+    Si la request tiene un tenant_id en su estado (establecido por el middleware),
+    configura la sesión con Row Level Security (RLS) para ese tenant.
     """
     if _session_factory is None:
         raise RuntimeError("Database not initialized. Call init_db() first.")
-    
+
     async with _session_factory() as session:
         try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+            # Check if tenant_id is available from the request state (set by middleware)
+            if hasattr(request.state, "tenant_id") and request.state.tenant_id:
+                tenant_id = request.state.tenant_id
+                # SET commands don't support parameterized queries in PostgreSQL
+                # Format the UUID directly into the SQL string (safe since UUID type is validated)
+                await session.execute(text(f"SET LOCAL app.current_tenant = '{str(tenant_id)}'"))
+                logger.debug("RLS_tenant_set", tenant_id=str(tenant_id))
 
-
-@asynccontextmanager
-async def get_session_with_tenant(tenant_id: UUID) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Obtiene sesión con RLS configurado para un tenant específico.
-    
-    IMPORTANTE: Usar esto para operaciones que requieren aislamiento de tenant.
-    
-    Uso:
-        async with get_session_with_tenant(tenant_id) as db:
-            projects = await db.execute(select(Project))
-            # Solo retorna proyectos del tenant_id especificado
-    """
-    if _session_factory is None:
-        raise RuntimeError("Database not initialized. Call init_db() first.")
-    
-    async with _session_factory() as session:
-        try:
-            # Configurar RLS para este tenant
-            await session.execute(
-                text("SET app.current_tenant = :tenant_id"),
-                {"tenant_id": str(tenant_id)}
-            )
-            
             yield session
             await session.commit()
         except Exception:
             await session.rollback()
             raise
         finally:
-            # Limpiar configuración de tenant
+            # Always reset the tenant context to prevent leakage
+            if hasattr(request.state, "tenant_id") and request.state.tenant_id:
+                await session.execute(text("RESET app.current_tenant"))
+                logger.debug("RLS_tenant_reset", tenant_id=str(request.state.tenant_id))
+
+
+# The get_session_with_tenant context manager can now be simplified or potentially removed
+# if get_session is the primary way to get a session in FastAPI routes.
+# However, keeping it for explicit tenant setting in background tasks or specific service methods
+# where request context is not available might be useful.
+# For this task, we will keep it as is, but rely on the improved get_session.
+
+
+@asynccontextmanager
+async def get_session_with_tenant(tenant_id: UUID) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Get a database session with tenant context set via RLS.
+
+    Useful for background tasks or service methods where request context is not available.
+    Sets the tenant_id in the session for RLS policies.
+
+    Args:
+        tenant_id: UUID of the tenant to set in session context
+
+    Yields:
+        AsyncSession with tenant context set
+    """
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+
+    async with _session_factory() as session:
+        try:
+            # Set tenant_id for RLS
+            # SET commands don't support parameterized queries in PostgreSQL
+            # Format the UUID directly into the SQL string (safe since UUID type is validated)
+            await session.execute(text(f"SET LOCAL app.current_tenant = '{str(tenant_id)}'"))
+            logger.debug("RLS_tenant_set", tenant_id=str(tenant_id))
+
+            yield session
+
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            # Reset tenant context
             await session.execute(text("RESET app.current_tenant"))
+            logger.debug("RLS_tenant_reset", tenant_id=str(tenant_id))
 
 
-class TenantSession:
+@asynccontextmanager
+async def get_raw_session() -> AsyncGenerator[AsyncSession, None]:
     """
-    Wrapper para sesión con tenant automático.
-    
-    Uso:
-        db = TenantSession(session, tenant_id)
-        await db.execute(select(Project))  # Automáticamente filtrado por tenant
+    Get a database session without tenant context.
+
+    Useful for middleware validation or operations that need to query
+    across all tenants (like checking if a tenant exists).
+
+    Yields:
+        AsyncSession without RLS tenant context
     """
-    
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
-        self._session = session
-        self._tenant_id = tenant_id
-        self._initialized = False
-    
-    async def _ensure_tenant_set(self) -> None:
-        """Asegura que el tenant esté configurado en la sesión."""
-        if not self._initialized:
-            await self._session.execute(
-                text("SET app.current_tenant = :tenant_id"),
-                {"tenant_id": str(self._tenant_id)}
-            )
-            self._initialized = True
-    
-    async def execute(self, *args, **kwargs):
-        await self._ensure_tenant_set()
-        return await self._session.execute(*args, **kwargs)
-    
-    async def scalar(self, *args, **kwargs):
-        await self._ensure_tenant_set()
-        return await self._session.scalar(*args, **kwargs)
-    
-    async def scalars(self, *args, **kwargs):
-        await self._ensure_tenant_set()
-        return await self._session.scalars(*args, **kwargs)
-    
-    def add(self, instance):
-        return self._session.add(instance)
-    
-    def add_all(self, instances):
-        return self._session.add_all(instances)
-    
-    async def delete(self, instance):
-        await self._ensure_tenant_set()
-        return await self._session.delete(instance)
-    
-    async def commit(self):
-        return await self._session.commit()
-    
-    async def rollback(self):
-        return await self._session.rollback()
-    
-    async def refresh(self, instance):
-        return await self._session.refresh(instance)
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+
+    async with _session_factory() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

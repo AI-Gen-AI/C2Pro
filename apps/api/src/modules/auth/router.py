@@ -4,31 +4,28 @@ C2Pro - Authentication Router
 Endpoints de autenticación y gestión de usuarios.
 """
 
-from typing import Annotated
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
-from src.core.security import CurrentUserId, CurrentTenantId
 from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
-from src.modules.auth.service import AuthService
+from src.core.security import CurrentUserId
 from src.modules.auth.schemas import (
-    RegisterRequest,
-    RegisterResponse,
+    AuthErrorResponse,
     LoginRequest,
     LoginResponse,
     MeResponse,
-    UserResponse,
-    TenantResponse,
-    RefreshTokenRequest,
-    TokenResponse,
-    UserUpdateRequest,
     PasswordChangeRequest,
-    AuthErrorResponse,
+    RefreshTokenRequest,
+    RegisterRequest,
+    RegisterResponse,
+    TenantResponse,
+    TokenResponse,
+    UserResponse,
+    UserUpdateRequest,
 )
-
-import structlog
+from src.modules.auth.service import AuthService
 
 logger = structlog.get_logger()
 
@@ -42,18 +39,16 @@ router = APIRouter(
     responses={
         401: {
             "description": "Unauthorized - Invalid or missing credentials",
-            "model": AuthErrorResponse
+            "model": AuthErrorResponse,
         },
-        403: {
-            "description": "Forbidden - Insufficient permissions",
-            "model": AuthErrorResponse
-        }
-    }
+        403: {"description": "Forbidden - Insufficient permissions", "model": AuthErrorResponse},
+    },
 )
 
 # ===========================================
 # PUBLIC ENDPOINTS (sin autenticación)
 # ===========================================
+
 
 @router.post(
     "/register",
@@ -74,13 +69,10 @@ router = APIRouter(
     responses={
         201: {"description": "User successfully registered"},
         409: {"description": "Email already exists"},
-        422: {"description": "Validation error"}
-    }
+        422: {"description": "Validation error"},
+    },
 )
-async def register(
-    request: RegisterRequest,
-    db: AsyncSession = Depends(get_session)
-):
+async def register(request: RegisterRequest, db: AsyncSession = Depends(get_session)):
     """
     Registra nuevo usuario y crea empresa/organización (tenant).
 
@@ -89,24 +81,17 @@ async def register(
     try:
         response = await AuthService.register(db, request)
 
-        logger.info(
-            "user_registered_via_api",
-            email=request.email,
-            company=request.company_name
-        )
+        logger.info("user_registered_via_api", email=request.email, company=request.company_name)
 
         return response
 
     except ConflictError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         logger.error("registration_error", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed. Please try again."
+            detail="Registration failed. Please try again.",
         )
 
 
@@ -126,13 +111,10 @@ async def register(
     responses={
         200: {"description": "Login successful"},
         401: {"description": "Invalid credentials"},
-        422: {"description": "Validation error"}
-    }
+        422: {"description": "Validation error"},
+    },
 )
-async def login(
-    request: LoginRequest,
-    db: AsyncSession = Depends(get_session)
-):
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_session)):
     """
     Autentica usuario con email y contraseña.
 
@@ -149,13 +131,13 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
         logger.error("login_error", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed. Please try again."
+            detail="Login failed. Please try again.",
         )
 
 
@@ -171,13 +153,10 @@ async def login(
     """,
     responses={
         200: {"description": "Token refreshed successfully"},
-        401: {"description": "Invalid or expired refresh token"}
-    }
+        401: {"description": "Invalid or expired refresh token"},
+    },
 )
-async def refresh_token(
-    request: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_session)
-):
+async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends(get_session)):
     """
     Refresca el access token usando el refresh token.
     """
@@ -192,13 +171,14 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
 # ===========================================
 # PROTECTED ENDPOINTS (requieren autenticación)
 # ===========================================
+
 
 @router.get(
     "/me",
@@ -214,13 +194,10 @@ async def refresh_token(
     """,
     responses={
         200: {"description": "User info retrieved successfully"},
-        401: {"description": "Not authenticated or invalid token"}
-    }
+        401: {"description": "Not authenticated or invalid token"},
+    },
 )
-async def get_me(
-    user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session)
-):
+async def get_me(user_id: CurrentUserId, db: AsyncSession = Depends(get_session)):
     """
     Obtiene información del usuario actual autenticado.
     """
@@ -229,19 +206,16 @@ async def get_me(
 
         return MeResponse(
             user=UserResponse.model_validate(user),
-            tenant=TenantResponse.model_validate(user.tenant)
+            tenant=TenantResponse.model_validate(user.tenant),
         )
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthenticationError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -253,12 +227,10 @@ async def get_me(
     Updates the profile of the currently authenticated user.
 
     Only the user can update their own profile.
-    """
+    """,
 )
 async def update_me(
-    request: UserUpdateRequest,
-    user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session)
+    request: UserUpdateRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
 ):
     """
     Actualiza el perfil del usuario actual.
@@ -290,10 +262,7 @@ async def update_me(
         return UserResponse.model_validate(user)
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post(
@@ -305,7 +274,7 @@ async def update_me(
 
     Note: With JWT tokens, actual logout is handled client-side by
     removing the tokens. This endpoint is for logging purposes.
-    """
+    """,
 )
 async def logout(user_id: CurrentUserId):
     """
@@ -322,6 +291,7 @@ async def logout(user_id: CurrentUserId):
 # PASSWORD MANAGEMENT
 # ===========================================
 
+
 @router.post(
     "/change-password",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -332,12 +302,10 @@ async def logout(user_id: CurrentUserId):
     Requires:
     - Current password (for verification)
     - New password (must meet security requirements)
-    """
+    """,
 )
 async def change_password(
-    request: PasswordChangeRequest,
-    user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session)
+    request: PasswordChangeRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
 ):
     """
     Cambia la contraseña del usuario actual.
@@ -351,13 +319,12 @@ async def change_password(
         if not user.hashed_password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot change password for OAuth users"
+                detail="Cannot change password for OAuth users",
             )
 
         if not verify_password(request.current_password, user.hashed_password):
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Current password is incorrect"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
             )
 
         # Actualizar contraseña
@@ -369,21 +336,19 @@ async def change_password(
         return None
 
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ===========================================
 # HEALTH CHECK
 # ===========================================
 
+
 @router.get(
     "/health",
     summary="Health check",
     description="Simple health check endpoint for authentication service",
-    include_in_schema=False
+    include_in_schema=False,
 )
 async def health():
     """Health check para el servicio de autenticación."""

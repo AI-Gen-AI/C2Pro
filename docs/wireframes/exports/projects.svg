@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="436">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="20" y="34" font-family="Courier New, monospace" font-size="14" fill="#111111">
+# Wireframe - Projects List
+</text><text x="20" y="52" font-family="Courier New, monospace" font-size="14" fill="#111111">
+</text><text x="20" y="70" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="88" font-family="Courier New, monospace" font-size="14" fill="#111111">| Projects                                                                       |
+</text><text x="20" y="106" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="124" font-family="Courier New, monospace" font-size="14" fill="#111111">| Filters: [Status v] [Type v] [Owner v] [Date v]   [Search.................]    |
+</text><text x="20" y="142" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="160" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+------------------+-----------+----------+---------+--------+-----------+ |
+</text><text x="20" y="178" font-family="Courier New, monospace" font-size="14" fill="#111111">| | ID | Project Name     | Status    | Score    | Alerts  | Owner  | Updated   | |
+</text><text x="20" y="196" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+------------------+-----------+----------+---------+--------+-----------+ |
+</text><text x="20" y="214" font-family="Courier New, monospace" font-size="14" fill="#111111">| | P1 | Airport Upgrade  | Active    | 78       | 3       | Ana    | 2h        | |
+</text><text x="20" y="232" font-family="Courier New, monospace" font-size="14" fill="#111111">| | P2 | Bridge Rehab     | Draft     | 64       | 7       | Luis   | 1d        | |
+</text><text x="20" y="250" font-family="Courier New, monospace" font-size="14" fill="#111111">| | P3 | Hospital Build   | Active    | 92       | 1       | Maria  | 3d        | |
+</text><text x="20" y="268" font-family="Courier New, monospace" font-size="14" fill="#111111">| | P4 | Port Expansion   | Archived  | 55       | 9       | Elena  | 1w        | |
+</text><text x="20" y="286" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+------------------+-----------+----------+---------+--------+-----------+ |
+</text><text x="20" y="304" font-family="Courier New, monospace" font-size="14" fill="#111111">| [Prev] 1 2 3 ... [Next]                                                   Page  |
+</text><text x="20" y="322" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="340" font-family="Courier New, monospace" font-size="14" fill="#111111">| Right Panel: Project Summary (select row)                                      |
+</text><text x="20" y="358" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Coherence score gauge                                                       |
+</text><text x="20" y="376" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Alerts by severity                                                          |
+</text><text x="20" y="394" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Last analysis timestamp                                                     |
+</text><text x="20" y="412" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text></svg>

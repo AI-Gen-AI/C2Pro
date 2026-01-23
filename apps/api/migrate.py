@@ -5,8 +5,8 @@ Script para gestionar migraciones de base de datos.
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -17,7 +17,7 @@ def run_command(cmd: list[str], description: str):
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"❌ ERROR:")
+        print("❌ ERROR:")
         print(result.stderr)
         return False
 
@@ -67,30 +67,18 @@ def main():
         return
 
     elif command == "upgrade":
-        run_command(
-            ["alembic", "upgrade", "head"],
-            "Aplicando migraciones"
-        )
+        run_command(["alembic", "upgrade", "head"], "Aplicando migraciones")
 
     elif command == "downgrade":
         confirm = input("⚠️  ¿Estás seguro de revertir la última migración? (s/n): ")
-        if confirm.lower() == 's':
-            run_command(
-                ["alembic", "downgrade", "-1"],
-                "Revirtiendo migración"
-            )
+        if confirm.lower() == "s":
+            run_command(["alembic", "downgrade", "-1"], "Revirtiendo migración")
 
     elif command == "current":
-        run_command(
-            ["alembic", "current"],
-            "Verificando migración actual"
-        )
+        run_command(["alembic", "current"], "Verificando migración actual")
 
     elif command == "history":
-        run_command(
-            ["alembic", "history", "--verbose"],
-            "Obteniendo historial de migraciones"
-        )
+        run_command(["alembic", "history", "--verbose"], "Obteniendo historial de migraciones")
 
     elif command == "create":
         if len(sys.argv) < 3:
@@ -101,7 +89,7 @@ def main():
         message = " ".join(sys.argv[2:])
         run_command(
             ["alembic", "revision", "--autogenerate", "-m", message],
-            f"Creando migración: {message}"
+            f"Creando migración: {message}",
         )
 
     else:

@@ -1,0 +1,33 @@
+{
+  "id": "project-overrun-overdue-003",
+  "clauses": [
+    {
+      "id": "clause-b-003",
+      "text": "The project budget is 200,000 USD, with current spend at 250,000 USD.",
+      "data": {
+        "planned": 200000,
+        "current": 250000,
+        "currency": "USD",
+        "type": "budget_summary"
+      }
+    },
+    {
+      "id": "clause-s-003",
+      "text": "Project schedule status: at-risk. End date: 2026-03-14.",
+      "data": {
+        "start_date": "2025-03-15",
+        "end_date": "2026-03-14",
+        "status": "at-risk",
+        "type": "schedule_summary"
+      }
+    },
+    {
+      "id": "clause-c-003",
+      "text": "Last contract review was on 2024-01-01.",
+      "data": {
+        "last_review_date": "2024-01-01",
+        "type": "contract_terms"
+      }
+    }
+  ]
+}
