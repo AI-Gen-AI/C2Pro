@@ -47,7 +47,7 @@ export function exportToJSON(
       entityId: h.entityId,
       color: h.color,
       label: h.label,
-      rectangles: h.rectangles,
+      rectangles: h.rects, // renamed from rectangles to rects to match Highlight type
     })),
     entities: entities.map((e) => ({
       id: e.id,

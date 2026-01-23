@@ -76,6 +76,8 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::ResourceWarning",  # Ignora warnings de recursos no cerrados en tests
+    "ignore:Importing 'parser\\.split_arg_string' is deprecated.*:DeprecationWarning",
+    "ignore:'BaseCommand' is deprecated.*:DeprecationWarning",
 ]
 
 [tool.coverage.run]

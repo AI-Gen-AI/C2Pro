@@ -34,12 +34,12 @@ function transformDocument(doc: DocumentResponse): DocumentInfo {
 
   return {
     id: doc.id,
-    name: doc.filename,
-    type: typeMap[doc.document_type] || 'contract',
+    name: doc.filename || doc.name || 'Untitled',
+    type: typeMap[doc.document_type || ''] || 'contract',
     extension,
-    url: doc.storage_url,
+    url: doc.storage_url || '',
     totalPages: undefined, // Will be determined when PDF loads
-    fileSize: doc.file_size_bytes,
+    fileSize: doc.file_size || 0,
     uploadedAt: doc.created_at ? new Date(doc.created_at) : undefined,
   };
 }
