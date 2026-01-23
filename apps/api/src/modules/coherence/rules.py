@@ -1,25 +1,67 @@
-from typing import Literal
+from typing import Literal, Optional
 
 import yaml
 from pydantic import BaseModel, Field
 
 
+# Evaluator types
+EvaluatorType = Literal["deterministic", "llm"]
+
+
 class Rule(BaseModel):
+    """
+    Schema for coherence rules.
+
+    Supports both deterministic rules (code-based) and LLM rules (AI-based).
+
+    For deterministic rules:
+    - detection_logic contains a code expression
+    - evaluator_type = "deterministic"
+
+    For LLM rules (CE-24):
+    - detection_logic contains natural language instructions
+    - evaluator_type = "llm"
+    """
+
     id: str = Field(..., description="Unique identifier for the rule.")
     description: str = Field(..., description="A brief description of what the rule checks.")
     inputs: list[str] = Field(
-        ..., description="List of project context fields this rule depends on."
+        default_factory=list, description="List of project context fields this rule depends on."
     )
     detection_logic: str = Field(
-        ..., description="Placeholder for the logic that detects the condition."
+        ..., description="For deterministic: code expression. For LLM: natural language instructions."
     )
     severity: Literal["critical", "high", "medium", "low"] = Field(
         ..., description="The severity of the alert if the rule is triggered."
     )
     evidence_fields: list[str] = Field(
-        ...,
+        default_factory=list,
         description="List of fields from the project context that provide evidence for the alert.",
     )
+
+    # New fields for LLM support (CE-24)
+    evaluator_type: EvaluatorType = Field(
+        default="deterministic",
+        description="Type of evaluator: 'deterministic' for code-based, 'llm' for AI-based."
+    )
+    category: Optional[str] = Field(
+        default="general",
+        description="Category of the rule (legal, financial, technical, schedule, scope, quality)."
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Human-readable name for the rule. If None, uses id."
+    )
+
+    @property
+    def display_name(self) -> str:
+        """Returns the display name of the rule."""
+        return self.name or self.id
+
+    @property
+    def is_llm_rule(self) -> bool:
+        """Returns True if this rule uses LLM for evaluation."""
+        return self.evaluator_type == "llm"
 
 
 def load_rules(file_path: str) -> list[Rule]:
