@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="696" height="436">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="20" y="34" font-family="Courier New, monospace" font-size="14" fill="#111111">
+# Wireframe - Alerts
+</text><text x="20" y="52" font-family="Courier New, monospace" font-size="14" fill="#111111">
+</text><text x="20" y="70" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="88" font-family="Courier New, monospace" font-size="14" fill="#111111">| Alerts                                                                         |
+</text><text x="20" y="106" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="124" font-family="Courier New, monospace" font-size="14" fill="#111111">| Filters: [Severity v] [Status v] [Project v] [Owner v] [Search...........]     |
+</text><text x="20" y="142" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="160" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+----------+--------------------------+----------+---------+-----------+  |
+</text><text x="20" y="178" font-family="Courier New, monospace" font-size="14" fill="#111111">| | ID | Severity | Title                    | Project  | Status  | Created   |  |
+</text><text x="20" y="196" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+----------+--------------------------+----------+---------+-----------+  |
+</text><text x="20" y="214" font-family="Courier New, monospace" font-size="14" fill="#111111">| | A1 | High     | Schedule mismatch        | P1       | Open    | 2h        |  |
+</text><text x="20" y="232" font-family="Courier New, monospace" font-size="14" fill="#111111">| | A2 | Medium   | Missing milestone        | P2       | Open    | 1d        |  |
+</text><text x="20" y="250" font-family="Courier New, monospace" font-size="14" fill="#111111">| | A3 | Low      | Budget variance          | P2       | Ack     | 2d        |  |
+</text><text x="20" y="268" font-family="Courier New, monospace" font-size="14" fill="#111111">| | A4 | High     | Clause conflict          | P3       | Open    | 3d        |  |
+</text><text x="20" y="286" font-family="Courier New, monospace" font-size="14" fill="#111111">| +----+----------+--------------------------+----------+---------+-----------+  |
+</text><text x="20" y="304" font-family="Courier New, monospace" font-size="14" fill="#111111">| [Bulk Actions] [Assign] [Resolve] [Export]                                     |
+</text><text x="20" y="322" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text><text x="20" y="340" font-family="Courier New, monospace" font-size="14" fill="#111111">| Detail Drawer (select row)                                                     |
+</text><text x="20" y="358" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Evidence link                                                                |
+</text><text x="20" y="376" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Suggested action                                                             |
+</text><text x="20" y="394" font-family="Courier New, monospace" font-size="14" fill="#111111">| - Related entities                                                             |
+</text><text x="20" y="412" font-family="Courier New, monospace" font-size="14" fill="#111111">+--------------------------------------------------------------------------------+
+</text></svg>

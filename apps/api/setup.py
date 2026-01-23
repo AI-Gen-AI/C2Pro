@@ -5,15 +5,16 @@ Script de inicialización para configurar el backend.
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
+
 
 def print_header(message: str):
     """Print formatted header."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"  {message}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def check_python_version():
@@ -44,15 +45,10 @@ def check_env_file():
     print("[OK] Archivo .env encontrado")
 
     # Check critical variables
-    with open(env_file, 'r') as f:
+    with open(env_file) as f:
         content = f.read()
 
-        critical_vars = [
-            "DATABASE_URL",
-            "SUPABASE_URL",
-            "SUPABASE_ANON_KEY",
-            "JWT_SECRET_KEY"
-        ]
+        critical_vars = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_ANON_KEY", "JWT_SECRET_KEY"]
 
         missing = []
         for var in critical_vars:
@@ -60,12 +56,12 @@ def check_env_file():
                 missing.append(var)
 
         if missing:
-            print(f"[ADVERTENCIA] Las siguientes variables necesitan ser configuradas:")
+            print("[ADVERTENCIA] Las siguientes variables necesitan ser configuradas:")
             for var in missing:
                 print(f"   - {var}")
 
             response = input("\n¿Continuar de todas formas? (s/n): ")
-            if response.lower() != 's':
+            if response.lower() != "s":
                 sys.exit(1)
 
 
@@ -89,7 +85,7 @@ def install_dependencies():
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     if result.returncode != 0:
@@ -110,11 +106,7 @@ def run_migrations():
     api_dir = Path(__file__).parent
     os.chdir(api_dir)
 
-    result = subprocess.run(
-        ["alembic", "upgrade", "head"],
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True)
 
     if result.returncode != 0:
         print("[ERROR] Error al ejecutar migraciones:")

@@ -1,0 +1,170 @@
+# C2Pro - Model Routing Configuration
+# Version: 1.0.0
+#
+# Este archivo configura el routing dinámico de modelos Claude según el tipo de operación.
+# Permite optimizar costos y performance eligiendo el modelo apropiado para cada tarea.
+#
+# Modelos disponibles:
+# - FLASH (Haiku): Rápido, económico - Tareas simples
+# - STANDARD (Sonnet): Balanceado - Tareas normales
+# - POWERFUL (Opus): Potente, costoso - Tareas complejas (Fase 2+)
+
+# ===========================================
+# CONFIGURACIÓN DE MODELOS
+# ===========================================
+
+models:
+  flash:
+    name: "claude-haiku-4-20250514"
+    tier: "flash"
+    description: "Modelo rápido y económico para tareas simples"
+    cost_per_1m_input: 0.25
+    cost_per_1m_output: 1.25
+    max_tokens: 4096
+    speed_factor: 3.0
+    recommended_for:
+      - "classification"
+      - "simple_extraction"
+      - "validation"
+      - "summarization_short"
+
+  standard:
+    name: "claude-sonnet-4-20250514"
+    tier: "standard"
+    description: "Modelo balanceado para tareas normales"
+    cost_per_1m_input: 3.0
+    cost_per_1m_output: 15.0
+    max_tokens: 8192
+    speed_factor: 1.0
+    recommended_for:
+      - "complex_extraction"
+      - "coherence_analysis"
+      - "relationship_mapping"
+      - "contract_parsing"
+      - "summarization_long"
+
+  powerful:
+    name: "claude-opus-4-20250514"
+    tier: "powerful"
+    description: "Modelo potente para tareas complejas"
+    cost_per_1m_input: 15.0
+    cost_per_1m_output: 75.0
+    max_tokens: 8192
+    speed_factor: 0.5
+    recommended_for:
+      - "implicit_needs"
+      - "legal_interpretation"
+      - "multi_document_analysis"
+      - "wbs_generation"
+      - "bom_generation"
+
+# ===========================================
+# ROUTING DE TAREAS → MODELOS
+# ===========================================
+
+task_routing:
+  # ===========================================
+  # ROADMAP §3.2 - Core Task Types
+  # ===========================================
+
+  # STANDARD (Sonnet) - High precision, long context
+  contract_extraction: standard
+
+  # FLASH (Haiku) - High volume, simple task
+  stakeholder_classification: flash
+
+  # FLASH (Haiku) - Deterministic rules, speed
+  coherence_check: flash
+
+  # STANDARD (Sonnet) - Complex reasoning
+  raci_generation: standard
+
+  # STANDARD (Sonnet) - Multimodal with images
+  # NOTE: For vision tasks, use claude-sonnet-4-vision model
+  multimodal_expediting: standard
+
+  # ===========================================
+  # Additional Task Types
+  # ===========================================
+
+  # FLASH tasks (Haiku)
+  classification: flash
+  simple_extraction: flash
+  validation: flash
+  summarization_short: flash
+
+  # STANDARD tasks (Sonnet)
+  complex_extraction: standard
+  coherence_analysis: standard
+  relationship_mapping: standard
+  summarization_long: standard
+  contract_parsing: standard
+
+  # POWERFUL tasks (Opus) - Fase 2+
+  implicit_needs: powerful
+  legal_interpretation: powerful
+  multi_document_analysis: powerful
+  wbs_generation: powerful
+  bom_generation: powerful
+
+# ===========================================
+# REGLAS DE FALLBACK
+# ===========================================
+
+fallback_rules:
+  # Budget-based downgrade
+  budget:
+    enabled: true
+    threshold_usd: 1.0
+    downgrade_powerful_to: standard
+    downgrade_standard_to: flash
+
+  # Size-based fallback (documentos grandes → modelo más rápido)
+  size:
+    enabled: true
+    threshold_tokens: 100000
+    downgrade_standard_to: flash
+    downgrade_powerful_to: standard
+
+  # Performance mode (prioriza velocidad sobre calidad)
+  performance_mode:
+    enabled: false
+    prefer: flash
+
+# ===========================================
+# CONFIGURACIÓN GENERAL
+# ===========================================
+
+settings:
+  # Modelo por defecto si no hay match
+  default_tier: standard
+
+  # Permitir override manual por el usuario
+  allow_force_tier: true
+
+  # Logging de decisiones de routing
+  log_routing_decisions: true
+
+  # Alertas de budget
+  budget_alert_thresholds:
+    - 0.50  # 50%
+    - 0.75  # 75%
+    - 0.90  # 90%
+    - 1.00  # 100%
+
+# ===========================================
+# MÉTRICAS Y OBSERVABILIDAD
+# ===========================================
+
+observability:
+  # Track métricas por modelo
+  track_usage_by_model: true
+
+  # Track métricas por task type
+  track_usage_by_task: true
+
+  # Track cost por tenant
+  track_cost_by_tenant: true
+
+  # Intervalo de agregación (segundos)
+  aggregation_interval: 60

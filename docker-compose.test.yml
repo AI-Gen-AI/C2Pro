@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: c2pro-test-db
+    environment:
+      POSTGRES_DB: c2pro_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      # Migrations will be applied manually to avoid pgaudit issues
+      # - ./infrastructure/supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d c2pro_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - c2pro-test
+
+networks:
+  c2pro-test:
+    driver: bridge
+
+volumes:
+  postgres_test_data:

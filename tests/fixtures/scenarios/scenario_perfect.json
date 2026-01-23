@@ -1,0 +1,37 @@
+{
+  "project_id": "scenario_perfect",
+  "contract": {
+    "total_amount": 100000
+  },
+  "budget_items": [
+    {
+      "amount": 95000
+    }
+  ],
+  "schedule_items": [
+    {
+      "id": "task-1",
+      "name": "Foundations",
+      "start_date": "2030-01-01T00:00:00",
+      "end_date": "2030-01-10T00:00:00",
+      "predecessor_id": null
+    },
+    {
+      "id": "task-2",
+      "name": "Structure",
+      "start_date": "2030-01-11T00:00:00",
+      "end_date": "2030-01-20T00:00:00",
+      "predecessor_id": "task-1"
+    }
+  ],
+  "bom_items": [
+    {
+      "item_name": "Steel Beams",
+      "required_on_site_date": "2030-02-01T00:00:00",
+      "lead_time_days": 30,
+      "budget_item_id": "budget-1"
+    }
+  ],
+  "wbs_items": [],
+  "clauses": []
+}

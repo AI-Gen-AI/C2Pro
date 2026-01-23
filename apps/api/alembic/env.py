@@ -5,6 +5,10 @@ Configuración para migraciones de base de datos con Alembic.
 """
 
 import asyncio
+import os
+
+# Importar config
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -15,15 +19,9 @@ from alembic import context
 
 # Importar Base y todos los modelos
 from src.core.database import Base
-from src.modules.auth.models import Tenant, User
-from src.modules.projects.models import Project
-
-# Importar config
-import sys
-import os
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from src.config import settings
 

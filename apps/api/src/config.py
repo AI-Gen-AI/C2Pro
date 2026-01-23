@@ -23,10 +23,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
     # ===========================================
@@ -44,7 +41,7 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:3001"],
-        description="Orígenes permitidos para CORS"
+        description="Orígenes permitidos para CORS",
     )
     cors_credentials: bool = True
     cors_methods: list[str] = ["*"]
@@ -54,10 +51,7 @@ class Settings(BaseSettings):
     # DATABASE (Supabase PostgreSQL)
     # ===========================================
 
-    database_url: str = Field(
-        ...,
-        description="PostgreSQL connection URL (asyncpg)"
-    )
+    database_url: str = Field(..., description="PostgreSQL connection URL (asyncpg)")
 
     # Connection pool
     db_pool_size: int = Field(default=5, ge=1, le=20)
@@ -69,6 +63,8 @@ class Settings(BaseSettings):
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """Valida que la URL de base de datos sea PostgreSQL."""
+        if v.startswith(("sqlite://", "sqlite+aiosqlite://")):
+            return v
         if not v.startswith(("postgresql://", "postgresql+asyncpg://")):
             raise ValueError("database_url must start with postgresql:// or postgresql+asyncpg://")
         return v
@@ -96,8 +92,7 @@ class Settings(BaseSettings):
     # ===========================================
 
     redis_url: str | None = Field(
-        default=None,
-        description="Redis connection URL (redis:// or rediss://)"
+        default=None, description="Redis connection URL (redis:// or rediss://)"
     )
 
     cache_ttl_default: int = Field(default=300, ge=0, description="TTL por defecto en segundos")
@@ -132,15 +127,12 @@ class Settings(BaseSettings):
     # AI (Claude API - Anthropic)
     # ===========================================
 
-    anthropic_api_key: str | None = Field(
-        default=None,
-        description="Anthropic API key para Claude"
-    )
+    anthropic_api_key: str | None = Field(default=None, description="Anthropic API key para Claude")
 
     # Model selection
     ai_model_default: str = "claude-sonnet-4-20250514"  # Sonnet 4 por defecto
-    ai_model_fast: str = "claude-haiku-4-20250514"      # Haiku 4 para tareas rápidas
-    ai_model_powerful: str = "claude-opus-4-20250514"   # Opus 4 para tareas complejas (Fase 2+)
+    ai_model_fast: str = "claude-haiku-4-20250514"  # Haiku 4 para tareas rápidas
+    ai_model_powerful: str = "claude-opus-4-20250514"  # Opus 4 para tareas complejas (Fase 2+)
 
     # Budget control
     ai_budget_monthly_default: float = Field(default=50.0, ge=0)  # USD por tenant
@@ -176,10 +168,7 @@ class Settings(BaseSettings):
     # ===========================================
 
     # Sentry
-    sentry_dsn: str | None = Field(
-        default=None,
-        description="Sentry DSN para error tracking"
-    )
+    sentry_dsn: str | None = Field(default=None, description="Sentry DSN para error tracking")
     sentry_environment: str | None = None
     sentry_traces_sample_rate: float = Field(default=0.1, ge=0, le=1)
 
@@ -243,6 +232,8 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
+            if not v.strip():  # Handle empty string
+                return []
             return [origin.strip() for origin in v.split(",")]
         return v
 
@@ -259,7 +250,8 @@ class Settings(BaseSettings):
 # SINGLETON INSTANCE
 # ===========================================
 
-@lru_cache()
+
+@lru_cache
 def get_settings() -> Settings:
     """
     Obtiene la instancia singleton de settings.
@@ -281,8 +273,10 @@ settings = get_settings()
 # ENVIRONMENT-SPECIFIC CONFIGS
 # ===========================================
 
+
 class DevelopmentSettings(Settings):
     """Configuración para desarrollo."""
+
     environment: Literal["development"] = "development"
     debug: bool = True
     db_echo: bool = True
@@ -291,6 +285,7 @@ class DevelopmentSettings(Settings):
 
 class ProductionSettings(Settings):
     """Configuración para producción."""
+
     environment: Literal["production"] = "production"
     debug: bool = False
     db_echo: bool = False
@@ -306,6 +301,7 @@ class ProductionSettings(Settings):
 
 class StagingSettings(Settings):
     """Configuración para staging."""
+
     environment: Literal["staging"] = "staging"
     debug: bool = False
     db_echo: bool = False

@@ -4,25 +4,24 @@ C2Pro - Projects Service
 Lógica de negocio para gestión de proyectos.
 """
 
-from datetime import datetime
-from typing import Sequence
-from uuid import UUID
 import math
+from datetime import datetime
+from typing import Any  # Added to fix F821 Undefined name Any
+from uuid import UUID
 
-from sqlalchemy import select, func, or_
-from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import NotFoundError, ValidationError, ConflictError
-from src.modules.projects.models import Project, ProjectStatus, ProjectType
+from src.core.exceptions import ConflictError, NotFoundError
+from src.modules.projects.models import Project, ProjectStatus
 from src.modules.projects.schemas import (
     ProjectCreateRequest,
-    ProjectUpdateRequest,
-    ProjectDetailResponse,
+    ProjectFilters,
     ProjectListItemResponse,
     ProjectListResponse,
     ProjectStatsResponse,
-    ProjectFilters,
+    ProjectUpdateRequest,
 )
 
 logger = structlog.get_logger()
@@ -32,11 +31,8 @@ logger = structlog.get_logger()
 # HELPER FUNCTIONS
 # ===========================================
 
-async def get_project_by_id(
-    db: AsyncSession,
-    project_id: UUID,
-    tenant_id: UUID
-) -> Project | None:
+
+async def get_project_by_id(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> Project | None:
     """
     Obtiene proyecto por ID verificando tenant.
 
@@ -49,18 +45,12 @@ async def get_project_by_id(
         Proyecto si existe y pertenece al tenant, None si no
     """
     result = await db.execute(
-        select(Project)
-        .where(Project.id == project_id)
-        .where(Project.tenant_id == tenant_id)
+        select(Project).where(Project.id == project_id).where(Project.tenant_id == tenant_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_project_by_code(
-    db: AsyncSession,
-    code: str,
-    tenant_id: UUID
-) -> Project | None:
+async def get_project_by_code(db: AsyncSession, code: str, tenant_id: UUID) -> Project | None:
     """
     Obtiene proyecto por código dentro del tenant.
 
@@ -73,9 +63,7 @@ async def get_project_by_code(
         Proyecto si existe, None si no
     """
     result = await db.execute(
-        select(Project)
-        .where(Project.code == code)
-        .where(Project.tenant_id == tenant_id)
+        select(Project).where(Project.code == code).where(Project.tenant_id == tenant_id)
     )
     return result.scalar_one_or_none()
 
@@ -84,15 +72,13 @@ async def get_project_by_code(
 # PROJECT SERVICE
 # ===========================================
 
+
 class ProjectService:
     """Servicio de gestión de proyectos."""
 
     @staticmethod
     async def create_project(
-        db: AsyncSession,
-        tenant_id: UUID,
-        user_id: UUID,
-        request: ProjectCreateRequest
+        db: AsyncSession, tenant_id: UUID, user_id: UUID, request: ProjectCreateRequest
     ) -> Project:
         """
         Crea nuevo proyecto.
@@ -139,17 +125,13 @@ class ProjectService:
             project_id=str(project.id),
             tenant_id=str(tenant_id),
             user_id=str(user_id),
-            name=project.name
+            name=project.name,
         )
 
         return project
 
     @staticmethod
-    async def get_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID
-    ) -> Project:
+    async def get_project(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> Project:
         """
         Obtiene proyecto por ID.
 
@@ -177,7 +159,7 @@ class ProjectService:
         tenant_id: UUID,
         page: int = 1,
         page_size: int = 20,
-        filters: ProjectFilters | None = None
+        filters: ProjectFilters | None = None,
     ) -> ProjectListResponse:
         """
         Lista proyectos con paginación y filtros.
@@ -212,7 +194,7 @@ class ProjectService:
                     or_(
                         Project.name.ilike(search_term),
                         Project.description.ilike(search_term),
-                        Project.code.ilike(search_term)
+                        Project.code.ilike(search_term),
                     )
                 )
 
@@ -265,15 +247,12 @@ class ProjectService:
             page_size=page_size,
             total_pages=total_pages,
             has_next=has_next,
-            has_prev=has_prev
+            has_prev=has_prev,
         )
 
     @staticmethod
     async def update_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID,
-        request: ProjectUpdateRequest
+        db: AsyncSession, project_id: UUID, tenant_id: UUID, request: ProjectUpdateRequest
     ) -> Project:
         """
         Actualiza proyecto.
@@ -335,20 +314,12 @@ class ProjectService:
         await db.commit()
         await db.refresh(project)
 
-        logger.info(
-            "project_updated",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_updated", project_id=str(project_id), tenant_id=str(tenant_id))
 
         return project
 
     @staticmethod
-    async def delete_project(
-        db: AsyncSession,
-        project_id: UUID,
-        tenant_id: UUID
-    ) -> None:
+    async def delete_project(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> None:
         """
         Elimina proyecto.
 
@@ -365,84 +336,120 @@ class ProjectService:
         await db.delete(project)
         await db.commit()
 
-        logger.info(
-            "project_deleted",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id)
-        )
+        logger.info("project_deleted", project_id=str(project_id), tenant_id=str(tenant_id))
 
-    @staticmethod
-    async def get_project_stats(
-        db: AsyncSession,
-        tenant_id: UUID
-    ) -> ProjectStatsResponse:
-        """
-        Obtiene estadísticas de proyectos del tenant.
+        @staticmethod
+        async def get_project_stats(db: AsyncSession, tenant_id: UUID) -> ProjectStatsResponse:
+            """
+            Obtiene estadísticas de proyectos del tenant.
 
-        Args:
-            db: Sesión de base de datos
-            tenant_id: ID del tenant
+                    Args:
 
-        Returns:
-            Estadísticas de proyectos
-        """
-        # Contar proyectos por estado
-        base_query = select(Project).where(Project.tenant_id == tenant_id)
+                        db: Sesión de base de datos
 
-        # Total
-        total_result = await db.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
-        total = total_result.scalar_one()
+                        tenant_id: ID del tenant
 
-        # Por estado
-        active_result = await db.execute(
-            select(func.count()).select_from(
-                base_query.where(Project.status == ProjectStatus.ACTIVE).subquery()
+
+
+                    Returns:
+
+                        Estadísticas de proyectos
+
+            """
+            # Contar proyectos por estado
+            base_query = select(Project).where(Project.tenant_id == tenant_id)
+
+            # Total
+            total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
+            total = total_result.scalar_one()
+
+            # Por estado
+            active_result = await db.execute(
+                select(func.count()).select_from(
+                    base_query.where(Project.status == ProjectStatus.ACTIVE).subquery()
+                )
             )
-        )
-        active = active_result.scalar_one()
+            active = active_result.scalar_one()
 
-        draft_result = await db.execute(
-            select(func.count()).select_from(
-                base_query.where(Project.status == ProjectStatus.DRAFT).subquery()
+            draft_result = await db.execute(
+                select(func.count()).select_from(
+                    base_query.where(Project.status == ProjectStatus.DRAFT).subquery()
+                )
             )
-        )
-        draft = draft_result.scalar_one()
+            draft = draft_result.scalar_one()
 
-        completed_result = await db.execute(
-            select(func.count()).select_from(
-                base_query.where(Project.status == ProjectStatus.COMPLETED).subquery()
+            completed_result = await db.execute(
+                select(func.count()).select_from(
+                    base_query.where(Project.status == ProjectStatus.COMPLETED).subquery()
+                )
             )
-        )
-        completed = completed_result.scalar_one()
+            completed = completed_result.scalar_one()
 
-        archived_result = await db.execute(
-            select(func.count()).select_from(
-                base_query.where(Project.status == ProjectStatus.ARCHIVED).subquery()
+            archived_result = await db.execute(
+                select(func.count()).select_from(
+                    base_query.where(Project.status == ProjectStatus.ARCHIVED).subquery()
+                )
             )
-        )
-        archived = archived_result.scalar_one()
+            archived = archived_result.scalar_one()
 
-        # Coherence score promedio
-        avg_score_result = await db.execute(
-            select(func.avg(Project.coherence_score))
-            .where(Project.tenant_id == tenant_id)
-            .where(Project.coherence_score.isnot(None))
-        )
-        avg_score = avg_score_result.scalar_one()
+            # Coherence score promedio
+            avg_score_result = await db.execute(
+                select(func.avg(Project.coherence_score))
+                .where(Project.tenant_id == tenant_id)
+                .where(Project.coherence_score.isnot(None))
+            )
+            avg_score = avg_score_result.scalar_one()
 
-        # TODO: Contar alertas cuando implementemos el módulo de análisis
-        total_critical_alerts = 0
-        total_high_alerts = 0
+            # TODO: Contar alertas cuando implementemos el módulo de análisis
+            total_critical_alerts = 0
+            total_high_alerts = 0
 
-        return ProjectStatsResponse(
-            total_projects=total,
-            active_projects=active,
-            draft_projects=draft,
-            completed_projects=completed,
-            archived_projects=archived,
-            avg_coherence_score=float(avg_score) if avg_score else None,
-            total_critical_alerts=total_critical_alerts,
-            total_high_alerts=total_high_alerts
-        )
+            return ProjectStatsResponse(
+                total_projects=total,
+                active_projects=active,
+                draft_projects=draft,
+                completed_projects=completed,
+                archived_projects=archived,
+                avg_coherence_score=float(avg_score) if avg_score else None,
+                total_critical_alerts=total_critical_alerts,
+                total_high_alerts=total_high_alerts,
+            )
+
+        @staticmethod
+        async def get_project_coherence_score(
+            db: AsyncSession, project_id: UUID, tenant_id: UUID
+        ) -> dict[str, Any]:
+            """
+            Obtiene el score de coherencia y su desglose para un proyecto.
+
+                    Args:
+                        db: Sesión de base de datos
+                        project_id: ID del proyecto
+                        tenant_id: ID del tenant
+
+                    Returns:
+                        Diccionario con el score de coherencia y su desglose.                    Raises:
+
+                        NotFoundError: Si el proyecto no existe o no pertenece al tenant.
+
+            """
+            project = await ProjectService.get_project(db, project_id, tenant_id)
+
+            # Simulación de cálculo de coherencia y desglose
+            # En una implementación real, esto interactuaría con el módulo de análisis
+            coherence_score = project.coherence_score if project.coherence_score is not None else 75
+            breakdown = {
+                "document_consistency": 80,
+                "stakeholder_alignment": 70,
+                "wbs_bom_coherence": 75,
+                "overall_rules_passed": 15,
+                "overall_rules_failed": 3,
+            }
+
+            logger.info(
+                "project_coherence_score_retrieved",
+                project_id=str(project_id),
+                tenant_id=str(tenant_id),
+                coherence_score=coherence_score,
+            )
+            return {"coherence_score": coherence_score, "breakdown": breakdown}

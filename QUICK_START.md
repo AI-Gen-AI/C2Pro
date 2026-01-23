@@ -2,7 +2,8 @@
 
 Guía rápida para poner en marcha el backend de C2Pro en **menos de 5 minutos**.
 
-## ✅ Prerrequisitos
+## �
+ Prerrequisitos
 
 - [x] Python 3.11+ instalado
 - [x] Cuenta de Supabase creada
@@ -10,15 +11,20 @@ Guía rápida para poner en marcha el backend de C2Pro en **menos de 5 minutos**
 
 ## 🔧 Paso 1: Obtener Contraseña de Base de Datos
 
-1. Ve a tu proyecto Supabase: https://supabase.com/dashboard/project/tcxedmnvebazcsaridge
-2. Navega a: **Settings** → **Database**
-3. En **Connection string**, selecciona **URI** (no Pooler)
-4. Copia la contraseña que aparece en el formato:
+1. Ve a tu proyecto Supabase: https://supabase.com/dashboard/project/your-project-ref
+2. Navega a: **Settings** -> **Database**
+3. En **Connection string**, elige **URI**:
+   - Recomendado: **Pooler** (pgbouncer, puerto 6543) para Windows o redes restrictivas.
+   - Alternativa: **Direct** (puerto 5432) si necesitas conexion directa.
+4. Usa el formato que corresponda:
    ```
-   postgresql://postgres:[PASSWORD]@db.tcxedmnvebazcsaridge.supabase.co:5432/postgres
+   postgresql://postgres:[PASSWORD]@aws-<region>.pooler.supabase.com:6543/postgres
+   postgresql://postgres:[PASSWORD]@db.<project>.supabase.co:5432/postgres
    ```
-5. Reemplaza `[YOUR-PASSWORD]` en el archivo `.env` (línea 29) con tu contraseña real
+5. Actualiza `DATABASE_URL` en `.env` (usa `.env.example` como base).
 
+Opcional (Supabase local):
+- Ejecuta `supabase status` y copia `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` (localhost:54322).
 ## 🚀 Paso 2: Inicializar Backend (Opción A - Automático)
 
 ### Windows:
@@ -33,10 +39,14 @@ chmod +x scripts/init-backend.sh
 ```
 
 Este script hace todo automáticamente:
-- ✅ Verifica Python
-- ✅ Instala dependencias
-- ✅ Ejecuta migraciones
-- ✅ Inicia el servidor
+- �
+ Verifica Python
+- �
+ Instala dependencias
+- �
+ Ejecuta migraciones
+- �
+ Inicia el servidor
 
 ## 🚀 Paso 2: Inicializar Backend (Opción B - Manual)
 
@@ -159,6 +169,14 @@ python apps/api/migrate.py create "descripcion del cambio"
 python apps/api/migrate.py upgrade
 ```
 
+### Migraciones Supabase (SQL)
+
+```bash
+# Ejecutar migraciones SQL (local/staging/production)
+python infrastructure/supabase/run_migrations.py --env local
+python infrastructure/supabase/run_migrations.py --env staging --dry-run
+```
+
 ### Con Make
 
 ```bash
@@ -196,9 +214,12 @@ Respuesta esperada:
 ### 2. Verificar Base de Datos
 
 En Supabase Dashboard → **Table Editor**, deberías ver las tablas:
-- ✅ `tenants`
-- ✅ `users`
-- ✅ `projects`
+- �
+ `tenants`
+- �
+ `users`
+- �
+ `projects`
 
 ### 3. OpenAPI Docs
 
@@ -252,7 +273,8 @@ lsof -ti:8000 | xargs kill -9
 
 Ahora que el backend está funcionando:
 
-1. ✅ Backend corriendo ← **Estás aquí**
+1. �
+ Backend corriendo ← **Estás aquí**
 2. ⬜ Configurar Frontend (Next.js)
 3. ⬜ Implementar módulo de Documentos
 4. ⬜ Implementar análisis de coherencia

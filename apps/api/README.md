@@ -27,11 +27,16 @@ python setup.py
 ```
 
 Este script:
-- âœ… Verifica la versiÃ³n de Python
-- âœ… Valida el archivo .env
-- âœ… Instala dependencias
-- âœ… Ejecuta migraciones de base de datos
-- âœ… Crea directorios necesarios
+- âœ
+ Verifica la versiÃ³n de Python
+- âœ
+ Valida el archivo .env
+- âœ
+ Instala dependencias
+- âœ
+ Ejecuta migraciones de base de datos
+- âœ
+ Crea directorios necesarios
 
 ### 3. Iniciar Servidor de Desarrollo
 
@@ -94,6 +99,14 @@ python migrate.py create "descripcion del cambio"
 
 # Revertir Ãºltima migraciÃ³n
 python migrate.py downgrade
+```
+
+### Migraciones Supabase (SQL)
+
+Desde la raiz del repo:
+```bash
+python infrastructure/supabase/run_migrations.py --env staging --dry-run
+python infrastructure/supabase/run_migrations.py --env staging
 ```
 
 ### Modelos Actuales (Sprint 1)
@@ -188,7 +201,13 @@ mypy src/
 
 ```bash
 # Base de datos
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.xxx.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.<project_ref>:[PASSWORD]@aws-<region>.pooler.supabase.com:6543/postgres
+# Directo (si necesitas conexion directa)
+# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.<project>.supabase.co:5432/postgres
+# Supabase local (CLI)
+# DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+# Docker compose (PostgreSQL local)
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/c2pro
 
 # Supabase
 SUPABASE_URL=https://xxx.supabase.co

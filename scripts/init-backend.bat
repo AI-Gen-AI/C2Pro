@@ -21,6 +21,9 @@ if not exist ".env" (
     exit /b 1
 )
 
+REM Copy .env to apps/api for pydantic-settings to find it correctly
+copy ".env" "apps\api\.env" > nul
+
 echo [1/4] Verificando Python...
 python --version
 if %errorlevel% neq 0 (
