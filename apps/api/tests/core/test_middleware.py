@@ -117,7 +117,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected")
 
         assert response.status_code == 401
-        assert "Not authenticated" in response.json()["detail"]
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_malformed_auth_header(self, app):
         """
@@ -130,6 +130,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected", headers={"Authorization": "InvalidToken"})
 
         assert response.status_code == 401
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_invalid_token(self, app):
         """
@@ -141,6 +142,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected", headers={"Authorization": "Bearer invalid.jwt.token"})
 
         assert response.status_code == 401
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_valid_token(self, app, valid_token, test_tenant, test_user):
         """
@@ -173,9 +175,10 @@ class TestTenantIsolationMiddleware:
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {token}"}
 
-        tenant_id = middleware._extract_tenant_id(request)
+        tenant_id, error_message = middleware._extract_tenant_id(request)
 
         assert tenant_id == test_tenant.id
+        assert error_message is None
 
     def test_extract_tenant_id_missing_claim(self):
         """
@@ -197,9 +200,37 @@ class TestTenantIsolationMiddleware:
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {token}"}
 
-        tenant_id = middleware._extract_tenant_id(request)
+        tenant_id, error_message = middleware._extract_tenant_id(request)
 
         assert tenant_id is None
+        assert error_message == "Missing tenant_id in token"
+
+    def test_extract_tenant_id_invalid_token_type(self, test_user, test_tenant):
+        """
+        Should return an error when token type is not access.
+        """
+        import jwt
+        from src.config import settings
+
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        token = jwt.encode(
+            {
+                "sub": str(test_user.id),
+                "tenant_id": str(test_tenant.id),
+                "type": "refresh",
+            },
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
+
+        request = Mock(spec=Request)
+        request.headers = {"Authorization": f"Bearer {token}"}
+
+        tenant_id, error_message = middleware._extract_tenant_id(request)
+
+        assert tenant_id is None
+        assert error_message == "Invalid token type"
 
     def test_extract_user_id_from_jwt(self, test_user, test_tenant):
         """
