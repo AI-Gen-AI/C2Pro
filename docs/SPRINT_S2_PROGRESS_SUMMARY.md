@@ -380,6 +380,7 @@
 - Priorizar CE-S3-XXX (OCR backend)
 - Considerar mockup temporal para demo
 - Evaluar servicios third-party (Google Vision, AWS Textract)
+- Tarea asocial ahora.
 
 ### Riesgo 2: Test Coverage Bajo
 **Probabilidad:** Alta
