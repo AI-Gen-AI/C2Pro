@@ -345,3 +345,95 @@ Incluyen templates para:
 - Análisis de proyecto completo
 - Análisis de presupuesto
 - Análisis de cronograma
+
+---
+
+## Testing Strategy (CE-25)
+
+El módulo incluye una estrategia de testing completa para evaluadores basados en LLM.
+
+### Estructura de Tests
+
+```
+tests/coherence/
+├── conftest.py              # Fixtures y mocks para LLM testing
+├── test_llm_evaluator.py    # Unit tests para LlmRuleEvaluator
+├── test_llm_integration.py  # Integration tests para CoherenceLLMService
+├── test_engine.py           # Tests del CoherenceEngine
+└── test_scoring.py          # Tests del ScoringService
+```
+
+### Mocking Strategy
+
+Para testing determinista de componentes LLM:
+
+```python
+from tests.coherence.conftest import MockAIResponse
+
+# MockAIResponse simula respuestas del API
+mock_response = MockAIResponse(
+    content={"rule_violated": True, "severity": "high", "evidence": {...}},
+    model_used="claude-haiku-4-20250514",
+    input_tokens=500,
+    output_tokens=200,
+    cost_usd=0.0002,
+    cached=False,
+)
+```
+
+### Fixtures Disponibles
+
+| Fixture | Descripción |
+|---------|-------------|
+| `sample_clause_clear` | Cláusula clara sin ambigüedades |
+| `sample_clause_ambiguous` | Cláusula con términos vagos |
+| `sample_clause_payment_vague` | Cláusula de pago con términos imprecisos |
+| `sample_clause_payment_clear` | Cláusula de pago bien definida |
+| `mock_llm_response_violation` | Respuesta mock indicando violación |
+| `mock_llm_response_no_violation` | Respuesta mock sin violación |
+| `mock_clause_analysis_with_issues` | Análisis mock con problemas |
+| `mock_clause_analysis_no_issues` | Análisis mock sin problemas |
+| `patch_anthropic_wrapper` | Patch para LlmRuleEvaluator |
+| `patch_anthropic_wrapper_for_integration` | Patch para CoherenceLLMService |
+
+### Golden Test Cases
+
+Casos de prueba con entradas/salidas fijas para validación:
+
+```python
+from tests.coherence.conftest import GOLDEN_TEST_CASES
+
+# Ejemplo: scope_ambiguous
+case = GOLDEN_TEST_CASES["scope_ambiguous"]
+# {
+#     "clause_text": "El contratista realizará trabajos adicionales según sea necesario.",
+#     "expected_violation": True,
+#     "expected_severity": "high",
+#     "trigger_terms": ["según sea necesario"],
+# }
+```
+
+### Ejecutar Tests
+
+```bash
+# Desde directorio raíz del proyecto
+cd /path/to/C2Pro
+
+# Tests unitarios del módulo coherence
+pytest apps/api/tests/coherence/ -v
+
+# Solo tests de LLM
+pytest apps/api/tests/coherence/test_llm_evaluator.py -v
+pytest apps/api/tests/coherence/test_llm_integration.py -v
+
+# Con coverage
+pytest apps/api/tests/coherence/ --cov=src/modules/coherence --cov-report=term-missing
+```
+
+### Principios de Testing
+
+1. **Mocking Completo**: Todas las llamadas al API de Claude se mockean
+2. **Determinismo**: Tests producen resultados consistentes
+3. **Cobertura**: Tests cubren inicialización, evaluación, parsing y estadísticas
+4. **Aislamiento**: Cada test es independiente usando fixtures
+5. **Golden Tests**: Casos fijos para validar comportamiento esperado
