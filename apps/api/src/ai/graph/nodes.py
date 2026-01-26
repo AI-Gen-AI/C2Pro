@@ -6,11 +6,11 @@ from uuid import UUID
 
 from langchain_core.messages import AIMessage
 
-from src.ai.agents.risk_agent import RiskExtractionAgent
 from src.ai.agents.wbs_agent import WBSExtractionAgent
 from src.ai.ai_service import AIService
 from src.ai.graph.schema import ProjectState
 from src.core.database import get_session_with_tenant
+from src.agents.risk_extractor import RiskExtractorAgent
 from src.modules.analysis.models import Alert, AlertSeverity, Analysis, AnalysisStatus, AnalysisType
 from src.modules.stakeholders.models import WBSItem, WBSItemType
 
@@ -110,9 +110,10 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    agent = RiskExtractionAgent(tenant_id=state.get("tenant_id"))
+    agent = RiskExtractorAgent(tenant_id=state.get("tenant_id"))
     doc = _augment_document(state["document_text"], state["critique_notes"], state["human_feedback"])
-    state["extracted_risks"] = await agent.extract(doc)
+    risks = await agent.extract(doc)
+    state["extracted_risks"] = [_risk_item_to_dict(risk) for risk in risks]
     state["confidence_score"] = _average_confidence(state["extracted_risks"])
     state["messages"].append(
         AIMessage(content=f"Risk extraction produced {len(state['extracted_risks'])} items.")
@@ -205,19 +206,14 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         if state["extracted_risks"]:
             alerts = []
             for item in state["extracted_risks"]:
-                severity_value = str(item.get("severity", "low")).lower()
-                severity = AlertSeverity.LOW
-                for candidate in AlertSeverity:
-                    if candidate.value == severity_value:
-                        severity = candidate
-                        break
+                severity = _map_risk_severity(item)
 
                 alerts.append(
                     Alert(
                         project_id=project_id,
                         analysis_id=analysis.id,
                         severity=severity,
-                        title=item.get("title") or "Risk identified",
+                        title=item.get("summary") or item.get("title") or "Risk identified",
                         description=item.get("description") or "Risk detected by AI extraction.",
                         category="risk",
                         impact_level=item.get("impact_level"),
@@ -276,3 +272,28 @@ def _next_after_critique(state: ProjectState) -> Literal[
                 return "budget_parser"
             return "wbs_extractor"
     return "save_to_db"
+
+
+def _risk_item_to_dict(risk) -> dict[str, Any]:
+    return {
+        "category": getattr(risk, "category", None).value if getattr(risk, "category", None) else None,
+        "title": getattr(risk, "title", None),
+        "summary": getattr(risk, "summary", None),
+        "description": getattr(risk, "description", None),
+        "probability": getattr(risk, "probability", None).value if getattr(risk, "probability", None) else None,
+        "impact": getattr(risk, "impact", None).value if getattr(risk, "impact", None) else None,
+        "mitigation_suggestion": getattr(risk, "mitigation_suggestion", None),
+        "source_quote": getattr(risk, "source_quote", None),
+        "source_text_snippet": getattr(risk, "source_text_snippet", None),
+        "risk_score": getattr(risk, "risk_score", 0),
+        "immediate_alert": getattr(risk, "immediate_alert", False),
+    }
+
+
+def _map_risk_severity(item: dict[str, Any]) -> AlertSeverity:
+    severity_source = item.get("severity") or item.get("impact") or "low"
+    severity_value = str(severity_source).lower()
+    for candidate in AlertSeverity:
+        if candidate.value == severity_value:
+            return candidate
+    return AlertSeverity.LOW
