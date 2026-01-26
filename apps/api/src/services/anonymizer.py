@@ -9,6 +9,7 @@ It implements a Singleton pattern to ensure the heavy NLP models are loaded only
 """
 
 import logging
+import os
 import re
 from typing import List, Dict, NamedTuple, Optional, Callable
 from collections import defaultdict
@@ -264,4 +265,13 @@ class PiiAnonymizerService:
 
 def get_pii_anonymizer_service() -> PiiAnonymizerService:
     """Returns the singleton instance of the PiiAnonymizerService."""
+    if os.getenv("C2PRO_TEST_LIGHT") == "1":
+        return _LightPiiAnonymizerService()
     return PiiAnonymizerService()
+
+
+class _LightPiiAnonymizerService:
+    """Lightweight anonymizer for tests (no external NLP models)."""
+
+    def anonymize(self, text: str) -> AnonymizedPayload:
+        return AnonymizedPayload(text=text or "", deanonymization_map={})
