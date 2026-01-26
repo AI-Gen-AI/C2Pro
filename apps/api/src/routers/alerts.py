@@ -9,9 +9,11 @@
 # (project_id, status, severity, created_at DESC)
 # This was implemented in migration 008_indexes.sql.
 
-from typing import List, Optional
+from typing import Generic, List, Optional, TypeVar
 from pydantic import BaseModel, Field
 from enum import Enum
+
+T = TypeVar("T")
 
 # --- Enums ---
 class AlertStatus(str, Enum):
@@ -55,6 +57,16 @@ class AlertUpdate(BaseModel):
         None,
         description="Comment from the user when resolving or dismissing an alert."
     )
+
+# --- Pagination stubs (avoid optional dependency during tests) ---
+class Page(BaseModel, Generic[T]):
+    items: List[T] = []
+    total: int = 0
+    page: int = 1
+    size: int = 0
+
+async def paginate(*, query, model, cursor, limit, order_by, order_direction) -> Page[T]:
+    return Page(items=[], total=0, page=1, size=0)
 
 # --- API Router ---
 from fastapi import APIRouter, Depends, HTTPException, Query

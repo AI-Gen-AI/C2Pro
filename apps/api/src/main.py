@@ -17,6 +17,7 @@ from src.core.database import close_db, init_db
 from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
     RequestLoggingMiddleware,
+    RateLimitMiddleware,
     TenantIsolationMiddleware,
 )
 from src.mcp.router import router as mcp_router
@@ -30,6 +31,9 @@ from src.modules.projects.router import router as projects_router
 from src.modules.analysis.router import router as analysis_router
 from src.routers.health import router as health_router
 from src.routers.alerts import router as alerts_router
+from src.routers.approvals import router as approvals_router
+from src.routers.raci import router as raci_router
+from src.routers.stakeholders import router as stakeholders_router
 
 logger = structlog.get_logger()
 
@@ -151,6 +155,7 @@ def create_application() -> FastAPI:
     )
 
     # Custom middleware
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(TenantIsolationMiddleware)
 
@@ -218,6 +223,21 @@ def create_application() -> FastAPI:
 
     app.include_router(
         alerts_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        approvals_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        stakeholders_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        raci_router,
         prefix=api_v1_prefix,
     )
 
