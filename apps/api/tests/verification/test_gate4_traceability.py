@@ -190,6 +190,7 @@ class TestGate4AlertTraceability:
         user_id = uuid4()
         project_id = uuid4()
         analysis_id = uuid4()
+        test_run_id = uuid4().hex[:8]
 
         async with _session_factory() as session:
             tenant = Tenant(id=tenant_id, name="Trace Test (Gate4)")
@@ -198,7 +199,7 @@ class TestGate4AlertTraceability:
 
             user = User(
                 id=user_id,
-                email="trace_gate4@test.com",
+                email=f"trace_gate4_{test_run_id}@test.com",
                 tenant_id=tenant_id,
                 hashed_password="hash",
             )
@@ -394,6 +395,7 @@ class TestGate4DataLineageIntegrity:
         project_id = uuid4()
         document_id = uuid4()
         analysis_id = uuid4()
+        test_run_id = uuid4().hex[:8]
 
         async with _session_factory() as session:
             # Create full lineage chain
@@ -403,7 +405,7 @@ class TestGate4DataLineageIntegrity:
 
             user = User(
                 id=user_id,
-                email="lineage_gate4@test.com",
+                email=f"lineage_gate4_{test_run_id}@test.com",
                 tenant_id=tenant_id,
                 hashed_password="hash",
             )

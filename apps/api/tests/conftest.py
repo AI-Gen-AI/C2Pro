@@ -8,6 +8,7 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
+import json
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -16,15 +17,24 @@ from asgi_lifespan import LifespanManager
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
+from sqlalchemy import event
 
 # ===========================================
 # OPTIONAL DEPENDENCY STUBS
 # ===========================================
 
 if "celery" not in sys.modules:
+    class _DummyConf(dict):
+        def __getattr__(self, name):
+            return self.get(name)
+
+        def __setattr__(self, name, value):
+            self[name] = value
+
     class _DummyCelery:
         def __init__(self, *args, **kwargs) -> None:
-            self.conf = {}
+            self.conf = _DummyConf()
 
         def task(self, *args, **kwargs):
             def decorator(fn):
@@ -79,6 +89,82 @@ os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 # Import all models here to ensure they are registered with SQLAlchemy
 # before any tests try to use them. This prevents relationship resolution errors.
 from src.modules.auth.models import Tenant, User
+
+
+def _auth_schema_available(session: Session) -> bool:
+    cached = session.info.get("auth_schema_available")
+    if cached is not None:
+        return cached
+    try:
+        result = session.execute(
+            text("SELECT 1 FROM pg_namespace WHERE nspname = 'auth'")
+        ).first()
+        available = bool(result)
+    except Exception:
+        available = False
+    session.info["auth_schema_available"] = available
+    return available
+
+
+def _auth_user_trigger_enabled(session: Session) -> bool:
+    cached = session.info.get("auth_user_trigger_enabled")
+    if cached is not None:
+        return cached
+    try:
+        result = session.execute(
+            text(
+                """
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'auth'
+                  AND c.relname = 'users'
+                  AND t.tgname = 'on_auth_user_created'
+                  AND t.tgenabled <> 'D'
+                """
+            )
+        ).first()
+        enabled = bool(result)
+    except Exception:
+        enabled = False
+    session.info["auth_user_trigger_enabled"] = enabled
+    return enabled
+
+
+@event.listens_for(Session, "before_flush")
+def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
+    if session.bind is None or session.bind.dialect.name != "postgresql":
+        return
+    if not _auth_schema_available(session):
+        return
+    new_users = [obj for obj in session.new if isinstance(obj, User)]
+    if not new_users:
+        return
+    for user in new_users:
+        if user.role is None:
+            role_value = "user"
+        else:
+            role_value = user.role.value if hasattr(user.role, "value") else str(user.role)
+        meta = json.dumps({"tenant_id": str(user.tenant_id), "role": role_value})
+        trigger_enabled = _auth_user_trigger_enabled(session)
+        if trigger_enabled:
+            try:
+                session.execute(text("SET LOCAL session_replication_role = replica"))
+            except Exception:
+                trigger_enabled = False
+        session.execute(
+            text(
+                """
+                INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
+                VALUES (:id, :email, CAST(:meta AS jsonb), NOW(), NOW())
+                ON CONFLICT (id) DO NOTHING
+                """
+            ),
+            {"id": user.id, "email": user.email, "meta": meta},
+        )
+        if trigger_enabled:
+            session.execute(text("SET LOCAL session_replication_role = origin"))
 
 # ===========================================
 # PYTEST CONFIGURATION
@@ -445,9 +531,14 @@ async def superuser_cleanup_engine():
     """
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    # Use superuser 'test' for cleanup operations
+    from src.config import settings
+
+    cleanup_url = settings.database_url
+    if cleanup_url.startswith("postgresql://"):
+        cleanup_url = cleanup_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
     cleanup_engine = create_async_engine(
-        "postgresql+asyncpg://test:test@localhost:5433/c2pro_test",
+        cleanup_url,
         echo=False,
         pool_pre_ping=True,
         pool_size=2,  # Small pool for cleanup only

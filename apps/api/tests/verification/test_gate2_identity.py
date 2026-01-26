@@ -204,6 +204,7 @@ class TestGate2RefreshTokenSecurity:
 
         test_user_id = uuid4()
         test_tenant_id = uuid4()
+        test_run_id = uuid4().hex[:8]
 
         # Create tenant and user in database
         async with _session_factory() as session:
@@ -213,7 +214,7 @@ class TestGate2RefreshTokenSecurity:
 
             user = User(
                 id=test_user_id,
-                email="refresh_gate2@test.com",
+                email=f"refresh_gate2_{test_run_id}@test.com",
                 tenant_id=test_tenant_id,
                 hashed_password="hashedpassword",
             )
@@ -261,6 +262,7 @@ class TestGate2RefreshTokenSecurity:
 
         test_user_id = uuid4()
         test_tenant_id = uuid4()
+        test_run_id = uuid4().hex[:8]
 
         async with _session_factory() as session:
             tenant = Tenant(id=test_tenant_id, name="Wrong Type (Gate2)")
@@ -269,7 +271,7 @@ class TestGate2RefreshTokenSecurity:
 
             user = User(
                 id=test_user_id,
-                email="wrongtype_gate2@test.com",
+                email=f"wrongtype_gate2_{test_run_id}@test.com",
                 tenant_id=test_tenant_id,
                 hashed_password="hashedpassword",
             )
