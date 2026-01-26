@@ -119,6 +119,9 @@ class RACIBase(BaseModel):
     raci_role: RACIRole = Field(
         ..., description="RACI role (Responsible, Accountable, Consulted, Informed)"
     )
+    evidence_text: Optional[str] = Field(
+        None, description="Evidence snippet supporting the assignment"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +191,62 @@ class StakeholderUpdate(BaseModel):
         return v.strip() if v else None
 
     model_config = ConfigDict(extra="forbid")
+
+
+# ---------------------------------------------------------------------------
+# API Schemas for Stakeholder Matrix (Power/Interest)
+# ---------------------------------------------------------------------------
+
+
+class StakeholderCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    role: Optional[str] = Field(None, max_length=100)
+    company: Optional[str] = Field(None, max_length=255)
+    department: Optional[str] = Field(None, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(None, max_length=50)
+    type: Optional[str] = Field(None, max_length=50)
+    power_score: Optional[int] = Field(None, ge=1, le=10)
+    interest_score: Optional[int] = Field(None, ge=1, le=10)
+    source_clause_id: Optional[UUID] = None
+    stakeholder_metadata: Optional[dict] = None
+    feedback_comment: Optional[str] = Field(None, max_length=500)
+
+
+class StakeholderUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    role: Optional[str] = Field(None, max_length=100)
+    company: Optional[str] = Field(None, max_length=255)
+    department: Optional[str] = Field(None, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(None, max_length=50)
+    type: Optional[str] = Field(None, max_length=50)
+    power_score: Optional[int] = Field(None, ge=1, le=10)
+    interest_score: Optional[int] = Field(None, ge=1, le=10)
+    source_clause_id: Optional[UUID] = None
+    stakeholder_metadata: Optional[dict] = None
+    feedback_comment: Optional[str] = Field(None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class StakeholderResponseOut(BaseModel):
+    id: UUID
+    project_id: UUID
+    name: Optional[str]
+    role: Optional[str]
+    company: Optional[str]
+    department: Optional[str]
+    email: Optional[EmailStr]
+    phone: Optional[str]
+    power_score: int
+    interest_score: int
+    power_level: PowerLevel
+    interest_level: InterestLevel
+    quadrant: Optional[StakeholderQuadrant]
+    source_clause_id: Optional[UUID]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WBSItemCreate(WBSItemBase):
@@ -435,3 +494,44 @@ class RaciMatrixResponse(BaseModel):
     )
     total_assignments: int = Field(0, description="Total number of RACI assignments")
     unverified_count: int = Field(0, description="Number of unverified assignments")
+
+
+class RaciMatrixAssignment(BaseModel):
+    """Assignment cell for the matrix view (task x stakeholder)."""
+
+    stakeholder_id: UUID = Field(..., description="Stakeholder ID")
+    role: str = Field(..., description="RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)")
+    is_verified: bool = Field(False, description="Whether this assignment is manually verified")
+
+
+class RaciMatrixTaskRow(BaseModel):
+    """Matrix row for a task with its stakeholder assignments."""
+
+    task_id: UUID = Field(..., description="Task (WBS item) ID")
+    task_name: str = Field(..., description="Task name")
+    assignments: list[RaciMatrixAssignment] = Field(
+        default_factory=list, description="Assignments for this task"
+    )
+
+
+class RaciMatrixViewResponse(BaseModel):
+    """Response schema for the nested matrix view."""
+
+    matrix: list[RaciMatrixTaskRow] = Field(default_factory=list, description="Matrix rows")
+
+
+class RaciAssignmentUpsertRequest(BaseModel):
+    """Request schema for creating or updating a single assignment."""
+
+    task_id: UUID = Field(..., description="Task (WBS item) ID")
+    stakeholder_id: UUID = Field(..., description="Stakeholder ID")
+    role: str = Field(..., description="RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)")
+
+
+class RaciAssignmentUpsertResponse(BaseModel):
+    """Response schema for a created or updated assignment."""
+
+    task_id: UUID = Field(..., description="Task (WBS item) ID")
+    stakeholder_id: UUID = Field(..., description="Stakeholder ID")
+    role: str = Field(..., description="RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)")
+    is_verified: bool = Field(False, description="Whether this assignment is manually verified")

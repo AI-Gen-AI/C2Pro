@@ -6,6 +6,7 @@ used for API request validation and response serialization.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 from uuid import UUID
 
@@ -147,9 +148,13 @@ class DocumentResponse(DocumentBase):
     created_by: Optional[UUID] = Field(None, description="ID of the user who created the document")
     created_at: datetime = Field(..., description="Timestamp of creation")
     updated_at: datetime = Field(..., description="Timestamp of last update")
-    metadata: dict = Field(default_factory=dict, description="Arbitrary metadata for the document")
+    metadata: dict = Field(
+        default_factory=dict,
+        description="Arbitrary metadata for the document",
+        alias="document_metadata",
+    )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ClauseResponse(ClauseBase):
@@ -192,3 +197,73 @@ class DocumentQueuedResponse(DocumentResponse):
     Includes the task_id for polling or tracking the background job.
     """
     task_id: str | None = Field(None, description="The ID of the background task processing this document.")
+
+
+class RagQuestionRequest(BaseModel):
+    """Request schema for querying documents via RAG."""
+
+    question: str = Field(..., min_length=3, description="Question to ask about the project documents")
+    top_k: Optional[int] = Field(5, ge=1, le=10, description="Number of chunks to retrieve")
+
+
+class RagAnswerSource(BaseModel):
+    """Source snippet used to answer a RAG question."""
+
+    content: str
+    metadata: dict = Field(default_factory=dict)
+    similarity: float
+
+
+class RagAnswerResponse(BaseModel):
+    """Response schema for a RAG answer with sources."""
+
+    answer: str
+    sources: list[RagAnswerSource] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Polling Schemas
+# ---------------------------------------------------------------------------
+
+
+class DocumentPollingStatus(str, Enum):
+    """
+    Enum for simplified document processing statuses for frontend polling.
+    """
+
+    QUEUED = "QUEUED"
+    PROCESSING = "PROCESSING"
+    PARSED = "PARSED"
+    ERROR = "ERROR"
+
+
+class DocumentListItem(BaseModel):
+    """
+    Schema for a single document item in a project's document list.
+    Designed for efficient polling.
+    """
+
+    id: UUID = Field(..., description="Unique ID of the document")
+    filename: str = Field(..., description="Original filename of the document")
+    status: DocumentPollingStatus = Field(
+        ..., description="Current processing status of the document"
+    )
+    error_message: Optional[str] = Field(
+        None, description="Error message if document processing failed"
+    )
+    uploaded_at: datetime = Field(..., description="Timestamp when the document was uploaded")
+    file_size_bytes: int = Field(..., description="Size of the file in bytes")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentListResponse(BaseModel):
+    """
+    Schema for the response when listing documents for a project,
+    containing a list of DocumentListItem.
+    """
+
+    items: list[DocumentListItem] = Field(..., description="List of documents")
+    total_count: int = Field(..., description="Total number of documents matching the criteria")
+    skip: int = Field(..., description="Number of items skipped")
+    limit: int = Field(..., description="Maximum number of items returned")

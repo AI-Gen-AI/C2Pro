@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- These indexes allow for fast "ILIKE '%...%'" style queries, which are
 -- essential for global search bars.
 
-CREATE INDEX IF NOT EXISTS idx_projects_title_trgm ON projects USING gin (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_projects_name_trgm ON projects USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_documents_filename_trgm ON documents USING gin (filename gin_trgm_ops);
 
 -- 3. B-Tree Indexes for Foreign Keys
@@ -25,4 +25,4 @@ CREATE INDEX IF NOT EXISTS idx_wbs_items_project_id ON wbs_items (project_id);
 -- The 'documents' table is frequently polled by workers to find tasks that
 -- are 'processing' or 'pending'. This index significantly speeds up that query.
 
-CREATE INDEX IF NOT EXISTS idx_documents_status ON documents (status);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents (upload_status);

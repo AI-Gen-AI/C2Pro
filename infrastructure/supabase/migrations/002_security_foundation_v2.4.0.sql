@@ -18,6 +18,10 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- Para búsquedas de texto
 
+-- Asegurar columnas esperadas en projects para vistas posteriores
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS coherence_score INTEGER;
+
 -- =====================================================
 -- SECCIÓN 1: CORRECCIONES DE SEGURIDAD CRÍTICAS
 -- =====================================================

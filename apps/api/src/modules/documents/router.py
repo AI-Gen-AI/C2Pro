@@ -2,26 +2,30 @@ import os
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session, get_session_with_tenant
-from src.core.security import (  # Assuming CurrentTenantId is also available
-    CurrentUserId,
-)
+from src.core.security import CurrentTenantId, CurrentUserId
 from src.modules.documents.models import Document, DocumentStatus, DocumentType
 from src.modules.documents.schemas import (
     DocumentDetailResponse,
     DocumentQueuedResponse,
     DocumentResponse,
     DocumentUploadResponse,
+    RagAnswerResponse,
+    RagQuestionRequest,
     UploadFileResponse,
+    DocumentListResponse,
+    DocumentListItem,
+    DocumentPollingStatus,
 )
 from src.modules.documents.service import DocumentService
-from src.modules.projects.schemas import DocumentListResponse, DocumentPollingStatus
+
 from src.modules.projects.service import ProjectService
+from src.services.rag_service import RagService
 from src.shared.storage import StorageService
 from src.config import settings
 import pathlib
@@ -201,6 +205,39 @@ async def download_document_endpoint(
         )
 
 
+@router.post(
+    "/projects/{project_id}/rag/answer",
+    response_model=RagAnswerResponse,
+    summary="Ask a question about project documents (RAG)",
+    description="Runs vector search over project documents and answers using the retrieved context.",
+)
+async def answer_project_question(
+    project_id: UUID,
+    payload: RagQuestionRequest,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    db: AsyncSession = Depends(get_session),
+):
+    await ProjectService.get_project(db=db, project_id=project_id, tenant_id=tenant_id)
+    rag_service = RagService(db)
+    result = await rag_service.answer_question(
+        question=payload.question,
+        project_id=project_id,
+        top_k=payload.top_k or 5,
+    )
+    return RagAnswerResponse(
+        answer=result.answer,
+        sources=[
+            {
+                "content": chunk.content,
+                "metadata": chunk.metadata,
+                "similarity": chunk.similarity,
+            }
+            for chunk in result.sources
+        ],
+    )
+
+
 @router.delete(
     "/documents/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -230,7 +267,7 @@ async def delete_document_endpoint(
 
 @router.get(
     "/projects/{project_id}/documents",
-    response_model=list[DocumentListResponse],
+    response_model=DocumentListResponse,
     summary="List documents for a project",
     description="Retrieves document metadata for polling upload status.",
 )
@@ -239,57 +276,30 @@ async def list_documents_for_project(
     user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     db: AsyncSession = Depends(get_session),
+    skip: int = Query(default=0, ge=0, description="Number of documents to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of documents to return"),
+    document_service: DocumentService = Depends(get_document_service),
 ):
-    def _normalize_status(status: object) -> DocumentPollingStatus:
-        raw_value = status.value if hasattr(status, "value") else str(status or "").lower()
-        raw_value = raw_value.lower()
-        if raw_value in {"queued", "uploaded"}:
-            return DocumentPollingStatus.QUEUED
-        if raw_value in {"processing", "parsing"}:
-            return DocumentPollingStatus.PROCESSING
-        if raw_value == "parsed":
-            return DocumentPollingStatus.PARSED
-        if raw_value == "error":
-            return DocumentPollingStatus.ERROR
-        return DocumentPollingStatus.PROCESSING
-
     try:
-        await ProjectService.get_project(db=db, project_id=project_id, tenant_id=tenant_id)
+        documents, total_count = await document_service.list_project_documents(
+            project_id=project_id, tenant_id=tenant_id, skip=skip, limit=limit
+        )
 
-        async with get_session_with_tenant(tenant_id) as tenant_db:
-            documents_result = await tenant_db.execute(
-                select(
-                    Document.id,
-                    Document.filename,
-                    Document.upload_status,
-                    Document.parsing_error,
-                    Document.created_at,
-                    Document.file_size_bytes,
-                )
-                .where(Document.project_id == project_id)
-                .order_by(Document.created_at.desc())
-            )
-            documents = documents_result.all()
-            logger.info(
-                "documents_listed",
-                project_id=str(project_id),
-                user_id=str(user_id),
-                count=len(documents),
-            )
-            response_items: list[DocumentListResponse] = []
-            for row in documents:
-                normalized = _normalize_status(row.upload_status)
-                response_items.append(
-                    DocumentListResponse(
-                        id=row.id,
-                        filename=row.filename,
-                        status=normalized,
-                        error_message=row.parsing_error if normalized == DocumentPollingStatus.ERROR else None,
-                        uploaded_at=row.created_at,
-                        file_size_bytes=row.file_size_bytes or 0,
-                    )
-                )
-            return response_items
+        logger.info(
+            "documents_listed",
+            project_id=str(project_id),
+            user_id=str(user_id),
+            count=len(documents),
+            total_count=total_count,
+            skip=skip,
+            limit=limit,
+        )
+        return DocumentListResponse(
+            items=documents,
+            total_count=total_count,
+            skip=skip,
+            limit=limit,
+        )
     except HTTPException as e:
         raise e
     except Exception as e:

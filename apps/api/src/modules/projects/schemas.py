@@ -158,7 +158,7 @@ class ProjectDetailResponse(BaseModel):
     last_analysis_at: datetime | None
 
     # Metadata
-    metadata: dict
+    metadata: dict = Field(default_factory=dict, alias="project_metadata")
 
     # Computed properties
     has_contract: bool
@@ -172,7 +172,7 @@ class ProjectDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ProjectSummaryResponse(BaseModel):

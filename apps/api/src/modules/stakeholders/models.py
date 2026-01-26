@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.core.approval import ApprovalStatus
 
 if TYPE_CHECKING:
     from src.modules.auth.models import User
@@ -152,6 +153,19 @@ class Stakeholder(Base):
         PGUUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
     )
 
+    # Approval workflow
+    approval_status: Mapped[ApprovalStatus] = mapped_column(
+        SQLEnum(ApprovalStatus, values_callable=lambda obj: [e.value for e in obj]),
+        default=ApprovalStatus.PENDING,
+        index=True,
+        nullable=False,
+    )
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Stakeholder Metadata (custom data)
     stakeholder_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
@@ -177,6 +191,12 @@ class Stakeholder(Base):
         "Document",
         back_populates="extracted_stakeholders",
         foreign_keys=[extracted_from_document_id],
+        lazy="select",
+    )
+
+    reviewer: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[reviewed_by],
         lazy="select",
     )
 
@@ -503,6 +523,9 @@ class StakeholderWBSRaci(Base):
 
     # RACI Role
     raci_role: Mapped[RACIRole] = mapped_column(SQLEnum(RACIRole), nullable=False, index=True)
+
+    # Evidence
+    evidence_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
     generated_automatically: Mapped[bool] = mapped_column(Boolean, default=True)

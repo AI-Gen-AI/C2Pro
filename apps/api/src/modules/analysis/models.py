@@ -28,6 +28,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.core.approval import ApprovalStatus
 
 if TYPE_CHECKING:
     from src.modules.auth.models import User
@@ -128,6 +129,9 @@ class Analysis(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relationships
@@ -246,6 +250,19 @@ class Alert(Base):
         default=AlertStatus.OPEN,
     )
 
+    # Approval workflow
+    approval_status: Mapped[ApprovalStatus] = mapped_column(
+        SQLEnum(ApprovalStatus, values_callable=lambda obj: [e.value for e in obj]),
+        default=ApprovalStatus.PENDING,
+        index=True,
+        nullable=False,
+    )
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Resolution
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_by: Mapped[UUID | None] = mapped_column(
@@ -276,6 +293,7 @@ class Alert(Base):
     )
 
     resolver: Mapped["User"] = relationship("User", foreign_keys=[resolved_by], lazy="select")
+    reviewer: Mapped["User"] = relationship("User", foreign_keys=[reviewed_by], lazy="select")
 
     # Indexes
     __table_args__ = (

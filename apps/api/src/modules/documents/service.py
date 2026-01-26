@@ -7,12 +7,14 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from src.config import settings
 from src.core.database import get_session_with_tenant
 from src.modules.documents.models import Document, DocumentStatus, DocumentType
+from src.modules.documents.schemas import DocumentListItem, DocumentPollingStatus
 from src.modules.documents.parsers.bc3_parser import BC3ParsingError, parse_bc3_file
 from src.modules.documents.parsers.excel_parser import (
     ExcelParsingError,
@@ -22,7 +24,11 @@ from src.modules.documents.parsers.excel_parser import (
 from src.modules.documents.parsers.pdf_parser import PDFParsingError, extract_text_and_offsets
 from src.modules.projects.models import Project
 from src.modules.stakeholders.models import BOMItem, Stakeholder, WBSItem, WBSItemType
+from src.services.rag_service import RagService
+from src.services.stakeholder_classifier import StakeholderClassifier, StakeholderInput
 from src.shared.storage import StorageService
+
+logger = structlog.get_logger()
 
 
 class DocumentService:
@@ -172,6 +178,8 @@ class DocumentService:
             if document.document_type == DocumentType.CONTRACT:
                 text_blocks = parsed_payload.get("text_blocks", [])
                 emails = set()
+                new_stakeholders: list[Stakeholder] = []
+                stakeholder_inputs: list[StakeholderInput] = []
                 for block in text_blocks:
                     text = block.get("text", "")
                     if not isinstance(text, str):
@@ -196,7 +204,37 @@ class DocumentService:
                         stakeholder_metadata={"source_document_id": str(document.id)},
                     )
                     tenant_db.add(stakeholder)
+                    new_stakeholders.append(stakeholder)
+                    stakeholder_inputs.append(
+                        StakeholderInput(
+                            name=stakeholder.name,
+                            role=stakeholder.role,
+                            company=stakeholder.organization,
+                        )
+                    )
                     extraction_summary["stakeholders"] += 1
+
+                if new_stakeholders:
+                    classifier = StakeholderClassifier(tenant_id=str(tenant_id))
+                    try:
+                        enriched = await classifier.classify_batch(
+                            stakeholder_inputs,
+                            contract_type=document.document_type.value,
+                        )
+                    except Exception as exc:
+                        logger.warning("stakeholder_classification_failed", error=str(exc))
+                    else:
+                        for stakeholder, result in zip(new_stakeholders, enriched):
+                            stakeholder.power_level = result.power_level
+                            stakeholder.interest_level = result.interest_level
+                            stakeholder.quadrant = result.quadrant_db
+                            metadata = dict(stakeholder.stakeholder_metadata or {})
+                            metadata["classification"] = {
+                                "power_score": result.power_score,
+                                "interest_score": result.interest_score,
+                                "quadrant": result.quadrant.value,
+                            }
+                            stakeholder.stakeholder_metadata = metadata
 
             if document.document_type == DocumentType.SCHEDULE:
                 for index, task in enumerate(parsed_payload.get("schedule", []), start=1):
@@ -310,6 +348,12 @@ class DocumentService:
                 tenant_id=tenant_id,
             )
 
+            await self._ingest_rag_chunks(
+                document=document,
+                parsed_payload=parsed_payload,
+                tenant_id=tenant_id,
+            )
+
             async with get_session_with_tenant(tenant_id) as tenant_db:
                 document_result = await tenant_db.execute(
                     select(Document).where(Document.id == document_id)
@@ -351,6 +395,44 @@ class DocumentService:
                     document.parsing_error = f"Unexpected parsing error: {e}"
                     await tenant_db.commit()
             raise
+
+    async def _ingest_rag_chunks(
+        self,
+        *,
+        document: Document,
+        parsed_payload: dict,
+        tenant_id: UUID,
+    ) -> None:
+        text_blocks = parsed_payload.get("text_blocks", [])
+        if not text_blocks:
+            return
+
+        text_content = "\n\n".join(
+            block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
+        ).strip()
+        if not text_content:
+            return
+
+        async with get_session_with_tenant(tenant_id) as tenant_db:
+            rag_service = RagService(tenant_db)
+            try:
+                ingested = await rag_service.ingest_document(
+                    document_id=document.id,
+                    project_id=document.project_id,
+                    text_content=text_content,
+                    metadata={"document_type": document.document_type.value},
+                )
+                logger.info(
+                    "rag_ingest_completed",
+                    document_id=str(document.id),
+                    chunks=ingested,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "rag_ingest_failed",
+                    document_id=str(document.id),
+                    error=str(exc),
+                )
 
     async def get_document(self, document_id: UUID, user_id: UUID) -> Document:
         """
@@ -537,3 +619,77 @@ class DocumentService:
             if document:
                 document.upload_status = status
                 await db.commit()
+
+    async def list_project_documents(
+        self, project_id: UUID, tenant_id: UUID, skip: int = 0, limit: int = 20
+    ) -> tuple[list[DocumentListItem], int]:
+        """
+        Lists documents for a specific project, with pagination and tenant isolation.
+        """
+        # 1. Verify project exists and belongs to the tenant
+        # Use a subquery or directly join if Project is available,
+        # otherwise fetch explicitly. For now, explicit fetch.
+        project = await self.db_session.scalar(
+            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+        )
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+        # 2. Build the base query for documents
+        stmt = (
+            select(
+                Document.id,
+                Document.filename,
+                Document.upload_status,
+                Document.parsing_error,
+                Document.created_at,
+                Document.file_size_bytes,
+            )
+            .where(Document.project_id == project_id)
+            .order_by(Document.created_at.desc())
+        )
+
+        # 3. Get total count for pagination metadata
+        count_stmt = select(func.count()).where(Document.project_id == project_id)
+        total_count_result = await self.db_session.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # 4. Apply pagination
+        stmt = stmt.offset(skip).limit(limit)
+
+        # 5. Execute query and fetch results
+        documents_result = await self.db_session.execute(stmt)
+        document_rows = documents_result.all()
+
+        # 6. Map results to DocumentListItem
+        items: list[DocumentListItem] = []
+        for row in document_rows:
+            # Normalize status
+            normalized_status = self._normalize_document_status_for_polling(row.upload_status)
+            items.append(
+                DocumentListItem(
+                    id=row.id,
+                    filename=row.filename,
+                    status=normalized_status,
+                    error_message=row.parsing_error if normalized_status == DocumentPollingStatus.ERROR else None,
+                    uploaded_at=row.created_at,
+                    file_size_bytes=row.file_size_bytes or 0,
+                )
+            )
+        return items, total_count
+    
+    def _normalize_document_status_for_polling(self, document_status: DocumentStatus) -> DocumentPollingStatus:
+        """
+        Helper to map internal DocumentStatus to external DocumentPollingStatus.
+        """
+        if document_status == DocumentStatus.UPLOADED:
+            return DocumentPollingStatus.QUEUED
+        if document_status == DocumentStatus.PARSING:
+            return DocumentPollingStatus.PROCESSING
+        if document_status == DocumentStatus.PARSED:
+            return DocumentPollingStatus.PARSED
+        if document_status == DocumentStatus.ERROR:
+            return DocumentPollingStatus.ERROR
+        # Default to processing for any unhandled or intermediate statuses
+        return DocumentPollingStatus.PROCESSING
+
