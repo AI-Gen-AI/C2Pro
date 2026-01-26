@@ -62,7 +62,11 @@ class MigrationRunner:
         """Obtiene lista de migraciones pendientes."""
         applied = await self.get_applied_migrations()
 
-        all_migrations = sorted(self.migrations_dir.glob("*.sql"))
+        legacy = {"001_initial_schema.sql"}
+        all_migrations = [
+            m for m in sorted(self.migrations_dir.glob("*.sql"))
+            if m.name not in legacy
+        ]
         pending = [
             m for m in all_migrations
             if m.stem not in applied
@@ -202,12 +206,12 @@ class MigrationRunner:
 
         if not all(gates.values()):
             logger.warning("cto_gates_validation_failed", gates=gates)
-            print("\n⚠️  ATENCIÓN: Algunas CTO Gates no pasaron la validación")
+            print("\nWARNING: Algunas CTO Gates no pasaron la validación")
             print("Revisa los logs arriba para detalles")
             sys.exit(1)
         else:
             logger.info("cto_gates_validation_passed")
-            print("\n✅ Todas las CTO Gates pasaron la validación")
+            print("\nOK: Todas las CTO Gates pasaron la validación")
 
 
 async def main():
