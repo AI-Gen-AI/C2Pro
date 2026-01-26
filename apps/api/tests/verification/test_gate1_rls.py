@@ -291,7 +291,7 @@ class TestGate1RLSCrossTenantIsolation:
         }
         files = {"file": ("contract.pdf", b"dummy pdf", "application/pdf")}
         response = await client.post(
-            f"/api/v1/documents/projects/{project_a_id}/upload",
+            f"/api/v1/projects/{project_a_id}/documents",
             data=upload_data,
             files=files,
             headers=headers_b,
@@ -303,7 +303,9 @@ class TestGate1RLSCrossTenantIsolation:
             f"❌ GATE 1 FAILURE: Cross-tenant document upload not blocked. "
             f"Expected 404, got {response.status_code}"
         )
-        assert "Project not found" in response.json()["detail"]
+        error_payload = response.json()
+        error_message = error_payload.get("detail") or error_payload.get("message", "")
+        assert "Project not found" in error_message
 
         # No cleanup - unique test_run_id prevents conflicts with future runs
 
@@ -422,16 +424,17 @@ class TestGate1RLSSuperuserEnforcement:
         """
         query = text("""
             SELECT
-                tablename,
-                relforcerowsecurity as force_rls
+                t.tablename,
+                c.relforcerowsecurity as force_rls
             FROM pg_tables t
-            JOIN pg_class c ON c.relname = t.tablename
-            WHERE schemaname = 'public'
-            AND tablename IN (
+            JOIN pg_namespace n ON n.nspname = t.schemaname
+            JOIN pg_class c ON c.relname = t.tablename AND c.relnamespace = n.oid
+            WHERE t.schemaname = 'public'
+            AND t.tablename IN (
                 'tenants', 'users', 'projects', 'documents',
                 'analyses', 'alerts'
             )
-            ORDER BY tablename;
+            ORDER BY t.tablename;
         """)
 
         result = await db_session.execute(query)

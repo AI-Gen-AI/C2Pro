@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,17 +11,29 @@ import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 from jose import jwt
+from sqlalchemy import ARRAY, text
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.config import settings
 from src.core import database as db_module
 from src.core.database import Base
+from src.modules.analysis.models import Alert, Analysis, Extraction
 from src.modules.auth.models import Tenant, User
 from src.modules.coherence import service as coherence_service
 from src.modules.documents.models import DocumentStatus
+from src.modules.documents.models import Clause, Document
+from src.modules.projects.models import Project
+from src.modules.stakeholders.models import BOMItem, Stakeholder, StakeholderWBSRaci, WBSItem
 
 
 FIXTURE_PDF = Path("tests/fixtures/files/contract_sample.pdf")
+
+
+@compiles(ARRAY, "sqlite")
+def _compile_array_sqlite(_type, _compiler, **_kw) -> str:
+    # SQLite has no ARRAY type; store as TEXT for tests.
+    return "TEXT"
 
 
 @asynccontextmanager
@@ -39,16 +52,43 @@ async def _no_rls_session(_tenant_id: UUID):
 async def _seed_auth(session_factory: async_sessionmaker[AsyncSession]) -> tuple[UUID, UUID]:
     tenant_id = uuid4()
     user_id = uuid4()
+    email = f"score-flow-{user_id.hex[:8]}@example.com"
 
     async with session_factory() as session:
-        tenant = Tenant(id=tenant_id, name="Test Tenant")
+        tenant = Tenant(id=tenant_id, name="Test Tenant", slug=f"tenant-{tenant_id.hex[:8]}")
+        session.add(tenant)
+        await session.flush()
+
+        dialect_name = session.get_bind().dialect.name
+        if dialect_name != "sqlite":
+            meta_payload = json.dumps(
+                {
+                    "tenant_id": str(tenant_id),
+                    "first_name": "Test",
+                    "last_name": "User",
+                    "role": "admin",
+                },
+                ensure_ascii=True,
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) "
+                    "VALUES (:id, :email, CAST(:meta AS jsonb), NOW(), NOW())"
+                ),
+                {
+                    "id": user_id,
+                    "email": email,
+                    "meta": meta_payload,
+                },
+            )
+
         user = User(
             id=user_id,
             tenant_id=tenant_id,
-            email="tester@example.com",
+            email=email,
             hashed_password="hashedpassword",
         )
-        session.add_all([tenant, user])
+        session.add(user)
         await session.commit()
 
     return tenant_id, user_id
@@ -70,6 +110,15 @@ def _make_auth_header(user_id: UUID, tenant_id: UUID) -> dict[str, str]:
 
 @pytest.mark.asyncio
 async def test_upload_and_calculate_score(monkeypatch) -> None:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        fitz = None
+    if fitz is not None and not hasattr(fitz, "Table"):
+        class _DummyTable:
+            pass
+        fitz.Table = _DummyTable
+
     from src.main import create_application
     from src.ai.ai_service import AIService
     from src.core.celery_app import celery_app
@@ -79,6 +128,7 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
     import src.modules.documents.service as documents_service
 
     app = create_application()
+    print("DEBUG: app created")
 
     # Avoid RLS SET LOCAL for SQLite during tests.
     monkeypatch.setattr(db_module, "get_session_with_tenant", _no_rls_session)
@@ -94,6 +144,11 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
         return []
 
     monkeypatch.setattr(AIService, "run_extraction", _fake_run_extraction)
+
+    async def _noop_rag_ingest(self, *, document, parsed_payload, tenant_id) -> None:
+        return None
+
+    monkeypatch.setattr(documents_service.DocumentService, "_ingest_rag_chunks", _noop_rag_ingest)
     celery_app.conf.task_always_eager = True
 
     async with LifespanManager(app):
@@ -101,9 +156,24 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
             raise RuntimeError("Database engine not initialized.")
 
         async with db_module._engine.begin() as conn:
-            _ = document_models.Document
-            _ = project_models.Project
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[
+                    Tenant.__table__,
+                    User.__table__,
+                    Analysis.__table__,
+                    Alert.__table__,
+                    Extraction.__table__,
+                    Project.__table__,
+                    Document.__table__,
+                    Clause.__table__,
+                    Stakeholder.__table__,
+                    WBSItem.__table__,
+                    BOMItem.__table__,
+                    StakeholderWBSRaci.__table__,
+                ],
+            )
+        print("DEBUG: schema created")
 
         session_factory = async_sessionmaker(
             bind=db_module._engine,
@@ -115,6 +185,7 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
 
         tenant_id, user_id = await _seed_auth(session_factory)
         headers = _make_auth_header(user_id, tenant_id)
+        print(f"DEBUG: seeded tenant={tenant_id} user={user_id}")
 
         coherence_service.MOCK_PROJECT_DB[str(tenant_id)] = {"name": "Test Project"}
 
@@ -128,6 +199,7 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
             project_response = await client.post("/api/v1/projects", json=project_payload)
             assert project_response.status_code == 201
             project_id = project_response.json()["id"]
+            print(f"DEBUG: project created id={project_id}")
 
             # Ensure coherence service has data for this project_id
             coherence_service.MOCK_PROJECT_DB[project_id] = {"name": "Integration Project"}
@@ -151,17 +223,20 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
             upload_body = upload_response.json()
             assert upload_body.get("task_id")
             document_id = upload_body["id"]
+            print(f"DEBUG: document uploaded id={document_id} task_id={upload_body.get('task_id')}")
 
             # Trigger parsing explicitly (Celery task uses mock DB in this environment).
-            parse_response = await client.post(f"/api/v1/documents/{document_id}/parse")
+            parse_response = await client.post(f"/api/v1/{document_id}/parse")
             assert parse_response.status_code == 202
+            print(f"DEBUG: parse triggered status={parse_response.status_code}")
 
             parsed = False
             deadline = asyncio.get_event_loop().time() + 10
             while asyncio.get_event_loop().time() < deadline:
                 poll_response = await client.get(f"/api/v1/projects/{project_id}/documents")
                 assert poll_response.status_code == 200
-                entries = poll_response.json()
+                payload = poll_response.json()
+                entries = payload.get("items", [])
                 target = next((doc for doc in entries if doc["id"] == document_id), None)
                 if target and target["status"] == DocumentStatus.PARSED.value.upper():
                     parsed = True
