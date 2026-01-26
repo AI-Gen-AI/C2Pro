@@ -117,7 +117,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected")
 
         assert response.status_code == 401
-        assert "Not authenticated" in response.json()["detail"]
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_malformed_auth_header(self, app):
         """
@@ -130,6 +130,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected", headers={"Authorization": "InvalidToken"})
 
         assert response.status_code == 401
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_invalid_token(self, app):
         """
@@ -141,6 +142,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected", headers={"Authorization": "Bearer invalid.jwt.token"})
 
         assert response.status_code == 401
+        assert "Invalid authentication credentials" in response.json()["detail"]
 
     def test_protected_path_with_valid_token(self, app, valid_token, test_tenant, test_user):
         """
@@ -199,6 +201,34 @@ class TestTenantIsolationMiddleware:
 
         tenant_id = middleware._extract_tenant_id(request)
 
+        assert tenant_id is None
+
+    def test_extract_tenant_id_invalid_token_type(self, test_user, test_tenant):
+        """
+        Should return None when token type is not 'access'.
+        """
+        import jwt
+        from src.config import settings
+
+        middleware = TenantIsolationMiddleware(app=Mock())
+
+        # Create a refresh token instead of access token
+        token = jwt.encode(
+            {
+                "sub": str(test_user.id),
+                "tenant_id": str(test_tenant.id),
+                "type": "refresh",  # Wrong token type
+            },
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
+
+        request = Mock(spec=Request)
+        request.headers = {"Authorization": f"Bearer {token}"}
+
+        tenant_id = middleware._extract_tenant_id(request)
+
+        # Should reject refresh tokens
         assert tenant_id is None
 
     def test_extract_user_id_from_jwt(self, test_user, test_tenant):
