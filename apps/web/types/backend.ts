@@ -30,6 +30,18 @@ export interface PaginatedResponse<T> {
  */
 export interface AlertResponse extends Alert {
   // Additional fields that might come from the backend
+  evidence_location?: {
+    page_number: number;
+    bbox: [number, number, number, number];
+    normalized?: boolean;
+  };
+  evidence_json?: {
+    evidence_location?: {
+      page_number: number;
+      bbox: [number, number, number, number];
+      normalized?: boolean;
+    };
+  };
 }
 
 /**
@@ -64,4 +76,13 @@ export interface DocumentResponse {
   processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;
+}
+
+export interface DocumentListResponse {
+  id: string;
+  filename: string;
+  status: 'queued' | 'processing' | 'parsed' | 'error';
+  error_message?: string | null;
+  uploaded_at: string;
+  file_size_bytes: number;
 }

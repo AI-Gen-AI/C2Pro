@@ -5,8 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+import { apiClient } from '@/lib/api/client';
 
 interface UseDocumentBlobResult {
   blobUrl: string | null;
@@ -50,8 +49,8 @@ export function useDocumentBlob(documentId: string | null): UseDocumentBlobResul
       setError(null);
 
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/documents/${documentId}/download`,
+        const response = await apiClient.get<Blob>(
+          `/documents/${documentId}/download`,
           {
             responseType: 'blob',
             signal: controller.signal,

@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -19,8 +21,11 @@ import {
   FileText,
 } from 'lucide-react';
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+// Configure PDF.js worker (local mjs build for Next.js)
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 export interface PDFViewerProps {
   /** URL or file path to the PDF document */
@@ -99,6 +104,12 @@ export function PDFViewer({
 
   useEffect(() => {
     if (!activeHighlightId) return;
+    const activeHighlight = highlights.find((h) => h.id === activeHighlightId);
+    if (activeHighlight && activeHighlight.page !== pageNumber) {
+      setPageNumber(activeHighlight.page);
+      onPageChange?.(activeHighlight.page);
+      return;
+    }
     const container = scrollContainerRef.current;
     if (!container) return;
 
@@ -113,7 +124,7 @@ export function PDFViewer({
       highlightRect.top - containerRect.top + container.scrollTop - 24;
 
     container.scrollTo({ top: offsetTop, behavior: 'smooth' });
-  }, [activeHighlightId, pageNumber, scale]);
+  }, [activeHighlightId, highlights, pageNumber, scale, onPageChange]);
 
   function onDocumentLoad({ numPages }: { numPages: number }) {
     setNumPages(numPages);
