@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { getProjectDocuments } from '@/lib/api';
-import type { DocumentResponse } from '@/types/backend';
+import type { DocumentListResponse } from '@/types/backend';
 import type { DocumentInfo } from '@/types/document';
 
 interface UseProjectDocumentsResult {
@@ -18,7 +18,7 @@ interface UseProjectDocumentsResult {
 /**
  * Transform backend DocumentResponse to frontend DocumentInfo
  */
-function transformDocument(doc: DocumentResponse): DocumentInfo {
+function transformDocument(doc: DocumentListResponse): DocumentInfo {
   // Map backend DocumentType to frontend type
   const typeMap: Record<string, any> = {
     CONTRACT: 'contract',
@@ -30,17 +30,17 @@ function transformDocument(doc: DocumentResponse): DocumentInfo {
   };
 
   // Map file format to extension
-  const extension = (doc.file_format || 'pdf') as 'pdf' | 'xlsx' | 'docx' | 'dwg';
+  const extension = 'pdf';
 
   return {
     id: doc.id,
-    name: doc.filename || doc.name || 'Untitled',
-    type: typeMap[doc.document_type || ''] || 'contract',
+    name: doc.filename || 'Untitled',
+    type: 'contract',
     extension,
-    url: doc.storage_url || '',
-    totalPages: undefined, // Will be determined when PDF loads
-    fileSize: doc.file_size || 0,
-    uploadedAt: doc.created_at ? new Date(doc.created_at) : undefined,
+    url: '',
+    totalPages: undefined,
+    fileSize: doc.file_size_bytes || 0,
+    uploadedAt: doc.uploaded_at ? new Date(doc.uploaded_at) : undefined,
   };
 }
 
