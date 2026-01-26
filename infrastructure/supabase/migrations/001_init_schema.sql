@@ -41,28 +41,43 @@ COMMENT ON EXTENSION vector IS 'C2Pro: Soporte para embeddings de IA (búsqueda 
 -- =====================================================
 
 -- Estado de proyectos
-CREATE TYPE project_status AS ENUM (
-    'draft',        -- Borrador (creado, sin documentos aún)
-    'active',       -- Activo (en progreso)
-    'completed',    -- Completado
-    'archived'      -- Archivado
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
+        CREATE TYPE project_status AS ENUM (
+            'draft',        -- Borrador (creado, sin documentos aún)
+            'active',       -- Activo (en progreso)
+            'completed',    -- Completado
+            'archived'      -- Archivado
+        );
+    END IF;
+END $$;
 
 -- Roles de usuario dentro de un tenant
-CREATE TYPE user_role AS ENUM (
-    'owner',        -- Dueño del tenant (acceso total)
-    'admin',        -- Administrador (casi total, no puede eliminar tenant)
-    'member'        -- Miembro (acceso limitado según permisos)
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        CREATE TYPE user_role AS ENUM (
+            'owner',        -- Dueño del tenant (acceso total)
+            'admin',        -- Administrador (casi total, no puede eliminar tenant)
+            'member'        -- Miembro (acceso limitado según permisos)
+        );
+    END IF;
+END $$;
 
 -- Tipo de documento
-CREATE TYPE document_type AS ENUM (
-    'contract',     -- Contrato principal
-    'schedule',     -- Cronograma
-    'budget',       -- Presupuesto
-    'addendum',     -- Anexo o modificación
-    'other'         -- Otro documento
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_type') THEN
+        CREATE TYPE document_type AS ENUM (
+            'contract',     -- Contrato principal
+            'schedule',     -- Cronograma
+            'budget',       -- Presupuesto
+            'addendum',     -- Anexo o modificación
+            'other'         -- Otro documento
+        );
+    END IF;
+END $$;
 
 COMMENT ON TYPE project_status IS 'C2Pro: Estados posibles de un proyecto';
 COMMENT ON TYPE user_role IS 'C2Pro: Roles de usuario dentro de un tenant';
@@ -102,9 +117,9 @@ CREATE TABLE IF NOT EXISTS tenants (
 );
 
 -- Índices para tenants
-CREATE INDEX idx_tenants_slug ON tenants(slug);
-CREATE INDEX idx_tenants_is_active ON tenants(is_active) WHERE is_active = true;
-CREATE INDEX idx_tenants_plan ON tenants(plan);
+CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
+CREATE INDEX IF NOT EXISTS idx_tenants_is_active ON tenants(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_tenants_plan ON tenants(plan);
 
 COMMENT ON TABLE tenants IS 'C2Pro: Organizaciones (multi-tenancy). Cada tenant es una organización independiente con datos aislados.';
 COMMENT ON COLUMN tenants.slug IS 'Identificador único amigable para URLs (ej: acme-corp)';
@@ -145,11 +160,11 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Índices para users
-CREATE INDEX idx_users_tenant_id ON users(tenant_id);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_tenant_email ON users(tenant_id, email);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_is_active ON users(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE is_active = true;
 
 COMMENT ON TABLE users IS 'C2Pro: Usuarios de la plataforma. Sincronizado con auth.users de Supabase.';
 COMMENT ON CONSTRAINT users_tenant_email_unique ON users IS 'CRÍTICO (Gate 2): Email único por tenant, NO globalmente. Un email puede existir en múltiples tenants.';
@@ -198,11 +213,11 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 -- Índices para projects
-CREATE INDEX idx_projects_tenant_id ON projects(tenant_id);
-CREATE INDEX idx_projects_status ON projects(status);
-CREATE INDEX idx_projects_created_by ON projects(created_by);
-CREATE INDEX idx_projects_created_at ON projects(created_at DESC);
-CREATE INDEX idx_projects_tenant_status ON projects(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
+CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_tenant_status ON projects(tenant_id, status);
 
 COMMENT ON TABLE projects IS 'C2Pro: Proyectos de construcción/obra. Cada proyecto pertenece a un tenant y contiene documentos.';
 COMMENT ON COLUMN projects.tenant_id IS 'CRÍTICO: Aislamiento por tenant. Un proyecto pertenece a UN SOLO tenant.';
@@ -256,11 +271,11 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 -- Índices para documents
-CREATE INDEX idx_documents_project_id ON documents(project_id);
-CREATE INDEX idx_documents_document_type ON documents(document_type);
-CREATE INDEX idx_documents_uploaded_by ON documents(uploaded_by);
-CREATE INDEX idx_documents_created_at ON documents(created_at DESC);
-CREATE INDEX idx_documents_is_processed ON documents(is_processed) WHERE is_processed = false;
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_is_processed ON documents(is_processed) WHERE is_processed = false;
 
 COMMENT ON TABLE documents IS 'C2Pro: Documentos de proyectos. Almacenados en Supabase Storage.';
 COMMENT ON COLUMN documents.project_id IS 'Relación con proyecto. El tenant_id se obtiene del proyecto.';
@@ -289,6 +304,7 @@ COMMENT ON TABLE documents IS E'RLS HABILITADO: Solo usuarios del mismo tenant p
 -- =====================================================
 
 -- Política SELECT: Un usuario solo puede ver su propio tenant
+DROP POLICY IF EXISTS "Users can view their own tenant" ON tenants;
 CREATE POLICY "Users can view their own tenant"
     ON tenants
     FOR SELECT
@@ -297,6 +313,7 @@ CREATE POLICY "Users can view their own tenant"
     );
 
 -- Política UPDATE: Solo owners y admins pueden actualizar tenant
+DROP POLICY IF EXISTS "Owners and admins can update tenant" ON tenants;
 CREATE POLICY "Owners and admins can update tenant"
     ON tenants
     FOR UPDATE
@@ -318,6 +335,7 @@ COMMENT ON POLICY "Owners and admins can update tenant" ON tenants IS 'RLS: Solo
 -- =====================================================
 
 -- Política SELECT: Un usuario puede ver otros usuarios de su tenant
+DROP POLICY IF EXISTS "Users can view users in their tenant" ON users;
 CREATE POLICY "Users can view users in their tenant"
     ON users
     FOR SELECT
@@ -329,6 +347,7 @@ CREATE POLICY "Users can view users in their tenant"
 -- No se permite INSERT directo por usuarios normales
 
 -- Política UPDATE: Un usuario puede actualizar su propio perfil
+DROP POLICY IF EXISTS "Users can update their own profile" ON users;
 CREATE POLICY "Users can update their own profile"
     ON users
     FOR UPDATE
@@ -338,16 +357,17 @@ CREATE POLICY "Users can update their own profile"
     );
 
 -- Política DELETE: Solo owners pueden eliminar usuarios
+DROP POLICY IF EXISTS "Owners can delete users" ON users;
 CREATE POLICY "Owners can delete users"
     ON users
     FOR DELETE
     USING (
         tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         AND EXISTS (
-            SELECT 1 FROM users AS current_user
-            WHERE current_user.id = auth.uid()
-            AND current_user.tenant_id = users.tenant_id
-            AND current_user.role = 'owner'
+            SELECT 1 FROM users AS current_user_row
+            WHERE current_user_row.id = auth.uid()
+            AND current_user_row.tenant_id = users.tenant_id
+            AND current_user_row.role = 'owner'
         )
     );
 
@@ -360,6 +380,7 @@ COMMENT ON POLICY "Owners can delete users" ON users IS 'RLS: Solo owners pueden
 -- =====================================================
 
 -- Política SELECT: Un usuario puede ver proyectos de su tenant
+DROP POLICY IF EXISTS "Users can view projects in their tenant" ON projects;
 CREATE POLICY "Users can view projects in their tenant"
     ON projects
     FOR SELECT
@@ -368,6 +389,7 @@ CREATE POLICY "Users can view projects in their tenant"
     );
 
 -- Política INSERT: Un usuario puede crear proyectos en su tenant
+DROP POLICY IF EXISTS "Users can create projects in their tenant" ON projects;
 CREATE POLICY "Users can create projects in their tenant"
     ON projects
     FOR INSERT
@@ -376,6 +398,7 @@ CREATE POLICY "Users can create projects in their tenant"
     );
 
 -- Política UPDATE: Un usuario puede actualizar proyectos de su tenant
+DROP POLICY IF EXISTS "Users can update projects in their tenant" ON projects;
 CREATE POLICY "Users can update projects in their tenant"
     ON projects
     FOR UPDATE
@@ -384,6 +407,7 @@ CREATE POLICY "Users can update projects in their tenant"
     );
 
 -- Política DELETE: Solo owners y admins pueden eliminar proyectos
+DROP POLICY IF EXISTS "Owners and admins can delete projects" ON projects;
 CREATE POLICY "Owners and admins can delete projects"
     ON projects
     FOR DELETE
@@ -408,6 +432,7 @@ COMMENT ON POLICY "Owners and admins can delete projects" ON projects IS 'RLS: S
 
 -- Política SELECT: Un usuario puede ver documentos de proyectos de su tenant
 -- CRÍTICO: JOIN seguro con projects para verificar tenant_id
+DROP POLICY IF EXISTS "Users can view documents in their tenant projects" ON documents;
 CREATE POLICY "Users can view documents in their tenant projects"
     ON documents
     FOR SELECT
@@ -420,6 +445,7 @@ CREATE POLICY "Users can view documents in their tenant projects"
     );
 
 -- Política INSERT: Un usuario puede subir documentos a proyectos de su tenant
+DROP POLICY IF EXISTS "Users can upload documents to their tenant projects" ON documents;
 CREATE POLICY "Users can upload documents to their tenant projects"
     ON documents
     FOR INSERT
@@ -432,6 +458,7 @@ CREATE POLICY "Users can upload documents to their tenant projects"
     );
 
 -- Política UPDATE: Un usuario puede actualizar documentos de su tenant
+DROP POLICY IF EXISTS "Users can update documents in their tenant projects" ON documents;
 CREATE POLICY "Users can update documents in their tenant projects"
     ON documents
     FOR UPDATE
@@ -444,6 +471,7 @@ CREATE POLICY "Users can update documents in their tenant projects"
     );
 
 -- Política DELETE: Solo owners y admins pueden eliminar documentos
+DROP POLICY IF EXISTS "Owners and admins can delete documents" ON documents;
 CREATE POLICY "Owners and admins can delete documents"
     ON documents
     FOR DELETE
@@ -559,6 +587,7 @@ COMMENT ON FUNCTION public.handle_new_user() IS 'C2Pro: Trigger function que sin
 -- =====================================================
 
 -- Trigger que se ejecuta DESPUÉS de insertar en auth.users
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW
@@ -588,24 +617,28 @@ COMMENT ON FUNCTION public.update_updated_at_column() IS 'C2Pro: Actualiza autom
 -- =====================================================
 
 -- Trigger para tenants
+DROP TRIGGER IF EXISTS update_tenants_updated_at ON tenants;
 CREATE TRIGGER update_tenants_updated_at
     BEFORE UPDATE ON tenants
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Trigger para users
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Trigger para projects
+DROP TRIGGER IF EXISTS update_projects_updated_at ON projects;
 CREATE TRIGGER update_projects_updated_at
     BEFORE UPDATE ON projects
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Trigger para documents
+DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
 CREATE TRIGGER update_documents_updated_at
     BEFORE UPDATE ON documents
     FOR EACH ROW
@@ -643,9 +676,11 @@ DECLARE
 BEGIN
     FOR v_table_name IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('tenants', 'users', 'projects', 'documents')
     LOOP
-        SELECT relrowsecurity INTO v_rls_enabled
-        FROM pg_class
-        WHERE relname = v_table_name;
+        SELECT c.relrowsecurity INTO v_rls_enabled
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = v_table_name
+        AND n.nspname = 'public';
 
         IF NOT v_rls_enabled THEN
             RAISE EXCEPTION 'RLS NO está habilitado en tabla %', v_table_name;
@@ -656,9 +691,12 @@ BEGIN
 END $$;
 
 -- Log de éxito
-RAISE NOTICE 'Migración 001_init_schema.sql completada exitosamente';
-RAISE NOTICE 'Extensiones creadas: pgcrypto, vector, uuid-ossp';
-RAISE NOTICE 'Tablas creadas: tenants, users, projects, documents';
-RAISE NOTICE 'RLS habilitado en TODAS las tablas';
-RAISE NOTICE 'Políticas RLS creadas para aislamiento por tenant';
-RAISE NOTICE 'Trigger de sincronización auth.users -> public.users configurado';
+DO $$
+BEGIN
+    RAISE NOTICE 'Migración 001_init_schema.sql completada exitosamente';
+    RAISE NOTICE 'Extensiones creadas: pgcrypto, vector, uuid-ossp';
+    RAISE NOTICE 'Tablas creadas: tenants, users, projects, documents';
+    RAISE NOTICE 'RLS habilitado en TODAS las tablas';
+    RAISE NOTICE 'Políticas RLS creadas para aislamiento por tenant';
+    RAISE NOTICE 'Trigger de sincronización auth.users -> public.users configurado';
+END $$;

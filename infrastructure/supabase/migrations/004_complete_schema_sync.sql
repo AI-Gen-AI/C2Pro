@@ -48,6 +48,13 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+-- Approval enums
+DO $$ BEGIN
+    CREATE TYPE approvalstatus AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CORRECTED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- Clause enums
 DO $$ BEGIN
     CREATE TYPE clausetype AS ENUM ('penalty', 'milestone', 'responsibility', 'payment', 'delivery', 'quality', 'scope', 'termination', 'dispute', 'other');
@@ -180,7 +187,8 @@ CREATE TABLE IF NOT EXISTS analyses (
     alerts_count INTEGER DEFAULT 0,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS ix_analyses_project_id ON analyses(project_id);
@@ -286,9 +294,150 @@ CREATE TABLE IF NOT EXISTS stakeholders (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Align alerts columns with API models
+ALTER TABLE alerts
+ADD COLUMN IF NOT EXISTS category VARCHAR(50),
+ADD COLUMN IF NOT EXISTS rule_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS related_clause_ids UUID[],
+ADD COLUMN IF NOT EXISTS affected_entities JSONB DEFAULT '[]',
+ADD COLUMN IF NOT EXISTS impact_level VARCHAR(20),
+ADD COLUMN IF NOT EXISTS alert_metadata JSONB DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS approval_status approvalstatus DEFAULT 'PENDING',
+ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id),
+ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS review_comment TEXT;
+
+-- Rename legacy columns if present
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'alerts' AND column_name = 'message'
+    ) THEN
+        ALTER TABLE alerts RENAME COLUMN message TO description;
+    ELSIF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'alerts' AND column_name = 'description'
+    ) THEN
+        ALTER TABLE alerts ADD COLUMN description TEXT;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'alerts' AND column_name = 'suggested_action'
+    ) THEN
+        ALTER TABLE alerts RENAME COLUMN suggested_action TO recommendation;
+    ELSIF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'alerts' AND column_name = 'recommendation'
+    ) THEN
+        ALTER TABLE alerts ADD COLUMN recommendation TEXT;
+    END IF;
+END $$;
+
+-- Rename legacy metadata column if present
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'stakeholders' AND column_name = 'metadata'
+    ) THEN
+        ALTER TABLE stakeholders RENAME COLUMN metadata TO stakeholder_metadata;
+    END IF;
+END $$;
+
+ALTER TABLE stakeholders
+ADD COLUMN IF NOT EXISTS stakeholder_metadata JSONB DEFAULT '{}';
+
+-- Align stakeholders columns with API models
+ALTER TABLE stakeholders
+ADD COLUMN IF NOT EXISTS department VARCHAR(100),
+ADD COLUMN IF NOT EXISTS email VARCHAR(255),
+ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
+ADD COLUMN IF NOT EXISTS extraction_confidence NUMERIC(3,2),
+ADD COLUMN IF NOT EXISTS extracted_from_document_id UUID REFERENCES documents(id),
+ADD COLUMN IF NOT EXISTS approval_status approvalstatus DEFAULT 'PENDING',
+ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id),
+ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS review_comment TEXT;
+
 CREATE INDEX IF NOT EXISTS ix_stakeholders_project_id ON stakeholders(project_id);
 CREATE INDEX IF NOT EXISTS ix_stakeholders_quadrant ON stakeholders(quadrant);
 CREATE INDEX IF NOT EXISTS ix_stakeholders_source_clause ON stakeholders(source_clause_id);
+
+-- ===================================
+-- 7.1 REFRESH MCP VIEWS (ALIGN TO CURRENT SCHEMA)
+-- ===================================
+
+DROP VIEW IF EXISTS v_project_summary;
+DROP VIEW IF EXISTS v_project_alerts;
+DROP VIEW IF EXISTS v_project_clauses;
+DROP VIEW IF EXISTS v_project_stakeholders;
+
+CREATE OR REPLACE VIEW v_project_summary AS
+SELECT
+    p.id,
+    p.tenant_id,
+    p.name,
+    p.status,
+    p.coherence_score,
+    COUNT(DISTINCT d.id) as document_count,
+    COUNT(DISTINCT a.id) as alert_count,
+    COUNT(DISTINCT s.id) as stakeholder_count,
+    p.created_at,
+    p.updated_at
+FROM projects p
+LEFT JOIN documents d ON d.project_id = p.id
+LEFT JOIN alerts a ON a.project_id = p.id AND a.status = 'open'
+LEFT JOIN stakeholders s ON s.project_id = p.id
+GROUP BY p.id;
+
+CREATE OR REPLACE VIEW v_project_alerts AS
+SELECT
+    a.id,
+    a.project_id,
+    p.tenant_id,
+    a.severity,
+    a.category,
+    a.rule_id,
+    a.title,
+    a.description,
+    a.status,
+    a.source_clause_id,
+    c.clause_code,
+    c.title as clause_title,
+    a.created_at
+FROM alerts a
+JOIN projects p ON p.id = a.project_id
+LEFT JOIN clauses c ON c.id = a.source_clause_id
+WHERE a.status = 'open';
+
+CREATE OR REPLACE VIEW v_project_clauses AS
+SELECT
+    c.id,
+    c.project_id,
+    p.tenant_id,
+    c.clause_code,
+    c.clause_type,
+    c.title,
+    c.full_text,
+    c.manually_verified,
+    c.created_at
+FROM clauses c
+JOIN projects p ON p.id = c.project_id;
+
+CREATE OR REPLACE VIEW v_project_stakeholders AS
+SELECT
+    s.id,
+    s.project_id,
+    p.tenant_id,
+    s.name,
+    s.role,
+    s.organization,
+    s.quadrant,
+    s.source_clause_id,
+    c.clause_code,
+    s.created_at
+FROM stakeholders s
+JOIN projects p ON p.id = s.project_id
+LEFT JOIN clauses c ON c.id = s.source_clause_id;
 
 -- ===================================
 -- 8. UPDATE WBS_ITEMS TABLE
@@ -350,6 +499,13 @@ CREATE TABLE IF NOT EXISTS stakeholder_wbs_raci (
     UNIQUE(stakeholder_id, wbs_item_id, raci_role)
 );
 
+ALTER TABLE stakeholder_wbs_raci
+ADD COLUMN IF NOT EXISTS evidence_text TEXT,
+ADD COLUMN IF NOT EXISTS generated_automatically BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS manually_verified BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS verified_by UUID REFERENCES users(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS ix_stakeholder_wbs_raci_project ON stakeholder_wbs_raci(project_id);
 CREATE INDEX IF NOT EXISTS ix_stakeholder_wbs_raci_stakeholder ON stakeholder_wbs_raci(stakeholder_id);
 CREATE INDEX IF NOT EXISTS ix_stakeholder_wbs_raci_wbs ON stakeholder_wbs_raci(wbs_item_id);
@@ -408,6 +564,28 @@ CREATE INDEX IF NOT EXISTS ix_audit_logs_created ON audit_logs(created_at);
 -- Enable RLS on new tables
 ALTER TABLE analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
+
+-- Enforce RLS even for superusers on core tenant tables
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'tenants') THEN
+        EXECUTE 'ALTER TABLE tenants FORCE ROW LEVEL SECURITY';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'users') THEN
+        EXECUTE 'ALTER TABLE users FORCE ROW LEVEL SECURITY';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'projects') THEN
+        EXECUTE 'ALTER TABLE projects FORCE ROW LEVEL SECURITY';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'documents') THEN
+        EXECUTE 'ALTER TABLE documents FORCE ROW LEVEL SECURITY';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'analyses') THEN
+        EXECUTE 'ALTER TABLE analyses FORCE ROW LEVEL SECURITY';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'alerts') THEN
+        EXECUTE 'ALTER TABLE alerts FORCE ROW LEVEL SECURITY';
+    END IF;
+END $$;
 ALTER TABLE extractions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stakeholders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stakeholder_wbs_raci ENABLE ROW LEVEL SECURITY;

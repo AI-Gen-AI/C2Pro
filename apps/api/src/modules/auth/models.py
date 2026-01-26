@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     String,
     event,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -284,3 +285,9 @@ def generate_tenant_slug(mapper, connection, target):
     """Auto-genera el slug si no se proporciona."""
     if not target.slug:
         target.slug = _generate_slug_from_name(target.name)
+    result = connection.execute(
+        text("SELECT 1 FROM tenants WHERE slug = :slug"),
+        {"slug": target.slug},
+    ).first()
+    if result:
+        target.slug = f"{target.slug}-{uuid4().hex[:8]}"

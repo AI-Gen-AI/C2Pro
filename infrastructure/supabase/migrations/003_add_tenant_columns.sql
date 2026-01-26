@@ -35,9 +35,11 @@ ALTER COLUMN slug SET NOT NULL;
 
 -- Add unique constraint and index for slug
 DO $$ BEGIN
-    ALTER TABLE tenants ADD CONSTRAINT tenants_slug_key UNIQUE (slug);
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'tenants_slug_key'
+    ) THEN
+        ALTER TABLE tenants ADD CONSTRAINT tenants_slug_key UNIQUE (slug);
+    END IF;
 END $$;
 
 -- Create indexes for better query performance
@@ -75,6 +77,64 @@ DROP COLUMN IF EXISTS role CASCADE;
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS role userrole DEFAULT 'user';
+
+-- Align auth trigger function with the new userrole enum
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_tenant_id UUID;
+    v_email VARCHAR(255);
+    v_first_name VARCHAR(100);
+    v_last_name VARCHAR(100);
+    v_role userrole;
+BEGIN
+    v_tenant_id := (NEW.raw_user_meta_data ->> 'tenant_id')::uuid;
+    v_email := NEW.email;
+    v_first_name := NEW.raw_user_meta_data ->> 'first_name';
+    v_last_name := NEW.raw_user_meta_data ->> 'last_name';
+    v_role := COALESCE((NEW.raw_user_meta_data ->> 'role')::userrole, 'user'::userrole);
+
+    IF v_tenant_id IS NULL THEN
+        RAISE EXCEPTION 'tenant_id is required in user metadata';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM tenants WHERE id = v_tenant_id) THEN
+        RAISE EXCEPTION 'tenant_id % does not exist', v_tenant_id;
+    END IF;
+
+    INSERT INTO public.users (
+        id,
+        tenant_id,
+        email,
+        first_name,
+        last_name,
+        role,
+        is_active,
+        created_at,
+        updated_at
+    ) VALUES (
+        NEW.id,
+        v_tenant_id,
+        v_email,
+        v_first_name,
+        v_last_name,
+        v_role,
+        true,
+        NOW(),
+        NOW()
+    );
+
+    RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE WARNING 'Error in handle_new_user: %', SQLERRM;
+        RAISE;
+END;
+$$;
 
 -- Create indexes for users
 CREATE INDEX IF NOT EXISTS ix_users_tenant_email ON users(tenant_id, email);
