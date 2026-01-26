@@ -104,7 +104,11 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with _session_factory() as session:
         try:
             # Check if tenant_id is available from the request state (set by middleware)
-            if hasattr(request.state, "tenant_id") and request.state.tenant_id:
+            if (
+                hasattr(request.state, "tenant_id")
+                and request.state.tenant_id
+                and not settings.database_url.startswith("sqlite")
+            ):
                 tenant_id = request.state.tenant_id
                 # SET commands don't support parameterized queries in PostgreSQL
                 # Format the UUID directly into the SQL string (safe since UUID type is validated)
@@ -118,7 +122,11 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             # Always reset the tenant context to prevent leakage
-            if hasattr(request.state, "tenant_id") and request.state.tenant_id:
+            if (
+                hasattr(request.state, "tenant_id")
+                and request.state.tenant_id
+                and not settings.database_url.startswith("sqlite")
+            ):
                 await session.execute(text("RESET app.current_tenant"))
                 logger.debug("RLS_tenant_reset", tenant_id=str(request.state.tenant_id))
 
