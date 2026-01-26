@@ -8,6 +8,7 @@ Guía rápida para poner en marcha el backend de C2Pro en **menos de 5 minutos**
 - [x] Python 3.11+ instalado
 - [x] Cuenta de Supabase creada
 - [x] Proyecto de Supabase configurado
+- [x] Dependencias de anonimización AI (si vas a correr tests/IA): `spacy`, `presidio-analyzer`, `presidio-anonymizer`
 
 ## 🔧 Paso 1: Obtener Contraseña de Base de Datos
 
@@ -243,6 +244,14 @@ python setup.py
 **Solución:** Verifica que `DATABASE_URL` en `.env` tenga la contraseña correcta.
 
 ### Error: "Module not found"
+
+
+### Error: "spacy/presidio_* not found"
+
+**Solución (tests/IA):**
+```bash
+pip install spacy presidio-analyzer presidio-anonymizer
+```
 
 **Solución:**
 ```bash

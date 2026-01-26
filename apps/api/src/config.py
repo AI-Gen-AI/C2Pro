@@ -177,12 +177,52 @@ class Settings(BaseSettings):
     log_json: bool = Field(default=True, description="Log en formato JSON")
 
     # ===========================================
+    # EMAIL
+    # ===========================================
+
+    email_from: str = Field(
+        default="C2Pro <noreply@c2pro.app>", validation_alias="EMAIL_FROM"
+    )
+
+    # ===========================================
     # RATE LIMITING
     # ===========================================
 
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = Field(default=60, ge=1)
     rate_limit_per_hour: int = Field(default=1000, ge=1)
+    rate_limit_user_per_min: int = Field(
+        default=20, ge=1, validation_alias="RATE_LIMIT_USER_PER_MIN"
+    )
+    rate_limit_tenant_per_min: int = Field(
+        default=60, ge=1, validation_alias="RATE_LIMIT_TENANT_PER_MIN"
+    )
+
+    # ===========================================
+    # CELERY
+    # ===========================================
+
+    celery_task_always_eager: bool = Field(
+        default=False, validation_alias="CELERY_TASK_ALWAYS_EAGER"
+    )
+
+    # ===========================================
+    # BUDGET ALERTS (FINOPS)
+    # ===========================================
+
+    budget_alert_admin_emails: list[str] = Field(
+        default_factory=list, validation_alias="BUDGET_ALERT_ADMIN_EMAILS"
+    )
+    budget_alert_webhook_url: str | None = Field(
+        default=None, validation_alias="BUDGET_ALERT_WEBHOOK_URL"
+    )
+
+    smtp_host: str | None = Field(default=None, validation_alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, validation_alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, validation_alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, validation_alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(default=True, validation_alias="SMTP_USE_TLS")
+    smtp_from: str | None = Field(default=None, validation_alias="SMTP_FROM")
 
     # ===========================================
     # FEATURES FLAGS (MVP - Fase 1)
@@ -243,6 +283,15 @@ class Settings(BaseSettings):
         """Valida que el budget sea positivo."""
         if v < 0:
             raise ValueError("ai_budget_monthly_default must be >= 0")
+        return v
+
+    @field_validator("budget_alert_admin_emails", mode="before")
+    @classmethod
+    def parse_budget_alert_admin_emails(cls, v):
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            return [email.strip() for email in v.split(",") if email.strip()]
         return v
 
 

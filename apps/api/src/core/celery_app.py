@@ -22,7 +22,10 @@ celery_app = Celery(
     "c2pro_worker",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["apps.api.src.tasks.ingestion_tasks"]  # Auto-discover tasks from this module
+    include=[
+        "apps.api.src.tasks.ingestion_tasks",
+        "apps.api.src.tasks.budget_alerts",
+    ],
 )
 
 # --- Configuration ---
@@ -40,6 +43,14 @@ celery_app.conf.update(
 
     # Worker settings
     worker_prefetch_multiplier=1, # Ensures workers only take one task at a time (good for long-running tasks)
+
+    # Beat schedule (periodic tasks)
+    beat_schedule={
+        "budget-alerts-every-10-mins": {
+            "task": "budget_alerts.run",
+            "schedule": 600.0,
+        }
+    },
 )
 
 if __name__ == "__main__":

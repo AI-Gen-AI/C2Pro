@@ -225,6 +225,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         message=str(exc.detail) if exc.detail else "HTTP error",
         path=str(request.url.path),
     )
+    # Preserve FastAPI-compatible detail field for clients/tests expecting it.
+    error_response["detail"] = str(exc.detail) if exc.detail else "HTTP error"
 
     return JSONResponse(
         status_code=exc.status_code,

@@ -64,6 +64,7 @@ python-dotenv==1.0.1
 orjson==3.9.14
 tenacity==8.2.3  # Retry logic
 email-validator==2.1.1
+networkx==3.3
 
 # Testing
 pytest==7.4.0
