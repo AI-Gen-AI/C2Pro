@@ -44,6 +44,8 @@ Thumbs.db
 .pytest_cache/
 __pycache__/
 *.pyc
+test.db
+*.db
 
 # Misc
 .cache/
@@ -51,6 +53,8 @@ __pycache__/
 credentials.json
 Captura de pantalla*.png
 zzz- capturas/
+storage/
+codex*.txt
 
 # Supabase specific
 *.bin
