@@ -41,9 +41,13 @@ Thumbs.db
 
 # Testing
 /coverage
+.coverage
+htmlcov/
 .pytest_cache/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 test.db
 *.db
 

@@ -113,7 +113,7 @@ class ProjectService:
             currency=request.currency,
             start_date=request.start_date,
             end_date=request.end_date,
-            metadata=request.metadata or {},
+            project_metadata=request.metadata or {},
         )
 
         db.add(project)
@@ -307,7 +307,7 @@ class ProjectService:
             project.end_date = request.end_date
 
         if request.metadata is not None:
-            project.metadata = request.metadata
+            project.project_metadata = request.metadata
 
         project.updated_at = datetime.utcnow()
 

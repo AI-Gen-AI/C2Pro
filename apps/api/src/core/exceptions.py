@@ -418,3 +418,14 @@ class DatabaseError(ExternalServiceError):
 
     def __init__(self, message: str = "Database error"):
         super().__init__(service="database", message=message)
+
+
+# ===========================================
+# ALIASES FOR BACKWARD COMPATIBILITY
+# ===========================================
+
+# Alias for NotFoundError (commonly used in services)
+NotFoundError = ResourceNotFoundError
+
+# Alias for ConflictError (commonly used in services)
+ConflictError = ResourceAlreadyExistsError
