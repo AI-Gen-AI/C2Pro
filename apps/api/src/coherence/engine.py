@@ -64,6 +64,7 @@ class CoherenceEngine:
                         Alert(
                             rule_id=rule.id,
                             severity=rule.severity,
+                            category=rule.category or "general",
                             message=f"Alert for rule '{rule.id}' triggered by clause '{finding.triggered_clause.id}'.",
                             evidence=Evidence(
                                 source_clause_id=finding.triggered_clause.id,
@@ -74,7 +75,15 @@ class CoherenceEngine:
                     )
 
         score = self.scoring_service.compute_score(alerts)
-        return CoherenceResult(alerts=alerts, score=score)
+
+        # Compute category breakdown
+        category_breakdown = self.scoring_service.compute_category_breakdown(alerts)
+
+        return CoherenceResult(
+            overall_score=score,
+            alerts=alerts,
+            category_breakdown=category_breakdown
+        )
 
 
 if __name__ == "__main__":

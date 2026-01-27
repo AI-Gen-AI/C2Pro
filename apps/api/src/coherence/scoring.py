@@ -9,18 +9,22 @@ project_root = os.path.abspath(
 )  # Go up from coherence to modules, src, api, apps, then c2pro
 sys.path.insert(0, project_root)
 
+from typing import Dict, List
+from collections import defaultdict
+
 from src.coherence.config import (
     DECAY_FACTOR,
     RULE_WEIGHT_OVERRIDES,
     SEVERITY_WEIGHTS,
 )
-from src.coherence.models import Alert, Evidence
+from src.coherence.models import Alert, Evidence, CategoryBreakdown, SeverityCount
 
 
 class ScoringService:
     """
     Service responsible for computing a coherence score based on a list of alerts.
     Implements an advanced model with rule-specific weights and diminishing returns.
+    Now supports category-based breakdown for detailed analysis.
     """
 
     def compute_score(self, alerts: list[Alert]) -> float:
@@ -62,6 +66,122 @@ class ScoringService:
 
         # Clamp the score between 0 and 100 and round to 2 decimal places
         return max(0.0, min(100.0, round(final_score, 2)))
+
+    def compute_category_breakdown(self, alerts: List[Alert]) -> List[CategoryBreakdown]:
+        """
+        Computes the coherence score breakdown by category.
+
+        Args:
+            alerts: List of alerts to analyze
+
+        Returns:
+            List of CategoryBreakdown objects, one per category with alerts
+        """
+        # Group alerts by category
+        category_alerts: Dict[str, List[Alert]] = defaultdict(list)
+        for alert in alerts:
+            category_alerts[alert.category].append(alert)
+
+        # Calculate overall score and total deduction for impact percentages
+        overall_score = self.compute_score(alerts)
+        total_deduction = 100.0 - overall_score
+
+        breakdown_list: List[CategoryBreakdown] = []
+
+        for category, cat_alerts in category_alerts.items():
+            # Calculate score for this category
+            category_score = self._compute_category_score(cat_alerts)
+
+            # Calculate category deduction
+            category_deduction = 100.0 - category_score
+
+            # Calculate impact percentage (what percentage of total deduction comes from this category)
+            if total_deduction > 0:
+                impact_percentage = round((category_deduction / total_deduction) * 100, 2)
+            else:
+                impact_percentage = 0.0
+
+            # Count alerts by severity
+            severity_breakdown = self._count_severity(cat_alerts)
+
+            breakdown_list.append(
+                CategoryBreakdown(
+                    category=category,
+                    score=category_score,
+                    alert_count=len(cat_alerts),
+                    severity_breakdown=severity_breakdown,
+                    impact_percentage=impact_percentage
+                )
+            )
+
+        # Sort by impact percentage (highest first)
+        breakdown_list.sort(key=lambda x: x.impact_percentage, reverse=True)
+
+        return breakdown_list
+
+    def _compute_category_score(self, alerts: List[Alert]) -> float:
+        """
+        Computes the coherence score for a specific category of alerts.
+
+        Args:
+            alerts: List of alerts in a single category
+
+        Returns:
+            Score for this category (0-100)
+        """
+        base_score = 100.0
+        total_deduction = 0.0
+
+        severity_counts: Dict[str, int] = {}
+
+        for alert in alerts:
+            # Check for rule-specific override
+            if alert.rule_id in RULE_WEIGHT_OVERRIDES:
+                total_deduction += RULE_WEIGHT_OVERRIDES[alert.rule_id]
+                continue
+
+            # Use severity weight with diminishing returns
+            base_penalty = SEVERITY_WEIGHTS.get(alert.severity, 0.0)
+
+            if base_penalty == 0.0:
+                continue
+
+            severity = alert.severity
+            count = severity_counts.get(severity, 0)
+
+            decayed_penalty = base_penalty * (DECAY_FACTOR**count)
+
+            total_deduction += decayed_penalty
+
+            severity_counts[severity] = count + 1
+
+        final_score = base_score - total_deduction
+
+        return max(0.0, min(100.0, round(final_score, 2)))
+
+    def _count_severity(self, alerts: List[Alert]) -> SeverityCount:
+        """
+        Counts alerts by severity level.
+
+        Args:
+            alerts: List of alerts to count
+
+        Returns:
+            SeverityCount object with counts by severity
+        """
+        counts = {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0
+        }
+
+        for alert in alerts:
+            severity = alert.severity.lower()
+            if severity in counts:
+                counts[severity] += 1
+
+        return SeverityCount(**counts)
 
 
 if __name__ == "__main__":
