@@ -20,20 +20,20 @@ from src.core.middleware import (
     RateLimitMiddleware,
     TenantIsolationMiddleware,
 )
-from src.mcp.router import router as mcp_router
+from src.core.mcp.router import router as mcp_router
 
 # Import routers
 from src.modules.auth.router import router as auth_router
-from src.modules.coherence.router import router as coherence_router
-from src.modules.documents.router import router as documents_router
+from src.coherence.router import router as coherence_router
+from src.documents.adapters.http.router import router as documents_router
 from src.modules.observability.router import router as observability_router
-from src.modules.projects.router import router as projects_router
-from src.modules.analysis.router import router as analysis_router
+from src.projects.adapters.http.router import router as projects_router
+from src.analysis.adapters.http.router import router as analysis_router
 from src.routers.health import router as health_router
 from src.routers.alerts import router as alerts_router
-from src.routers.approvals import router as approvals_router
-from src.routers.raci import router as raci_router
-from src.routers.stakeholders import router as stakeholders_router
+from src.stakeholders.adapters.http.approvals_router import router as approvals_router
+from src.stakeholders.adapters.http.raci_router import router as raci_router
+from src.stakeholders.adapters.http.router import router as stakeholders_router
 
 logger = structlog.get_logger()
 

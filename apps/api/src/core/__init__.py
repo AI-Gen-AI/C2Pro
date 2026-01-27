@@ -1,7 +1,7 @@
 """
 C2Pro Core Module
 
-Funcionalidades compartidas: database, security, middleware, etc.
+Funcionalidades compartidas: database, security, middleware, MCP, etc.
 """
 
 from src.core.database import (
@@ -20,6 +20,7 @@ from src.core.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from src.core.mcp.servers.database_server import DatabaseMCPServer, get_mcp_server
 from src.core.security import (
     CurrentTenantId,
     CurrentUserId,
@@ -49,4 +50,7 @@ __all__ = [
     "ValidationError",
     "AIServiceError",
     "AIBudgetExceededError",
+    # MCP
+    "DatabaseMCPServer",
+    "get_mcp_server",
 ]

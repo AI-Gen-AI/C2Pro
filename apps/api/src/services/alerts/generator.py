@@ -7,10 +7,10 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.analysis.models import Alert, AlertSeverity, AlertStatus
+from src.analysis.adapters.persistence.models import Alert, AlertSeverity, AlertStatus
 from src.modules.analysis.schemas import AlertCreate
-from src.modules.coherence.alert_generator import AlertGenerator
-from src.modules.coherence.rules_engine.context_rules import CoherenceRuleResult
+from src.coherence.alert_generator import AlertGenerator
+from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 
 
 class AlertGeneratorService:

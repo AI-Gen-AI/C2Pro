@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 # Assuming WBSItemType is defined elsewhere and can be imported
 # For now, let's create a placeholder if it's not easily accessible
-from src.modules.stakeholders.models import WBSItemType
+from src.procurement.adapters.persistence.models import WBSItemType
 
 
 class WBSNodeBase(BaseModel):
@@ -43,4 +43,3 @@ class WBSNodeUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[UUID] = None
-

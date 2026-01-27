@@ -7,14 +7,15 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.raci_generator import (
+from src.analysis.adapters.ai.agents.raci_generator import (
     RaciGenerationResult,
     RaciGeneratorAgent,
     StakeholderInput,
     WBSItemInput,
 )
-from src.modules.documents.models import Clause
-from src.modules.stakeholders.models import Stakeholder, StakeholderWBSRaci, WBSItem
+from src.documents.adapters.persistence.models import ClauseORM
+from src.procurement.adapters.persistence.models import WBSItemORM
+from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 
 logger = structlog.get_logger()
 
@@ -46,7 +47,7 @@ class RaciGenerationService:
 
     async def _load_leaf_wbs_items(self, project_id: UUID) -> list[WBSItemInput]:
         result = await self.db_session.execute(
-            select(WBSItem).where(WBSItem.project_id == project_id)
+            select(WBSItemORM).where(WBSItemORM.project_id == project_id)
         )
         items = list(result.scalars().all())
         if not items:
@@ -75,13 +76,13 @@ class RaciGenerationService:
             return {}
 
         result = await self.db_session.execute(
-            select(Clause.id, Clause.full_text).where(Clause.id.in_(ids))
+            select(ClauseORM.id, ClauseORM.full_text).where(ClauseORM.id.in_(ids))
         )
         return {row[0]: row[1] for row in result.all() if row[1]}
 
     async def _load_stakeholders(self, project_id: UUID) -> list[StakeholderInput]:
         result = await self.db_session.execute(
-            select(Stakeholder).where(Stakeholder.project_id == project_id)
+            select(StakeholderORM).where(StakeholderORM.project_id == project_id)
         )
         stakeholders = list(result.scalars().all())
         return [
@@ -106,7 +107,7 @@ class RaciGenerationService:
             return
 
         existing = await self.db_session.execute(
-            select(StakeholderWBSRaci).where(StakeholderWBSRaci.project_id == project_id)
+            select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
         )
         existing_rows = list(existing.scalars().all())
         existing_keys = {
@@ -119,7 +120,7 @@ class RaciGenerationService:
             if key in existing_keys:
                 continue
             new_rows.append(
-                StakeholderWBSRaci(
+                StakeholderWBSRaciORM(
                     project_id=project_id,
                     stakeholder_id=assignment.stakeholder_id,
                     wbs_item_id=assignment.wbs_item_id,
