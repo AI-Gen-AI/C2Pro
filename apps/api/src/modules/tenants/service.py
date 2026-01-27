@@ -4,7 +4,7 @@ from uuid import UUID
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.modules.auth.models import Tenant
+from src.core.auth.models import Tenant
 
 logger = structlog.get_logger()
 

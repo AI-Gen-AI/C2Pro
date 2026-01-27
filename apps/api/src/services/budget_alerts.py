@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from src.config import settings
 from src.core.database import get_raw_session
-from src.modules.auth.models import Tenant, User, UserRole
+from src.core.auth.models import Tenant, User, UserRole
 
 logger = structlog.get_logger()
 

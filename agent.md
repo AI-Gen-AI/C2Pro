@@ -244,6 +244,182 @@ Never speculate about code you have not opened. If the user references a specifi
   - Estado: ✅ COMPLETADO - coherence consolidado en ubicación final
   - Resultado: Eliminada duplicación de código, estructura limpia y organizada
 
+- **Migración de Auth a infraestructura core (2026-01-27) - ✅ COMPLETADO**:
+  - Problema: Módulo auth ubicado en `modules/auth/` pero es infraestructura transversal, no dominio
+  - Análisis arquitectónico:
+    - Auth NO es un bounded context de negocio
+    - ES infraestructura transversal: autenticación, multi-tenancy, JWT
+    - Usado por `core/middleware.py` (TenantIsolationMiddleware)
+    - Usado por `core/database.py` (modelos User y Tenant)
+    - Similar a MCP: seguridad y control de acceso
+  - Decisión: Migrar a `core/auth/` siguiendo mismo criterio que MCP
+  - Composición del módulo (1,561 líneas):
+    - `models.py` (296 líneas) - User y Tenant ORM con multi-tenancy
+    - `service.py` (528 líneas) - AuthService, JWT, password hashing
+    - `router.py` (355 líneas) - Endpoints FastAPI (register, login, me, refresh)
+    - `schemas.py` (382 líneas) - Pydantic schemas para API
+  - Acciones ejecutadas:
+    1. Creada estructura `src/core/auth/`
+    2. Copiados archivos de `modules/auth/` a `core/auth/`
+    3. Actualización de imports internos:
+       - Reemplazo masivo: `src.modules.auth` → `src.core.auth` (usando sed)
+       - Archivos actualizados: todos los .py dentro de core/auth/
+    4. Creado `core/auth/__init__.py` con exports completos
+    5. Actualizado `core/__init__.py` para exportar User, Tenant, AuthService, etc.
+    6. Actualización de imports externos (7 archivos):
+       - `src/main.py`: router de auth
+       - `src/core/database.py`: models import
+       - `src/core/middleware.py`: Tenant import
+       - `src/modules/main.py`: router import
+       - `src/modules/tenants/service.py`: Tenant import
+       - `src/services/budget_alerts.py`: User, Tenant, UserRole imports
+       - `src/analysis/adapters/persistence/models.py`: User import
+    7. Movido `modules/auth/` a `_legacy/modules/auth/`
+    8. Creado `_legacy/modules/auth/LEGACY.md` documentando la migración
+  - Verificación:
+    - ✅ Aplicación importa correctamente: "Application imported successfully"
+    - ✅ Coherence rules cargadas: 6 LLM + 3 determinísticas
+    - ✅ Registry inicializado correctamente
+    - ✅ Exception handlers registrados (4 handlers)
+    - ✅ Sin imports residuales de `modules.auth` fuera de _legacy/
+  - Estructura final:
+    ```
+    src/core/auth/
+    ├── __init__.py      → Exports públicos
+    ├── models.py        → User y Tenant ORM (SQLAlchemy)
+    ├── schemas.py       → Pydantic schemas para API
+    ├── service.py       → AuthService (lógica autenticación)
+    └── router.py        → FastAPI router
+    ```
+  - Estado: ✅ COMPLETADO - auth migrado a core como infraestructura transversal
+  - Resultado: Consistencia arquitectónica con MCP, claridad conceptual
+  - Beneficios:
+    - Infraestructura centralizada en `core/`
+    - Separación clara entre dominio e infraestructura
+    - Alineado con ADR-001 y PLAN_ARQUITECTURA.md Fase 1
+    - Facilita acceso desde middleware y database
+
+- **Migración de Observability a infraestructura core (2026-01-27) - ✅ COMPLETADO**:
+  - Problema: Observability disperso en dos ubicaciones:
+    - `core/observability.py` - Setup de logging, Sentry, Prometheus (244 líneas)
+    - `modules/observability/` - Endpoints de monitoreo (119 líneas: router, service, schemas)
+  - Análisis arquitectónico:
+    - Observability es infraestructura transversal, no dominio
+    - Usado por toda la aplicación para logging, métricas y error tracking
+    - Similar a MCP y Auth: debe estar en `core/`
+  - Decisión: Consolidar todo en `core/observability/` como directorio estructurado
+  - Acciones ejecutadas:
+    1. Creada estructura `src/core/observability/`
+    2. Movido `core/observability.py` → `core/observability/monitoring.py`
+    3. Copiados archivos de `modules/observability/` a `core/observability/`
+    4. Actualización de imports internos: `src.modules.observability` → `src.core.observability`
+    5. Creado `core/observability/__init__.py` con exports completos
+    6. Actualizado `core/__init__.py` para exportar funciones de observability
+    7. Actualizado `main.py`: router import ya era de `core.observability`
+    8. Movido `modules/observability/` a `_legacy/modules/observability/`
+    9. Creado `_legacy/modules/observability/LEGACY.md` documentando la migración
+  - Estructura final:
+    ```
+    src/core/observability/
+    ├── __init__.py       → Exports públicos
+    ├── monitoring.py     → Setup logging, Sentry, Prometheus (antes core/observability.py)
+    ├── router.py         → Endpoints /status y /analyses
+    ├── service.py        → ObservabilityService
+    └── schemas.py        → Pydantic schemas
+    ```
+  - Verificación:
+    - ✅ Aplicación importa correctamente: "Application imported successfully"
+    - ✅ No hay imports residuales de `modules.observability` fuera de _legacy/
+  - Estado: ✅ COMPLETADO - observability consolidado en core/
+  - Beneficios:
+    - Eliminada dispersión de código
+    - Estructura organizada por responsabilidad
+    - Consistencia con otros módulos core (auth, mcp, middleware)
+
+- **Migración de Middleware a infraestructura core (2026-01-27) - ✅ COMPLETADO**:
+  - Problema: Middleware disperso en dos ubicaciones:
+    - `core/middleware.py` - TenantIsolationMiddleware y RequestLoggingMiddleware (287 líneas)
+    - `middleware/rate_limiter.py` - RateLimitMiddleware (244 líneas)
+  - Análisis arquitectónico:
+    - Todo middleware es infraestructura transversal crítica para seguridad
+    - Mejor organización: un archivo por middleware
+    - Consistencia con estructura de otros módulos core
+  - Decisión: Consolidar todo en `core/middleware/` como directorio estructurado
+  - Acciones ejecutadas:
+    1. Creada estructura `src/core/middleware/`
+    2. Extraído TenantIsolationMiddleware a `core/middleware/tenant_isolation.py`
+    3. Extraído RequestLoggingMiddleware a `core/middleware/request_logging.py`
+    4. Copiado `middleware/rate_limiter.py` a `core/middleware/rate_limiter.py`
+    5. Creado `core/middleware/__init__.py` con exports completos
+    6. Actualizado `main.py`: imports ya eran de `core.middleware` (sin cambios)
+    7. Movido `core/middleware.py` a `_legacy/core/middleware.py`
+    8. Movido `middleware/` a `_legacy/middleware/`
+    9. Creado LEGACY.md documentando las migraciones
+  - Estructura final:
+    ```
+    src/core/middleware/
+    ├── __init__.py          → Exports públicos
+    ├── tenant_isolation.py  → TenantIsolationMiddleware
+    ├── request_logging.py   → RequestLoggingMiddleware
+    └── rate_limiter.py      → RateLimitMiddleware
+    ```
+  - Verificación:
+    - ✅ Aplicación importa correctamente: "Application imported successfully"
+    - ✅ No hay imports residuales de `src.middleware` fuera de _legacy/
+  - Estado: ✅ COMPLETADO - middleware consolidado en core/
+  - Beneficios:
+    - Eliminada dispersión de código
+    - Un archivo por middleware (mejor mantenibilidad)
+    - Consistencia con otros módulos core
+
+- **Migración de Tasks a infraestructura core (2026-01-27) - ✅ COMPLETADO**:
+  - Problema: Background tasks dispersos en dos ubicaciones:
+    - `core/celery_app.py` - Configuración Celery (58 líneas)
+    - `tasks/` - Implementaciones de tasks (ingestion_tasks.py, budget_alerts.py)
+  - Análisis arquitectónico:
+    - Tasks y Celery config son infraestructura de background jobs
+    - Mejor cohesión: todo lo relacionado con Celery en un módulo
+    - Consistencia con estructura de otros módulos core
+  - Decisión: Consolidar todo en `core/tasks/` como directorio estructurado
+  - Acciones ejecutadas:
+    1. Creada estructura `src/core/tasks/`
+    2. Movido `core/celery_app.py` a `core/tasks/celery_app.py`
+    3. Copiados `tasks/ingestion_tasks.py` y `tasks/budget_alerts.py` a `core/tasks/`
+    4. Actualización de imports internos:
+       - `src.core.celery_app` → `src.core.tasks.celery_app`
+       - Actualizado include paths en celery_app.py
+    5. Creado `core/tasks/__init__.py` con exports completos
+    6. Actualización de imports externos (2 archivos):
+       - `src/documents/adapters/http/router.py`: import de process_document_async
+       - `tests/integration/flows/test_full_scoring_loop.py`: import de celery_app
+    7. Movido `core/celery_app.py` a `_legacy/core/celery_app.py`
+    8. Movido `tasks/` a `_legacy/tasks/`
+    9. Creado LEGACY.md documentando las migraciones
+  - Estructura final:
+    ```
+    src/core/tasks/
+    ├── __init__.py          → Exports públicos
+    ├── celery_app.py        → Celery app config (antes core/celery_app.py)
+    ├── ingestion_tasks.py   → Document processing tasks
+    └── budget_alerts.py     → Budget monitoring tasks
+    ```
+  - Comando Celery Worker actualizado:
+    ```bash
+    # Antes
+    celery -A apps.api.src.core.celery_app.celery_app worker --loglevel=info -P gevent
+
+    # Ahora
+    celery -A apps.api.src.core.tasks.celery_app.celery_app worker --loglevel=info -P gevent
+    ```
+  - Verificación:
+    - ✅ Aplicación importa correctamente: "Application imported successfully"
+    - ✅ No hay imports residuales de `src.tasks` o `src.core.celery_app` fuera de _legacy/
+  - Estado: ✅ COMPLETADO - tasks consolidado en core/
+  - Beneficios:
+    - Eliminada dispersión de código
+    - Todo lo relacionado con Celery en un módulo
+    - Consistencia con otros módulos core
+
 ## Plan de trabajo acordado (fase actual)
 1) Auditar endpoints y dependencias de `documents`, `stakeholders`, `procurement`. (COMPLETADO)
 2) Crear/adaptar routers (HTTP adapters) en módulos nuevos + wiring mínimo de DI. (EN PROGRESO: documents y stakeholders)
@@ -256,13 +432,29 @@ src/
 ├── core/                        # ✅ Infraestructura compartida (bien ubicado)
 │   ├── database.py
 │   ├── cache.py
-│   ├── middleware.py
 │   ├── security.py
 │   ├── handlers.py
-│   ├── observability.py
-│   └── mcp/                     # ✅ MIGRADO (2026-01-27)
-│       ├── router.py
-│       └── servers/database_server.py
+│   ├── mcp/                     # ✅ MIGRADO (2026-01-27)
+│   │   ├── router.py
+│   │   └── servers/database_server.py
+│   ├── auth/                    # ✅ MIGRADO (2026-01-27)
+│   │   ├── models.py            → User y Tenant ORM
+│   │   ├── service.py           → AuthService, JWT
+│   │   ├── router.py            → FastAPI endpoints
+│   │   └── schemas.py           → Pydantic schemas
+│   ├── observability/           # ✅ MIGRADO (2026-01-27)
+│   │   ├── monitoring.py        → Logging, Sentry, Prometheus
+│   │   ├── router.py            → Endpoints de monitoreo
+│   │   ├── service.py           → ObservabilityService
+│   │   └── schemas.py           → Pydantic schemas
+│   ├── middleware/              # ✅ MIGRADO (2026-01-27)
+│   │   ├── tenant_isolation.py  → TenantIsolationMiddleware
+│   │   ├── request_logging.py   → RequestLoggingMiddleware
+│   │   └── rate_limiter.py      → RateLimitMiddleware
+│   └── tasks/                   # ✅ MIGRADO (2026-01-27)
+│       ├── celery_app.py        → Celery app config
+│       ├── ingestion_tasks.py   → Document processing tasks
+│       └── budget_alerts.py     → Budget monitoring tasks
 │
 ├── documents/                   # ✅ Módulo de dominio (arquitectura hexagonal)
 │   ├── domain/
@@ -278,9 +470,9 @@ src/
 ├── shared_kernel/               # 📦 DDD Shared Kernel (vacío, para value objects compartidos)
 │
 ├── modules/                     # ⚠️  LEGACY - en proceso de migración
-│   ├── auth/                    # → evaluar si va a core/auth o nuevo módulo
-│   ├── coherence/               # → evaluar si es módulo o parte de analysis
-│   ├── observability/           # → evaluar si va a core/observability
+│   ├── bom/                     # → consolidar en procurement/
+│   ├── wbs/                     # → consolidar en procurement/
+│   ├── tenants/                 # → evaluar si va a core/tenants
 │   └── [otros]
 │
 ├── routers/                     # ⚠️  LEGACY - migrar a adapters HTTP de módulos
@@ -294,25 +486,35 @@ src/
 │   ├── stakeholder_classifier.py
 │   └── [otros]
 │
-├── coherence/                   # ⚠️  EVALUAR - posible módulo de dominio
+├── coherence/                   # ✅ Módulo de dominio COMPLETO
 ├── security/                    # ⚠️  EVALUAR - probablemente core/security
-├── tasks/                       # ⚠️  EVALUAR - Celery tasks
-├── middleware/                  # ⚠️  EVALUAR - probablemente core/middleware
 │
 └── _legacy/                     # 🗑️  Código legacy aislado
     ├── modules/
+    │   ├── auth/                # ✅ MIGRADO a core/auth/
+    │   ├── observability/       # ✅ MIGRADO a core/observability/
+    │   └── [otros]
+    ├── core/
+    │   ├── middleware.py        # ✅ MIGRADO a core/middleware/
+    │   └── celery_app.py        # ✅ MIGRADO a core/tasks/
+    ├── middleware/              # ✅ MIGRADO a core/middleware/
+    ├── tasks/                   # ✅ MIGRADO a core/tasks/
     ├── routers/
     ├── services/
     └── ai/
 ```
 
 ## Bloqueos/pendientes inmediatos
-- 🟠 **[ALTA]** Consolidar coherence/ (duplicado en src/coherence/ y src/modules/coherence/)
-- 🟠 **[ALTA]** Migrar auth (decisión: core/auth/ vs auth/ como módulo)
 - 🟡 **[MEDIA]** Refactorizar projects router a usar casos de uso (actualmente usa ORM directamente)
 - 🟡 **[MEDIA]** Refactorizar analysis router (import de orchestrator comentado temporalmente)
-- 🟡 **[MEDIA]** Consolidar observability, middleware, tasks a core/
+- 🟡 **[MEDIA]** Consolidar modules/bom/ y modules/wbs/ en procurement/
+- 🟢 **[BAJA]** Distribuir services/ a módulos dueños
 - 🟢 **[BAJA]** Arreglar warning Pydantic: `orm_mode` → `from_attributes`
+- ✅ **[COMPLETADO]** Consolidar observability a core/ (2026-01-27)
+- ✅ **[COMPLETADO]** Consolidar middleware a core/middleware/ (2026-01-27)
+- ✅ **[COMPLETADO]** Migrar tasks a core/tasks/ (2026-01-27)
+- ✅ **[COMPLETADO]** Consolidar coherence/ (duplicado) (2026-01-27)
+- ✅ **[COMPLETADO]** Migrar auth a core/auth/ (2026-01-27)
 - ✅ **[COMPLETADO]** Aplicación arranca exitosamente (2026-01-27)
 - ✅ **[COMPLETADO]** Import circular en coherence arreglado (2026-01-27)
 - ✅ **[COMPLETADO]** Import roto de projects router arreglado (2026-01-27)
@@ -329,32 +531,42 @@ src/
 4. ~~**Arreglar imports legacy de stakeholders/procurement**~~ ✅ COMPLETADO (2026-01-27)
 **→ RESULTADO: Aplicación arranca correctamente con 46 rutas cargadas**
 
-### 🟠 PRIORIDAD ALTA (claridad arquitectónica)
-2. **Consolidar coherence/**:
-   - Evaluar si coherence es módulo de dominio separado
-   - Si es dominio: consolidar `src/coherence/` + `src/modules/coherence/` → `src/coherence/` hexagonal
-   - Si es parte de analysis: migrar todo a `src/analysis/adapters/coherence/`
+### ✅ PRIORIDAD ALTA (claridad arquitectónica) - COMPLETADOS
+2. ~~**Consolidar coherence/**~~ ✅ COMPLETADO (2026-01-27):
+   - Decisión: coherence es módulo independiente
+   - Consolidado `src/modules/coherence/` → `src/coherence/` (versión completa v0.2)
+   - 21 archivos consolidados con integración LLM
+   - Actualizados 4 imports externos
+   - Resultado: estructura limpia y organizada
 
-3. **Migrar auth**:
-   - Decisión: `src/auth/` (módulo de dominio) vs `src/core/auth/` (infraestructura)
-   - Recomendación: `src/core/auth/` (transversal como MCP, usado por middleware/database)
-   - Actualizar 28 archivos que importan de `src.modules.auth`
+3. ~~**Migrar auth**~~ ✅ COMPLETADO (2026-01-27):
+   - Decisión: `src/core/auth/` (infraestructura transversal)
+   - Migrado `modules/auth/` → `core/auth/` (1,561 líneas)
+   - Actualizados 7 imports externos
+   - Resultado: consistencia con MCP, infraestructura centralizada
+
+4. ~~**Consolidar observability**~~ ✅ COMPLETADO (2026-01-27):
+   - Decisión: `src/core/observability/` (infraestructura transversal)
+   - Consolidado `core/observability.py` + `modules/observability/` → `core/observability/`
+   - Estructura organizada: monitoring.py, router.py, service.py, schemas.py
+   - Resultado: eliminada dispersión de código
+
+5. ~~**Consolidar middleware**~~ ✅ COMPLETADO (2026-01-27):
+   - Decisión: `src/core/middleware/` (directorio estructurado)
+   - Consolidado `core/middleware.py` + `middleware/rate_limiter.py` → `core/middleware/`
+   - Un archivo por middleware: tenant_isolation.py, request_logging.py, rate_limiter.py
+   - Resultado: mejor mantenibilidad y consistencia
+
+6. ~~**Migrar tasks a core**~~ ✅ COMPLETADO (2026-01-27):
+   - Decisión: `src/core/tasks/` (infraestructura de background jobs)
+   - Consolidado `core/celery_app.py` + `tasks/` → `core/tasks/`
+   - Estructura: celery_app.py, ingestion_tasks.py, budget_alerts.py
+   - Resultado: todo lo relacionado con Celery en un módulo
 
 ### 🟡 PRIORIDAD MEDIA (consolidación)
-4. **Consolidar observability**:
-   - `core/observability.py` (archivo) → `core/observability/` (directorio)
-   - Migrar `modules/observability/` a `core/observability/`
-
-5. **Migrar routers a core**:
+7. **Migrar routers a core**:
    - `routers/health.py` → `core/routers/health.py`
    - `routers/alerts.py` → `analysis/adapters/http/alerts_router.py` o `core/routers/alerts.py`
-
-6. **Consolidar middleware**:
-   - `middleware/rate_limiter.py` → integrar en `core/middleware.py` o expandir a directorio
-
-7. **Migrar tasks a core**:
-   - `tasks/budget_alerts.py` → `core/tasks/budget_alerts.py`
-   - `tasks/ingestion_tasks.py` → `core/tasks/ingestion_tasks.py` o distribuir en módulos
 
 ### 🟢 PRIORIDAD BAJA (limpieza)
 8. **Limpiar modules/ai/**:
@@ -436,7 +648,7 @@ src/
 - `coherence/` - Motor de coherencia (alert_generator, config, engine, etc.)
   - **Estado**: ACTIVO - gran cantidad de código
   - **Existe también**: `src/coherence/` (evaluator, llm_rule_evaluator, models, rules/)
-  - **Acción**: ⏭️ CONSOLIDAR ambos coherence/ en ubicación única
+  - **Acción**: ⏭️ CONSOLIDAR ambos coherence/ en ubicación única (hay que implementar lo que hay en el frontend. que el coherence score. se subdivide en varias categorias, scope, techichal, budjet, quality, cronograma o planing, legal )
 
 - `config.py` - Configuración del módulo modules
   - **Acción**: ⏭️ EVALUAR si debe ir a core/config.py o eliminarse
@@ -456,7 +668,7 @@ src/
 
 - `tenants/` - Gestión de tenants
   - **Estado**: Aparente módulo pequeño
-  - **Acción**: ⏭️ EVALUAR si es `core/tenants/` (infraestructura) o módulo separado
+  - **Acción**: ⏭️ EVALUAR si es `core/tenants/` (infraestructura) o módulo separado (podría ir en un modulo con auth, valorar)
 
 - `wbs/` - Work Breakdown Structure
   - **Estado**: Aparente módulo pequeño
@@ -467,6 +679,7 @@ src/
 **Archivos encontrados:**
 - `alerts.py` - 5.6KB
   - **Acción**: ⏭️ Migrar a `analysis/adapters/http/alerts_router.py` o `core/routers/alerts.py`
+  - **NOTA**: (las alertas en fronend, del ejemplo hemos creado varias catergorias, de tipos, hay que implementar)
 
 - `health.py` - 4.4KB
   - **Acción**: ⏭️ Migrar a `core/routers/health.py` (infraestructura)
@@ -484,10 +697,10 @@ src/
   - **Acción**: ⏭️ Migrar a `core/services/anonymizer.py` o `analysis/adapters/`
 
 - `budget_alerts.py` - 8.3KB
-  - **Acción**: ⏭️ Migrar a dominio correspondiente (analysis?)
+  - **Acción**: ⏭️ Migrar a dominio correspondiente (analysis?) si creo debe ser analysis
 
 - `ingestion/` - subdirectorio
-  - **Acción**: ⏭️ EVALUAR si es parte de documents/ o analysis/
+  - **Acción**: ⏭️ EVALUAR si es parte de documents/ o analysis/ (si es ingestion de documentos creo sera en documents mejor, razona)
 
 - `knowledge_graph.py` - 8.1KB
   - **Acción**: ⏭️ Migrar a `analysis/adapters/graph/` (ya existe analysis/adapters/graph/)
@@ -496,13 +709,13 @@ src/
   - **Acción**: ⏭️ EVALUAR y migrar a `core/privacy/` o eliminar
 
 - `raci_generation_service.py` - 4.9KB
-  - **Acción**: ⏭️ Migrar a `stakeholders/adapters/` o `analysis/adapters/`
+  - **Acción**: ⏭️ Migrar a `stakeholders/adapters/` o `analysis/adapters/` (en skateholder)
 
 - `rag_service.py` - 5.8KB
   - **Acción**: ⏭️ Migrar a `documents/adapters/rag/` (ya existe)
 
 - `scoring/` - subdirectorio
-  - **Acción**: ⏭️ EVALUAR si es parte de analysis/ o coherence/
+  - **Acción**: ⏭️ EVALUAR si es parte de analysis/ o coherence/ si es el scoring de coherence score, debera ir a coherence. 
 
 - `source_locator.py` - 5.5KB
   - **Acción**: ⏭️ Migrar a dominio correspondiente
@@ -519,12 +732,12 @@ src/
 - `rules/` - subdirectorio
 
 **Conflicto**: También existe `modules/coherence/` con mucho código
-**Acción**: ⏭️ CONSOLIDAR en una única ubicación (¿módulo `coherence/` o `analysis/adapters/coherence/`?)
+**Acción**: ⏭️ CONSOLIDAR en una única ubicación (¿módulo `coherence/` o `analysis/adapters/coherence/`?) valorar que corresponde a cada uno, en anaysis sera la ingesta de la información y en analisis, que sera IA, y motor de agentes, el coherence, se conectara , 
 
 ### 5. `src/security/` - VACÍO (estructura preparada)
 
 **Estado**: Directorio con structure domain/application/adapters pero vacío
-**Acción**: ⏭️ EVALUAR si debe ser `core/security/` o mantener como módulo
+**Acción**: ⏭️ EVALUAR si debe ser `core/security/` o mantener como módulo 
 
 ### 6. `src/tasks/` - Celery tasks
 

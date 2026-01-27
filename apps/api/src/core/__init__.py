@@ -28,6 +28,31 @@ from src.core.security import (
     get_current_tenant_id,
     get_current_user_id,
 )
+from src.core.auth import (
+    AuthService,
+    LoginRequest,
+    LoginResponse,
+    RegisterRequest,
+    RegisterResponse,
+    SubscriptionPlan,
+    Tenant,
+    TokenResponse,
+    User,
+    UserRole,
+    create_access_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from src.core.observability import (
+    configure_logging,
+    get_version,
+    init_sentry,
+    record_ai_metric,
+    record_cache_hit,
+    record_cache_miss,
+    record_request_metric,
+)
 
 __all__ = [
     # Database
@@ -53,4 +78,27 @@ __all__ = [
     # MCP
     "DatabaseMCPServer",
     "get_mcp_server",
+    # Auth
+    "User",
+    "Tenant",
+    "UserRole",
+    "SubscriptionPlan",
+    "AuthService",
+    "LoginRequest",
+    "LoginResponse",
+    "RegisterRequest",
+    "RegisterResponse",
+    "TokenResponse",
+    "create_access_token",
+    "decode_token",
+    "hash_password",
+    "verify_password",
+    # Observability
+    "configure_logging",
+    "init_sentry",
+    "get_version",
+    "record_request_metric",
+    "record_ai_metric",
+    "record_cache_hit",
+    "record_cache_miss",
 ]

@@ -16,17 +16,17 @@ from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
 from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
-    RequestLoggingMiddleware,
     RateLimitMiddleware,
+    RequestLoggingMiddleware,
     TenantIsolationMiddleware,
 )
 from src.core.mcp.router import router as mcp_router
 
 # Import routers
-from src.modules.auth.router import router as auth_router
+from src.core.auth.router import router as auth_router
 from src.coherence.router import router as coherence_router
 from src.documents.adapters.http.router import router as documents_router
-from src.modules.observability.router import router as observability_router
+from src.core.observability.router import router as observability_router
 from src.projects.adapters.http.router import router as projects_router
 from src.analysis.adapters.http.router import router as analysis_router
 from src.routers.health import router as health_router

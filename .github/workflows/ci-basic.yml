@@ -1,0 +1,55 @@
+name: CI Basic
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        cd apps/api
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Lint with Ruff
+      run: |
+        cd apps/api
+        pip install ruff
+        ruff check src/
+    - name: Run tests
+      run: |
+        cd apps/api
+        pip install pytest
+        pytest tests/ -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: apps/web/package-lock.json
+    - name: Install dependencies
+      run: |
+        cd apps/web
+        npm ci
+    - name: Lint
+      run: |
+        cd apps/web
+        npm run lint
+    - name: Build
+      run: |
+        cd apps/web
+        npm run build

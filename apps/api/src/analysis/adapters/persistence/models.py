@@ -31,7 +31,7 @@ from src.core.database import Base
 from src.core.approval import ApprovalStatus
 
 if TYPE_CHECKING:
-    from src.modules.auth.models import User
+    from src.core.auth.models import User
     from src.documents.adapters.persistence.models import ClauseORM
     from src.projects.adapters.persistence.models import ProjectORM
 

@@ -24,7 +24,7 @@ from src.core.middleware import (
 )
 from src.core.observability import configure_logging, init_sentry
 from src.analysis.adapters.http.router import router as analysis_router
-from src.modules.auth.router import router as auth_router
+from src.core.auth.router import router as auth_router
 from src.documents.adapters.http.router import router as documents_router
 from src.modules.projects.router import router as projects_router
 
