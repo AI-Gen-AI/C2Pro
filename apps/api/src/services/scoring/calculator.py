@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from src.modules.analysis.models import Alert, AlertSeverity, AlertStatus
+from src.analysis.adapters.persistence.models import Alert, AlertSeverity, AlertStatus
 from src.services.scoring.weights import DEFAULT_SENSITIVITY, SEVERITY_WEIGHTS
 
 

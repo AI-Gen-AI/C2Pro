@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.analysis.models import Analysis
+from src.analysis.adapters.persistence.models import Analysis
 from src.modules.observability.schemas import (
     AnalysisStatus,
     RecentAnalysesResponse,

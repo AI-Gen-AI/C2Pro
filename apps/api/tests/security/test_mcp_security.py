@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.mcp.servers.database_server import (
+from src.core.mcp.servers.database_server import (
     DatabaseMCPServer,
     FunctionCallRequest,
     QueryLimits,
@@ -381,7 +381,7 @@ async def test_tenant_filter_always_applied():
 @pytest.mark.asyncio
 async def test_audit_logging_structure():
     """Test: Estructura de log de auditoría."""
-    from src.mcp.servers.database_server import QueryAuditLog
+    from src.core.mcp.servers.database_server import QueryAuditLog
 
     log = QueryAuditLog(
         tenant_id=uuid4(),

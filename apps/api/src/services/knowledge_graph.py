@@ -8,9 +8,11 @@ import networkx as nx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.analysis.models import Alert
-from src.modules.documents.models import Clause
-from src.modules.stakeholders.models import RACIRole, Stakeholder, StakeholderWBSRaci, WBSItem
+from src.analysis.adapters.persistence.models import Alert
+from src.documents.adapters.persistence.models import ClauseORM
+from src.procurement.adapters.persistence.models import WBSItemORM
+from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
+from src.stakeholders.domain.models import RACIRole
 
 
 @dataclass
@@ -151,15 +153,15 @@ class ProjectKnowledgeGraph:
     def degree_centrality(self) -> dict[str, float]:
         return nx.degree_centrality(self.graph)
 
-    async def _load_stakeholders(self, project_id: UUID) -> list[Stakeholder]:
+    async def _load_stakeholders(self, project_id: UUID) -> list[StakeholderORM]:
         result = await self.db_session.execute(
-            select(Stakeholder).where(Stakeholder.project_id == project_id)
+            select(StakeholderORM).where(StakeholderORM.project_id == project_id)
         )
         return list(result.scalars().all())
 
-    async def _load_tasks(self, project_id: UUID) -> list[WBSItem]:
+    async def _load_tasks(self, project_id: UUID) -> list[WBSItemORM]:
         result = await self.db_session.execute(
-            select(WBSItem).where(WBSItem.project_id == project_id)
+            select(WBSItemORM).where(WBSItemORM.project_id == project_id)
         )
         return list(result.scalars().all())
 
@@ -173,20 +175,22 @@ class ProjectKnowledgeGraph:
         self,
         project_id: UUID,
         risks: Iterable[Alert],
-        tasks: Iterable[WBSItem],
-    ) -> list[Clause]:
+        tasks: Iterable[WBSItemORM],
+    ) -> list[ClauseORM]:
         clause_ids = {risk.source_clause_id for risk in risks if risk.source_clause_id}
         clause_ids.update({task.funded_by_clause_id for task in tasks if task.funded_by_clause_id})
         if not clause_ids:
             return []
         result = await self.db_session.execute(
-            select(Clause).where(Clause.project_id == project_id).where(Clause.id.in_(clause_ids))
+            select(ClauseORM)
+            .where(ClauseORM.project_id == project_id)
+            .where(ClauseORM.id.in_(clause_ids))
         )
         return list(result.scalars().all())
 
-    async def _load_raci(self, project_id: UUID) -> list[StakeholderWBSRaci]:
+    async def _load_raci(self, project_id: UUID) -> list[StakeholderWBSRaciORM]:
         result = await self.db_session.execute(
-            select(StakeholderWBSRaci).where(StakeholderWBSRaci.project_id == project_id)
+            select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
         )
         return list(result.scalars().all())
 

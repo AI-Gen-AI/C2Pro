@@ -6,12 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.core.database import get_session_with_tenant
-from src.modules.documents.models import Clause, Document
-from src.modules.analysis.models import Alert, AlertSeverity, Analysis, AnalysisStatus, AnalysisType
-from src.modules.coherence.rules_engine.context_rules import CoherenceRuleResult
+from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
+from src.analysis.adapters.persistence.models import (
+    Alert,
+    AlertSeverity,
+    Analysis,
+    AnalysisStatus,
+    AnalysisType,
+)
+from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.services.alerts.generator import AlertGeneratorService
-from src.modules.projects.models import Project
-from src.modules.stakeholders.models import BOMItem, WBSItem
+from src.projects.adapters.persistence.models import ProjectORM
+from src.procurement.adapters.persistence.models import BOMItemORM, WBSItemORM
 
 
 class CoherenceEngine:
@@ -58,7 +64,7 @@ class CoherenceEngine:
 
     async def _fetch_documents_and_extractions(
         self, db: AsyncSession, project_id: UUID
-    ) -> list["Document"]:
+    ) -> list["DocumentORM"]:
         """
         Fetches documents and their associated clauses for a given project.
         Uses tenant-aware session to ensure RLS is applied.
@@ -66,7 +72,7 @@ class CoherenceEngine:
         print(f"Fetching documents and extractions for project {project_id}")
 
         # Fetch the project first to get the tenant_id
-        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project_result = await db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
         project = project_result.scalar_one_or_none()
 
         if not project:
@@ -75,9 +81,9 @@ class CoherenceEngine:
 
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
             documents_result = await tenant_db.execute(
-                select(Document)
-                .where(Document.project_id == project_id)
-                .options(selectinload(Document.clauses))
+                select(DocumentORM)
+                .where(DocumentORM.project_id == project_id)
+                .options(selectinload(DocumentORM.clauses))
             )
             documents = documents_result.scalars().all()
             print(f"Found {len(documents)} documents for project {project_id}")
@@ -166,7 +172,7 @@ class CoherenceEngine:
 
     async def _fetch_documents_and_extractions(
         self, db: AsyncSession, project_id: UUID
-    ) -> list["Document"]:
+    ) -> list["DocumentORM"]:
         """
         Fetches documents and their associated clauses for a given project.
         Uses tenant-aware session to ensure RLS is applied.
@@ -174,7 +180,7 @@ class CoherenceEngine:
         print(f"Fetching documents and extractions for project {project_id}")
 
         # Fetch the project first to get the tenant_id
-        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project_result = await db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
         project = project_result.scalar_one_or_none()
 
         if not project:
@@ -183,17 +189,17 @@ class CoherenceEngine:
 
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
             documents_result = await tenant_db.execute(
-                select(Document)
-                .where(Document.project_id == project_id)
-                .options(selectinload(Document.clauses))
+                select(DocumentORM)
+                .where(DocumentORM.project_id == project_id)
+                .options(selectinload(DocumentORM.clauses))
             )
             documents = documents_result.scalars().all()
             print(f"Found {len(documents)} documents for project {project_id}")
             return documents
 
     async def _generate_wbs_and_bom(
-        self, db: AsyncSession, project_id: UUID, documents: list["Document"]
-    ) -> (list["WBSItem"], list["BOMItem"]):
+        self, db: AsyncSession, project_id: UUID, documents: list["DocumentORM"]
+    ) -> (list["WBSItemORM"], list["BOMItemORM"]):
         """
         Generates WBS and BOM items from the extracted entities in document clauses.
         Persists newly generated items to the database.
@@ -201,15 +207,15 @@ class CoherenceEngine:
         print(f"Generating WBS and BOM for project {project_id}")
 
         # Fetch the project first to get the tenant_id
-        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project_result = await db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
         project = project_result.scalar_one_or_none()
 
         if not project:
             print(f"Project with ID {project_id} not found for WBS/BOM generation.")
             return [], []
 
-        generated_wbs_items: list[WBSItem] = []
-        generated_bom_items: list[BOMItem] = []
+        generated_wbs_items: list[WBSItemORM] = []
+        generated_bom_items: list[BOMItemORM] = []
 
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
             for doc in documents:
@@ -225,13 +231,13 @@ class CoherenceEngine:
                             if "wbs_code" in wbs_data and "name" in wbs_data:
                                 # Check if item already exists to prevent duplicates (simple check for now)
                                 existing_wbs = await tenant_db.scalar(
-                                    select(WBSItem).where(
-                                        WBSItem.project_id == project_id,
-                                        WBSItem.wbs_code == wbs_data["wbs_code"],
+                                    select(WBSItemORM).where(
+                                        WBSItemORM.project_id == project_id,
+                                        WBSItemORM.wbs_code == wbs_data["wbs_code"],
                                     )
                                 )
                                 if not existing_wbs:
-                                    wbs_item = WBSItem(
+                                    wbs_item = WBSItemORM(
                                         project_id=project_id,
                                         wbs_code=wbs_data["wbs_code"],
                                         name=wbs_data["name"],
@@ -239,7 +245,7 @@ class CoherenceEngine:
                                         level=wbs_data.get("level", 1),
                                         item_type=wbs_data.get("item_type"),
                                         funded_by_clause_id=clause.id,
-                                        metadata={"source_document_id": str(doc.id)},
+                                        wbs_metadata={"source_document_id": str(doc.id)},
                                     )
                                     tenant_db.add(wbs_item)
                                     generated_wbs_items.append(wbs_item)
@@ -257,17 +263,17 @@ class CoherenceEngine:
                             if "item_name" in bom_data and "quantity" in bom_data:
                                 # Check if item already exists
                                 existing_bom = await tenant_db.scalar(
-                                    select(BOMItem).where(
-                                        BOMItem.project_id == project_id,
-                                        BOMItem.item_name == bom_data["item_name"],
-                                        BOMItem.unit
+                                    select(BOMItemORM).where(
+                                        BOMItemORM.project_id == project_id,
+                                        BOMItemORM.item_name == bom_data["item_name"],
+                                        BOMItemORM.unit
                                         == bom_data.get(
                                             "unit"
                                         ),  # include unit in check for uniqueness
                                     )
                                 )
                                 if not existing_bom:
-                                    bom_item = BOMItem(
+                                    bom_item = BOMItemORM(
                                         project_id=project_id,
                                         item_name=bom_data["item_name"],
                                         quantity=bom_data[
@@ -280,7 +286,7 @@ class CoherenceEngine:
                                         total_price=bom_data.get("total_price"),
                                         currency=bom_data.get("currency", "EUR"),
                                         contract_clause_id=clause.id,
-                                        metadata={"source_document_id": str(doc.id)},
+                                        bom_metadata={"source_document_id": str(doc.id)},
                                     )
                                     tenant_db.add(bom_item)
                                     generated_bom_items.append(bom_item)
@@ -305,9 +311,9 @@ class CoherenceEngine:
         self,
         db: AsyncSession,
         project_id: UUID,
-        documents: list["Document"],
-        wbs: list["WBSItem"],
-        bom: list["BOMItem"],
+        documents: list["DocumentORM"],
+        wbs: list["WBSItemORM"],
+        bom: list["BOMItemORM"],
     ) -> list[dict]:
         """
         Applies predefined coherence rules to the project's documents, WBS, and BOM.
@@ -317,11 +323,11 @@ class CoherenceEngine:
         coherence_results: list[dict] = []
 
         # Helper to find a document by type
-        def get_document_by_type(doc_type: str) -> Document | None:
+        def get_document_by_type(doc_type: str) -> DocumentORM | None:
             return next((doc for doc in documents if doc.document_type.value == doc_type), None)
 
         # Helper to find clauses by type
-        def get_clauses_by_type(clause_type: str) -> list[Clause]:
+        def get_clauses_by_type(clause_type: str) -> list[ClauseORM]:
             all_clauses = [clause for doc in documents for clause in doc.clauses]
             return [
                 clause
@@ -457,7 +463,7 @@ class CoherenceEngine:
         print(f"Saving analysis results for project {project_id}")
 
         # Fetch the project first to get the tenant_id and update it
-        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project_result = await db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
         project = project_result.scalar_one_or_none()
 
         if not project:

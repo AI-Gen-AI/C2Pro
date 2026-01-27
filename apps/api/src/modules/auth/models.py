@@ -30,7 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
 
 if TYPE_CHECKING:
-    from src.modules.projects.models import Project
+    from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SubscriptionPlan(str, Enum):
@@ -107,8 +107,11 @@ class Tenant(Base):
         "User", back_populates="tenant", lazy="selectin", cascade="all, delete-orphan"
     )
 
-    projects: Mapped[list["Project"]] = relationship(
-        "Project", foreign_keys="Project.tenant_id", lazy="select", cascade="all, delete-orphan"
+    projects: Mapped[list["ProjectORM"]] = relationship(
+        "ProjectORM",
+        foreign_keys="ProjectORM.tenant_id",
+        lazy="select",
+        cascade="all, delete-orphan",
     )
 
     # Indexes

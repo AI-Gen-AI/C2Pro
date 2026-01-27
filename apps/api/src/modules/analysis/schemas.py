@@ -11,7 +11,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.modules.analysis.models import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
+from src.analysis.adapters.persistence.models import (
+    AlertSeverity,
+    AlertStatus,
+    AnalysisStatus,
+    AnalysisType,
+)
 
 # ===========================================
 # ANALYSIS SCHEMAS

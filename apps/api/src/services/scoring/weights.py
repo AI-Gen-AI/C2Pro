@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.modules.analysis.models import AlertSeverity
+from src.analysis.adapters.persistence.models import AlertSeverity
 
 SEVERITY_WEIGHTS: dict[AlertSeverity, int] = {
     AlertSeverity.CRITICAL: 25,

@@ -4,6 +4,8 @@ C2Pro API - Main Application
 Entry point de la aplicación FastAPI.
 """
 
+# LEGACY: prefer `src/main.py` for runtime. This file is kept for historical reference.
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -21,9 +23,9 @@ from src.core.middleware import (
     TenantIsolationMiddleware,
 )
 from src.core.observability import configure_logging, init_sentry
-from src.modules.analysis.router import router as analysis_router
+from src.analysis.adapters.http.router import router as analysis_router
 from src.modules.auth.router import router as auth_router
-from src.modules.documents.router import router as documents_router
+from src.documents.adapters.http.router import router as documents_router
 from src.modules.projects.router import router as projects_router
 
 # Configure structured logging

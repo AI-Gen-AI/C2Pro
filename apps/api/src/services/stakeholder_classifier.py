@@ -6,8 +6,8 @@ from typing import Any, Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.ai.ai_service import AIService
-from src.modules.stakeholders.models import InterestLevel, PowerLevel, StakeholderQuadrant
+from src.analysis.adapters.ai.anthropic_client import AIService
+from src.stakeholders.domain.models import InterestLevel, PowerLevel, StakeholderQuadrant
 
 STAKEHOLDER_CLASSIFIER_SYSTEM_PROMPT = """
 Eres un estratega de producto experto en gestion de proyectos.

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from src.modules.documents.models import Clause
+from src.documents.adapters.persistence.models import ClauseORM
 
 # --- Dependency Check ---
 try:
@@ -83,9 +83,9 @@ class SourceLocator:
         match = self.clause_regex.search(query_text)
         if match:
             clause_code = match.group(1)
-            stmt = select(Clause).where(
-                Clause.document_id == document_id,
-                Clause.clause_code == clause_code
+            stmt = select(ClauseORM).where(
+                ClauseORM.document_id == document_id,
+                ClauseORM.clause_code == clause_code
             )
             result = await self.db.execute(stmt)
             clause = result.scalar_one_or_none()
@@ -101,7 +101,7 @@ class SourceLocator:
 
         # --- Slow Path: Fuzzy Search ---
         logger.info("source_locator_slow_path_started", document_id=document_id)
-        stmt_all = select(Clause).where(Clause.document_id == document_id)
+        stmt_all = select(ClauseORM).where(ClauseORM.document_id == document_id)
         result_all = await self.db.execute(stmt_all)
         all_clauses = result_all.scalars().all()
 
