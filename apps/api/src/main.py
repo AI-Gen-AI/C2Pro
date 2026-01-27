@@ -34,6 +34,7 @@ from src.routers.alerts import router as alerts_router
 from src.stakeholders.adapters.http.approvals_router import router as approvals_router
 from src.stakeholders.adapters.http.raci_router import router as raci_router
 from src.stakeholders.adapters.http.router import router as stakeholders_router
+from src.procurement.adapters.http.router import router as procurement_router
 
 logger = structlog.get_logger()
 
@@ -238,6 +239,11 @@ def create_application() -> FastAPI:
 
     app.include_router(
         raci_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        procurement_router,
         prefix=api_v1_prefix,
     )
 

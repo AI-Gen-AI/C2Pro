@@ -373,6 +373,7 @@ class CoherenceEngineV2:
                         Alert(
                             rule_id=rule.id,
                             severity=rule.severity,
+                            category=rule.category or "general",
                             message=f"[Deterministic] Rule '{rule.id}' triggered.",
                             evidence=Evidence(
                                 source_clause_id=finding.triggered_clause.id,
@@ -467,6 +468,7 @@ class CoherenceEngineV2:
         return Alert(
             rule_id=rule.id,
             severity=severity,
+            category=rule.category or "general",
             message=f"[LLM] Rule '{rule.id}' ({finding.raw_data.get('rule_name', '')}) triggered.",
             evidence=Evidence(
                 source_clause_id=finding.triggered_clause.id,
@@ -582,16 +584,24 @@ class CoherenceEngineV2:
         # Compute final score
         score = self.scoring_service.compute_score(alerts)
 
+        # Compute category breakdown
+        category_breakdown = self.scoring_service.compute_category_breakdown(alerts)
+
         logger.info(
             "coherence_evaluation_complete",
             project_id=project.id,
             total_alerts=len(alerts),
             deterministic_findings=self._stats["deterministic_findings"],
             llm_findings=self._stats["llm_findings"],
-            score=score,
+            overall_score=score,
+            categories=len(category_breakdown),
         )
 
-        return CoherenceResult(alerts=alerts, score=score)
+        return CoherenceResult(
+            overall_score=score,
+            alerts=alerts,
+            category_breakdown=category_breakdown
+        )
 
     # ===========================================
     # STATISTICS & UTILITIES
