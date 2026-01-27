@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
 from src.core.database import get_raw_session
-from src.modules.auth.models import Tenant
+from src.core.auth.models import Tenant
 
 logger = structlog.get_logger()
 

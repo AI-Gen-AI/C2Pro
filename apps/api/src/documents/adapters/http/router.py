@@ -198,7 +198,7 @@ async def upload_document_for_processing(
         user_id=user_id,
     )
 
-    from src.tasks.ingestion_tasks import process_document_async
+    from src.core.tasks.ingestion_tasks import process_document_async
 
     task = process_document_async.delay(document_id=document.id)
     response_data = DocumentResponse.model_validate(document).model_dump()

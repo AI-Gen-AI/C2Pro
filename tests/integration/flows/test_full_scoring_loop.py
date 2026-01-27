@@ -121,7 +121,7 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
 
     from src.main import create_application
     from src.ai.ai_service import AIService
-    from src.core.celery_app import celery_app
+    from src.core.tasks.celery_app import celery_app
     from src.modules.documents import models as document_models
     from src.modules.projects import models as project_models
     import src.modules.documents.router as documents_router
