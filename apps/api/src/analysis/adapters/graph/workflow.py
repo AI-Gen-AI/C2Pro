@@ -112,3 +112,37 @@ def get_graph_app():
 
     _graph_app = compile_workflow(checkpointer=_build_checkpointer())
     return _graph_app
+
+
+async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
+    """
+    Run the LangGraph orchestration workflow with the given initial state.
+
+    Args:
+        initial_state: Dictionary containing the initial state for the workflow
+        thread_id: Unique identifier for this thread (used for checkpointing)
+
+    Returns:
+        Dictionary containing the final state after workflow execution
+    """
+    app = get_graph_app()
+
+    # Configure the thread for checkpointing
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    # Invoke the graph with the initial state
+    result = await app.ainvoke(initial_state, config)
+
+    logger.info(
+        "orchestration_completed",
+        thread_id=thread_id,
+        project_id=result.get("project_id"),
+        doc_type=result.get("doc_type"),
+        human_approval_required=result.get("human_approval_required", False),
+    )
+
+    return result

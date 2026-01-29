@@ -55,6 +55,11 @@ class IDocumentRepository(ABC):
     async def add_clause(self, clause: Clause) -> None:
         """Adds a new clause to a document."""
         pass
+
+    @abstractmethod
+    async def clause_exists(self, clause_id: UUID) -> bool:
+        """Checks whether a clause exists by ID."""
+        pass
     
     @abstractmethod
     async def commit(self) -> None:

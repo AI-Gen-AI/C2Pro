@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 from src.stakeholders.domain.models import Stakeholder, StakeholderRole, ContactInfo
 
 # Temporary import for AI dependencies. This will be refactored into an adapter later.
-from src.modules.ai.anthropic_wrapper import get_anthropic_wrapper
-from src.modules.ai.model_router import AITaskType
+from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType
 
 SYSTEM_PROMPT = """
 Eres un Contract Administrator experto en contratos de construccion.
@@ -67,7 +67,7 @@ class ExtractStakeholdersUseCase:
         if not contract_text or not contract_text.strip():
             return []
 
-        from src.modules.ai.anthropic_wrapper import AIRequest
+        from src.core.ai.anthropic_wrapper import AIRequest
 
         request = AIRequest(
             prompt=contract_text,
@@ -96,3 +96,4 @@ def _extract_json_array(raw: str) -> str:
     if start == -1 or end == -1 or end < start:
         raise ValueError(f"LLM response did not include a valid JSON array. Raw response: {raw[:200]}...")
     return raw[start : end + 1]
+

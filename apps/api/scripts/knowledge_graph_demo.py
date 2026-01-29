@@ -7,7 +7,7 @@ from uuid import UUID
 import networkx as nx
 
 from src.core.database import close_db, get_session_with_tenant, init_db
-from src.services.knowledge_graph import ProjectKnowledgeGraph
+from src.analysis.adapters.graph.knowledge_graph import ProjectKnowledgeGraph
 
 
 async def _run(project_id: UUID, tenant_id: UUID, source: str, target: str) -> None:

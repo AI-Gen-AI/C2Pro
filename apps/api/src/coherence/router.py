@@ -1,4 +1,4 @@
-# apps/api/src/modules/coherence/router.py
+# apps/api/src/coherence/router.py
 import os
 
 from fastapi import APIRouter, Depends

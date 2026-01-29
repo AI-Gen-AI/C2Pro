@@ -3,47 +3,30 @@ HTTP adapter (FastAPI router) for RACI endpoints.
 """
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.procurement.adapters.persistence.models import WBSItemORM
-from src.projects.adapters.persistence.models import ProjectORM
-from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
+from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
+from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
+    SqlAlchemyStakeholderRepository,
+)
 from src.stakeholders.application.dtos import (
     RaciAssignmentUpsertRequest,
     RaciAssignmentUpsertResponse,
-    RaciMatrixAssignment,
-    RaciMatrixTaskRow,
     RaciMatrixViewResponse,
 )
-from src.stakeholders.domain.models import RACIRole
+from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixUseCase
+from src.stakeholders.application.upsert_raci_assignment_use_case import (
+    UpsertRaciAssignmentUseCase,
+)
 
 logger = structlog.get_logger()
-
-ROLE_LABELS = {
-    RACIRole.RESPONSIBLE: "RESPONSIBLE",
-    RACIRole.ACCOUNTABLE: "ACCOUNTABLE",
-    RACIRole.CONSULTED: "CONSULTED",
-    RACIRole.INFORMED: "INFORMED",
-}
-
-ROLE_VALUES = {
-    "R": RACIRole.RESPONSIBLE,
-    "A": RACIRole.ACCOUNTABLE,
-    "C": RACIRole.CONSULTED,
-    "I": RACIRole.INFORMED,
-    "RESPONSIBLE": RACIRole.RESPONSIBLE,
-    "ACCOUNTABLE": RACIRole.ACCOUNTABLE,
-    "CONSULTED": RACIRole.CONSULTED,
-    "INFORMED": RACIRole.INFORMED,
-}
 
 router = APIRouter(
     prefix="",
@@ -51,20 +34,40 @@ router = APIRouter(
     responses={404: {"description": "Not Found"}},
 )
 
+def get_stakeholder_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyStakeholderRepository:
+    return SqlAlchemyStakeholderRepository(session=db)
 
-def _role_from_label(role: str) -> RACIRole:
-    if not role or not role.strip():
-        raise HTTPException(status_code=400, detail="role is required")
-    normalized = role.strip().upper()
-    raci_role = ROLE_VALUES.get(normalized)
-    if raci_role is None:
-        raise HTTPException(status_code=400, detail="Invalid RACI role")
-    return raci_role
+def get_wbs_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SQLAlchemyWBSRepository:
+    return SQLAlchemyWBSRepository(session=db)
 
+def get_project_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SQLAlchemyProjectRepository:
+    return SQLAlchemyProjectRepository(session=db)
 
-def _role_to_label(role: RACIRole) -> str:
-    return ROLE_LABELS.get(role, role.value)
+def get_matrix_use_case(
+    stakeholder_repo: SqlAlchemyStakeholderRepository = Depends(get_stakeholder_repository),
+    wbs_repo: SQLAlchemyWBSRepository = Depends(get_wbs_repository),
+    project_repo: SQLAlchemyProjectRepository = Depends(get_project_repository),
+) -> GetRaciMatrixUseCase:
+    return GetRaciMatrixUseCase(
+        stakeholder_repository=stakeholder_repo,
+        wbs_repository=wbs_repo,
+        project_repository=project_repo,
+    )
 
+def get_upsert_use_case(
+    stakeholder_repo: SqlAlchemyStakeholderRepository = Depends(get_stakeholder_repository),
+    wbs_repo: SQLAlchemyWBSRepository = Depends(get_wbs_repository),
+) -> UpsertRaciAssignmentUseCase:
+    return UpsertRaciAssignmentUseCase(
+        stakeholder_repository=stakeholder_repo,
+        wbs_repository=wbs_repo,
+    )
 
 @router.get(
     "/projects/{project_id}/raci",
@@ -75,44 +78,14 @@ async def get_project_raci_matrix(
     project_id: UUID,
     tenant_id: CurrentTenantId,
     _user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session),
+    use_case: GetRaciMatrixUseCase = Depends(get_matrix_use_case),
 ) -> RaciMatrixViewResponse:
-    await _require_project(db, project_id, tenant_id)
-
-    wbs_result = await db.execute(
-        select(WBSItemORM)
-        .where(WBSItemORM.project_id == project_id)
-        .order_by(WBSItemORM.wbs_code)
-    )
-    wbs_items = list(wbs_result.scalars().all())
-    if not wbs_items:
-        return RaciMatrixViewResponse(matrix=[])
-
-    raci_result = await db.execute(
-        select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
-    )
-    raci_rows = list(raci_result.scalars().all())
-
-    assignments_by_task: dict[UUID, list[RaciMatrixAssignment]] = {}
-    for row in raci_rows:
-        assignments_by_task.setdefault(row.wbs_item_id, []).append(
-            RaciMatrixAssignment(
-                stakeholder_id=row.stakeholder_id,
-                role=_role_to_label(row.raci_role),
-                is_verified=row.manually_verified,
-            )
-        )
-
-    matrix = [
-        RaciMatrixTaskRow(
-            task_id=item.id,
-            task_name=item.name,
-            assignments=assignments_by_task.get(item.id, []),
-        )
-        for item in wbs_items
-    ]
-
-    return RaciMatrixViewResponse(matrix=matrix)
+    try:
+        return await use_case.execute(project_id=project_id, tenant_id=tenant_id)
+    except ValueError as exc:
+        if str(exc) == "project_not_found":
+            raise HTTPException(status_code=404, detail="Project not found")
+        raise
 
 
 @router.put(
@@ -124,82 +97,31 @@ async def upsert_raci_assignment(
     payload: RaciAssignmentUpsertRequest,
     tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session),
+    use_case: UpsertRaciAssignmentUseCase = Depends(get_upsert_use_case),
 ) -> RaciAssignmentUpsertResponse:
-    raci_role = _role_from_label(payload.role)
-
-    wbs_item = await db.scalar(select(WBSItemORM).where(WBSItemORM.id == payload.task_id))
-    if wbs_item is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    await _require_project(db, wbs_item.project_id, tenant_id)
-
-    stakeholder = await db.scalar(
-        select(StakeholderORM).where(StakeholderORM.id == payload.stakeholder_id)
-    )
-    if stakeholder is None:
-        raise HTTPException(status_code=404, detail="Stakeholder not found")
-
-    if stakeholder.project_id != wbs_item.project_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Stakeholder and task must belong to the same project",
+    try:
+        return await use_case.execute(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            payload=payload,
         )
-
-    if raci_role == RACIRole.ACCOUNTABLE:
-        existing_accountable = await db.scalar(
-            select(StakeholderWBSRaciORM).where(
-                StakeholderWBSRaciORM.wbs_item_id == wbs_item.id,
-                StakeholderWBSRaciORM.raci_role == RACIRole.ACCOUNTABLE,
-                StakeholderWBSRaciORM.stakeholder_id != stakeholder.id,
+    except ValueError as exc:
+        reason = str(exc)
+        if reason == "task_not_found":
+            raise HTTPException(status_code=404, detail="Task not found")
+        if reason == "stakeholder_not_found":
+            raise HTTPException(status_code=404, detail="Stakeholder not found")
+        if reason == "stakeholder_project_mismatch":
+            raise HTTPException(
+                status_code=400,
+                detail="Stakeholder and task must belong to the same project",
             )
-        )
-        if existing_accountable is not None:
+        if reason == "accountable_exists":
             raise HTTPException(
                 status_code=400, detail="Only one ACCOUNTABLE is allowed per task"
             )
-
-    assignment = await db.scalar(
-        select(StakeholderWBSRaciORM).where(
-            StakeholderWBSRaciORM.wbs_item_id == wbs_item.id,
-            StakeholderWBSRaciORM.stakeholder_id == stakeholder.id,
-        )
-    )
-
-    if assignment is None:
-        assignment = StakeholderWBSRaciORM(
-            project_id=wbs_item.project_id,
-            stakeholder_id=stakeholder.id,
-            wbs_item_id=wbs_item.id,
-            raci_role=raci_role,
-        )
-        db.add(assignment)
-    else:
-        assignment.raci_role = raci_role
-
-    assignment.generated_automatically = False
-    assignment.manually_verified = True
-    assignment.verified_by = user_id
-    assignment.verified_at = datetime.utcnow()
-
-    await db.commit()
-    await db.refresh(assignment)
-
-    return RaciAssignmentUpsertResponse(
-        task_id=wbs_item.id,
-        stakeholder_id=stakeholder.id,
-        role=_role_to_label(assignment.raci_role),
-        is_verified=assignment.manually_verified,
-    )
-
-
-async def _require_project(
-    db: AsyncSession,
-    project_id: UUID,
-    tenant_id: UUID,
-) -> None:
-    project = await db.scalar(
-        select(ProjectORM).where(ProjectORM.id == project_id, ProjectORM.tenant_id == tenant_id)
-    )
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        if reason == "role_required":
+            raise HTTPException(status_code=400, detail="role is required")
+        if reason == "invalid_role":
+            raise HTTPException(status_code=400, detail="Invalid RACI role")
+        raise

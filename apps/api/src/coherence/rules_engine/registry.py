@@ -1,4 +1,4 @@
-# apps/api/src/modules/coherence/rules_engine/registry.py
+# apps/api/src/coherence/rules_engine/registry.py
 """
 C2Pro - Coherence Rules Registry
 

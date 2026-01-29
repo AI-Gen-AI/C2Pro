@@ -32,7 +32,7 @@ from src.core.database import Base
 if TYPE_CHECKING:
     # Assuming these modules will also have their persistence models
     from src.analysis.adapters.persistence.models import Alert
-    from src.security.adapters.persistence.models import User, Tenant
+    from src.core.auth.models import User, Tenant
     from src.projects.adapters.persistence.models import ProjectORM
     from src.stakeholders.adapters.persistence.models import StakeholderORM
     from src.procurement.adapters.persistence.models import BOMItemORM, WBSItemORM

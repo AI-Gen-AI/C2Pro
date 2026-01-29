@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.approval import ApprovalStatus
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.analysis.adapters.persistence.models import Alert
 from src.stakeholders.adapters.persistence.models import StakeholderORM
 
 logger = structlog.get_logger()
@@ -43,7 +42,6 @@ class ApprovalResponse(BaseModel):
 
 RESOURCE_MAP = {
     "stakeholders": "stakeholders",
-    "risks": "alerts",
 }
 
 
@@ -70,9 +68,7 @@ async def review_resource(
         original_snapshot = _snapshot_record(record)
         _apply_corrections(record, payload.correction_data, _stakeholder_fields())
     else:
-        record = await _get_alert(db, resource_id)
-        original_snapshot = _snapshot_record(record)
-        _apply_corrections(record, payload.correction_data, _alert_fields())
+        raise HTTPException(status_code=400, detail="Unsupported resource type")
 
     record.approval_status = _normalize_status(payload.status, payload.correction_data)
     record.reviewed_by = user_id
@@ -104,13 +100,6 @@ async def _get_stakeholder(db: AsyncSession, stakeholder_id: UUID) -> Stakeholde
     result = await db.get(StakeholderORM, stakeholder_id)
     if not result:
         raise HTTPException(status_code=404, detail="Stakeholder not found")
-    return result
-
-
-async def _get_alert(db: AsyncSession, alert_id: UUID) -> Alert:
-    result = await db.get(Alert, alert_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Risk not found")
     return result
 
 
@@ -154,21 +143,9 @@ def _stakeholder_fields() -> set[str]:
     }
 
 
-def _alert_fields() -> set[str]:
-    return {
-        "title",
-        "description",
-        "recommendation",
-        "severity",
-        "category",
-        "impact_level",
-        "alert_metadata",
-    }
-
-
 def _snapshot_record(record: Any) -> dict[str, Any]:
     snapshot = {}
-    for field in _stakeholder_fields() | _alert_fields():
+    for field in _stakeholder_fields():
         if hasattr(record, field):
             snapshot[field] = getattr(record, field)
     return snapshot

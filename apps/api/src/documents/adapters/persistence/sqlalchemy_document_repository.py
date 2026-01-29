@@ -167,6 +167,12 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         orm_clause = self._to_orm_clause(clause)
         self.session.add(orm_clause)
 
+    async def clause_exists(self, clause_id: UUID) -> bool:
+        result = await self.session.execute(
+            select(ClauseORM.id).where(ClauseORM.id == clause_id)
+        )
+        return result.scalar_one_or_none() is not None
+
     async def commit(self) -> None:
         await self.session.commit()
 

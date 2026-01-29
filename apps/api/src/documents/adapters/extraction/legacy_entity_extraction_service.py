@@ -15,7 +15,7 @@ import structlog
 from sqlalchemy import select
 
 from src.core.database import get_session_with_tenant
-from src.services.stakeholder_classifier import StakeholderClassifier, StakeholderInput
+from src.stakeholders.adapters.ai.classifier import StakeholderClassifier, StakeholderInput
 from src.stakeholders.adapters.persistence.models import StakeholderORM as Stakeholder
 from src.procurement.adapters.persistence.models import BOMItemORM as BOMItem, WBSItemORM as WBSItem, WBSItemType
 

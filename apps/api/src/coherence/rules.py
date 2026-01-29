@@ -94,7 +94,7 @@ if __name__ == "__main__":
   severity: medium
   evidence_fields: ["project.schedule.status"]
 """
-    example_yaml_path = "apps/api/src/modules/coherence/example_rules.yaml"
+    example_yaml_path = "apps/api/src/coherence/example_rules.yaml"
     with open(example_yaml_path, "w", encoding="utf-8") as f:
         f.write(example_yaml_content)
 

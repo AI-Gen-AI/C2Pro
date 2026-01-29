@@ -336,7 +336,7 @@ service = get_coherence_llm_service(low_budget_mode=True)
 ### Prompt Templates
 
 Los templates de prompts están en:
-- `src/modules/ai/prompts/v1/coherence_analysis.py`
+- `src/core/ai/prompts/v1/coherence_analysis.py`
 
 Incluyen templates para:
 - Análisis de cláusulas individuales

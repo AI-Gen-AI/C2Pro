@@ -1,4 +1,4 @@
-# apps/api/src/modules/coherence/rules_engine/deterministic.py
+# apps/api/src/coherence/rules_engine/deterministic.py
 
 from ..models import Clause
 from .base import Finding, RuleEvaluator

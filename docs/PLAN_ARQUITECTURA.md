@@ -9,6 +9,16 @@ Este plan representa nuestra hoja de ruta para transformar la base de código de
 - **Fase 3 (Escalado y Madurez):** Puntos 9-11. Reforzamos nuestros contratos, estrategia de pruebas y documentación para escalar el equipo y el producto.
 
 ---
+## Checklist de Consolidación Cross-Módulo (Fase 1)
+- [ ] **Eliminar imports ORM cruzados en adapters HTTP** (routers deben delegar a application services).
+- [ ] **Crear puertos de consulta mínimos entre módulos** (existencia/lectura de entidades) y exponerlos desde la capa de aplicación.
+- [ ] **Migrar servicios application que usan ORM de otros módulos** a puertos y DTOs.
+- [ ] **Aislar adapters transicionales** (ej: `legacy_entity_extraction_service`) con TODO y rutas claras de eliminación.
+- [ ] **Reducir relaciones ORM cross-módulo** a FKs simples o moverlas a una capa infra de integración.
+- [ ] **Documentar contratos públicos por módulo** (exports + puertos permitidos).
+- [ ] **Verificar cumplimiento con rg** (no `*.adapters.persistence.models` cross-modulo en application/adapters HTTP).
+
+---
 ## 1. Fundación: Monolito Modular y DDD
 - **Responsable**: Arquitecto Principal + Tech Lead
 - **Logros Esperados**: Estructura de código única, sin ambigüedad, que refleje el negocio. Reduce drásticamente el tiempo de onboarding y la duplicación de código. Se establece la base para toda la evolución futura.
@@ -17,6 +27,9 @@ Este plan representa nuestra hoja de ruta para transformar la base de código de
   - **1.2. Definir los Módulos (Bounded Contexts)**: Mapear y crear la estructura de directorios para los módulos principales (ej: `documents`, `analysis`, `stakeholders`, `procurement`, `security`).
   - **1.3. Establecer la Política de Comunicación Inter-Módulo**: Formalizar la regla de que los módulos **solo** pueden comunicarse a través de interfaces públicas (Puertos) definidas en la capa de aplicación del módulo invocado. Prohibir importaciones directas a modelos, repositorios o servicios internos de otros módulos.
   - **1.4. Consolidar Código Duplicado**: Migrar la lógica dispersa (en `agents/`, `routers/`, etc.) a sus respectivos nuevos módulos.
+  - **1.5. Separar Dominio vs Infraestructura**: Declarar explícitamente qué directorios son **dominio** (`documents`, `analysis`, `stakeholders`, `procurement`, `projects`, `coherence`) y cuáles son **infraestructura transversal** (`core/*`: auth, mcp, observability, middleware, tasks, database, cache, security).
+  - **1.6. Eliminar Ambigüedad de Ubicación**: Asegurar que no existan módulos duplicados (por ejemplo `auth` fuera de `core/`, `routers/` legacy). Todo código activo debe vivir en la estructura final.
+  - **1.7. Definir Contratos Públicos por Módulo**: Documentar qué paquetes son públicos (exports) y cuáles son internos, y reforzar con convenciones de import.
 
 ---
 
@@ -28,6 +41,7 @@ Este plan representa nuestra hoja de ruta para transformar la base de código de
   - **2.2. Definir Puertos (Interfaces)**: En cada módulo, definir los `ports` para repositorios (`IRepository`) y servicios externos.
   - **2.3. Implementar Adaptadores**: Implementar los `adapters` en una capa de infraestructura, manteniendo el ORM (SQLAlchemy) y otros detalles de implementación aislados del dominio.
   - **2.4. Mover lógica a Casos de Uso (Application Services)**: Refactorizar los routers para que sean "delgados", delegando toda la lógica de orquestación a `application/use_cases`. Estos casos de uso son los únicos que interactúan con los repositorios y otros servicios.
+  - **2.5. Infraestructura Transversal sin Sobre-ingeniería**: Los módulos en `core/` pueden usar estructura simple (models/service/router) cuando no exista lógica de dominio. Solo aplicar hexagonal en `core/` si hay reglas de negocio complejas y claras.
 
 ---
 ## 3. Seguridad Multitenant: Defensa en Profundidad

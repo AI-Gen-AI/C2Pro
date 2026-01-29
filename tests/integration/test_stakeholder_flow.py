@@ -30,7 +30,7 @@ from src.modules.stakeholders.models import (
     WBSItem,
     WBSItemType,
 )
-from src.services.stakeholder_classifier import StakeholderClassifier, StakeholderInput
+from src.stakeholders.adapters.ai.classifier import StakeholderClassifier, StakeholderInput
 
 
 async def _override_get_session():

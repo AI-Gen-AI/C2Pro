@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.services.rag_service import RagService
+from src.documents.adapters.rag.rag_service import RagService
 
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser

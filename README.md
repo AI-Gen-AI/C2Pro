@@ -51,8 +51,7 @@ c2pro/
 │   ├── web/                  # Frontend Next.js
 │   └── api/                  # Backend FastAPI
 ├── packages/                 # Shared packages (futuro)
-├── infrastructure/           # Supabase migrations, scripts
-├── scripts/                  # Scripts de utilidad
+├── infrastructure/           # Infraestructura (DB, scripts operativos)
 ├── docs/
 │   ├── DEVELOPMENT_STATUS.md # Estado principal del desarrollo
 │   ├── ROADMAP_v2.4.0.md     # Roadmap actual
@@ -79,11 +78,11 @@ cp .env.example .env
 # Edita .env y añade tu DATABASE_URL
 
 # 2. Opción A: Script automático (Windows)
-.\scripts\init-backend.bat
+.\infrastructure\scripts\init-backend.bat
 
 # 2. Opción B: Script automático (Linux/Mac)
-chmod +x scripts/init-backend.sh
-./scripts/init-backend.sh
+chmod +x infrastructure/scripts/init-backend.sh
+./infrastructure/scripts/init-backend.sh
 
 # 2. Opción C: Manual
 cd apps/api
@@ -209,6 +208,16 @@ Ver `.env.example` para la lista completa. Las críticas son:
 - [Runbooks](docs/runbooks/) - Guías operativas y configuración
 - [Especificaciones](docs/specifications/) - Documentación técnica
 - [Wireframes](docs/wireframes/) - Diseños de interfaz
+
+## 🧭 Significado de carpetas clave
+
+- `apps/`: productos ejecutables (backend/frontend).
+- `infrastructure/`: base de datos, migraciones y scripts operativos (todo lo infra).
+- `supabase/`: workspace del Supabase CLI (config local + migrations para CLI).
+- `docs/`: documentación viva del proyecto (estado, roadmap, ADRs).
+- `tests/`: suites globales y utilidades de testing.
+- `evidence/`: evidencia generada (CTO gates, reportes, artefactos).
+- `backups/`: backups locales/manuales (si se usan).
 
 ## 🛣️ Roadmap
 

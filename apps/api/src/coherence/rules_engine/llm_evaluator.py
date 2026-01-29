@@ -24,8 +24,8 @@ from uuid import UUID
 
 import structlog
 
-from src.modules.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
-from src.modules.ai.model_router import AITaskType
+from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType
 from src.coherence.models import Clause
 from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
@@ -443,3 +443,4 @@ def get_predefined_llm_evaluators(
         create_llm_evaluator_from_rule(rule, low_budget_mode, tenant_id)
         for rule in QUALITATIVE_RULES
     ]
+
