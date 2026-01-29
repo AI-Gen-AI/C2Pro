@@ -23,13 +23,13 @@ from uuid import UUID
 
 import structlog
 
-from src.modules.ai.anthropic_wrapper import (
+from src.core.ai.anthropic_wrapper import (
     AIRequest,
     AIResponse,
     get_anthropic_wrapper,
     AnthropicWrapper,
 )
-from src.modules.ai.model_router import AITaskType, ModelTier
+from src.core.ai.model_router import AITaskType, ModelTier
 from src.coherence.models import Clause, ProjectContext, Alert, Evidence
 
 logger = structlog.get_logger()
@@ -735,3 +735,4 @@ def reset_coherence_llm_service() -> None:
     """Reset singleton (útil para testing)."""
     global _service
     _service = None
+

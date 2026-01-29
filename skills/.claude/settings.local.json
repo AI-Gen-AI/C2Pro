@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c:*)",
+      "Bash(python -m pytest tests/core/test_error_handlers.py -v --tb=short)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m src.modules.ai.test_prompts_simple:*)",
+      "Bash(npm run build:*)",
+      "Bash(tee:*)",
+      "Bash(timeout 120 npm run build)"
+    ]
+  }
+}

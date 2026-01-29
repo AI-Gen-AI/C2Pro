@@ -29,7 +29,7 @@ from src.stakeholders.domain.models import PowerLevel, InterestLevel, Stakeholde
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
-    from src.security.adapters.persistence.models import User
+    from src.core.auth.models import User
     from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
     from src.projects.adapters.persistence.models import ProjectORM
     from src.procurement.adapters.persistence.models import WBSItemORM

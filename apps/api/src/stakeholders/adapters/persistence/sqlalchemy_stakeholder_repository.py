@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.approval import ApprovalStatus
-from src.stakeholders.domain.models import Stakeholder, RaciAssignment
+from src.stakeholders.domain.models import Stakeholder, RaciAssignment, RACIRole
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 
@@ -69,6 +69,21 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             reviewed_at=domain.reviewed_at,
             review_comment=domain.review_comment,
             stakeholder_metadata=domain.stakeholder_metadata,
+        )
+
+    def _to_raci_domain(self, orm: StakeholderWBSRaciORM) -> RaciAssignment:
+        return RaciAssignment(
+            id=orm.id,
+            project_id=orm.project_id,
+            stakeholder_id=orm.stakeholder_id,
+            wbs_item_id=orm.wbs_item_id,
+            raci_role=orm.raci_role,
+            evidence_text=orm.evidence_text,
+            generated_automatically=orm.generated_automatically,
+            manually_verified=orm.manually_verified,
+            verified_by=orm.verified_by,
+            verified_at=orm.verified_at,
+            created_at=orm.created_at,
         )
 
     def _to_raci_orm(self, assignment: RaciAssignment) -> StakeholderWBSRaciORM:
@@ -144,6 +159,54 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def add_raci_assignment(self, assignment: RaciAssignment) -> None:
         self.session.add(self._to_raci_orm(assignment))
 
+    async def list_raci_assignments(self, project_id: UUID) -> List[RaciAssignment]:
+        result = await self.session.execute(
+            select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
+        )
+        rows = result.scalars().all()
+        return [self._to_raci_domain(row) for row in rows]
+
+    async def get_raci_assignment(
+        self, project_id: UUID, wbs_item_id: UUID, stakeholder_id: UUID
+    ) -> RaciAssignment | None:
+        result = await self.session.execute(
+            select(StakeholderWBSRaciORM).where(
+                StakeholderWBSRaciORM.project_id == project_id,
+                StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
+                StakeholderWBSRaciORM.stakeholder_id == stakeholder_id,
+            )
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_raci_domain(orm) if orm else None
+
+    async def get_accountable_assignment(
+        self,
+        project_id: UUID,
+        wbs_item_id: UUID,
+        exclude_stakeholder_id: UUID | None = None,
+    ) -> RaciAssignment | None:
+        stmt = select(StakeholderWBSRaciORM).where(
+            StakeholderWBSRaciORM.project_id == project_id,
+            StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
+            StakeholderWBSRaciORM.raci_role == RACIRole.ACCOUNTABLE,
+        )
+        if exclude_stakeholder_id:
+            stmt = stmt.where(StakeholderWBSRaciORM.stakeholder_id != exclude_stakeholder_id)
+        result = await self.session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        return self._to_raci_domain(orm) if orm else None
+
+    async def update_raci_assignment(self, assignment: RaciAssignment) -> None:
+        orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
+        if not orm:
+            return
+        orm.raci_role = assignment.raci_role
+        orm.evidence_text = assignment.evidence_text
+        orm.generated_automatically = assignment.generated_automatically
+        orm.manually_verified = assignment.manually_verified
+        orm.verified_by = assignment.verified_by
+        orm.verified_at = assignment.verified_at
+
     async def commit(self) -> None:
         await self.session.commit()
 
@@ -170,3 +233,13 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
                 entity.stakeholder_metadata = orm.stakeholder_metadata or {}
                 entity.created_at = orm.created_at
                 entity.updated_at = orm.updated_at
+        if isinstance(entity, RaciAssignment):
+            orm = await self.session.get(StakeholderWBSRaciORM, entity.id)
+            if orm:
+                await self.session.refresh(orm)
+                entity.raci_role = orm.raci_role
+                entity.evidence_text = orm.evidence_text
+                entity.generated_automatically = orm.generated_automatically
+                entity.manually_verified = orm.manually_verified
+                entity.verified_by = orm.verified_by
+                entity.verified_at = orm.verified_at

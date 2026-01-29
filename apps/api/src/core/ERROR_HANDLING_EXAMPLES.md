@@ -200,13 +200,13 @@ from src.core.exceptions import (
     QuotaExceededException,
     ResourceNotFoundError
 )
-from src.modules.projects.schemas import ProjectCreate, ProjectResponse
+from src.projects.application.dtos import ProjectCreateRequest, ProjectDetailResponse
 
 router = APIRouter()
 
-@router.post("/projects", response_model=ProjectResponse)
+@router.post("/projects", response_model=ProjectDetailResponse)
 async def create_project(
-    project_data: ProjectCreate,
+    project_data: ProjectCreateRequest,
     current_user = Depends(get_current_user)
 ):
     """Crea un nuevo proyecto."""
@@ -415,7 +415,7 @@ def test_internal_error_no_stack_trace(client: TestClient, auth_headers, monkeyp
     def mock_get_project(project_id: str):
         raise RuntimeError("Database connection failed")
 
-    monkeypatch.setattr("src.modules.projects.router.get_project", mock_get_project)
+    monkeypatch.setattr("src.projects.adapters.http.router.get_project", mock_get_project)
 
     # Request que causa error 500
     response = client.get("/api/v1/projects/123", headers=auth_headers)

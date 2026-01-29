@@ -1,4 +1,4 @@
-# apps/api/src/modules/coherence/rules_engine/base.py
+# apps/api/src/coherence/rules_engine/base.py
 from abc import ABC, abstractmethod
 from typing import Any
 

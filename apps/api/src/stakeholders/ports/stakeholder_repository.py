@@ -41,6 +41,33 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
+    async def list_raci_assignments(self, project_id: UUID) -> List[RaciAssignment]:
+        """Lists RACI assignments for a project."""
+        pass
+
+    @abstractmethod
+    async def get_raci_assignment(
+        self, project_id: UUID, wbs_item_id: UUID, stakeholder_id: UUID
+    ) -> RaciAssignment | None:
+        """Retrieves a single RACI assignment by composite key."""
+        pass
+
+    @abstractmethod
+    async def get_accountable_assignment(
+        self,
+        project_id: UUID,
+        wbs_item_id: UUID,
+        exclude_stakeholder_id: UUID | None = None,
+    ) -> RaciAssignment | None:
+        """Finds an existing ACCOUNTABLE assignment for a task."""
+        pass
+
+    @abstractmethod
+    async def update_raci_assignment(self, assignment: RaciAssignment) -> None:
+        """Updates an existing RACI assignment."""
+        pass
+
+    @abstractmethod
     async def commit(self) -> None:
         """Commits pending changes to the repository."""
         pass

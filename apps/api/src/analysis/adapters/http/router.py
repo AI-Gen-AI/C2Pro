@@ -4,8 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
-# TODO: Arreglar import - orchestrator es un shim legacy
-# from src.analysis.adapters.ai.orchestrator import run_orchestration
+
+from src.analysis.adapters.graph.workflow import run_orchestration
 
 router = APIRouter(
     prefix="",

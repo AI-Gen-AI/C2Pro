@@ -13,9 +13,9 @@ from tenacity import RetryError, retry, retry_if_exception_type, stop_after_atte
 
 from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
-from src.modules.ai.anthropic_wrapper import AIRequest as WrapperRequest
-from src.modules.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
-from src.modules.ai.model_router import AITaskType
+from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
+from src.core.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType
 
 logger = structlog.get_logger()
 
@@ -248,3 +248,4 @@ class AIService:
                 "confidence": 0.84,
             }
         ]
+

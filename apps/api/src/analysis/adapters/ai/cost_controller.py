@@ -17,7 +17,7 @@ CLAUDE_3_HAIKU_OUTPUT = 1.25
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.modules.tenants.service import get_tenant_by_id
+from src.core.tenants.service import get_tenant_by_id
 from datetime import datetime
 from uuid import UUID
 
@@ -146,5 +146,6 @@ class CostControllerService:
         output_cost = (output_tokens / 1_000_000) * output_price_per_million
         
         return input_cost + output_cost
+
 
 

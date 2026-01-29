@@ -10,7 +10,7 @@ from uuid import UUID
 import structlog
 
 from src.core.database import get_session_with_tenant
-from src.services.rag_service import RagService
+from src.documents.adapters.rag.rag_service import RagService
 
 from src.documents.domain.models import Document
 from src.documents.ports.rag_ingestion_service import IRagIngestionService

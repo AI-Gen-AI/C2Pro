@@ -1,29 +1,52 @@
 """
-C2Pro - Projects Router
+C2Pro - Projects HTTP Router (Hexagonal Architecture)
 
-TRANSITIONAL IMPLEMENTATION:
-This router currently uses ORM directly instead of use cases.
-TODO: Refactor to use proper application/use_cases/ when implemented.
+This router follows the hexagonal architecture pattern:
+- Delegates business logic to use cases
+- Uses DTOs for request/response validation
+- Injects dependencies (repository, session)
+- Handles HTTP-specific concerns (status codes, errors)
 
 Endpoints:
 - GET /projects - List projects with pagination and filters
 - POST /projects - Create new project
 - GET /projects/{id} - Get project by ID
 - PUT /projects/{id} - Update project
+- DELETE /projects/{id} - Delete project
 """
 
-from uuid import UUID, uuid4
-from datetime import datetime
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
-from src.core.exceptions import NotFoundError, ConflictError
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.projects.adapters.persistence.models import ProjectORM
+
+# Domain models
+from src.projects.domain.models import ProjectStatus, ProjectType
+
+# DTOs
+from src.projects.application.dtos import (
+    ProjectCreateRequest,
+    ProjectUpdateRequest,
+    ProjectDetailResponse,
+    ProjectListResponse,
+)
+
+# Use cases
+from src.projects.application.use_cases import (
+    CreateProjectUseCase,
+    GetProjectUseCase,
+    ListProjectsUseCase,
+    UpdateProjectUseCase,
+    DeleteProjectUseCase,
+)
+
+# Repository
+from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
+
 
 logger = structlog.get_logger()
 
@@ -37,187 +60,179 @@ router = APIRouter(
 )
 
 # ===========================================
-# TRANSITIONAL DTOs (inline until proper DTOs are imported)
+# DEPENDENCY INJECTION
 # ===========================================
 
-from pydantic import BaseModel, Field
-
-class ProjectCreateDTO(BaseModel):
-    """DTO for creating a project."""
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str | None = None
-    code: str | None = None
-    project_type: str = "construction"
-    estimated_budget: float | None = None
-    currency: str = "EUR"
-    start_date: datetime | None = None
-    end_date: datetime | None = None
-
-class ProjectUpdateDTO(BaseModel):
-    """DTO for updating a project."""
-    name: str | None = None
-    description: str | None = None
-    code: str | None = None
-    project_type: str | None = None
-    status: str | None = None
-    estimated_budget: float | None = None
-    currency: str | None = None
-    start_date: datetime | None = None
-    end_date: datetime | None = None
-
-class ProjectResponseDTO(BaseModel):
-    """DTO for project response."""
-    id: UUID
-    tenant_id: UUID
-    name: str | None
-    created_at: datetime | None
-    updated_at: datetime | None
-
-    class Config:
-        from_attributes = True
-
-class PaginatedProjectsDTO(BaseModel):
-    """DTO for paginated projects list."""
-    items: list[ProjectResponseDTO]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+def get_project_repository(session: AsyncSession = Depends(get_session)) -> SQLAlchemyProjectRepository:
+    """Dependency injection for project repository."""
+    return SQLAlchemyProjectRepository(session)
 
 # ===========================================
 # ENDPOINTS
 # ===========================================
 
-@router.get("", response_model=PaginatedProjectsDTO, summary="List projects")
+@router.get("", response_model=ProjectListResponse, summary="List projects")
 async def list_projects(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    status: str | None = Query(None),
-    search: str | None = Query(None),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search in name, code, or description"),
+    status: ProjectStatus | None = Query(None, description="Filter by status"),
+    project_type: ProjectType | None = Query(None, description="Filter by project type"),
     tenant_id: UUID = Depends(CurrentTenantId),
-    db: AsyncSession = Depends(get_session),
-) -> PaginatedProjectsDTO:
+    repository: SQLAlchemyProjectRepository = Depends(get_project_repository),
+    session: AsyncSession = Depends(get_session),
+) -> ProjectListResponse:
     """
     List projects with pagination and optional filters.
 
     **Filters:**
-    - `status`: Filter by project status
-    - `search`: Search in project name (case-insensitive)
+    - `search`: Search in project name, code, or description (case-insensitive)
+    - `status`: Filter by project status (draft, active, completed, archived)
+    - `project_type`: Filter by project type (construction, engineering, etc.)
+
+    **Pagination:**
+    - `page`: Page number (starts at 1)
+    - `page_size`: Items per page (max 100)
     """
     try:
-        # Build base query
-        query = select(ProjectORM).where(ProjectORM.tenant_id == tenant_id)
+        use_case = ListProjectsUseCase(repository)
+        projects, total = await use_case.execute(
+            tenant_id=tenant_id,
+            page=page,
+            page_size=page_size,
+            search=search,
+            status=status,
+            project_type=project_type,
+        )
 
-        # Apply filters
-        if search:
-            query = query.where(ProjectORM.name.ilike(f"%{search}%"))
+        # Commit session after read
+        await session.commit()
 
-        # Count total
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
+        # Map to response DTOs
+        items = [
+            ProjectDetailResponse(
+                id=p.id,
+                tenant_id=p.tenant_id,
+                name=p.name,
+                description=p.description,
+                code=p.code,
+                project_type=p.project_type,
+                status=p.status,
+                estimated_budget=p.estimated_budget,
+                currency=p.currency,
+                start_date=p.start_date,
+                end_date=p.end_date,
+                coherence_score=p.coherence_score,
+                last_analysis_at=p.last_analysis_at,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in projects
+        ]
 
-        # Apply pagination
-        offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size)
-
-        # Execute
-        result = await db.execute(query)
-        projects = result.scalars().all()
-
-        # Calculate total pages
-        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-
-        logger.info(
-            "projects_listed",
-            tenant_id=str(tenant_id),
+        return ProjectListResponse(
+            items=items,
             total=total,
             page=page,
             page_size=page_size,
         )
 
-        return PaginatedProjectsDTO(
-            items=[ProjectResponseDTO.model_validate(p) for p in projects],
-            total=total,
-            page=page,
-            page_size=page_size,
-            total_pages=total_pages,
+    except ValueError as e:
+        logger.error("list_projects_validation_error", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
-
     except Exception as e:
         logger.error("list_projects_failed", error=str(e), tenant_id=str(tenant_id))
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list projects"
+            detail="Failed to list projects",
         )
 
 
-@router.post("", response_model=ProjectResponseDTO, status_code=status.HTTP_201_CREATED, summary="Create project")
+@router.post("", response_model=ProjectDetailResponse, status_code=status.HTTP_201_CREATED, summary="Create project")
 async def create_project(
-    data: ProjectCreateDTO,
+    data: ProjectCreateRequest,
     tenant_id: UUID = Depends(CurrentTenantId),
     user_id: UUID = Depends(CurrentUserId),
-    db: AsyncSession = Depends(get_session),
-) -> ProjectResponseDTO:
+    repository: SQLAlchemyProjectRepository = Depends(get_project_repository),
+    session: AsyncSession = Depends(get_session),
+) -> ProjectDetailResponse:
     """
     Create a new project.
 
     **Required fields:**
-    - `name`: Project name
+    - `name`: Project name (1-255 characters)
+
+    **Optional fields:**
+    - `description`: Detailed description
+    - `code`: Unique project code
+    - `project_type`: Type of project (default: construction)
+    - `estimated_budget`: Budget estimate
+    - `currency`: Currency code (default: EUR)
+    - `start_date`: Project start date
+    - `end_date`: Project end date
     """
     try:
-        # Check for duplicate code if provided
-        if data.code:
-            existing = await db.execute(
-                select(ProjectORM).where(
-                    ProjectORM.tenant_id == tenant_id,
-                    ProjectORM.code == data.code
-                )
-            )
-            if existing.scalar_one_or_none():
-                raise ConflictError(f"Project with code '{data.code}' already exists")
-
-        # Create project
-        project = ProjectORM(
-            id=uuid4(),
+        use_case = CreateProjectUseCase(repository)
+        project = await use_case.execute(
             tenant_id=tenant_id,
+            user_id=user_id,
             name=data.name,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            description=data.description,
+            code=data.code,
+            project_type=data.project_type,
+            estimated_budget=data.estimated_budget,
+            currency=data.currency,
+            start_date=data.start_date,
+            end_date=data.end_date,
         )
 
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
+        await session.commit()
 
-        logger.info(
-            "project_created",
-            project_id=str(project.id),
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
+        return ProjectDetailResponse(
+            id=project.id,
+            tenant_id=project.tenant_id,
+            name=project.name,
+            description=project.description,
+            code=project.code,
+            project_type=project.project_type,
+            status=project.status,
+            estimated_budget=project.estimated_budget,
+            currency=project.currency,
+            start_date=project.start_date,
+            end_date=project.end_date,
+            coherence_score=project.coherence_score,
+            last_analysis_at=project.last_analysis_at,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
         )
 
-        return ProjectResponseDTO.model_validate(project)
-
-    except ConflictError:
+    except ValueError as e:
+        logger.error("create_project_validation_error", error=str(e))
+        await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Project with code '{data.code}' already exists"
+            status_code=status.HTTP_409_CONFLICT if "already exists" in str(e) else status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
     except Exception as e:
         logger.error("create_project_failed", error=str(e), tenant_id=str(tenant_id))
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create project"
+            detail="Failed to create project",
         )
 
 
-@router.get("/{project_id}", response_model=ProjectResponseDTO, summary="Get project")
+@router.get("/{project_id}", response_model=ProjectDetailResponse, summary="Get project")
 async def get_project(
     project_id: UUID,
     tenant_id: UUID = Depends(CurrentTenantId),
-    db: AsyncSession = Depends(get_session),
-) -> ProjectResponseDTO:
+    repository: SQLAlchemyProjectRepository = Depends(get_project_repository),
+    session: AsyncSession = Depends(get_session),
+) -> ProjectDetailResponse:
     """
     Get a project by ID.
 
@@ -225,107 +240,158 @@ async def get_project(
     Only returns projects belonging to the authenticated tenant.
     """
     try:
-        result = await db.execute(
-            select(ProjectORM).where(
-                ProjectORM.id == project_id,
-                ProjectORM.tenant_id == tenant_id,
-            )
+        use_case = GetProjectUseCase(repository)
+        project = await use_case.execute(project_id, tenant_id)
+
+        await session.commit()
+
+        return ProjectDetailResponse(
+            id=project.id,
+            tenant_id=project.tenant_id,
+            name=project.name,
+            description=project.description,
+            code=project.code,
+            project_type=project.project_type,
+            status=project.status,
+            estimated_budget=project.estimated_budget,
+            currency=project.currency,
+            start_date=project.start_date,
+            end_date=project.end_date,
+            coherence_score=project.coherence_score,
+            last_analysis_at=project.last_analysis_at,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
         )
-        project = result.scalar_one_or_none()
 
-        if not project:
-            raise NotFoundError(f"Project {project_id} not found")
-
-        logger.info(
-            "project_retrieved",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id),
-        )
-
-        return ProjectResponseDTO.model_validate(project)
-
-    except NotFoundError:
+    except ValueError as e:
+        logger.error("get_project_not_found", error=str(e), project_id=str(project_id))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project {project_id} not found"
+            detail=str(e),
         )
     except Exception as e:
         logger.error("get_project_failed", error=str(e), project_id=str(project_id))
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get project"
+            detail="Failed to get project",
         )
 
 
-@router.put("/{project_id}", response_model=ProjectResponseDTO, summary="Update project")
+@router.put("/{project_id}", response_model=ProjectDetailResponse, summary="Update project")
 async def update_project(
     project_id: UUID,
-    data: ProjectUpdateDTO,
+    data: ProjectUpdateRequest,
     tenant_id: UUID = Depends(CurrentTenantId),
     user_id: UUID = Depends(CurrentUserId),
-    db: AsyncSession = Depends(get_session),
-) -> ProjectResponseDTO:
+    repository: SQLAlchemyProjectRepository = Depends(get_project_repository),
+    session: AsyncSession = Depends(get_session),
+) -> ProjectDetailResponse:
     """
     Update a project.
 
     **Partial updates:**
-    Only provided fields will be updated.
+    Only provided fields will be updated. Omitted fields remain unchanged.
+
+    **Updatable fields:**
+    - `name`: Project name
+    - `description`: Description
+    - `code`: Project code (must be unique)
+    - `project_type`: Project type
+    - `status`: Project status
+    - `estimated_budget`: Budget estimate
+    - `currency`: Currency code
+    - `start_date`: Start date
+    - `end_date`: End date
     """
     try:
-        # Get existing project
-        result = await db.execute(
-            select(ProjectORM).where(
-                ProjectORM.id == project_id,
-                ProjectORM.tenant_id == tenant_id,
-            )
-        )
-        project = result.scalar_one_or_none()
-
-        if not project:
-            raise NotFoundError(f"Project {project_id} not found")
-
-        # Check for duplicate code if updating
-        if data.code and data.code != project.code:
-            existing = await db.execute(
-                select(ProjectORM).where(
-                    ProjectORM.tenant_id == tenant_id,
-                    ProjectORM.code == data.code,
-                    ProjectORM.id != project_id,
-                )
-            )
-            if existing.scalar_one_or_none():
-                raise ConflictError(f"Project with code '{data.code}' already exists")
-
-        # Update fields
-        if data.name is not None:
-            project.name = data.name
-        project.updated_at = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(project)
-
-        logger.info(
-            "project_updated",
-            project_id=str(project_id),
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
+        use_case = UpdateProjectUseCase(repository)
+        project = await use_case.execute(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            name=data.name,
+            description=data.description,
+            code=data.code,
+            project_type=data.project_type,
+            status=data.status,
+            estimated_budget=data.estimated_budget,
+            currency=data.currency,
+            start_date=data.start_date,
+            end_date=data.end_date,
         )
 
-        return ProjectResponseDTO.model_validate(project)
+        await session.commit()
 
-    except NotFoundError:
+        return ProjectDetailResponse(
+            id=project.id,
+            tenant_id=project.tenant_id,
+            name=project.name,
+            description=project.description,
+            code=project.code,
+            project_type=project.project_type,
+            status=project.status,
+            estimated_budget=project.estimated_budget,
+            currency=project.currency,
+            start_date=project.start_date,
+            end_date=project.end_date,
+            coherence_score=project.coherence_score,
+            last_analysis_at=project.last_analysis_at,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
+        )
+
+    except ValueError as e:
+        logger.error("update_project_error", error=str(e), project_id=str(project_id))
+        await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project {project_id} not found"
-        )
-    except ConflictError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
+            status_code=status.HTTP_404_NOT_FOUND if "not found" in str(e) else status.HTTP_409_CONFLICT if "already exists" in str(e) else status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
     except Exception as e:
         logger.error("update_project_failed", error=str(e), project_id=str(project_id))
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update project"
+            detail="Failed to update project",
+        )
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete project")
+async def delete_project(
+    project_id: UUID,
+    tenant_id: UUID = Depends(CurrentTenantId),
+    user_id: UUID = Depends(CurrentUserId),
+    repository: SQLAlchemyProjectRepository = Depends(get_project_repository),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """
+    Delete a project by ID.
+
+    **Note:**
+    This permanently deletes the project and all associated data.
+    Consider implementing soft deletion for production use.
+    """
+    try:
+        use_case = DeleteProjectUseCase(repository)
+        deleted = await use_case.execute(project_id, tenant_id, user_id)
+
+        if not deleted:
+            raise ValueError(f"Project {project_id} not found")
+
+        await session.commit()
+
+    except ValueError as e:
+        logger.error("delete_project_not_found", error=str(e), project_id=str(project_id))
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error("delete_project_failed", error=str(e), project_id=str(project_id))
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete project",
         )

@@ -4,7 +4,7 @@ from typing import Iterable
 from uuid import UUID
 
 from src.analysis.adapters.persistence.models import AlertSeverity
-from src.modules.analysis.schemas import AlertCreate
+from src.analysis.application.schemas import AlertCreate
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 
 TEMPLATES: dict[str, str] = {
@@ -167,3 +167,4 @@ class AlertGenerator:
         if rule_id == "R14" and evidence.get("material"):
             entities["bom_items"] = [str(evidence["material"])]
         return entities
+
