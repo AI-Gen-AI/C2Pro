@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+const { describe, expect, it } = await import("vitest");
 
 import { cn } from "@/lib/utils";
 

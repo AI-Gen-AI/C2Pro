@@ -11,6 +11,7 @@ to be performant, it is crucial to have a composite index on:
 This was implemented in migration 008_indexes.sql.
 """
 
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status

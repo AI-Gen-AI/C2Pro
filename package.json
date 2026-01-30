@@ -21,7 +21,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
-    "supabase": "^2.72.6"
+    "husky": "^9.1.7",
+    "supabase": "^2.72.6",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

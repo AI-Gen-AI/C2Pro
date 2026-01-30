@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
+from src.core.repositories import (
+    get_project_repository as get_core_project_repository,
+    get_wbs_repository as get_core_wbs_repository,
+)
 from src.core.security import CurrentTenantId, CurrentUserId
 from src.procurement.ports.wbs_repository import IWBSRepository
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.projects.ports.project_repository import ProjectRepository
-from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -42,14 +44,14 @@ def get_stakeholder_repository(
     return SqlAlchemyStakeholderRepository(session=db)
 
 def get_wbs_repository(
-    db: AsyncSession = Depends(get_session),
+    repository: IWBSRepository = Depends(get_core_wbs_repository),
 ) -> IWBSRepository:
-    return SQLAlchemyWBSRepository(session=db)
+    return repository
 
 def get_project_repository(
-    db: AsyncSession = Depends(get_session),
+    repository: ProjectRepository = Depends(get_core_project_repository),
 ) -> ProjectRepository:
-    return SQLAlchemyProjectRepository(session=db)
+    return repository
 
 def get_matrix_use_case(
     stakeholder_repo: SqlAlchemyStakeholderRepository = Depends(get_stakeholder_repository),

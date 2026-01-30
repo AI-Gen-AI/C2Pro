@@ -36,8 +36,11 @@ class GetRaciMatrixUseCase:
         self.project_repository = project_repository
 
     async def execute(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse:
-        project = await self.project_repository.get_by_id(project_id, tenant_id)
-        if project is None:
+        project_exists = await self.project_repository.exists_by_id(
+            project_id=project_id,
+            tenant_id=tenant_id,
+        )
+        if not project_exists:
             raise ValueError("project_not_found")
 
         wbs_items = await self.wbs_repository.get_by_project(project_id, tenant_id)

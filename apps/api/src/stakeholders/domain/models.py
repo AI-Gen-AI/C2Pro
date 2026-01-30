@@ -45,24 +45,25 @@ class Stakeholder:
     """
     id: UUID
     project_id: UUID
-    name: str | None
-    role: str | None
-    organization: str | None
-    department: str | None
     power_level: PowerLevel
     interest_level: InterestLevel
-    quadrant: StakeholderQuadrant | None
-    email: str | None
-    phone: str | None
-    source_clause_id: UUID | None
-    extracted_from_document_id: UUID | None
     approval_status: str # Assuming approval_status is string for now, enum to be defined later if needed
-    reviewed_by: UUID | None
-    reviewed_at: datetime | None
-    review_comment: str | None
-    stakeholder_metadata: dict = field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
+    name: str | None = None
+    role: str | None = None
+    organization: str | None = None
+    department: str | None = None
+    quadrant: StakeholderQuadrant | None = None
+    email: str | None = None
+    phone: str | None = None
+    source_clause_id: UUID | None = None
+    extracted_from_document_id: UUID | None = None
+    reviewed_by: UUID | None = None
+    reviewed_at: datetime | None = None
+    review_comment: str | None = None
+    stakeholder_metadata: dict = field(default_factory=dict)
+
 
     def is_key_player(self) -> bool:
         return self.quadrant == StakeholderQuadrant.KEY_PLAYER
@@ -81,12 +82,12 @@ class RaciAssignment:
     stakeholder_id: UUID
     wbs_item_id: UUID
     raci_role: RACIRole
-    evidence_text: str | None
+    created_at: datetime
+    evidence_text: str | None = None
     generated_automatically: bool = True
     manually_verified: bool = False
-    verified_by: UUID | None
-    verified_at: datetime | None
-    created_at: datetime
+    verified_by: UUID | None = None
+    verified_at: datetime | None = None
 
     def is_verified(self) -> bool:
         return self.manually_verified and self.verified_at is not None

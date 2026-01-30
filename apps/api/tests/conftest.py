@@ -93,8 +93,8 @@ os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 from src.config import settings
 from src.core.database import Base, get_session
 from src.main import create_application
-from src.modules.auth.models import Tenant, User, UserRole, SubscriptionPlan
-from src.modules.auth.service import hash_password
+from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.core.auth.service import hash_password
 
 
 def _auth_schema_available(session: Session) -> bool:

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     app_name: str = "C2Pro API"
     app_version: str = "1.0.0"
-    environment: Literal["development", "staging", "production"] = "development"
+    environment: Literal["development", "staging", "production", "test"] = "development"
     debug: bool = Field(default=False, description="Modo debug")
 
     # API Settings

@@ -80,11 +80,11 @@ class Document:
     project_id: UUID
     document_type: DocumentType
     filename: str
+    upload_status: DocumentStatus
     file_format: str | None = None
     storage_url: str | None = None
     storage_encrypted: bool = True
     file_size_bytes: int | None = None
-    upload_status: DocumentStatus
     parsed_at: datetime | None = None
     parsing_error: str | None = None
     retention_until: datetime | None = None
