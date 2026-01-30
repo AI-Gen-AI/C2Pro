@@ -76,6 +76,7 @@ Definir los puntos de integracion permitidos entre modulos. Cualquier uso cross-
 ## Projects
 **Puertos (interfaces)**
 - `src.projects.ports.ProjectRepository`
+  - incluye `exists_by_id(project_id, tenant_id)`
 
 **DTOs**
 - `src.projects.application.dtos` (Project* schemas)

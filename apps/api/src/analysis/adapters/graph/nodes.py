@@ -141,26 +141,37 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    agent = RiskExtractorAgent(tenant_id=state.get("tenant_id"))
-    doc = _augment_document(state["document_text"], state["critique_notes"], state["human_feedback"])
-    risks = await agent.extract(doc)
-    state["extracted_risks"] = [_risk_item_to_dict(risk) for risk in risks]
-    state["confidence_score"] = _average_confidence(state["extracted_risks"])
-    state["messages"].append(
-        AIMessage(content=f"Risk extraction produced {len(state['extracted_risks'])} items.")
-    )
-    return state
+    """
+    Extract risks using RiskExtractionTool.
+
+    The tool handles:
+    - Input extraction from state (with critique/feedback augmentation)
+    - Prompt rendering
+    - LLM call via AnthropicWrapper
+    - Output parsing and validation
+    - State injection
+    """
+    from src.core.ai.tools import get_tool
+
+    tool = get_tool("risk_extraction", version="1.0")
+    return await tool(state)
 
 
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
-    agent = WBSExtractionAgent(tenant_id=state.get("tenant_id"))
-    doc = _augment_document(state["document_text"], state["critique_notes"], state["human_feedback"])
-    state["extracted_wbs"] = await agent.extract(doc)
-    state["confidence_score"] = _average_confidence(state["extracted_wbs"])
-    state["messages"].append(
-        AIMessage(content=f"WBS extraction produced {len(state['extracted_wbs'])} items.")
-    )
-    return state
+    """
+    Extract WBS items using WBSExtractionTool.
+
+    The tool handles:
+    - Input extraction from state (with critique/feedback augmentation)
+    - Prompt rendering
+    - LLM call via AnthropicWrapper
+    - Output parsing and validation to typed WBSItemOutput models
+    - State injection
+    """
+    from src.core.ai.tools import get_tool
+
+    tool = get_tool("wbs_extraction", version="1.0")
+    return await tool(state)
 
 
 async def budget_parser_node(state: ProjectState) -> ProjectState:

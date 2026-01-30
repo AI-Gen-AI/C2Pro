@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID
 
 from src.core.approval import ApprovalStatus
+from src.documents.ports.document_repository import IDocumentRepository
 from src.stakeholders.application.dtos import StakeholderUpdateRequest
 from src.stakeholders.application.helpers import (
     derive_levels_and_quadrant,
@@ -17,8 +18,13 @@ from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 
 class UpdateStakeholderUseCase:
-    def __init__(self, repository: IStakeholderRepository):
+    def __init__(
+        self,
+        repository: IStakeholderRepository,
+        document_repository: IDocumentRepository,
+    ):
         self.repository = repository
+        self.document_repository = document_repository
 
     async def execute(
         self,
@@ -43,6 +49,9 @@ class UpdateStakeholderUseCase:
         if payload.phone is not None:
             stakeholder.phone = payload.phone
         if payload.source_clause_id is not None:
+            exists = await self.document_repository.clause_exists(payload.source_clause_id)
+            if not exists:
+                raise ValueError("source_clause_id_not_found")
             stakeholder.source_clause_id = payload.source_clause_id
 
         metadata = dict(stakeholder.stakeholder_metadata or {})

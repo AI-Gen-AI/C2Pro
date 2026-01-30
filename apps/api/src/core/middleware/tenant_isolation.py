@@ -38,6 +38,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         "/docs",
         "/redoc",
         "/openapi.json",
+        "/api/v1/openapi.json",
         "/",
         "/api/auth/login",
         "/api/auth/register",
@@ -73,12 +74,12 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
             )
 
         # Validar que el tenant existe en la base de datos
-        tenant_exists = await self._validate_tenant_exists(tenant_id)
-        if not tenant_exists:
+        tenant_active = await self._validate_tenant_exists(tenant_id)
+        if not tenant_active:
             logger.warning(
                 "authentication_failed",
                 path=request.url.path,
-                reason="tenant_not_found",
+                reason="tenant_inactive_or_missing",
                 tenant_id=str(tenant_id),
             )
             return Response(
@@ -183,7 +184,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
     async def _validate_tenant_exists(self, tenant_id: UUID) -> bool:
         """
-        Valida que el tenant existe en la base de datos.
+        Valida que el tenant existe y está activo en la base de datos.
 
         Args:
             tenant_id: UUID del tenant a validar
@@ -195,7 +196,9 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
             async with get_raw_session() as session:
                 result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
                 tenant = result.scalar_one_or_none()
-                return tenant is not None
+                if tenant is None:
+                    return False
+                return bool(tenant.is_active)
         except Exception as e:
             logger.error("tenant_validation_error", error=str(e), tenant_id=str(tenant_id))
             return False

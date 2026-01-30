@@ -197,7 +197,7 @@ Este plan representa la hoja de ruta para transformar C2Pro en un monolito modul
 - Responsable: Backend Lead + Arquitecto
 - Tareas:
   - 2.1 Dominio puro (entidades, value objects, domain services). [DONE]
-  - 2.2 Puertos (interfaces) por modulo. [EN PROGRESO]
+  - 2.2 Puertos (interfaces) por modulo. [DONE] (2026-01-30)
   - 2.3 Adaptadores (HTTP, persistence, externos). [DONE]
   - 2.4 Routers delgados delegan a use cases. [DONE]
   - 2.5 Core simple salvo reglas de negocio complejas. [DONE]
@@ -206,7 +206,7 @@ Este plan representa la hoja de ruta para transformar C2Pro en un monolito modul
 
 - Responsable: Security Lead + Backend Lead
 - Tareas:
-  - 3.1 Middleware obligatorio de tenant. [EN REVISION]
+  - 3.1 Middleware obligatorio de tenant. [DONE] (2026-01-30)
   - 3.2 Repositorios con filtro tenant obligatorio. [PENDIENTE]
   - 3.3 RLS en DB alineado a logica app. [PENDIENTE]
 

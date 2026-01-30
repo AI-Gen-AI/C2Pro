@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from src.core.approval import ApprovalStatus
+from src.documents.ports.document_repository import IDocumentRepository
 from src.stakeholders.application.helpers import derive_levels_and_quadrant
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
@@ -14,8 +15,13 @@ from src.stakeholders.application.dtos import StakeholderCreateRequest
 
 
 class CreateStakeholderUseCase:
-    def __init__(self, repository: IStakeholderRepository):
+    def __init__(
+        self,
+        repository: IStakeholderRepository,
+        document_repository: IDocumentRepository,
+    ):
         self.repository = repository
+        self.document_repository = document_repository
 
     async def execute(
         self,
@@ -23,6 +29,11 @@ class CreateStakeholderUseCase:
         user_id: UUID,
         payload: StakeholderCreateRequest,
     ) -> Stakeholder:
+        if payload.source_clause_id:
+            exists = await self.document_repository.clause_exists(payload.source_clause_id)
+            if not exists:
+                raise ValueError("source_clause_id_not_found")
+
         metadata = dict(payload.stakeholder_metadata or {})
         if payload.type:
             metadata["type"] = payload.type

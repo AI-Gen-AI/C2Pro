@@ -47,6 +47,20 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    async def exists_by_id(self, project_id: UUID, tenant_id: UUID) -> bool:
+        """
+        Check if a project exists by ID, enforcing tenant isolation.
+
+        Args:
+            project_id: The project's unique identifier
+            tenant_id: The tenant ID for isolation
+
+        Returns:
+            True if exists, False otherwise
+        """
+        pass
+
+    @abstractmethod
     async def list(
         self,
         tenant_id: UUID,

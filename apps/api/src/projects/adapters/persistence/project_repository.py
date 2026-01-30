@@ -103,6 +103,16 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         orm = result.scalar_one_or_none()
         return self._to_entity(orm) if orm else None
 
+    async def exists_by_id(self, project_id: UUID, tenant_id: UUID) -> bool:
+        """Check whether a project exists by ID with tenant isolation."""
+        result = await self.session.execute(
+            select(ProjectORM.id).where(
+                ProjectORM.id == project_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def list(
         self,
         tenant_id: UUID,

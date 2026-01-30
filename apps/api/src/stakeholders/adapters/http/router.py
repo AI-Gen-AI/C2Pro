@@ -10,10 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
+from src.core.repositories import get_document_repository as get_core_document_repository
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-    SqlAlchemyDocumentRepository,
-)
+from src.documents.ports.document_repository import IDocumentRepository
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -43,12 +42,6 @@ router = APIRouter(
 def get_repository(db: AsyncSession = Depends(get_session)) -> SqlAlchemyStakeholderRepository:
     return SqlAlchemyStakeholderRepository(session=db)
 
-def get_document_repository(
-    db: AsyncSession = Depends(get_session),
-) -> SqlAlchemyDocumentRepository:
-    return SqlAlchemyDocumentRepository(session=db)
-
-
 def get_list_use_case(
     repo: SqlAlchemyStakeholderRepository = Depends(get_repository),
 ) -> ListProjectStakeholdersUseCase:
@@ -57,14 +50,22 @@ def get_list_use_case(
 
 def get_create_use_case(
     repo: SqlAlchemyStakeholderRepository = Depends(get_repository),
+    document_repository: IDocumentRepository = Depends(get_core_document_repository),
 ) -> CreateStakeholderUseCase:
-    return CreateStakeholderUseCase(repository=repo)
+    return CreateStakeholderUseCase(
+        repository=repo,
+        document_repository=document_repository,
+    )
 
 
 def get_update_use_case(
     repo: SqlAlchemyStakeholderRepository = Depends(get_repository),
+    document_repository: IDocumentRepository = Depends(get_core_document_repository),
 ) -> UpdateStakeholderUseCase:
-    return UpdateStakeholderUseCase(repository=repo)
+    return UpdateStakeholderUseCase(
+        repository=repo,
+        document_repository=document_repository,
+    )
 
 
 def get_delete_use_case(
@@ -99,7 +100,6 @@ async def create_project_stakeholder(
     payload: StakeholderCreateRequest,
     _tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    document_repository: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     create_use_case: CreateStakeholderUseCase = Depends(get_create_use_case),
 ) -> StakeholderResponseOut:
     if payload.stakeholder_metadata is not None and not isinstance(
@@ -107,14 +107,14 @@ async def create_project_stakeholder(
     ):
         raise HTTPException(status_code=400, detail="stakeholder_metadata must be a dict")
 
-    if payload.source_clause_id:
-        exists = await document_repository.clause_exists(payload.source_clause_id)
-        if not exists:
+    try:
+        stakeholder = await create_use_case.execute(
+            project_id=project_id, user_id=user_id, payload=payload
+        )
+    except ValueError as exc:
+        if str(exc) == "source_clause_id_not_found":
             raise HTTPException(status_code=400, detail="source_clause_id not found")
-
-    stakeholder = await create_use_case.execute(
-        project_id=project_id, user_id=user_id, payload=payload
-    )
+        raise
     logger.info(
         "stakeholder_created",
         project_id=str(project_id),
@@ -134,7 +134,6 @@ async def update_stakeholder(
     payload: StakeholderUpdateRequest,
     _tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    document_repository: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     update_use_case: UpdateStakeholderUseCase = Depends(get_update_use_case),
 ) -> StakeholderResponseOut:
     if payload.stakeholder_metadata is not None and not isinstance(
@@ -142,16 +141,14 @@ async def update_stakeholder(
     ):
         raise HTTPException(status_code=400, detail="stakeholder_metadata must be a dict")
 
-    if payload.source_clause_id:
-        exists = await document_repository.clause_exists(payload.source_clause_id)
-        if not exists:
-            raise HTTPException(status_code=400, detail="source_clause_id not found")
-
     try:
         stakeholder = await update_use_case.execute(
             stakeholder_id=stakeholder_id, user_id=user_id, payload=payload
         )
-    except ValueError:
+    except ValueError as exc:
+        reason = str(exc)
+        if reason == "source_clause_id_not_found":
+            raise HTTPException(status_code=400, detail="source_clause_id not found")
         raise HTTPException(status_code=404, detail="Stakeholder not found")
 
     return _to_response(stakeholder)

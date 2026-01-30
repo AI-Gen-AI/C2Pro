@@ -66,37 +66,25 @@ class WBSItem:
     Domain entity representing a Work Breakdown Structure item.
     Used for AI generation and business logic.
     """
-    # Identity
-    id: UUID = field(default_factory=uuid4)
+    # Required fields first
     project_id: UUID
-
-    # Hierarchy
     code: str
     name: str
-    description: Optional[str] = None
     level: int
+
+    # Optional/default fields after
+    id: UUID = field(default_factory=uuid4)
+    description: Optional[str] = None
     parent_code: Optional[str] = None
-
-    # Classification
     item_type: Optional[WBSItemType] = None
-
-    # Financial
     budget_allocated: Optional[Decimal] = None
     budget_spent: Decimal = field(default=Decimal(0))
-
-    # Schedule
     planned_start: Optional[datetime] = None
     planned_end: Optional[datetime] = None
     actual_start: Optional[datetime] = None
     actual_end: Optional[datetime] = None
-
-    # Traceability
     source_clause_id: Optional[UUID] = None
-
-    # Metadata
     wbs_metadata: dict = field(default_factory=dict)
-
-    # Relationships (not persisted directly, loaded separately)
     children: List["WBSItem"] = field(default_factory=list)
 
     def is_leaf(self) -> bool:
@@ -141,41 +129,29 @@ class BOMItem:
     Domain entity representing a Bill of Materials item.
     Used for AI generation and business logic.
     """
-    # Identity
-    id: UUID = field(default_factory=uuid4)
+    # Required fields first
     project_id: UUID
-    wbs_item_id: Optional[UUID] = None
-
-    # Identification
-    item_code: Optional[str] = None
     item_name: str
+    quantity: Decimal
+
+    # Optional/default fields after
+    id: UUID = field(default_factory=uuid4)
+    wbs_item_id: Optional[UUID] = None
+    item_code: Optional[str] = None
     description: Optional[str] = None
     category: Optional[BOMCategory] = None
-
-    # Quantity
-    quantity: Decimal
     unit: Optional[str] = None
-
-    # Pricing
     unit_price: Optional[Decimal] = None
     total_price: Optional[Decimal] = None
     currency: str = "EUR"
-
-    # Procurement
     supplier: Optional[str] = None
     lead_time_days: Optional[int] = None
     production_time_days: Optional[int] = None
     transit_time_days: Optional[int] = None
     incoterm: Optional[str] = None
-
-    # Traceability
     contract_clause_id: Optional[UUID] = None
     budget_item_id: Optional[UUID] = None
-
-    # Status
     procurement_status: ProcurementStatus = ProcurementStatus.PENDING
-
-    # Metadata
     bom_metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
