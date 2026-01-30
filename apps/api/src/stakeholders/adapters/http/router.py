@@ -14,7 +14,6 @@ from src.core.security import CurrentTenantId, CurrentUserId
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from src.documents.application.check_clause_exists_use_case import CheckClauseExistsUseCase
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -44,15 +43,10 @@ router = APIRouter(
 def get_repository(db: AsyncSession = Depends(get_session)) -> SqlAlchemyStakeholderRepository:
     return SqlAlchemyStakeholderRepository(session=db)
 
-def get_documents_repository(
+def get_document_repository(
     db: AsyncSession = Depends(get_session),
 ) -> SqlAlchemyDocumentRepository:
     return SqlAlchemyDocumentRepository(session=db)
-
-def get_clause_exists_use_case(
-    repo: SqlAlchemyDocumentRepository = Depends(get_documents_repository),
-) -> CheckClauseExistsUseCase:
-    return CheckClauseExistsUseCase(document_repository=repo)
 
 
 def get_list_use_case(
@@ -105,7 +99,7 @@ async def create_project_stakeholder(
     payload: StakeholderCreateRequest,
     _tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    clause_use_case: CheckClauseExistsUseCase = Depends(get_clause_exists_use_case),
+    document_repository: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     create_use_case: CreateStakeholderUseCase = Depends(get_create_use_case),
 ) -> StakeholderResponseOut:
     if payload.stakeholder_metadata is not None and not isinstance(
@@ -114,7 +108,7 @@ async def create_project_stakeholder(
         raise HTTPException(status_code=400, detail="stakeholder_metadata must be a dict")
 
     if payload.source_clause_id:
-        exists = await clause_use_case.execute(payload.source_clause_id)
+        exists = await document_repository.clause_exists(payload.source_clause_id)
         if not exists:
             raise HTTPException(status_code=400, detail="source_clause_id not found")
 
@@ -140,7 +134,7 @@ async def update_stakeholder(
     payload: StakeholderUpdateRequest,
     _tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    clause_use_case: CheckClauseExistsUseCase = Depends(get_clause_exists_use_case),
+    document_repository: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     update_use_case: UpdateStakeholderUseCase = Depends(get_update_use_case),
 ) -> StakeholderResponseOut:
     if payload.stakeholder_metadata is not None and not isinstance(
@@ -149,7 +143,7 @@ async def update_stakeholder(
         raise HTTPException(status_code=400, detail="stakeholder_metadata must be a dict")
 
     if payload.source_clause_id:
-        exists = await clause_use_case.execute(payload.source_clause_id)
+        exists = await document_repository.clause_exists(payload.source_clause_id)
         if not exists:
             raise HTTPException(status_code=400, detail="source_clause_id not found")
 

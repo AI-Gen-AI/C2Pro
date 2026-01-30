@@ -1,4 +1,4 @@
-# CTO Gates 1-4 Verification Plan
+﻿# CTO Gates 1-4 Verification Plan
 **Task ID**: CE-P0-05
 **Priority**: P0 (Critical - CTO Review)
 **Status**: Ready for Implementation
@@ -463,7 +463,7 @@ Audit Log (who created, when, why)
 - [ ] Implement Gate 4 Traceability tests
 
 ### Phase 2: Evidence Generation Tool (1-2 hours)
-**Deliverable**: `scripts/generate_cto_gates_evidence.py`
+**Deliverable**: `infrastructure/scripts/generate_cto_gates_evidence.py`
 
 ```python
 #!/usr/bin/env python3
@@ -474,7 +474,7 @@ Runs all gate verification tests and generates comprehensive evidence
 package for CTO review.
 
 Usage:
-    python scripts/generate_cto_gates_evidence.py --output=evidence/
+    python infrastructure/scripts/generate_cto_gates_evidence.py --output=evidence/
 """
 
 import json
@@ -624,7 +624,7 @@ jobs:
         run: pytest tests/verification/test_gate4_traceability.py -v --json-report
 
       - name: Generate Evidence Package
-        run: python scripts/generate_cto_gates_evidence.py
+        run: python infrastructure/scripts/generate_cto_gates_evidence.py
 
       - name: Upload Evidence Artifacts
         uses: actions/upload-artifact@v3

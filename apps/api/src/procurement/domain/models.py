@@ -3,13 +3,12 @@ Domain models for the Procurement bounded context.
 These are pure domain entities representing core business concepts.
 """
 from __future__ import annotations
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional, List
 from uuid import UUID, uuid4
-
-from pydantic import BaseModel, Field, field_validator
 
 
 # ===========================================
@@ -47,7 +46,8 @@ class ProcurementStatus(str, Enum):
 # ===========================================
 
 
-class BudgetItem(BaseModel):
+@dataclass
+class BudgetItem:
     """Represents a single item from the project budget."""
     id: UUID
     name: str
@@ -60,20 +60,21 @@ class BudgetItem(BaseModel):
 # ===========================================
 
 
-class WBSItem(BaseModel):
+@dataclass
+class WBSItem:
     """
     Domain entity representing a Work Breakdown Structure item.
     Used for AI generation and business logic.
     """
     # Identity
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = field(default_factory=uuid4)
     project_id: UUID
 
     # Hierarchy
-    code: str = Field(..., description="WBS code like '1.2.3'")
+    code: str
     name: str
     description: Optional[str] = None
-    level: int = Field(..., ge=0)
+    level: int
     parent_code: Optional[str] = None
 
     # Classification
@@ -81,7 +82,7 @@ class WBSItem(BaseModel):
 
     # Financial
     budget_allocated: Optional[Decimal] = None
-    budget_spent: Decimal = Field(default=Decimal(0))
+    budget_spent: Decimal = field(default=Decimal(0))
 
     # Schedule
     planned_start: Optional[datetime] = None
@@ -90,31 +91,13 @@ class WBSItem(BaseModel):
     actual_end: Optional[datetime] = None
 
     # Traceability
-    source_clause_id: Optional[UUID] = Field(
-        None,
-        description="Contract clause that defines this WBS item"
-    )
+    source_clause_id: Optional[UUID] = None
 
     # Metadata
-    wbs_metadata: dict = Field(default_factory=dict)
+    wbs_metadata: dict = field(default_factory=dict)
 
     # Relationships (not persisted directly, loaded separately)
-    children: List[WBSItem] = Field(default_factory=list)
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "project_id": "123e4567-e89b-12d3-a456-426614174000",
-                "code": "1.2.1",
-                "name": "Foundation Works",
-                "description": "Excavation and foundation construction",
-                "level": 3,
-                "parent_code": "1.2",
-                "item_type": "work_package",
-                "budget_allocated": "150000.00",
-                "source_clause_id": "223e4567-e89b-12d3-a456-426614174001"
-            }
-        }
+    children: List["WBSItem"] = field(default_factory=list)
 
     def is_leaf(self) -> bool:
         """Check if this WBS item is a leaf node (has no children)."""
@@ -141,9 +124,10 @@ class WBSItem(BaseModel):
         return self.budget_spent > self.budget_allocated
 
 
-class WBSItemList(BaseModel):
+@dataclass
+class WBSItemList:
     """Container for a list of WBS items, used for structured LLM output."""
-    items: List[WBSItem] = Field(default_factory=list)
+    items: List[WBSItem] = field(default_factory=list)
 
 
 # ===========================================
@@ -151,13 +135,14 @@ class WBSItemList(BaseModel):
 # ===========================================
 
 
-class BOMItem(BaseModel):
+@dataclass
+class BOMItem:
     """
     Domain entity representing a Bill of Materials item.
     Used for AI generation and business logic.
     """
     # Identity
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = field(default_factory=uuid4)
     project_id: UUID
     wbs_item_id: Optional[UUID] = None
 
@@ -168,76 +153,40 @@ class BOMItem(BaseModel):
     category: Optional[BOMCategory] = None
 
     # Quantity
-    quantity: Decimal = Field(..., gt=Decimal(0))
+    quantity: Decimal
     unit: Optional[str] = None
 
     # Pricing
     unit_price: Optional[Decimal] = None
     total_price: Optional[Decimal] = None
-    currency: str = Field(default="EUR")
+    currency: str = "EUR"
 
     # Procurement
     supplier: Optional[str] = None
-    lead_time_days: Optional[int] = Field(None, ge=0)
-    production_time_days: Optional[int] = Field(None, ge=0)
-    transit_time_days: Optional[int] = Field(None, ge=0)
+    lead_time_days: Optional[int] = None
+    production_time_days: Optional[int] = None
+    transit_time_days: Optional[int] = None
     incoterm: Optional[str] = None
 
     # Traceability
-    contract_clause_id: Optional[UUID] = Field(
-        None,
-        description="Contract clause that defines this BOM item"
-    )
-    budget_item_id: Optional[UUID] = Field(
-        None,
-        description="Linked budget item for cost tracking"
-    )
+    contract_clause_id: Optional[UUID] = None
+    budget_item_id: Optional[UUID] = None
 
     # Status
-    procurement_status: ProcurementStatus = Field(default=ProcurementStatus.PENDING)
+    procurement_status: ProcurementStatus = ProcurementStatus.PENDING
 
     # Metadata
-    bom_metadata: dict = Field(default_factory=dict)
+    bom_metadata: dict = field(default_factory=dict)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "project_id": "123e4567-e89b-12d3-a456-426614174000",
-                "wbs_item_id": "223e4567-e89b-12d3-a456-426614174001",
-                "item_code": "MAT-001",
-                "item_name": "Concrete C30/37",
-                "description": "Ready-mix concrete for foundation",
-                "category": "material",
-                "quantity": "150.5",
-                "unit": "m3",
-                "unit_price": "95.50",
-                "total_price": "14372.75",
-                "currency": "EUR",
-                "supplier": "ABC Concrete Ltd.",
-                "lead_time_days": 7,
-                "procurement_status": "pending"
-            }
-        }
-
-    @field_validator('total_price', mode='before')
-    def calculate_total_price(cls, v, info):
-        """Automatically calculate total price if not provided."""
-        if v is None and 'unit_price' in info.data and 'quantity' in info.data:
-            unit_price = info.data.get('unit_price')
-            quantity = info.data.get('quantity')
-            if unit_price is not None and quantity is not None:
-                return Decimal(str(unit_price)) * Decimal(str(quantity))
-        return v
-
-    @field_validator('lead_time_days', mode='before')
-    def calculate_lead_time(cls, v, info):
-        """Calculate total lead time from production and transit times if not provided."""
-        if v is None:
-            production = info.data.get('production_time_days', 0) or 0
-            transit = info.data.get('transit_time_days', 0) or 0
+    def __post_init__(self) -> None:
+        """Derive total_price and lead_time_days when omitted."""
+        if self.total_price is None and self.unit_price is not None and self.quantity is not None:
+            self.total_price = Decimal(str(self.unit_price)) * Decimal(str(self.quantity))
+        if self.lead_time_days is None:
+            production = self.production_time_days or 0
+            transit = self.transit_time_days or 0
             if production or transit:
-                return production + transit
-        return v
+                self.lead_time_days = production + transit
 
     def get_total_cost(self) -> Decimal:
         """Get the total cost of this BOM item."""
@@ -271,9 +220,10 @@ class BOMItem(BaseModel):
         return order_date + timedelta(days=self.lead_time_days)
 
 
-class BOMItemList(BaseModel):
+@dataclass
+class BOMItemList:
     """Container for a list of BOM items, used for structured LLM output."""
-    items: List[BOMItem] = Field(default_factory=list)
+    items: List[BOMItem] = field(default_factory=list)
 
     def get_total_cost(self) -> Decimal:
         """Calculate total cost of all BOM items."""

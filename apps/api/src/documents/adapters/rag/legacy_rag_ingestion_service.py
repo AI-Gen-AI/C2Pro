@@ -1,7 +1,10 @@
 """
-Legacy RAG ingestion adapter.
+Legacy RAG ingestion adapter (TRANSITIONAL).
 
-Bridges the new Documents module port to existing RagService.
+Bridges the Documents module port to legacy RagService.
+TODO(arch): Remove when RAG ingestion has a first-class adapter using a
+non-legacy RAG service behind IRagIngestionService.
+Target: end of Fase 1 consolidation.
 """
 from __future__ import annotations
 

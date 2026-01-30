@@ -1,4 +1,4 @@
-# C2Pro - Contract Intelligence Platform
+﻿# C2Pro - Contract Intelligence Platform
 
 > Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
 

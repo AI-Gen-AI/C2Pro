@@ -5,19 +5,22 @@ Transitional location under stakeholders until a dedicated approvals module exis
 """
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.approval import ApprovalStatus
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.stakeholders.adapters.persistence.models import StakeholderORM
+from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
+    SqlAlchemyStakeholderRepository,
+)
+from src.stakeholders.application.review_stakeholder_approval_use_case import (
+    ReviewStakeholderApprovalUseCase,
+)
 
 logger = structlog.get_logger()
 
@@ -44,6 +47,16 @@ RESOURCE_MAP = {
     "stakeholders": "stakeholders",
 }
 
+def get_repository(
+    db=Depends(get_session),
+) -> SqlAlchemyStakeholderRepository:
+    return SqlAlchemyStakeholderRepository(session=db)
+
+def get_review_use_case(
+    repo: SqlAlchemyStakeholderRepository = Depends(get_repository),
+) -> ReviewStakeholderApprovalUseCase:
+    return ReviewStakeholderApprovalUseCase(repository=repo)
+
 
 @router.patch(
     "/{resource_type}/{resource_id}",
@@ -57,25 +70,25 @@ async def review_resource(
     payload: ApprovalReview,
     _tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_session),
+    use_case: ReviewStakeholderApprovalUseCase = Depends(get_review_use_case),
 ) -> ApprovalResponse:
     resource_type = resource_type.lower()
     if resource_type not in RESOURCE_MAP:
         raise HTTPException(status_code=400, detail="Unsupported resource type")
 
     if resource_type == "stakeholders":
-        record = await _get_stakeholder(db, resource_id)
-        original_snapshot = _snapshot_record(record)
-        _apply_corrections(record, payload.correction_data, _stakeholder_fields())
+        try:
+            record, original_snapshot = await use_case.execute(
+                stakeholder_id=resource_id,
+                status=payload.status,
+                correction_data=payload.correction_data,
+                feedback_comment=payload.feedback_comment,
+                user_id=user_id,
+            )
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Stakeholder not found")
     else:
         raise HTTPException(status_code=400, detail="Unsupported resource type")
-
-    record.approval_status = _normalize_status(payload.status, payload.correction_data)
-    record.reviewed_by = user_id
-    record.reviewed_at = datetime.utcnow()
-    record.review_comment = payload.feedback_comment
-
-    await db.commit()
 
     if payload.status in {ApprovalStatus.REJECTED, ApprovalStatus.CORRECTED}:
         logger.info(
@@ -94,58 +107,3 @@ async def review_resource(
         resource_id=resource_id,
         status=record.approval_status,
     )
-
-
-async def _get_stakeholder(db: AsyncSession, stakeholder_id: UUID) -> StakeholderORM:
-    result = await db.get(StakeholderORM, stakeholder_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Stakeholder not found")
-    return result
-
-
-def _apply_corrections(record: Any, corrections: dict[str, Any] | None, allowed: set[str]) -> bool:
-    if not corrections:
-        return False
-    updated = False
-    for key, value in corrections.items():
-        if key not in allowed:
-            continue
-        if hasattr(record, key):
-            setattr(record, key, value)
-            updated = True
-    return updated
-
-
-def _normalize_status(status: ApprovalStatus, corrections: dict[str, Any] | None) -> ApprovalStatus:
-    if status == ApprovalStatus.REJECTED:
-        return ApprovalStatus.REJECTED
-    if corrections:
-        return ApprovalStatus.CORRECTED
-    if status == ApprovalStatus.CORRECTED:
-        return ApprovalStatus.CORRECTED
-    if status == ApprovalStatus.APPROVED:
-        return ApprovalStatus.APPROVED
-    return ApprovalStatus.PENDING
-
-
-def _stakeholder_fields() -> set[str]:
-    return {
-        "name",
-        "role",
-        "organization",
-        "department",
-        "email",
-        "phone",
-        "power_level",
-        "interest_level",
-        "quadrant",
-        "stakeholder_metadata",
-    }
-
-
-def _snapshot_record(record: Any) -> dict[str, Any]:
-    snapshot = {}
-    for field in _stakeholder_fields():
-        if hasattr(record, field):
-            snapshot[field] = getattr(record, field)
-    return snapshot

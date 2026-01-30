@@ -1,4 +1,4 @@
-# C2Pro Product Roadmap
+﻿# C2Pro Product Roadmap
 **Contract Intelligence Platform - Master Development Plan**
 
 **Versión:** 2.2.0
@@ -936,7 +936,7 @@ class AnonymizerService:
 
 # apps/api/src/services/ai/
 ├── client.py                  # Claude API client wrapper
-├── prompts/
+├── apps/api/src/core/ai/prompts/
 │   ├── contract_extraction_v1.py
 │   ├── schedule_extraction_v1.py
 │   └── budget_extraction_v1.py
@@ -970,7 +970,7 @@ class ClaudeService:
 #### Prompts v1.0 (Ejemplos)
 
 ```python
-# apps/api/src/services/ai/prompts/contract_extraction_v1.py
+# apps/api/src/core/ai/prompts/contract_extraction_v1.py
 SYSTEM_PROMPT = """Eres un experto en análisis de contratos de construcción.
 Extrae la siguiente información del contrato:
 

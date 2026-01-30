@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Iterable
 from uuid import UUID
 
-from src.analysis.adapters.persistence.models import AlertSeverity
-from src.analysis.application.schemas import AlertCreate
+from src.analysis.domain.enums import AlertSeverity
+from src.analysis.application.dtos import AlertCreate
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 
 TEMPLATES: dict[str, str] = {

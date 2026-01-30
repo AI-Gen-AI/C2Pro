@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.adapters.persistence.models import Analysis
+from src.analysis.ports.analysis_repository import IAnalysisRepository
 from src.core.observability.schemas import (
     AnalysisStatus,
     RecentAnalysesResponse,
@@ -12,8 +12,14 @@ from src.core.observability.schemas import (
 
 
 class ObservabilityService:
-    def __init__(self, db_session: AsyncSession):
+    def __init__(
+        self,
+        *,
+        db_session: AsyncSession,
+        analysis_repository: IAnalysisRepository,
+    ):
         self.db_session = db_session
+        self.analysis_repository = analysis_repository
 
     async def get_system_status(self) -> SystemStatusResponse:
         """
@@ -37,17 +43,14 @@ class ObservabilityService:
         """
         Retrieves a list of recent coherence analyses.
         """
-        query = select(Analysis).order_by(Analysis.created_at.desc()).offset(offset).limit(limit)
-        result = await self.db_session.execute(query)
-        analyses = result.scalars().all()
-
-        total_analyses_count = await self.db_session.scalar(select(func.count(Analysis.id)))
+        analyses = await self.analysis_repository.list_recent(limit=limit, offset=offset)
+        total_analyses_count = await self.analysis_repository.count_all()
 
         analysis_statuses = [
             AnalysisStatus(
                 id=analysis.id,
                 project_id=analysis.project_id,
-                status=analysis.status.value,  # Convert Enum to string
+                status=analysis.status.value if hasattr(analysis.status, "value") else str(analysis.status),
                 coherence_score=analysis.coherence_score,
                 alerts_count=analysis.alerts_count,
                 started_at=analysis.started_at

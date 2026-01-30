@@ -1,4 +1,4 @@
-# CE-P0-06: Implementation Complete ✅
+﻿# CE-P0-06: Implementation Complete ✅
 
 **Date**: 2026-01-08
 **Status**: All scripts and documentation created - Ready for execution
@@ -11,7 +11,7 @@
 
 ### 📝 SQL Verification Scripts (8 files)
 
-All SQL scripts for database verification in `scripts/ce-p0-06/`:
+All SQL scripts for database verification in `infrastructure/scripts/ce-p0-06/`:
 
 1. **capture_db_state.sql** - Complete database state snapshot
 2. **verify_rls_coverage.sql** - RLS policy coverage verification
@@ -24,7 +24,7 @@ All SQL scripts for database verification in `scripts/ce-p0-06/`:
 
 ### 🚀 Task Execution Scripts (9 tasks)
 
-All Windows batch scripts created in `scripts/ce-p0-06/`:
+All Windows batch scripts created in `infrastructure/scripts/ce-p0-06/`:
 
 1. **ce20_validate_environment.bat** - Pre-migration validation (30 min)
 2. **ce21_validate_scripts.bat** - Script validation (45 min)
@@ -40,7 +40,7 @@ Plus: **ce20_validate_environment.sh** for Unix/Linux
 
 ### 📚 Documentation
 
-1. **scripts/ce-p0-06/README.md** - Comprehensive execution guide
+1. **infrastructure/scripts/ce-p0-06/README.md** - Comprehensive execution guide
    - Quick start instructions
    - Task descriptions with success criteria
    - Troubleshooting guide
@@ -53,7 +53,7 @@ Plus: **ce20_validate_environment.sh** for Unix/Linux
 ### Execute All Tasks
 
 ```bash
-cd scripts\ce-p0-06
+cd infrastructure\\scripts\\ce-p0-06
 
 # Run each task in sequence
 .\ce20_validate_environment.bat
@@ -154,7 +154,7 @@ type logs\ce22_migration_execution.log
 python infrastructure\supabase\rollback_migrations.py --env staging --target-version 003
 ```
 
-**See full troubleshooting guide**: `scripts/ce-p0-06/README.md`
+**See full troubleshooting guide**: `infrastructure/scripts/ce-p0-06/README.md`
 
 ---
 
@@ -189,7 +189,7 @@ python infrastructure\supabase\rollback_migrations.py --env staging --target-ver
 
 **Status**: ✅ **READY FOR EXECUTION**
 
-All infrastructure complete. Follow instructions in `scripts/ce-p0-06/README.md` to execute.
+All infrastructure complete. Follow instructions in `infrastructure/scripts/ce-p0-06/README.md` to execute.
 
 ---
 

@@ -1,4 +1,4 @@
-# CE-P0-06: Staging Migrations - Task Summary
+﻿# CE-P0-06: Staging Migrations - Task Summary
 **Date**: 2026-01-08
 **Status**: Ready for Execution
 **Total Time**: 5.5 hours
@@ -99,7 +99,7 @@ pg_dump ... -f backups/staging_post_migration_*.dump
 
 **Key Commands**:
 ```bash
-psql -f scripts/verify_rls_coverage.sql
+psql -f infrastructure/scripts/verify_rls_coverage.sql
 pytest tests/verification/test_gate1_rls.py -v
 ```
 
@@ -116,8 +116,8 @@ pytest tests/verification/test_gate1_rls.py -v
 
 **Key Commands**:
 ```bash
-psql -f scripts/list_foreign_keys.sql
-psql -f scripts/check_orphaned_records.sql
+psql -f infrastructure/scripts/list_foreign_keys.sql
+psql -f infrastructure/scripts/check_orphaned_records.sql
 ```
 
 **Success Criteria**: ✅ All FKs exist, 0 orphaned records
@@ -133,7 +133,7 @@ psql -f scripts/check_orphaned_records.sql
 
 **Key Commands**:
 ```bash
-psql -f scripts/data_integrity_checks.sql
+psql -f infrastructure/scripts/data_integrity_checks.sql
 pytest tests/smoke/ -v
 ```
 
@@ -186,7 +186,7 @@ python infrastructure/supabase/rollback_migrations.py \
 
 **Key Commands**:
 ```bash
-python scripts/generate_migration_report.py
+python infrastructure/scripts/generate_migration_report.py
 mkdir evidence/staging_migration_$(date +%Y%m%d)
 ```
 
@@ -252,42 +252,42 @@ mkdir evidence/staging_migration_$(date +%Y%m%d)
 
 ### One-Line Execution (All Tasks)
 ```bash
-./scripts/run_staging_migration.sh
+./infrastructure/scripts/run_staging_migration.sh
 ```
 
 ### Individual Task Execution
 ```bash
 # CE-20
-./scripts/ce20_validate_environment.sh
+./infrastructure/scripts/ce20_validate_environment.sh
 
 # CE-21
-./scripts/ce21_validate_scripts.sh
+./infrastructure/scripts/ce21_validate_scripts.sh
 
 # CE-22
-./scripts/ce22_execute_migrations.sh
+./infrastructure/scripts/ce22_execute_migrations.sh
 
 # CE-23
-./scripts/ce23_verify_rls.sh
+./infrastructure/scripts/ce23_verify_rls.sh
 
 # CE-24
-./scripts/ce24_verify_fks.sh
+./infrastructure/scripts/ce24_verify_fks.sh
 
 # CE-25
-./scripts/ce25_smoke_tests.sh
+./infrastructure/scripts/ce25_smoke_tests.sh
 
 # CE-26
-./scripts/ce26_benchmarks.sh
+./infrastructure/scripts/ce26_benchmarks.sh
 
 # CE-27
-./scripts/ce27_test_rollback.sh
+./infrastructure/scripts/ce27_test_rollback.sh
 
 # CE-28
-./scripts/ce28_generate_report.sh
+./infrastructure/scripts/ce28_generate_report.sh
 ```
 
 ### Emergency Rollback
 ```bash
-./scripts/emergency_rollback.sh
+./infrastructure/scripts/emergency_rollback.sh
 ```
 
 ---

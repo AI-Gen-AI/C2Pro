@@ -6,6 +6,7 @@ Soporta múltiples ambientes (dev, staging, prod).
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -112,7 +113,7 @@ class Settings(BaseSettings):
     r2_endpoint_url: str | None = None  # Auto-construido si no se provee
 
     # Local storage (desarrollo)
-    local_storage_path: str = "./storage"
+    local_storage_path: str = str(Path(__file__).resolve().parents[2] / "storage")
 
     @property
     def storage_endpoint(self) -> str:

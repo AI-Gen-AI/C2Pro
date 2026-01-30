@@ -10,10 +10,12 @@ from src.stakeholders.adapters.ai.classifier import (
     StakeholderInput,
     EnrichedStakeholder,
 )
+from src.stakeholders.adapters.ai.raci_generator_adapter import RaciGeneratorAdapter
 
 __all__ = [
     "StakeholderClassifier",
     "MendelowQuadrant",
     "StakeholderInput",
     "EnrichedStakeholder",
+    "RaciGeneratorAdapter",
 ]

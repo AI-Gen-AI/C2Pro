@@ -1,4 +1,4 @@
-# Resultados de Tests de Seguridad - C2Pro
+﻿# Resultados de Tests de Seguridad - C2Pro
 ## Ejecución: 2026-01-06 19:30
 
 **Versión:** 2.4.0 Security Hardening
@@ -358,8 +358,8 @@ pytest tests/security/test_jwt_validation.py::test_protected_endpoint_with_missi
 
 ### Archivos Creados
 - `docker-compose.test.yml`
-- `scripts/setup-test-db.sh`
-- `scripts/setup-test-db.bat`
+- `infrastructure/scripts/setup-test-db.sh`
+- `infrastructure/scripts/setup-test-db.bat`
 - `tests/README.md`
 - `src/core/types.py`
 - `docs/CHANGELOG_2026-01-06.md`

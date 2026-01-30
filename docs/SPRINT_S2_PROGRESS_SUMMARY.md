@@ -1,4 +1,4 @@
-# Sprint S2 - Progress Summary
+﻿# Sprint S2 - Progress Summary
 **Fecha de actualización:** 2026-01-23
 **Sprint:** S2 Semana 2 + P2-02 (LLM Integration)
 **Estado:** 🟢 COMPLETADO - Sprint P2-02 Finalizado
@@ -174,7 +174,7 @@
 
 **Archivos creados/modificados:**
 - `apps/api/src/modules/coherence/llm_integration.py` (nuevo, ~600 líneas)
-- `apps/api/src/modules/ai/prompts/v1/coherence_analysis.py` (actualizado)
+- `apps/api/src/core/ai/prompts/v1/coherence_analysis.py` (actualizado)
 - `apps/api/src/modules/coherence/README.md` (actualizado)
 
 ---

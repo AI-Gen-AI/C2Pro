@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -13,25 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+from src.documents.application.dtos import RagAnswer, RetrievedChunk
 
 logger = structlog.get_logger()
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 1536
 DEFAULT_TOP_K = 5
-
-
-@dataclass
-class RetrievedChunk:
-    content: str
-    metadata: dict[str, Any]
-    similarity: float
-
-
-@dataclass
-class RagAnswer:
-    answer: str
-    sources: list[RetrievedChunk]
 
 
 class RagService:

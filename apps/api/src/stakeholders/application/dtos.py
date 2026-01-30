@@ -373,3 +373,35 @@ class RaciAssignmentUpsertResponse(BaseModel):
     stakeholder_id: UUID = Field(..., description="Stakeholder ID")
     role: str = Field(..., description="RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)")
     is_verified: bool = Field(False, description="Whether this assignment is manually verified")
+
+
+# ---------------------------------------------------------------------------
+# AI RACI Generation DTOs
+# ---------------------------------------------------------------------------
+
+
+class RaciWBSItemInput(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    clause_text: Optional[str] = None
+
+
+class RaciStakeholderInput(BaseModel):
+    id: UUID
+    name: Optional[str] = None
+    role: Optional[str] = None
+    company: Optional[str] = None
+    stakeholder_type: Optional[str] = None
+
+
+class RaciGenerationAssignment(BaseModel):
+    wbs_item_id: UUID
+    stakeholder_id: UUID
+    role: RACIRole
+    evidence_text: Optional[str] = None
+
+
+class RaciGenerationResult(BaseModel):
+    assignments: list[RaciGenerationAssignment]
+    warnings: list[str] = Field(default_factory=list)

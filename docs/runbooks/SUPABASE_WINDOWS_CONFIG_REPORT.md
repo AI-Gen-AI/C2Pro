@@ -1,4 +1,4 @@
-# Configuración Supabase en Windows - C2Pro
+﻿# Configuración Supabase en Windows - C2Pro
 
 **Fecha:** 2026-01-07 20:05 CET
 **Objetivo:** Resolver conectividad Supabase desde Windows y documentar configuración estándar
@@ -219,7 +219,7 @@ DATABASE_URL=postgresql://postgres.tcxedmnvebazcsaridge:1TcIs1wJkKjQwn@aws-1-eu-
 
 # Storage
 STORAGE_PROVIDER=local
-LOCAL_STORAGE_PATH=./storage
+LOCAL_STORAGE_PATH=apps/api/storage
 
 # AI (opcional para desarrollo)
 # ANTHROPIC_API_KEY=sk-ant-api03-...
@@ -282,14 +282,14 @@ RATE_LIMIT_PER_MINUTE=60
 
 ### Script de Test
 
-**Archivo:** `scripts/test_supabase_connection.py`
+**Archivo:** `infrastructure/scripts/test_supabase_connection.py`
 
 ```python
 """
 Test de conexión a Supabase desde Windows.
 
 Uso:
-    python scripts/test_supabase_connection.py
+    python infrastructure/scripts/test_supabase_connection.py
 """
 
 import asyncio
@@ -375,7 +375,7 @@ if __name__ == "__main__":
 
 ```bash
 # Crear script de test
-python scripts/test_supabase_connection.py
+python infrastructure/scripts/test_supabase_connection.py
 
 # Salida esperada:
 # ============================================================
@@ -534,7 +534,7 @@ engine = create_async_engine(
 - ✅ `apps/api/.env.test` - Configuración para tests locales
 
 ### Scripts
-- ✅ `scripts/test_supabase_connection.py` - Test de conectividad
+- ✅ `infrastructure/scripts/test_supabase_connection.py` - Test de conectividad
 
 ### Documentación
 - ✅ `SUPABASE_WINDOWS_CONFIG_REPORT.md` - Este documento

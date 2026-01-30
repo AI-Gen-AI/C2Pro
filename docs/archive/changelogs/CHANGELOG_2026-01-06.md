@@ -1,4 +1,4 @@
-# Changelog - 2026-01-06
+﻿# Changelog - 2026-01-06
 ## Security Foundation Sprint - Continuación
 
 **Sesión:** Implementación completa de tests de seguridad
@@ -187,8 +187,8 @@ services:
 ### 2. Scripts de Inicialización ✅
 
 **Archivos creados:**
-- ✅ `scripts/setup-test-db.sh` (Linux/Mac)
-- ✅ `scripts/setup-test-db.bat` (Windows)
+- ✅ `infrastructure/scripts/setup-test-db.sh` (Linux/Mac)
+- ✅ `infrastructure/scripts/setup-test-db.bat` (Windows)
 
 **Funcionalidad:**
 - Inicia PostgreSQL en Docker
@@ -315,8 +315,8 @@ pytest tests/security/test_mcp_security.py -v
 
 ### Archivos Creados
 1. ✅ `docker-compose.test.yml` - PostgreSQL para tests
-2. ✅ `scripts/setup-test-db.sh` - Script de inicialización (Unix)
-3. ✅ `scripts/setup-test-db.bat` - Script de inicialización (Windows)
+2. ✅ `infrastructure/scripts/setup-test-db.sh` - Script de inicialización (Unix)
+3. ✅ `infrastructure/scripts/setup-test-db.bat` - Script de inicialización (Windows)
 4. ✅ `apps/api/tests/README.md` - Guía de testing
 5. ✅ `docs/CHANGELOG_2026-01-06.md` - Este archivo
 

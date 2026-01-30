@@ -1,4 +1,4 @@
-# CE-S2-008: Prompt Templates con Versionado - Resumen de Implementación
+﻿# CE-S2-008: Prompt Templates con Versionado - Resumen de Implementación
 
 **Fecha**: 2026-01-13
 **Tarea**: CE-S2-008 - Sistema de Gestión de Plantillas de Prompts
@@ -353,7 +353,7 @@ GROUP BY operation, prompt_version;
 | Motor de plantillas (Jinja2) | ✅ | `PromptManager.env` (Jinja2 Environment) |
 | Registro central de templates | ✅ | `PROMPT_REGISTRY` (dict) |
 | Versionado de prompts | ✅ | `PromptTemplate.version` + múltiples versiones |
-| Clase `PromptManager` | ✅ | `prompts/__init__.py:PromptManager` |
+| Clase `PromptManager` | ✅ | `apps/api/src/core/ai/prompts/__init__.py:PromptManager` |
 | Método `get_template()` | ✅ | `PromptManager.get_template(task, version)` |
 | Método `render_prompt()` | ✅ | `PromptManager.render_prompt(task, context, version)` |
 | Retorno de `(prompt, version)` | ✅ | Retorna `(system, user, version)` |

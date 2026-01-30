@@ -1,4 +1,4 @@
-# Staging Pre-Migration State Report
+﻿# Staging Pre-Migration State Report
 
 **Date**: 2026-01-08 22:20
 **Task**: CE-20 Environment Validation
@@ -114,7 +114,7 @@ The staging database environment has been validated and is **READY** for migrati
 
 - `logs/ce20_validation_summary.log` - Detailed validation log
 - `docs/staging_pre_migration_state.md` - This document
-- `scripts/ce-p0-06/check_db_state.py` - Database state checker
+- `infrastructure/scripts/ce-p0-06/check_db_state.py` - Database state checker
 
 ---
 

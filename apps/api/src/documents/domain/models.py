@@ -3,11 +3,10 @@ Domain models for the Document bounded context.
 A Document is an Aggregate Root for Clauses.
 """
 from __future__ import annotations
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
-
-from pydantic import BaseModel, Field
 
 # Canonical status for a document's lifecycle.
 class DocumentStatus(str, Enum):
@@ -41,7 +40,8 @@ class ClauseType(str, Enum):
     OTHER = "other"
 
 
-class Clause(BaseModel):
+@dataclass
+class Clause:
     """
     Represents a contractual Clause as a pure domain entity.
     It lives within the Document aggregate.
@@ -55,14 +55,11 @@ class Clause(BaseModel):
     full_text: str | None
     text_start_offset: int | None = None
     text_end_offset: int | None = None
-    extracted_entities: dict = Field(default_factory=dict)
-    extraction_confidence: float | None
+    extracted_entities: dict = field(default_factory=dict)
+    extraction_confidence: float | None = None
     extraction_model: str | None = None
     manually_verified: bool = False
-    verified_at: datetime | None
-
-    class Config:
-        from_attributes = True
+    verified_at: datetime | None = None
 
     def is_verified(self) -> bool:
         """Business rule: Checks if the clause was manually verified."""
@@ -74,7 +71,8 @@ class Clause(BaseModel):
         return not self.is_verified() and self.clause_type in critical_types
 
 
-class Document(BaseModel):
+@dataclass
+class Document:
     """
     Represents a Document as a pure domain entity and Aggregate Root.
     """
@@ -87,17 +85,14 @@ class Document(BaseModel):
     storage_encrypted: bool = True
     file_size_bytes: int | None = None
     upload_status: DocumentStatus
-    parsed_at: datetime | None
-    parsing_error: str | None
+    parsed_at: datetime | None = None
+    parsing_error: str | None = None
     retention_until: datetime | None = None
     created_by: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    document_metadata: dict = Field(default_factory=dict)
-    clauses: list[Clause] = Field(default_factory=list)
-
-    class Config:
-        from_attributes = True
+    document_metadata: dict = field(default_factory=dict)
+    clauses: list[Clause] = field(default_factory=list)
 
     def is_parsed(self) -> bool:
         """Business rule: Checks if the document was successfully parsed."""

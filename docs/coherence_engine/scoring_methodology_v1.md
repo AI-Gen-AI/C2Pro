@@ -1,4 +1,4 @@
-# Coherence Score v1 - Scoring Methodology
+﻿# Coherence Score v1 - Scoring Methodology
 
 Version: 1.0  
 Date: 2026-01-24  
@@ -81,7 +81,7 @@ Estos pesos fueron validados contra un dataset de 20 proyectos reales, logrando 
     *   Para cada proyecto en este dataset, se define un `rango de score esperado` cualitativo y cuantitativo, basado en el juicio de expertos.
 
 2.  **Ejecución del Motor:**
-    *   Se utiliza el script de calibración automatizado (`scripts/run_calibration.py`, CE-20) para ejecutar el `CoherenceEngine` sobre cada proyecto del dataset.
+    *   Se utiliza el script de calibración automatizado (`infrastructure/scripts/run_calibration.py`, CE-20) para ejecutar el `CoherenceEngine` sobre cada proyecto del dataset.
     *   El script registra el `score real` y las alertas generadas para cada proyecto.
 
 3.  **Análisis de Resultados:**

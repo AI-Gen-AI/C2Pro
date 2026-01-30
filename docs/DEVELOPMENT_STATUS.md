@@ -1,4 +1,4 @@
-# C2Pro - Estado del Desarrollo v2.7.0
+﻿# C2Pro - Estado del Desarrollo v2.7.0
 ## Coherence Engine Sprints - Progreso Actual
 
 **Fecha:** 23 de Enero de 2026
@@ -182,7 +182,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 4.  **Modelo de Score Avanzado y Calibrado** (100%)
     - El `ScoringService` fue mejorado para incluir **rendimientos decrecientes** y **pesos por regla específicos**.
     - Se creó un **dataset de calibración** con proyectos de prueba (`excellent`, `minor_issues`, `major_issues`).
-    - Se implementó un **script de calibración automatizado** (`scripts/run_calibration.py`) para validar el modelo de score.
+    - Se implementó un **script de calibración automatizado** (`infrastructure/scripts/run_calibration.py`) para validar el modelo de score.
     - Los pesos del score en `config.py` fueron **ajustados y calibrados** para que los resultados se alineen con las expectativas definidas en la metodología.
 
 ### Logros Principales ✅
@@ -562,7 +562,7 @@ c2pro/
 │       ├── README.md ← (guía completa)
 │       └── seed.sql (existente)
 │
-├── scripts/
+├── infrastructure/scripts/
 │   ├── ce-p0-06/
 │   │   ├── verify_rls_coverage.sql ← NUEVO
 │   │   └── verify_foreign_keys.sql ← NUEVO

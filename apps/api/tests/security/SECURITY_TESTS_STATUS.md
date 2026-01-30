@@ -1,4 +1,4 @@
-# Estado de Tests de Seguridad - C2Pro
+﻿# Estado de Tests de Seguridad - C2Pro
 
 **Última actualización:** 2026-01-06 19:20
 **Versión:** 2.0.0
@@ -252,8 +252,8 @@ if response.status_code == 200:
 ### 4. Docker Compose para Tests
 **Creado:**
 - ✅ `docker-compose.test.yml` - PostgreSQL 15 para tests
-- ✅ `scripts/setup-test-db.sh` - Script de inicialización (Linux/Mac)
-- ✅ `scripts/setup-test-db.bat` - Script de inicialización (Windows)
+- ✅ `infrastructure/scripts/setup-test-db.sh` - Script de inicialización (Linux/Mac)
+- ✅ `infrastructure/scripts/setup-test-db.bat` - Script de inicialización (Windows)
 - ✅ `tests/README.md` - Guía de testing completa
 
 ---

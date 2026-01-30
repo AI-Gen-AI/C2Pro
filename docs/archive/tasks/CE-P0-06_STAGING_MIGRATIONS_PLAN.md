@@ -1,4 +1,4 @@
-# CE-P0-06: Staging Migrations Deployment - Master Plan
+﻿# CE-P0-06: Staging Migrations Deployment - Master Plan
 **Date**: 2026-01-08
 **Priority**: P0 (Critical - Production Prerequisite)
 **Status**: Planning
@@ -950,9 +950,9 @@ Create comprehensive readiness report for CTO/stakeholder approval before produc
 
 2. **Generate Executive Summary**
    ```python
-   # File: scripts/generate_migration_report.py
+   # File: infrastructure/scripts/generate_migration_report.py
 
-   python scripts/generate_migration_report.py \
+   python infrastructure/scripts/generate_migration_report.py \
      --input-dir evidence/staging_migration_$(date +%Y%m%d) \
      --output docs/STAGING_MIGRATION_READINESS_REPORT.md
    ```

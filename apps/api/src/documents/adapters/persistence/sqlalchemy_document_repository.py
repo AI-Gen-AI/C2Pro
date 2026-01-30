@@ -173,6 +173,40 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         )
         return result.scalar_one_or_none() is not None
 
+    async def get_clause_text_map(self, clause_ids: List[UUID]) -> dict[UUID, str]:
+        if not clause_ids:
+            return {}
+        result = await self.session.execute(
+            select(ClauseORM.id, ClauseORM.full_text).where(ClauseORM.id.in_(clause_ids))
+        )
+        return {row[0]: row[1] for row in result.all() if row[1]}
+
+    async def get_clauses_by_ids(self, clause_ids: List[UUID]) -> List[Clause]:
+        if not clause_ids:
+            return []
+        result = await self.session.execute(
+            select(ClauseORM).where(ClauseORM.id.in_(clause_ids))
+        )
+        return [self._to_domain_clause(orm) for orm in result.scalars().all()]
+
+    async def get_clause_by_document_and_code(
+        self, document_id: UUID, clause_code: str
+    ) -> Clause | None:
+        result = await self.session.execute(
+            select(ClauseORM).where(
+                ClauseORM.document_id == document_id,
+                ClauseORM.clause_code == clause_code,
+            )
+        )
+        orm_clause = result.scalar_one_or_none()
+        return self._to_domain_clause(orm_clause) if orm_clause else None
+
+    async def list_clauses_for_document(self, document_id: UUID) -> List[Clause]:
+        result = await self.session.execute(
+            select(ClauseORM).where(ClauseORM.document_id == document_id)
+        )
+        return [self._to_domain_clause(orm) for orm in result.scalars().all()]
+
     async def commit(self) -> None:
         await self.session.commit()
 

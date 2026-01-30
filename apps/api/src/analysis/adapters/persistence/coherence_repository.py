@@ -8,13 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.analysis.adapters.persistence.models import (
-    Alert,
-    AlertSeverity,
-    Analysis,
-    AnalysisStatus,
-    AnalysisType,
-)
+from src.analysis.adapters.persistence.models import Alert, Analysis
+from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity
 from src.analysis.ports.coherence_repository import ICoherenceRepository
 from src.core.database import get_session_with_tenant
 from src.documents.adapters.persistence.models import DocumentORM

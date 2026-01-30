@@ -5,14 +5,16 @@ from typing import Any, Iterable
 from uuid import UUID
 
 import networkx as nx
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
-from src.documents.adapters.persistence.models import ClauseORM
-from src.procurement.adapters.persistence.models import WBSItemORM
-from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
-from src.stakeholders.domain.models import RACIRole
+from src.analysis.ports.alert_repository import AlertRepository
+from src.analysis.ports.knowledge_graph import KnowledgeGraphPort
+from src.documents.domain.models import Clause
+from src.documents.ports.document_repository import IDocumentRepository
+from src.procurement.domain.models import WBSItem
+from src.procurement.ports.wbs_repository import IWBSRepository
+from src.stakeholders.domain.models import RACIRole, RaciAssignment, Stakeholder
+from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 
 @dataclass
@@ -21,18 +23,28 @@ class GraphPath:
     edges: list[str]
 
 
-class ProjectKnowledgeGraph:
-    def __init__(self, db_session: AsyncSession) -> None:
-        self.db_session = db_session
+class ProjectKnowledgeGraph(KnowledgeGraphPort):
+    def __init__(
+        self,
+        *,
+        stakeholder_repository: IStakeholderRepository,
+        wbs_repository: IWBSRepository,
+        alert_repository: AlertRepository,
+        document_repository: IDocumentRepository,
+    ) -> None:
+        self.stakeholder_repository = stakeholder_repository
+        self.wbs_repository = wbs_repository
+        self.alert_repository = alert_repository
+        self.document_repository = document_repository
         self.graph = nx.DiGraph()
 
-    async def build_graph(self, project_id: UUID) -> nx.DiGraph:
+    async def build_graph(self, project_id: UUID, tenant_id: UUID) -> nx.DiGraph:
         self.graph.clear()
 
         stakeholders = await self._load_stakeholders(project_id)
-        tasks = await self._load_tasks(project_id)
+        tasks = await self._load_tasks(project_id, tenant_id)
         risks = await self._load_risks(project_id)
-        clauses = await self._load_clauses(project_id, risks, tasks)
+        clauses = await self._load_clauses(risks, tasks)
         raci_rows = await self._load_raci(project_id)
 
         for stakeholder in stakeholders:
@@ -47,20 +59,22 @@ class ProjectKnowledgeGraph:
                 },
             )
 
+        code_to_id = {task.code: task.id for task in tasks if task.code}
         for task in tasks:
+            parent_id = code_to_id.get(task.parent_code) if task.parent_code else None
             self._add_node(
                 _task_node_id(task.id),
                 node_type="TASK",
                 label=task.name,
                 properties={
-                    "wbs_code": task.wbs_code,
-                    "parent_id": str(task.parent_id) if task.parent_id else None,
+                    "wbs_code": task.code,
+                    "parent_id": str(parent_id) if parent_id else None,
                 },
             )
-            if task.parent_id:
+            if parent_id:
                 self._add_edge(
                     _task_node_id(task.id),
-                    _task_node_id(task.parent_id),
+                    _task_node_id(parent_id),
                     relation="DEPENDS_ON",
                     properties={"relation_type": "parent"},
                 )
@@ -153,46 +167,38 @@ class ProjectKnowledgeGraph:
     def degree_centrality(self) -> dict[str, float]:
         return nx.degree_centrality(self.graph)
 
-    async def _load_stakeholders(self, project_id: UUID) -> list[StakeholderORM]:
-        result = await self.db_session.execute(
-            select(StakeholderORM).where(StakeholderORM.project_id == project_id)
+    async def _load_stakeholders(self, project_id: UUID) -> list[Stakeholder]:
+        stakeholders, _ = await self.stakeholder_repository.get_stakeholders_by_project(
+            project_id=project_id,
+            skip=0,
+            limit=1000,
         )
-        return list(result.scalars().all())
+        return list(stakeholders)
 
-    async def _load_tasks(self, project_id: UUID) -> list[WBSItemORM]:
-        result = await self.db_session.execute(
-            select(WBSItemORM).where(WBSItemORM.project_id == project_id)
-        )
-        return list(result.scalars().all())
+    async def _load_tasks(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+        return await self.wbs_repository.get_by_project(project_id, tenant_id)
 
     async def _load_risks(self, project_id: UUID) -> list[Alert]:
-        result = await self.db_session.execute(
-            select(Alert).where(Alert.project_id == project_id).where(Alert.category == "risk")
+        page = await self.alert_repository.list_for_project(
+            project_id=project_id,
+            category="risk",
+            limit=500,
         )
-        return list(result.scalars().all())
+        return list(page.items)
 
     async def _load_clauses(
         self,
-        project_id: UUID,
         risks: Iterable[Alert],
-        tasks: Iterable[WBSItemORM],
-    ) -> list[ClauseORM]:
+        tasks: Iterable[WBSItem],
+    ) -> list[Clause]:
         clause_ids = {risk.source_clause_id for risk in risks if risk.source_clause_id}
-        clause_ids.update({task.funded_by_clause_id for task in tasks if task.funded_by_clause_id})
+        clause_ids.update({task.source_clause_id for task in tasks if task.source_clause_id})
         if not clause_ids:
             return []
-        result = await self.db_session.execute(
-            select(ClauseORM)
-            .where(ClauseORM.project_id == project_id)
-            .where(ClauseORM.id.in_(clause_ids))
-        )
-        return list(result.scalars().all())
+        return await self.document_repository.get_clauses_by_ids(list(clause_ids))
 
-    async def _load_raci(self, project_id: UUID) -> list[StakeholderWBSRaciORM]:
-        result = await self.db_session.execute(
-            select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
-        )
-        return list(result.scalars().all())
+    async def _load_raci(self, project_id: UUID) -> list[RaciAssignment]:
+        return await self.stakeholder_repository.list_raci_assignments(project_id)
 
     def _add_node(self, node_id: str, *, node_type: str, label: str, properties: dict[str, Any]):
         self.graph.add_node(

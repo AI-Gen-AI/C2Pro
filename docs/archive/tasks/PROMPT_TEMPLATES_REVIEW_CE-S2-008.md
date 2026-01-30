@@ -1,4 +1,4 @@
-# Revisión Prompt Templates con Versioning - CE-S2-008
+﻿# Revisión Prompt Templates con Versioning - CE-S2-008
 
 **Fecha**: 2026-01-21
 **Ticket**: CE-S2-008 - Prompt Templates con Versioning
@@ -30,7 +30,7 @@ La implementación del sistema de Prompt Templates con versionado completo ha si
 
 ### Módulos Creados
 
-1. **`apps/api/src/modules/ai/prompts/__init__.py`** (616 líneas)
+1. **`apps/api/src/core/ai/prompts/__init__.py`** (616 líneas)
    - `PromptTemplate` (dataclass): Estructura de template versionado
    - `PROMPT_REGISTRY`: Registro central `{task_name: {version: template}}`
    - `PromptManager`: Gestor con Jinja2 engine
@@ -72,7 +72,7 @@ La implementación del sistema de Prompt Templates con versionado completo ha si
 
 ### 1. Motor de Plantillas con Jinja2 ✅
 
-**Implementación**: `prompts/__init__.py:372-376`
+**Implementación**: `apps/api/src/core/ai/prompts/__init__.py:372-376`
 ```python
 class PromptManager:
     def __init__(self):
@@ -99,7 +99,7 @@ $ python -m src.modules.ai.test_prompts_simple
 
 ### 2. Registro Central de Templates ✅
 
-**Implementación**: `prompts/__init__.py:85-104`
+**Implementación**: `apps/api/src/core/ai/prompts/__init__.py:85-104`
 ```python
 # Registry global
 PROMPT_REGISTRY: dict[str, dict[str, PromptTemplate]] = {}
@@ -136,7 +136,7 @@ $ python -c "from src.modules.ai.prompts import PROMPT_REGISTRY; print(len(PROMP
 
 ### 3. Versionado Completo ✅
 
-**Implementación**: `prompts/__init__.py:510-539`
+**Implementación**: `apps/api/src/core/ai/prompts/__init__.py:510-539`
 ```python
 def _get_latest_version(self, task_name: str) -> str:
     versions = list(PROMPT_REGISTRY[task_name].keys())
@@ -173,7 +173,7 @@ def _get_latest_version(self, task_name: str) -> str:
 
 ### 4. Separación System/User Prompts ✅
 
-**Implementación**: `prompts/__init__.py:49-68`
+**Implementación**: `apps/api/src/core/ai/prompts/__init__.py:49-68`
 ```python
 @dataclass
 class PromptTemplate:
@@ -185,7 +185,7 @@ class PromptTemplate:
     metadata: dict[str, Any] | None = None
 ```
 
-**Render**: `prompts/__init__.py:439-504`
+**Render**: `apps/api/src/core/ai/prompts/__init__.py:439-504`
 ```python
 def render_prompt(
     self,
@@ -610,7 +610,7 @@ assert "fecha" in user
 | 1 | Motor de plantillas con Jinja2 | ✅ COMPLETO | `PromptManager.env` (Jinja2 Environment) |
 | 2 | Registro central de templates | ✅ COMPLETO | `PROMPT_REGISTRY` (dict global) |
 | 3 | Versionado de prompts | ✅ COMPLETO | Múltiples versiones + resolución "latest" |
-| 4 | Clase `PromptManager` | ✅ COMPLETO | `prompts/__init__.py:348-594` |
+| 4 | Clase `PromptManager` | ✅ COMPLETO | `apps/api/src/core/ai/prompts/__init__.py:348-594` |
 | 5 | Método `get_template()` | ✅ COMPLETO | Líneas 388-437 |
 | 6 | Método `render_prompt()` | ✅ COMPLETO | Líneas 439-504 |
 | 7 | Retorno `(prompt, version)` | ✅ COMPLETO | Retorna `(system, user, version)` |
