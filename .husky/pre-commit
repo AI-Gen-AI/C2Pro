@@ -1,0 +1,17 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Ejecutando validaciones pre-commit..."
+
+# Validar que hay cambios para validar
+if git diff-index --cached --quiet HEAD; then
+    echo "⚠️ Sin cambios para validar"
+    exit 0
+fi
+
+echo "✓ Cambios detectados"
+
+# Ejecutar lint si está disponible
+npm run lint --if-present
+
+echo "✅ Pre-commit validación completada"
