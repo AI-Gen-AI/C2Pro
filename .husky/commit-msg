@@ -1,0 +1,19 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "💬 Validando mensaje del commit..."
+
+# Validar que el mensaje no esté vacío
+if [ ! -s "$1" ]; then
+    echo "❌ El mensaje del commit está vacío"
+    exit 1
+fi
+
+# Validar longitud mínima (10 caracteres)
+commit_msg=$(head -n 1 "$1" | sed 's/^#.*//')
+if [ ${#commit_msg} -lt 10 ]; then
+    echo "❌ El mensaje debe tener al menos 10 caracteres"
+    exit 1
+fi
+
+echo "✅ Mensaje de commit válido"
