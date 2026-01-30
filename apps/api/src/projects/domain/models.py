@@ -2,11 +2,10 @@
 Domain models for the Project bounded context.
 """
 from __future__ import annotations
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from uuid import UUID, uuid4
-
-from pydantic import BaseModel, Field
+from uuid import UUID
 
 
 class ProjectStatus(str, Enum):
@@ -26,6 +25,7 @@ class ProjectType(str, Enum):
     OTHER = "other"
 
 
+@dataclass
 class Project:
     """
     Represents a Project as a pure domain entity and Aggregate Root.
@@ -55,14 +55,7 @@ class Project:
     # but we might only load IDs or lightweight objects to avoid fetching everything.
     # For now, we'll keep it simple and assume the use case layer will populate this.
     # In a full DDD model, this would be a list of Document entities.
-    _document_types: list[str] = []
-
-    def __init__(self, **data):
-        # A simple constructor to allow Pydantic-like initialization
-        # A full-fledged entity might have a more complex constructor
-        # or factory methods like Project.create(...)
-        for key, value in data.items():
-            setattr(self, key, value)
+    _document_types: list[str] = field(default_factory=list)
 
     def is_ready_for_analysis(self) -> bool:
         """

@@ -7,7 +7,7 @@ used for API request validation and response serialization.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -220,6 +220,17 @@ class RagAnswerResponse(BaseModel):
 
     answer: str
     sources: list[RagAnswerSource] = Field(default_factory=list)
+
+
+class RetrievedChunk(BaseModel):
+    content: str
+    metadata: dict[str, Any]
+    similarity: float
+
+
+class RagAnswer(BaseModel):
+    answer: str
+    sources: list[RetrievedChunk]
 
 
 # ---------------------------------------------------------------------------

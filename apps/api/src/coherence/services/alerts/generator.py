@@ -4,18 +4,17 @@ import hashlib
 from datetime import datetime
 from typing import Iterable
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.analysis.adapters.persistence.models import Alert, AlertSeverity, AlertStatus
-from src.analysis.application.schemas import AlertCreate
+from src.analysis.application.dtos import AlertCreate
+from src.analysis.domain.enums import AlertSeverity, AlertStatus
+from src.analysis.ports.alert_repository import AlertRepository
+from src.analysis.ports.types import AlertRecord
 from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 
 
 class AlertGeneratorService:
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, repository: AlertRepository) -> None:
+        self._repository = repository
 
     async def process_violations(
         self,
@@ -23,7 +22,7 @@ class AlertGeneratorService:
         violations: list[AlertCreate],
         *,
         auto_resolve: bool = True,
-    ) -> list[Alert]:
+    ) -> list[AlertRecord]:
         """
         Persist new alerts, update existing ones, and optionally auto-resolve missing ones.
         """
@@ -33,34 +32,38 @@ class AlertGeneratorService:
             (alert.alert_metadata or {}).get("fingerprint"): alert for alert in existing
         }
 
-        processed: list[Alert] = []
+        processed: list[AlertRecord] = []
         now = datetime.utcnow()
 
-        async with self._db.begin():
-            for violation in violations:
-                fingerprint = self._fingerprint(violation)
-                alert = existing_by_fp.get(fingerprint)
+        for violation in violations:
+            fingerprint = self._fingerprint(violation)
+            alert = existing_by_fp.get(fingerprint)
 
-                if alert is None:
-                    alert = self._create_alert(project_id, violation, fingerprint)
-                    self._db.add(alert)
-                elif alert.status == AlertStatus.OPEN:
-                    self._update_alert(alert, violation, fingerprint)
-                else:
-                    self._reopen_alert(alert, violation, fingerprint)
+            if alert is None:
+                created = await self._create_alert(project_id, violation, fingerprint)
+                processed.append(created)
+                continue
 
-                processed.append(alert)
+            if alert.status == AlertStatus.OPEN:
+                self._update_alert(alert, violation, fingerprint)
+            else:
+                self._reopen_alert(alert, violation, fingerprint)
+            await self._repository.update(alert)
+            processed.append(alert)
 
-            if auto_resolve:
-                for alert in existing:
-                    fingerprint = (alert.alert_metadata or {}).get("fingerprint")
-                    if alert.status == AlertStatus.OPEN and fingerprint not in fingerprints:
-                        alert.status = AlertStatus.RESOLVED
-                        alert.resolved_at = now
-                        alert.resolution_notes = self._merge_notes(
-                            alert.resolution_notes,
-                            "Auto-resolved: violation not detected in latest analysis.",
-                        )
+        if auto_resolve:
+            for alert in existing:
+                fingerprint = (alert.alert_metadata or {}).get("fingerprint")
+                if alert.status == AlertStatus.OPEN and fingerprint not in fingerprints:
+                    alert.status = AlertStatus.RESOLVED
+                    alert.resolved_at = now
+                    alert.resolution_notes = self._merge_notes(
+                        alert.resolution_notes,
+                        "Auto-resolved: violation not detected in latest analysis.",
+                    )
+                    await self._repository.update(alert)
+
+        await self._repository.commit()
 
         return processed
 
@@ -71,7 +74,7 @@ class AlertGeneratorService:
         *,
         analysis_id=None,
         auto_resolve: bool = True,
-    ) -> list[Alert]:
+    ) -> list[AlertRecord]:
         generator = AlertGenerator(project_id=project_id, analysis_id=analysis_id)
         violations: list[AlertCreate] = []
         for result in rule_results:
@@ -82,30 +85,29 @@ class AlertGeneratorService:
             auto_resolve=auto_resolve,
         )
 
-    async def _load_existing(self, project_id) -> list[Alert]:
-        result = await self._db.execute(select(Alert).where(Alert.project_id == project_id))
-        return list(result.scalars().all())
+    async def _load_existing(self, project_id) -> list[AlertRecord]:
+        items: list[AlertRecord] = []
+        cursor = None
+        while True:
+            page = await self._repository.list_for_project(
+                project_id=project_id,
+                cursor=cursor,
+                limit=200,
+            )
+            items.extend(page.items)
+            if not page.has_more:
+                break
+            cursor = page.next_cursor
+        return items
 
-    def _create_alert(self, project_id, violation: AlertCreate, fingerprint: str) -> Alert:
+    async def _create_alert(
+        self, project_id, violation: AlertCreate, fingerprint: str
+    ) -> AlertRecord:
         metadata = self._build_metadata(violation, fingerprint)
-        return Alert(
-            project_id=project_id,
-            analysis_id=violation.analysis_id,
-            severity=violation.severity,
-            category=violation.category,
-            rule_id=violation.rule_id,
-            title=violation.title,
-            description=violation.description,
-            recommendation=violation.recommendation,
-            source_clause_id=violation.source_clause_id,
-            related_clause_ids=violation.related_clause_ids,
-            affected_entities=violation.affected_entities,
-            impact_level=violation.impact_level,
-            alert_metadata=metadata,
-            status=AlertStatus.OPEN,
-        )
+        payload = violation.model_copy(update={"alert_metadata": metadata, "project_id": project_id})
+        return await self._repository.create(payload)
 
-    def _update_alert(self, alert: Alert, violation: AlertCreate, fingerprint: str) -> None:
+    def _update_alert(self, alert: AlertRecord, violation: AlertCreate, fingerprint: str) -> None:
         alert.severity = violation.severity
         alert.category = violation.category
         alert.rule_id = violation.rule_id
@@ -118,7 +120,7 @@ class AlertGeneratorService:
         alert.impact_level = violation.impact_level
         alert.alert_metadata = self._build_metadata(violation, fingerprint)
 
-    def _reopen_alert(self, alert: Alert, violation: AlertCreate, fingerprint: str) -> None:
+    def _reopen_alert(self, alert: AlertRecord, violation: AlertCreate, fingerprint: str) -> None:
         alert.status = AlertStatus.OPEN
         alert.resolved_at = None
         alert.resolved_by = None

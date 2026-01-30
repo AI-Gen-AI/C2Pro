@@ -14,8 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
-from src.documents.adapters.rag.rag_service import RagService
-
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
@@ -26,6 +24,7 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
 from src.documents.adapters.rag.legacy_rag_ingestion_service import (
     LegacyRagIngestionService,
 )
+from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.extraction.legacy_entity_extraction_service import (
     LegacyEntityExtractionService,
 )
@@ -35,11 +34,15 @@ from src.documents.adapters.storage.local_file_storage_service import (
 from src.documents.application.delete_document_use_case import DeleteDocumentUseCase
 from src.documents.application.download_document_use_case import DownloadDocumentUseCase
 from src.documents.application.get_document_use_case import GetDocumentUseCase
+from src.documents.application.get_document_with_clauses_use_case import (
+    GetDocumentWithClausesUseCase,
+)
 from src.documents.application.list_project_documents_use_case import (
     ListProjectDocumentsUseCase,
 )
 from src.documents.application.parse_document_use_case import ParseDocumentUseCase
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
+from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.application.dtos import (
     DocumentDetailResponse,
@@ -147,6 +150,11 @@ def get_list_documents_use_case(
 ) -> ListProjectDocumentsUseCase:
     return ListProjectDocumentsUseCase(document_repository=repo)
 
+def get_get_document_with_clauses_use_case(
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> GetDocumentWithClausesUseCase:
+    return GetDocumentWithClausesUseCase(document_repository=repo)
+
 
 def get_parse_document_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
@@ -162,6 +170,16 @@ def get_parse_document_use_case(
         entity_extraction_service=entity_extraction,
         rag_ingestion_service=rag_ingestion,
     )
+
+def get_rag_service(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyRagService:
+    return SqlAlchemyRagService(db_session=db)
+
+def get_answer_rag_use_case(
+    rag_service: SqlAlchemyRagService = Depends(get_rag_service),
+) -> AnswerRagQuestionUseCase:
+    return AnswerRagQuestionUseCase(rag_service=rag_service)
 
 
 @router.post(
@@ -214,11 +232,9 @@ async def upload_document_for_processing(
 async def get_document_endpoint(
     document_id: UUID,
     user_id: CurrentUserId,
-    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> DocumentDetailResponse:
-    document = await repo.get_document_with_clauses(document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+    document = await use_case.execute(document_id)
     return DocumentDetailResponse.model_validate(document)
 
 
@@ -312,10 +328,9 @@ async def answer_project_question(
     payload: RagQuestionRequest,
     user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session),
+    use_case: AnswerRagQuestionUseCase = Depends(get_answer_rag_use_case),
 ):
-    rag_service = RagService(db)
-    result = await rag_service.answer_question(
+    result = await use_case.execute(
         question=payload.question,
         project_id=project_id,
         top_k=payload.top_k or 5,

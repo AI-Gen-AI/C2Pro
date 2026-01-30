@@ -1,4 +1,4 @@
-# Sprint 1 - Foundation ✅ COMPLETADO
+﻿# Sprint 1 - Foundation ✅ COMPLETADO
 
 **Fecha de Inicio:** 04 Enero 2026
 **Fecha de Finalización:** 04 Enero 2026
@@ -111,7 +111,7 @@ apps/api/
 ├── migrate.py                   ✅ Migration helper
 └── README.md                    ✅ Documentación
 
-scripts/
+infrastructure/scripts/
 ├── init-backend.bat             ✅ Setup Windows
 ├── init-backend.sh              ✅ Setup Linux/Mac
 └── test-api.py                  ✅ API testing
@@ -203,7 +203,7 @@ raíz/
 
 ### Script de Testing Automatizado
 ```bash
-python scripts/test-api.py
+python infrastructure/scripts/test-api.py
 ```
 
 Tests incluidos:
@@ -229,10 +229,10 @@ Tests incluidos:
 
 ```bash
 # Opción 1: Script automático (Windows)
-.\scripts\init-backend.bat
+.\infrastructure\\scripts\\init-backend.bat
 
 # Opción 2: Script automático (Linux/Mac)
-./scripts/init-backend.sh
+./infrastructure/scripts/init-backend.sh
 
 # Opción 3: Manual
 cd apps/api

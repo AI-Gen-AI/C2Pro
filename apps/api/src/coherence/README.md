@@ -1,4 +1,4 @@
-# Coherence Engine v0.2 - LLM Integration
+﻿# Coherence Engine v0.2 - LLM Integration
 
 Este módulo contiene la implementación del **Coherence Engine**, un servicio diseñado para analizar la coherencia de los documentos de un proyecto y generar un score de alineación.
 

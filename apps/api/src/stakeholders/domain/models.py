@@ -2,12 +2,10 @@
 Domain models for the Stakeholders bounded context.
 """
 from __future__ import annotations
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 from uuid import UUID
-
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
 
 
 class PowerLevel(str, Enum):
@@ -32,31 +30,6 @@ class StakeholderQuadrant(str, Enum):
     MONITOR = "monitor"  # low/low
 
 
-class MendelowQuadrant(str, Enum): # From stakeholder_classifier.py
-    MANAGE_CLOSELY = "MANAGE_CLOSELY"
-    KEEP_SATISFIED = "KEEP_SATISFIED"
-    KEEP_INFORMED = "KEEP_INFORMED"
-    MONITOR = "MONITOR"
-
-
-class StakeholderInput(BaseModel): # From stakeholder_classifier.py
-    name: str | None = None
-    role: str | None = None
-    company: str | None = None
-
-
-class EnrichedStakeholder(BaseModel): # From stakeholder_classifier.py
-    name: str | None = None
-    role: str | None = None
-    company: str | None = None
-    power_score: int = Field(ge=1, le=10)
-    interest_score: int = Field(ge=1, le=10)
-    power_level: PowerLevel
-    interest_level: InterestLevel
-    quadrant: MendelowQuadrant
-    quadrant_db: StakeholderQuadrant # Maps to StakeholderQuadrant
-
-
 class RACIRole(str, Enum):
     """RACI roles."""
     RESPONSIBLE = "R"
@@ -65,7 +38,8 @@ class RACIRole(str, Enum):
     INFORMED = "I"
 
 
-class Stakeholder(BaseModel):
+@dataclass
+class Stakeholder:
     """
     Represents a Stakeholder as a pure domain entity.
     """
@@ -78,7 +52,7 @@ class Stakeholder(BaseModel):
     power_level: PowerLevel
     interest_level: InterestLevel
     quadrant: StakeholderQuadrant | None
-    email: EmailStr | None
+    email: str | None
     phone: str | None
     source_clause_id: UUID | None
     extracted_from_document_id: UUID | None
@@ -86,12 +60,9 @@ class Stakeholder(BaseModel):
     reviewed_by: UUID | None
     reviewed_at: datetime | None
     review_comment: str | None
-    stakeholder_metadata: dict
+    stakeholder_metadata: dict = field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
     def is_key_player(self) -> bool:
         return self.quadrant == StakeholderQuadrant.KEY_PLAYER
@@ -100,7 +71,8 @@ class Stakeholder(BaseModel):
         return self.source_clause_id is not None
 
 
-class RaciAssignment(BaseModel):
+@dataclass
+class RaciAssignment:
     """
     Represents a RACI assignment as a pure domain entity.
     """
@@ -115,9 +87,6 @@ class RaciAssignment(BaseModel):
     verified_by: UUID | None
     verified_at: datetime | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
     def is_verified(self) -> bool:
         return self.manually_verified and self.verified_at is not None

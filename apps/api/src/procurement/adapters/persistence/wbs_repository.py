@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.procurement.adapters.persistence.models import WBSItemORM
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SQLAlchemyWBSRepository(IWBSRepository):
@@ -105,8 +106,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             select(WBSItemORM)
             .options(selectinload(WBSItemORM.parent))
             .where(WBSItemORM.id == wbs_id)
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -121,8 +122,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             select(WBSItemORM)
             .options(selectinload(WBSItemORM.parent))
             .where(WBSItemORM.project_id == project_id)
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(WBSItemORM.wbs_code)
         )
         orms = result.scalars().all()
@@ -140,8 +141,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                     WBSItemORM.wbs_code == wbs_code
                 )
             )
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -155,8 +156,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         result = await self.session.execute(
             select(WBSItemORM)
             .where(WBSItemORM.parent_id == parent_id)
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(WBSItemORM.wbs_code)
         )
         orms = result.scalars().all()
@@ -171,8 +172,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             .options(selectinload(WBSItemORM.children))
             .where(WBSItemORM.project_id == project_id)
             .where(WBSItemORM.parent_id == None)  # Only root items
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(WBSItemORM.wbs_code)
         )
         root_orms = result.scalars().all()
@@ -184,8 +185,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         result = await self.session.execute(
             select(WBSItemORM)
             .where(WBSItemORM.id == wbs_id)
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -228,8 +229,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         result = await self.session.execute(
             select(WBSItemORM)
             .where(WBSItemORM.id == wbs_id)
-            .join(WBSItemORM.project)
-            .where(WBSItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -274,3 +275,4 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             created_items.append(self._orm_to_domain(orm))
 
         return created_items
+

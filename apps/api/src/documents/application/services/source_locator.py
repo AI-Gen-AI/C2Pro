@@ -9,15 +9,13 @@ fuzzy text matching.
 import re
 import sys
 import subprocess
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 import structlog
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-from src.documents.adapters.persistence.models import ClauseORM
+from src.documents.ports.document_repository import IDocumentRepository
 
 # --- Dependency Check ---
 try:
@@ -52,8 +50,8 @@ class SourceLocator:
     """
     Finds the source of AI-generated text within project documents.
     """
-    def __init__(self, db_session: AsyncSession):
-        self.db = db_session
+    def __init__(self, document_repository: IDocumentRepository):
+        self.document_repository = document_repository
         # Regex to find clause references like "Clause 14.2" or "Sub-Clause 3.1.a"
         self.clause_regex = re.compile(r'(?:cláusula|clause|sub-clause|sub-cláusula)\s+([0-9]+\.[0-9]+(?:\.[a-zA-Z0-9]+)*)', re.IGNORECASE)
 
@@ -83,12 +81,10 @@ class SourceLocator:
         match = self.clause_regex.search(query_text)
         if match:
             clause_code = match.group(1)
-            stmt = select(ClauseORM).where(
-                ClauseORM.document_id == document_id,
-                ClauseORM.clause_code == clause_code
+            clause = await self.document_repository.get_clause_by_document_and_code(
+                document_id=document_id,
+                clause_code=clause_code,
             )
-            result = await self.db.execute(stmt)
-            clause = result.scalar_one_or_none()
             if clause:
                 logger.info("source_locator_fast_path_success", clause_code=clause_code)
                 return SourceLocation(
@@ -101,9 +97,7 @@ class SourceLocator:
 
         # --- Slow Path: Fuzzy Search ---
         logger.info("source_locator_slow_path_started", document_id=document_id)
-        stmt_all = select(ClauseORM).where(ClauseORM.document_id == document_id)
-        result_all = await self.db.execute(stmt_all)
-        all_clauses = result_all.scalars().all()
+        all_clauses = await self.document_repository.list_clauses_for_document(document_id=document_id)
 
         if not all_clauses:
             logger.warning("source_locator_no_clauses", document_id=document_id)

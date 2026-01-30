@@ -27,51 +27,15 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity, AlertStatus
 from src.core.database import Base
 from src.core.approval import ApprovalStatus
 
 if TYPE_CHECKING:
     from src.core.auth.models import User
-    from src.documents.adapters.persistence.models import ClauseORM
-    from src.projects.adapters.persistence.models import ProjectORM
 
 
-class AnalysisType(str, Enum):
-    """Tipos de análisis disponibles."""
-
-    COHERENCE = "coherence"
-    RISK = "risk"
-    COST = "cost"
-    SCHEDULE = "schedule"
-    QUALITY = "quality"
-
-
-class AnalysisStatus(str, Enum):
-    """Estados de un análisis."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    ERROR = "error"
-    CANCELLED = "cancelled"
-
-
-class AlertSeverity(str, Enum):
-    """Severidad de una alerta."""
-
-    CRITICAL = "critical"  # Bloquea ejecución
-    HIGH = "high"  # Requiere acción inmediata
-    MEDIUM = "medium"  # Requiere atención
-    LOW = "low"  # Informativo
-
-
-class AlertStatus(str, Enum):
-    """Estados de una alerta."""
-
-    OPEN = "open"
-    ACKNOWLEDGED = "acknowledged"
-    RESOLVED = "resolved"
-    DISMISSED = "dismissed"
+ 
 
 
 class Analysis(Base):
@@ -135,10 +99,6 @@ class Analysis(Base):
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="analyses", lazy="selectin"
-    )
-
     alerts: Mapped[list["Alert"]] = relationship(
         "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
     )
@@ -281,19 +241,8 @@ class Alert(Base):
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="alerts", lazy="selectin"
-    )
-
     analysis: Mapped["Analysis"] = relationship(
         "Analysis", back_populates="alerts", lazy="selectin"
-    )
-
-    source_clause: Mapped["ClauseORM"] = relationship(
-        "ClauseORM",
-        back_populates="alerts",
-        foreign_keys=[source_clause_id],
-        lazy="selectin",  # IMPORTANTE: Cargar siempre para trazabilidad
     )
 
     resolver: Mapped["User"] = relationship("User", foreign_keys=[resolved_by], lazy="select")
@@ -338,8 +287,6 @@ class Alert(Base):
     @property
     def clause_code(self) -> str | None:
         """Código de la cláusula fuente (si existe)."""
-        if self.source_clause:
-            return self.source_clause.clause_code
         return None
 
     @property

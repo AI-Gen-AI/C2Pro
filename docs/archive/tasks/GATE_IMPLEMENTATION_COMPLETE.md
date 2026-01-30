@@ -1,4 +1,4 @@
-# CTO Gates 1-4 Implementation - COMPLETE ✅
+﻿# CTO Gates 1-4 Implementation - COMPLETE ✅
 **Date**: 2026-01-08
 **Task**: CE-P0-05
 **Status**: ✅ **IMPLEMENTATION COMPLETE**
@@ -155,7 +155,7 @@ All 4 CTO Security Gates verification test suites have been **successfully imple
 ## Evidence Generation System
 
 ### Generator Script
-**File**: `scripts/generate_cto_gates_evidence.py` (300+ lines)
+**File**: `infrastructure/scripts/generate_cto_gates_evidence.py` (300+ lines)
 
 **Capabilities**:
 - ✅ Automated test execution for all gates
@@ -169,13 +169,13 @@ All 4 CTO Security Gates verification test suites have been **successfully imple
 **Usage**:
 ```bash
 # Run all gates
-python scripts/generate_cto_gates_evidence.py
+python infrastructure/scripts/generate_cto_gates_evidence.py
 
 # Run specific gates
-python scripts/generate_cto_gates_evidence.py --gates=1,2,3
+python infrastructure/scripts/generate_cto_gates_evidence.py --gates=1,2,3
 
 # Custom output directory
-python scripts/generate_cto_gates_evidence.py --output=evidence/
+python infrastructure/scripts/generate_cto_gates_evidence.py --output=evidence/
 ```
 
 **Output Structure**:
@@ -258,7 +258,7 @@ pytest tests/verification/test_gate4_traceability.py -v
 ### Step 2: Generate Complete Evidence Package
 ```bash
 # Generate full evidence package for CTO review
-python scripts/generate_cto_gates_evidence.py
+python infrastructure/scripts/generate_cto_gates_evidence.py
 
 # Review executive summary
 cat evidence/CTO_GATES_VERIFICATION_REPORT.md
@@ -337,7 +337,7 @@ Use the generated `evidence/CTO_GATES_VERIFICATION_REPORT.md` which includes:
 ## Next Steps
 
 ### Immediate (Before CTO Review)
-1. **Run evidence generator**: `python scripts/generate_cto_gates_evidence.py`
+1. **Run evidence generator**: `python infrastructure/scripts/generate_cto_gates_evidence.py`
 2. **Review output**: Check `evidence/CTO_GATES_VERIFICATION_REPORT.md`
 3. **Fix Gate 1 cleanup** (optional): Adjust timing in one test
 4. **Verify all gates**: Run each gate test suite individually
@@ -369,7 +369,7 @@ Use the generated `evidence/CTO_GATES_VERIFICATION_REPORT.md` which includes:
 5. `apps/api/tests/verification/test_gate4_traceability.py` (450+ lines)
 
 ### Scripts (1)
-1. `scripts/generate_cto_gates_evidence.py` (300+ lines)
+1. `infrastructure/scripts/generate_cto_gates_evidence.py` (300+ lines)
 
 ### Documentation (5)
 1. `docs/CTO_GATES_VERIFICATION_PLAN.md` (350+ lines)

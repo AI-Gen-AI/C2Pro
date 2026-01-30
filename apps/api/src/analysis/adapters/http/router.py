@@ -2,16 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from src.analysis.adapters.graph.workflow import run_orchestration
+from src.analysis.adapters.graph.orchestrator_adapter import WorkflowOrchestrator
+from src.analysis.application.analyze_document_use_case import AnalyzeDocumentUseCase
 
 router = APIRouter(
     prefix="",
     tags=["analysis"],
     responses={404: {"description": "Not found"}},
 )
+
+def get_orchestrator() -> WorkflowOrchestrator:
+    return WorkflowOrchestrator()
+
+def get_analyze_use_case(
+    orchestrator: WorkflowOrchestrator = Depends(get_orchestrator),
+) -> AnalyzeDocumentUseCase:
+    return AnalyzeDocumentUseCase(orchestrator)
 
 
 class AnalyzeRequest(BaseModel):
@@ -34,24 +43,18 @@ class AnalyzeResponse(BaseModel):
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_document(payload: AnalyzeRequest, request: Request) -> AnalyzeResponse:
-    initial_state = {
-        "document_text": payload.document_text,
-        "project_id": payload.project_id,
-        "document_id": payload.document_id or payload.project_id,
-        "doc_type": "",
-        "tenant_id": str(getattr(request.state, "tenant_id", "")) or None,
-        "messages": [],
-        "extracted_risks": [],
-        "extracted_wbs": [],
-        "confidence_score": 0.0,
-        "critique_notes": "",
-        "human_feedback": "",
-        "retry_count": 0,
-        "human_approval_required": False,
-        "analysis_id": None,
-    }
-    result = await run_orchestration(initial_state, thread_id=payload.project_id)
+async def analyze_document(
+    payload: AnalyzeRequest,
+    request: Request,
+    use_case: AnalyzeDocumentUseCase = Depends(get_analyze_use_case),
+) -> AnalyzeResponse:
+    tenant_id = str(getattr(request.state, "tenant_id", "")) or None
+    result = await use_case.execute(
+        document_text=payload.document_text,
+        project_id=payload.project_id,
+        document_id=payload.document_id,
+        tenant_id=tenant_id,
+    )
     message_contents = [
         message.content for message in result.get("messages", []) if hasattr(message, "content")
     ]

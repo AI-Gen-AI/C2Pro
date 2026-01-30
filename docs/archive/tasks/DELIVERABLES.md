@@ -1,4 +1,4 @@
-# CE-P0-06: Staging Migrations - DELIVERABLES
+﻿# CE-P0-06: Staging Migrations - DELIVERABLES
 **Date**: 2026-01-08
 **Status**: ✅ COMPLETE
 
@@ -27,7 +27,7 @@ Your single task has been expanded into **9 comprehensive subtasks** with detail
 | `infrastructure/supabase/run_migrations.py` | Main migration executor | 290 | ✅ Enhanced |
 | `infrastructure/supabase/rollback_migrations.py` | Rollback script (CE-27) | 250 | ✅ Created |
 | `infrastructure/supabase/check_env.py` | Environment validator (CE-20) | 120 | ✅ Created |
-| `scripts/generate_migration_report.py` | Report generator (CE-28) | 300 | ✅ Created |
+| `infrastructure/scripts/generate_migration_report.py` | Report generator (CE-28) | 300 | ✅ Created |
 
 **Total**: ~960 lines of production Python code
 
@@ -37,8 +37,8 @@ Your single task has been expanded into **9 comprehensive subtasks** with detail
 
 | File | Purpose | Checks | Status |
 |------|---------|--------|--------|
-| `scripts/ce-p0-06/verify_rls_coverage.sql` | RLS verification (CE-23) | 14 tables, policies, FORCE RLS | ✅ Created |
-| `scripts/ce-p0-06/verify_foreign_keys.sql` | FK verification (CE-24) | FKs, orphans, indexes | ✅ Created |
+| `infrastructure/scripts/ce-p0-06/verify_rls_coverage.sql` | RLS verification (CE-23) | 14 tables, policies, FORCE RLS | ✅ Created |
+| `infrastructure/scripts/ce-p0-06/verify_foreign_keys.sql` | FK verification (CE-24) | FKs, orphans, indexes | ✅ Created |
 
 **Total**: ~200 lines of SQL verification queries
 
@@ -48,8 +48,8 @@ Your single task has been expanded into **9 comprehensive subtasks** with detail
 
 | File | Platform | Purpose | Status |
 |------|----------|---------|--------|
-| `scripts/run_staging_migration.sh` | Linux/Mac | Execute all 9 tasks | ✅ Created |
-| `scripts/run_staging_migration.bat` | Windows | Execute all 9 tasks | ✅ Created |
+| `infrastructure/scripts/run_staging_migration.sh` | Linux/Mac | Execute all 9 tasks | ✅ Created |
+| `infrastructure/scripts/run_staging_migration.bat` | Windows | Execute all 9 tasks | ✅ Created |
 
 **Total**: ~400 lines of bash/batch automation
 
@@ -104,7 +104,7 @@ python infrastructure/supabase/run_migrations.py --env staging --verbose
 
 ### CE-23: RLS Verification ✅
 ```bash
-psql $DATABASE_URL -f scripts/ce-p0-06/verify_rls_coverage.sql
+psql $DATABASE_URL -f infrastructure/scripts/ce-p0-06/verify_rls_coverage.sql
 pytest tests/verification/test_gate1_rls.py -v
 ```
 - 14 table RLS coverage check
@@ -114,7 +114,7 @@ pytest tests/verification/test_gate1_rls.py -v
 
 ### CE-24: FK Verification ✅
 ```bash
-psql $DATABASE_URL -f scripts/ce-p0-06/verify_foreign_keys.sql
+psql $DATABASE_URL -f infrastructure/scripts/ce-p0-06/verify_foreign_keys.sql
 ```
 - List all foreign keys
 - Check critical FK existence
@@ -147,7 +147,7 @@ python infrastructure/supabase/rollback_migrations.py \
 
 ### CE-28: Report Generator ✅
 ```bash
-python scripts/generate_migration_report.py \
+python infrastructure/scripts/generate_migration_report.py \
     --input-dir evidence/staging_migration_20260108
 ```
 - CTO-ready markdown report
@@ -163,12 +163,12 @@ python scripts/generate_migration_report.py \
 
 ### Linux/Mac:
 ```bash
-./scripts/run_staging_migration.sh
+./infrastructure/scripts/run_staging_migration.sh
 ```
 
 ### Windows:
 ```batch
-scripts\run_staging_migration.bat
+infrastructure\\scripts\\run_staging_migration.bat
 ```
 
 **Executes all 9 tasks automatically** with:
@@ -208,7 +208,7 @@ scripts\run_staging_migration.bat
 ### 1. Execute Full Pipeline
 ```bash
 # All 9 tasks in sequence
-./scripts/run_staging_migration.sh
+./infrastructure/scripts/run_staging_migration.sh
 ```
 
 ### 2. Execute Individual Tasks
@@ -226,7 +226,7 @@ pytest tests/verification/test_gate1_rls.py -v
 ### 3. Generate Reports
 ```bash
 # Create CTO-ready report
-python scripts/generate_migration_report.py \
+python infrastructure/scripts/generate_migration_report.py \
     --input-dir evidence/staging_migration_$(date +%Y%m%d)
 ```
 
@@ -351,7 +351,7 @@ All scripts work on both platforms:
 4. **Execute staging migration**
    ```bash
    # Full pipeline
-   ./scripts/run_staging_migration.sh
+   ./infrastructure/scripts/run_staging_migration.sh
    ```
 
 5. **Review results**

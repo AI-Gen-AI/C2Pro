@@ -12,14 +12,10 @@ from src.analysis.adapters.graph.schema import ProjectState
 from src.core.database import get_session_with_tenant
 from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractorAgent
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
-from src.analysis.adapters.persistence.models import (
-    Alert,
-    AlertSeverity,
-    Analysis,
-    AnalysisStatus,
-    AnalysisType,
-)
-from src.procurement.adapters.persistence.models import WBSItemORM, WBSItemType
+from src.analysis.adapters.persistence.models import Alert, Analysis
+from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity
+from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.domain.models import WBSItem, WBSItemType
 
 DOC_TYPES: tuple[str, ...] = ("contract", "technical_spec", "budget")
 
@@ -83,6 +79,34 @@ async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
     except Exception:
         pass
     return _fallback_doc_type(text)
+
+
+def _to_wbs_items(project_id: UUID, items: list[dict[str, Any]]) -> list[WBSItem]:
+    wbs_items: list[WBSItem] = []
+    for item in items:
+        code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
+        level = code.count(".") + 1 if code else 1
+        item_type_raw = str(item.get("item_type") or "").lower()
+        item_type = None
+        for candidate in WBSItemType:
+            if candidate.value == item_type_raw:
+                item_type = candidate
+                break
+
+        wbs_items.append(
+            WBSItem(
+                project_id=project_id,
+                code=code,
+                name=item.get("name") or "WBS Item",
+                description=item.get("description"),
+                level=level,
+                parent_code=None,
+                item_type=item_type,
+                budget_allocated=_parse_decimal(item.get("budget_allocated")),
+                wbs_metadata={"confidence": item.get("confidence"), "raw": item},
+            )
+        )
+    return wbs_items
 
 
 async def _critique_extraction(
@@ -202,6 +226,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
 
     async with get_session_with_tenant(tenant_id) as session:
         repo = SqlAlchemyAnalysisRepository(session)
+        wbs_repo = SQLAlchemyWBSRepository(session)
         analysis = Analysis(
             project_id=project_id,
             analysis_type=analysis_type,
@@ -231,30 +256,8 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
             await repo.add_alerts(alerts)
 
         if state["extracted_wbs"]:
-            wbs_items = []
-            for item in state["extracted_wbs"]:
-                code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
-                level = code.count(".") + 1 if code else 1
-                item_type_raw = str(item.get("item_type") or "").lower()
-                item_type = None
-                for candidate in WBSItemType:
-                    if candidate.value == item_type_raw:
-                        item_type = candidate
-                        break
-
-                wbs_items.append(
-                    WBSItemORM(
-                        project_id=project_id,
-                        wbs_code=code,
-                        name=item.get("name") or "WBS Item",
-                        description=item.get("description"),
-                        level=level,
-                        item_type=item_type,
-                        wbs_metadata={"confidence": item.get("confidence"), "raw": item},
-                        budget_allocated=_parse_decimal(item.get("budget_allocated")),
-                    )
-                )
-            session.add_all(wbs_items)
+            wbs_items = _to_wbs_items(project_id, state["extracted_wbs"])
+            await wbs_repo.bulk_create(wbs_items)
 
         state["analysis_id"] = str(analysis.id)
         state["messages"].append(

@@ -5,7 +5,7 @@ SQLAlchemy ORM models for Procurement bounded context, used by the persistence a
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum # Needed for the enums defined here
-from typing import TYPE_CHECKING
+ 
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -58,10 +58,7 @@ class ProcurementStatus(str, Enum):
 
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
-if TYPE_CHECKING:
-    from src.projects.adapters.persistence.models import ProjectORM
-    from src.documents.adapters.persistence.models import ClauseORM
-    from src.stakeholders.adapters.persistence.models import StakeholderWBSRaciORM
+ 
 
 
 class WBSItemORM(Base):
@@ -131,10 +128,6 @@ class WBSItemORM(Base):
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="wbs_items", foreign_keys=[project_id], lazy="selectin"
-    )
-
     parent: Mapped["WBSItemORM"] = relationship(
         "WBSItemORM",
         back_populates="children",
@@ -147,17 +140,7 @@ class WBSItemORM(Base):
         "WBSItemORM", back_populates="parent", lazy="select", cascade="all, delete-orphan"
     )
 
-    funded_by_clause: Mapped["ClauseORM"] = relationship(
-        "ClauseORM",
-        back_populates="wbs_items",
-        foreign_keys=[funded_by_clause_id],
-        lazy="selectin",
-    )
-
-    raci_assignments: Mapped[list["StakeholderWBSRaciORM"]] = relationship(
-        "StakeholderWBSRaciORM", back_populates="wbs_item", lazy="select", cascade="all, delete-orphan"
-    )
-
+ 
     bom_items: Mapped[list["BOMItemORM"]] = relationship(
         "BOMItemORM", back_populates="wbs_item", lazy="select", cascade="all, delete-orphan"
     )
@@ -239,21 +222,11 @@ class BOMItemORM(Base):
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="bom_items", foreign_keys=[project_id], lazy="selectin"
-    )
-
     wbs_item: Mapped["WBSItemORM"] = relationship(
         "WBSItemORM", back_populates="bom_items", lazy="selectin"
     )
 
-    contract_clause: Mapped["ClauseORM"] = relationship(
-        "ClauseORM",
-        back_populates="bom_items",
-        foreign_keys=[contract_clause_id],
-        lazy="selectin",
-    )
-
+ 
     # Indexes
     __table_args__ = (
         Index("ix_bom_items_project", "project_id"),

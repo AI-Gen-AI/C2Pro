@@ -60,6 +60,28 @@ class IDocumentRepository(ABC):
     async def clause_exists(self, clause_id: UUID) -> bool:
         """Checks whether a clause exists by ID."""
         pass
+
+    @abstractmethod
+    async def get_clause_text_map(self, clause_ids: List[UUID]) -> dict[UUID, str]:
+        """Returns a map of clause_id to full_text for the given IDs."""
+        pass
+
+    @abstractmethod
+    async def get_clauses_by_ids(self, clause_ids: List[UUID]) -> List[Clause]:
+        """Returns clauses for the given IDs."""
+        pass
+
+    @abstractmethod
+    async def get_clause_by_document_and_code(
+        self, document_id: UUID, clause_code: str
+    ) -> Clause | None:
+        """Returns a clause by document_id and clause_code."""
+        pass
+
+    @abstractmethod
+    async def list_clauses_for_document(self, document_id: UUID) -> List[Clause]:
+        """Lists all clauses for a document."""
+        pass
     
     @abstractmethod
     async def commit(self) -> None:

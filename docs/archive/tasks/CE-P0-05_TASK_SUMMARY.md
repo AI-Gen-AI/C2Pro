@@ -1,4 +1,4 @@
-# CE-P0-05: CTO Gates 1-4 Verification - Task Summary
+﻿# CE-P0-05: CTO Gates 1-4 Verification - Task Summary
 **Status**: ✅ READY FOR IMPLEMENTATION
 **Date**: 2026-01-07
 **Time Investment**: 4-6 hours to complete
@@ -28,7 +28,7 @@ A complete 350+ line implementation plan covering:
 ---
 
 ### 🔧 2. Evidence Generation Tool
-**File**: `scripts/generate_cto_gates_evidence.py`
+**File**: `infrastructure/scripts/generate_cto_gates_evidence.py`
 
 A production-ready Python script (300+ lines) that:
 - ✅ Runs all 4 gate verification test suites
@@ -41,13 +41,13 @@ A production-ready Python script (300+ lines) that:
 **Usage**:
 ```bash
 # Run all gates
-python scripts/generate_cto_gates_evidence.py
+python infrastructure/scripts/generate_cto_gates_evidence.py
 
 # Run specific gates
-python scripts/generate_cto_gates_evidence.py --gates=1,2
+python infrastructure/scripts/generate_cto_gates_evidence.py --gates=1,2
 
 # Custom output directory
-python scripts/generate_cto_gates_evidence.py --output=evidence/
+python infrastructure/scripts/generate_cto_gates_evidence.py --output=evidence/
 ```
 
 **Output Files**:
@@ -198,7 +198,7 @@ Step-by-step instructions for:
 
 5. **Run Verification**:
    ```bash
-   python scripts/generate_cto_gates_evidence.py
+   python infrastructure/scripts/generate_cto_gates_evidence.py
    ```
 
 ---
@@ -312,7 +312,7 @@ evidence/
 3. `docs/CE-P0-05_TASK_SUMMARY.md` - This file
 
 ### Scripts (1 file):
-1. `scripts/generate_cto_gates_evidence.py` - Evidence generator (300+ lines)
+1. `infrastructure/scripts/generate_cto_gates_evidence.py` - Evidence generator (300+ lines)
 
 ### Tests (2 files + 2 to create):
 1. `apps/api/tests/verification/__init__.py` - Module init

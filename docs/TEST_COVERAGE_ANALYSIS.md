@@ -1,4 +1,4 @@
-# Test Coverage Analysis Report
+﻿# Test Coverage Analysis Report
 **Date**: 2026-01-18
 **Analyzed By**: Claude
 **Project**: C2Pro - Contract Intelligence Platform
@@ -106,7 +106,7 @@ src/modules/ai/
 ├── anonymizer.py           # 0 lines - PII masking
 ├── cost_controller.py      # 0 lines - API budget tracking
 ├── model_router.py         # 0 lines - Model selection logic
-└── prompts/
+└── apps/api/src/core/ai/prompts/
     ├── registry.py         # 0 lines
     └── v1/
         ├── contract_extraction.py    # 0 lines

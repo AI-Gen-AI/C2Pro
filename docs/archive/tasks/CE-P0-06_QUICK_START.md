@@ -1,4 +1,4 @@
-# CE-P0-06: Staging Migration - Quick Start Guide
+﻿# CE-P0-06: Staging Migration - Quick Start Guide
 **Last Updated**: 2026-01-08
 
 ---
@@ -7,7 +7,7 @@
 
 ```bash
 # Full staging migration execution (5.5 hours)
-./scripts/run_staging_migration.sh
+./infrastructure/scripts/run_staging_migration.sh
 ```
 
 ---
@@ -29,7 +29,7 @@ pg_dump -h staging-db.supabase.co -U postgres -d c2pro_staging \
 
 # 4. Capture current state
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/capture_db_state.sql > logs/ce20_pre_state.log
+  -f infrastructure/scripts/capture_db_state.sql > logs/ce20_pre_state.log
 ```
 
 **Expected Output**: ✅ Connection successful, backup created, state documented
@@ -95,7 +95,7 @@ pg_dump -h staging-db.supabase.co -U postgres -d c2pro_staging \
 ```bash
 # 1. Check RLS coverage
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/verify_rls_coverage.sql
+  -f infrastructure/scripts/verify_rls_coverage.sql
 
 # 2. Run automated tests
 cd apps/api
@@ -104,7 +104,7 @@ pytest tests/verification/test_gate1_rls.py -v
 
 # 3. Manual cross-tenant test
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/manual_rls_test.sql
+  -f infrastructure/scripts/manual_rls_test.sql
 ```
 
 **Expected Output**: ✅ 14/14 tables with RLS, 7/7 tests passed, cross-tenant isolation confirmed
@@ -116,15 +116,15 @@ psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
 ```bash
 # 1. List all FKs
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/list_foreign_keys.sql
+  -f infrastructure/scripts/list_foreign_keys.sql
 
 # 2. Check for orphans
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/check_orphaned_records.sql
+  -f infrastructure/scripts/check_orphaned_records.sql
 
 # 3. Test FK integrity
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/test_fk_integrity.sql
+  -f infrastructure/scripts/test_fk_integrity.sql
 ```
 
 **Expected Output**: ✅ All FKs exist, 0 orphaned records, integrity tests passed
@@ -136,7 +136,7 @@ psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
 ```bash
 # 1. Data integrity checks
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/data_integrity_checks.sql
+  -f infrastructure/scripts/data_integrity_checks.sql
 
 # 2. Run smoke test suite
 cd apps/api
@@ -152,11 +152,11 @@ pytest tests/smoke/ -v --tb=short --log-file=../../logs/ce25_smoke_tests.log
 ```bash
 # 1. Index usage analysis
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/analyze_index_usage.sql
+  -f infrastructure/scripts/analyze_index_usage.sql
 
 # 2. Query performance tests
 psql -h staging-db.supabase.co -U postgres -d c2pro_staging \
-  -f scripts/performance_benchmarks.sql
+  -f infrastructure/scripts/performance_benchmarks.sql
 
 # 3. Run benchmark suite
 python infrastructure/benchmark/run_benchmark.py \
@@ -210,7 +210,7 @@ cp logs/ce*.log evidence/staging_migration_$(date +%Y%m%d)/
 cp docs/ce*.md evidence/staging_migration_$(date +%Y%m%d)/
 
 # 2. Generate report
-python scripts/generate_migration_report.py \
+python infrastructure/scripts/generate_migration_report.py \
   --input-dir evidence/staging_migration_$(date +%Y%m%d) \
   --output docs/STAGING_MIGRATION_READINESS_REPORT.md
 
@@ -240,7 +240,7 @@ python infrastructure/supabase/rollback_migrations.py \
 
 # 3. Verify rollback
 pytest tests/verification/test_gate1_rls.py -v
-psql -h staging-db.supabase.co -f scripts/verify_rls_coverage.sql
+psql -h staging-db.supabase.co -f infrastructure/scripts/verify_rls_coverage.sql
 
 # 4. If rollback fails, restore from backup
 pg_restore -h staging-db.supabase.co -U postgres -d c2pro_staging \
@@ -305,7 +305,7 @@ psql -h staging-db.supabase.co -c "
 psql -h staging-db.supabase.co -c "ANALYZE;"
 
 # Check missing indexes
-psql -h staging-db.supabase.co -f scripts/suggest_missing_indexes.sql
+psql -h staging-db.supabase.co -f infrastructure/scripts/suggest_missing_indexes.sql
 
 # Vacuum if needed
 psql -h staging-db.supabase.co -c "VACUUM ANALYZE;"

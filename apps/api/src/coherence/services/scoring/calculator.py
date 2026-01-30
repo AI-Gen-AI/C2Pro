@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from src.analysis.adapters.persistence.models import Alert, AlertSeverity, AlertStatus
+from src.analysis.domain.enums import AlertSeverity, AlertStatus
+from src.analysis.ports.types import AlertRecord
 from src.services.scoring.weights import DEFAULT_SENSITIVITY, SEVERITY_WEIGHTS
 
 
@@ -29,7 +30,7 @@ class ScoreCalculator:
     def __init__(self, sensitivity: int = DEFAULT_SENSITIVITY) -> None:
         self._sensitivity = sensitivity
 
-    def calculate(self, alerts: Iterable[Alert]) -> ScoreResult:
+    def calculate(self, alerts: Iterable[AlertRecord]) -> ScoreResult:
         open_alerts = [alert for alert in alerts if alert.status == AlertStatus.OPEN]
         raw_penalty = self._raw_penalty(open_alerts)
         normalized = 100 / (1 + (raw_penalty / self._sensitivity))
@@ -41,19 +42,19 @@ class ScoreCalculator:
             calculated_at=datetime.utcnow(),
         )
 
-    def _raw_penalty(self, alerts: list[Alert]) -> int:
+    def _raw_penalty(self, alerts: list[AlertRecord]) -> int:
         total = 0
         for alert in alerts:
             total += SEVERITY_WEIGHTS.get(alert.severity, 0)
         return total
 
-    def _severity_breakdown(self, alerts: list[Alert]) -> dict[str, int]:
+    def _severity_breakdown(self, alerts: list[AlertRecord]) -> dict[str, int]:
         breakdown = {severity.value: 0 for severity in AlertSeverity}
         for alert in alerts:
             breakdown[alert.severity.value] += 1
         return breakdown
 
-    def _top_drivers(self, alerts: list[Alert]) -> list[str]:
+    def _top_drivers(self, alerts: list[AlertRecord]) -> list[str]:
         penalties: dict[str, int] = {}
         for alert in alerts:
             if not alert.rule_id:

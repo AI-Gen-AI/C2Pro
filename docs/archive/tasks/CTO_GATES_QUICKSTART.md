@@ -1,4 +1,4 @@
-# CTO Gates Verification - Quick Start Guide
+﻿# CTO Gates Verification - Quick Start Guide
 **Task**: CE-P0-05 - CTO Gates 1-4 Verification with Evidence
 **Priority**: P0 (Critical)
 **Time to Complete**: 4-6 hours
@@ -204,12 +204,12 @@ class TestGate4Traceability:
 
 Make the evidence generator executable:
 ```bash
-chmod +x scripts/generate_cto_gates_evidence.py
+chmod +x infrastructure/scripts/generate_cto_gates_evidence.py
 ```
 
 Run all gates:
 ```bash
-python scripts/generate_cto_gates_evidence.py
+python infrastructure/scripts/generate_cto_gates_evidence.py
 ```
 
 This will:
@@ -383,7 +383,7 @@ jobs:
 
       - name: Run CTO Gates Verification
         run: |
-          python scripts/generate_cto_gates_evidence.py
+          python infrastructure/scripts/generate_cto_gates_evidence.py
 
       - name: Upload Evidence Package
         if: always()
@@ -519,5 +519,5 @@ Prepare presentation using:
 
 **Need Help?**
 - Review detailed plan: `docs/CTO_GATES_VERIFICATION_PLAN.md`
-- Check script source: `scripts/generate_cto_gates_evidence.py`
+- Check script source: `infrastructure/scripts/generate_cto_gates_evidence.py`
 - See example tests: `apps/api/tests/verification/test_gate1_rls.py`

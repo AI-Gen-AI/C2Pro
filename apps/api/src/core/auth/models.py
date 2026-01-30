@@ -7,7 +7,6 @@ Modelos SQLAlchemy para usuarios y tenants (multi-tenancy).
 import re
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -28,9 +27,6 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
-
-if TYPE_CHECKING:
-    from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SubscriptionPlan(str, Enum):
@@ -105,13 +101,6 @@ class Tenant(Base):
     # Relationships
     users: Mapped[list["User"]] = relationship(
         "User", back_populates="tenant", lazy="selectin", cascade="all, delete-orphan"
-    )
-
-    projects: Mapped[list["ProjectORM"]] = relationship(
-        "ProjectORM",
-        foreign_keys="ProjectORM.tenant_id",
-        lazy="select",
-        cascade="all, delete-orphan",
     )
 
     # Indexes

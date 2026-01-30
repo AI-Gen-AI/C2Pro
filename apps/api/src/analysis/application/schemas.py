@@ -13,12 +13,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.analysis.adapters.persistence.models import (
-    AlertSeverity,
-    AlertStatus,
-    AnalysisStatus,
-    AnalysisType,
-)
+from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity, AlertStatus
+from src.analysis.application.dtos import AlertBase, AlertCreate
 
 # ===========================================
 # ANALYSIS SCHEMAS
@@ -97,48 +93,6 @@ class AnalysisResponse(AnalysisBase):
 # ===========================================
 # ALERT SCHEMAS
 # ===========================================
-
-
-class AlertBase(BaseModel):
-    """Base schema for alert attributes."""
-
-    title: str = Field(..., min_length=1, max_length=255, description="Short title for the alert")
-    description: str = Field(..., min_length=1, description="Detailed message explaining the alert")
-    severity: AlertSeverity = Field(..., description="Severity level of the alert")
-    rule_id: Optional[str] = Field(
-        None, max_length=100, description="ID of the coherence rule that triggered this alert"
-    )
-    category: Optional[str] = Field(None, max_length=50, description="Category of the alert")
-
-
-class AlertCreate(AlertBase):
-    """Schema for creating a new alert (used by AI agents)."""
-
-    project_id: UUID = Field(..., description="ID of the project this alert belongs to")
-    analysis_id: Optional[UUID] = Field(None, description="ID of the analysis that generated this alert")
-
-    # CRITICAL: Legal traceability (ROADMAP §5.3)
-    source_clause_id: Optional[UUID] = Field(
-        None, description="ID of the source clause that triggered this alert (legal traceability)"
-    )
-    related_clause_ids: Optional[List[UUID]] = Field(
-        None, description="IDs of related clauses referenced in this alert"
-    )
-
-    # Affected entities
-    affected_entities: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="JSON object with affected entities: {documents: [], wbs: [], bom: []}"
-    )
-
-    # Evidence and metadata
-    alert_metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata and evidence for the alert"
-    )
-
-    recommendation: Optional[str] = Field(None, description="Suggested action or recommendation")
-    impact_level: Optional[str] = Field(None, max_length=20, description="Impact level assessment")
-
 
 class AlertUpdate(BaseModel):
     """Schema for updating an existing alert."""

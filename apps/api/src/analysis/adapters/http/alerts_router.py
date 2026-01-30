@@ -13,19 +13,19 @@ This was implemented in migration 008_indexes.sql.
 
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
 from src.core.database import get_session
-from src.core.pagination import Page, paginate
-from src.analysis.adapters.persistence.models import (
-    Alert,
-    AlertStatus,
-    AlertSeverity,
+from src.core.pagination import Page
+from src.analysis.domain.enums import AlertStatus, AlertSeverity
+from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+from src.analysis.application.alerts_use_cases import (
+    DeleteAlertUseCase,
+    GetAlertUseCase,
+    GetAlertsStatsUseCase,
+    ListAlertsUseCase,
+    UpdateAlertStatusUseCase,
 )
 
 # ===========================================
@@ -103,6 +103,38 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+# ===========================================
+# DEPENDENCY INJECTION
+# ===========================================
+
+def get_alert_repository(db=Depends(get_session)) -> SqlAlchemyAlertRepository:
+    return SqlAlchemyAlertRepository(session=db)
+
+def get_list_alerts_use_case(
+    repo: SqlAlchemyAlertRepository = Depends(get_alert_repository),
+) -> ListAlertsUseCase:
+    return ListAlertsUseCase(repository=repo)
+
+def get_alerts_stats_use_case(
+    repo: SqlAlchemyAlertRepository = Depends(get_alert_repository),
+) -> GetAlertsStatsUseCase:
+    return GetAlertsStatsUseCase(repository=repo)
+
+def get_get_alert_use_case(
+    repo: SqlAlchemyAlertRepository = Depends(get_alert_repository),
+) -> GetAlertUseCase:
+    return GetAlertUseCase(repository=repo)
+
+def get_update_alert_use_case(
+    repo: SqlAlchemyAlertRepository = Depends(get_alert_repository),
+) -> UpdateAlertStatusUseCase:
+    return UpdateAlertStatusUseCase(repository=repo)
+
+def get_delete_alert_use_case(
+    repo: SqlAlchemyAlertRepository = Depends(get_alert_repository),
+) -> DeleteAlertUseCase:
+    return DeleteAlertUseCase(repository=repo)
+
 
 # ===========================================
 # ENDPOINTS
@@ -116,12 +148,12 @@ router = APIRouter(
 )
 async def list_alerts_for_project(
     project_id: UUID,
-    db: AsyncSession = Depends(get_session),
     severities: Optional[List[AlertSeverity]] = Query(None),
     statuses: Optional[List[AlertStatus]] = Query([AlertStatus.OPEN]),
     category: Optional[str] = Query(None),
     cursor: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
+    use_case: ListAlertsUseCase = Depends(get_list_alerts_use_case),
 ):
     """
     List alerts for a specific project with filtering and pagination.
@@ -138,28 +170,13 @@ async def list_alerts_for_project(
     Returns:
         Paginated list of alerts
     """
-    # Build query
-    query = select(Alert).where(Alert.project_id == project_id)
-
-    # Apply filters
-    if severities:
-        query = query.where(Alert.severity.in_(severities))
-    if statuses:
-        query = query.where(Alert.status.in_(statuses))
-    if category:
-        query = query.where(Alert.category == category)
-
-    # Order by severity (critical first) and then by creation date
-    query = query.order_by(Alert.severity.desc(), Alert.created_at.desc())
-
-    # Paginate
-    return await paginate(
-        query=query,
-        model=Alert,
+    return await use_case.execute(
+        project_id=project_id,
+        severities=severities,
+        statuses=statuses,
+        category=category,
         cursor=cursor,
         limit=limit,
-        order_by="created_at",
-        order_direction="desc"
     )
 
 
@@ -171,7 +188,7 @@ async def list_alerts_for_project(
 )
 async def get_alerts_stats(
     project_id: UUID,
-    db: AsyncSession = Depends(get_session),
+    use_case: GetAlertsStatsUseCase = Depends(get_alerts_stats_use_case),
 ):
     """
     Get statistics about alerts for a specific project.
@@ -183,24 +200,7 @@ async def get_alerts_stats(
     Returns:
         Alert statistics
     """
-    # Fetch all alerts for the project
-    result = await db.execute(
-        select(Alert).where(Alert.project_id == project_id)
-    )
-    alerts = result.scalars().all()
-
-    # Calculate statistics
-    stats = {
-        "total": len(alerts),
-        "open": sum(1 for a in alerts if a.status == AlertStatus.OPEN),
-        "resolved": sum(1 for a in alerts if a.status == AlertStatus.RESOLVED),
-        "dismissed": sum(1 for a in alerts if a.status == AlertStatus.DISMISSED),
-        "critical": sum(1 for a in alerts if a.severity == AlertSeverity.CRITICAL),
-        "high": sum(1 for a in alerts if a.severity == AlertSeverity.HIGH),
-        "medium": sum(1 for a in alerts if a.severity == AlertSeverity.MEDIUM),
-        "low": sum(1 for a in alerts if a.severity == AlertSeverity.LOW),
-    }
-
+    stats = await use_case.execute(project_id)
     return AlertsStats(**stats)
 
 
@@ -212,7 +212,7 @@ async def get_alerts_stats(
 )
 async def get_alert(
     alert_id: UUID,
-    db: AsyncSession = Depends(get_session),
+    use_case: GetAlertUseCase = Depends(get_get_alert_use_case),
 ):
     """
     Get a single alert by its ID.
@@ -227,18 +227,10 @@ async def get_alert(
     Raises:
         HTTPException: 404 if alert not found
     """
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id)
-    )
-    alert = result.scalar_one_or_none()
-
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-
-    return alert
+    try:
+        return await use_case.execute(alert_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
 
 @router.patch(
@@ -250,7 +242,7 @@ async def get_alert(
 async def update_alert(
     alert_id: UUID,
     alert_update: AlertUpdate,
-    db: AsyncSession = Depends(get_session),
+    use_case: UpdateAlertStatusUseCase = Depends(get_update_alert_use_case),
     # TODO: Add current_user dependency when auth is integrated
 ):
     """
@@ -268,47 +260,28 @@ async def update_alert(
         HTTPException: 404 if alert not found
         HTTPException: 400 if validation fails
     """
-    # Fetch alert
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id)
-    )
-    alert = result.scalar_one_or_none()
-
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+    try:
+        return await use_case.execute(
+            alert_id=alert_id,
+            status=alert_update.status,
+            resolution_notes=alert_update.resolution_notes,
         )
-
-    # Validate status transitions
-    if alert.status != AlertStatus.OPEN:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot update an alert that is already {alert.status.value}"
-        )
-
-    if alert_update.status not in [AlertStatus.RESOLVED, AlertStatus.DISMISSED, AlertStatus.ACKNOWLEDGED]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Alert status can only be updated to RESOLVED, DISMISSED, or ACKNOWLEDGED"
-        )
-
-    # Update status
-    alert.status = alert_update.status
-
-    # If resolving or dismissing, set resolution fields
-    if alert_update.status in [AlertStatus.RESOLVED, AlertStatus.DISMISSED]:
-        alert.resolved_at = datetime.utcnow()
-        if alert_update.resolution_notes:
-            alert.resolution_notes = alert_update.resolution_notes
-        # TODO: Set resolved_by when auth is integrated
-        # alert.resolved_by = current_user.id
-
-    # Commit changes
-    await db.commit()
-    await db.refresh(alert)
-
-    return alert
+    except ValueError as exc:
+        reason = str(exc)
+        if reason == "alert_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+        if reason.startswith("cannot_update_"):
+            status_value = reason.replace("cannot_update_", "")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update an alert that is already {status_value}",
+            )
+        if reason == "invalid_status":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Alert status can only be updated to RESOLVED, DISMISSED, or ACKNOWLEDGED",
+            )
+        raise
 
 
 @router.delete(
@@ -319,7 +292,7 @@ async def update_alert(
 )
 async def delete_alert(
     alert_id: UUID,
-    db: AsyncSession = Depends(get_session),
+    use_case: DeleteAlertUseCase = Depends(get_delete_alert_use_case),
     # TODO: Add current_user dependency and check admin role
 ):
     """
@@ -332,16 +305,7 @@ async def delete_alert(
     Raises:
         HTTPException: 404 if alert not found
     """
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id)
-    )
-    alert = result.scalar_one_or_none()
-
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-
-    await db.delete(alert)
-    await db.commit()
+    try:
+        await use_case.execute(alert_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")

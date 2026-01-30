@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.procurement.ports.bom_repository import IBOMRepository
 from src.procurement.domain.models import BOMItem, BOMCategory, ProcurementStatus
 from src.procurement.adapters.persistence.models import BOMItemORM
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SQLAlchemyBOMRepository(IBOMRepository):
@@ -78,8 +79,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.id == bom_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -93,8 +94,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.project_id == project_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(BOMItemORM.item_code)
         )
         orms = result.scalars().all()
@@ -106,8 +107,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.wbs_item_id == wbs_item_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(BOMItemORM.item_code)
         )
         orms = result.scalars().all()
@@ -126,8 +127,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
                     BOMItemORM.category == category
                 )
             )
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(BOMItemORM.item_code)
         )
         orms = result.scalars().all()
@@ -146,8 +147,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
                     BOMItemORM.procurement_status == status
                 )
             )
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
             .order_by(BOMItemORM.item_code)
         )
         orms = result.scalars().all()
@@ -159,8 +160,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.id == bom_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -195,8 +196,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.id == bom_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 
@@ -215,8 +216,8 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         result = await self.session.execute(
             select(BOMItemORM)
             .where(BOMItemORM.id == bom_id)
-            .join(BOMItemORM.project)
-            .where(BOMItemORM.project.has(tenant_id=tenant_id))
+            .join(ProjectORM, ProjectORM.id == BOMItemORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
         )
         orm = result.scalar_one_or_none()
 

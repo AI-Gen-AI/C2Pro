@@ -52,10 +52,4 @@ class ProjectORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
-    documents = relationship("DocumentORM", back_populates="project", lazy="selectin")
-    stakeholders = relationship("StakeholderORM", back_populates="project", lazy="selectin")
-    wbs_items = relationship("WBSItemORM", back_populates="project", lazy="selectin")
-    bom_items = relationship("BOMItemORM", back_populates="project", lazy="selectin")
-    analyses = relationship("Analysis", back_populates="project", lazy="selectin")
-    alerts = relationship("Alert", back_populates="project", lazy="selectin")
+    # Relationships (intentionally omitted to avoid cross-module ORM coupling)

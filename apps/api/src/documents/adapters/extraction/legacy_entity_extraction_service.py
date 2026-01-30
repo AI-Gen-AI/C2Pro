@@ -1,8 +1,11 @@
 """
-Legacy entity extraction adapter.
+Legacy entity extraction adapter (TRANSITIONAL).
 
-Bridges the new Documents module port to existing legacy models/services.
-This is a transitional adapter until stakeholders/procurement ports are ready.
+Bridges the Documents module port to legacy ORM/services.
+TODO(arch): Remove when:
+- Stakeholders extraction is fully served via stakeholder ports/use cases.
+- Procurement WBS/BOM creation uses procurement ports/use cases only.
+Target: end of Fase 1 consolidation.
 """
 from __future__ import annotations
 

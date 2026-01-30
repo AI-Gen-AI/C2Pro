@@ -30,12 +30,7 @@ from src.core.database import Base
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
-    # Assuming these modules will also have their persistence models
-    from src.analysis.adapters.persistence.models import Alert
     from src.core.auth.models import User, Tenant
-    from src.projects.adapters.persistence.models import ProjectORM
-    from src.stakeholders.adapters.persistence.models import StakeholderORM
-    from src.procurement.adapters.persistence.models import BOMItemORM, WBSItemORM
 
 
 # These enums are defined in domain layer, but ORM needs an Enum as SQLEnum
@@ -103,21 +98,10 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="documents", lazy="selectin"
-    )
-
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="select")
 
     clauses: Mapped[list["ClauseORM"]] = relationship(
         "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
-    )
-
-    extracted_stakeholders: Mapped[list["StakeholderORM"]] = relationship(
-        "StakeholderORM",
-        back_populates="extracted_from_document",
-        foreign_keys="StakeholderORM.extracted_from_document_id",
-        lazy="select",
     )
 
     # Indexes
@@ -197,41 +181,13 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship("ProjectORM", foreign_keys=[project_id], lazy="selectin")
-
     document: Mapped["DocumentORM"] = relationship(
         "DocumentORM", back_populates="clauses", lazy="selectin"
     )
 
     verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
 
-    alerts: Mapped[list["Alert"]] = relationship(
-        "Alert",
-        back_populates="source_clause",
-        foreign_keys="Alert.source_clause_id",
-        lazy="select",
-    )
-
-    stakeholders: Mapped[list["StakeholderORM"]] = relationship(
-        "StakeholderORM",
-        back_populates="source_clause",
-        foreign_keys="StakeholderORM.source_clause_id",
-        lazy="select",
-    )
-
-    wbs_items: Mapped[list["WBSItemORM"]] = relationship(
-        "WBSItemORM",
-        back_populates="funded_by_clause",
-        foreign_keys="WBSItemORM.funded_by_clause_id",
-        lazy="select",
-    )
-
-    bom_items: Mapped[list["BOMItemORM"]] = relationship(
-        "BOMItemORM",
-        back_populates="contract_clause",
-        foreign_keys="BOMItemORM.contract_clause_id",
-        lazy="select",
-    )
+ 
 
     # Constraints and Indexes
     __table_args__ = (

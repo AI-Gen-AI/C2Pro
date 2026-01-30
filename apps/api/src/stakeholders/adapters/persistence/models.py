@@ -30,9 +30,6 @@ from src.stakeholders.domain.models import PowerLevel, InterestLevel, Stakeholde
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
     from src.core.auth.models import User
-    from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
-    from src.projects.adapters.persistence.models import ProjectORM
-    from src.procurement.adapters.persistence.models import WBSItemORM
 
 
 class StakeholderORM(Base):
@@ -106,24 +103,6 @@ class StakeholderORM(Base):
     )
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship(
-        "ProjectORM", back_populates="stakeholders", foreign_keys=[project_id], lazy="selectin"
-    )
-
-    source_clause: Mapped["ClauseORM"] = relationship(
-        "ClauseORM",
-        back_populates="stakeholders",
-        foreign_keys=[source_clause_id],
-        lazy="selectin",
-    )
-
-    extracted_from_document: Mapped["DocumentORM"] = relationship(
-        "DocumentORM",
-        back_populates="extracted_stakeholders",
-        foreign_keys=[extracted_from_document_id],
-        lazy="select",
-    )
-
     reviewer: Mapped["User"] = relationship(
         "User",
         foreign_keys=[reviewed_by],
@@ -195,14 +174,8 @@ class StakeholderWBSRaciORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    project: Mapped["ProjectORM"] = relationship("ProjectORM", foreign_keys=[project_id], lazy="selectin")
-
     stakeholder: Mapped["StakeholderORM"] = relationship(
         "StakeholderORM", back_populates="raci_assignments", lazy="selectin"
-    )
-
-    wbs_item: Mapped["WBSItemORM"] = relationship(
-        "WBSItemORM", back_populates="raci_assignments", lazy="selectin"
     )
 
     verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
