@@ -6,7 +6,8 @@ echo "📤 Validando antes de push..."
 # Validar rama no es main (protección)
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$current_branch" = "main" ]; then
-    echo "⚠️  Estás en rama main. Usa git push --force-with-lease si es intencional"
+    exit 1
+    echo "🚫 Push aborted on main branch. Please switch branches or create a hotfix workflow."; exit 1
 fi
 
 echo "✅ Pre-push validación completada"

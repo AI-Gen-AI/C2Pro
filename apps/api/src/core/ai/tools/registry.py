@@ -151,6 +151,8 @@ class ToolRegistry:
         return result
 
     def get_metadata(self, name: str, version: str = "latest") -> ToolMetadata:
+    """Get tool metadata without instantiating."""
+    return self.get(name, version).metadata
         """Get tool metadata without instantiating."""
         tool = self.get(name, version)
         return tool.metadata

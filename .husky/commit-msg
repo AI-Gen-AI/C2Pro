@@ -10,7 +10,7 @@ if [ ! -s "$1" ]; then
 fi
 
 # Validar longitud mínima (10 caracteres)
-commit_msg=$(head -n 1 "$1" | sed 's/^#.*//')
+commit_msg=$(head -n 1 "$1")
 if [ ${#commit_msg} -lt 10 ]; then
     echo "❌ El mensaje debe tener al menos 10 caracteres"
     exit 1
