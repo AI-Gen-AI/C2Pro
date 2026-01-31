@@ -29,8 +29,8 @@ from src.core.security import (
     Permissions,
 )
 from src.core.exceptions import AuthenticationError, TenantNotFoundError
-from src.modules.auth.service import create_access_token
-from src.modules.auth.models import UserRole
+from src.core.auth.service import create_access_token
+from src.core.auth.models import UserRole
 
 
 # ===========================================
@@ -175,9 +175,10 @@ class TestTenantIsolationMiddleware:
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {token}"}
 
-        tenant_id = middleware._extract_tenant_id(request)
+        tenant_id, error_message = middleware._extract_tenant_id(request)
 
         assert tenant_id == test_tenant.id
+        assert error_message is None
 
     def test_extract_tenant_id_missing_claim(self):
         """
@@ -199,9 +200,10 @@ class TestTenantIsolationMiddleware:
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {token}"}
 
-        tenant_id = middleware._extract_tenant_id(request)
+        tenant_id, error_message = middleware._extract_tenant_id(request)
 
         assert tenant_id is None
+        assert error_message is not None
 
     def test_extract_tenant_id_invalid_token_type(self, test_user, test_tenant):
         """
@@ -226,10 +228,11 @@ class TestTenantIsolationMiddleware:
         request = Mock(spec=Request)
         request.headers = {"Authorization": f"Bearer {token}"}
 
-        tenant_id = middleware._extract_tenant_id(request)
+        tenant_id, error_message = middleware._extract_tenant_id(request)
 
         # Should reject refresh tokens
         assert tenant_id is None
+        assert error_message is not None
 
     def test_extract_user_id_from_jwt(self, test_user, test_tenant):
         """
@@ -286,6 +289,23 @@ class TestTenantIsolationMiddleware:
             call_kwargs = mock_bind.call_args[1]
             assert call_kwargs["tenant_id"] == str(test_tenant.id)
             assert call_kwargs["user_id"] == str(test_user.id)
+
+    @pytest.mark.asyncio
+    async def test_inactive_tenant_is_blocked(self, app, valid_token, test_tenant):
+        """
+        Should reject requests when tenant exists but is inactive.
+        """
+        app.add_middleware(TenantIsolationMiddleware)
+        client = TestClient(app)
+
+        with patch(
+            "src.core.middleware.tenant_isolation.TenantIsolationMiddleware._validate_tenant_exists",
+            new=AsyncMock(return_value=False),
+        ):
+            response = client.get("/protected", headers={"Authorization": f"Bearer {valid_token}"})
+
+        assert response.status_code == 401
+        assert "Invalid authentication context" in response.json()["detail"]
 
 
 # ===========================================

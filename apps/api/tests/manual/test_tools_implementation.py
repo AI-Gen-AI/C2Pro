@@ -378,7 +378,7 @@ def run_all_tests():
         "Input Models": test_input_models(),
         "Output Models": test_output_models(),
         "Node Integration": test_node_integration(),
-        "Protocol Implementation": test_protocol(),
+        "Protocol Implementation": test_tool_protocol()
     }
 
     # Summary

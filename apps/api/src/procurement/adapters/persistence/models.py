@@ -1,238 +1,125 @@
 """
-SQLAlchemy ORM models for Procurement bounded context, used by the persistence adapter.
+SQLAlchemy ORM models for the Procurement bounded context.
+These models represent the database schema for procurement-related entities.
 """
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum # Needed for the enums defined here
- 
-from uuid import UUID, uuid4
+import uuid
 
 from sqlalchemy import (
-    Boolean,
+    Column,
+    String,
+    Integer,
+    DECIMAL,
     DateTime,
     ForeignKey,
-    Index,
-    Integer,
-    Numeric,
-    String,
+    Enum,
+    Boolean,
     Text,
 )
-from sqlalchemy import (
-    Enum as SQLEnum,
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+
+from apps.api.src.procurement.domain.models import (
+    BOMCategory,
+    ProcurementStatus,
+    WBSItemType,
 )
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.core.database import Base
-
-# Import enums from our domain models (these will be moved here later)
-# For now, defining them here as they are part of the original models.py file
-# They will be moved to procurement/domain/models.py in a later step.
+Base = declarative_base()
 
 
-class WBSItemType(str, Enum):
-    """Types of WBS items."""
-    DELIVERABLE = "deliverable"
-    WORK_PACKAGE = "work_package"
-    ACTIVITY = "activity"
+class BudgetItemORM(Base):
+    """SQLAlchemy model for BudgetItem domain entity."""
 
+    __tablename__ = "procurement_budget_items"
 
-class BOMCategory(str, Enum):
-    """Categories of BOM items."""
-    MATERIAL = "material"
-    EQUIPMENT = "equipment"
-    SERVICE = "service"
-    CONSUMABLE = "consumable"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    code = Column(String, nullable=False, unique=True)
+    amount = Column(DECIMAL(10, 2), nullable=False)
 
-
-class ProcurementStatus(str, Enum):
-    """Procurement statuses."""
-    PENDING = "pending"
-    REQUESTED = "requested"
-    ORDERED = "ordered"
-    IN_TRANSIT = "in_transit"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
-
-
-# TYPE_CHECKING imports need to be adjusted for the new module structure
- 
+    def __repr__(self):
+        return f"<BudgetItemORM(id={self.id}, name='{self.name}', amount={self.amount})>"
 
 
 class WBSItemORM(Base):
-    """
-    SQLAlchemy model for WBS Item.
-    """
+    """SQLAlchemy model for WBSItem domain entity."""
 
-    __tablename__ = "wbs_items"
+    __tablename__ = "procurement_wbs_items"
 
-    # Primary key
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-
-    # Project relationship
-    project_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    # Hierarchy
-    parent_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("wbs_items.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-
-    # Identification
-    wbs_code: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        index=True,
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    level: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    # Classification
-    item_type: Mapped[WBSItemType | None] = mapped_column(SQLEnum(WBSItemType), nullable=True)
-
-    # Financial
-    budget_allocated: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    budget_spent: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
-
-    # Schedule
-    planned_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    planned_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    actual_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    actual_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    # Traceability
-    funded_by_clause_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("clauses.id"),
-        nullable=True,
-        index=True,
-    )
-
-    # WBS Metadata (custom data)
-    wbs_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
-
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), nullable=False)
+    code = Column(String, nullable=False, unique=True)
+    name = Column(String, nullable=False)
+    level = Column(Integer, nullable=False)
+    description = Column(Text, nullable=True)
+    parent_code = Column(String, ForeignKey("procurement_wbs_items.code"), nullable=True)
+    item_type = Column(Enum(WBSItemType), nullable=True)
+    budget_allocated = Column(DECIMAL(10, 2), nullable=True)
+    budget_spent = Column(DECIMAL(10, 2), default=Decimal(0), nullable=False)
+    planned_start = Column(DateTime(timezone=True), nullable=True)
+    planned_end = Column(DateTime(timezone=True), nullable=True)
+    actual_start = Column(DateTime(timezone=True), nullable=True)
+    actual_end = Column(DateTime(timezone=True), nullable=True)
+    source_clause_id = Column(UUID(as_uuid=True), nullable=True)
+    wbs_metadata = Column(JSONB, default={}, nullable=False)
 
     # Relationships
-    parent: Mapped["WBSItemORM"] = relationship(
+    # Parent relationship (many-to-one)
+    parent = relationship(
         "WBSItemORM",
+        remote_side=[code], # 'code' of the parent WBSItemORM
         back_populates="children",
-        remote_side=[id],
-        foreign_keys=[parent_id],
-        lazy="select",
+        uselist=False # A child has only one parent
     )
 
-    children: Mapped[list["WBSItemORM"]] = relationship(
-        "WBSItemORM", back_populates="parent", lazy="select", cascade="all, delete-orphan"
+    # Children relationship (one-to-many)
+    children = relationship(
+        "WBSItemORM",
+        back_populates="parent",
+        cascade="all, delete-orphan", # Cascade operations to children
+        foreign_keys=[parent_code] # Specify the foreign key on the local side
     )
 
- 
-    bom_items: Mapped[list["BOMItemORM"]] = relationship(
-        "BOMItemORM", back_populates="wbs_item", lazy="select", cascade="all, delete-orphan"
-    )
-
-    # Indexes
-    __table_args__ = (
-        Index("ix_wbs_items_project", "project_id"),
-        Index("ix_wbs_items_parent", "parent_id"),
-        Index("ix_wbs_items_code", "wbs_code"),
-        Index("ix_wbs_items_clause", "funded_by_clause_id"),
-        {"info": {"rls_policy": "tenant_isolation"}},
-    )
+    def __repr__(self):
+        return f"<WBSItemORM(id={self.id}, code='{self.code}', name='{self.name}')>"
 
 
 class BOMItemORM(Base):
-    """
-    SQLAlchemy model for BOM Item.
-    """
+    """SQLAlchemy model for BOMItem domain entity."""
 
-    __tablename__ = "bom_items"
+    __tablename__ = "procurement_bom_items"
 
-    # Primary key
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), nullable=False)
+    item_name = Column(String, nullable=False)
+    quantity = Column(DECIMAL(10, 2), nullable=False)
+    wbs_item_id = Column(UUID(as_uuid=True), ForeignKey("procurement_wbs_items.id"), nullable=True)
+    item_code = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    category = Column(Enum(BOMCategory), nullable=True)
+    unit = Column(String, nullable=True)
+    unit_price = Column(DECIMAL(10, 2), nullable=True)
+    total_price = Column(DECIMAL(10, 2), nullable=True)
+    currency = Column(String, default="EUR", nullable=False)
+    supplier = Column(String, nullable=True)
+    lead_time_days = Column(Integer, nullable=True)
+    production_time_days = Column(Integer, nullable=True)
+    transit_time_days = Column(Integer, nullable=True)
+    incoterm = Column(String, nullable=True)
+    contract_clause_id = Column(UUID(as_uuid=True), nullable=True)
+    budget_item_id = Column(UUID(as_uuid=True), ForeignKey("procurement_budget_items.id"), nullable=True)
+    procurement_status = Column(
+        Enum(ProcurementStatus), default=ProcurementStatus.PENDING, nullable=False
+    )
+    bom_metadata = Column(JSONB, default={}, nullable=False)
 
     # Relationships
-    project_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    wbs_item_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("wbs_items.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
+    wbs_item = relationship("WBSItemORM", backref="bom_items")
+    budget_item = relationship("BudgetItemORM", backref="bom_items")
 
-    # Identification
-    item_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    category: Mapped[BOMCategory | None] = mapped_column(SQLEnum(BOMCategory), nullable=True)
-
-    # Quantity
-    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
-    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
-
-    # Pricing
-    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    total_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    currency: Mapped[str] = mapped_column(String(3), default="EUR")
-
-    # Procurement
-    supplier: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    lead_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    incoterm: Mapped[str | None] = mapped_column(String(20), nullable=True)
-
-    # Traceability
-    contract_clause_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("clauses.id"),
-        nullable=True,
-        index=True,
-    )
-
-    # Status
-    procurement_status: Mapped[ProcurementStatus] = mapped_column(
-        SQLEnum(ProcurementStatus), default=ProcurementStatus.PENDING, index=True
-    )
-
-    # BOM Metadata (custom data)
-    bom_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
-
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
-
-    # Relationships
-    wbs_item: Mapped["WBSItemORM"] = relationship(
-        "WBSItemORM", back_populates="bom_items", lazy="selectin"
-    )
-
- 
-    # Indexes
-    __table_args__ = (
-        Index("ix_bom_items_project", "project_id"),
-        Index("ix_bom_items_wbs", "wbs_item_id"),
-        Index("ix_bom_items_category", "category"),
-        Index("ix_bom_items_clause", "contract_clause_id"),
-        Index("ix_bom_items_status", "procurement_status"),
-        {"info": {"rls_policy": "tenant_isolation"}},
-    )
+    def __repr__(self):
+        return f"<BOMItemORM(id={self.id}, item_name='{self.item_name}', quantity={self.quantity})>"

@@ -27,3 +27,5 @@ export default defineConfig({
     },
   },
 });
+
+https://dc374a124792ae061c949999122d205a@o4510540096077824.ingest.de.sentry.io/4510804751089744

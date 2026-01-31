@@ -6,6 +6,14 @@ const nextConfig = {
     config.resolve.alias.canvas = false;
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: "/tunnel",
+        destination: "https://o4510540096077824.ingest.de.sentry.io/api/4510804751089744/envelope/?hsts=0",
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

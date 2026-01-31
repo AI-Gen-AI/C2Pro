@@ -4,7 +4,11 @@
 echo "🔍 Ejecutando validaciones pre-commit..."
 
 # Validar que hay cambios para validar
-if git diff-index --cached --quiet HEAD; then
+if ! git rev-parse --verify HEAD >/dev/null 2>&1 || if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    git diff-index --cached --quiet HEAD
+else
+    echo "No previous commit"
+fi; then
     echo "⚠️ Sin cambios para validar"
     exit 0
 fi
@@ -12,6 +16,6 @@ fi
 echo "✓ Cambios detectados"
 
 # Ejecutar lint si está disponible
-npm run lint --if-present
+npm run lint --if-present; exit $?
 
 echo "✅ Pre-commit validación completada"

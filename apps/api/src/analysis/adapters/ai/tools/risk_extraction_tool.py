@@ -67,7 +67,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Apply filtering if requested
         if input_data.filter_relevant:
-            filtered_text = self._filter_relevant_text(input_data.document_text)
+            if input_data.filter_relevant:
+    input_data.document_text = self._filter_relevant_text(input_data.document_text)
         else:
             filtered_text = input_data.document_text
 
@@ -130,7 +131,12 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Update confidence score based on result quality
         if result.confidence_score:
-            state["confidence_score"] = result.confidence_score
+            if result.data:
+    confidences = [item.confidence for item in result.data]
+    state["confidence_score"] = sum(confidences) / len(confidences) if confidences else 0.9
+else:
+    state["confidence_score"] = 0.9
+
         else:
             # Calculate average confidence if individual risks have confidence
             confidences = [

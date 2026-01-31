@@ -149,6 +149,12 @@ async def update_stakeholder(
         reason = str(exc)
         if reason == "source_clause_id_not_found":
             raise HTTPException(status_code=400, detail="source_clause_id not found")
+        elif reason == "stakeholder_not_found":
+            raise HTTPException(status_code=404, detail="stakeholder not found")
+            raise HTTPException(status_code=400, detail="source_clause_id not found")
+        elif reason == "stakeholder_not_found":
+            raise HTTPException(status_code=404, detail="Stakeholder not found")
+            raise HTTPException(status_code=400, detail="source_clause_id not found")
         raise HTTPException(status_code=404, detail="Stakeholder not found")
 
     return _to_response(stakeholder)

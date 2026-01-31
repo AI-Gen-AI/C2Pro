@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 # Generic input/output types
-TInput = TypeVar("TInput", bound=BaseModel, contravariant=True)
+TInput = TypeVar("TInput")
 TOutput = TypeVar("TOutput", covariant=True)
 
 
