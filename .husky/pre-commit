@@ -1,21 +1,5 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
-echo "🔍 Ejecutando validaciones pre-commit..."
-
-# Validar que hay cambios para validar
-if ! git rev-parse --verify HEAD >/dev/null 2>&1 || if git rev-parse --verify HEAD >/dev/null 2>&1; then
-    git diff-index --cached --quiet HEAD
-else
-    echo "No previous commit"
-fi; then
-    echo "⚠️ Sin cambios para validar"
-    exit 0
-fi
-
-echo "✓ Cambios detectados"
-
-# Ejecutar lint si está disponible
-npm run lint --if-present; exit $?
-
-echo "✅ Pre-commit validación completada"
+#!/usr/bin/env sh
+echo "🔍 Running Quality Gates (pre-commit)..."
+echo "📝 Checking code style..."
+pnpm run lint || { echo "❌ ESLint failed!"; exit 1; }
+echo "✅ Pre-commit gates passed!"

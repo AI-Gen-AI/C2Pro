@@ -12,7 +12,6 @@
   },
   "license": "ISC",
   "author": "AI-Gen",
-  "type": "commonjs",
   "main": "index.js",
   "directories": {
     "doc": "docs"
