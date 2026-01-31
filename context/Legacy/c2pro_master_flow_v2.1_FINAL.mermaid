@@ -1,0 +1,624 @@
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#1a1a2e',
+    'primaryTextColor': '#eaeaea',
+    'primaryBorderColor': '#16213e',
+    'lineColor': '#0f3460',
+    'secondaryColor': '#0f3460',
+    'tertiaryColor': '#e94560',
+    'background': '#0f0f23',
+    'mainBkg': '#1a1a2e',
+    'nodeBorder': '#e94560',
+    'clusterBkg': '#16213e',
+    'clusterBorder': '#0f3460',
+    'titleColor': '#eaeaea',
+    'edgeLabelBackground': '#1a1a2e'
+  }
+}}%%
+
+flowchart TB
+    %% ============================================================
+    %% ESTILOS Y CLASES
+    %% ============================================================
+    classDef security fill:#e94560,stroke:#fff,stroke-width:2px,color:#fff
+    classDef async fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#fff
+    classDef error fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    classDef success fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#fff
+    classDef llm fill:#845ef7,stroke:#5f3dc4,stroke-width:2px,color:#fff
+    classDef human fill:#ffd43b,stroke:#fab005,stroke-width:2px,color:#fff
+    classDef db fill:#20c997,stroke:#0ca678,stroke-width:2px,color:#fff
+    classDef audit fill:#fd7e14,stroke:#e8590c,stroke-width:2px,color:#fff
+    classDef module fill:#1a1a2e,stroke:#e94560,stroke-width:3px,color:#eaeaea
+    classDef bottleneck fill:#f06595,stroke:#d6336c,stroke-width:3px,color:#fff
+    classDef category fill:#339af0,stroke:#1c7ed6,stroke-width:2px,color:#fff
+    classDef newfeature fill:#ff922b,stroke:#e8590c,stroke-width:3px,color:#fff
+
+    %% ============================================================
+    %% SUBGRAFO: ONBOARDING EMPRESA (🆕 v2.1)
+    %% ============================================================
+    subgraph ONBOARDING ["🆕 ONBOARDING EMPRESA"]
+        direction TB
+        C2PRO_ADMIN["C2Pro Admin"]
+        CREATE_TENANT["Crear Tenant"]
+        CREATE_MASTER["Crear Usuario Maestro"]
+        TENANT_CONFIG["Config Tenant"]
+        
+        C2PRO_ADMIN --> CREATE_TENANT
+        CREATE_TENANT --> CREATE_MASTER
+        CREATE_MASTER --> TENANT_CONFIG
+    end
+
+    %% ============================================================
+    %% SUBGRAFO: USUARIOS Y ROLES (🆕 v2.1)
+    %% ============================================================
+    subgraph USERS ["👥 GESTIÓN DE USUARIOS Y ROLES"]
+        direction TB
+        
+        subgraph ROLE_HIERARCHY ["Jerarquía de Roles"]
+            MASTER_USER["🔑 Usuario Maestro<br/>Admin Empresa"]
+            
+            subgraph SUBORDINATE_ROLES ["Roles Subordinados"]
+                ROLE_ADMIN["🔑 Admin"]
+                ROLE_PM["📊 PM"]
+                ROLE_ENGINEER["⚙️ Engineer"]
+                ROLE_PROCUREMENT["🛒 Procurement"]
+                ROLE_QA["✅ QA"]
+                ROLE_VIEWER["👁️ Viewer"]
+            end
+            
+            MASTER_USER --> SUBORDINATE_ROLES
+        end
+        
+        USER_SESSION["Sesión Usuario"]
+        ROLE_PERMISSIONS{"Matriz Permisos"}
+        
+        SUBORDINATE_ROLES --> USER_SESSION
+        USER_SESSION --> ROLE_PERMISSIONS
+    end
+    
+    TENANT_CONFIG --> MASTER_USER
+
+    %% ============================================================
+    %% SUBGRAFO: FRONTEND (Basado en UI Real)
+    %% ============================================================
+    subgraph ENTRY ["🖥️ FRONTEND Next.js"]
+        direction TB
+        UI_START((("👤 Usuario")))
+        
+        subgraph MAIN_VIEWS ["Vistas Principales"]
+            UI_DASHBOARD["📊 Dashboard<br/>Score 78/100<br/>Projects: 12<br/>Alerts: 7"]
+            UI_PROJECTS["📁 Projects<br/>Lista con Score<br/>Status, Alerts"]
+            UI_EVIDENCE["📄 Evidence<br/>Visor PDF<br/>Extracted Data<br/>Approve/Reject"]
+            UI_ALERTS["⚠️ Alerts Center<br/>Por severidad<br/>Por tipo"]
+            UI_STAKEHOLDERS["👥 Stakeholders"]
+            UI_RACI["📋 RACI Matrix"]
+        end
+        
+        subgraph UI_COMPONENTS ["Componentes"]
+            UI_SIDEBAR["Sidebar"]
+            UI_SEARCH["🔍 Search"]
+            UI_NOTIFICATIONS["🔔 Notificaciones"]
+        end
+        
+        UI_START --> UI_DASHBOARD
+        UI_DASHBOARD --> UI_PROJECTS
+        UI_DASHBOARD --> UI_ALERTS
+        UI_PROJECTS --> UI_EVIDENCE
+    end
+
+    %% ============================================================
+    %% SUBGRAFO: FUENTES DE DOCUMENTOS (🆕 v2.1 Folder Sync)
+    %% ============================================================
+    subgraph DOC_SOURCES ["📥 FUENTES DE DOCUMENTOS"]
+        direction TB
+        
+        subgraph MANUAL_UPLOAD ["Opción 1: Upload Manual"]
+            UPLOAD_UI["📤 Drag & Drop"]
+            UPLOAD_API["POST /api/documents"]
+            UPLOAD_UI --> UPLOAD_API
+        end
+        
+        subgraph FOLDER_SYNC ["🆕 Opción 2: Folder Sync"]
+            direction TB
+            
+            subgraph SYNC_SOURCES ["Fuentes Extensibles"]
+                SRC_SHAREPOINT["📁 SharePoint"]
+                SRC_GDRIVE["📁 Google Drive"]
+                SRC_S3["📁 AWS S3"]
+                SRC_NAS["📁 NAS/SMB"]
+                SRC_OTHER["📁 Otras..."]
+            end
+            
+            SYNC_CONFIG["Config Sync<br/>• Carpeta origen<br/>• Polling interval<br/>• Filtros"]
+            SYNC_SERVICE["🔄 Sync Service<br/>Polling/Webhook"]
+            VERSION_CONTROL["📋 Versionado<br/>Historial docs"]
+            
+            SYNC_SOURCES --> SYNC_CONFIG
+            SYNC_CONFIG --> SYNC_SERVICE
+            SYNC_SERVICE --> VERSION_CONTROL
+        end
+        
+        DOC_INGESTION["Document Ingestion"]
+        
+        UPLOAD_API --> DOC_INGESTION
+        VERSION_CONTROL --> DOC_INGESTION
+    end
+
+    %% ============================================================
+    %% SUBGRAFO: PERÍMETRO DE SEGURIDAD
+    %% ============================================================
+    subgraph SECURITY ["🔒 PERÍMETRO DE SEGURIDAD"]
+        direction TB
+        API_GATEWAY["API Gateway FastAPI"]
+        JWT_VALIDATE{"🔒 Validar JWT"}
+        TENANT_EXTRACT["🏢 Extraer tenant_id"]
+        TENANT_CONTEXT["TenantContext"]
+        PERMISSION_CHECK{"🔐 Verificar Permisos"}
+        
+        API_GATEWAY --> JWT_VALIDATE
+        JWT_VALIDATE -->|"❌"| REJECT_401["401"]
+        JWT_VALIDATE -->|"✅"| TENANT_EXTRACT
+        TENANT_EXTRACT --> TENANT_CONTEXT
+        TENANT_CONTEXT --> PERMISSION_CHECK
+        PERMISSION_CHECK -->|"❌"| REJECT_403["403"]
+    end
+    
+    ENTRY --> API_GATEWAY
+    ROLE_PERMISSIONS --> PERMISSION_CHECK
+
+    %% ============================================================
+    %% SUBGRAFO: ORQUESTADOR
+    %% ============================================================
+    subgraph ORCHESTRATOR ["🎯 ORQUESTADOR LANGGRAPH"]
+        direction TB
+        INTENT_CLASSIFIER{"Clasificador Intención"}
+        AGENT_ROUTER{"🔀 Router Agentes"}
+        STATE_MACHINE["State Machine"]
+        HUMAN_CHECKPOINT{"👤 Human Checkpoint"}
+        
+        INTENT_CLASSIFIER --> AGENT_ROUTER
+        AGENT_ROUTER --> STATE_MACHINE
+        STATE_MACHINE -->|"needs_validation"| HUMAN_CHECKPOINT
+        HUMAN_CHECKPOINT -->|"approved"| STATE_MACHINE
+        HUMAN_CHECKPOINT -->|"rejected"| ROLLBACK["Rollback"]
+    end
+    
+    PERMISSION_CHECK -->|"✅"| INTENT_CLASSIFIER
+
+    %% ============================================================
+    %% SUBGRAFO: MÓDULO DOCUMENTS
+    %% ============================================================
+    subgraph MOD_DOCUMENTS ["📄 MÓDULO: DOCUMENTS"]
+        direction TB
+        DOC_ROUTER["Router HTTP"]
+        DOC_USECASE["Use Cases"]
+        DOC_DOMAIN["Domain"]
+        DOC_PORTS["Ports"]
+        DOC_ADAPTERS["Adapters"]
+        
+        DOC_ROUTER --> DOC_USECASE
+        DOC_USECASE --> DOC_DOMAIN
+        DOC_DOMAIN --> DOC_PORTS
+        DOC_PORTS --> DOC_ADAPTERS
+        
+        subgraph DOC_PROCESSING ["🔄 Pipeline Async"]
+            DOC_PARSE["1. Parse PDF/DOCX"]
+            DOC_EXTRACT["2. ⚡ Entity Extraction"]
+            DOC_CLASSIFY["3. 🆕 Clasificar Categoría"]
+            DOC_EMBED["4. ⚡ Embeddings"]
+            DOC_LINK["5. Link WBS/BOM"]
+            DOC_INDEX["6. Index Graph RAG"]
+            
+            DOC_PARSE --> DOC_EXTRACT
+            DOC_EXTRACT --> DOC_CLASSIFY
+            DOC_CLASSIFY --> DOC_EMBED
+            DOC_EMBED --> DOC_LINK
+            DOC_LINK --> DOC_INDEX
+        end
+        
+        DOC_ADAPTERS --> DOC_PROCESSING
+    end
+    
+    AGENT_ROUTER -->|"document_task"| DOC_ROUTER
+    DOC_INGESTION --> DOC_PROCESSING
+
+    %% ============================================================
+    %% SUBGRAFO: MÓDULO STAKEHOLDERS
+    %% ============================================================
+    subgraph MOD_STAKEHOLDERS ["👥 MÓDULO: STAKEHOLDERS"]
+        direction TB
+        STK_ROUTER["Router HTTP"]
+        STK_USECASE["Use Cases"]
+        STK_DOMAIN["Domain"]
+        STK_PORTS["Ports"]
+        RACI_GENERATOR["RACI Generator<br/>Auto + Editable"]
+        
+        STK_ROUTER --> STK_USECASE
+        STK_USECASE --> STK_DOMAIN
+        STK_DOMAIN --> STK_PORTS
+        STK_USECASE --> RACI_GENERATOR
+    end
+    
+    AGENT_ROUTER -->|"stakeholder_task"| STK_ROUTER
+
+    %% ============================================================
+    %% SUBGRAFO: MÓDULO PROJECTS
+    %% ============================================================
+    subgraph MOD_PROJECTS ["📁 MÓDULO: PROJECTS"]
+        direction TB
+        PRJ_ROUTER["Router HTTP"]
+        PRJ_USECASE["Use Cases"]
+        PRJ_DOMAIN["Domain"]
+        PRJ_PORTS["Ports"]
+        WBS_MANAGER["WBS Manager"]
+        
+        PRJ_ROUTER --> PRJ_USECASE
+        PRJ_USECASE --> PRJ_DOMAIN
+        PRJ_DOMAIN --> PRJ_PORTS
+        PRJ_USECASE --> WBS_MANAGER
+    end
+    
+    AGENT_ROUTER -->|"project_task"| PRJ_ROUTER
+
+    %% ============================================================
+    %% SUBGRAFO: MÓDULO PROCUREMENT
+    %% ============================================================
+    subgraph MOD_PROCUREMENT ["🛒 MÓDULO: PROCUREMENT"]
+        direction TB
+        PROC_ROUTER["Router HTTP"]
+        PROC_USECASE["Use Cases"]
+        PROC_DOMAIN["Domain"]
+        PROC_PORTS["Ports"]
+        BOM_ANALYZER["BOM Analyzer"]
+        PROCUREMENT_PLAN["Procurement Plan<br/>Fechas óptimas"]
+        
+        PROC_ROUTER --> PROC_USECASE
+        PROC_USECASE --> PROC_DOMAIN
+        PROC_DOMAIN --> PROC_PORTS
+        PROC_USECASE --> BOM_ANALYZER
+        BOM_ANALYZER --> PROCUREMENT_PLAN
+    end
+    
+    AGENT_ROUTER -->|"procurement_task"| PROC_ROUTER
+
+    %% ============================================================
+    %% SUBGRAFO: MÓDULO ANALYSIS (IA)
+    %% ============================================================
+    subgraph MOD_ANALYSIS ["🤖 MÓDULO: ANALYSIS"]
+        direction TB
+        ANA_ROUTER["Router HTTP"]
+        ANA_USECASE["Use Cases"]
+        ANA_DOMAIN["Domain"]
+        ANA_PORTS["Ports"]
+        
+        subgraph LLM_CALLS ["⚡ Llamadas LLM"]
+            GRAPH_RAG["Graph RAG Multi-hop"]
+            LLM_ANALYZE["LLM OpenAI/Anthropic"]
+            PROMPT_VERSION["Prompts Versionados"]
+            MCP_VIEWS["MCP Views"]
+            
+            GRAPH_RAG --> LLM_ANALYZE
+            PROMPT_VERSION --> LLM_ANALYZE
+            MCP_VIEWS --> GRAPH_RAG
+        end
+        
+        ANA_ROUTER --> ANA_USECASE
+        ANA_USECASE --> ANA_DOMAIN
+        ANA_DOMAIN --> ANA_PORTS
+        ANA_USECASE --> LLM_CALLS
+    end
+    
+    AGENT_ROUTER -->|"analysis_task"| ANA_ROUTER
+
+    %% ============================================================
+    %% SUBGRAFO: COHERENCE ENGINE v2.1 (🆕 6 CATEGORÍAS)
+    %% ============================================================
+    subgraph MOD_COHERENCE ["🎯 COHERENCE ENGINE v2.1"]
+        direction TB
+        COH_ROUTER["Router HTTP"]
+        COH_USECASE["Use Cases"]
+        COH_DOMAIN["Domain"]
+        COH_PORTS["Ports"]
+        
+        subgraph COHERENCE_CATEGORIES ["🆕 6 Categorías"]
+            CAT_SCOPE["🎯 SCOPE<br/>Alcance"]
+            CAT_BUDGET["💰 BUDGET<br/>Costos"]
+            CAT_QUALITY["✅ QUALITY<br/>Estándares"]
+            CAT_TECHNICAL["⚙️ TECHNICAL<br/>Ingeniería"]
+            CAT_LEGAL["⚖️ LEGAL<br/>Contratos"]
+            CAT_TIME["⏱️ TIME<br/>Cronograma"]
+        end
+        
+        subgraph COHERENCE_LOGIC ["Motor de Cálculo"]
+            RULES_ENGINE["12 Reglas Deterministas<br/>2 por categoría"]
+            LLM_QUALITATIVE["⚡ LLM Fallback"]
+            
+            subgraph SCORE_CALCULATION ["🆕 Sub-Scores"]
+                SCORE_SCOPE["Scope: 80%"]
+                SCORE_BUDGET["Budget: 62%"]
+                SCORE_QUALITY["Quality: 85%"]
+                SCORE_TECHNICAL["Technical: 72%"]
+                SCORE_LEGAL["Legal: 90%"]
+                SCORE_TIME["Time: 75%"]
+                SCORE_WEIGHTS["Pesos Config"]
+                SCORE_GLOBAL["Global: 78/100"]
+                
+                SCORE_SCOPE --> SCORE_WEIGHTS
+                SCORE_BUDGET --> SCORE_WEIGHTS
+                SCORE_QUALITY --> SCORE_WEIGHTS
+                SCORE_TECHNICAL --> SCORE_WEIGHTS
+                SCORE_LEGAL --> SCORE_WEIGHTS
+                SCORE_TIME --> SCORE_WEIGHTS
+                SCORE_WEIGHTS --> SCORE_GLOBAL
+            end
+            
+            RULES_ENGINE --> SCORE_CALCULATION
+            LLM_QUALITATIVE -.->|"fallback"| SCORE_CALCULATION
+        end
+        
+        COH_ROUTER --> COH_USECASE
+        COH_USECASE --> COH_DOMAIN
+        COH_DOMAIN --> COH_PORTS
+        COH_USECASE --> COHERENCE_CATEGORIES
+        COHERENCE_CATEGORIES --> COHERENCE_LOGIC
+    end
+    
+    AGENT_ROUTER -->|"coherence_task"| COH_ROUTER
+    ANA_USECASE -->|"trigger"| COH_USECASE
+
+    %% ============================================================
+    %% SUBGRAFO: SISTEMA DE ALERTAS
+    %% ============================================================
+    subgraph ALERT_SYSTEM ["⚠️ SISTEMA DE ALERTAS"]
+        direction TB
+        
+        ALERT_GENERATOR["Generador Alertas"]
+        
+        subgraph ALERT_TYPES ["🆕 Por Categoría"]
+            ALERT_SCOPE["🎯 Scope"]
+            ALERT_FINANCIAL["💰 Financial"]
+            ALERT_QUALITY["✅ Quality"]
+            ALERT_TECHNICAL["⚙️ Technical"]
+            ALERT_LEGAL["⚖️ Legal"]
+            ALERT_SCHEDULE["⏱️ Schedule"]
+        end
+        
+        subgraph SEVERITY_LEVELS ["Severidad"]
+            SEV_CRITICAL["🔴 Critical"]
+            SEV_HIGH["🟠 High"]
+            SEV_MEDIUM["🟡 Medium"]
+            SEV_LOW["🟢 Low"]
+        end
+        
+        ALERT_QUEUE["Cola Alertas"]
+        ALERT_PERSIST["Persistir DB"]
+    end
+    
+    SCORE_CALCULATION --> ALERT_GENERATOR
+    ALERT_GENERATOR --> ALERT_TYPES
+    ALERT_TYPES --> SEVERITY_LEVELS
+    SEVERITY_LEVELS --> ALERT_QUEUE
+    ALERT_QUEUE --> ALERT_PERSIST
+
+    %% ============================================================
+    %% SUBGRAFO: HUMAN-IN-THE-LOOP
+    %% ============================================================
+    subgraph HUMAN_LOOP ["👤 HUMAN-IN-THE-LOOP"]
+        direction TB
+        
+        SEVERITY_CHECK{"Severidad?"}
+        
+        subgraph REVIEW_PANEL ["Panel Revisión"]
+            EXTRACTED_DATA["Extracted Data<br/>Confidence %"]
+            CONFIDENCE_CHECK{"Confidence?"}
+            LINKAGES_DISPLAY["Linkages WBS"]
+            LOW_CONF_WARNING["⚠️ Low confidence<br/>Validation required"]
+        end
+        
+        subgraph USER_ACTIONS ["Acciones"]
+            BTN_APPROVE["✅ Approve"]
+            BTN_REJECT["❌ Reject"]
+            BTN_IGNORE["⏭️ Ignorar"]
+            BTN_NOTE["📝 Nota"]
+            BTN_RERUN["🔄 Re-ejecutar"]
+        end
+        
+        SEVERITY_CHECK -->|"Critical/High"| REVIEW_PANEL
+        SEVERITY_CHECK -->|"Medium/Low"| AUTO_PROCESS["Auto-proceso"]
+        
+        EXTRACTED_DATA --> CONFIDENCE_CHECK
+        CONFIDENCE_CHECK -->|"< 85%"| LOW_CONF_WARNING
+        CONFIDENCE_CHECK -->|">= 85%"| LINKAGES_DISPLAY
+        LOW_CONF_WARNING --> USER_ACTIONS
+        LINKAGES_DISPLAY --> USER_ACTIONS
+    end
+    
+    ALERT_QUEUE --> SEVERITY_CHECK
+    BTN_RERUN --> LLM_QUALITATIVE
+
+    %% ============================================================
+    %% SUBGRAFO: ERROR RECOVERY
+    %% ============================================================
+    subgraph ERROR_RECOVERY ["🔴 ERROR RECOVERY"]
+        direction TB
+        
+        CIRCUIT_BREAKER{"🔌 Circuit Breaker"}
+        RETRY_LOGIC["Retry Backoff"]
+        FALLBACK_RESPONSE["Fallback"]
+        ERROR_LOG["📊 Error Log"]
+        ALERT_OPS["🚨 Alerta Ops"]
+        
+        CIRCUIT_BREAKER -->|"OPEN"| FALLBACK_RESPONSE
+        CIRCUIT_BREAKER -->|"HALF-OPEN"| RETRY_LOGIC
+        RETRY_LOGIC -->|"max"| FALLBACK_RESPONSE
+        RETRY_LOGIC -->|"ok"| CONTINUE_FLOW["Continuar"]
+        FALLBACK_RESPONSE --> ERROR_LOG
+        ERROR_LOG --> ALERT_OPS
+    end
+    
+    LLM_ANALYZE -->|"error"| CIRCUIT_BREAKER
+    LLM_QUALITATIVE -->|"error"| CIRCUIT_BREAKER
+    GRAPH_RAG -->|"error"| ERROR_LOG
+
+    %% ============================================================
+    %% SUBGRAFO: PERSISTENCIA
+    %% ============================================================
+    subgraph DATA_STORES ["💾 PERSISTENCIA"]
+        direction TB
+        
+        SUPABASE_DB[("🏢 PostgreSQL + RLS")]
+        NEO4J_GRAPH[("🔗 Neo4j Graph")]
+        VECTOR_STORE[("📐 Vectors")]
+        REDIS_CACHE[("⚡ Redis")]
+        
+        subgraph TABLES ["Tablas"]
+            T_TENANTS["tenants"]
+            T_USERS["users + roles"]
+            T_PROJECTS["projects"]
+            T_DOCUMENTS["documents"]
+            T_WBS["wbs_items"]
+            T_BOM["bom_items"]
+            T_ALERTS["alerts + category"]
+            T_COHERENCE["coherence_scores<br/>🆕 6 sub-scores"]
+            T_AUDIT["audit_logs"]
+            T_AI_USAGE["ai_usage_logs"]
+        end
+    end
+    
+    DOC_ADAPTERS --> SUPABASE_DB
+    DOC_INDEX --> NEO4J_GRAPH
+    DOC_EMBED --> VECTOR_STORE
+    STK_PORTS --> SUPABASE_DB
+    PRJ_PORTS --> SUPABASE_DB
+    PROC_PORTS --> SUPABASE_DB
+    COH_PORTS --> SUPABASE_DB
+    ANA_PORTS --> SUPABASE_DB
+    GRAPH_RAG --> NEO4J_GRAPH
+    GRAPH_RAG --> VECTOR_STORE
+    ALERT_PERSIST --> SUPABASE_DB
+
+    %% ============================================================
+    %% SUBGRAFO: OBSERVABILIDAD
+    %% ============================================================
+    subgraph OBSERVABILITY ["📊 OBSERVABILIDAD"]
+        direction TB
+        TRACE_GEN["trace_id"]
+        JSON_LOGS["JSON Logs"]
+        METRICS["Metrics"]
+        AI_DASHBOARD["AI Dashboard Interno"]
+        BUDGET_CHECK{"Budget >$30/día?"}
+        
+        TRACE_GEN --> JSON_LOGS
+        JSON_LOGS --> METRICS
+        AI_DASHBOARD --> BUDGET_CHECK
+        BUDGET_CHECK -->|"yes"| BUDGET_ALERT["🚨 Alerta + Throttle"]
+    end
+    
+    API_GATEWAY --> TRACE_GEN
+    LLM_ANALYZE --> AI_DASHBOARD
+    LLM_QUALITATIVE --> AI_DASHBOARD
+
+    %% ============================================================
+    %% SUBGRAFO: AUDIT TRAIL
+    %% ============================================================
+    subgraph AUDIT_TRAIL ["📋 AUDITORÍA"]
+        direction TB
+        AUDIT_LOG["audit_logs<br/>{timestamp, user_id,<br/>tenant_id, action,<br/>entity, source}"]
+    end
+    
+    BTN_APPROVE --> AUDIT_LOG
+    BTN_REJECT --> AUDIT_LOG
+    BTN_IGNORE --> AUDIT_LOG
+    BTN_NOTE --> AUDIT_LOG
+    LLM_ANALYZE -->|"decision"| AUDIT_LOG
+    SCORE_GLOBAL -->|"change"| AUDIT_LOG
+
+    %% ============================================================
+    %% SUBGRAFO: SERVICIOS EXTERNOS
+    %% ============================================================
+    subgraph EXTERNAL_SERVICES ["🌐 EXTERNOS"]
+        direction TB
+        OPENAI_API["OpenAI"]
+        ANTHROPIC_API["Anthropic"]
+        SUPABASE_AUTH["Supabase Auth"]
+        SUPABASE_STORAGE["Supabase Storage"]
+        EMBEDDING_SVC["Embeddings"]
+    end
+    
+    JWT_VALIDATE --> SUPABASE_AUTH
+    UPLOAD_API --> SUPABASE_STORAGE
+    LLM_ANALYZE --> OPENAI_API
+    LLM_ANALYZE -.->|"fallback"| ANTHROPIC_API
+    DOC_EMBED --> EMBEDDING_SVC
+
+    %% ============================================================
+    %% SUBGRAFO: ASYNC
+    %% ============================================================
+    subgraph ASYNC_LAYER ["🔄 ASYNC"]
+        direction TB
+        JOB_QUEUE[("Cola Jobs")]
+        WORKER_POOL["Workers"]
+        EVENT_BUS["Event Bus"]
+        
+        JOB_QUEUE --> WORKER_POOL
+        
+        subgraph EVENTS ["Eventos"]
+            EVT_DOC_PROCESSED["doc.processed"]
+            EVT_ALERT_CREATED["alert.created"]
+            EVT_COHERENCE_UPDATED["coherence.updated"]
+        end
+        
+        EVENT_BUS --> EVENTS
+    end
+    
+    DOC_PROCESSING --> JOB_QUEUE
+    DOC_INDEX --> EVT_DOC_PROCESSED
+    SCORE_GLOBAL --> EVT_COHERENCE_UPDATED
+    ALERT_PERSIST --> EVT_ALERT_CREATED
+    EVT_ALERT_CREATED -->|"high/critical"| UI_NOTIFICATIONS
+
+    %% ============================================================
+    %% SUBGRAFO: SALIDA
+    %% ============================================================
+    subgraph OUTPUT ["✅ RESPUESTA"]
+        direction TB
+        RESPONSE_BUILD["Build Response"]
+        SUCCESS_MSG["✅ Éxito"]
+        ERROR_MSG["❌ Error"]
+    end
+    
+    AUTO_PROCESS --> RESPONSE_BUILD
+    BTN_APPROVE --> RESPONSE_BUILD
+    BTN_REJECT --> RESPONSE_BUILD
+    FALLBACK_RESPONSE --> ERROR_MSG
+    CONTINUE_FLOW --> RESPONSE_BUILD
+    RESPONSE_BUILD --> SUCCESS_MSG
+    RESPONSE_BUILD --> ERROR_MSG
+    
+    SUCCESS_MSG --> UI_DASHBOARD
+    ERROR_MSG --> UI_DASHBOARD
+
+    %% ============================================================
+    %% COMUNICACIÓN INTER-MÓDULO
+    %% ============================================================
+    DOC_PORTS <-.->|"DTO"| ANA_PORTS
+    DOC_PORTS <-.->|"DTO"| STK_PORTS
+    PRJ_PORTS <-.->|"DTO"| PROC_PORTS
+    ANA_PORTS <-.->|"DTO"| COH_PORTS
+    WBS_MANAGER <-.->|"DTO"| BOM_ANALYZER
+    RACI_GENERATOR <-.->|"DTO"| WBS_MANAGER
+
+    %% ============================================================
+    %% ESTILOS
+    %% ============================================================
+    class JWT_VALIDATE,TENANT_EXTRACT,TENANT_CONTEXT,PERMISSION_CHECK security
+    class DOC_PROCESSING,JOB_QUEUE,WORKER_POOL,EVENT_BUS,SYNC_SERVICE async
+    class CIRCUIT_BREAKER,RETRY_LOGIC,FALLBACK_RESPONSE,ERROR_LOG,ALERT_OPS,REJECT_401,REJECT_403 error
+    class SUCCESS_MSG,BTN_APPROVE,AUTO_PROCESS success
+    class LLM_ANALYZE,LLM_QUALITATIVE,GRAPH_RAG,OPENAI_API,ANTHROPIC_API,DOC_EXTRACT,DOC_EMBED llm
+    class REVIEW_PANEL,USER_ACTIONS,HUMAN_CHECKPOINT human
+    class SUPABASE_DB,NEO4J_GRAPH,VECTOR_STORE,REDIS_CACHE db
+    class AUDIT_LOG,BUDGET_CHECK,BUDGET_ALERT audit
+    class CAT_SCOPE,CAT_BUDGET,CAT_QUALITY,CAT_TECHNICAL,CAT_LEGAL,CAT_TIME category
+    class FOLDER_SYNC,SYNC_SERVICE,VERSION_CONTROL,SCORE_CALCULATION,COHERENCE_CATEGORIES,ONBOARDING newfeature
