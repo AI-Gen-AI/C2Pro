@@ -24,6 +24,9 @@ RESET := \033[0m
 # ===========================================
 help: ## Mostrar esta ayuda
 	@echo ""
+	openapi: ## Generar OpenAPI YAML desde runtime
+	@echo "$(CYAN)📜 Generando OpenAPI...$(RESET)"
+	@python apps/api/scripts/generate_openapi.py
 	@echo "$(CYAN)C2PRO - Comandos disponibles$(RESET)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'

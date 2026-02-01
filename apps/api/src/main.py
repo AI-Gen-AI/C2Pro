@@ -134,8 +134,8 @@ def create_application() -> FastAPI:
         - 📖 Docs: https://docs.c2pro.app
         - 💬 Discord: https://discord.gg/c2pro
         """,
-        docs_url="/docs" if settings.is_development else None,
-        redoc_url="/redoc" if settings.is_development else None,
+        docs_url="/docs",
+        redoc_url="/redoc",
         openapi_url=f"{settings.api_v1_prefix}/openapi.json",
         lifespan=lifespan,
         debug=settings.debug,
