@@ -1,0 +1,4694 @@
+openapi: 3.1.0
+info:
+  title: C2Pro API
+  description: "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma\
+    \ de inteligencia contractual para proyectos de construcci\xF3n e ingenier\xED\
+    a.\n\n        ## Caracter\xEDsticas\n\n        - \U0001F50D **Auditor\xEDa Tridimensional**:\
+    \ Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \U0001F916\
+    \ **IA Especializada**: Claude 4 entrenado en documentos de construcci\xF3n\n\
+    \        - \U0001F4CA **Coherence Score**: Indicador 0-100 de alineaci\xF3n entre\
+    \ documentos\n        - \U0001F465 **Stakeholder Intelligence**: Extracci\xF3\
+    n y mapeo autom\xE1tico de stakeholders\n        - \U0001F4C8 **Multi-tenant**:\
+    \ Aislamiento completo de datos por organizaci\xF3n\n\n        ## Autenticaci\xF3\
+    n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
+    \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
+    \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
+    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
+    \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
+    \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
+    \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
+    \        - \U0001F4AC Discord: https://discord.gg/c2pro\n        "
+  version: 1.0.0
+paths:
+  /:
+    get:
+      tags:
+      - Root
+      summary: Root
+      description: 'Root endpoint.
+
+
+        Redirects to API documentation.'
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/live:
+    get:
+      tags:
+      - Health
+      summary: Liveness Probe
+      description: Checks if the application process is running. This should not have
+        external dependencies.
+      operationId: liveness_check_health_live_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/ready:
+    get:
+      tags:
+      - Health
+      summary: Readiness Probe
+      description: Checks if the application is ready to accept traffic by verifying
+        connections to dependencies.
+      operationId: readiness_check_health_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/:
+    get:
+      tags:
+      - Health
+      summary: Generic Health Check
+      description: Alias for the readiness probe. Useful for simple uptime monitors.
+      operationId: generic_health_check_health__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register new user and company
+      description: "Registers a new user and creates a new company (tenant).\n\n \
+        \   The first user registered for a company becomes the admin.\n    Returns\
+        \ user info, company info, and authentication tokens.\n\n    **Requirements:**\n\
+        \    - Email must be unique\n    - Password must be at least 8 characters\
+        \ with uppercase, lowercase, and digit\n    - Must accept terms and conditions"
+      operationId: register_api_v1_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '401':
+          description: Unauthorized - Invalid or missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '409':
+          description: Email already exists
+        '422':
+          description: Validation error
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Login with email and password
+      description: "Authenticates a user with email and password.\n\n    Returns user\
+        \ info, company info, and JWT tokens.\n\n    **Tokens:**\n    - `access_token`:\
+        \ Use for API requests (expires in 24h)\n    - `refresh_token`: Use to get\
+        \ new access token (expires in 30 days)"
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '422':
+          description: Validation error
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Refresh access token
+      description: "Refreshes the access token using a valid refresh token.\n\n  \
+        \  Use this endpoint when your access token expires to get a new one\n   \
+        \ without requiring the user to log in again."
+      operationId: refresh_token_api_v1_auth_refresh_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid or expired refresh token
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get current user info
+      description: "Returns information about the currently authenticated user.\n\n\
+        \    Requires valid JWT access token in Authorization header:\n    ```\n \
+        \   Authorization: Bearer <access_token>\n    ```"
+      operationId: get_me_api_v1_auth_me_get
+      responses:
+        '200':
+          description: User info retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: Not authenticated or invalid token
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+    put:
+      tags:
+      - Authentication
+      summary: Update current user profile
+      description: "Updates the profile of the currently authenticated user.\n\n \
+        \   Only the user can update their own profile."
+      operationId: update_me_api_v1_auth_me_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized - Invalid or missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Logout current user
+      description: "Logs out the current user.\n\n    Note: With JWT tokens, actual\
+        \ logout is handled client-side by\n    removing the tokens. This endpoint\
+        \ is for logging purposes."
+      operationId: logout_api_v1_auth_logout_post
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Unauthorized - Invalid or missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+  /api/v1/auth/change-password:
+    post:
+      tags:
+      - Authentication
+      summary: Change password
+      description: "Changes the password for the currently authenticated user.\n\n\
+        \    Requires:\n    - Current password (for verification)\n    - New password\
+        \ (must meet security requirements)"
+      operationId: change_password_api_v1_auth_change_password_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Unauthorized - Invalid or missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects:
+    get:
+      tags:
+      - Projects
+      summary: List projects
+      description: 'List projects with pagination and optional filters.
+
+
+        **Filters:**
+
+        - `search`: Search in project name, code, or description (case-insensitive)
+
+        - `status`: Filter by project status (draft, active, completed, archived)
+
+        - `project_type`: Filter by project type (construction, engineering, etc.)
+
+
+        **Pagination:**
+
+        - `page`: Page number (starts at 1)
+
+        - `page_size`: Items per page (max 100)'
+      operationId: list_projects_api_v1_projects_get
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          description: Page number (1-indexed)
+          default: 1
+          title: Page
+        description: Page number (1-indexed)
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Items per page
+          default: 20
+          title: Page Size
+        description: Items per page
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Search in name, code, or description
+          title: Search
+        description: Search in name, code, or description
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/ProjectStatus'
+          - type: 'null'
+          description: Filter by status
+          title: Status
+        description: Filter by status
+      - name: project_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/ProjectType'
+          - type: 'null'
+          description: Filter by project type
+          title: Project Type
+        description: Filter by project type
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Projects
+      summary: Create project
+      description: 'Create a new project.
+
+
+        **Required fields:**
+
+        - `name`: Project name (1-255 characters)
+
+
+        **Optional fields:**
+
+        - `description`: Detailed description
+
+        - `code`: Unique project code
+
+        - `project_type`: Type of project (default: construction)
+
+        - `estimated_budget`: Budget estimate
+
+        - `currency`: Currency code (default: EUR)
+
+        - `start_date`: Project start date
+
+        - `end_date`: Project end date'
+      operationId: create_project_api_v1_projects_post
+      parameters:
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}:
+    get:
+      tags:
+      - Projects
+      summary: Get project
+      description: 'Get a project by ID.
+
+
+        **Tenant isolation:**
+
+        Only returns projects belonging to the authenticated tenant.'
+      operationId: get_project_api_v1_projects__project_id__get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Projects
+      summary: Update project
+      description: 'Update a project.
+
+
+        **Partial updates:**
+
+        Only provided fields will be updated. Omitted fields remain unchanged.
+
+
+        **Updatable fields:**
+
+        - `name`: Project name
+
+        - `description`: Description
+
+        - `code`: Project code (must be unique)
+
+        - `project_type`: Project type
+
+        - `status`: Project status
+
+        - `estimated_budget`: Budget estimate
+
+        - `currency`: Currency code
+
+        - `start_date`: Start date
+
+        - `end_date`: End date'
+      operationId: update_project_api_v1_projects__project_id__put
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Projects
+      summary: Delete project
+      description: 'Delete a project by ID.
+
+
+        **Note:**
+
+        This permanently deletes the project and all associated data.
+
+        Consider implementing soft deletion for production use.'
+      operationId: delete_project_api_v1_projects__project_id__delete
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mcp/query-view:
+    post:
+      tags:
+      - MCP - Model Context Protocol
+      summary: Query Vista Permitida
+      description: "Ejecuta una query sobre una vista permitida.\n\n    **Seguridad:**\n\
+        \    - Solo vistas en allowlist\n    - Rate limiting por tenant\n    - Query\
+        \ limits (timeout, row count)\n    - Auditor\xEDa completa\n\n    **Vistas\
+        \ permitidas:**\n    - v_project_summary\n    - v_project_alerts\n    - v_project_clauses\n\
+        \    - v_project_stakeholders\n    - v_project_wbs\n    - v_project_bom\n\
+        \    - v_coherence_breakdown\n    - v_raci_matrix"
+      operationId: query_view_api_v1_mcp_query_view_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewQueryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mcp/call-function:
+    post:
+      tags:
+      - MCP - Model Context Protocol
+      summary: "Llamar Funci\xF3n Permitida"
+      description: "Ejecuta una funci\xF3n permitida.\n\n    **Seguridad:**\n    -\
+        \ Solo funciones en allowlist\n    - Validaci\xF3n de par\xE1metros\n    -\
+        \ Rate limiting\n    - Auditor\xEDa\n\n    **Funciones permitidas:**\n   \
+        \ - fn_get_clause_by_id\n    - fn_get_stakeholder_by_id\n    - fn_get_neighbors\
+        \ (Knowledge Graph)\n    - fn_find_path (Knowledge Graph)\n    - fn_get_subgraph\
+        \ (Knowledge Graph)"
+      operationId: call_function_api_v1_mcp_call_function_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FunctionCallRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mcp/views:
+    get:
+      tags:
+      - MCP - Model Context Protocol
+      summary: Listar Vistas Permitidas
+      description: Retorna la lista de vistas permitidas en el MCP Server.
+      operationId: list_allowed_views_api_v1_mcp_views_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                type: object
+                title: Response List Allowed Views Api V1 Mcp Views Get
+  /api/v1/mcp/functions:
+    get:
+      tags:
+      - MCP - Model Context Protocol
+      summary: Listar Funciones Permitidas
+      description: Retorna la lista de funciones permitidas en el MCP Server.
+      operationId: list_allowed_functions_api_v1_mcp_functions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                type: object
+                title: Response List Allowed Functions Api V1 Mcp Functions Get
+  /api/v1/mcp/rate-limit-status:
+    get:
+      tags:
+      - MCP - Model Context Protocol
+      summary: Estado de Rate Limit
+      description: Retorna el estado actual del rate limit para el tenant actual.
+      operationId: get_rate_limit_status_api_v1_mcp_rate_limit_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Rate Limit Status Api V1 Mcp Rate Limit Status
+                  Get
+  /api/v1/status:
+    get:
+      summary: Get system health status
+      description: Retrieves the overall health status of the API and its dependencies,
+        such as the database.
+      operationId: get_system_status_api_v1_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatusResponse'
+  /api/v1/analyses:
+    get:
+      summary: Get recent coherence analyses
+      description: Retrieves a list of recent coherence analysis runs with their status
+        and key metrics.
+      operationId: get_recent_analyses_api_v1_analyses_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecentAnalysesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/documents:
+    post:
+      tags:
+      - Documents
+      summary: Upload a document for asynchronous processing
+      operationId: upload_document_for_processing_api_v1_projects__project_id__documents_post
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_document_for_processing_api_v1_projects__project_id__documents_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentQueuedResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Documents
+      summary: List documents for a project
+      operationId: list_documents_for_project_api_v1_projects__project_id__documents_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}:
+    get:
+      tags:
+      - Documents
+      summary: Get document details by ID
+      operationId: get_document_endpoint_api_v1_documents__document_id__get
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetailResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Documents
+      summary: Delete a document by ID
+      operationId: delete_document_endpoint_api_v1_documents__document_id__delete
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}/download:
+    get:
+      tags:
+      - Documents
+      summary: Download document file by ID
+      operationId: download_document_endpoint_api_v1_documents__document_id__download_get
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/{document_id}/parse:
+    post:
+      tags:
+      - Documents
+      summary: Parse a document by ID
+      operationId: parse_document_endpoint_api_v1__document_id__parse_post
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentUploadResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/rag/answer:
+    post:
+      tags:
+      - Documents
+      summary: Ask a question about project documents (RAG)
+      operationId: answer_project_question_api_v1_projects__project_id__rag_answer_post
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RagQuestionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RagAnswerResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analyze:
+    post:
+      tags:
+      - analysis
+      summary: Analyze Document
+      operationId: analyze_document_api_v1_analyze_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/projects/{project_id}:
+    get:
+      tags:
+      - Alerts
+      summary: List alerts for project
+      description: List alerts for a specific project with filtering and pagination.
+      operationId: list_alerts_for_project_api_v1_alerts_projects__project_id__get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: severities
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/AlertSeverity'
+          - type: 'null'
+          title: Severities
+      - name: statuses
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/AlertStatus'
+          - type: 'null'
+          default:
+          - open
+          title: Statuses
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AlertRead_'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/projects/{project_id}/stats:
+    get:
+      tags:
+      - Alerts
+      summary: Get alert statistics
+      description: Get statistics about alerts for a specific project.
+      operationId: get_alerts_stats_api_v1_alerts_projects__project_id__stats_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertsStats'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}:
+    get:
+      tags:
+      - Alerts
+      summary: Get alert by ID
+      description: Get a single alert by its ID.
+      operationId: get_alert_api_v1_alerts__alert_id__get
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRead'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Alerts
+      summary: Update alert
+      description: Update an alert's status and add resolution notes.
+      operationId: update_alert_api_v1_alerts__alert_id__patch
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRead'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Alerts
+      summary: Delete alert
+      description: Delete an alert (admin only).
+      operationId: delete_alert_api_v1_alerts__alert_id__delete
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '204':
+          description: Successful Response
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/approvals/{resource_type}/{resource_id}:
+    patch:
+      tags:
+      - Approvals
+      summary: Approve, reject, or correct AI-generated resources
+      operationId: review_resource_api_v1_approvals__resource_type___resource_id__patch
+      parameters:
+      - name: resource_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Resource Type
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Resource Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalReview'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResponse'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/stakeholders/projects/{project_id}:
+    get:
+      tags:
+      - Stakeholders
+      summary: List stakeholders for a project
+      operationId: list_project_stakeholders_api_v1_stakeholders_projects__project_id__get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StakeholderResponseOut'
+                title: Response List Project Stakeholders Api V1 Stakeholders Projects  Project
+                  Id  Get
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Stakeholders
+      summary: Create stakeholder manually
+      operationId: create_project_stakeholder_api_v1_stakeholders_projects__project_id__post
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StakeholderCreateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderResponseOut'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/stakeholders/{stakeholder_id}:
+    patch:
+      tags:
+      - Stakeholders
+      summary: Update stakeholder
+      operationId: update_stakeholder_api_v1_stakeholders__stakeholder_id__patch
+      parameters:
+      - name: stakeholder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StakeholderUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderResponseOut'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Stakeholders
+      summary: Delete stakeholder
+      operationId: delete_stakeholder_api_v1_stakeholders__stakeholder_id__delete
+      parameters:
+      - name: stakeholder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+      responses:
+        '204':
+          description: Successful Response
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/raci:
+    get:
+      tags:
+      - RACI
+      summary: Get RACI matrix view
+      operationId: get_project_raci_matrix_api_v1_projects__project_id__raci_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaciMatrixViewResponse'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assignments:
+    put:
+      tags:
+      - RACI
+      summary: Create or update a single RACI assignment
+      operationId: upsert_raci_assignment_api_v1_assignments_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RaciAssignmentUpsertRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaciAssignmentUpsertResponse'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/wbs:
+    post:
+      tags:
+      - procurement
+      summary: Create Wbs Item
+      description: Create a new WBS item.
+      operationId: create_wbs_item_api_v1_procurement_wbs_post
+      parameters:
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WBSItemCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/wbs/project/{project_id}:
+    get:
+      tags:
+      - procurement
+      summary: List Wbs Items
+      description: List all WBS items for a project.
+      operationId: list_wbs_items_api_v1_procurement_wbs_project__project_id__get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WBSItemResponse'
+                title: Response List Wbs Items Api V1 Procurement Wbs Project  Project
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/wbs/project/{project_id}/tree:
+    get:
+      tags:
+      - procurement
+      summary: Get Wbs Tree
+      description: Get the complete WBS tree for a project with hierarchy.
+      operationId: get_wbs_tree_api_v1_procurement_wbs_project__project_id__tree_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WBSItemResponse'
+                title: Response Get Wbs Tree Api V1 Procurement Wbs Project  Project
+                  Id  Tree Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/wbs/{wbs_id}:
+    get:
+      tags:
+      - procurement
+      summary: Get Wbs Item
+      description: Get a specific WBS item by ID.
+      operationId: get_wbs_item_api_v1_procurement_wbs__wbs_id__get
+      parameters:
+      - name: wbs_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Wbs Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - procurement
+      summary: Update Wbs Item
+      description: Update a WBS item.
+      operationId: update_wbs_item_api_v1_procurement_wbs__wbs_id__put
+      parameters:
+      - name: wbs_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Wbs Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WBSItemUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - procurement
+      summary: Delete Wbs Item
+      description: Delete a WBS item and its children (cascade).
+      operationId: delete_wbs_item_api_v1_procurement_wbs__wbs_id__delete
+      parameters:
+      - name: wbs_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Wbs Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/bom:
+    post:
+      tags:
+      - procurement
+      summary: Create Bom Item
+      description: Create a new BOM item.
+      operationId: create_bom_item_api_v1_procurement_bom_post
+      parameters:
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BOMItemCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/bom/project/{project_id}:
+    get:
+      tags:
+      - procurement
+      summary: List Bom Items
+      description: List all BOM items for a project.
+      operationId: list_bom_items_api_v1_procurement_bom_project__project_id__get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BOMItemResponse'
+                title: Response List Bom Items Api V1 Procurement Bom Project  Project
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/bom/{bom_id}:
+    get:
+      tags:
+      - procurement
+      summary: Get Bom Item
+      description: Get a specific BOM item by ID.
+      operationId: get_bom_item_api_v1_procurement_bom__bom_id__get
+      parameters:
+      - name: bom_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Bom Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - procurement
+      summary: Update Bom Item
+      description: Update a BOM item.
+      operationId: update_bom_item_api_v1_procurement_bom__bom_id__put
+      parameters:
+      - name: bom_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Bom Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BOMItemUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - procurement
+      summary: Delete Bom Item
+      description: Delete a BOM item.
+      operationId: delete_bom_item_api_v1_procurement_bom__bom_id__delete
+      parameters:
+      - name: bom_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Bom Id
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/procurement/bom/{bom_id}/status:
+    patch:
+      tags:
+      - procurement
+      summary: Update Bom Status
+      description: Update the procurement status of a BOM item.
+      operationId: update_bom_status_api_v1_procurement_bom__bom_id__status_patch
+      parameters:
+      - name: bom_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Bom Id
+      - name: status
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ProcurementStatus'
+      - name: args
+        in: query
+        required: true
+        schema:
+          title: Args
+      - name: kwargs
+        in: query
+        required: true
+        schema:
+          title: Kwargs
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v0/coherence/evaluate:
+    post:
+      tags:
+      - Coherence Engine
+      summary: Evaluate Project Coherence
+      description: "Accepts a project's context and evaluates it against a predefined\
+        \ set of coherence rules.\n    Returns a list of alerts and a calculated coherence\
+        \ score."
+      operationId: evaluate_project_coherence_v0_coherence_evaluate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectContext'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoherenceResult'
+        '404':
+          description: Not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    Alert:
+      properties:
+        rule_id:
+          type: string
+          title: Rule Id
+          description: The ID of the rule that triggered this alert.
+        severity:
+          type: string
+          title: Severity
+          description: The severity of the triggered alert (e.g., critical, high,
+            medium, low).
+        category:
+          type: string
+          enum:
+          - legal
+          - financial
+          - technical
+          - schedule
+          - scope
+          - quality
+          title: Category
+          description: The category of the alert (legal, financial, technical, schedule,
+            scope).
+        message:
+          type: string
+          title: Message
+          description: A descriptive message for the alert.
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+          description: Structured evidence supporting the alert.
+      type: object
+      required:
+      - rule_id
+      - severity
+      - category
+      - message
+      - evidence
+      title: Alert
+      description: Represents an alert generated by a rule.
+    AlertRead:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        analysis_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Analysis Id
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        rule_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Id
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+        related_clause_ids:
+          anyOf:
+          - items:
+              type: string
+              format: uuid
+            type: array
+          - type: 'null'
+          title: Related Clause Ids
+        affected_entities:
+          additionalProperties: true
+          type: object
+          title: Affected Entities
+        impact_level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Impact Level
+        alert_metadata:
+          additionalProperties: true
+          type: object
+          title: Alert Metadata
+        status:
+          $ref: '#/components/schemas/AlertStatus'
+        approval_status:
+          type: string
+          title: Approval Status
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        resolved_by:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Resolved By
+        resolution_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution Notes
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - severity
+      - title
+      - description
+      - affected_entities
+      - alert_metadata
+      - status
+      - approval_status
+      - created_at
+      - updated_at
+      title: AlertRead
+      description: Alert read schema.
+    AlertSeverity:
+      type: string
+      enum:
+      - critical
+      - high
+      - medium
+      - low
+      title: AlertSeverity
+    AlertStatus:
+      type: string
+      enum:
+      - open
+      - acknowledged
+      - resolved
+      - dismissed
+      title: AlertStatus
+    AlertUpdate:
+      properties:
+        status:
+          $ref: '#/components/schemas/AlertStatus'
+        resolution_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution Notes
+          description: Notes when resolving or dismissing an alert.
+      type: object
+      required:
+      - status
+      title: AlertUpdate
+      description: Alert update schema.
+    AlertsStats:
+      properties:
+        total:
+          type: integer
+          title: Total
+        open:
+          type: integer
+          title: Open
+        resolved:
+          type: integer
+          title: Resolved
+        dismissed:
+          type: integer
+          title: Dismissed
+        critical:
+          type: integer
+          title: Critical
+        high:
+          type: integer
+          title: High
+        medium:
+          type: integer
+          title: Medium
+        low:
+          type: integer
+          title: Low
+      type: object
+      required:
+      - total
+      - open
+      - resolved
+      - dismissed
+      - critical
+      - high
+      - medium
+      - low
+      title: AlertsStats
+      description: Statistics about alerts for a project.
+    AnalysisStatus:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+          description: Unique identifier of the analysis
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+          description: Project ID associated with the analysis
+        status:
+          type: string
+          title: Status
+          description: Current status of the analysis (e.g., COMPLETED, ERROR)
+        coherence_score:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Coherence Score
+          description: Coherence score if analysis completed
+        alerts_count:
+          type: integer
+          title: Alerts Count
+          description: Number of alerts generated by the analysis
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+          description: Timestamp when the analysis started
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+          description: Timestamp when the analysis completed
+      type: object
+      required:
+      - id
+      - project_id
+      - status
+      - alerts_count
+      - started_at
+      title: AnalysisStatus
+    AnalyzeRequest:
+      properties:
+        document_text:
+          type: string
+          minLength: 1
+          title: Document Text
+        project_id:
+          type: string
+          minLength: 1
+          title: Project Id
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+      type: object
+      required:
+      - document_text
+      - project_id
+      title: AnalyzeRequest
+    AnalyzeResponse:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        analysis_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Analysis Id
+        risks:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Risks
+        wbs:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Wbs
+        human_approval_required:
+          type: boolean
+          title: Human Approval Required
+        doc_type:
+          type: string
+          title: Doc Type
+        confidence_score:
+          type: number
+          title: Confidence Score
+        critique_notes:
+          type: string
+          title: Critique Notes
+        retry_count:
+          type: integer
+          title: Retry Count
+        messages:
+          items:
+            type: string
+          type: array
+          title: Messages
+      type: object
+      required:
+      - project_id
+      - analysis_id
+      - risks
+      - wbs
+      - human_approval_required
+      - doc_type
+      - confidence_score
+      - critique_notes
+      - retry_count
+      - messages
+      title: AnalyzeResponse
+    ApprovalResponse:
+      properties:
+        resource_type:
+          type: string
+          title: Resource Type
+        resource_id:
+          type: string
+          format: uuid
+          title: Resource Id
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+      type: object
+      required:
+      - resource_type
+      - resource_id
+      - status
+      title: ApprovalResponse
+    ApprovalReview:
+      properties:
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        correction_data:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Correction Data
+        feedback_comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Feedback Comment
+      type: object
+      required:
+      - status
+      title: ApprovalReview
+    ApprovalStatus:
+      type: string
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - CORRECTED
+      title: ApprovalStatus
+    AuthErrorResponse:
+      properties:
+        detail:
+          type: string
+          title: Detail
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+      type: object
+      required:
+      - detail
+      title: AuthErrorResponse
+      description: "Response de error de autenticaci\xF3n."
+      example:
+        detail: Invalid credentials
+        error_code: INVALID_CREDENTIALS
+    BOMCategory:
+      type: string
+      enum:
+      - material
+      - equipment
+      - service
+      - consumable
+      title: BOMCategory
+      description: Categories of BOM items.
+    BOMItemCreate:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+          description: ID of the project this BOM item belongs to
+        wbs_item_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Item Id
+          description: Associated WBS item ID
+        item_code:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Item Code
+          description: SKU or item code
+        item_name:
+          type: string
+          maxLength: 255
+          title: Item Name
+          description: Name of the material or service
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Detailed description
+        category:
+          anyOf:
+          - $ref: '#/components/schemas/BOMCategory'
+          - type: 'null'
+          description: Category of the BOM item
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Quantity
+          description: Required quantity
+        unit:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Unit
+          description: Unit of measure (e.g., 'kg', 'm2', 'units')
+        unit_price:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Unit Price
+          description: Price per unit
+        total_price:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Total Price
+          description: Total price (quantity * unit_price)
+        currency:
+          type: string
+          maxLength: 3
+          title: Currency
+          description: Currency code (e.g., 'EUR', 'USD')
+          default: EUR
+        supplier:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Supplier
+          description: Supplier name
+        lead_time_days:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Lead Time Days
+          description: Procurement lead time in days
+        incoterm:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Incoterm
+          description: Incoterm for delivery (e.g., 'FOB', 'CIF')
+        procurement_status:
+          $ref: '#/components/schemas/ProcurementStatus'
+          description: Current procurement status
+          default: pending
+        bom_metadata:
+          additionalProperties: true
+          type: object
+          title: Bom Metadata
+          description: Custom metadata
+        contract_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Contract Clause Id
+          description: FK to the clause defining this BOM item
+      type: object
+      required:
+      - project_id
+      - item_name
+      - quantity
+      title: BOMItemCreate
+      description: Schema for creating a new BOM item, including the contractual clause.
+    BOMItemResponse:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+          description: ID of the project this BOM item belongs to
+        wbs_item_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Item Id
+          description: Associated WBS item ID
+        item_code:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Item Code
+          description: SKU or item code
+        item_name:
+          type: string
+          maxLength: 255
+          title: Item Name
+          description: Name of the material or service
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Detailed description
+        category:
+          anyOf:
+          - $ref: '#/components/schemas/BOMCategory'
+          - type: 'null'
+          description: Category of the BOM item
+        quantity:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Quantity
+          description: Required quantity
+        unit:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Unit
+          description: Unit of measure (e.g., 'kg', 'm2', 'units')
+        unit_price:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Unit Price
+          description: Price per unit
+        total_price:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Total Price
+          description: Total price (quantity * unit_price)
+        currency:
+          type: string
+          maxLength: 3
+          title: Currency
+          description: Currency code (e.g., 'EUR', 'USD')
+          default: EUR
+        supplier:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Supplier
+          description: Supplier name
+        lead_time_days:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Lead Time Days
+          description: Procurement lead time in days
+        incoterm:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Incoterm
+          description: Incoterm for delivery (e.g., 'FOB', 'CIF')
+        procurement_status:
+          $ref: '#/components/schemas/ProcurementStatus'
+          description: Current procurement status
+          default: pending
+        bom_metadata:
+          additionalProperties: true
+          type: object
+          title: Bom Metadata
+          description: Custom metadata
+        id:
+          type: string
+          format: uuid
+          title: Id
+          description: Unique ID of the BOM item
+        contract_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Contract Clause Id
+          description: FK to the contract clause (legal traceability)
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+          description: Timestamp of creation
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+          description: Timestamp of last update
+      type: object
+      required:
+      - project_id
+      - item_name
+      - quantity
+      - id
+      - created_at
+      - updated_at
+      title: BOMItemResponse
+      description: Response schema for a BOM item, including IDs and timestamps.
+    BOMItemUpdate:
+      properties:
+        item_name:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Item Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Quantity
+        unit:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Unit
+        unit_price:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Unit Price
+        total_price:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Total Price
+        supplier:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Supplier
+        lead_time_days:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Lead Time Days
+        procurement_status:
+          anyOf:
+          - $ref: '#/components/schemas/ProcurementStatus'
+          - type: 'null'
+        bom_metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Bom Metadata
+      additionalProperties: false
+      type: object
+      title: BOMItemUpdate
+      description: Schema for updating a BOM item. All fields are optional.
+    Body_upload_document_for_processing_api_v1_projects__project_id__documents_post:
+      properties:
+        document_type:
+          $ref: '#/components/schemas/DocumentType'
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+      - document_type
+      - file
+      title: Body_upload_document_for_processing_api_v1_projects__project_id__documents_post
+    CategoryBreakdown:
+      properties:
+        category:
+          type: string
+          enum:
+          - legal
+          - financial
+          - technical
+          - schedule
+          - scope
+          - quality
+          title: Category
+          description: The alert category.
+        score:
+          type: number
+          title: Score
+          description: The coherence score for this category (0-100).
+        alert_count:
+          type: integer
+          title: Alert Count
+          description: Total number of alerts in this category.
+        severity_breakdown:
+          $ref: '#/components/schemas/SeverityCount'
+          description: Breakdown of alerts by severity within this category.
+        impact_percentage:
+          type: number
+          title: Impact Percentage
+          description: Percentage of impact this category has on the overall score.
+      type: object
+      required:
+      - category
+      - score
+      - alert_count
+      - severity_breakdown
+      - impact_percentage
+      title: CategoryBreakdown
+      description: Represents the coherence score breakdown for a specific category.
+    Clause:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for the clause.
+        text:
+          type: string
+          title: Text
+          description: The textual content of the clause.
+        data:
+          additionalProperties: true
+          type: object
+          title: Data
+          description: Structured data extracted from or associated with the clause
+            (e.g., budget figures, dates, status).
+      type: object
+      required:
+      - id
+      - text
+      title: Clause
+      description: Represents a specific clause or segment of a document.
+    CoherenceResult:
+      properties:
+        overall_score:
+          type: number
+          title: Overall Score
+          description: The overall calculated coherence score for the project.
+        alerts:
+          items:
+            $ref: '#/components/schemas/Alert'
+          type: array
+          title: Alerts
+          description: List of alerts generated during the evaluation.
+        category_breakdown:
+          items:
+            $ref: '#/components/schemas/CategoryBreakdown'
+          type: array
+          title: Category Breakdown
+          description: Breakdown of the score by alert category.
+        calculated_at:
+          type: string
+          format: date-time
+          title: Calculated At
+          description: Timestamp when the score was calculated.
+      type: object
+      required:
+      - overall_score
+      - alerts
+      title: CoherenceResult
+      description: Represents the complete result of a coherence evaluation, including
+        alerts and the final score.
+    DocumentDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        document_type:
+          $ref: '#/components/schemas/DocumentType'
+        filename:
+          type: string
+          title: Filename
+        upload_status:
+          $ref: '#/components/schemas/DocumentStatus'
+        file_format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Format
+        storage_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Storage Url
+        storage_encrypted:
+          type: boolean
+          title: Storage Encrypted
+          default: true
+        file_size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: File Size Bytes
+        parsed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Parsed At
+        parsing_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parsing Error
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+        clauses:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Clauses
+      type: object
+      required:
+      - id
+      - project_id
+      - document_type
+      - filename
+      - upload_status
+      title: DocumentDetailResponse
+      description: Detailed document response.
+    DocumentListItem:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        status:
+          $ref: '#/components/schemas/DocumentPollingStatus'
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        uploaded_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Uploaded At
+        file_size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: File Size Bytes
+      type: object
+      required:
+      - id
+      - filename
+      - status
+      title: DocumentListItem
+      description: List item for documents.
+    DocumentListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DocumentListItem'
+          type: array
+          title: Items
+        total_count:
+          type: integer
+          title: Total Count
+        skip:
+          type: integer
+          title: Skip
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total_count
+      - skip
+      - limit
+      title: DocumentListResponse
+      description: Paginated list response for documents.
+    DocumentPollingStatus:
+      type: string
+      enum:
+      - queued
+      - processing
+      - parsed
+      - error
+      title: DocumentPollingStatus
+      description: Polling status exposed to clients.
+    DocumentQueuedResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        document_type:
+          $ref: '#/components/schemas/DocumentType'
+        filename:
+          type: string
+          title: Filename
+        upload_status:
+          $ref: '#/components/schemas/DocumentStatus'
+        file_format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Format
+        storage_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Storage Url
+        storage_encrypted:
+          type: boolean
+          title: Storage Encrypted
+          default: true
+        file_size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: File Size Bytes
+        parsed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Parsed At
+        parsing_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parsing Error
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      type: object
+      required:
+      - id
+      - project_id
+      - document_type
+      - filename
+      - upload_status
+      title: DocumentQueuedResponse
+      description: Response for async document upload.
+    DocumentStatus:
+      type: string
+      enum:
+      - uploaded
+      - queued
+      - parsing
+      - parsed
+      - error
+      title: DocumentStatus
+      description: Represents the status of a document during its lifecycle.
+    DocumentType:
+      type: string
+      enum:
+      - contract
+      - schedule
+      - budget
+      - drawing
+      - specification
+      - other
+      title: DocumentType
+      description: Supported document types.
+    DocumentUploadResponse:
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - document_id
+      - status
+      - message
+      title: DocumentUploadResponse
+      description: Response for parse endpoints.
+    Evidence:
+      properties:
+        source_clause_id:
+          type: string
+          title: Source Clause Id
+          description: The ID of the clause that serves as direct evidence.
+        claim:
+          type: string
+          title: Claim
+          description: A concise claim or summary derived from the evidence.
+        quote:
+          type: string
+          title: Quote
+          description: The direct quote from the clause text that serves as evidence.
+      type: object
+      required:
+      - source_clause_id
+      - claim
+      - quote
+      title: Evidence
+      description: Represents the specific evidence supporting an alert.
+    FunctionCallRequest:
+      properties:
+        function_name:
+          type: string
+          title: Function Name
+        params:
+          additionalProperties: true
+          type: object
+          title: Params
+      type: object
+      required:
+      - function_name
+      - params
+      title: FunctionCallRequest
+      description: "Request para llamada a funci\xF3n."
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    InterestLevel:
+      type: string
+      enum:
+      - low
+      - medium
+      - high
+      title: InterestLevel
+      description: Level of interest of the stakeholder.
+    LoginRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          minLength: 1
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginRequest
+      description: Request para login.
+      example:
+        email: usuario@ejemplo.com
+        password: Password123!
+    LoginResponse:
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        tenant:
+          $ref: '#/components/schemas/TenantResponse'
+        tokens:
+          $ref: '#/components/schemas/TokenResponse'
+      type: object
+      required:
+      - user
+      - tenant
+      - tokens
+      title: LoginResponse
+      description: Response completo de login.
+      example:
+        tenant:
+          id: 550e8400-e29b-41d4-a716-446655440001
+          name: Constructora Ejemplo S.L.
+          subscription_plan: free
+        tokens:
+          access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+          expires_in: 86400
+          token_type: bearer
+        user:
+          email: usuario@ejemplo.com
+          first_name: Juan
+          id: 550e8400-e29b-41d4-a716-446655440000
+          last_name: "P\xE9rez"
+          role: admin
+    MeResponse:
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        tenant:
+          $ref: '#/components/schemas/TenantResponse'
+      type: object
+      required:
+      - user
+      - tenant
+      title: MeResponse
+      description: Response para endpoint /me.
+    Page_AlertRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AlertRead'
+          type: array
+          title: Items
+          description: The list of items on the current page.
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: The cursor to use to get the next page of results.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether there are more pages of results.
+      type: object
+      required:
+      - items
+      - has_more
+      title: Page[AlertRead]
+    PasswordChangeRequest:
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          title: Current Password
+        new_password:
+          type: string
+          maxLength: 100
+          minLength: 8
+          title: New Password
+        new_password_confirm:
+          type: string
+          maxLength: 100
+          minLength: 8
+          title: New Password Confirm
+      type: object
+      required:
+      - current_password
+      - new_password
+      - new_password_confirm
+      title: PasswordChangeRequest
+      description: "Request para cambio de contrase\xF1a."
+    PowerLevel:
+      type: string
+      enum:
+      - low
+      - medium
+      - high
+      title: PowerLevel
+      description: Level of power of the stakeholder.
+    ProcurementStatus:
+      type: string
+      enum:
+      - pending
+      - requested
+      - ordered
+      - in_transit
+      - delivered
+      - cancelled
+      title: ProcurementStatus
+      description: Procurement statuses.
+    ProjectContext:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for the project.
+        clauses:
+          items:
+            $ref: '#/components/schemas/Clause'
+          type: array
+          title: Clauses
+          description: List of structured clauses from documents relevant to the project.
+      type: object
+      required:
+      - id
+      title: ProjectContext
+      description: Represents the full context of a project to be evaluated, now with
+        structured clauses.
+    ProjectCreateRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Name
+        description:
+          anyOf:
+          - type: string
+            maxLength: 5000
+          - type: 'null'
+          title: Description
+        code:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Code
+          description: Internal project code
+        project_type:
+          $ref: '#/components/schemas/ProjectType'
+          default: construction
+        estimated_budget:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Estimated Budget
+          description: Estimated budget
+        currency:
+          type: string
+          maxLength: 3
+          title: Currency
+          default: EUR
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+      type: object
+      required:
+      - name
+      title: ProjectCreateRequest
+      description: DTO for creating a new project.
+    ProjectDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        project_type:
+          $ref: '#/components/schemas/ProjectType'
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        estimated_budget:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimated Budget
+        currency:
+          type: string
+          title: Currency
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+        coherence_score:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Coherence Score
+        last_analysis_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Analysis At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - name
+      - description
+      - code
+      - project_type
+      - status
+      - estimated_budget
+      - currency
+      - start_date
+      - end_date
+      - coherence_score
+      - last_analysis_at
+      - created_at
+      - updated_at
+      title: ProjectDetailResponse
+      description: Detailed DTO for a single project.
+    ProjectListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectDetailResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      title: ProjectListResponse
+      description: Paginated DTO for a list of projects.
+    ProjectStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - completed
+      - archived
+      title: ProjectStatus
+      description: Possible states of a project in its lifecycle.
+    ProjectType:
+      type: string
+      enum:
+      - construction
+      - engineering
+      - industrial
+      - infrastructure
+      - other
+      title: ProjectType
+      description: Types of projects supported by the system.
+    ProjectUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+            minLength: 1
+          - type: 'null'
+          title: Name
+        description:
+          anyOf:
+          - type: string
+            maxLength: 5000
+          - type: 'null'
+          title: Description
+        code:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Code
+        project_type:
+          anyOf:
+          - $ref: '#/components/schemas/ProjectType'
+          - type: 'null'
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/ProjectStatus'
+          - type: 'null'
+        estimated_budget:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Estimated Budget
+        currency:
+          anyOf:
+          - type: string
+            maxLength: 3
+          - type: 'null'
+          title: Currency
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+      type: object
+      title: ProjectUpdateRequest
+      description: DTO for updating a project.
+    QueryResult:
+      properties:
+        data:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Data
+        row_count:
+          type: integer
+          title: Row Count
+        execution_time_ms:
+          type: number
+          title: Execution Time Ms
+        view_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: View Name
+        function_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Function Name
+        cached:
+          type: boolean
+          title: Cached
+          default: false
+      type: object
+      required:
+      - data
+      - row_count
+      - execution_time_ms
+      title: QueryResult
+      description: Resultado de query.
+    RaciAssignmentUpsertRequest:
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          title: Task Id
+          description: Task (WBS item) ID
+        stakeholder_id:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+          description: Stakeholder ID
+        role:
+          type: string
+          title: Role
+          description: RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)
+      type: object
+      required:
+      - task_id
+      - stakeholder_id
+      - role
+      title: RaciAssignmentUpsertRequest
+      description: Request schema for creating or updating a single assignment.
+    RaciAssignmentUpsertResponse:
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          title: Task Id
+          description: Task (WBS item) ID
+        stakeholder_id:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+          description: Stakeholder ID
+        role:
+          type: string
+          title: Role
+          description: RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)
+        is_verified:
+          type: boolean
+          title: Is Verified
+          description: Whether this assignment is manually verified
+          default: false
+      type: object
+      required:
+      - task_id
+      - stakeholder_id
+      - role
+      title: RaciAssignmentUpsertResponse
+      description: Response schema for a created or updated assignment.
+    RaciMatrixAssignment:
+      properties:
+        stakeholder_id:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+          description: Stakeholder ID
+        role:
+          type: string
+          title: Role
+          description: RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)
+        is_verified:
+          type: boolean
+          title: Is Verified
+          description: Whether this assignment is manually verified
+          default: false
+      type: object
+      required:
+      - stakeholder_id
+      - role
+      title: RaciMatrixAssignment
+      description: Assignment cell for the matrix view (task x stakeholder).
+    RaciMatrixTaskRow:
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          title: Task Id
+          description: Task (WBS item) ID
+        task_name:
+          type: string
+          title: Task Name
+          description: Task name
+        assignments:
+          items:
+            $ref: '#/components/schemas/RaciMatrixAssignment'
+          type: array
+          title: Assignments
+          description: Assignments for this task
+      type: object
+      required:
+      - task_id
+      - task_name
+      title: RaciMatrixTaskRow
+      description: Matrix row for a task with its stakeholder assignments.
+    RaciMatrixViewResponse:
+      properties:
+        matrix:
+          items:
+            $ref: '#/components/schemas/RaciMatrixTaskRow'
+          type: array
+          title: Matrix
+          description: Matrix rows
+      type: object
+      title: RaciMatrixViewResponse
+      description: Response schema for the nested matrix view.
+    RagAnswerResponse:
+      properties:
+        answer:
+          type: string
+          title: Answer
+        sources:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Sources
+      type: object
+      required:
+      - answer
+      title: RagAnswerResponse
+      description: Response for RAG answers.
+    RagQuestionRequest:
+      properties:
+        question:
+          type: string
+          title: Question
+        top_k:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Top K
+      type: object
+      required:
+      - question
+      title: RagQuestionRequest
+      description: Request for RAG questions.
+    RecentAnalysesResponse:
+      properties:
+        analyses:
+          items:
+            $ref: '#/components/schemas/AnalysisStatus'
+          type: array
+          title: Analyses
+          description: List of recent coherence analyses
+        total_analyses:
+          type: integer
+          title: Total Analyses
+          description: Total count of all analyses
+      type: object
+      required:
+      - analyses
+      - total_analyses
+      title: RecentAnalysesResponse
+    RefreshTokenRequest:
+      properties:
+        refresh_token:
+          type: string
+          title: Refresh Token
+      type: object
+      required:
+      - refresh_token
+      title: RefreshTokenRequest
+      description: Request para refrescar token.
+    RegisterRequest:
+      properties:
+        company_name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Company Name
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          maxLength: 100
+          minLength: 8
+          title: Password
+        password_confirm:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 8
+          - type: 'null'
+          title: Password Confirm
+          description: "Opcional; si se env\xEDa debe coincidir con password"
+        first_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: First Name
+        last_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Last Name
+        accept_terms:
+          type: boolean
+          title: Accept Terms
+          description: "Debe aceptar t\xE9rminos y condiciones"
+      type: object
+      required:
+      - company_name
+      - email
+      - password
+      - accept_terms
+      title: RegisterRequest
+      description: Request para registro de nuevo usuario.
+      example:
+        accept_terms: true
+        company_name: Constructora Ejemplo S.L.
+        email: usuario@ejemplo.com
+        first_name: Juan
+        last_name: "P\xE9rez"
+        password: Password123!
+        password_confirm: Password123!
+    RegisterResponse:
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        tenant:
+          $ref: '#/components/schemas/TenantResponse'
+        tokens:
+          $ref: '#/components/schemas/TokenResponse'
+        message:
+          type: string
+          title: Message
+          default: Registration successful. Please verify your email.
+      type: object
+      required:
+      - user
+      - tenant
+      - tokens
+      title: RegisterResponse
+      description: Response completo de registro.
+    SeverityCount:
+      properties:
+        critical:
+          type: integer
+          title: Critical
+          description: Number of critical alerts.
+          default: 0
+        high:
+          type: integer
+          title: High
+          description: Number of high severity alerts.
+          default: 0
+        medium:
+          type: integer
+          title: Medium
+          description: Number of medium severity alerts.
+          default: 0
+        low:
+          type: integer
+          title: Low
+          description: Number of low severity alerts.
+          default: 0
+      type: object
+      title: SeverityCount
+      description: Represents the count of alerts by severity level.
+    StakeholderCreateRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Name
+        role:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Role
+        company:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Company
+        department:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Department
+        email:
+          anyOf:
+          - type: string
+            format: email
+          - type: 'null'
+          title: Email
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Phone
+        type:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Type
+        power_score:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Power Score
+        interest_score:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Interest Score
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+        stakeholder_metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Stakeholder Metadata
+        feedback_comment:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Feedback Comment
+      type: object
+      required:
+      - name
+      title: StakeholderCreateRequest
+    StakeholderQuadrant:
+      type: string
+      enum:
+      - key_player
+      - keep_satisfied
+      - keep_informed
+      - monitor
+      title: StakeholderQuadrant
+      description: Power/interest quadrant (Mendelow Matrix).
+    StakeholderResponseOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        company:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Company
+        department:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Department
+        email:
+          anyOf:
+          - type: string
+            format: email
+          - type: 'null'
+          title: Email
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        power_score:
+          type: integer
+          title: Power Score
+        interest_score:
+          type: integer
+          title: Interest Score
+        power_level:
+          $ref: '#/components/schemas/PowerLevel'
+        interest_level:
+          $ref: '#/components/schemas/InterestLevel'
+        quadrant:
+          anyOf:
+          - $ref: '#/components/schemas/StakeholderQuadrant'
+          - type: 'null'
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+      type: object
+      required:
+      - id
+      - project_id
+      - name
+      - role
+      - company
+      - department
+      - email
+      - phone
+      - power_score
+      - interest_score
+      - power_level
+      - interest_level
+      - quadrant
+      - source_clause_id
+      title: StakeholderResponseOut
+    StakeholderUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+            minLength: 1
+          - type: 'null'
+          title: Name
+        role:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Role
+        company:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Company
+        department:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Department
+        email:
+          anyOf:
+          - type: string
+            format: email
+          - type: 'null'
+          title: Email
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Phone
+        type:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Type
+        power_score:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Power Score
+        interest_score:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Interest Score
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+        stakeholder_metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Stakeholder Metadata
+        feedback_comment:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Feedback Comment
+      additionalProperties: false
+      type: object
+      title: StakeholderUpdateRequest
+    SubscriptionPlan:
+      type: string
+      enum:
+      - free
+      - starter
+      - professional
+      - enterprise
+      title: SubscriptionPlan
+      description: "Planes de suscripci\xF3n disponibles."
+    SystemStatusResponse:
+      properties:
+        api_status:
+          type: string
+          title: Api Status
+          description: Status of the API service
+        database_status:
+          type: string
+          title: Database Status
+          description: Status of the database connection
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+          description: Time when the status was checked
+      type: object
+      required:
+      - api_status
+      - database_status
+      - timestamp
+      title: SystemStatusResponse
+    TenantResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        subscription_plan:
+          $ref: '#/components/schemas/SubscriptionPlan'
+        subscription_status:
+          type: string
+          title: Subscription Status
+        ai_budget_monthly:
+          type: number
+          title: Ai Budget Monthly
+        ai_spend_current:
+          type: number
+          title: Ai Spend Current
+        budget_usage_percentage:
+          type: number
+          title: Budget Usage Percentage
+        is_over_budget:
+          type: boolean
+          title: Is Over Budget
+        max_projects:
+          type: integer
+          title: Max Projects
+        max_users:
+          type: integer
+          title: Max Users
+        max_storage_gb:
+          type: integer
+          title: Max Storage Gb
+        is_active:
+          type: boolean
+          title: Is Active
+        user_count:
+          type: integer
+          title: User Count
+        is_at_user_limit:
+          type: boolean
+          title: Is At User Limit
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - name
+      - slug
+      - subscription_plan
+      - subscription_status
+      - ai_budget_monthly
+      - ai_spend_current
+      - budget_usage_percentage
+      - is_over_budget
+      - max_projects
+      - max_users
+      - max_storage_gb
+      - is_active
+      - user_count
+      - is_at_user_limit
+      - created_at
+      - updated_at
+      title: TenantResponse
+      description: "Response con informaci\xF3n de Tenant."
+    TokenResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+      type: object
+      required:
+      - access_token
+      - expires_in
+      title: TokenResponse
+      description: "Response con tokens de autenticaci\xF3n."
+      example:
+        access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        expires_in: 86400
+        refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type: bearer
+    UserResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        email:
+          type: string
+          title: Email
+        first_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: First Name
+        last_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Name
+        full_name:
+          type: string
+          title: Full Name
+        avatar_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Avatar Url
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        role:
+          $ref: '#/components/schemas/UserRole'
+        is_active:
+          type: boolean
+          title: Is Active
+        is_verified:
+          type: boolean
+          title: Is Verified
+        is_admin:
+          type: boolean
+          title: Is Admin
+        is_viewer:
+          type: boolean
+          title: Is Viewer
+        can_edit:
+          type: boolean
+          title: Can Edit
+        can_manage_users:
+          type: boolean
+          title: Can Manage Users
+        last_login:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Login
+        last_activity:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Activity
+        login_count:
+          type: integer
+          title: Login Count
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - email
+      - first_name
+      - last_name
+      - full_name
+      - avatar_url
+      - phone
+      - role
+      - is_active
+      - is_verified
+      - is_admin
+      - is_viewer
+      - can_edit
+      - can_manage_users
+      - last_login
+      - last_activity
+      - login_count
+      - created_at
+      - updated_at
+      title: UserResponse
+      description: "Response con informaci\xF3n de Usuario."
+    UserRole:
+      type: string
+      enum:
+      - admin
+      - user
+      - viewer
+      - api
+      title: UserRole
+      description: Roles de usuario.
+    UserUpdateRequest:
+      properties:
+        first_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: First Name
+        last_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Last Name
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Phone
+        avatar_url:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Avatar Url
+        preferences:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Preferences
+      type: object
+      title: UserUpdateRequest
+      description: Request para actualizar perfil de usuario.
+      example:
+        first_name: Juan
+        last_name: "P\xE9rez"
+        phone: +34 600 000 000
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    ViewQueryRequest:
+      properties:
+        view_name:
+          type: string
+          title: View Name
+        project_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Project Id
+        filters:
+          additionalProperties: true
+          type: object
+          title: Filters
+        limit:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Limit
+          default: 100
+        offset:
+          type: integer
+          minimum: 0.0
+          title: Offset
+          default: 0
+      type: object
+      required:
+      - view_name
+      title: ViewQueryRequest
+      description: Request para query de vista.
+    WBSItemCreate:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+          description: ID of the project this WBS item belongs to
+        parent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Id
+          description: ID of the parent WBS item for hierarchical structure
+        wbs_code:
+          type: string
+          maxLength: 50
+          title: Wbs Code
+          description: Unique code for the WBS item (e.g., '1.2.1')
+        name:
+          type: string
+          maxLength: 255
+          title: Name
+          description: Name of the WBS item
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Detailed description of the WBS item
+        level:
+          type: integer
+          minimum: 0.0
+          title: Level
+          description: Hierarchy level of the item
+        item_type:
+          anyOf:
+          - $ref: '#/components/schemas/WBSItemType'
+          - type: 'null'
+          description: Type of the WBS item
+        budget_allocated:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Budget Allocated
+          description: Allocated budget for this item
+        budget_spent:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Budget Spent
+          description: Budget spent to date
+          default: '0'
+        planned_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start
+          description: Planned start date
+        planned_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned End
+          description: Planned end date
+        actual_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual Start
+          description: Actual start date
+        actual_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual End
+          description: Actual end date
+        wbs_metadata:
+          additionalProperties: true
+          type: object
+          title: Wbs Metadata
+          description: Custom metadata
+        funded_by_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Funded By Clause Id
+          description: FK to the clause that funds this WBS item
+      type: object
+      required:
+      - project_id
+      - wbs_code
+      - name
+      - level
+      title: WBSItemCreate
+      description: Schema for creating a new WBS item, including the funding clause.
+    WBSItemResponse:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+          description: ID of the project this WBS item belongs to
+        parent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Id
+          description: ID of the parent WBS item for hierarchical structure
+        wbs_code:
+          type: string
+          maxLength: 50
+          title: Wbs Code
+          description: Unique code for the WBS item (e.g., '1.2.1')
+        name:
+          type: string
+          maxLength: 255
+          title: Name
+          description: Name of the WBS item
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Detailed description of the WBS item
+        level:
+          type: integer
+          minimum: 0.0
+          title: Level
+          description: Hierarchy level of the item
+        item_type:
+          anyOf:
+          - $ref: '#/components/schemas/WBSItemType'
+          - type: 'null'
+          description: Type of the WBS item
+        budget_allocated:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Budget Allocated
+          description: Allocated budget for this item
+        budget_spent:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Budget Spent
+          description: Budget spent to date
+          default: '0'
+        planned_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start
+          description: Planned start date
+        planned_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned End
+          description: Planned end date
+        actual_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual Start
+          description: Actual start date
+        actual_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual End
+          description: Actual end date
+        wbs_metadata:
+          additionalProperties: true
+          type: object
+          title: Wbs Metadata
+          description: Custom metadata
+        id:
+          type: string
+          format: uuid
+          title: Id
+          description: Unique ID of the WBS item
+        funded_by_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Funded By Clause Id
+          description: FK to the funding clause (legal traceability)
+        children:
+          items:
+            $ref: '#/components/schemas/WBSItemResponse'
+          type: array
+          title: Children
+          default: []
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+          description: Timestamp of creation
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+          description: Timestamp of last update
+      type: object
+      required:
+      - project_id
+      - wbs_code
+      - name
+      - level
+      - id
+      - created_at
+      - updated_at
+      title: WBSItemResponse
+      description: Response schema for a WBS item, including IDs and timestamps.
+    WBSItemType:
+      type: string
+      enum:
+      - deliverable
+      - work_package
+      - activity
+      title: WBSItemType
+      description: Types of WBS items.
+    WBSItemUpdate:
+      properties:
+        parent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Id
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        budget_allocated:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Budget Allocated
+        budget_spent:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Budget Spent
+        planned_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start
+        planned_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned End
+        actual_start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual Start
+        actual_end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual End
+        wbs_metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Wbs Metadata
+      additionalProperties: false
+      type: object
+      title: WBSItemUpdate
+      description: Schema for updating a WBS item. All fields are optional.
