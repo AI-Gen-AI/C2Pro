@@ -72,3 +72,10 @@ infrastructure/supabase/test_connection.py
 nul
 SECRETS.md
 claves postgre.txt
+
+# Office temp files
+~.xls*
+.~lock.*
+
+# Local copies
+* - copia.xlsx
