@@ -1,6 +1,3 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
 echo "📤 Validando antes de push..."
 
 # Validar rama no es main (protección)
