@@ -72,6 +72,7 @@ markers = [
     "ai: AI-related tests (may use API)",
     "slow: Slow tests",
     "security: Security tests (critical)",
+    "critical: P0 critical tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
