@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from apps.api.src.procurement.domain.models import (
+from src.procurement.domain.models import (
     BOMCategory,
     ProcurementStatus,
     WBSItemType,
