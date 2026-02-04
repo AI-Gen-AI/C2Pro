@@ -1,3 +1,6 @@
+"""
+TS-UD-DOC-ENT-002: Money entity extraction domain service.
+"""
 
 import re
 from typing import List, NamedTuple, Union, Any
@@ -39,26 +42,65 @@ class MoneyEntityExtractor:
     """
 
     def __init__(self):
-        # A regex for a typical monetary amount, allowing for negative values,
-        # thousands separators (dot or comma), and a decimal separator (comma or dot).
-        amount_pattern = r"(-?[\d.,\s]+)"
-
-        # The order of patterns matters. More specific (contextual) patterns should come first.
+        amount_pattern = r"-?\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?"
         self.patterns = [
-            # --- Contextual Patterns ---
-            ("EUR", MoneyContextType.ADVANCE, re.compile(fr"\b(?:anticipo|advance)[\s:]*{amount_pattern}\s*(?:€|euros)\b", re.IGNORECASE)),
-            ("EUR", MoneyContextType.FINAL_PAYMENT, re.compile(fr"\b(?:pago final de|final payment of)\s*{amount_pattern}\s*(?:€|euros)\b", re.IGNORECASE)),
-            ("EUR", MoneyContextType.PENALTY, re.compile(fr"\b(?:penalizaci[oó]n de|penalty of)\s*{amount_pattern}\s*(?:€|euros?)\b", re.IGNORECASE)),
-            ("USD", MoneyContextType.TOTAL, re.compile(fr"\b(?:total)[\s:]*\$\s*{amount_pattern}\b", re.IGNORECASE)),
-            
-            # --- Generic Currency Patterns ---
-            ("EUR", MoneyContextType.GENERIC, re.compile(fr"\b{amount_pattern}\s*(?:€|euros?)\b", re.IGNORECASE)),
-            ("EUR", MoneyContextType.GENERIC, re.compile(fr"\b€\s*{amount_pattern}\b", re.IGNORECASE)),
-            ("USD", MoneyContextType.GENERIC, re.compile(fr"\b{amount_pattern}\s*(?:dollars?|usd)\b", re.IGNORECASE)),
-            ("USD", MoneyContextType.GENERIC, re.compile(fr"\b\$\s*{amount_pattern}\b", re.IGNORECASE)),
-            
-            # --- Percentage Pattern ---
-            ("PERCENT", MoneyContextType.GENERIC, re.compile(fr"\b({amount_pattern})\s*%\b", re.IGNORECASE)),
+            (
+                "EUR",
+                MoneyContextType.ADVANCE,
+                re.compile(
+                    rf"\b(?:anticipo|advance)\b[^-\d€$]*(?P<amount>{amount_pattern})\s*(?:€|euros?\b)",
+                    re.IGNORECASE,
+                ),
+            ),
+            (
+                "EUR",
+                MoneyContextType.FINAL_PAYMENT,
+                re.compile(
+                    rf"\b(?:pago final de|final payment of)\b[^-\d€$]*(?P<amount>{amount_pattern})\s*(?:€|euros?\b)",
+                    re.IGNORECASE,
+                ),
+            ),
+            (
+                "EUR",
+                MoneyContextType.PENALTY,
+                re.compile(
+                    rf"\b(?:penalizaci[oó]n de|penalty of)\b[^-\d€$]*(?P<amount>{amount_pattern})\s*(?:€|euros?\b)",
+                    re.IGNORECASE,
+                ),
+            ),
+            (
+                "USD",
+                MoneyContextType.TOTAL,
+                re.compile(
+                    rf"\btotal\b[^-\d€$]*\$\s*(?P<amount>{amount_pattern})",
+                    re.IGNORECASE,
+                ),
+            ),
+            (
+                "EUR",
+                MoneyContextType.GENERIC,
+                re.compile(rf"(?P<amount>{amount_pattern})\s*(?:€|euros?\b)", re.IGNORECASE),
+            ),
+            (
+                "EUR",
+                MoneyContextType.GENERIC,
+                re.compile(rf"€\s*(?P<amount>{amount_pattern})", re.IGNORECASE),
+            ),
+            (
+                "USD",
+                MoneyContextType.GENERIC,
+                re.compile(rf"(?P<amount>{amount_pattern})\s*(?:dollars?|usd)\b", re.IGNORECASE),
+            ),
+            (
+                "USD",
+                MoneyContextType.GENERIC,
+                re.compile(rf"\$\s*(?P<amount>{amount_pattern})", re.IGNORECASE),
+            ),
+            (
+                "PERCENT",
+                MoneyContextType.GENERIC,
+                re.compile(rf"(?P<amount>-?\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE),
+            ),
         ]
 
     def _normalize_amount_string(self, text: str) -> float:
@@ -67,21 +109,31 @@ class MoneyEntityExtractor:
         Example: "1.234,56" -> 1234.56
         Example: "1,234.56" -> 1234.56
         """
-        text = text.strip()
-        # If the last separator is a comma, assume it's the decimal point
-        if ',' in text and '.' in text:
-            if text.rfind(',') > text.rfind('.'):
-                # Format is 1.234,56 -> remove dots, replace comma with dot
-                cleaned_text = text.replace('.', '').replace(',', '.')
+        text = text.strip().replace(" ", "")
+        if "," in text and "." in text:
+            if text.rfind(",") > text.rfind("."):
+                cleaned_text = text.replace(".", "").replace(",", ".")
             else:
-                # Format is 1,234.56 -> remove commas
-                cleaned_text = text.replace(',', '')
-        elif ',' in text:
-             cleaned_text = text.replace(',', '.') # Assume comma is decimal
+                cleaned_text = text.replace(",", "")
+        elif "." in text:
+            parts = text.split(".")
+            if len(parts) > 2:
+                cleaned_text = "".join(parts)
+            elif len(parts) == 2 and len(parts[1]) == 3 and len(parts[0]) >= 1:
+                cleaned_text = text.replace(".", "")
+            else:
+                cleaned_text = text
+        elif "," in text:
+            parts = text.split(",")
+            if len(parts) > 2:
+                cleaned_text = "".join(parts)
+            elif len(parts) == 2 and len(parts[1]) == 3 and len(parts[0]) >= 1:
+                cleaned_text = text.replace(",", "")
+            else:
+                cleaned_text = text.replace(",", ".")
         else:
             cleaned_text = text
-        
-        # Remove any remaining non-numeric characters (except '-' and '.')
+
         cleaned_text = re.sub(r"[^-0-9.]", "", cleaned_text)
         return float(cleaned_text)
 
@@ -102,8 +154,7 @@ class MoneyEntityExtractor:
                     continue
 
                 try:
-                    # The amount is captured in the first group of the regex
-                    amount_str = match.group(1)
+                    amount_str = match.group("amount")
                     normalized_amount = self._normalize_amount_string(amount_str)
 
                     if currency == "PERCENT":

@@ -1,10 +1,15 @@
+"""
+Subscore calculator tests.
+
+Refers to Suite ID: TS-UD-COH-SCR-001.
+"""
 
 import pytest
 from typing import List, NamedTuple
 from enum import Enum, auto
 
-# This import will fail as the modules do not exist yet.
-from apps.api.src.coherence.domain.subscore_calculator import (
+# Domain import
+from src.coherence.domain.subscore_calculator import (
     SubscoreCalculator,
     CoherenceAlert,
     CoherenceSeverity,

@@ -1,19 +1,22 @@
+"""
+TS-UC-SEC-MCP-001: MCP Gateway Allowlist Validation tests.
+"""
+
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
-# This import will fail as the module does not exist yet.
-from apps.api.src.mcp.adapters.mcp_gateway import MCPGateway, OperationAllowlistRepository
+from src.mcp.adapters.mcp_gateway import MCPGateway, OperationAllowlistRepository
 
 # A fixture to create a gateway with a mocked repository for each test
 @pytest.fixture
 def mock_repo():
-    """Fixture for a mock OperationAllowlistRepository."""
+    """Refers to Suite ID: TS-UC-SEC-MCP-001."""
     return MagicMock(spec=OperationAllowlistRepository)
 
 @pytest.fixture
 def mcp_gateway(mock_repo):
-    """Fixture for MCPGateway with a mocked repository."""
+    """Refers to Suite ID: TS-UC-SEC-MCP-001."""
     return MCPGateway(allowlist_repo=mock_repo)
 
 @pytest.mark.asyncio

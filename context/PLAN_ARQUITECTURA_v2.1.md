@@ -96,7 +96,7 @@ apps/api/src/
 | Routers HTTP Delgados | ✅ Implementado | 100% |
 | Regla Cross-Módulo | ✅ Aplicada | 100% |
 | Coherence Engine v2 | 🔄 En Progreso | 60% |
-| MCP Gateway | ⏳ Pendiente | 0% |
+| MCP Gateway | 🔄 En Progreso | 75% |
 | Observabilidad Completa | 🔄 En Progreso | 40% |
 
 ---
@@ -255,11 +255,12 @@ USUARIO
 | 6.2.1 | Middleware obligatorio de tenant | ✅ DONE | CRÍTICA |
 | 6.2.2 | Repositorios con filtro tenant obligatorio | ⏳ PENDIENTE | CRÍTICA |
 | 6.2.3 | RLS en DB alineado a lógica app | ⏳ PENDIENTE | ALTA |
+| 6.2.4 | Tenant Context + aislamiento de cache por tenant (TS-UC-SEC-TNT-001) | ✅ COMPLETADO | ALTA |
 
 ### 6.3 MCP Gateway (Securizado) - NUEVO v2.1
 
 **Responsable:** Security Lead + Backend Lead  
-**Estado:** ⏳ PENDIENTE  
+**Estado:** 🔄 EN PROGRESO  
 **Prioridad:** 🔴 CRÍTICA
 
 El MCP Gateway actúa como perímetro de seguridad para operaciones de agentes IA.
@@ -294,15 +295,15 @@ MCP_GATEWAY_CONFIG = {
 
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
-| 6.3.3.1 | Implementar validación Allowlist | ⏳ PENDIENTE | M |
-| 6.3.3.2 | Configurar Rate Limiting | ⏳ PENDIENTE | S |
-| 6.3.3.3 | Implementar Query Limits | ⏳ PENDIENTE | S |
+| 6.3.3.1 | Implementar validación Allowlist | ✅ COMPLETADO | M |
+| 6.3.3.2 | Configurar Rate Limiting | ✅ COMPLETADO | S |
+| 6.3.3.3 | Implementar Query Limits | ✅ COMPLETADO | S |
 | 6.3.3.4 | Habilitar MCP Audit Log | ⏳ PENDIENTE | S |
 
 ### 6.4 Anonymizer Service (PII) - NUEVO v2.1
 
 **Responsable:** Security Lead + AI Lead  
-**Estado:** ⏳ PENDIENTE  
+**Estado:** 🔄 EN PROGRESO  
 **Prioridad:** 🔴 CRÍTICA
 
 Procesa documentos **ANTES** de extracción para detectar y anonimizar PII.
@@ -328,8 +329,8 @@ Parser (PDF/Excel/BC3) → Anonymizer Service → Clause Extractor → Entity Ex
 
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
-| 6.4.3.1 | Implementar detección PII (regex + NER) | ⏳ PENDIENTE | L |
-| 6.4.3.2 | Configurar estrategia por tipo | ⏳ PENDIENTE | M |
+| 6.4.3.1 | Implementar detección PII (regex + NER) | ✅ COMPLETADO | L |
+| 6.4.3.2 | Configurar estrategia por tipo | ✅ COMPLETADO | M |
 | 6.4.3.3 | Registrar en audit_logs | ⏳ PENDIENTE | S |
 | 6.4.3.4 | Tests con datos sintéticos | ⏳ PENDIENTE | M |
 
@@ -676,6 +677,9 @@ CREATE INDEX idx_coherence_subscores ON coherence_scores USING GIN (sub_scores);
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
 | 9.1.8.1 | Implementar evaluación por categorías | 🔄 EN PROGRESO | L |
+| 9.1.8.1.a | Definir Category Enum + pesos default (TS-UD-COH-CAT-001) | ✅ COMPLETADO | S |
+| 9.1.8.1.b | Implementar reglas determinísticas por categoría (TS-UD-COH-RUL-001) | ✅ COMPLETADO | M |
+| 9.1.8.1.c | Validar reglas de presupuesto (TS-UD-COH-RUL-002) | ✅ COMPLETADO | S |
 | 9.1.8.2 | Migrar reglas a YAML/DB | ⏳ PENDIENTE | M |
 | 9.1.8.3 | Pesos configurables por proyecto | ⏳ PENDIENTE | M |
 | 9.1.8.4 | Anti-Gaming Policy | ⏳ PENDIENTE | L |
@@ -1049,7 +1053,7 @@ El sistema requiere aceptación explícita de términos de uso antes de acceder:
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
 | 14.5.1 | Implementar audit_logs | ⏳ PENDIENTE | L |
-| 14.5.2 | Anti-Gaming Policy | ⏳ PENDIENTE | L |
+| 14.5.2 | Anti-Gaming Policy | 🔄 EN PROGRESO | L |
 | 14.5.3 | Cumplimiento GDPR básico | ⏳ PENDIENTE | M |
 | 14.5.4 | Disclaimer UI | ⏳ PENDIENTE | M |
 | 14.5.5 | API eliminación datos | ⏳ PENDIENTE | M |

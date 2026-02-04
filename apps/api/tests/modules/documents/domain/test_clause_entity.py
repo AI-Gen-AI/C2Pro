@@ -1,9 +1,13 @@
+"""
+TS-UD-DOC-CLS-001: Clause entity tests.
+"""
+
+from uuid import UUID, uuid4
+
 import pytest
-from uuid import uuid4, UUID
 from pydantic import ValidationError
 
-# This import will fail as the module does not exist yet.
-from apps.api.src.documents.domain.clause_entity import Clause, EmbeddingService
+from src.documents.domain.clause_entity import Clause, EmbeddingService
 
 # --- Test Data and Fixtures ---
 @pytest.fixture
@@ -86,23 +90,25 @@ class TestClauseEntity:
 
     def test_011_clause_content_max_length(self, minimal_clause_data):
         """Tests that content exceeding the maximum length is rejected."""
-        # Assuming MAX_CONTENT_LENGTH = 5000
-        long_content = "a" * 5001
+        data = {**minimal_clause_data, "content": "a" * 5001}
         with pytest.raises(ValidationError, match="Clause content exceeds maximum length"):
-            Clause(**minimal_clause_data, content=long_content)
+            Clause(**data)
 
     def test_012_clause_content_empty_rejected(self, minimal_clause_data):
         """Tests that empty content is rejected."""
+        data = {**minimal_clause_data, "content": ""}
         with pytest.raises(ValidationError, match="Clause content cannot be empty"):
-            Clause(**minimal_clause_data, content="")
+            Clause(**data)
 
     @pytest.mark.parametrize("invalid_id", ["not-a-uuid", 12345, None])
     def test_014_016_fk_invalid_rejected(self, minimal_clause_data, invalid_id):
         """Tests that invalid UUIDs for foreign keys are rejected."""
+        invalid_document_data = {**minimal_clause_data, "document_id": invalid_id}
+        invalid_tenant_data = {**minimal_clause_data, "tenant_id": invalid_id}
         with pytest.raises(ValidationError):
-            Clause(**minimal_clause_data, document_id=invalid_id)
+            Clause(**invalid_document_data)
         with pytest.raises(ValidationError):
-            Clause(**minimal_clause_data, tenant_id=invalid_id)
+            Clause(**invalid_tenant_data)
     
     # Tests 017 and 018 are persistence layer concerns and not tested here.
 
@@ -118,10 +124,12 @@ class TestClauseEntity:
 
     def test_020_022_clause_embedding_generation_and_update(self, minimal_clause_data):
         """Tests that generating an embedding returns a new, updated Clause instance."""
-        # 1. Create a mock embedding service
-        mock_service = EmbeddingService()
+        class FakeEmbeddingService(EmbeddingService):
+            def generate_embedding(self, text: str) -> list[float]:
+                return [0.2] * 1536
+
+        mock_service = FakeEmbeddingService()
         expected_vector = [0.2] * 1536
-        mock_service.generate_embedding = lambda text: expected_vector
 
         # 2. Create an initial clause without an embedding
         initial_clause = Clause(**minimal_clause_data)

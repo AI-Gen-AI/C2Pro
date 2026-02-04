@@ -14,7 +14,7 @@ import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from jose import JWTError, jwt
+import jwt
 from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -183,7 +183,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 algorithms=[settings.jwt_algorithm],
                 options={"verify_signature": True, "verify_exp": True},
             )
-        except (JWTError, ValueError):
+        except (jwt.PyJWTError, ValueError):
             return None, None
 
         tenant_id_raw = payload.get("tenant_id")

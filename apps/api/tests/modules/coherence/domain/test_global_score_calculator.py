@@ -1,10 +1,15 @@
+"""
+Global score calculator tests.
+
+Refers to Suite ID: TS-UD-COH-SCR-002.
+"""
 
 import pytest
 from typing import Dict
 from enum import Enum, auto
 
-# This import will fail as the modules do not exist yet.
-from apps.api.src.coherence.domain.global_score_calculator import (
+# Domain import
+from src.coherence.domain.global_score_calculator import (
     GlobalScoreCalculator,
     ScoreScope,
     WeightConfig,

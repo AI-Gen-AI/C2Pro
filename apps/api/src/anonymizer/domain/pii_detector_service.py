@@ -1,3 +1,6 @@
+"""
+TS-UC-SEC-ANO-001: PII detector domain service.
+"""
 
 import re
 from enum import Enum, auto
@@ -48,7 +51,7 @@ class PiiDetectorService:
     # A more comprehensive email regex that supports unicode and plus notation
     _EMAIL_REGEX = re.compile(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b', re.UNICODE)
     # Spanish phone numbers (9 digits), with optional country code (+34 or 34)
-    _PHONE_REGEX = re.compile(r'\b(?:\+34|34)?[6789]\d{8}\b')
+    _PHONE_REGEX = re.compile(r'(?<!\w)(?:\+34|34)?[6789]\d{8}\b')
     # General IBAN format (Country code + 2 check digits + up to 30 alphanumeric chars)
     _IBAN_REGEX = re.compile(r'\b[A-Z]{2}\d{2}[a-zA-Z0-9]{1,30}\b')
 
@@ -66,17 +69,25 @@ class PiiDetectorService:
         return self._DNI_LETTERS[int(number_part) % 23] == letter_part
 
     def _is_valid_iban(self, iban: str) -> bool:
-        """
-        Validates an IBAN using the MOD-97-10 algorithm.
-        This is a 'fake' implementation for the TDD green phase, it only checks format, not the actual checksum.
-        A real implementation would be more complex.
-        """
-        # For the green phase, we accept common formats seen in tests.
-        if iban.startswith("ES") and len(iban) == 24:
-            return True
-        if iban.startswith("DE") and len(iban) == 22:
-            return True
-        return False
+        """Validates IBAN using MOD-97-10 checksum."""
+        normalized = iban.replace(" ", "").upper()
+        if len(normalized) < 15 or len(normalized) > 34:
+            return False
+        if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]+", normalized):
+            return False
+
+        rearranged = normalized[4:] + normalized[:4]
+        numeric = ""
+        for char in rearranged:
+            if char.isdigit():
+                numeric += char
+            else:
+                numeric += str(ord(char) - 55)  # A=10, B=11, ..., Z=35
+
+        remainder = 0
+        for digit in numeric:
+            remainder = (remainder * 10 + int(digit)) % 97
+        return remainder == 1
 
     async def detect(self, text: str) -> PiiDetectionResult:
         """

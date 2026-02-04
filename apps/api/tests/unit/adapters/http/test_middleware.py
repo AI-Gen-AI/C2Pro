@@ -16,7 +16,7 @@ Validates TenantIsolationMiddleware in isolation:
 Methodology: TDD Strict (Red → Green → Refactor)
 Testing Approach: Unit tests.  The middleware's settings (jwt_secret_key /
     jwt_algorithm) and DB session (get_raw_session) are patched at their
-    module-import points.  Tokens are signed directly with jose.jwt.encode
+    module-import points.  Tokens are signed directly with jwt.encode (PyJWT)
     using the same test secret the patched middleware decodes against, so
     signature round-trips are exercised without touching the real Settings
     singleton or any database.
@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt
 
 from src.core.middleware.tenant_isolation import TenantIsolationMiddleware
 
@@ -624,7 +624,7 @@ GREEN PHASE STRATEGY:
 These 19 tests validate the TenantIsolationMiddleware contracts:
 
 1. Public-path bypass:  _is_public_path() → call_next() immediately
-2. JWT decode:          jose.jwt.decode with verify_signature + verify_exp
+2. JWT decode:          jwt.decode (PyJWT) with verify_signature + verify_exp
 3. Token-type gate:     payload["type"] must equal "access"
 4. Tenant-id extract:   payload["tenant_id"] parsed as UUID
 5. Tenant DB check:     get_raw_session() → Tenant query → is_active gate

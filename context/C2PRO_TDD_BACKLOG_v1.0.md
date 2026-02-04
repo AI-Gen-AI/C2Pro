@@ -552,6 +552,15 @@ tests/
 | E2E | - | - | 2 | 2 |
 | **Total** | **41** | **5** | **2** | **48** |
 
+#### 4.1.1 Estado de Suites (Documents Domain)
+
+- [x] TS-UD-DOC-CLS-001 - Clause Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-ENT-001 - Entity Extraction - Dates (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-ENT-002 - Entity Extraction - Money (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-ENT-003 - Entity Extraction - Durations (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-ENT-004 - Entity Extraction - Stakeholders (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-CNF-001 - Confidence Scoring (Implemented: Unit Tests & Domain Logic)
+
 ### 4.2 Módulo: COHERENCE (56 tests total)
 
 | Capa | Unit | Integration | E2E | Total |
@@ -562,6 +571,12 @@ tests/
 | Integration | - | 3 | - | 3 |
 | E2E | - | - | 2 | 2 |
 | **Total** | **51** | **3** | **2** | **56** |
+
+#### 4.2.1 Estado de Suites (Coherence Domain)
+
+- [x] TS-UD-COH-CAT-001 - Category Enum & Weights (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-001 - Coherence Rules: Scope Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-002 - Coherence Rules: Budget Category (Implemented: Unit Tests & Domain Logic)
 
 ### 4.3 Módulo: PROJECTS (36 tests total)
 
@@ -617,6 +632,17 @@ tests/
 | Integration | - | 6 | - | 6 |
 | E2E | - | - | 2 | 2 |
 | **Total** | **30** | **6** | **2** | **38** |
+
+#### 4.7.1 Estado de Suites (Security/MCP)
+
+- [x] TS-UC-SEC-MCP-001 - MCP Gateway Allowlist (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UC-SEC-MCP-002 - MCP Gateway Rate Limiting (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UC-SEC-MCP-003 - MCP Gateway Query Limits (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UC-SEC-ANO-001 - Anonymizer PII Detection (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UC-SEC-ANO-002 - Anonymizer Strategies (Implemented: Unit Tests & Application Logic)
+- [x] TS-UC-SEC-ANO-003 - Anonymizer Tenant Config (Implemented: Unit Tests & Application Logic)
+- [x] TS-UC-SEC-GAM-001 - Anti-Gaming Detection (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UC-SEC-TNT-001 - Tenant Context & Isolation (Implemented: Unit Tests & Core Security Logic)
 
 ### 4.8 Módulo: ASYNC/EVENTS (22 tests total)
 
