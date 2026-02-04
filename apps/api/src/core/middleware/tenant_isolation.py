@@ -12,7 +12,7 @@ from uuid import UUID
 
 import structlog
 from fastapi import Request, Response
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -154,7 +154,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         except jwt.ExpiredSignatureError:
             logger.debug("jwt_expired")
             return None, "Token has expired"
-        except JWTError as e:
+        except jwt.PyJWTError as e:
             logger.debug("jwt_invalid", error=str(e))
             return None, "Invalid authentication credentials"
         except ValueError as e:
@@ -179,7 +179,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
             )
             user_id = payload.get("sub")
             return UUID(user_id) if user_id else None
-        except (JWTError, ValueError):
+        except (jwt.PyJWTError, ValueError):
             return None
 
     async def _validate_tenant_exists(self, tenant_id: UUID) -> bool:

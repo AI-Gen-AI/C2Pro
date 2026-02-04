@@ -1,3 +1,6 @@
+"""
+TS-UD-DOC-CLS-001: Clause entity domain model.
+"""
 
 import abc
 import re

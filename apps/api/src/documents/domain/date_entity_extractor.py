@@ -1,3 +1,6 @@
+"""
+TS-UD-DOC-ENT-001: Date entity extraction domain service.
+"""
 
 import re
 from datetime import date, timedelta
@@ -50,10 +53,21 @@ class DateEntityExtractor:
             (re.compile(r"\b(?:fecha de inicio:|start date is)\s*(?P<date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.START, self._parse_absolute),
             (re.compile(r"\b(?:fecha de fin:|end date is)\s*(?P<date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.END, self._parse_absolute),
             # Date Ranges
-            (re.compile(r"\bfrom\s*(?P<date>[\w\s,/-]+?)\s*to\s*", re.IGNORECASE), DateContextType.RANGE_START, self._parse_absolute),
+            (
+                re.compile(r"\bfrom\s*(?P<date>[\w\s,/-]+?)(?=\s+to\b)", re.IGNORECASE),
+                DateContextType.RANGE_START,
+                self._parse_absolute,
+            ),
             (re.compile(r"\bto\s*(?P<date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.RANGE_END, self._parse_absolute),
             # Relative Dates
-            (re.compile(r"\b(in|within|after)\s*(?P<num>\d+)\s*(?P<unit>days|months|years)\b", re.IGNORECASE), DateContextType.GENERIC, self._parse_relative),
+            (
+                re.compile(
+                    r"\b(in|within|after)\s*(?P<num>\d+)\s*(?P<unit>day|days|month|months|year|years)\b",
+                    re.IGNORECASE,
+                ),
+                DateContextType.GENERIC,
+                self._parse_relative,
+            ),
             (re.compile(r"\b(?P<num>\d+)\s*days\s*from\s*(?P<base_date>[\w\s,/-]+)", re.IGNORECASE), DateContextType.GENERIC, self._parse_relative_from),
             # Absolute Dates (generic)
             (re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b"), DateContextType.GENERIC, self._parse_absolute),
@@ -66,6 +80,8 @@ class DateEntityExtractor:
         """Replaces Spanish month names with English ones for the parser."""
         for esp, eng in self.spanish_months.items():
             text = text.lower().replace(esp, eng)
+        # "10 de enero de 2025" -> "10 january 2025"
+        text = re.sub(r"\s+de\s+", " ", text)
         return text
 
     # --- Handler Methods ---

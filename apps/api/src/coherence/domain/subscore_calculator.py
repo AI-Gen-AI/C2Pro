@@ -1,3 +1,8 @@
+"""
+Subscore calculator domain service.
+
+Refers to Suite ID: TS-UD-COH-SCR-001.
+"""
 
 from typing import List, NamedTuple
 from enum import Enum, auto
@@ -37,13 +42,10 @@ class SubscoreCalculator:
     within a specific scope.
     """
 
-    # Defines the penalty points for each severity level.
-    PENALTY_MAP = {
-        CoherenceSeverity.LOW: 5,
-        CoherenceSeverity.MEDIUM: 10,
-        CoherenceSeverity.HIGH: 20,
-        CoherenceSeverity.CRITICAL: 30,
-    }
+    # Exposed for tests that inject temporary classes.
+    CoherenceSeverity = CoherenceSeverity
+    ScoreScope = ScoreScope
+    CoherenceAlert = CoherenceAlert
     
     BASE_SCORE = 100.0
     MIN_SCORE = 0.0
@@ -59,14 +61,25 @@ class SubscoreCalculator:
         Returns:
             The calculated subscore, as a float between 0.0 and 100.0.
         """
+        penalty_by_name = {
+            "LOW": 5,
+            "MEDIUM": 10,
+            "HIGH": 20,
+            "CRITICAL": 30,
+        }
         total_penalty = 0
 
         # Filter alerts that match the requested scope
-        relevant_alerts = [alert for alert in alerts if alert.scope == scope]
+        relevant_alerts = [
+            alert
+            for alert in alerts
+            if getattr(alert.scope, "name", str(alert.scope)) == getattr(scope, "name", str(scope))
+        ]
 
         # Calculate the cumulative penalty
         for alert in relevant_alerts:
-            total_penalty += self.PENALTY_MAP.get(alert.severity, 0)
+            severity_name = getattr(alert.severity, "name", str(alert.severity)).upper()
+            total_penalty += penalty_by_name.get(severity_name, 0)
             
         # Calculate the final score and ensure it doesn't go below the minimum
         final_score = self.BASE_SCORE - total_penalty

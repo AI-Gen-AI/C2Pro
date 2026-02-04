@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import structlog
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -170,7 +170,7 @@ def decode_token(token: str) -> TokenPayload:
             sub=user_id, tenant_id=tenant_id, email=email, role=role, exp=exp, iat=iat
         )
 
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         logger.warning("jwt_decode_error", error=str(e))
         raise AuthenticationError("Invalid token")
     except (KeyError, ValueError) as e:
@@ -520,7 +520,7 @@ class AuthService:
         except jwt.ExpiredSignatureError:
             logger.warning("refresh_token_expired")
             raise AuthenticationError("Token has expired")
-        except JWTError as e:
+        except jwt.PyJWTError as e:
             logger.warning("refresh_token_invalid", error=str(e))
             raise AuthenticationError("Invalid authentication credentials")
         except ValueError as e:

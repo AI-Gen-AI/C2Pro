@@ -1,7 +1,10 @@
+"""
+TS-UC-SEC-ANO-002: Anonymization strategies application service.
+"""
 
 import hashlib
 from enum import Enum, auto
-from typing import Dict, List, Set
+from typing import Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -59,37 +62,64 @@ class AnonymizationService:
         if detection_result.is_empty():
             return text
 
-        # --- State for a single anonymization call ---
-        modified_text = text
-        # For pseudonymization, we need to map original values to a generated ID
+        actionable_items = self._select_non_overlapping_items(
+            detection_result.items, config.strategies
+        )
+        if not actionable_items:
+            return text
+
+        replacements: dict[tuple[int, int], str] = {}
         pseudonym_map: Dict[str, str] = {}
         pseudonym_counter = 1
-        
-        # Process detections from last to first to avoid messing up indices
-        for pii in sorted(detection_result.items, key=lambda p: p.start, reverse=True):
-            strategy = config.strategies.get(pii.pii_type, AnonymizationStrategy.NONE)
-            
-            replacement = ""
-            if strategy == AnonymizationStrategy.REDACT:
-                replacement = "[REDACTED]"
-            
-            elif strategy == AnonymizationStrategy.HASH:
-                # Use a simple, deterministic SHA-256 hash
-                h = hashlib.sha256()
-                h.update(pii.text.encode('utf-8'))
-                replacement = h.hexdigest()
 
+        # Build replacements in natural text order to keep pseudonym IDs stable.
+        for pii in sorted(actionable_items, key=lambda p: p.start):
+            strategy = config.strategies.get(pii.pii_type, AnonymizationStrategy.NONE)
+            if strategy == AnonymizationStrategy.REDACT:
+                replacements[(pii.start, pii.end)] = "[REDACTED]"
+            elif strategy == AnonymizationStrategy.HASH:
+                h = hashlib.sha256()
+                h.update(pii.text.encode("utf-8"))
+                replacements[(pii.start, pii.end)] = h.hexdigest()
             elif strategy == AnonymizationStrategy.PSEUDONYMIZE:
                 if pii.text not in pseudonym_map:
                     pseudonym_map[pii.text] = f"[PERSON_{pseudonym_counter:03d}]"
                     pseudonym_counter += 1
-                replacement = pseudonym_map[pii.text]
+                replacements[(pii.start, pii.end)] = pseudonym_map[pii.text]
 
-            elif strategy == AnonymizationStrategy.NONE:
-                # No replacement, continue to the next item
-                continue
-
-            # Replace the original PII text with the generated replacement
+        modified_text = text
+        # Apply from right to left so original indexes remain valid.
+        for pii in sorted(actionable_items, key=lambda p: p.start, reverse=True):
+            replacement = replacements[(pii.start, pii.end)]
             modified_text = modified_text[:pii.start] + replacement + modified_text[pii.end:]
 
         return modified_text
+
+    @staticmethod
+    def _select_non_overlapping_items(
+        items: List["DetectedPii"],
+        strategies: Dict[PiiType, AnonymizationStrategy],
+    ) -> List["DetectedPii"]:
+        """
+        Keep only actionable, non-overlapping detections.
+        For overlaps, the longest match wins.
+        """
+        actionable = [
+            item
+            for item in items
+            if strategies.get(item.pii_type, AnonymizationStrategy.NONE) != AnonymizationStrategy.NONE
+        ]
+        if not actionable:
+            return []
+
+        chosen: List["DetectedPii"] = []
+        for candidate in sorted(
+            actionable,
+            key=lambda item: (-(item.end - item.start), item.start),
+        ):
+            overlaps = any(
+                not (candidate.end <= kept.start or candidate.start >= kept.end) for kept in chosen
+            )
+            if not overlaps:
+                chosen.append(candidate)
+        return chosen

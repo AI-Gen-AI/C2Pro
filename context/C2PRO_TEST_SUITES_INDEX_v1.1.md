@@ -1161,7 +1161,7 @@ COMPARACIÓN (2):
 ║  ├── TS-UA-DTO-ALL-001: DTOs Validation ............. 24 tests               ║
 ║  ├── TS-UA-DTO-SER-001: Serialization ............... 16 tests               ║
 ║  ├── TS-UAD-HTTP-RTR-001: Routers ................... 32 tests               ║
-║  ├── TS-UAD-HTTP-MDW-001: Middleware ................ 18 tests               ║
+║  ├── TS-UAD-HTTP-MDW--001: Middleware ................ 18 tests               ║
 ║  └── TS-UAD-HTTP-ERR-001: Error Handlers ............ 12 tests               ║
 ║      ─────────────────────────────────────────────────────────               ║
 ║      TOTAL AGENTE 10: 102 tests (ajustado)                                   ║

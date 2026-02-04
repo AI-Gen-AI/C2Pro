@@ -13,7 +13,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt
 
 from src.core.middleware import TenantIsolationMiddleware
 from src.core.auth.jwt_validator import JwtValidator
