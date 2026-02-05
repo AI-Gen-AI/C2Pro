@@ -1,6 +1,8 @@
 """
 Domain models for the Procurement bounded context.
 These are pure domain entities representing core business concepts.
+
+Refers to Suite ID: TS-UD-PROC-BOM-001.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -156,6 +158,20 @@ class BOMItem:
 
     def __post_init__(self) -> None:
         """Derive total_price and lead_time_days when omitted."""
+        if self.project_id is None:
+            raise ValueError("project_id is required")
+        if not self.item_name or not self.item_name.strip():
+            raise ValueError("item_name is required")
+        if self.quantity is None or self.quantity <= 0:
+            raise ValueError("quantity must be > 0")
+        if self.unit_price is not None and self.unit_price < 0:
+            raise ValueError("unit_price must be >= 0")
+        if len(self.currency) != 3 or not self.currency.isupper():
+            raise ValueError("currency must be 3 uppercase letters")
+        for value in (self.lead_time_days, self.production_time_days, self.transit_time_days):
+            if value is not None and value < 0:
+                raise ValueError("time component must be >= 0")
+
         if self.total_price is None and self.unit_price is not None and self.quantity is not None:
             self.total_price = Decimal(str(self.unit_price)) * Decimal(str(self.quantity))
         if self.lead_time_days is None:

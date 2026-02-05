@@ -216,12 +216,9 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
 
         # Get tenant_id from state
         try:
-    try:
-    tenant_id = UUID(state["tenant_id"])
-except (ValueError, TypeError):
-    tenant_id = None
-except (ValueError, TypeError):
-    tenant_id = None if state.get("tenant_id") else None
+            tenant_id = UUID(state["tenant_id"])
+        except (ValueError, TypeError):
+            tenant_id = None
 
         # Execute tool
         result = await self.execute(input_data, tenant_id=tenant_id)
@@ -233,8 +230,8 @@ except (ValueError, TypeError):
         from langchain_core.messages import AIMessage
 
         if "messages" not in updated_state or updated_state["messages"] is None:
-    updated_state["messages"] = []
-updated_state["messages"].append(
+            updated_state["messages"] = []
+        updated_state["messages"].append(
             AIMessage(content=f"Tool '{self.name}' executed: {result.status.value}")
         )
 

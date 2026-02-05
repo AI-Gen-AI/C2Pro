@@ -1,124 +1,186 @@
-import abc
+"""
+Lead Time Calculator domain service.
+
+Refers to Suite ID: TS-UD-PROC-LTM-001.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import List, NamedTuple, Optional, Union
-from enum import Enum, auto
+from enum import Enum
 
-# --- DTOs and Enums ---
 
-class LeadTimeSeverity(Enum):
-    CRITICAL = auto()
-    WARNING = auto()
+class LeadTimeSeverity(str, Enum):
+    """Alert severity levels for lead time risk."""
 
-class LeadTimeStatus(Enum):
-    DATE_PASSED = auto()
-    TIGHT_MARGIN = auto()
-    OK = auto()
+    CRITICAL = "critical"
+    WARNING = "warning"
 
-class LeadTimeAlert(NamedTuple):
+
+class LeadTimeStatus(str, Enum):
+    """Lead time alert statuses."""
+
+    DATE_PASSED = "date_passed"
+    TIGHT_MARGIN = "tight_margin"
+
+
+@dataclass(frozen=True)
+class LeadTimeAlert:
+    """Alert produced by lead time analysis."""
+
     status: LeadTimeStatus
     severity: LeadTimeSeverity
     message: str
 
-class LeadTimeComponents(NamedTuple):
-    production_days: int = 0
-    transit_days: int = 0
-    buffer_days: int = 0
 
-class LeadTimeResult(NamedTuple):
-    optimal_required_on_site_date: date
-    lead_time_breakdown: LeadTimeComponents
-    alerts: List[LeadTimeAlert]
+@dataclass(frozen=True)
+class LeadTimeBreakdown:
+    """Breakdown of lead time components in days."""
 
-# --- Ports ---
+    production_days: int
+    transit_days: int
+    customs_days: int
+    buffer_days: int
+    total_days: int
 
-class CalendarService(abc.ABC):
-    """
-    Port for a service that provides calendar-related functionalities,
-    such as identifying working days and adding/subtracting business days.
-    """
-    @abc.abstractmethod
-    def is_working_day(self, day: date) -> bool:
-        """Returns True if the given day is a working day, False otherwise."""
-        raise NotImplementedError
 
-    @abc.abstractmethod
-    def add_business_days(self, start_date: date, days: int) -> date:
-        """
-        Adds or subtracts a specified number of business days from a start date.
-        
-        Args:
-            start_date: The date to start counting from.
-            days: The number of business days to add (positive) or subtract (negative).
+@dataclass(frozen=True)
+class LeadTimeResult:
+    """Lead time calculation result."""
 
-        Returns:
-            The resulting date after adding/subtracting business days.
-        """
-        raise NotImplementedError
+    required_on_site_date: date
+    optimal_order_date: date
+    lead_time_breakdown: LeadTimeBreakdown
+    alerts: list[LeadTimeAlert]
 
-# --- Domain Service ---
 
 class LeadTimeCalculator:
-    """
-    Calculates optimal required on-site dates for procurement items,
-    considering various lead time components, business days, holidays,
-    and generating alerts based on deadlines.
-    """
+    """Domain service for procurement lead time calculations."""
 
-    TIGHT_MARGIN_DAYS = 3 # Margin for warning alert
+    _TIGHT_MARGIN_DAYS: int = 3
 
-    def __init__(self, calendar_service: CalendarService):
-        self.calendar_service = calendar_service
-        # For temporary access in tests before real models exist
-        self.LeadTimeSeverity = LeadTimeSeverity
-        self.LeadTimeStatus = LeadTimeStatus
-        self.LeadTimeAlert = LeadTimeAlert
-        self.LeadTimeComponents = LeadTimeComponents
-        self.LeadTimeResult = LeadTimeResult
+    def calculate_optimal_order_date(
+        self,
+        required_on_site_date: date | None = None,
+        start_date: date | None = None,
+        production_days: int = 0,
+        transit_days: int = 0,
+        customs_days: int = 0,
+        buffer_days: int = 0,
+        use_business_days: bool = False,
+        holidays: set[date] | None = None,
+        adjust_to_business_day: bool = False,
+    ) -> date:
+        """Return the optimal order date to hit the required on-site date."""
+        target_date = required_on_site_date or start_date
+        if target_date is None:
+            raise ValueError("required_on_site_date is required")
 
-    async def calculate_optimal_required_on_site_date(
-        self, 
-        required_by_date: date, 
-        components: LeadTimeComponents
+        total_days = production_days + transit_days + customs_days + buffer_days
+        holiday_set = holidays or set()
+
+        if use_business_days:
+            optimal = self._subtract_business_days(
+                end_date=target_date,
+                days=total_days,
+                holidays=holiday_set,
+            )
+            return optimal
+
+        optimal = target_date - timedelta(days=total_days)
+        if adjust_to_business_day:
+            optimal = self._roll_back_to_business_day(optimal, holiday_set)
+        return optimal
+
+    def calculate(
+        self,
+        required_on_site_date: date,
+        production_days: int = 0,
+        transit_days: int = 0,
+        customs_days: int = 0,
+        buffer_days: int = 0,
+        use_business_days: bool = False,
+        holidays: set[date] | None = None,
+        adjust_to_business_day: bool = False,
+        current_date: date | None = None,
     ) -> LeadTimeResult:
-        """
-        Calculates the optimal date an item needs to be on-site to meet a required-by date.
-        """
-        total_lead_time_days = components.production_days + components.transit_days + components.buffer_days
-        
-        # Calculate the initial optimal date by subtracting business days
-        optimal_date = self.calendar_service.add_business_days(required_by_date, -total_lead_time_days)
-
-        # Ensure the final optimal_date itself falls on a working day (adjust backwards if not)
-        while not self.calendar_service.is_working_day(optimal_date):
-            optimal_date = self.calendar_service.add_business_days(optimal_date, -1)
-            
-        alerts = await self._check_deadlines(optimal_date, required_by_date)
-        
-        return LeadTimeResult(
-            optimal_required_on_site_date=optimal_date,
-            lead_time_breakdown=components,
-            alerts=alerts
+        """Return lead time result with breakdown and alerts."""
+        total_days = production_days + transit_days + customs_days + buffer_days
+        optimal_order_date = self.calculate_optimal_order_date(
+            required_on_site_date=required_on_site_date,
+            production_days=production_days,
+            transit_days=transit_days,
+            customs_days=customs_days,
+            buffer_days=buffer_days,
+            use_business_days=use_business_days,
+            holidays=holidays,
+            adjust_to_business_day=adjust_to_business_day,
         )
 
-    async def _check_deadlines(self, optimal_date: date, required_by_date: date) -> List[LeadTimeAlert]:
-        """
-        Checks for deadline violations and generates appropriate alerts.
-        """
-        alerts: List[LeadTimeAlert] = []
-        
-        margin_days = (required_by_date - optimal_date).days
-        
+        alerts = self._build_alerts(
+            optimal_order_date=optimal_order_date,
+            current_date=current_date or date.today(),
+        )
+
+        breakdown = LeadTimeBreakdown(
+            production_days=production_days,
+            transit_days=transit_days,
+            customs_days=customs_days,
+            buffer_days=buffer_days,
+            total_days=total_days,
+        )
+        return LeadTimeResult(
+            required_on_site_date=required_on_site_date,
+            optimal_order_date=optimal_order_date,
+            lead_time_breakdown=breakdown,
+            alerts=alerts,
+        )
+
+    def _build_alerts(
+        self,
+        optimal_order_date: date,
+        current_date: date,
+    ) -> list[LeadTimeAlert]:
+        margin_days = (optimal_order_date - current_date).days
         if margin_days < 0:
-            alerts.append(LeadTimeAlert(
-                status=LeadTimeStatus.DATE_PASSED,
-                severity=LeadTimeSeverity.CRITICAL,
-                message=f"Optimal required on-site date ({optimal_date}) is after the required by date ({required_by_date})."
-            ))
-        elif 0 <= margin_days <= self.TIGHT_MARGIN_DAYS:
-            alerts.append(LeadTimeAlert(
-                status=LeadTimeStatus.TIGHT_MARGIN,
-                severity=LeadTimeSeverity.WARNING,
-                message=f"Tight margin of {margin_days} day(s) between optimal on-site date and required by date."
-            ))
-            
-        return alerts
+            return [
+                LeadTimeAlert(
+                    status=LeadTimeStatus.DATE_PASSED,
+                    severity=LeadTimeSeverity.CRITICAL,
+                    message="Optimal order date has already passed.",
+                )
+            ]
+        if margin_days <= self._TIGHT_MARGIN_DAYS:
+            return [
+                LeadTimeAlert(
+                    status=LeadTimeStatus.TIGHT_MARGIN,
+                    severity=LeadTimeSeverity.WARNING,
+                    message="Tight lead time margin.",
+                )
+            ]
+        return []
+
+    def _subtract_business_days(
+        self,
+        end_date: date,
+        days: int,
+        holidays: set[date],
+    ) -> date:
+        current = end_date
+        remaining = max(days, 0)
+        while remaining > 0:
+            current -= timedelta(days=1)
+            if self._is_business_day(current, holidays):
+                remaining -= 1
+        return self._roll_back_to_business_day(current, holidays)
+
+    def _roll_back_to_business_day(self, candidate: date, holidays: set[date]) -> date:
+        current = candidate
+        while not self._is_business_day(current, holidays):
+            current -= timedelta(days=1)
+        return current
+
+    @staticmethod
+    def _is_business_day(candidate: date, holidays: set[date]) -> bool:
+        return candidate.weekday() < 5 and candidate not in holidays

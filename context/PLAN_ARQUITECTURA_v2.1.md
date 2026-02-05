@@ -654,7 +654,7 @@ DEFAULT_WEIGHTS = {
 | **Rules Engine** | Evalúa 20 reglas determinísticas | 🔄 EN PROGRESO |
 | **LLM Qualitative** | Fallback para evaluaciones complejas | ⏳ PENDIENTE |
 | **Score Calculator** | Aplica fórmula con pesos | 🔄 EN PROGRESO |
-| **Anti-Gaming Policy** | Detecta manipulación | ⏳ PENDIENTE |
+| **Anti-Gaming Policy** | Detecta manipulación | ✅ COMPLETADO |
 
 #### 9.1.6 Anti-Gaming Policy
 
@@ -680,9 +680,17 @@ CREATE INDEX idx_coherence_subscores ON coherence_scores USING GIN (sub_scores);
 | 9.1.8.1.a | Definir Category Enum + pesos default (TS-UD-COH-CAT-001) | ✅ COMPLETADO | S |
 | 9.1.8.1.b | Implementar reglas determinísticas por categoría (TS-UD-COH-RUL-001) | ✅ COMPLETADO | M |
 | 9.1.8.1.c | Validar reglas de presupuesto (TS-UD-COH-RUL-002) | ✅ COMPLETADO | S |
+| 9.1.8.1.d | Validar reglas de tiempo (TS-UD-COH-RUL-003) | ✅ COMPLETADO | S |
+| 9.1.8.1.e | Validar reglas técnicas (TS-UD-COH-RUL-004) | ✅ COMPLETADO | S |
+| 9.1.8.1.f | Validar reglas legales (TS-UD-COH-RUL-005) | ✅ COMPLETADO | S |
+| 9.1.8.1.g | Validar reglas de calidad (TS-UD-COH-RUL-006) | ✅ COMPLETADO | S |
+| 9.1.8.1.h | Implementar SubScores Calculator (TS-UD-COH-SCR-001) | ✅ COMPLETADO | S |
+| 9.1.8.1.i | Implementar Global Score Calculator (TS-UD-COH-SCR-002) | ✅ COMPLETADO | S |
+| 9.1.8.1.j | Implementar Custom Weights Calculator (TS-UD-COH-SCR-003) | ✅ COMPLETADO | S |
+| 9.1.8.1.k | Implementar Alert Entity & Mapping (TS-UD-COH-ALR-001) | ✅ COMPLETADO | S |
 | 9.1.8.2 | Migrar reglas a YAML/DB | ⏳ PENDIENTE | M |
 | 9.1.8.3 | Pesos configurables por proyecto | ⏳ PENDIENTE | M |
-| 9.1.8.4 | Anti-Gaming Policy | ⏳ PENDIENTE | L |
+| 9.1.8.4 | Anti-Gaming Policy | ✅ COMPLETADO | L |
 | 9.1.8.5 | Coherence Dashboard con drill-down | ⏳ PENDIENTE | L |
 
 ### 9.2 Graph RAG con `IGraphRepository`
@@ -759,6 +767,17 @@ class LeadTimeCalculator:
 
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
+| 9.3.5.0 | Implementar WBS Item Entity (TS-UD-PRJ-WBS-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.a | Implementar WBS Hierarchy & Codes (TS-UD-PRJ-WBS-002) | ✅ COMPLETADO | S |
+| 9.3.5.0.b | Implementar WBS Validation Rules (TS-UD-PRJ-WBS-003) | ✅ COMPLETADO | S |
+| 9.3.5.0.c | Implementar WBS CRUD Operations (TS-UD-PRJ-WBS-004) | ✅ COMPLETADO | S |
+| 9.3.5.0.d | Implementar Project Entity (TS-UD-PRJ-PRJ-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.e | Implementar WBSItemDTO & IWBSQueryPort (TS-UD-PRJ-DTO-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.f | Implementar BOM Item Entity (TS-UD-PROC-BOM-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.g | Implementar BOM Validation Rules (TS-UD-PROC-BOM-002) | ✅ COMPLETADO | S |
+| 9.3.5.0.h | Implementar Lead Time Calculator Basic (TS-UD-PROC-LTM-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.i | Implementar Lead Time Calculator Incoterms (TS-UD-PROC-LTM-002) | ✅ COMPLETADO | S |
+| 9.3.5.0.j | Implementar Lead Time Calculator Customs (TS-UD-PROC-LTM-003) | ✅ COMPLETADO | S |
 | 9.3.5.1 | Definir DTO WBS Items | ⏳ PENDIENTE | S |
 | 9.3.5.2 | Puerto consulta Projects | ⏳ PENDIENTE | M |
 | 9.3.5.3 | BOM Builder consume WBS | ⏳ PENDIENTE | M |
@@ -1227,3 +1246,4 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 **Versión:** 2.1  
 **Estado:** APROBADO - Pendiente firmas  
 **Próxima revisión:** 2026-02-28
+

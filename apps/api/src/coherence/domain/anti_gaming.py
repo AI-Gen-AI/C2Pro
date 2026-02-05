@@ -1,5 +1,7 @@
 """
 TS-UC-SEC-GAM-001: Anti-gaming detection domain logic.
+
+Refers to Suite ID: TS-UD-COH-GAM-001.
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from uuid import UUID
 
 @dataclass(frozen=True)
 class AlertEvent:
-    """Refers to Suite ID: TS-UC-SEC-GAM-001."""
+    """Refers to Suite ID: TS-UC-SEC-GAM-001 and TS-UD-COH-GAM-001."""
 
     type: str
     user_id: UUID
@@ -22,7 +24,7 @@ class AlertEvent:
 
 @dataclass(frozen=True)
 class AntiGamingResult:
-    """Refers to Suite ID: TS-UC-SEC-GAM-001."""
+    """Refers to Suite ID: TS-UC-SEC-GAM-001 and TS-UD-COH-GAM-001."""
 
     is_gaming: bool
     reason: str | None
@@ -32,7 +34,7 @@ class AntiGamingResult:
 
 
 class AntiGamingDetector:
-    """Refers to Suite ID: TS-UC-SEC-GAM-001."""
+    """Refers to Suite ID: TS-UC-SEC-GAM-001 and TS-UD-COH-GAM-001."""
 
     def __init__(
         self,
@@ -128,7 +130,7 @@ class AntiGamingDetector:
     ) -> bool:
         if score is None or document_count is None:
             return False
-        return score > self.high_score_threshold and document_count < self.few_docs_threshold
+        return score >= self.high_score_threshold and document_count <= self.few_docs_threshold
 
     def _is_weight_manipulation(self, events: list[AlertEvent], reference_time: datetime) -> bool:
         cutoff = reference_time - timedelta(hours=self.weight_window_hours)
