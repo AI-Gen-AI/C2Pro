@@ -298,7 +298,7 @@ MCP_GATEWAY_CONFIG = {
 | 6.3.3.1 | Implementar validación Allowlist | ✅ COMPLETADO | M |
 | 6.3.3.2 | Configurar Rate Limiting | ✅ COMPLETADO | S |
 | 6.3.3.3 | Implementar Query Limits | ✅ COMPLETADO | S |
-| 6.3.3.4 | Habilitar MCP Audit Log | ⏳ PENDIENTE | S |
+| 6.3.3.4 | Habilitar MCP Audit Log | ✅ COMPLETADO | S |
 
 ### 6.4 Anonymizer Service (PII) - NUEVO v2.1
 
@@ -778,6 +778,23 @@ class LeadTimeCalculator:
 | 9.3.5.0.h | Implementar Lead Time Calculator Basic (TS-UD-PROC-LTM-001) | ✅ COMPLETADO | S |
 | 9.3.5.0.i | Implementar Lead Time Calculator Incoterms (TS-UD-PROC-LTM-002) | ✅ COMPLETADO | S |
 | 9.3.5.0.j | Implementar Lead Time Calculator Customs (TS-UD-PROC-LTM-003) | ✅ COMPLETADO | S |
+| 9.3.5.0.k | Implementar Lead Time Alerts (TS-UD-PROC-LTM-004) | ✅ COMPLETADO | S |
+| 9.3.5.0.l | Implementar Procurement Plan Generation (TS-UD-PROC-PLN-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.m | Implementar Stakeholder Entity (TS-UD-STK-ENT-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.n | Implementar Power/Interest Classification (TS-UD-STK-CLS-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.o | Implementar Quadrant Assignment (TS-UD-STK-CLS-002) | ✅ COMPLETADO | S |
+| 9.3.5.0.p | Implementar JWT Validation (TS-UC-SEC-JWT-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.q | Implementar Audit Trail Core (TS-UC-SEC-AUD-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.r | Implementar Celery Job Queue (TS-INT-EVT-CEL-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.s | Implementar Dead Letter Queue (TS-INT-EVT-DLQ-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.t | Implementar All DTOs Validation (TS-UA-DTO-ALL-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.u | Implementar DTO Serialization/Deserialization (TS-UA-DTO-SER-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.v | Implementar Error Handlers (TS-UAD-HTTP-ERR-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.w | Implementar Clause Repository + DB (TS-INT-DB-CLS-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.x | Implementar Document Repository + DB (TS-INT-DB-DOC-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.y | Implementar WBS Repository + DB (TS-INT-DB-WBS-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.z | Implementar Generate WBS Use Case (TS-UA-PRJ-UC-001) | ✅ COMPLETADO | S |
+| 9.3.5.0.aa | Implementar CRUD WBS Item Use Case (TS-UA-PRJ-UC-002) | ✅ COMPLETADO | S |
 | 9.3.5.1 | Definir DTO WBS Items | ⏳ PENDIENTE | S |
 | 9.3.5.2 | Puerto consulta Projects | ⏳ PENDIENTE | M |
 | 9.3.5.3 | BOM Builder consume WBS | ⏳ PENDIENTE | M |
@@ -841,11 +858,11 @@ Upload → API → Job Queue → Worker → [
 
 | ID | Tarea | Estado | Esfuerzo |
 |----|-------|--------|----------|
-| 10.4.1 | Configurar Celery + Redis | ⏳ PENDIENTE | M |
-| 10.4.2 | Implementar Event Bus | ⏳ PENDIENTE | M |
+| 10.4.1 | Configurar Celery + Redis | ✅ COMPLETADO | M |
+| 10.4.2 | Implementar Event Bus | ✅ COMPLETADO | M |
 | 10.4.3 | Migrar docs processing a async | ⏳ PENDIENTE | L |
 | 10.4.4 | Documentar catálogo eventos | ⏳ PENDIENTE | S |
-| 10.4.5 | Dead letter queue | ⏳ PENDIENTE | M |
+| 10.4.5 | Dead letter queue | ✅ COMPLETADO | M |
 | 10.4.6 | Monitoring workers | ⏳ PENDIENTE | M |
 
 ---

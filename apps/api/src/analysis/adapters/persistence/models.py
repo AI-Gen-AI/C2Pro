@@ -3,6 +3,8 @@ C2Pro - Analysis Models
 
 Modelos SQLAlchemy para análisis de coherencia y alertas.
 Incluye trazabilidad legal mediante FKs a clauses (ROADMAP §5.3).
+
+Refers to Suite ID: TS-INT-DB-CLS-001.
 """
 
 from datetime import datetime
@@ -366,8 +368,8 @@ class Extraction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    document: Mapped["Document"] = relationship(
-        "Document", foreign_keys=[document_id], lazy="selectin"
+    document: Mapped["DocumentORM"] = relationship(
+        "DocumentORM", foreign_keys=[document_id], lazy="selectin"
     )
 
     # Indexes

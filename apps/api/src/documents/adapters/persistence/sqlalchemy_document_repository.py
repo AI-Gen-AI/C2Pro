@@ -1,12 +1,14 @@
 """
 SQLAlchemy implementation of the IDocumentRepository port.
 Handles persistence for Document and Clause entities.
+
+Refers to Suite ID: TS-INT-DB-CLS-001, TS-INT-DB-DOC-001.
 """
 from datetime import datetime
 from typing import List, Tuple
 from uuid import UUID
 
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, table, column, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload # For eager loading relationships
 
@@ -18,12 +20,53 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _get_current_tenant_id(self) -> UUID | None:
+        try:
+            result = await self.session.execute(
+                text("SELECT current_setting('app.current_tenant', true)")
+            )
+        except Exception:
+            return None
+        tenant_value = result.scalar_one_or_none()
+        if not tenant_value:
+            return None
+        try:
+            return UUID(str(tenant_value))
+        except ValueError:
+            return None
+
+    async def _apply_document_tenant_filter(self, stmt):
+        tenant_id = await self._get_current_tenant_id()
+        if tenant_id is None:
+            return stmt
+        projects = table("projects", column("id"), column("tenant_id"))
+        return stmt.join(projects, projects.c.id == DocumentORM.project_id).where(
+            projects.c.tenant_id == tenant_id
+        )
+
+    async def _apply_clause_tenant_filter(self, stmt):
+        tenant_id = await self._get_current_tenant_id()
+        if tenant_id is None:
+            return stmt
+        projects = table("projects", column("id"), column("tenant_id"))
+        return stmt.join(projects, projects.c.id == ClauseORM.project_id).where(
+            projects.c.tenant_id == tenant_id
+        )
+
     # --- Mapper functions ---
     def _to_domain_document(self, orm_document: DocumentORM) -> Document:
         if orm_document is None:
             return None
         # Convert list of ClauseORM to list of Clause domain entities
-        clauses = [self._to_domain_clause(orm_clause) for orm_clause in orm_document.clauses] if orm_document.clauses else []
+        state = inspect(orm_document)
+        if "clauses" in state.unloaded:
+            clauses = []
+        else:
+            clauses = (
+                [self._to_domain_clause(orm_clause) for orm_clause in orm_document.clauses]
+                if orm_document.clauses
+                else []
+            )
         
         domain_document = Document(
             id=orm_document.id,
@@ -116,12 +159,18 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
 
     async def get_by_id(self, document_id: UUID) -> Document | None:
         stmt = select(DocumentORM).where(DocumentORM.id == document_id)
+        stmt = await self._apply_document_tenant_filter(stmt)
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
         return self._to_domain_document(orm_document)
 
     async def get_document_with_clauses(self, document_id: UUID) -> Document | None:
-        stmt = select(DocumentORM).options(selectinload(DocumentORM.clauses)).where(DocumentORM.id == document_id)
+        stmt = (
+            select(DocumentORM)
+            .options(selectinload(DocumentORM.clauses))
+            .where(DocumentORM.id == document_id)
+        )
+        stmt = await self._apply_document_tenant_filter(stmt)
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
         return self._to_domain_document(orm_document)
@@ -145,8 +194,20 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     async def list_for_project(
         self, project_id: UUID, skip: int, limit: int
     ) -> Tuple[List[Document], int]:
-        stmt = select(DocumentORM).where(DocumentORM.project_id == project_id).offset(skip).limit(limit)
-        count_stmt = select(func.count()).where(DocumentORM.project_id == project_id)
+        stmt = (
+            select(DocumentORM)
+            .options(selectinload(DocumentORM.clauses))
+            .where(DocumentORM.project_id == project_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        stmt = await self._apply_document_tenant_filter(stmt)
+        count_stmt = (
+            select(func.count())
+            .select_from(DocumentORM)
+            .where(DocumentORM.project_id == project_id)
+        )
+        count_stmt = await self._apply_document_tenant_filter(count_stmt)
 
         results = await self.session.execute(stmt)
         documents_orm = results.scalars().all()
@@ -157,10 +218,13 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         return [self._to_domain_document(doc_orm) for doc_orm in documents_orm], total_count
 
     async def get_project_tenant_id(self, project_id: UUID) -> UUID | None:
-        result = await self.session.execute(
-            text("SELECT tenant_id FROM projects WHERE id = :project_id"),
-            {"project_id": str(project_id)},
-        )
+        tenant_id = await self._get_current_tenant_id()
+        query = "SELECT tenant_id FROM projects WHERE id = :project_id"
+        params: dict[str, str] = {"project_id": str(project_id)}
+        if tenant_id is not None:
+            query += " AND tenant_id = :tenant_id"
+            params["tenant_id"] = str(tenant_id)
+        result = await self.session.execute(text(query), params)
         return result.scalar_one_or_none()
     
     async def add_clause(self, clause: Clause) -> None:
@@ -168,43 +232,43 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         self.session.add(orm_clause)
 
     async def clause_exists(self, clause_id: UUID) -> bool:
-        result = await self.session.execute(
-            select(ClauseORM.id).where(ClauseORM.id == clause_id)
-        )
+        stmt = select(ClauseORM.id).where(ClauseORM.id == clause_id)
+        stmt = await self._apply_clause_tenant_filter(stmt)
+        result = await self.session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
     async def get_clause_text_map(self, clause_ids: List[UUID]) -> dict[UUID, str]:
         if not clause_ids:
             return {}
-        result = await self.session.execute(
-            select(ClauseORM.id, ClauseORM.full_text).where(ClauseORM.id.in_(clause_ids))
-        )
+        stmt = select(ClauseORM.id, ClauseORM.full_text).where(ClauseORM.id.in_(clause_ids))
+        stmt = await self._apply_clause_tenant_filter(stmt)
+        result = await self.session.execute(stmt)
         return {row[0]: row[1] for row in result.all() if row[1]}
 
     async def get_clauses_by_ids(self, clause_ids: List[UUID]) -> List[Clause]:
         if not clause_ids:
             return []
-        result = await self.session.execute(
-            select(ClauseORM).where(ClauseORM.id.in_(clause_ids))
-        )
+        stmt = select(ClauseORM).where(ClauseORM.id.in_(clause_ids))
+        stmt = await self._apply_clause_tenant_filter(stmt)
+        result = await self.session.execute(stmt)
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
 
     async def get_clause_by_document_and_code(
         self, document_id: UUID, clause_code: str
     ) -> Clause | None:
-        result = await self.session.execute(
-            select(ClauseORM).where(
-                ClauseORM.document_id == document_id,
-                ClauseORM.clause_code == clause_code,
-            )
+        stmt = select(ClauseORM).where(
+            ClauseORM.document_id == document_id,
+            ClauseORM.clause_code == clause_code,
         )
+        stmt = await self._apply_clause_tenant_filter(stmt)
+        result = await self.session.execute(stmt)
         orm_clause = result.scalar_one_or_none()
         return self._to_domain_clause(orm_clause) if orm_clause else None
 
     async def list_clauses_for_document(self, document_id: UUID) -> List[Clause]:
-        result = await self.session.execute(
-            select(ClauseORM).where(ClauseORM.document_id == document_id)
-        )
+        stmt = select(ClauseORM).where(ClauseORM.document_id == document_id)
+        stmt = await self._apply_clause_tenant_filter(stmt)
+        result = await self.session.execute(stmt)
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
 
     async def commit(self) -> None:

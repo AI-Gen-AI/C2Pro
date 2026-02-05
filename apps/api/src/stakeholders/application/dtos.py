@@ -1,5 +1,7 @@
 """
 Data Transfer Objects (DTOs) for the Stakeholders module.
+
+Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import datetime
 from decimal import Decimal
@@ -146,6 +148,13 @@ class StakeholderCreateRequest(BaseModel):
     stakeholder_metadata: Optional[dict] = None
     feedback_comment: Optional[str] = Field(None, max_length=500)
 
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_blank(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("name cannot be empty or whitespace only")
+        return value.strip()
+
 
 class StakeholderUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -160,6 +169,15 @@ class StakeholderUpdateRequest(BaseModel):
     source_clause_id: Optional[UUID] = None
     stakeholder_metadata: Optional[dict] = None
     feedback_comment: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("name cannot be empty or whitespace only")
+        return value.strip()
 
     model_config = ConfigDict(extra="forbid")
 
