@@ -506,6 +506,10 @@ tests/
 | UAD-HTTP-031 | test_cors_middleware_blocked_origin | UAD | 🟡 P2 | 10.4.1 |
 | UAD-HTTP-032 | test_request_id_middleware_generation | UAD | 🟠 P1 | 9.2.1 |
 
+#### 3.3.1.1 Estado de Suites (HTTP Adapters)
+
+- [x] TS-UAD-HTTP-ERR-001 - Error Handlers (Implemented: Unit Tests & Core HTTP Error Handling)
+
 #### 3.3.2 Persistence Adapters (26 tests)
 
 | ID | Test Name | Tipo | Prioridad | Ciclo TDD |
@@ -561,6 +565,11 @@ tests/
 - [x] TS-UD-DOC-ENT-004 - Entity Extraction - Stakeholders (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-DOC-CNF-001 - Confidence Scoring (Implemented: Unit Tests & Domain Logic)
 
+#### 4.1.2 Estado de Suites (Documents Integration)
+
+- [x] TS-INT-DB-CLS-001 - Clause Repository + DB (Implemented: Integration Tests & Persistence Logic)
+- [x] TS-INT-DB-DOC-001 - Document Repository + DB (Implemented: Integration Tests & Persistence Logic)
+
 ### 4.2 Módulo: COHERENCE (56 tests total)
 
 | Capa | Unit | Integration | E2E | Total |
@@ -608,6 +617,11 @@ tests/
 - [x] TS-UD-PRJ-PRJ-001 - Project Entity (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-PRJ-DTO-001 - WBSItemDTO & IWBSQueryPort (Implemented: Unit Tests & Domain Logic)
 
+#### 4.3.2 Estado de Suites (Projects Application)
+
+- [x] TS-UA-PRJ-UC-001 - Generate WBS Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-PRJ-UC-002 - CRUD WBS Item Use Case (Implemented: Unit Tests & Application Logic)
+
 ### 4.4 Módulo: PROCUREMENT (32 tests total)
 
 | Capa | Unit | Integration | E2E | Total |
@@ -627,6 +641,12 @@ tests/
 - [x] TS-UD-PROC-LTM-001 - Lead Time Calculator - Basic (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-PROC-LTM-002 - Lead Time Calculator - Incoterms (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-PROC-LTM-003 - Lead Time Calculator - Customs (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-LTM-004 - Lead Time Alerts (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-PLN-001 - Procurement Plan Generation (Implemented: Unit Tests & Domain Logic)
+
+#### 4.4.2 Estado de Suites (Procurement Integration)
+
+- [x] TS-INT-DB-WBS-001 - WBS Repository + DB (Implemented: Integration Tests & Persistence Logic)
 
 ### 4.5 Módulo: STAKEHOLDERS (26 tests total)
 
@@ -638,6 +658,12 @@ tests/
 | Integration | - | 1 | - | 1 |
 | E2E | - | - | 1 | 1 |
 | **Total** | **24** | **1** | **1** | **26** |
+
+#### 4.5.1 Estado de Suites (Stakeholders Domain)
+
+- [x] TS-UD-STK-ENT-001 - Stakeholder Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-CLS-001 - Power/Interest Classification (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-CLS-002 - Quadrant Assignment (Implemented: Unit Tests & Domain Logic)
 
 ### 4.6 Módulo: ANALYSIS (24 tests total)
 
@@ -666,6 +692,9 @@ tests/
 - [x] TS-UC-SEC-MCP-001 - MCP Gateway Allowlist (Implemented: Unit Tests & Adapter Logic)
 - [x] TS-UC-SEC-MCP-002 - MCP Gateway Rate Limiting (Implemented: Unit Tests & Adapter Logic)
 - [x] TS-UC-SEC-MCP-003 - MCP Gateway Query Limits (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UC-SEC-MCP-004 - MCP Gateway Audit (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UC-SEC-JWT-001 - JWT Validation (Implemented: Unit Tests & Core Security Logic)
+- [x] TS-UC-SEC-AUD-001 - Audit Trail Core (Implemented: Unit Tests & Core Security Logic)
 - [x] TS-UC-SEC-ANO-001 - Anonymizer PII Detection (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UC-SEC-ANO-002 - Anonymizer Strategies (Implemented: Unit Tests & Application Logic)
 - [x] TS-UC-SEC-ANO-003 - Anonymizer Tenant Config (Implemented: Unit Tests & Application Logic)
@@ -682,6 +711,12 @@ tests/
 | Integration | - | 10 | - | 10 |
 | E2E | - | - | 2 | 2 |
 | **Total** | **10** | **10** | **2** | **22** |
+
+#### 4.8.1 Estado de Suites (Async/Events)
+
+- [x] TS-INT-EVT-BUS-001 - Event Bus Publish/Subscribe (Implemented: Integration Tests & Core Event Bus Logic)
+- [x] TS-INT-EVT-CEL-001 - Celery Job Queue (Implemented: Integration Tests & Task Queue Adapter Logic)
+- [x] TS-INT-EVT-DLQ-001 - Dead Letter Queue (Implemented: Integration Tests & Core Event Bus Logic)
 
 ### 4.9 Módulo: OBSERVABILITY (18 tests total)
 
@@ -702,6 +737,11 @@ tests/
 | Adapters | - | - | - | - |
 | Contract Tests | - | 6 | - | 6 |
 | **Total** | **18** | **6** | **0** | **24** |
+
+#### 4.10.1 Estado de Suites (API Contracts)
+
+- [x] TS-UA-DTO-ALL-001 - All DTOs Validation (Implemented: Unit Tests & Application DTO Logic)
+- [x] TS-UA-DTO-SER-001 - Serialization/Deserialization (Implemented: Unit Tests & Core Serialization Logic)
 
 ---
 dos los módulos | 3 |

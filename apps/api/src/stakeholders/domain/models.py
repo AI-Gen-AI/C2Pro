@@ -1,5 +1,7 @@
 """
 Domain models for the Stakeholders bounded context.
+
+Refers to Suite ID: TS-UD-STK-ENT-001.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -64,6 +66,24 @@ class Stakeholder:
     review_comment: str | None = None
     stakeholder_metadata: dict = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.project_id is None:
+            raise ValueError("project_id is required")
+        if self.name is None or not self.name.strip():
+            raise ValueError("name is required")
+        if self.updated_at < self.created_at:
+            raise ValueError("updated_at cannot be before created_at")
+
+        clause_adjusted = self.source_clause_id is not None and self.power_level == PowerLevel.LOW
+        if clause_adjusted:
+            self.power_level = PowerLevel.MEDIUM
+
+        if self.quadrant is None:
+            if clause_adjusted:
+                self.quadrant = StakeholderQuadrant.KEEP_SATISFIED
+            else:
+                self.quadrant = _derive_quadrant(self.power_level, self.interest_level)
+
 
     def is_key_player(self) -> bool:
         return self.quadrant == StakeholderQuadrant.KEY_PLAYER
@@ -91,3 +111,13 @@ class RaciAssignment:
 
     def is_verified(self) -> bool:
         return self.manually_verified and self.verified_at is not None
+
+
+def _derive_quadrant(power_level: PowerLevel, interest_level: InterestLevel) -> StakeholderQuadrant:
+    if power_level == PowerLevel.HIGH and interest_level == InterestLevel.HIGH:
+        return StakeholderQuadrant.KEY_PLAYER
+    if power_level == PowerLevel.HIGH and interest_level != InterestLevel.HIGH:
+        return StakeholderQuadrant.KEEP_SATISFIED
+    if power_level != PowerLevel.HIGH and interest_level == InterestLevel.HIGH:
+        return StakeholderQuadrant.KEEP_INFORMED
+    return StakeholderQuadrant.MONITOR

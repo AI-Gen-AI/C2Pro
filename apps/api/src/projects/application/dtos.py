@@ -4,6 +4,8 @@ Data Transfer Objects (DTOs) for the Project module.
 These models define the data structures for API requests and responses.
 They are part of the application layer and are used to transfer data between
 the presentation layer (API routers) and the application services (use cases).
+
+Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import datetime
 from uuid import UUID
@@ -35,6 +37,11 @@ class ProjectCreateRequest(BaseModel):
             if v <= info.data["start_date"]:
                 raise ValueError("end_date must be after start_date")
         return v
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.upper()
 
 class ProjectUpdateRequest(BaseModel):
     """DTO for updating a project."""

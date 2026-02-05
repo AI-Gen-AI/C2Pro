@@ -14,8 +14,10 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+from src.core import database as database_module
 from src.core.database import Base
 from src.core.database import get_session_with_tenant
+from src.core.auth.models import Tenant, User
 from src.projects.adapters.persistence.models import ProjectORM
 from src.documents.adapters.persistence.models import DocumentORM, ClauseORM
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
@@ -24,18 +26,39 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
 from src.documents.domain.models import Document, DocumentStatus, DocumentType, Clause, ClauseType
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def pg_engine():
     container = PostgresContainer("postgres:15-alpine")
     container.start()
+    engine = None
     try:
-        url = container.get_connection_url().replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = container.get_connection_url()
+        if url.startswith("postgresql+psycopg2://"):
+            url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         engine = create_async_engine(url, echo=False)
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[
+                    Tenant.__table__,
+                    User.__table__,
+                    ProjectORM.__table__,
+                    DocumentORM.__table__,
+                    ClauseORM.__table__,
+                ],
+            )
+        database_module._session_factory = async_sessionmaker(
+            bind=engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
+        )
         yield engine
     finally:
-        await engine.dispose()
+        if engine is not None:
+            await engine.dispose()
+        database_module._session_factory = None
         container.stop()
 
 
@@ -74,8 +97,6 @@ async def test_clause_repository_crud_and_tenant_filtering(session: AsyncSession
     session.add(project_a)
     await session.commit()
 
-    repo = SqlAlchemyDocumentRepository(session)
-
     document = Document(
         id=uuid4(),
         project_id=project_a.id,
@@ -86,9 +107,6 @@ async def test_clause_repository_crud_and_tenant_filtering(session: AsyncSession
         updated_at=datetime.utcnow(),
         document_metadata={},
     )
-    await repo.add(document)
-    await repo.commit()
-
     clause = Clause(
         id=uuid4(),
         project_id=project_a.id,
@@ -99,12 +117,16 @@ async def test_clause_repository_crud_and_tenant_filtering(session: AsyncSession
         full_text="Scope text",
         extraction_confidence=0.9,
     )
-    await repo.add_clause(clause)
-    await repo.commit()
+    async with get_session_with_tenant(tenant_a) as tenant_a_session:
+        repo = SqlAlchemyDocumentRepository(tenant_a_session)
+        await repo.add(document)
+        await repo.commit()
+        await repo.add_clause(clause)
+        await repo.commit()
 
-    found = await repo.list_clauses_for_document(document.id)
-    assert len(found) == 1
-    assert found[0].clause_code == "1.1"
+        found = await repo.list_clauses_for_document(document.id)
+        assert len(found) == 1
+        assert found[0].clause_code == "1.1"
 
     # Critical security test: tenant isolation via RLS/session context
     async with get_session_with_tenant(tenant_b) as tenant_b_session:
