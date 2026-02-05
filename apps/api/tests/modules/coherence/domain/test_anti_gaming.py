@@ -1,5 +1,7 @@
 """
-TS-UC-SEC-GAM-001: Anti-gaming detection tests.
+Coherence anti-gaming policy tests (TDD - RED phase).
+
+Refers to Suite ID: TS-UD-COH-GAM-001.
 """
 
 from __future__ import annotations
@@ -10,181 +12,217 @@ from uuid import uuid4
 from src.coherence.domain.anti_gaming import AlertEvent, AntiGamingDetector
 
 
-class TestAntiGamingDetection:
-    """Refers to Suite ID: TS-UC-SEC-GAM-001."""
+class TestAntiGamingPolicy:
+    """Refers to Suite ID: TS-UD-COH-GAM-001"""
 
-    def test_001_mass_changes_11_in_hour_detected(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
+    def test_001_detect_mass_changes_15_in_30min(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
         user_id = uuid4()
         events = [
-            AlertEvent("change", user_id, f"sig-{idx}", now - timedelta(minutes=idx))
-            for idx in range(11)
+            AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
+            for i in range(15)
         ]
-        result = AntiGamingDetector().detect(events, now=now)
+        detector = AntiGamingDetector(mass_changes_threshold=10, mass_changes_window_minutes=30)
+
+        result = detector.detect(events, now=now)
+
         assert result.is_gaming is True
         assert "mass_changes" in result.violations
 
-    def test_002_mass_changes_10_in_hour_allowed(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
+    def test_002_no_violation_10_in_60min(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
         user_id = uuid4()
         events = [
-            AlertEvent("change", user_id, f"sig-{idx}", now - timedelta(minutes=idx))
-            for idx in range(10)
+            AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
+            for i in range(10)
         ]
+
         result = AntiGamingDetector().detect(events, now=now)
+
         assert result.is_gaming is False
 
-    def test_003_mass_changes_window_reset(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
+    def test_003_mass_changes_window_sliding(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
         user_id = uuid4()
-        old_events = [
-            AlertEvent("change", user_id, f"sig-{idx}", now - timedelta(minutes=61 + idx))
-            for idx in range(11)
-        ]
-        result = AntiGamingDetector().detect(old_events, now=now)
-        assert result.is_gaming is False
-
-    def test_004_resolve_reintroduce_3_times_detected(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        signature = "alert:scope:4.2"
         events = [
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=0)),
-            AlertEvent("resolved", user_id, signature, now + timedelta(seconds=30)),
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=60)),
-            AlertEvent("resolved", user_id, signature, now + timedelta(seconds=90)),
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=120)),
+            AlertEvent("updated", user_id, f"sig-old-{i}", now - timedelta(minutes=35 + i))
+            for i in range(20)
         ]
-        result = AntiGamingDetector().detect(events, now=now + timedelta(seconds=121))
+        detector = AntiGamingDetector(mass_changes_threshold=10, mass_changes_window_minutes=30)
+
+        result = detector.detect(events, now=now)
+
+        assert result.is_gaming is False
+
+    def test_004_mass_changes_flag_for_review(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+        events = [
+            AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
+            for i in range(11)
+        ]
+
+        result = AntiGamingDetector().detect(events, now=now)
+
+        assert any("mass_changes" in log for log in result.audit_logs)
+
+    def test_005_detect_resolve_reintroduce_4_times(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+        sig = "alert:budget:overrun"
+        events = [
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=0)),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=10)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=20)),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=30)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=40)),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=50)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=60)),
+        ]
+
+        result = AntiGamingDetector(repeat_threshold=4).detect(events, now=now + timedelta(seconds=61))
+
         assert result.is_gaming is True
         assert "resolve_reintroduce" in result.violations
 
-    def test_005_resolve_reintroduce_2_times_allowed(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
+    def test_006_no_violation_2_times(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
         user_id = uuid4()
-        signature = "alert:scope:4.2"
+        sig = "alert:budget:overrun"
         events = [
-            AlertEvent("created", user_id, signature, now),
-            AlertEvent("resolved", user_id, signature, now + timedelta(seconds=30)),
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=60)),
+            AlertEvent("created", user_id, sig, now),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=10)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=20)),
         ]
-        result = AntiGamingDetector().detect(events, now=now + timedelta(seconds=61))
+
+        result = AntiGamingDetector(repeat_threshold=3).detect(events, now=now + timedelta(seconds=21))
+
         assert result.is_gaming is False
 
-    def test_006_resolve_reintroduce_different_hash_allowed(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
+    def test_007_hash_comparison_same_content(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+        sig = "alert:scope:same-hash"
+        events = [
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=0)),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=10)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=20)),
+            AlertEvent("resolved", user_id, sig, now + timedelta(seconds=30)),
+            AlertEvent("created", user_id, sig, now + timedelta(seconds=40)),
+        ]
+
+        result = AntiGamingDetector(repeat_threshold=3).detect(events, now=now + timedelta(seconds=41))
+
+        assert result.is_gaming is True
+        assert "resolve_reintroduce" in result.violations
+
+    def test_008_penalty_minus_5_points(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
         user_id = uuid4()
         events = [
-            AlertEvent("created", user_id, "hash-a", now),
-            AlertEvent("resolved", user_id, "hash-a", now + timedelta(seconds=30)),
-            AlertEvent("created", user_id, "hash-b", now + timedelta(seconds=60)),
-            AlertEvent("resolved", user_id, "hash-b", now + timedelta(seconds=90)),
-            AlertEvent("created", user_id, "hash-c", now + timedelta(seconds=120)),
+            AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
+            for i in range(11)
         ]
-        result = AntiGamingDetector().detect(events, now=now + timedelta(seconds=121))
-        assert result.is_gaming is False
 
-    def test_007_high_score_few_docs_detected(self) -> None:
+        result = AntiGamingDetector(penalty_per_violation=5).detect(events, now=now)
+
+        assert result.penalty_points == 5
+
+    def test_009_detect_95_percent_3_docs(self) -> None:
         result = AntiGamingDetector().detect(
-            [],
+            events=[],
             score=95.0,
             document_count=3,
-            now=datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
         )
+
         assert result.is_gaming is True
         assert "suspicious_high_score" in result.violations
 
-    def test_008_high_score_many_docs_allowed(self) -> None:
+    def test_010_no_violation_95_percent_50_docs(self) -> None:
         result = AntiGamingDetector().detect(
-            [],
+            events=[],
             score=95.0,
-            document_count=8,
-            now=datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc),
+            document_count=50,
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
         )
+
         assert result.is_gaming is False
 
-    def test_009_high_score_threshold_boundary(self) -> None:
+    def test_011_threshold_90_percent_5_docs(self) -> None:
         result = AntiGamingDetector().detect(
-            [],
+            events=[],
             score=90.0,
-            document_count=4,
-            now=datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc),
+            document_count=5,
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
         )
-        assert result.is_gaming is False
 
-    def test_010_weight_change_25_percent_detected(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        events = [
-            AlertEvent("weight_changed", user_id, "weights", now, weight_change_percent=25.0),
-        ]
-        result = AntiGamingDetector().detect(events, now=now)
+        assert result.is_gaming is True
+        assert "suspicious_high_score" in result.violations
+
+    def test_012_require_audit_action(self) -> None:
+        result = AntiGamingDetector().detect(
+            events=[],
+            score=95.0,
+            document_count=3,
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
+        )
+
+        assert any("suspicious_high_score" in log for log in result.audit_logs)
+
+    def test_013_detect_weight_change_25_percent(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        event = AlertEvent(
+            "weight_changed",
+            uuid4(),
+            "weights:v1",
+            now,
+            weight_change_percent=25.0,
+        )
+
+        result = AntiGamingDetector().detect([event], now=now)
+
         assert result.is_gaming is True
         assert "weight_manipulation" in result.violations
 
-    def test_011_weight_change_15_percent_allowed(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        events = [
-            AlertEvent("weight_changed", user_id, "weights", now, weight_change_percent=15.0),
-        ]
-        result = AntiGamingDetector().detect(events, now=now)
-        assert result.is_gaming is False
-
-    def test_012_weight_change_tracking_24h_window(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        events = [
-            AlertEvent(
-                "weight_changed",
-                user_id,
-                "weights",
-                now - timedelta(hours=25),
-                weight_change_percent=30.0,
-            ),
-        ]
-        result = AntiGamingDetector().detect(events, now=now)
-        assert result.is_gaming is False
-
-    def test_edge_001_multiple_violations_combined(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        signature = "alert:scope:4.2"
-        events = [
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=0)),
-            AlertEvent("resolved", user_id, signature, now + timedelta(seconds=30)),
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=60)),
-            AlertEvent("resolved", user_id, signature, now + timedelta(seconds=90)),
-            AlertEvent("created", user_id, signature, now + timedelta(seconds=120)),
-            AlertEvent("weight_changed", user_id, "weights", now, weight_change_percent=25.0),
-        ]
-        result = AntiGamingDetector().detect(
-            events,
-            score=95.0,
-            document_count=3,
-            now=now + timedelta(seconds=121),
+    def test_014_no_violation_change_15_percent(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        event = AlertEvent(
+            "weight_changed",
+            uuid4(),
+            "weights:v1",
+            now,
+            weight_change_percent=15.0,
         )
-        assert result.is_gaming is True
-        assert len(result.violations) >= 2
-        assert result.reason == "multiple_violations"
 
-    def test_edge_002_violation_penalty_application(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        events = [
-            AlertEvent("change", user_id, f"sig-{idx}", now - timedelta(minutes=idx))
-            for idx in range(11)
-        ]
-        result = AntiGamingDetector().detect(events, now=now)
-        assert result.penalty_points == 5
+        result = AntiGamingDetector().detect([event], now=now)
 
-    def test_edge_003_violation_audit_logging(self) -> None:
-        now = datetime(2026, 2, 3, 10, 0, tzinfo=timezone.utc)
-        user_id = uuid4()
-        events = [
-            AlertEvent("change", user_id, f"sig-{idx}", now - timedelta(minutes=idx))
-            for idx in range(11)
-        ]
-        result = AntiGamingDetector().detect(events, now=now)
-        assert len(result.audit_logs) >= 1
-        assert "mass_changes" in result.audit_logs[0]
+        assert result.is_gaming is False
+
+    def test_015_24h_window_tracking(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        outside_window = AlertEvent(
+            "weight_changed",
+            uuid4(),
+            "weights:old",
+            now - timedelta(hours=25),
+            weight_change_percent=30.0,
+        )
+
+        result = AntiGamingDetector().detect([outside_window], now=now)
+
+        assert result.is_gaming is False
+
+    def test_016_notify_admin_action(self) -> None:
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        event = AlertEvent(
+            "weight_changed",
+            uuid4(),
+            "weights:v1",
+            now,
+            weight_change_percent=30.0,
+        )
+
+        result = AntiGamingDetector().detect([event], now=now)
+
+        assert any("weight_manipulation" in log for log in result.audit_logs)

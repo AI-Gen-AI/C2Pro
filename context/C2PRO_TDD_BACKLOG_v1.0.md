@@ -577,6 +577,15 @@ tests/
 - [x] TS-UD-COH-CAT-001 - Category Enum & Weights (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-COH-RUL-001 - Coherence Rules: Scope Category (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-COH-RUL-002 - Coherence Rules: Budget Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-003 - Coherence Rules: Time Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-004 - Coherence Rules: Technical Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-005 - Coherence Rules: Legal Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-RUL-006 - Coherence Rules: Quality Category (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-SCR-001 - Score Calculator: SubScores (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-SCR-002 - Score Calculator: Global Score (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-SCR-003 - Score Calculator: Custom Weights (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-GAM-001 - Anti-Gaming Policy (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-COH-ALR-001 - Alert Entity & Mapping (Implemented: Unit Tests & Domain Logic)
 
 ### 4.3 Módulo: PROJECTS (36 tests total)
 
@@ -589,6 +598,16 @@ tests/
 | E2E | - | - | 1 | 1 |
 | **Total** | **32** | **3** | **1** | **36** |
 
+
+#### 4.3.1 Estado de Suites (Projects Domain)
+
+- [x] TS-UD-PRJ-WBS-001 - WBS Item Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PRJ-WBS-002 - WBS Hierarchy & Codes (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PRJ-WBS-003 - WBS Validation Rules (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PRJ-WBS-004 - WBS CRUD Operations (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PRJ-PRJ-001 - Project Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PRJ-DTO-001 - WBSItemDTO & IWBSQueryPort (Implemented: Unit Tests & Domain Logic)
+
 ### 4.4 Módulo: PROCUREMENT (32 tests total)
 
 | Capa | Unit | Integration | E2E | Total |
@@ -599,6 +618,15 @@ tests/
 | Integration | - | 3 | - | 3 |
 | E2E | - | - | 1 | 1 |
 | **Total** | **28** | **3** | **1** | **32** |
+
+
+#### 4.4.1 Estado de Suites (Procurement Domain)
+
+- [x] TS-UD-PROC-BOM-001 - BOM Item Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-BOM-002 - BOM Validation Rules (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-LTM-001 - Lead Time Calculator - Basic (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-LTM-002 - Lead Time Calculator - Incoterms (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-PROC-LTM-003 - Lead Time Calculator - Customs (Implemented: Unit Tests & Domain Logic)
 
 ### 4.5 Módulo: STAKEHOLDERS (26 tests total)
 

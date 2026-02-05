@@ -1,123 +1,113 @@
+"""
+Incoterm adjustment rules for lead-time ownership.
 
-import pytest
-from typing import List, NamedTuple
-from enum import Enum, auto
+Refers to Suite ID: TS-UD-PROC-LTM-002.
+"""
 
-# This import will fail as the modules do not exist yet.
-from apps.api.src.procurement.domain.incoterm_adjuster import (
-    IncotermAdjuster,
-    Incoterm,
-    LogisticsLeg,
-    FullRoute,
-    Party,
+from src.procurement.domain.incoterm_adjuster import (
     AdjustedLeadTime,
+    FullRoute,
+    Incoterm,
+    IncotermAdjuster,
+    LogisticsLeg,
+    Party,
 )
 
-# --- Temporary definitions for test development ---
-class TempParty(Enum):
-    SELLER = auto()
-    BUYER = auto()
 
-class TempIncoterm(Enum):
-    EXW = "Ex Works"
-    FOB = "Free On Board"
-    CIF = "Cost, Insurance, and Freight"
-    DDP = "Delivered Duty Paid"
+def _standard_route() -> FullRoute:
+    return FullRoute(
+        legs=[
+            LogisticsLeg(name="Production", duration_days=20),
+            LogisticsLeg(name="Origin Inland Transit", duration_days=3),
+            LogisticsLeg(name="Origin Customs Clearance", duration_days=2),
+            LogisticsLeg(name="Ocean Freight", duration_days=15),
+            LogisticsLeg(name="Insurance", duration_days=1),
+            LogisticsLeg(name="Destination Customs Clearance", duration_days=4),
+            LogisticsLeg(name="Destination Inland Transit", duration_days=2),
+        ]
+    )
 
-class TempLogisticsLeg(NamedTuple):
-    name: str
-    duration_days: int
-    default_responsible_party: TempParty
-    
-class TempFullRoute(NamedTuple):
-    legs: List[TempLogisticsLeg]
-    
-class TempAdjustedLeadTime(NamedTuple):
-    buyer_responsible_days: int
-    seller_responsible_days: int
-    breakdown: dict
 
-# --- Test Fixtures ---
-@pytest.fixture
-def adjuster() -> IncotermAdjuster:
-    """Provides an instance of the IncotermAdjuster."""
-    return IncotermAdjuster()
-
-@pytest.fixture
-def standard_route() -> TempFullRoute:
-    """Provides a standard, complete logistics route for testing."""
-    return TempFullRoute(legs=[
-        TempLogisticsLeg("Production", 20, TempParty.SELLER),
-        TempLogisticsLeg("Origin Inland Transit", 3, TempParty.SELLER),
-        TempLogisticsLeg("Origin Customs Clearance", 2, TempParty.SELLER),
-        TempLogisticsLeg("Ocean Freight", 15, TempParty.BUYER),
-        TempLogisticsLeg("Destination Customs Clearance", 4, TempParty.BUYER),
-        TempLogisticsLeg("Destination Inland Transit", 2, TempParty.BUYER),
-    ])
-
-# --- Test Cases ---
-@pytest.mark.asyncio
 class TestIncotermAdjuster:
     """Refers to Suite ID: TS-UD-PROC-LTM-002"""
 
-    async def test_001_exw_buyer_full_responsibility(self, adjuster, standard_route):
-        """Under EXW, the buyer is responsible for the entire journey after production."""
-        result = await adjuster.calculate(standard_route, Incoterm.EXW)
-        
-        # Expected: Origin Transit (3) + Origin Customs (2) + Ocean (15) + Dest Customs (4) + Dest Transit (2) = 26
-        assert result.buyer_responsible_days == 26
-        assert result.seller_responsible_days == 20 # Just production
+    def test_001_exw_buyer_full_responsibility(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.EXW)
+        assert isinstance(result, AdjustedLeadTime)
+        assert result.seller_responsible_days == 20
+        assert result.buyer_responsible_days == 27
 
-    async def test_004_fob_shared_responsibility(self, adjuster, standard_route):
-        """Under FOB, buyer responsibility starts after goods are on the vessel."""
-        result = await adjuster.calculate(standard_route, Incoterm.FOB)
-        
-        # Expected: Ocean (15) + Dest Customs (4) + Dest Transit (2) = 21
-        assert result.buyer_responsible_days == 21
-        # Expected: Production (20) + Origin Transit (3) + Origin Customs (2) = 25
+    def test_002_exw_transit_time_included(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.EXW)
+        assert result.breakdown["Origin Inland Transit"] == Party.BUYER
+        assert result.breakdown["Ocean Freight"] == Party.BUYER
+        assert result.breakdown["Destination Inland Transit"] == Party.BUYER
+
+    def test_003_exw_customs_included(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.EXW)
+        assert result.breakdown["Origin Customs Clearance"] == Party.BUYER
+        assert result.breakdown["Destination Customs Clearance"] == Party.BUYER
+
+    def test_004_fob_shared_responsibility(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.FOB)
         assert result.seller_responsible_days == 25
+        assert result.buyer_responsible_days == 22
 
-    async def test_007_cif_seller_insurance(self, adjuster, standard_route):
-        """Under CIF, buyer responsibility starts at the destination port."""
-        result = await adjuster.calculate(standard_route, Incoterm.CIF)
-        
-        # Expected: Dest Customs (4) + Dest Transit (2) = 6
-        assert result.buyer_responsible_days == 6
-        # Expected: Production (20) + Origin Transit (3) + Origin Customs (2) + Ocean (15) = 40
-        assert result.seller_responsible_days == 40
+    def test_005_fob_port_handover(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.FOB)
+        assert result.breakdown["Origin Customs Clearance"] == Party.SELLER
+        assert result.breakdown["Ocean Freight"] == Party.BUYER
 
-    async def test_010_ddp_seller_full_responsibility(self, adjuster, standard_route):
-        """Under DDP, seller is responsible for the entire journey."""
-        result = await adjuster.calculate(standard_route, Incoterm.DDP)
-        
-        # Expected: 0 (or a final 'last mile' if defined, here it's 0)
+    def test_006_fob_insurance_buyer(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.FOB)
+        assert result.breakdown["Insurance"] == Party.BUYER
+
+    def test_007_cif_seller_insurance(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.CIF)
+        assert result.breakdown["Insurance"] == Party.SELLER
+
+    def test_008_cif_port_to_port(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.CIF)
+        assert result.breakdown["Ocean Freight"] == Party.SELLER
+        assert result.breakdown["Destination Inland Transit"] == Party.BUYER
+
+    def test_009_cif_customs_buyer(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.CIF)
+        assert result.breakdown["Destination Customs Clearance"] == Party.BUYER
+
+    def test_010_ddp_seller_full_responsibility(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.DDP)
         assert result.buyer_responsible_days == 0
-        # Expected: All legs sum up
-        assert result.seller_responsible_days == 20 + 3 + 2 + 15 + 4 + 2
+        assert result.seller_responsible_days == 47
 
-    async def test_014_incoterm_impact_on_lead_time(self, adjuster, standard_route):
-        """Verify that lead time for the buyer decreases as seller responsibility increases."""
-        exw_res = await adjuster.calculate(standard_route, Incoterm.EXW)
-        fob_res = await adjuster.calculate(standard_route, Incoterm.FOB)
-        cif_res = await adjuster.calculate(standard_route, Incoterm.CIF)
-        ddp_res = await adjuster.calculate(standard_route, Incoterm.DDP)
-        
-        exw_time = exw_res.buyer_responsible_days
-        fob_time = fob_res.buyer_responsible_days
-        cif_time = cif_res.buyer_responsible_days
-        ddp_time = ddp_res.buyer_responsible_days
-        
-        assert exw_time > fob_time > cif_time >= ddp_time
-        assert ddp_time == 0
+    def test_011_ddp_no_customs_buyer(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.DDP)
+        assert result.breakdown["Origin Customs Clearance"] == Party.SELLER
+        assert result.breakdown["Destination Customs Clearance"] == Party.SELLER
 
-    async def test_breakdown_returned(self, adjuster, standard_route):
-        """Test that a breakdown of responsibilities is returned."""
-        result = await adjuster.calculate(standard_route, Incoterm.FOB)
-        
-        breakdown = result.breakdown
-        assert breakdown["Production"] == Party.SELLER
-        assert breakdown["Origin Inland Transit"] == Party.SELLER
-        assert breakdown["Origin Customs Clearance"] == Party.SELLER
-        assert breakdown["Ocean Freight"] == Party.BUYER
-        assert breakdown["Destination Customs Clearance"] == Party.BUYER
-        assert breakdown["Destination Inland Transit"] == Party.BUYER
+    def test_012_ddp_door_to_door(self) -> None:
+        result = IncotermAdjuster().calculate(_standard_route(), Incoterm.DDP)
+        assert result.breakdown["Origin Inland Transit"] == Party.SELLER
+        assert result.breakdown["Destination Inland Transit"] == Party.SELLER
+
+    def test_013_incoterm_comparison_same_route(self) -> None:
+        adjuster = IncotermAdjuster()
+        route = _standard_route()
+
+        exw = adjuster.calculate(route, Incoterm.EXW)
+        fob = adjuster.calculate(route, Incoterm.FOB)
+        cif = adjuster.calculate(route, Incoterm.CIF)
+        ddp = adjuster.calculate(route, Incoterm.DDP)
+
+        assert exw.buyer_responsible_days > fob.buyer_responsible_days > cif.buyer_responsible_days > ddp.buyer_responsible_days
+
+    def test_014_incoterm_impact_on_lead_time(self) -> None:
+        adjuster = IncotermAdjuster()
+        route = _standard_route()
+
+        exw = adjuster.calculate(route, Incoterm.EXW)
+        ddp = adjuster.calculate(route, Incoterm.DDP)
+
+        assert exw.total_days == ddp.total_days == 47
+        assert exw.buyer_responsible_days == 27
+        assert ddp.buyer_responsible_days == 0

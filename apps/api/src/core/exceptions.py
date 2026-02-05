@@ -195,6 +195,13 @@ class ValidationError(C2ProException):
         )
 
 
+class DomainValidationError(ValidationError):
+    """Validation error raised by domain / business logic (not HTTP schema validation)."""
+
+    def __init__(self, message: str = "Domain validation failed"):
+        super().__init__(message=message)
+
+
 class BusinessLogicException(C2ProException):
     """
     Error de lógica de negocio.

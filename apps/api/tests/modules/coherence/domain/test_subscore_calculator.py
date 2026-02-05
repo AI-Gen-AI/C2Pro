@@ -4,118 +4,149 @@ Subscore calculator tests.
 Refers to Suite ID: TS-UD-COH-SCR-001.
 """
 
-import pytest
-from typing import List, NamedTuple
-from enum import Enum, auto
+from __future__ import annotations
 
-# Domain import
+from uuid import uuid4
+
 from src.coherence.domain.subscore_calculator import (
-    SubscoreCalculator,
     CoherenceAlert,
     CoherenceSeverity,
     ScoreScope,
+    SubscoreCalculator,
 )
 
-# --- Temporary definitions for test development ---
-class TempCoherenceSeverity(Enum):
-    LOW = auto()
-    MEDIUM = auto()
-    HIGH = auto()
-    CRITICAL = auto()
 
-class TempScoreScope(Enum):
-    SCOPE = auto()
-    BUDGET = auto()
-    QUALITY = auto()
-    TECHNICAL = auto()
-    LEGAL = auto()
-    TIME = auto()
-
-class TempCoherenceAlert(NamedTuple):
-    rule_id: str
-    severity: TempCoherenceSeverity
-    scope: TempScoreScope
-
-
-# --- Test Fixture ---
-@pytest.fixture
-def calculator() -> SubscoreCalculator:
-    """Provides an instance of the SubscoreCalculator."""
-    # This is a pure domain service with no dependencies.
-    service = SubscoreCalculator()
-    # Temporarily attach the temp classes for testing
-    service.CoherenceSeverity = TempCoherenceSeverity
-    service.ScoreScope = TempScoreScope
-    service.CoherenceAlert = TempCoherenceAlert
-    return service
-
-# --- Test Cases ---
-@pytest.mark.asyncio
 class TestSubscoreCalculator:
     """Refers to Suite ID: TS-UD-COH-SCR-001"""
 
-    async def test_001_subscore_no_alerts_100_percent(self, calculator):
-        score = await calculator.calculate(alerts=[], scope=calculator.ScoreScope.BUDGET)
+    def test_001_subscore_no_alerts_100_percent(self) -> None:
+        score = SubscoreCalculator().calculate_subscore(alerts=[], scope=ScoreScope.BUDGET)
         assert score == 100.0
 
-    async def test_002_subscore_one_alert_penalized(self, calculator):
+    def test_002_subscore_one_alert_penalized(self) -> None:
         alerts = [
-            calculator.CoherenceAlert("R1", calculator.CoherenceSeverity.MEDIUM, calculator.ScoreScope.BUDGET)
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.BUDGET}
+            )
         ]
-        score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.BUDGET)
-        assert score == 90.0 # 100 - 10
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
+        assert score == 90.0
 
-    async def test_003_subscore_multiple_alerts_cumulative(self, calculator):
+    def test_003_subscore_multiple_alerts_cumulative(self) -> None:
         alerts = [
-            calculator.CoherenceAlert("R1", calculator.CoherenceSeverity.MEDIUM, calculator.ScoreScope.BUDGET),
-            calculator.CoherenceAlert("R2", calculator.CoherenceSeverity.HIGH, calculator.ScoreScope.BUDGET),
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.BUDGET}
+            ),
+            CoherenceAlert.model_validate(
+                {"rule_id": "R15", "severity": CoherenceSeverity.HIGH, "scope": ScoreScope.BUDGET}
+            ),
         ]
-        score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.BUDGET)
-        assert score == 70.0 # 100 - 10 - 20
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
+        assert score == 70.0
 
-    @pytest.mark.parametrize("severity, expected_penalty", [
-        (TempCoherenceSeverity.LOW, 5),
-        (TempCoherenceSeverity.MEDIUM, 10),
-        (TempCoherenceSeverity.HIGH, 20),
-        (TempCoherenceSeverity.CRITICAL, 30),
-    ])
-    async def test_004_to_007_subscore_severity_penalties(self, calculator, severity, expected_penalty):
-        alerts = [calculator.CoherenceAlert("R1", severity, calculator.ScoreScope.BUDGET)]
-        score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.BUDGET)
-        assert score == 100.0 - expected_penalty
-
-    async def test_008_to_013_subscore_scope_calculation(self, calculator):
-        """
-        Tests that only alerts for the specified scope are included in the calculation.
-        """
+    def test_004_subscore_severity_low_penalty_5(self) -> None:
         alerts = [
-            calculator.CoherenceAlert("R-BUDGET", calculator.CoherenceSeverity.HIGH, calculator.ScoreScope.BUDGET), # -20
-            calculator.CoherenceAlert("R-TIME", calculator.CoherenceSeverity.MEDIUM, calculator.ScoreScope.TIME),   # -10
-            calculator.CoherenceAlert("R-SCOPE", calculator.CoherenceSeverity.LOW, calculator.ScoreScope.SCOPE),    # -5
+            CoherenceAlert.model_validate(
+                {"rule_id": "R11", "severity": CoherenceSeverity.LOW, "scope": ScoreScope.SCOPE}
+            )
         ]
-        
-        # Calculate for BUDGET scope
-        budget_score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.BUDGET)
-        assert budget_score == 80.0 # 100 - 20
-        
-        # Calculate for TIME scope
-        time_score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.TIME)
-        assert time_score == 90.0 # 100 - 10
-        
-        # Calculate for SCOPE scope
-        scope_score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.SCOPE)
-        assert scope_score == 95.0 # 100 - 5
-        
-        # Calculate for a scope with no alerts
-        quality_score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.QUALITY)
-        assert quality_score == 100.0
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.SCOPE)
+        assert score == 95.0
 
-    async def test_014_subscore_floor_at_zero(self, calculator):
+    def test_005_subscore_severity_medium_penalty_10(self) -> None:
         alerts = [
-            calculator.CoherenceAlert("R1", calculator.CoherenceSeverity.CRITICAL, calculator.ScoreScope.BUDGET), # -30
-            calculator.CoherenceAlert("R2", calculator.CoherenceSeverity.CRITICAL, calculator.ScoreScope.BUDGET), # -30
-            calculator.CoherenceAlert("R3", calculator.CoherenceSeverity.CRITICAL, calculator.ScoreScope.BUDGET), # -30
-            calculator.CoherenceAlert("R4", calculator.CoherenceSeverity.CRITICAL, calculator.ScoreScope.BUDGET), # -30
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.BUDGET}
+            )
         ]
-        score = await calculator.calculate(alerts=alerts, scope=calculator.ScoreScope.BUDGET)
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
+        assert score == 90.0
+
+    def test_006_subscore_severity_high_penalty_20(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R1", "severity": CoherenceSeverity.HIGH, "scope": ScoreScope.TIME}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.TIME)
+        assert score == 80.0
+
+    def test_007_subscore_severity_critical_penalty_30(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R14", "severity": CoherenceSeverity.CRITICAL, "scope": ScoreScope.TIME}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.TIME)
+        assert score == 70.0
+
+    def test_008_subscore_scope_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R11", "severity": CoherenceSeverity.HIGH, "scope": ScoreScope.SCOPE}
+            ),
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.CRITICAL, "scope": ScoreScope.BUDGET}
+            ),
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.SCOPE)
+        assert score == 80.0
+
+    def test_009_subscore_budget_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.BUDGET}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
+        assert score == 90.0
+
+    def test_010_subscore_quality_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R17", "severity": CoherenceSeverity.HIGH, "scope": ScoreScope.QUALITY}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.QUALITY)
+        assert score == 80.0
+
+    def test_011_subscore_technical_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R3", "severity": CoherenceSeverity.LOW, "scope": ScoreScope.TECHNICAL}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.TECHNICAL)
+        assert score == 95.0
+
+    def test_012_subscore_legal_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R8", "severity": CoherenceSeverity.HIGH, "scope": ScoreScope.LEGAL}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.LEGAL)
+        assert score == 80.0
+
+    def test_013_subscore_time_calculation(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R2", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.TIME}
+            )
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.TIME)
+        assert score == 90.0
+
+    def test_014_subscore_floor_at_zero(self) -> None:
+        alerts = [
+            CoherenceAlert.model_validate(
+                {
+                    "rule_id": f"R-C-{index}",
+                    "severity": CoherenceSeverity.CRITICAL,
+                    "scope": ScoreScope.BUDGET,
+                }
+            )
+            for index in range(4)
+        ]
+        score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
         assert score == 0.0
