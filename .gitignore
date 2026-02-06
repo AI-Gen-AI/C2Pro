@@ -51,6 +51,11 @@ __pycache__/
 test.db
 *.db
 
+# Python virtualenvs
+.venv/
+.venv*/
+apps/.venv*/
+
 # Misc
 .cache/
 *.tgz

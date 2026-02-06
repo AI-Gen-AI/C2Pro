@@ -163,6 +163,7 @@ async def update_stakeholder(
 @router.delete(
     "/{stakeholder_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete stakeholder",
 )
 async def delete_stakeholder(

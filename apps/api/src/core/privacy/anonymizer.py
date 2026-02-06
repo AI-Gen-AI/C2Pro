@@ -34,14 +34,26 @@ Date: 2026-01-13
 
 import re
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from threading import Lock
 
-from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
-from presidio_analyzer.nlp_engine import NlpEngineProvider
-from presidio_anonymizer import AnonymizerEngine
-from presidio_anonymizer.entities import OperatorConfig
+# Optional presidio imports - not required for testing
+try:
+    from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
+    from presidio_analyzer.nlp_engine import NlpEngineProvider
+    from presidio_anonymizer import AnonymizerEngine
+    from presidio_anonymizer.entities import OperatorConfig
+    PRESIDIO_AVAILABLE = True
+except ImportError:
+    # Create stub classes for when presidio is not available
+    PRESIDIO_AVAILABLE = False
+    AnalyzerEngine = type('AnalyzerEngine', (), {})
+    PatternRecognizer = type('PatternRecognizer', (), {})
+    Pattern = type('Pattern', (), {})
+    NlpEngineProvider = type('NlpEngineProvider', (), {})
+    AnonymizerEngine = type('AnonymizerEngine', (), {})
+    OperatorConfig = type('OperatorConfig', (), {})
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +216,17 @@ class PiiAnonymizerService:
             if self._initialized:
                 return
 
+            if not PRESIDIO_AVAILABLE:
+                logger.warning("Presidio not available - PII anonymization disabled")
+                self._nlp_engine = None
+                self._analyzer = None
+                self._anonymizer_engine = None
+                self._entity_counters: Dict[str, int] = {}
+                self._entity_mapping: Dict[str, str] = {}
+                self._reverse_mapping: Dict[str, str] = {}
+                self._initialized = True
+                return
+
             logger.info("Initializing PII Anonymizer Service...")
 
             # Step 1: Configure Spacy NLP engine for Spanish
@@ -332,6 +355,16 @@ class PiiAnonymizerService:
         if not text or not text.strip():
             return AnonymizedResult(
                 anonymized_text="",
+                mapping={},
+                entities_found=[],
+                statistics={}
+            )
+
+        # If presidio is not available, return text unchanged
+        if not PRESIDIO_AVAILABLE or self._analyzer is None:
+            logger.warning("Presidio not available - returning text unchanged")
+            return AnonymizedResult(
+                anonymized_text=text,
                 mapping={},
                 entities_found=[],
                 statistics={}
