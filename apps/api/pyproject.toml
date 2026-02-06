@@ -69,6 +69,7 @@ pythonpath = ["src"]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
+    "e2e: End-to-end tests",
     "ai: AI-related tests (may use API)",
     "slow: Slow tests",
     "security: Security tests (critical)",

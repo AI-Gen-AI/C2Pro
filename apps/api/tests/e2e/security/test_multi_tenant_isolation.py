@@ -613,7 +613,7 @@ async def test_009_inactive_tenant_access_denied(
 @pytest.mark.security
 @pytest.mark.e2e
 @pytest.mark.skipif(
-    "sqlite" in __import__("src.config").settings.database_url,
+    "sqlite" in __import__("src.config", fromlist=["settings"]).settings.database_url,
     reason="RLS is PostgreSQL-specific",
 )
 async def test_010_rls_context_set_and_reset(
