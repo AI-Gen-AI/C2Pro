@@ -101,9 +101,10 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     # Relationships
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="select")
 
-    clauses: Mapped[list["ClauseORM"]] = relationship(
-        "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
-    )
+    # TODO: Re-enable relationship when Clause FK is restored (GREEN phase)
+    # clauses: Mapped[list["ClauseORM"]] = relationship(
+    #     "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
+    # )
 
     # Indexes
     __table_args__ = (
@@ -184,9 +185,10 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     )
 
     # Relationships
-    document: Mapped["DocumentORM"] = relationship(
-        "DocumentORM", back_populates="clauses", lazy="selectin"
-    )
+    # TODO: Re-enable relationship when Document FK is restored (GREEN phase)
+    # document: Mapped["DocumentORM"] = relationship(
+    #     "DocumentORM", back_populates="clauses", lazy="selectin"
+    # )
 
     verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
 

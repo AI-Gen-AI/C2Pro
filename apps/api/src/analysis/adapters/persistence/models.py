@@ -102,9 +102,10 @@ class Analysis(Base):
     )
 
     # Relationships
-    alerts: Mapped[list["Alert"]] = relationship(
-        "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
-    )
+    # TODO: Re-enable relationship when Alert FK is restored (GREEN phase)
+    # alerts: Mapped[list["Alert"]] = relationship(
+    #     "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
+    # )
 
     # Indexes
     __table_args__ = (
@@ -247,9 +248,10 @@ class Alert(Base):
     )
 
     # Relationships
-    analysis: Mapped["Analysis"] = relationship(
-        "Analysis", back_populates="alerts", lazy="selectin"
-    )
+    # TODO: Re-enable relationship when Analysis FK is restored (GREEN phase)
+    # analysis: Mapped["Analysis"] = relationship(
+    #     "Analysis", back_populates="alerts", lazy="selectin"
+    # )
 
     resolver: Mapped["User"] = relationship("User", foreign_keys=[resolved_by], lazy="select")
     reviewer: Mapped["User"] = relationship("User", foreign_keys=[reviewed_by], lazy="select")
