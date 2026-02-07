@@ -1,0 +1,114 @@
+name: E2E Security Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  e2e-security-tests:
+    name: Multi-Tenant Isolation Tests
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: postgresql://nonsuperuser:test@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
+      SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
+      ANTHROPIC_API_KEY: sk-ant-test-mock-key
+      REDIS_URL: redis://localhost:6379/0
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_PER_MINUTE: "100"
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov  # For coverage reports
+
+      - name: Start test database
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          echo "Waiting for PostgreSQL to be ready..."
+          sleep 10
+
+      - name: Verify database connection
+        run: |
+          docker exec c2pro-postgres-test psql -U postgres -c "SELECT version();"
+          docker exec c2pro-postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database(), current_user;"
+
+      - name: Run E2E Security Tests
+        working-directory: apps/api
+        run: |
+          python -m pytest tests/e2e/security/test_multi_tenant_isolation.py \
+            -v \
+            -m "e2e and security" \
+            --tb=short \
+            --cov=src/projects \
+            --cov=src/core/auth \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --junit-xml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: apps/api/test-results.xml
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: apps/api/coverage.xml
+
+      - name: Comment coverage on PR
+        uses: py-cov-action/python-coverage-comment-action@v3
+        if: github.event_name == 'pull_request'
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 80
+          MINIMUM_ORANGE: 60
+
+      - name: Database logs on failure
+        if: failure()
+        run: |
+          echo "=== PostgreSQL Logs ==="
+          docker logs c2pro-postgres-test --tail 100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
