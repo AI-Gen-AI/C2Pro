@@ -87,7 +87,7 @@ jobs:
 
       - name: Start test database
         run: |
-          docker-compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d
           sleep 10
 
       - name: Run database migrations
@@ -111,7 +111,7 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+        run: docker compose -f docker-compose.test.yml down -v
 
   e2e-security-tests:
     name: E2E Security Tests (TS-E2E-SEC-TNT-001)
@@ -199,7 +199,7 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+        run: docker compose -f docker-compose.test.yml down -v
 
   test-summary:
     name: Test Summary
