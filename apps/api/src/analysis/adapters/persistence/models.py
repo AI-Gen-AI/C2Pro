@@ -184,9 +184,10 @@ class Alert(Base):
     recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # TRAZABILIDAD LEGAL (ROADMAP §5.3)
+    # TODO: Re-enable FK when clauses table is implemented (GREEN phase)
     source_clause_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("clauses.id"),
+        # ForeignKey("clauses.id"),  # Temporarily commented - clauses table not implemented yet
         nullable=True,
         index=True,  # FK a cláusula que origina la alerta
     )
@@ -341,9 +342,10 @@ class Extraction(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Document relationship
+    # TODO: Re-enable FK when documents table is implemented (GREEN phase)
     document_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("documents.id", ondelete="CASCADE"),
+        # ForeignKey("documents.id", ondelete="CASCADE"),  # Temporarily commented - documents table not implemented yet
         nullable=False,
         index=True,
     )
@@ -368,9 +370,10 @@ class Extraction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    document: Mapped["DocumentORM"] = relationship(
-        "DocumentORM", foreign_keys=[document_id], lazy="selectin"
-    )
+    # TODO: Re-enable relationship when documents table is implemented (GREEN phase)
+    # document: Mapped["DocumentORM"] = relationship(
+    #     "DocumentORM", foreign_keys=[document_id], lazy="selectin"
+    # )
 
     # Indexes
     __table_args__ = (
