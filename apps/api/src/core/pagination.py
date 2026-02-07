@@ -2,7 +2,6 @@ from typing import List, TypeVar, Generic, Optional
 import base64
 import binascii
 from pydantic import BaseModel, Field
-from pydantic.generics import GenericModel
 
 T = TypeVar('T')
 
@@ -21,7 +20,7 @@ def decode_cursor(cursor: str) -> str:
     except (binascii.Error, UnicodeDecodeError):
         raise InvalidCursorException("Invalid cursor")
 
-class Page(GenericModel, Generic[T]):
+class Page(BaseModel, Generic[T]):
     """
     A generic page model for cursor-based pagination.
     """
