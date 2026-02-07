@@ -112,7 +112,7 @@ jobs:
 
       - name: Verify database is running
         run: |
-          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker logs c2pro-postgres-test 2>&1 || true && exit 1)
+          docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
 
       - name: Run database migrations
         working-directory: apps/api
@@ -201,10 +201,10 @@ jobs:
 
       - name: Verify database setup
         run: |
-          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker ps -a && exit 1)
-          docker exec c2pro-postgres-test psql -U postgres -c "\l"
-          docker exec c2pro-postgres-test psql -U postgres -c "\du"
-          docker exec c2pro-postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database();"
+          docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
+          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "\l"
+          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "\du"
+          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database();"
 
       - name: Run E2E Security Tests
         working-directory: apps/api
@@ -241,9 +241,7 @@ jobs:
           echo "=== All Containers ==="
           docker ps -a || true
           echo "=== PostgreSQL Logs ==="
-          docker logs c2pro-postgres-test --tail 100 2>&1 || echo "Could not get logs"
-          echo "=== Docker Compose Logs ==="
-          docker compose -f docker-compose.test.yml logs || true
+          docker compose -f docker-compose.test.yml logs postgres-test || true
 
       - name: Cleanup
         if: always()
@@ -264,6 +262,7 @@ jobs:
       - name: Publish test summary
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
+        continue-on-error: true  # Allow failures due to permissions
         with:
           files: test-results/**/*.xml
           check_name: Test Results Summary

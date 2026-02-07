@@ -82,10 +82,10 @@ jobs:
       - name: Verify database connection
         run: |
           echo "Checking if container is running..."
-          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker ps -a && exit 1)
+          docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
           echo "Testing database connection..."
-          docker exec c2pro-postgres-test psql -U postgres -c "SELECT version();"
-          docker exec c2pro-postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database(), current_user;"
+          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "SELECT version();"
+          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database(), current_user;"
 
       - name: Run E2E Security Tests
         working-directory: apps/api
@@ -131,11 +131,8 @@ jobs:
           echo "=== All Containers ==="
           docker ps -a || true
           echo ""
-          echo "=== PostgreSQL Logs ==="
-          docker logs c2pro-postgres-test --tail 100 2>&1 || echo "Could not get logs - container may not exist"
-          echo ""
-          echo "=== Docker Compose Logs ==="
-          docker compose -f docker-compose.test.yml logs || true
+          echo "=== PostgreSQL Logs (via compose) ==="
+          docker compose -f docker-compose.test.yml logs postgres-test || true
 
       - name: Cleanup
         if: always()
