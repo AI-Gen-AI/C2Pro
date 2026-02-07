@@ -97,10 +97,22 @@ jobs:
           pip install -r requirements.txt
           pip install python-magic  # File MIME type detection (Linux)
 
+      - name: Verify test database setup files
+        run: |
+          ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
+          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+
       - name: Start test database
         run: |
+          echo "Starting PostgreSQL test container..."
           docker compose -f docker-compose.test.yml up -d
+          sleep 5
+          docker ps -a | grep postgres || echo "No postgres container found!"
           sleep 10
+
+      - name: Verify database is running
+        run: |
+          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker logs c2pro-postgres-test 2>&1 || true && exit 1)
 
       - name: Run database migrations
         working-directory: apps/api
@@ -172,14 +184,24 @@ jobs:
           pip install pytest-cov
           pip install python-magic  # File MIME type detection (Linux)
 
+      - name: Verify test database setup files
+        run: |
+          ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
+          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+
       - name: Start test database
         run: |
+          echo "Starting PostgreSQL test container..."
           docker compose -f docker-compose.test.yml up -d
+          echo "Waiting for container..."
+          sleep 5
+          docker ps -a | grep postgres || echo "No postgres container found!"
           echo "Waiting for PostgreSQL..."
           sleep 10
 
       - name: Verify database setup
         run: |
+          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker ps -a && exit 1)
           docker exec c2pro-postgres-test psql -U postgres -c "\l"
           docker exec c2pro-postgres-test psql -U postgres -c "\du"
           docker exec c2pro-postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database();"
@@ -213,7 +235,15 @@ jobs:
 
       - name: Database logs on failure
         if: failure()
-        run: docker logs c2pro-postgres-test --tail 100
+        run: |
+          echo "=== Docker Compose Services ==="
+          docker compose -f docker-compose.test.yml ps || true
+          echo "=== All Containers ==="
+          docker ps -a || true
+          echo "=== PostgreSQL Logs ==="
+          docker logs c2pro-postgres-test --tail 100 2>&1 || echo "Could not get logs"
+          echo "=== Docker Compose Logs ==="
+          docker compose -f docker-compose.test.yml logs || true
 
       - name: Cleanup
         if: always()

@@ -62,14 +62,28 @@ jobs:
           pip install pytest-cov  # For coverage reports
           pip install python-magic  # File MIME type detection (Linux)
 
+      - name: Verify test database setup files
+        run: |
+          echo "Checking test database initialization files..."
+          ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
+          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+
       - name: Start test database
         run: |
+          echo "Starting PostgreSQL test container..."
           docker compose -f docker-compose.test.yml up -d
+          echo "Waiting for container to be created..."
+          sleep 5
+          echo "Checking container status..."
+          docker ps -a | grep postgres || echo "No postgres container found!"
           echo "Waiting for PostgreSQL to be ready..."
           sleep 10
 
       - name: Verify database connection
         run: |
+          echo "Checking if container is running..."
+          docker ps | grep c2pro-postgres-test || (echo "Container not running!" && docker ps -a && exit 1)
+          echo "Testing database connection..."
           docker exec c2pro-postgres-test psql -U postgres -c "SELECT version();"
           docker exec c2pro-postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database(), current_user;"
 
@@ -111,8 +125,17 @@ jobs:
       - name: Database logs on failure
         if: failure()
         run: |
+          echo "=== Docker Compose Services ==="
+          docker compose -f docker-compose.test.yml ps || true
+          echo ""
+          echo "=== All Containers ==="
+          docker ps -a || true
+          echo ""
           echo "=== PostgreSQL Logs ==="
-          docker logs c2pro-postgres-test --tail 100
+          docker logs c2pro-postgres-test --tail 100 2>&1 || echo "Could not get logs - container may not exist"
+          echo ""
+          echo "=== Docker Compose Logs ==="
+          docker compose -f docker-compose.test.yml logs || true
 
       - name: Cleanup
         if: always()
