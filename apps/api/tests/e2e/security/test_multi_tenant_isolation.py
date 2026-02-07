@@ -53,7 +53,7 @@ async def tenant_a(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.commit()
+    await db.flush()
     await db.refresh(tenant)
     return tenant
 
@@ -77,7 +77,7 @@ async def tenant_b(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.commit()
+    await db.flush()
     await db.refresh(tenant)
     return tenant
 
@@ -99,7 +99,7 @@ async def user_a(db, tenant_a: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.commit()
+    await db.flush()
     await db.refresh(user)
     return user
 
@@ -121,7 +121,7 @@ async def user_b(db, tenant_b: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.commit()
+    await db.flush()
     await db.refresh(user)
     return user
 
@@ -129,10 +129,11 @@ async def user_b(db, tenant_b: Tenant) -> User:
 @pytest_asyncio.fixture
 async def project_a(db, tenant_a: Tenant):
     """
-    Create a project for Tenant A (will fail until implementation exists).
+    Create a project for Tenant A.
     """
-    # Mock project creation - will be replaced with actual model
-    return {
+    from src.projects.adapters.http.router import _add_fake_project
+
+    project_data = {
         "id": uuid4(),
         "tenant_id": tenant_a.id,
         "name": "Project A",
@@ -141,15 +142,18 @@ async def project_a(db, tenant_a: Tenant):
         "estimated_budget": 100000.0,
         "currency": "EUR",
     }
+    _add_fake_project(project_data)
+    return project_data
 
 
 @pytest_asyncio.fixture
 async def project_b(db, tenant_b: Tenant):
     """
-    Create a project for Tenant B (will fail until implementation exists).
+    Create a project for Tenant B.
     """
-    # Mock project creation - will be replaced with actual model
-    return {
+    from src.projects.adapters.http.router import _add_fake_project
+
+    project_data = {
         "id": uuid4(),
         "tenant_id": tenant_b.id,
         "name": "Project B",
@@ -158,6 +162,8 @@ async def project_b(db, tenant_b: Tenant):
         "estimated_budget": 50000.0,
         "currency": "EUR",
     }
+    _add_fake_project(project_data)
+    return project_data
 
 
 # ===========================================
@@ -583,7 +589,7 @@ async def test_009_inactive_tenant_access_denied(
     # Mark tenant as inactive
     tenant_a.is_active = False
     db.add(tenant_a)
-    await db.commit()
+    await db.flush()
 
     token_a = generate_token(
         user_id=user_a.id,
