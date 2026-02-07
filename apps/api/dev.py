@@ -17,16 +17,16 @@ def main():
     # Check if .env exists
     env_file = Path(__file__).parent.parent.parent / ".env"
     if not env_file.exists():
-        print("❌ ERROR: No se encontró el archivo .env")
+        print("[ERROR] No se encontro el archivo .env")
         print("Por favor ejecuta 'python setup.py' primero")
         sys.exit(1)
 
     # Run uvicorn
     import uvicorn
 
-    print("🚀 Iniciando servidor de desarrollo...")
-    print("📝 Docs disponibles en: http://localhost:8000/docs")
-    print("🔥 Hot-reload activado")
+    print(">> Iniciando servidor de desarrollo...")
+    print(">> Docs disponibles en: http://localhost:8000/docs")
+    print(">> Hot-reload activado")
     print("\nPresiona Ctrl+C para detener\n")
 
     uvicorn.run(

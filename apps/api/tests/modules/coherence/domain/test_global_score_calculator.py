@@ -191,3 +191,84 @@ class TestGlobalScoreCalculator:
         assert len(history) == 2
         assert history[0].weights[ScoreScope.BUDGET] == pytest.approx(0.50)
         assert history[1].weights[ScoreScope.TIME] == pytest.approx(0.75)
+
+    def test_013_empty_subscores_returns_100(self) -> None:
+        """Empty subscores dictionary returns perfect score."""
+        subscores = {}
+        score = GlobalScoreCalculator().calculate_global(subscores=subscores)
+        assert score == 100.0
+
+    def test_014_weights_config_with_no_matching_scopes_uses_equal(self) -> None:
+        """When weights don't match any subscores, use equal weighting."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.SCOPE: 0.50, ScoreScope.LEGAL: 0.50}}
+        )
+
+        score = GlobalScoreCalculator().calculate_global(subscores=subscores, weights=weights)
+        # Should use equal weights (0.5 each) since no relevant weights
+        assert score == pytest.approx(85.0)
+
+    def test_015_weights_exact_sum_to_1_with_all_scopes(self) -> None:
+        """When weights exactly sum to 1.0 and cover all scopes, use as-is."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.BUDGET: 0.40, ScoreScope.TIME: 0.60}}
+        )
+
+        score = GlobalScoreCalculator().calculate_global(subscores=subscores, weights=weights)
+        expected = (80.0 * 0.40) + (90.0 * 0.60)
+        assert score == pytest.approx(expected)
+
+    def test_016_weights_zero_sum_uses_equal(self) -> None:
+        """When all weights sum to zero, use equal weighting."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.BUDGET: 0.0, ScoreScope.TIME: 0.0}}
+        )
+
+        score = GlobalScoreCalculator().calculate_global(subscores=subscores, weights=weights)
+        # Should use equal weights (0.5 each)
+        assert score == pytest.approx(85.0)
+
+    @pytest.mark.asyncio
+    async def test_017_async_calculate_wrapper(self) -> None:
+        """Async calculate() wrapper returns same result as calculate_global()."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.BUDGET: 0.50, ScoreScope.TIME: 0.50}}
+        )
+
+        calculator = GlobalScoreCalculator()
+        sync_score = calculator.calculate_global(subscores=subscores, weights=weights)
+        async_score = await calculator.calculate(subscores=subscores, weights=weights)
+
+        assert async_score == sync_score
+        assert async_score == pytest.approx(85.0)
+
+    def test_018_weights_partial_sum_less_than_1_with_all_scopes_covered(self) -> None:
+        """When weights sum < 1.0 but cover all scopes in subscores, use as-is."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.BUDGET: 0.30, ScoreScope.TIME: 0.40}}  # Sum = 0.70
+        )
+
+        score = GlobalScoreCalculator().calculate_global(
+            subscores=subscores, weights=weights, normalize_weights=True
+        )
+        # Should return as-is since all subscores are covered
+        expected = (80.0 * 0.30) + (90.0 * 0.40)
+        assert score == pytest.approx(expected)
+
+    def test_019_normalization_disabled_with_exact_1_0_sum(self) -> None:
+        """When normalize_weights=False and weights sum exactly to 1.0, use as-is."""
+        subscores = {ScoreScope.BUDGET: 80.0, ScoreScope.TIME: 90.0}
+        weights = WeightConfig.model_validate(
+            {"weights": {ScoreScope.BUDGET: 0.40, ScoreScope.TIME: 0.60}}
+        )
+
+        score = GlobalScoreCalculator().calculate_global(
+            subscores=subscores, weights=weights, normalize_weights=False
+        )
+        expected = (80.0 * 0.40) + (90.0 * 0.60)
+        assert score == pytest.approx(expected)

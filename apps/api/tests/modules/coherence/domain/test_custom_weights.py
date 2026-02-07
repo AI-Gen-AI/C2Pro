@@ -207,3 +207,92 @@ class TestCustomWeights:
 
         assert resolved.name == "default"
         assert resolved.weights[CoherenceCategory.SCOPE] == pytest.approx(0.20)
+
+    def test_011_reject_partial_weights_exceeding_1_0(self) -> None:
+        """Normalization rejects when partial weights sum > 1.0."""
+        profile = CustomWeightProfile.model_validate(
+            {
+                "name": "exceed_sum",
+                "weights": {
+                    CoherenceCategory.BUDGET: 0.60,
+                    CoherenceCategory.TIME: 0.50,
+                    # Missing categories, but already sum > 1.0
+                },
+            }
+        )
+
+        with pytest.raises(ValueError, match="sum to 1.0"):
+            CustomWeightRegistry().create_profile(profile=profile, normalize=True)
+
+    def test_012_normalize_all_zero_weights(self) -> None:
+        """When all weights are zero, use equal distribution."""
+        profile = CustomWeightProfile.model_validate(
+            {
+                "name": "all_zero",
+                "weights": {
+                    CoherenceCategory.SCOPE: 0.0,
+                    CoherenceCategory.BUDGET: 0.0,
+                    CoherenceCategory.QUALITY: 0.0,
+                    CoherenceCategory.TECHNICAL: 0.0,
+                    CoherenceCategory.LEGAL: 0.0,
+                    CoherenceCategory.TIME: 0.0,
+                },
+            }
+        )
+        registry = CustomWeightRegistry()
+
+        registry.create_profile(profile=profile, normalize=True)
+
+        stored = registry.get_profile("all_zero")
+        expected_equal = 1.0 / 6
+        for category in CoherenceCategory:
+            assert stored.weights[category] == pytest.approx(expected_equal)
+
+    def test_013_normalize_weights_not_summing_to_1_with_all_categories(self) -> None:
+        """When all categories present but sum != 1.0, normalize proportionally."""
+        profile = CustomWeightProfile.model_validate(
+            {
+                "name": "proportional",
+                "weights": {
+                    CoherenceCategory.SCOPE: 10.0,
+                    CoherenceCategory.BUDGET: 10.0,
+                    CoherenceCategory.QUALITY: 5.0,
+                    CoherenceCategory.TECHNICAL: 5.0,
+                    CoherenceCategory.LEGAL: 5.0,
+                    CoherenceCategory.TIME: 5.0,
+                },
+            }
+        )
+        registry = CustomWeightRegistry()
+
+        registry.create_profile(profile=profile, normalize=True)
+
+        stored = registry.get_profile("proportional")
+        total = 40.0
+        assert stored.weights[CoherenceCategory.SCOPE] == pytest.approx(10.0 / total)
+        assert stored.weights[CoherenceCategory.BUDGET] == pytest.approx(10.0 / total)
+        assert stored.weights[CoherenceCategory.QUALITY] == pytest.approx(5.0 / total)
+        assert sum(stored.weights.values()) == pytest.approx(1.0)
+
+    def test_014_normalize_weights_close_to_1_but_not_exact(self) -> None:
+        """When sum is close to 1.0 but not exact (outside tolerance), normalize."""
+        profile = CustomWeightProfile.model_validate(
+            {
+                "name": "close_to_one",
+                "weights": {
+                    CoherenceCategory.SCOPE: 0.17,
+                    CoherenceCategory.BUDGET: 0.17,
+                    CoherenceCategory.QUALITY: 0.17,
+                    CoherenceCategory.TECHNICAL: 0.17,
+                    CoherenceCategory.LEGAL: 0.16,
+                    CoherenceCategory.TIME: 0.16,
+                },  # Sum = 1.00 exactly (should pass validation)
+            }
+        )
+        registry = CustomWeightRegistry()
+
+        registry.create_profile(profile=profile, normalize=True)
+
+        stored = registry.get_profile("close_to_one")
+        # Should normalize to ensure exact 1.0
+        assert sum(stored.weights.values()) == pytest.approx(1.0)

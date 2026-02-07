@@ -6,42 +6,17 @@ Refers to Suite IDs: TS-UA-SVC-EXT-001, TS-UA-SVC-EXT-002.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
-from typing import List
-from uuid import uuid4
-
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 
-# ---------------------------------------------------------------------------
-# Skeleton DTOs/Entities (tests should run but fail until real code exists)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ClauseDTO:
-    clause_code: str
-    title: str
-    content: str
-    confidence_score: float
-
-
-@dataclass(frozen=True)
-class MoneyEntity:
-    amount: int
-    currency: str
-
-
-@dataclass(frozen=True)
-class DateEntity:
-    value: date
-
-
-class ContentParsingException(Exception):
-    """Raised when LLM JSON content cannot be parsed."""
-
+from src.documents.application.services.extraction_service import (
+    ClauseDTO,
+    ContentParsingException,
+    DateEntity,
+    MoneyEntity,
+)
 
 class ILLMClientPort:
     """Minimal port interface for mocking."""

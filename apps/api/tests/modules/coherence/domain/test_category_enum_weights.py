@@ -75,3 +75,26 @@ class TestCategoryEnumWeights:
                     CoherenceCategory.TIME: 0.15,
                 }
             )
+
+    def test_validate_category_weights_rejects_missing_categories(self):
+        with pytest.raises(ValueError, match="Missing category weights"):
+            validate_category_weights(
+                {
+                    CoherenceCategory.SCOPE: 0.50,
+                    CoherenceCategory.BUDGET: 0.50,
+                    # Missing: QUALITY, TECHNICAL, LEGAL, TIME
+                }
+            )
+
+    def test_validate_category_weights_accepts_valid_weights(self):
+        # Should not raise any exception
+        validate_category_weights(
+            {
+                CoherenceCategory.SCOPE: 0.20,
+                CoherenceCategory.BUDGET: 0.20,
+                CoherenceCategory.QUALITY: 0.15,
+                CoherenceCategory.TECHNICAL: 0.15,
+                CoherenceCategory.LEGAL: 0.15,
+                CoherenceCategory.TIME: 0.15,
+            }
+        )

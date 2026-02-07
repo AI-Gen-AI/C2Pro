@@ -1,5 +1,7 @@
 """
 Use cases for the Procurement bounded context.
+Refers to Suite ID: TS-UA-PROC-UC-001.
+Refers to Suite ID: TS-UA-PROC-UC-002.
 """
 from .wbs_use_cases import (
     CreateWBSItemUseCase,
@@ -17,6 +19,8 @@ from .bom_use_cases import (
     DeleteBOMItemUseCase,
     UpdateBOMStatusUseCase,
 )
+from .generate_bom_use_case import GenerateBOMUseCase
+from .calculate_lead_time_use_case import CalculateLeadTimeUseCase
 
 __all__ = [
     # WBS use cases
@@ -33,4 +37,6 @@ __all__ = [
     "UpdateBOMItemUseCase",
     "DeleteBOMItemUseCase",
     "UpdateBOMStatusUseCase",
+    "GenerateBOMUseCase",
+    "CalculateLeadTimeUseCase",
 ]

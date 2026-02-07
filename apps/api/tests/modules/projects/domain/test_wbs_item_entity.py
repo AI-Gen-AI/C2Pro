@@ -139,3 +139,225 @@ class TestWBSItemEntity:
         )
         with pytest.raises(ValueError, match="must start with parent code"):
             wbs.add_item(invalid_child)
+
+    def test_019_wbs_reject_wrong_project_id(self) -> None:
+        """WBS rejects items with different project_id."""
+        project_a = uuid4()
+        project_b = uuid4()
+        wbs = WBS(project_id=project_a)
+        item = WBSItem(project_id=project_b, code="1", name="Task", level=1)
+
+        with pytest.raises(ValueError, match="project_id does not match"):
+            wbs.add_item(item)
+
+    def test_020_wbs_reject_parent_not_found(self) -> None:
+        """WBS rejects items referencing non-existent parent."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        missing_parent_id = uuid4()
+        item = WBSItem(
+            project_id=project_id,
+            code="1.1",
+            name="Orphan",
+            level=2,
+            parent_id=missing_parent_id,
+        )
+
+        with pytest.raises(ValueError, match="Parent WBS item.*not found"):
+            wbs.add_item(item)
+
+    def test_021_wbs_reject_wrong_child_level(self) -> None:
+        """WBS rejects child with non-sequential level."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        parent = WBSItem(project_id=project_id, code="1", name="Parent", level=1)
+        wbs.add_item(parent)
+
+        # Code 1.1.1 has depth 3, but parent level is 1, so child should be level 2
+        wrong_level_child = WBSItem(
+            project_id=project_id,
+            code="1.1.1",
+            name="Wrong Level",
+            level=3,
+            parent_id=parent.id,
+        )
+
+        with pytest.raises(ValueError, match="one greater than parent level"):
+            wbs.add_item(wrong_level_child)
+
+    def test_022_wbs_get_item_found(self) -> None:
+        """WBS.get_item returns item when found."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item = WBSItem(project_id=project_id, code="1", name="Task", level=1)
+        wbs.add_item(item)
+
+        found = wbs.get_item(item.id)
+        assert found == item
+
+    def test_023_wbs_get_item_not_found(self) -> None:
+        """WBS.get_item returns None when not found."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+
+        missing_id = uuid4()
+        found = wbs.get_item(missing_id)
+        assert found is None
+
+    def test_024_wbs_get_all_items(self) -> None:
+        """WBS.get_all_items returns all items."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item1 = WBSItem(project_id=project_id, code="1", name="Task 1", level=1)
+        item2 = WBSItem(project_id=project_id, code="2", name="Task 2", level=1)
+        wbs.add_item(item1)
+        wbs.add_item(item2)
+
+        all_items = wbs.get_all_items()
+        assert len(all_items) == 2
+        assert item1 in all_items
+        assert item2 in all_items
+
+    def test_025_wbs_list_items_no_filter(self) -> None:
+        """WBS.list_items without level filter returns all."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item1 = WBSItem(project_id=project_id, code="1", name="Level 1", level=1)
+        wbs.add_item(item1)
+        item2 = WBSItem(
+            project_id=project_id, code="1.1", name="Level 2", level=2, parent_id=item1.id
+        )
+        wbs.add_item(item2)
+
+        items = wbs.list_items()
+        assert len(items) == 2
+
+    def test_026_wbs_list_items_filtered_by_level(self) -> None:
+        """WBS.list_items with level filter returns matching items."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item1 = WBSItem(project_id=project_id, code="1", name="Level 1", level=1)
+        wbs.add_item(item1)
+        item2 = WBSItem(
+            project_id=project_id, code="1.1", name="Level 2", level=2, parent_id=item1.id
+        )
+        wbs.add_item(item2)
+
+        level2_items = wbs.list_items(level=2)
+        assert len(level2_items) == 1
+        assert level2_items[0].level == 2
+
+    def test_027_wbs_update_item_name(self) -> None:
+        """WBS.update_item changes item name."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item = WBSItem(project_id=project_id, code="1", name="Old Name", level=1)
+        wbs.add_item(item)
+
+        updated = wbs.update_item(item.id, name="New Name")
+        assert updated.name == "New Name"
+        assert updated.code == "1"
+
+    def test_028_wbs_update_item_description(self) -> None:
+        """WBS.update_item changes item description."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item = WBSItem(project_id=project_id, code="1", name="Task", level=1)
+        wbs.add_item(item)
+
+        updated = wbs.update_item(item.id, description="New desc")
+        assert updated.description == "New desc"
+
+    def test_029_wbs_update_item_code(self) -> None:
+        """WBS.update_item changes item code."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item = WBSItem(project_id=project_id, code="1", name="Task", level=1)
+        wbs.add_item(item)
+
+        updated = wbs.update_item(item.id, code="2")
+        assert updated.code == "2"
+
+    def test_030_wbs_update_item_not_found(self) -> None:
+        """WBS.update_item raises when item not found."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        missing_id = uuid4()
+
+        with pytest.raises(ValueError, match="not found"):
+            wbs.update_item(missing_id, name="New")
+
+    def test_031_wbs_update_item_duplicate_code(self) -> None:
+        """WBS.update_item rejects duplicate code."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item1 = WBSItem(project_id=project_id, code="1", name="Task 1", level=1)
+        item2 = WBSItem(project_id=project_id, code="2", name="Task 2", level=1)
+        wbs.add_item(item1)
+        wbs.add_item(item2)
+
+        with pytest.raises(ValueError, match="already exists"):
+            wbs.update_item(item2.id, code="1")
+
+    def test_032_wbs_delete_item(self) -> None:
+        """WBS.delete_item removes item."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        item = WBSItem(project_id=project_id, code="1", name="Task", level=1)
+        wbs.add_item(item)
+
+        wbs.delete_item(item.id)
+        assert wbs.get_item(item.id) is None
+
+    def test_033_wbs_delete_item_not_found(self) -> None:
+        """WBS.delete_item raises when item not found."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        missing_id = uuid4()
+
+        with pytest.raises(ValueError, match="not found"):
+            wbs.delete_item(missing_id)
+
+    def test_034_wbs_delete_item_with_children_rejected(self) -> None:
+        """WBS.delete_item rejects items with children."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        parent = WBSItem(project_id=project_id, code="1", name="Parent", level=1)
+        wbs.add_item(parent)
+        child = WBSItem(
+            project_id=project_id, code="1.1", name="Child", level=2, parent_id=parent.id
+        )
+        wbs.add_item(child)
+
+        with pytest.raises(ValueError, match="has children"):
+            wbs.delete_item(parent.id)
+
+    def test_035_wbs_update_item_with_parent_validates_hierarchy(self) -> None:
+        """WBS.update_item validates parent hierarchy when updating child code."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        parent = WBSItem(project_id=project_id, code="1", name="Parent", level=1)
+        wbs.add_item(parent)
+        child = WBSItem(
+            project_id=project_id, code="1.1", name="Child", level=2, parent_id=parent.id
+        )
+        wbs.add_item(child)
+
+        # Valid update: change code to 1.2 (still under parent 1)
+        updated = wbs.update_item(child.id, code="1.2")
+        assert updated.code == "1.2"
+
+    def test_036_wbs_update_item_invalid_parent_code_prefix(self) -> None:
+        """WBS.update_item rejects code not starting with parent code."""
+        project_id = uuid4()
+        wbs = WBS(project_id=project_id)
+        parent = WBSItem(project_id=project_id, code="1", name="Parent", level=1)
+        wbs.add_item(parent)
+        child = WBSItem(
+            project_id=project_id, code="1.1", name="Child", level=2, parent_id=parent.id
+        )
+        wbs.add_item(child)
+
+        # Invalid: changing code to 2.1 doesn't start with parent code "1"
+        with pytest.raises(ValueError, match="must start with parent code"):
+            wbs.update_item(child.id, code="2.1")
