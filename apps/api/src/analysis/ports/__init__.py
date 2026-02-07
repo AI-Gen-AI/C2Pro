@@ -8,6 +8,7 @@ from src.analysis.ports.ai_client import IAIClient
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
 from src.analysis.ports.types import AlertRecord, AnalysisRecord
 from src.analysis.ports.knowledge_graph import KnowledgeGraphPort
+from src.analysis.ports.coherence_calculator import CoherenceCalculatorPort
 
 __all__ = [
     "IAnalysisRepository",
@@ -18,4 +19,5 @@ __all__ = [
     "AlertRecord",
     "AnalysisRecord",
     "KnowledgeGraphPort",
+    "CoherenceCalculatorPort",
 ]
