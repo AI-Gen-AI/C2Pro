@@ -1,12 +1,13 @@
 """
-WBS Repository Integration Tests (TDD - RED Phase)
+BOM Repository Integration Tests (TDD - RED Phase)
 
-Refers to Suite ID: TS-INT-DB-WBS-001.
+Refers to Suite ID: TS-INT-DB-BOM-001.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -15,13 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
-from src.core.database import Base
-from src.core.database import get_session_with_tenant
 from src.core import database as core_database
-from src.projects.adapters.persistence.models import ProjectORM
+from src.core.database import Base, get_session_with_tenant
+from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.domain.models import WBSItem
+from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -67,12 +67,13 @@ async def session(pg_engine) -> AsyncSession:
 
 
 @pytest.mark.asyncio
-async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
+async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSession):
     """
-    WBS tree retrieval should include parent/child and enforce tenant isolation.
+    BOM repository should persist items and enforce tenant filtering.
     """
     tenant_a = uuid4()
     tenant_b = uuid4()
+
     project_a = ProjectORM(
         id=uuid4(),
         tenant_id=tenant_a,
@@ -81,7 +82,7 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         code="A-1",
         project_type="construction",
         status="draft",
-        estimated_budget=1000.0,
+        estimated_budget=5000.0,
         currency="EUR",
         start_date=None,
         end_date=None,
@@ -94,34 +95,53 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
     session.add(project_a)
     await session.commit()
 
-    # Seed ORM hierarchy directly to test repository tree building
-    parent = WBSItemORM(
+    wbs_item = WBSItemORM(
         id=uuid4(),
         project_id=project_a.id,
         code="1",
         name="Root",
         level=1,
     )
-    child = WBSItemORM(
-        id=uuid4(),
-        project_id=project_a.id,
-        code="1.1",
-        name="Child",
-        level=2,
-        parent_code="1",
-    )
-    session.add_all([parent, child])
+    session.add(wbs_item)
     await session.commit()
 
-    repo = SQLAlchemyWBSRepository(session)
-    tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
-    assert len(tree) == 1
-    assert tree[0].code == "1"
-    assert len(tree[0].children) == 1
-    assert tree[0].children[0].code == "1.1"
+    repo = SQLAlchemyBOMRepository(session)
+    bom_item = BOMItem(
+        id=uuid4(),
+        project_id=project_a.id,
+        wbs_item_id=wbs_item.id,
+        item_code="BOM-001",
+        item_name="Steel Beam",
+        description="Primary beam",
+        category=BOMCategory.MATERIAL,
+        quantity=Decimal("10"),
+        unit="pcs",
+        unit_price=Decimal("125.50"),
+        currency="EUR",
+        supplier="Supplier A",
+        lead_time_days=14,
+        procurement_status=ProcurementStatus.REQUESTED,
+        bom_metadata={"grade": "S275"},
+    )
+    created = await repo.create(bom_item)
+    assert created.item_code == "BOM-001"
+    assert created.total_price == Decimal("1255.00")
 
-    # Critical security test: tenant isolation via RLS/session context
+    by_project = await repo.get_by_project(project_a.id, tenant_a)
+    assert len(by_project) == 1
+    assert by_project[0].item_name == "Steel Beam"
+
+    by_wbs = await repo.get_by_wbs_item(wbs_item.id, tenant_a)
+    assert len(by_wbs) == 1
+    assert by_wbs[0].item_code == "BOM-001"
+
+    by_category = await repo.get_by_category(project_a.id, BOMCategory.MATERIAL, tenant_a)
+    assert len(by_category) == 1
+
+    by_status = await repo.get_by_status(project_a.id, ProcurementStatus.REQUESTED, tenant_a)
+    assert len(by_status) == 1
+
     async with get_session_with_tenant(tenant_b) as tenant_b_session:
-        tenant_b_repo = SQLAlchemyWBSRepository(tenant_b_session)
-        tree_b = await tenant_b_repo.get_tree(project_id=project_a.id, tenant_id=tenant_b)
-        assert tree_b == []
+        tenant_b_repo = SQLAlchemyBOMRepository(tenant_b_session)
+        tenant_b_items = await tenant_b_repo.get_by_project(project_a.id, tenant_b)
+        assert tenant_b_items == []
