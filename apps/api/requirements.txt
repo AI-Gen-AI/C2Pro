@@ -58,8 +58,9 @@ httpx==0.27.0
 celery[redis]==5.3.6
 
 # Utilities
-python-magic==0.4.27; sys_platform != 'win32'  # File MIME type validation (Linux/Mac)
-python-magic-bin==0.4.14; sys_platform == 'win32'  # File MIME type validation (Windows)
+# python-magic - File MIME type validation (install separately per platform)
+# Linux/Mac: pip install python-magic (requires system libmagic)
+# Windows: pip install python-magic-bin
 lark==1.1.9
 pyyaml==6.0.1 # For Coherence Engine rules
 python-dotenv==1.0.1
