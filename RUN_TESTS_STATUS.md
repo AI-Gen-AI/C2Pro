@@ -1,20 +1,21 @@
 # Test Execution Status - TS-E2E-SEC-TNT-001
 
-**Date:** 2026-02-05
-**Status:** ⚠️ **BLOCKED - Environment Dependencies**
+**Date:** 2026-02-07
+**Status:** ⚠️ **BLOCKED - Test Fixture/Schema Issues (DB reachable)**
 
 ---
 
-## ❌ Blocker: PostgreSQL Not Running
+## ❌ Blocker: Fixture Transaction Errors
 
-Attempted to apply RLS migration with:
+Latest test run reaches the database but fails in fixtures:
+
 ```bash
-alembic upgrade head
+pytest apps/api/tests/e2e/security/test_multi_tenant_isolation.py -v -o asyncio_default_fixture_loop_scope=session
 ```
 
-**Error:** `socket.gaierror: [Errno 11001] getaddrinfo failed`
+**Error:** `sqlalchemy.exc.InvalidRequestError: Can't operate on closed transaction inside context manager`
 
-**Cause:** PostgreSQL test database is not running (or DATABASE_URL is not configured)
+**Cause:** Fixtures commit inside a `session.begin()` context (`db` fixture), then call `refresh()` after the transaction has been closed.
 
 ---
 
@@ -46,14 +47,23 @@ Many packages don't have prebuilt wheels for Python 3.13 on Windows.
 **Missing Dependencies:**
 - Still missing some transitive dependencies (langchain ecosystem)
 
-### Issue 2: PostgreSQL Test Database Not Running ❌
+### Issue 2: Fixture Transaction Lifecycle ❌
 
-**Expected DATABASE_URL:**
-```
-postgresql://nonsuperuser:test@localhost:5433/c2pro_test
-```
+**Symptom:** `db.refresh()` fails after `db.commit()` inside fixtures.
 
-**Current State:** Database not accessible
+**Likely Fix Options:**
+- Use `await db.flush()` instead of `commit()` inside fixtures, then `refresh()`
+- Remove `async with session.begin()` from `db` fixture and manage transaction per test
+
+### Issue 3: Metadata Teardown FK Error ❌
+
+**Error:** `NoReferencedTableError` for `stakeholder_wbs_raci.wbs_item_id` referencing `wbs_items`
+
+**Cause:** `Base.metadata` lacks the `wbs_items` table during `drop_all`
+
+**Likely Fix Options:**
+- Ensure `wbs_items` model is imported before metadata creation
+- Limit `drop_all` to test tables only
 
 ---
 
@@ -140,9 +150,9 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 | Core Packages | ⚠️ Partial | fastapi, sqlalchemy, pytest installed |
 | LangChain | ❌ Missing | Not critical for tenant isolation tests |
 | Spacy/Presidio | ❌ Commented Out | Not needed for security tests |
-| PostgreSQL | ❌ Not Running | Optional - SQLite fallback available |
+| PostgreSQL | ✅ Running | `supabase_db_c2pro` on `localhost:54322` |
 | Test Suite | ✅ Ready | 11 test cases written |
-| RLS Migration | ✅ Created | Ready to apply when PostgreSQL is available |
+| RLS Migration | ✅ Created | Apply once fixture/schema issues resolved |
 
 ---
 
@@ -228,7 +238,8 @@ pip install <missing-package>
 
 **What's Blocking:**
 - ⚠️ Python 3.13 ecosystem maturity (missing prebuilt wheels)
-- ❌ PostgreSQL not running
+- ❌ Fixture transaction lifecycle (commit/refresh inside closed transaction)
+- ❌ Metadata teardown FK error (`wbs_items` not present in metadata)
 
 **Recommended Fix:**
 - ⭐ **Use Python 3.11** (5 minutes to full test suite passing)
