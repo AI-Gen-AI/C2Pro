@@ -66,7 +66,12 @@ jobs:
         run: |
           echo "Checking test database initialization files..."
           ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
-          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+          if [ -f infrastructure/database/test-init/01-setup.sql ]; then
+            echo "Found 01-setup.sql:"
+            cat infrastructure/database/test-init/01-setup.sql
+          else
+            echo "WARNING: 01-setup.sql not found"
+          fi
 
       - name: Start test database
         run: |
@@ -83,9 +88,18 @@ jobs:
         run: |
           echo "Checking if container is running..."
           docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
+          echo ""
+          echo "Checking init scripts in container..."
+          docker compose -f docker-compose.test.yml exec -T postgres-test ls -la /docker-entrypoint-initdb.d/ || echo "Init directory not found in container"
+          echo ""
           echo "Testing database connection..."
-          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "SELECT version();"
-          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database(), current_user;"
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "SELECT version();"
+          echo ""
+          echo "Checking current database..."
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -d c2pro_test -c "SELECT current_database(), current_user;"
+          echo ""
+          echo "Listing all database users..."
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "\du"
 
       - name: Run E2E Security Tests
         working-directory: apps/api

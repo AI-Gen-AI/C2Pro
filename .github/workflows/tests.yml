@@ -100,7 +100,9 @@ jobs:
       - name: Verify test database setup files
         run: |
           ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
-          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+          if [ -f infrastructure/database/test-init/01-setup.sql ]; then
+            cat infrastructure/database/test-init/01-setup.sql
+          fi
 
       - name: Start test database
         run: |
@@ -187,7 +189,9 @@ jobs:
       - name: Verify test database setup files
         run: |
           ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
-          cat infrastructure/database/test-init/01-setup.sql || echo "WARNING: setup SQL not found"
+          if [ -f infrastructure/database/test-init/01-setup.sql ]; then
+            cat infrastructure/database/test-init/01-setup.sql
+          fi
 
       - name: Start test database
         run: |
@@ -202,9 +206,12 @@ jobs:
       - name: Verify database setup
         run: |
           docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
-          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "\l"
-          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "\du"
-          docker compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "SELECT current_database();"
+          echo "Listing databases..."
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "\l"
+          echo "Listing users..."
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "\du"
+          echo "Checking current database..."
+          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -d c2pro_test -c "SELECT current_database();"
 
       - name: Run E2E Security Tests
         working-directory: apps/api
