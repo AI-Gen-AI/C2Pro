@@ -1,5 +1,11 @@
 ﻿# C2Pro - Contract Intelligence Platform
 
+[![Tests](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml)
+[![E2E Security](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+
 > Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
 
 ## 🎉 Estado Actual: Sprint S2 en Progreso (65%)
