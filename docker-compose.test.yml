@@ -1,31 +1,45 @@
-version: '3.8'
+# ===========================================
+# C2PRO - Test Database Setup
+# ===========================================
+# Used for running E2E and integration tests
+#
+# Usage:
+#   docker-compose -f docker-compose.test.yml up -d
+#   docker-compose -f docker-compose.test.yml down
 
 services:
+  # ===========================================
+  # PostgreSQL Test Database
+  # ===========================================
   postgres-test:
     image: postgres:15-alpine
-    container_name: c2pro-test-db
-    environment:
-      POSTGRES_DB: c2pro_test
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_HOST_AUTH_METHOD: trust
+    container_name: c2pro-postgres-test
+    restart: unless-stopped
     ports:
       - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: c2pro_test
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
-      # Migrations will be applied manually to avoid pgaudit issues
-      # - ./infrastructure/supabase/migrations:/docker-entrypoint-initdb.d
+      - ./infrastructure/database/test-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d c2pro_test"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d c2pro_test"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-    networks:
-      - c2pro-test
-
-networks:
-  c2pro-test:
-    driver: bridge
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=128MB"
 
 volumes:
   postgres_test_data:
+    driver: local
+
+networks:
+  default:
+    name: c2pro-test-network
