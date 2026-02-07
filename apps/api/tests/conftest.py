@@ -234,8 +234,8 @@ async def test_engine():
 
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
-        # Use psycopg instead of asyncpg for better Windows compatibility
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        # Use asyncpg for async PostgreSQL operations (already in requirements.txt)
+        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     try:
         engine = create_async_engine(
@@ -244,7 +244,7 @@ async def test_engine():
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=10,
-            # psycopg doesn't need special connect_args for local connections
+            connect_args={"statement_cache_size": 0},  # asyncpg config for test isolation
         )
 
         # Test connection and create tables
