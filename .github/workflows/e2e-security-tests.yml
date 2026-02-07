@@ -58,7 +58,7 @@ jobs:
 
       - name: Start test database
         run: |
-          docker-compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d
           echo "Waiting for PostgreSQL to be ready..."
           sleep 10
 
@@ -111,4 +111,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
