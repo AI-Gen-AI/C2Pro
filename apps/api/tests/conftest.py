@@ -55,6 +55,11 @@ if "celery" not in sys.modules:
 # ENVIRONMENT SETUP
 # ===========================================
 
+# Fix for Windows asyncpg issues
+# Use Selector event loop instead of Proactor on Windows
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 # Configurar variables de entorno antes de importar la app
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
@@ -202,13 +207,14 @@ def anyio_backend():
 pytest_plugins = ("pytest_asyncio",)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def event_loop():
     """
-    Create an instance of the event loop for the entire test session.
-    This ensures all async tests share the same event loop.
+    Create an instance of the event loop for each test function.
+    This avoids issues with event loop reuse and futures attached to different loops.
     """
-    loop = asyncio.get_event_loop_policy().new_event_loop()
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
     yield loop
     loop.close()
 
@@ -218,7 +224,7 @@ def event_loop():
 # ===========================================
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_engine():
     """
     Create a test database engine.
@@ -228,7 +234,8 @@ async def test_engine():
 
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Use psycopg instead of asyncpg for better Windows compatibility
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
     try:
         engine = create_async_engine(
@@ -237,6 +244,7 @@ async def test_engine():
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=10,
+            # psycopg doesn't need special connect_args for local connections
         )
 
         # Test connection and create tables
@@ -248,13 +256,17 @@ async def test_engine():
 
         # Cleanup: Drop all tables after tests
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            try:
+                await conn.run_sync(Base.metadata.drop_all)
+            except Exception as exc:
+                # Avoid hard failing test teardown when metadata is incomplete
+                print(f"\n[WARNING] Teardown drop_all skipped: {exc}")
 
         await engine.dispose()
 
     except (OperationalError, OSError):
         # Fallback to SQLite in memory
-        print("\n⚠️  PostgreSQL no disponible, usando SQLite en memoria")
+        print("\n[WARNING] PostgreSQL no disponible, usando SQLite en memoria")
         print("   Para ejecutar TODOS los tests, inicia PostgreSQL con:")
         print("   docker-compose -f docker-compose.test.yml up -d\n")
 
@@ -270,7 +282,7 @@ async def test_engine():
         await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_session_factory(test_engine):
     """
     Create a session factory for tests.
@@ -293,8 +305,10 @@ async def db(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
     ensuring test isolation.
     """
     async with test_session_factory() as session:
-        async with session.begin():
+        try:
             yield session
+        finally:
+            # Ensure any open transaction is rolled back between tests
             await session.rollback()
 
 
@@ -604,7 +618,7 @@ async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
     Creates an HTTP client for testing API endpoints.
     """
-    async def override_get_session():
+    async def override_get_session(*args, **kwargs):
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
