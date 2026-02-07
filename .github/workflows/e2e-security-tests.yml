@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DATABASE_URL: postgresql://nonsuperuser:test@localhost:5433/c2pro_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       ENVIRONMENT: test
       DEBUG: "true"
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
