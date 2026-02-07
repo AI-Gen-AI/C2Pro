@@ -666,6 +666,7 @@ tests/
 #### 4.4.3 Estado de Suites (Procurement Integration)
 
 - [x] TS-INT-DB-WBS-001 - WBS Repository + DB (Implemented: Integration Tests & Persistence Logic)
+- [x] TS-INT-MOD-WBS-001 - WBS → Procurement Integration (Implemented: Integration Tests & Mapping Use Case)
 
 ### 4.5 Módulo: STAKEHOLDERS (26 tests total)
 
