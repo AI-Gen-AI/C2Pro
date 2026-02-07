@@ -70,14 +70,17 @@ class StakeholderORM(Base):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Traceability
+    # TODO: Re-enable FKs when clauses/documents tables are implemented (GREEN phase)
     source_clause_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("clauses.id"),
+        # ForeignKey("clauses.id"),  # Temporarily commented - clauses table not implemented yet
         nullable=True,
         index=True,
     )
     extracted_from_document_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
+        PGUUID(as_uuid=True),
+        # ForeignKey("documents.id"),  # Temporarily commented - documents table not implemented yet
+        nullable=True,
     )
 
     # Approval workflow
