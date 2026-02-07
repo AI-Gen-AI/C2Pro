@@ -1,52 +1,54 @@
 @echo off
-REM Script para inicializar la base de datos de test en Windows
+REM C2Pro - Test Database Setup Script (Windows)
+REM Sets up and initializes the test database
 
-echo 🚀 Iniciando setup de base de datos de test...
+echo ================================
+echo C2Pro - Test Database Setup
+echo ================================
+echo.
 
-REM Verificar si Docker está corriendo
+REM Check if Docker is running
 docker info >nul 2>&1
-if errorlevel 1 (
-    echo ❌ Error: Docker no está corriendo
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker is not running. Please start Docker first.
     exit /b 1
 )
 
-REM Detener contenedor anterior si existe
-echo 🧹 Limpiando contenedores anteriores...
-docker-compose -f docker-compose.test.yml down -v >nul 2>&1
-
-REM Iniciar PostgreSQL
-echo 🐘 Iniciando PostgreSQL...
+REM Start test database
+echo [1/4] Starting test database container...
 docker-compose -f docker-compose.test.yml up -d
 
-REM Esperar a que PostgreSQL esté listo
-echo ⏳ Esperando a que PostgreSQL esté listo...
-:wait_loop
-timeout /t 2 >nul
-docker-compose -f docker-compose.test.yml exec -T postgres-test pg_isready -U test -d c2pro_test >nul 2>&1
-if errorlevel 1 goto wait_loop
+REM Wait for database to be ready
+echo [2/4] Waiting for database to be ready...
+timeout /t 5 /nobreak >nul
 
-echo ✅ PostgreSQL está listo
+REM Run migrations
+echo [3/4] Running database migrations...
+cd apps\api
+set DATABASE_URL=postgresql://nonsuperuser:test@localhost:5433/c2pro_test
+alembic upgrade head
+cd ..\..
 
-REM Aplicar migraciones
-echo 🔧 Aplicando migraciones...
-for %%f in (infrastructure\supabase\migrations\*.sql) do (
-    echo   ➡️  Aplicando %%~nxf...
-    docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < "%%f" 2>nul
-)
+REM Verify setup
+echo [4/4] Verifying setup...
+docker-compose -f docker-compose.test.yml ps
 
 echo.
-echo ✅ Base de datos de test configurada!
+echo ================================
+echo Test database ready!
+echo ================================
 echo.
-echo 📊 Información de conexión:
-echo   Host:     localhost
-echo   Port:     5432
+echo Database connection:
+echo   Host: localhost
+echo   Port: 5433
 echo   Database: c2pro_test
-echo   User:     test
+echo   User: nonsuperuser
 echo   Password: test
 echo.
-echo 🧪 Para ejecutar los tests:
+echo To run tests:
 echo   cd apps\api
-echo   pytest tests\security\ -v
+echo   pytest tests\e2e\security\ -v -m "e2e and security"
 echo.
-echo 🛑 Para detener la base de datos:
+echo To stop the database:
 echo   docker-compose -f docker-compose.test.yml down
+echo.

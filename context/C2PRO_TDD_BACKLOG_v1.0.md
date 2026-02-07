@@ -559,6 +559,9 @@ tests/
 #### 4.1.1 Estado de Suites (Documents Domain)
 
 - [x] TS-UD-DOC-CLS-001 - Clause Entity (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-CLS-002 - Clause Types & Classification (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-CLS-003 - SubClause Hierarchy (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-DOC-DOC-001 - Document Entity (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-DOC-ENT-001 - Entity Extraction - Dates (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-DOC-ENT-002 - Entity Extraction - Money (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-DOC-ENT-003 - Entity Extraction - Durations (Implemented: Unit Tests & Domain Logic)
@@ -569,6 +572,17 @@ tests/
 
 - [x] TS-INT-DB-CLS-001 - Clause Repository + DB (Implemented: Integration Tests & Persistence Logic)
 - [x] TS-INT-DB-DOC-001 - Document Repository + DB (Implemented: Integration Tests & Persistence Logic)
+
+#### 4.1.3 Estado de Suites (Documents Application)
+
+- [x] TS-UA-DOC-UC-001 - Upload Document Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-DOC-UC-002 - Extract Clauses Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-DOC-UC-003 - Extract Entities Use Case (Implemented: Unit Tests & Application Logic)
+
+#### 4.1.4 Estado de Suites (Documents Application Services)
+
+- [x] TS-UA-SVC-EXT-001 - Clause Extraction Service (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-SVC-EXT-002 - Entity Extraction Service (Implemented: Unit Tests & Application Logic)
 
 ### 4.2 Módulo: COHERENCE (56 tests total)
 
@@ -644,7 +658,12 @@ tests/
 - [x] TS-UD-PROC-LTM-004 - Lead Time Alerts (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-PROC-PLN-001 - Procurement Plan Generation (Implemented: Unit Tests & Domain Logic)
 
-#### 4.4.2 Estado de Suites (Procurement Integration)
+#### 4.4.2 Estado de Suites (Procurement Application)
+
+- [x] TS-UA-PROC-UC-001 - Generate BOM Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-PROC-UC-002 - Calculate Lead Time Use Case (Implemented: Unit Tests & Application Logic)
+
+#### 4.4.3 Estado de Suites (Procurement Integration)
 
 - [x] TS-INT-DB-WBS-001 - WBS Repository + DB (Implemented: Integration Tests & Persistence Logic)
 
@@ -664,6 +683,15 @@ tests/
 - [x] TS-UD-STK-ENT-001 - Stakeholder Entity (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-STK-CLS-001 - Power/Interest Classification (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UD-STK-CLS-002 - Quadrant Assignment (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-RAC-001 - RACI Entry Validation (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-RAC-002 - RACI Matrix Generation (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-RAC-003 - RACI from Clauses (Implemented: Unit Tests & Domain Logic)
+- [x] TS-UD-STK-MAP-001 - Stakeholder Map Data (Implemented: Unit Tests & Domain Logic)
+
+#### 4.5.2 Estado de Suites (Stakeholders Application)
+
+- [x] TS-UA-STK-UC-001 - Extract Stakeholders Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-STK-UC-002 - Generate RACI Use Case (Implemented: Unit Tests & Application Logic)
 
 ### 4.6 Módulo: ANALYSIS (24 tests total)
 
@@ -675,6 +703,10 @@ tests/
 | Integration | - | 3 | - | 3 |
 | E2E | - | - | 1 | 1 |
 | **Total** | **20** | **3** | **1** | **24** |
+
+#### 4.6.1 Estado de Suites (Analysis Domain)
+
+- [x] TS-UD-ANA-GRP-001 - Graph Node Entity (Implemented: Unit Tests & Domain Logic)
 
 ### 4.7 Módulo: SECURITY/MCP (38 tests total)
 

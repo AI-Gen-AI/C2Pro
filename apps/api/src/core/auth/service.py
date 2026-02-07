@@ -40,7 +40,10 @@ logger = structlog.get_logger()
 # ===========================================
 
 pwd_context = CryptContext(
-    schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.bcrypt_rounds
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=settings.bcrypt_rounds,
+    bcrypt__ident="2b",  # Use 2b ident to avoid version detection issues with bcrypt 5.0
 )
 
 

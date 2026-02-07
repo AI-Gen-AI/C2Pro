@@ -1,6 +1,8 @@
 """
 Domain models for the Document bounded context.
 A Document is an Aggregate Root for Clauses.
+Refers to Suite ID: TS-UD-DOC-CLS-002.
+Refers to Suite ID: TS-UD-DOC-DOC-001.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -35,6 +37,7 @@ class ClauseType(str, Enum):
     DELIVERY = "delivery"
     QUALITY = "quality"
     SCOPE = "scope"
+    WARRANTY = "warranty"
     TERMINATION = "termination"
     DISPUTE = "dispute"
     OTHER = "other"
@@ -111,3 +114,39 @@ class Document:
         if clause.document_id != self.id:
             raise ValueError("Clause does not belong to this document.")
         self.clauses.append(clause)
+
+    def transition_to(self, new_status: DocumentStatus) -> "Document":
+        """Refers to Suite ID: TS-UD-DOC-DOC-001."""
+        allowed: dict[DocumentStatus, set[DocumentStatus]] = {
+            DocumentStatus.UPLOADED: {DocumentStatus.QUEUED, DocumentStatus.ERROR},
+            DocumentStatus.QUEUED: {DocumentStatus.PARSING, DocumentStatus.ERROR},
+            DocumentStatus.PARSING: {DocumentStatus.PARSED, DocumentStatus.ERROR},
+            DocumentStatus.PARSED: {DocumentStatus.ERROR},
+            DocumentStatus.ERROR: set(),
+        }
+
+        if new_status == self.upload_status:
+            return self
+
+        if new_status not in allowed.get(self.upload_status, set()):
+            raise ValueError("Invalid status transition")
+
+        return Document(
+            id=self.id,
+            project_id=self.project_id,
+            document_type=self.document_type,
+            filename=self.filename,
+            upload_status=new_status,
+            file_format=self.file_format,
+            storage_url=self.storage_url,
+            storage_encrypted=self.storage_encrypted,
+            file_size_bytes=self.file_size_bytes,
+            parsed_at=self.parsed_at,
+            parsing_error=self.parsing_error,
+            retention_until=self.retention_until,
+            created_by=self.created_by,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+            document_metadata=dict(self.document_metadata),
+            clauses=list(self.clauses),
+        )

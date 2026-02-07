@@ -104,3 +104,10 @@ class TestProjectEntity:
         project.update_document_list(["drawing", "contract"])
 
         assert project.is_ready_for_analysis() is True
+
+    def test_013_project_archive_from_active_rejected(self) -> None:
+        """Cannot archive from ACTIVE status."""
+        project = _project(status=ProjectStatus.ACTIVE)
+
+        with pytest.raises(ValueError, match="cannot archive"):
+            project.archive()

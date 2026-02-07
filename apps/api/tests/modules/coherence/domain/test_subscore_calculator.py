@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from src.coherence.domain.subscore_calculator import (
     CoherenceAlert,
     CoherenceSeverity,
@@ -150,3 +152,19 @@ class TestSubscoreCalculator:
         ]
         score = SubscoreCalculator().calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
         assert score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_015_async_calculate_wrapper(self) -> None:
+        """Async calculate() wrapper returns same result as calculate_subscore()."""
+        alerts = [
+            CoherenceAlert.model_validate(
+                {"rule_id": "R6", "severity": CoherenceSeverity.MEDIUM, "scope": ScoreScope.BUDGET}
+            )
+        ]
+        calculator = SubscoreCalculator()
+
+        sync_score = calculator.calculate_subscore(alerts=alerts, scope=ScoreScope.BUDGET)
+        async_score = await calculator.calculate(alerts=alerts, scope=ScoreScope.BUDGET)
+
+        assert async_score == sync_score
+        assert async_score == 90.0

@@ -6,6 +6,7 @@ Refers to Suite ID: TS-UA-SVC-EXT-001.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -20,8 +21,8 @@ class TestClauseExtractionService:
     """Refers to Suite ID: TS-UA-SVC-EXT-001."""
 
     @pytest.mark.asyncio
-    async def test_calls_llm_port_and_maps_results(self, mocker):
-        llm_port = mocker.AsyncMock()
+    async def test_calls_llm_port_and_maps_results(self):
+        llm_port = AsyncMock()
         llm_port.extract_clauses.return_value = [
             {
                 "clause_code": "1.1",

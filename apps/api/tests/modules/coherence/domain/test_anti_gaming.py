@@ -226,3 +226,58 @@ class TestAntiGamingPolicy:
         result = AntiGamingDetector().detect([event], now=now)
 
         assert any("weight_manipulation" in log for log in result.audit_logs)
+
+    def test_017_resolve_reference_time_from_empty_events(self) -> None:
+        """When no events provided, use current UTC time."""
+        result = AntiGamingDetector().detect(events=[], now=None)
+        # Should not raise error and should use current time
+        assert result.is_gaming is False
+
+    def test_018_resolve_reference_time_with_explicit_now(self) -> None:
+        """When explicit 'now' provided, use it instead of deriving from events."""
+        past_time = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+        event = AlertEvent("created", user_id, "sig", past_time)
+
+        # Provide explicit 'now' far in the future
+        explicit_now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+
+        result = AntiGamingDetector(mass_changes_threshold=0).detect([event], now=explicit_now)
+        # Event is outside the window, so no mass_changes violation
+        assert result.is_gaming is False
+
+    def test_019_resolve_reference_time_from_aware_timestamp(self) -> None:
+        """When event has aware timestamp, convert to UTC."""
+        aware_time = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+        event = AlertEvent("created", user_id, "sig", aware_time)
+
+        result = AntiGamingDetector().detect([event], now=None)
+        # Should handle aware timestamp without error
+        assert result.is_gaming is False
+
+    def test_020_multiple_violations_reason(self) -> None:
+        """When multiple violations occur, reason is 'multiple_violations'."""
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        user_id = uuid4()
+
+        # Create mass changes
+        mass_events = [
+            AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
+            for i in range(15)
+        ]
+
+        # Add weight manipulation
+        weight_event = AlertEvent(
+            "weight_changed", user_id, "weights:v1", now, weight_change_percent=25.0
+        )
+
+        all_events = mass_events + [weight_event]
+
+        result = AntiGamingDetector(mass_changes_threshold=10).detect(
+            all_events, score=95.0, document_count=3, now=now
+        )
+
+        assert result.is_gaming is True
+        assert len(result.violations) >= 2
+        assert result.reason == "multiple_violations"

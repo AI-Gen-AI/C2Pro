@@ -1,62 +1,68 @@
 #!/bin/bash
-# Script para inicializar la base de datos de test
+# ===========================================
+# C2PRO - Test Database Setup Script
+# ===========================================
+# Sets up and initializes the test database
 
 set -e
 
-echo "🚀 Iniciando setup de base de datos de test..."
+echo "================================"
+echo "C2Pro - Test Database Setup"
+echo "================================"
+echo ""
 
-# Verificar si Docker está corriendo
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Error: Docker no está corriendo"
+    echo -e "${RED}[ERROR]${NC} Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Detener contenedor anterior si existe
-echo "🧹 Limpiando contenedores anteriores..."
-docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
-
-# Iniciar PostgreSQL
-echo "🐘 Iniciando PostgreSQL..."
+# Start test database
+echo -e "${GREEN}[1/4]${NC} Starting test database container..."
 docker-compose -f docker-compose.test.yml up -d
 
-# Esperar a que PostgreSQL esté listo
-echo "⏳ Esperando a que PostgreSQL esté listo..."
-until docker-compose -f docker-compose.test.yml exec -T postgres-test pg_isready -U test -d c2pro_test > /dev/null 2>&1; do
-    sleep 1
-done
+# Wait for database to be ready
+echo -e "${GREEN}[2/4]${NC} Waiting for database to be ready..."
+sleep 5
 
-echo "✅ PostgreSQL está listo"
+# Check if database is healthy
+if ! docker-compose -f docker-compose.test.yml ps | grep -q "healthy"; then
+    echo -e "${YELLOW}[WARNING]${NC} Database may not be fully ready yet, waiting a bit more..."
+    sleep 5
+fi
 
-# Ejecutar migraciones
-echo "📦 Ejecutando migraciones..."
-export DATABASE_URL="postgresql://test:test@localhost:5432/c2pro_test"
-
+# Run migrations
+echo -e "${GREEN}[3/4]${NC} Running database migrations..."
 cd apps/api
-python -m pytest --version > /dev/null 2>&1 || pip install -r requirements.txt
-
+DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test" alembic upgrade head
 cd ../..
 
-# Aplicar migraciones usando SQL directo
-echo "🔧 Aplicando migraciones..."
-for migration in infrastructure/supabase/migrations/*.sql; do
-    if [ -f "$migration" ]; then
-        echo "  ➡️  Aplicando $(basename $migration)..."
-        docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < "$migration" || true
-    fi
-done
+# Verify setup
+echo -e "${GREEN}[4/4]${NC} Verifying setup..."
+docker-compose -f docker-compose.test.yml ps
 
-echo "✅ Base de datos de test configurada!"
 echo ""
-echo "📊 Información de conexión:"
-echo "  Host:     localhost"
-echo "  Port:     5432"
+echo "================================"
+echo -e "${GREEN}Test database ready!${NC}"
+echo "================================"
+echo ""
+echo "Database connection:"
+echo "  Host: localhost"
+echo "  Port: 5433"
 echo "  Database: c2pro_test"
-echo "  User:     test"
+echo "  User: nonsuperuser"
 echo "  Password: test"
 echo ""
-echo "🧪 Para ejecutar los tests:"
+echo "To run tests:"
 echo "  cd apps/api"
-echo "  pytest tests/security/ -v"
+echo "  pytest tests/e2e/security/ -v -m \"e2e and security\""
 echo ""
-echo "🛑 Para detener la base de datos:"
+echo "To stop the database:"
 echo "  docker-compose -f docker-compose.test.yml down"
+echo ""

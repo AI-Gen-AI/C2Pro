@@ -1,74 +1,222 @@
-# C2Pro - Testing Guide
+# C2Pro Test Suite Documentation
 
-## Configuración de Base de Datos para Tests
+This document provides comprehensive instructions for running the C2Pro test suite.
 
-Los tests de seguridad requieren una base de datos PostgreSQL. Hay tres opciones:
+## Prerequisites
 
-### Opción 1: Docker (Recomendado)
+- Python 3.11+
+- Docker and Docker Compose
+- PostgreSQL client (optional, for debugging)
 
+## Test Database Setup
+
+### Automated Setup (Recommended)
+
+Run the automated setup script:
+
+**Windows:**
+```cmd
+.\infrastructure\scripts\setup-test-db.bat
+```
+
+**Linux/macOS:**
 ```bash
-# Desde la raíz del proyecto
+chmod +x infrastructure/scripts/setup-test-db.sh
+./infrastructure/scripts/setup-test-db.sh
+```
+
+### Manual Setup
+
+1. Start the test database container:
+```bash
 docker-compose -f docker-compose.test.yml up -d
+```
 
-# Aplicar migraciones
-docker-compose -f docker-compose.test.yml exec postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+2. Wait for the database to be ready (check with `docker ps`)
 
-# Ejecutar tests
+3. The database will be available at:
+   - Host: `localhost`
+   - Port: `5433`
+   - Database: `c2pro_test`
+   - User: `nonsuperuser`
+   - Password: `test`
+
+## Running Tests
+
+### Environment Configuration
+
+Set the `DATABASE_URL` environment variable before running tests:
+
+```bash
+export DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test"
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test"
+```
+
+### Running All Tests
+
+```bash
 cd apps/api
-pytest tests/security/ -v
-
-# Detener la BD
-docker-compose -f docker-compose.test.yml down
+pytest
 ```
 
-### Opción 2: PostgreSQL Local
+### Running Specific Test Suites
 
-1. Instalar PostgreSQL 15+
-2. Crear base de datos:
+**E2E Security Tests:**
 ```bash
-createdb -U postgres c2pro_test
-createuser test -P  # Password: test
+pytest tests/e2e/security/ -v -m "e2e and security"
 ```
-3. Aplicar migraciones
-4. Ejecutar tests
 
-### Opción 3: Tests sin BD (Solo para CI/CD)
+**Unit Tests:**
+```bash
+pytest tests/unit/ -v -m "unit"
+```
 
-Para tests que NO requieren BD real, se usa SQLite en memoria automáticamente.
+**Integration Tests:**
+```bash
+pytest tests/integration/ -v -m "integration"
+```
 
-## Ejecutar Tests
+### Running a Single Test
 
 ```bash
-# Todos los tests de seguridad
-pytest tests/security/ -v
-
-# Tests específicos
-pytest tests/security/test_mcp_security.py -v
-pytest tests/security/test_jwt_validation.py -v
-pytest tests/security/test_rls_isolation.py -v
-pytest tests/security/test_sql_injection.py -v
-
-# Con coverage
-pytest tests/security/ --cov=src --cov-report=html -v
+pytest tests/e2e/security/test_multi_tenant_isolation.py::test_001_tenant_a_cannot_read_tenant_b_project -v
 ```
 
-## Estado Actual
+## Test Configuration
 
-- ✅ **MCP Security**: 23/23 tests pasando (NO requiere BD)
-- ⏳ **JWT Validation**: 10 tests (Requiere BD PostgreSQL)
-- ⏳ **RLS Isolation**: 3 tests (Requiere BD PostgreSQL)
-- ⏳ **SQL Injection**: 6 tests (Requiere BD PostgreSQL)
+### pytest.ini Options
+
+The test configuration is defined in `pyproject.toml`:
+
+- `asyncio_mode = "auto"` - Automatically detects async tests
+- Test markers are defined for categorization (`e2e`, `integration`, `unit`, `security`, `ai`, etc.)
+
+### Test Fixtures
+
+Key fixtures are defined in `tests/conftest.py`:
+
+- `test_engine` - Async database engine for tests
+- `test_session_factory` - Session factory for database operations
+- `db` - Database session for individual tests
+- `client` - Async HTTP client for API testing
+- `generate_token` - JWT token generator for authentication testing
+
+## Known Issues & Fixes
+
+### 1. Windows Async Event Loop Issues
+
+**Issue:** `ConnectionResetError` or `ConnectionDoesNotExistError` on Windows
+
+**Fix:** The test configuration automatically applies `WindowsSelectorEventLoopPolicy` on Windows (configured in `tests/conftest.py`).
+
+### 2. Bcrypt Version Compatibility
+
+**Issue:** `ValueError: password cannot be longer than 72 bytes`
+
+**Fix:** The project uses `bcrypt==4.3.0` which is compatible with `passlib==1.7.4`. Do NOT upgrade to bcrypt 5.x.
+
+**Lock the version:**
+```bash
+pip install 'bcrypt<5.0,>=4.0'
+```
+
+### 3. Pgbouncer / Supabase Connection Pooler
+
+**Issue:** `DuplicatePreparedStatementError` when using Supabase Connection Pooler
+
+**Fix:** Add `statement_cache_size=0` to database connect_args (already configured in `tests/conftest.py` and `src/core/database.py`).
+
+## Test Database Maintenance
+
+### Reset Test Database
+
+```bash
+docker-compose -f docker-compose.test.yml down -v
+docker-compose -f docker-compose.test.yml up -d
+```
+
+### View Database Logs
+
+```bash
+docker logs c2pro-postgres-test
+```
+
+### Connect to Test Database
+
+```bash
+docker exec -it c2pro-postgres-test psql -U nonsuperuser -d c2pro_test
+```
+
+## CI/CD Integration
+
+For CI/CD pipelines, use the following approach:
+
+```yaml
+# Example GitHub Actions workflow
+- name: Start Test Database
+  run: docker-compose -f docker-compose.test.yml up -d
+
+- name: Wait for Database
+  run: sleep 5
+
+- name: Run Tests
+  env:
+    DATABASE_URL: postgresql://nonsuperuser:test@localhost:5433/c2pro_test
+  run: |
+    cd apps/api
+    pytest tests/ -v --cov=src --cov-report=xml
+
+- name: Stop Test Database
+  run: docker-compose -f docker-compose.test.yml down -v
+```
+
+## Test Coverage
+
+To generate coverage reports:
+
+```bash
+cd apps/api
+pytest --cov=src --cov-report=html --cov-report=term
+```
+
+View the HTML report:
+```bash
+open htmlcov/index.html  # macOS
+start htmlcov/index.html # Windows
+xdg-open htmlcov/index.html # Linux
+```
 
 ## Troubleshooting
 
-### ConnectionRefusedError
-- **Causa**: Base de datos no está corriendo
-- **Solución**: Iniciar PostgreSQL con Docker o localmente
+### Tests Hang or Timeout
 
-### SQLAlchemy errors
-- **Causa**: Migraciones no aplicadas
-- **Solución**: Aplicar migraciones a la BD de test
+1. Check if the database is running: `docker ps | grep c2pro-postgres-test`
+2. Verify database connectivity: `docker exec c2pro-postgres-test psql -U nonsuperuser -d c2pro_test -c "SELECT 1;"`
+3. Check for orphaned connections: Restart the test database
 
-### Import errors
-- **Causa**: Modelos no importados
-- **Solución**: Ya está corregido en conftest.py
+### Import Errors
+
+Ensure you're in the correct directory and have installed dependencies:
+```bash
+cd apps/api
+pip install -r requirements.txt
+```
+
+### Database Schema Issues
+
+If tests fail due to missing tables, ensure migrations have run:
+```bash
+export DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test"
+alembic upgrade head
+```
+
+## Contact
+
+For issues or questions about the test suite, please:
+1. Check this documentation first
+2. Review existing tests in the `tests/` directory
+3. Create an issue in the project repository

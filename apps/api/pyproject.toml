@@ -56,9 +56,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "7.0"
 asyncio_mode = "auto"
-# asyncio_default_fixture_loop_scope controla el scope del event loop
-# "function" asegura que cada test tenga su propio loop (más estable)
-asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = [
     "-ra",
@@ -77,6 +74,7 @@ markers = [
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
     "ignore::ResourceWarning",  # Ignora warnings de recursos no cerrados en tests
     "ignore:Importing 'parser\\.split_arg_string' is deprecated.*:DeprecationWarning",
     "ignore:'BaseCommand' is deprecated.*:DeprecationWarning",
