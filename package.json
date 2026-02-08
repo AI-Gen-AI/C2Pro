@@ -23,7 +23,9 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "eslint": "^9.39.2",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.0",
+    "globals": "^17.3.0",
     "husky": "^9.1.7",
     "prettier": "^3.8.1",
     "supabase": "^2.72.6",
