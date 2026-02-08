@@ -21,10 +21,12 @@ interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  userRole?: 'user' | 'tenant_admin' | 'c2pro_admin';
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
   refreshUserData: () => Promise<void>;
+  setDemoRole?: (role: 'user' | 'tenant_admin' | 'c2pro_admin') => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,6 +35,7 @@ const ACCESS_TOKEN_KEY = 'c2pro_access_token';
 const REFRESH_TOKEN_KEY = 'c2pro_refresh_token';
 const USER_DATA_KEY = 'c2pro_user_data';
 const TENANT_DATA_KEY = 'c2pro_tenant_data';
+const DEMO_ROLE_KEY = 'c2pro_demo_role';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [tenant, setTenant] = useState<TenantResponse | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [demoRole, setDemoRole] = useState<'user' | 'tenant_admin' | 'c2pro_admin' | null>(null);
   const router = useRouter();
 
   /**
@@ -54,11 +58,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
         const storedUser = localStorage.getItem(USER_DATA_KEY);
         const storedTenant = localStorage.getItem(TENANT_DATA_KEY);
+        const storedDemoRole = localStorage.getItem(DEMO_ROLE_KEY);
 
         if (storedToken && storedUser && storedTenant) {
           setAccessToken(storedToken);
           setUser(JSON.parse(storedUser));
           setTenant(JSON.parse(storedTenant));
+        }
+
+        if (storedDemoRole && process.env.NODE_ENV === 'development') {
+          setDemoRole(storedDemoRole as 'user' | 'tenant_admin' | 'c2pro_admin');
         }
       } catch (error) {
         console.error('Failed to load stored auth data:', error);
@@ -247,10 +256,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     accessToken,
     isAuthenticated: !!user && !!accessToken,
     isLoading,
+    userRole: demoRole || (user?.role as 'user' | 'tenant_admin' | 'c2pro_admin') || 'user',
     login,
     register,
     logout,
     refreshUserData,
+    setDemoRole: process.env.NODE_ENV === 'development' ? (role: 'user' | 'tenant_admin' | 'c2pro_admin') => {
+      setDemoRole(role);
+      localStorage.setItem(DEMO_ROLE_KEY, role);
+    } : undefined,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
