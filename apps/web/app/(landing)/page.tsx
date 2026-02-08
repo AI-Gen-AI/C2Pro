@@ -8,25 +8,30 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="text-xl font-bold text-primary">C2Pro</div>
-        </div>
+      <nav className="flex items-center justify-between border-b px-6 py-4 sticky top-0 bg-white/95 backdrop-blur-sm z-50">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            C2Pro
+          </div>
+        </Link>
         <div className="hidden gap-8 md:flex">
-          <a href="#features" className="text-sm text-foreground hover:text-primary">
+          <a href="#features" className="text-sm text-foreground hover:text-primary transition-colors">
             Features
           </a>
-          <a href="#pricing" className="text-sm text-foreground hover:text-primary">
+          <a href="#stats" className="text-sm text-foreground hover:text-primary transition-colors">
+            Why C2Pro
+          </a>
+          <a href="#" className="text-sm text-foreground hover:text-primary transition-colors">
             Pricing
           </a>
         </div>
-        <div className="flex gap-3">
-          <Link href="/auth/login">
+        <div className="flex gap-3 items-center">
+          <Link href="/login">
             <Button variant="ghost" size="sm">
               Sign In
             </Button>
           </Link>
-          <Link href="/auth/register">
+          <Link href="/signup">
             <Button size="sm" className="bg-primary hover:bg-primary/90">
               Get Started
             </Button>
@@ -46,13 +51,13 @@ export default function LandingPage() {
           Quality, Technical, Legal, and Time.
         </p>
         <div className="flex justify-center gap-4">
-          <Link href="/auth/register">
+          <Link href="/signup">
             <Button size="lg" className="bg-primary hover:bg-primary/90">
               Start Free Trial
               <span className="ml-2">→</span>
             </Button>
           </Link>
-          <Link href="#demo">
+          <Link href="/dashboard">
             <Button size="lg" variant="outline">
               View Live Demo
             </Button>
@@ -184,7 +189,7 @@ export default function LandingPage() {
           <p className="mt-4 text-lg text-muted-foreground">
             Join enterprise teams detecting millions in savings with C2Pro.
           </p>
-          <Link href="/auth/register" className="mt-8 inline-block">
+          <Link href="/signup" className="mt-8 inline-block">
             <Button size="lg" className="bg-primary hover:bg-primary/90">
               Start Your Free Trial
             </Button>

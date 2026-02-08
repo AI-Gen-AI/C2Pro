@@ -21,6 +21,7 @@ interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  userRole?: 'user' | 'tenant_admin' | 'c2pro_admin';
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
@@ -247,6 +248,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     accessToken,
     isAuthenticated: !!user && !!accessToken,
     isLoading,
+    userRole: (user?.role as 'user' | 'tenant_admin' | 'c2pro_admin') || 'user',
     login,
     register,
     logout,
