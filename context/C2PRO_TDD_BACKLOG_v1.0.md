@@ -541,6 +541,13 @@ tests/
 | UAD-PERS-025 | test_r2_storage_adapter_download | UAD | 🟠 P1 | 6.5.1 |
 | UAD-PERS-026 | test_r2_storage_adapter_delete | UAD | 🟡 P2 | 6.5.1 |
 
+#### 3.3.2.1 Estado de Suites (Persistence Adapters)
+
+- [x] TS-UAD-PER-GRP-001 - Graph Adapters (Neo4j) (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UAD-PER-R2-001 - R2 Storage Adapters (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UAD-PER-RDS-001 - Redis Adapters (Implemented: Unit Tests & Adapter Logic)
+- [x] TS-UAD-PER-REP-001 - All Repositories (Implemented: Unit Tests & Adapter Logic)
+
 ---
 
 ## 4. Índice Completo por Módulo
@@ -572,6 +579,7 @@ tests/
 
 - [x] TS-INT-DB-CLS-001 - Clause Repository + DB (Implemented: Integration Tests & Persistence Logic)
 - [x] TS-INT-DB-DOC-001 - Document Repository + DB (Implemented: Integration Tests & Persistence Logic)
+- [x] TS-INT-MOD-DOC-001 - Documents → Analysis Integration (Implemented: Integration Tests & Mapping Use Case)
 
 #### 4.1.3 Estado de Suites (Documents Application)
 
@@ -666,6 +674,12 @@ tests/
 #### 4.4.3 Estado de Suites (Procurement Integration)
 
 - [x] TS-INT-DB-WBS-001 - WBS Repository + DB (Implemented: Integration Tests & Persistence Logic)
+- [x] TS-INT-DB-BOM-001 - BOM Repository + DB (Implemented: Integration Tests & Persistence Logic)
+- [x] TS-INT-MOD-WBS-001 - WBS → Procurement Integration (Implemented: Integration Tests & Mapping Use Case)
+
+#### 4.4.4 Estado de Suites (Security Audit Integration)
+
+- [x] TS-INT-DB-AUD-001 - Audit Repository + DB (Implemented: Integration Tests & Persistence Logic)
 
 ### 4.5 Módulo: STAKEHOLDERS (26 tests total)
 
@@ -693,6 +707,10 @@ tests/
 - [x] TS-UA-STK-UC-001 - Extract Stakeholders Use Case (Implemented: Unit Tests & Application Logic)
 - [x] TS-UA-STK-UC-002 - Generate RACI Use Case (Implemented: Unit Tests & Application Logic)
 
+#### 4.5.3 Estado de Suites (Stakeholders Integration)
+
+- [x] TS-INT-MOD-STK-001 - Stakeholders → RACI Integration (Implemented: Integration Tests & Mapping Use Case)
+
 ### 4.6 Módulo: ANALYSIS (24 tests total)
 
 | Capa | Unit | Integration | E2E | Total |
@@ -707,6 +725,13 @@ tests/
 #### 4.6.1 Estado de Suites (Analysis Domain)
 
 - [x] TS-UD-ANA-GRP-001 - Graph Node Entity (Implemented: Unit Tests & Domain Logic)
+
+#### 4.6.2 Estado de Suites (Analysis Integration)
+
+- [x] TS-INT-MOD-ANA-001 - Analysis → Coherence Integration (Implemented: Integration Tests & Mapping Use Case)
+- [x] TS-INT-EXT-LLM-001 - LLM Client Integration (Implemented: Integration Tests & LLM Adapter Flow)
+- [x] TS-INT-EXT-LLM-002 - LLM Fallback Integration (Implemented: Integration Tests & Fallback Adapter)
+- [x] TS-INT-GRP-NEO-001 - Neo4j Integration (Implemented: Integration Tests & Graph Adapter)
 
 ### 4.7 Módulo: SECURITY/MCP (38 tests total)
 
@@ -732,6 +757,8 @@ tests/
 - [x] TS-UC-SEC-ANO-003 - Anonymizer Tenant Config (Implemented: Unit Tests & Application Logic)
 - [x] TS-UC-SEC-GAM-001 - Anti-Gaming Detection (Implemented: Unit Tests & Domain Logic)
 - [x] TS-UC-SEC-TNT-001 - Tenant Context & Isolation (Implemented: Unit Tests & Core Security Logic)
+- [x] TS-UA-SEC-UC-001 - Validate MCP Operation Use Case (Implemented: Unit Tests & Application Logic)
+- [x] TS-UA-SEC-UC-002 - Anonymize Document Use Case (Implemented: Unit Tests & Application Logic)
 
 ### 4.8 Módulo: ASYNC/EVENTS (22 tests total)
 

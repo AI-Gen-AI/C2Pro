@@ -7,6 +7,7 @@ Hierarchical rate limiter (user -> tenant) with Redis fixed window counters.
 from __future__ import annotations
 
 from datetime import datetime
+import time
 from typing import Callable
 from uuid import UUID
 
@@ -52,6 +53,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._redis = self._build_redis(redis_url or settings.redis_url)
         self._user_limit = user_limit or settings.rate_limit_user_per_min
         self._tenant_limit = tenant_limit or settings.rate_limit_tenant_per_min
+        self._requests: dict[str, list[float]] = {}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if not settings.rate_limit_enabled:
@@ -61,11 +63,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if self._redis is None:
-            return await call_next(request)
+            return await self._dispatch_in_memory(request, call_next)
 
         user_id, tenant_id = self._extract_ids(request)
         if user_id is None and tenant_id is None:
-            return await call_next(request)
+            return await self._dispatch_in_memory(request, call_next)
 
         now = datetime.utcnow()
         window_key = now.strftime("%Y-%m-%dT%H:%M")
@@ -77,7 +79,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
         if user_count is None and tenant_count is None:
-            return await call_next(request)
+            return await self._dispatch_in_memory(request, call_next)
 
         reset_seconds = max(1, WINDOW_SECONDS - now.second)
 
@@ -143,6 +145,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         return response
+
+    async def _dispatch_in_memory(self, request: Request, call_next: Callable) -> Response:
+        client_id = self._get_client_identifier(request)
+        if self._is_rate_limited(client_id, request.url.path):
+            return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+        self._record_request(client_id)
+        return await call_next(request)
 
     def _is_public_path(self, path: str) -> bool:
         return any(path.startswith(prefix) for prefix in self.PUBLIC_PATH_PREFIXES)
@@ -247,3 +256,38 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         except RedisError as exc:
             logger.warning("rate_limiter_redis_error", error=str(exc))
             return None, None
+
+    def _get_client_identifier(self, request: Request) -> str:
+        tenant_id = getattr(request.state, "tenant_id", None)
+        if tenant_id:
+            return f"tenant:{tenant_id}"
+
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            ip = forwarded_for.split(",")[0].strip()
+            return f"ip:{ip}"
+
+        if request.client:
+            return f"ip:{request.client.host}"
+
+        return "ip:unknown"
+
+    def _record_request(self, client_id: str) -> None:
+        now = time.time()
+        window_seconds = 300
+        window_start = now - window_seconds
+
+        timestamps = self._requests.get(client_id, [])
+        timestamps = [ts for ts in timestamps if ts > window_start]
+        timestamps.append(now)
+        self._requests[client_id] = timestamps
+
+    def _is_rate_limited(self, client_id: str, path: str) -> bool:
+        limit = settings.rate_limit_per_minute
+        if "/api/ai/" in path:
+            limit = max(1, limit // 2)
+
+        now = time.time()
+        window_start = now - 60
+        timestamps = [ts for ts in self._requests.get(client_id, []) if ts > window_start]
+        return len(timestamps) >= limit
