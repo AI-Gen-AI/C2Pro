@@ -10,24 +10,30 @@ export default function RootPage() {
   const { isAuthenticated, isLoading, userRole } = useAuth();
   const router = useRouter();
   const [showLanding, setShowLanding] = useState(false);
+  const [lastRole, setLastRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
 
-    // If authenticated, redirect based on role
+    // If authenticated, redirect based on role (including demo role changes)
     if (isAuthenticated) {
-      if (userRole === 'c2pro_admin') {
-        router.push('/admin/c2pro');
-      } else if (userRole === 'tenant_admin') {
-        router.push('/admin/tenant');
-      } else {
-        router.push('/dashboard/projects');
+      // If role changed, navigate to appropriate dashboard
+      if (userRole !== lastRole) {
+        setLastRole(userRole);
+        
+        if (userRole === 'c2pro_admin') {
+          router.push('/admin/c2pro');
+        } else if (userRole === 'tenant_admin') {
+          router.push('/admin/tenant');
+        } else {
+          router.push('/dashboard/projects');
+        }
       }
     } else {
       // Not authenticated, show landing page
       setShowLanding(true);
     }
-  }, [isAuthenticated, isLoading, userRole, router]);
+  }, [isAuthenticated, isLoading, userRole, router, lastRole]);
 
   if (isLoading) {
     return (

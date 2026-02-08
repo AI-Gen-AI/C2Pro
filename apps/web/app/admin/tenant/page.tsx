@@ -38,16 +38,31 @@ const MOCK_PROJECTS = [
 ];
 
 export default function TenantAdminDashboard() {
-  const { user, tenant, logout } = useAuth();
+  const { user, tenant, logout, userRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [projects] = useState(MOCK_PROJECTS);
+
+  // Check if user has correct role
+  if (userRole !== 'tenant_admin' && userRole !== 'c2pro_admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground">You need Tenant Admin or C2Pro Admin access</p>
+          <Link href="/">
+            <Button>Go Home</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const filteredProjects = projects.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="tenant_admin">
       <div className="min-h-screen bg-background">
         {/* Header */}
         <header className="border-b bg-card">

@@ -41,9 +41,24 @@ const MOCK_TENANTS = [
 ];
 
 export default function C2ProAdminPanel() {
-  const { logout } = useAuth();
+  const { logout, userRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [tenants] = useState(MOCK_TENANTS);
+
+  // Check if user has correct role
+  if (userRole !== 'c2pro_admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground">Only C2Pro Admin can access this page</p>
+          <Link href="/">
+            <Button>Go Home</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const filteredTenants = tenants.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
