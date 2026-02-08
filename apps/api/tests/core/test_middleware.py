@@ -11,6 +11,7 @@ Comprehensive tests for middleware components including:
 import pytest
 import time
 from unittest.mock import Mock, AsyncMock, patch
+from types import SimpleNamespace
 from uuid import uuid4, UUID
 
 from fastapi import FastAPI, Request, Response, HTTPException
@@ -75,12 +76,38 @@ def valid_token(test_user, test_tenant):
     )
 
 
+@pytest.fixture
+def test_tenant():
+    """Simple tenant fixture without DB dependency."""
+    return SimpleNamespace(id=uuid4())
+
+
+@pytest.fixture
+def test_user(test_tenant):
+    """Simple user fixture without DB dependency."""
+    return SimpleNamespace(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        email="test@example.com",
+        role=UserRole.ADMIN,
+    )
+
+
 # ===========================================
 # TENANT ISOLATION MIDDLEWARE TESTS
 # ===========================================
 
 class TestTenantIsolationMiddleware:
     """Tests for TenantIsolationMiddleware."""
+
+    @pytest.fixture(autouse=True)
+    def _bypass_tenant_db(self, monkeypatch):
+        """Avoid hitting DB during middleware unit tests."""
+        monkeypatch.setattr(
+            TenantIsolationMiddleware,
+            "_validate_tenant_exists",
+            AsyncMock(return_value=True),
+        )
 
     def test_public_path_bypass_health(self, app):
         """
