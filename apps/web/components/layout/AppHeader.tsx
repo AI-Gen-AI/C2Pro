@@ -21,7 +21,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background px-6">
+    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card px-6">
       {/* Left: Breadcrumb / Title */}
       <div className="flex items-center gap-2">
         {breadcrumb && breadcrumb.length > 0 ? (

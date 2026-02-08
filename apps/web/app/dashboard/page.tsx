@@ -12,7 +12,7 @@ import { CategoryDetail } from '@/components/coherence/CategoryDetail';
 // ── Mock Data (TDD v3.0 spec) ──
 const DATA = {
   score: 78,
-  project: 'Torre Skyline \u2014 Contract Review',
+  project: 'Torre Skyline — Contract Review',
   docs: 8,
   points: 2847,
   cats: {
