@@ -7,9 +7,9 @@ export default [
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
-        browser: true,
-        node: true,
-        es2021: true,
+        // Using built-in browser and node globals from @eslint/js
+        ...js.configs.browser,
+        ...js.configs.node,
       },
     },
     rules: {},
