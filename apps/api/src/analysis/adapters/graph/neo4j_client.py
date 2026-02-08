@@ -1,7 +1,7 @@
 """
 Neo4j graph adapter.
 
-Refers to Suite ID: TS-INT-GRP-NEO-001.
+Refers to Suite IDs: TS-UAD-PER-GRP-001, TS-INT-GRP-NEO-001.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ class _Neo4jDriver(Protocol):
 
 @dataclass
 class Neo4jGraphClient:
-    """Refers to Suite ID: TS-INT-GRP-NEO-001."""
+    """Refers to Suite ID: TS-UAD-PER-GRP-001."""
 
     driver: _Neo4jDriver
 

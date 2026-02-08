@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.core.services.rate_limiter_service import RateLimiterService
-from src.core.exceptions import RateLimitExceededException
+from src.core.exceptions import RateLimitExceededError
 
 
 class TestRateLimiterService:
@@ -24,5 +24,5 @@ class TestRateLimiterService:
 
         service = RateLimiterService(redis_client=redis_client, limit_per_minute=60)
 
-        with pytest.raises(RateLimitExceededException):
+        with pytest.raises(RateLimitExceededError):
             service.check_and_increment(key="tenant:123")

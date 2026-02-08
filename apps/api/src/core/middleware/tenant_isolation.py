@@ -103,7 +103,9 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
     def _is_public_path(self, path: str) -> bool:
         """Verifica si la ruta es pública."""
-        return any(path.startswith(p) for p in self.PUBLIC_PATHS)
+        if path == "/":
+            return True
+        return any(path.startswith(p) for p in self.PUBLIC_PATHS if p != "/")
 
     def _extract_tenant_id(self, request: Request) -> tuple[UUID | None, str | None]:
         """
