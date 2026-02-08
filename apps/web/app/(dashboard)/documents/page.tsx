@@ -226,8 +226,8 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Documents</h1>
+          <p className="text-sm text-muted-foreground">
             All project documents in one place
           </p>
         </div>

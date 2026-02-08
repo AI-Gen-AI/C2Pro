@@ -127,8 +127,8 @@ export default function AlertsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Alerts Center</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alerts Center</h1>
+          <p className="text-sm text-muted-foreground">
             Monitor and manage all project alerts
           </p>
         </div>

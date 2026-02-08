@@ -9,10 +9,8 @@ import { RadarView } from '@/components/coherence/RadarView';
 import { AlertsDistribution } from '@/components/coherence/AlertsDistribution';
 import { CategoryDetail } from '@/components/coherence/CategoryDetail';
 
-// ── Mock Data (TDD v3.0 spec) ──
 const DATA = {
   score: 78,
-  project: 'Torre Skyline \u2014 Contract Review',
   docs: 8,
   points: 2847,
   cats: {
@@ -26,58 +24,41 @@ const DATA = {
   alertSum: { critical: 2, high: 5, medium: 8, low: 3 },
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  SCOPE: 'Scope',
-  BUDGET: 'Budget',
-  QUALITY: 'Quality',
-  TECHNICAL: 'Technical',
-  LEGAL: 'Legal',
-  TIME: 'Time',
+const LABELS: Record<string, string> = {
+  SCOPE: 'Scope', BUDGET: 'Budget', QUALITY: 'Quality',
+  TECHNICAL: 'Technical', LEGAL: 'Legal', TIME: 'Time',
 };
 
 type ViewMode = 'breakdown' | 'radar' | 'alerts';
 
-export default function DashboardPage() {
+export default function ProjectCoherencePage() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('breakdown');
 
   const barData = Object.entries(DATA.cats).map(([k, v]) => ({
-    name: CATEGORY_LABELS[k],
-    score: v.score,
+    name: LABELS[k], score: v.score,
   }));
 
   const radarData = Object.entries(DATA.cats).map(([k, v]) => ({
-    category: CATEGORY_LABELS[k],
-    score: v.score,
-    target: 80,
+    category: LABELS[k], score: v.score, target: 80,
   }));
 
-  const catEntries = Object.entries(DATA.cats).sort(
-    ([, a], [, b]) => a.score - b.score
-  );
+  const catEntries = Object.entries(DATA.cats).sort(([, a], [, b]) => a.score - b.score);
 
   return (
-    <section className="space-y-5">
-      {/* Header */}
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-            Project / Torre Skyline
-          </div>
-          <h1 className="text-[22px] font-semibold text-foreground">
-            Coherence Dashboard
-          </h1>
-        </div>
+        <h3 className="text-lg font-semibold">Coherence Dashboard</h3>
         <div className="flex gap-2">
           {(['breakdown', 'radar', 'alerts'] as ViewMode[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={cn(
-                'rounded-md border px-3.5 py-1.5 text-xs font-medium capitalize transition-all duration-150',
+                'rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-all duration-150',
                 view === v
                   ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
               )}
             >
               {v}
@@ -86,7 +67,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Top Row: Gauge + Dynamic View */}
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <CoherenceGauge
           score={DATA.score}
@@ -94,42 +74,27 @@ export default function DashboardPage() {
           dataPointsChecked={DATA.points}
           calculatedAt="Feb 7, 2026 14:34"
         />
-
         <div className="rounded-md border bg-card p-5 shadow-sm">
           {view === 'breakdown' && <BreakdownChart data={barData} />}
           {view === 'radar' && <RadarView data={radarData} />}
-          {view === 'alerts' && (
-            <AlertsDistribution
-              critical={DATA.alertSum.critical}
-              high={DATA.alertSum.high}
-              medium={DATA.alertSum.medium}
-              low={DATA.alertSum.low}
-            />
-          )}
+          {view === 'alerts' && <AlertsDistribution {...DATA.alertSum} />}
         </div>
       </div>
 
-      {/* Category Cards */}
       <div>
         <h3 className="mb-3 text-sm font-semibold">Sub-Category Breakdown</h3>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {catEntries.map(([cat, data]) => (
             <ScoreCard
-              key={cat}
-              category={cat}
-              score={data.score}
-              weight={data.w}
-              alertCount={data.alerts}
+              key={cat} category={cat} score={data.score}
+              weight={data.w} alertCount={data.alerts}
               selected={selectedCat === cat}
-              onClick={() =>
-                setSelectedCat(selectedCat === cat ? null : cat)
-              }
+              onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
             />
           ))}
         </div>
       </div>
 
-      {/* Selected Category Detail */}
       {selectedCat && DATA.cats[selectedCat as keyof typeof DATA.cats] && (
         <CategoryDetail
           category={selectedCat}
@@ -140,6 +105,6 @@ export default function DashboardPage() {
           onClose={() => setSelectedCat(null)}
         />
       )}
-    </section>
+    </div>
   );
 }

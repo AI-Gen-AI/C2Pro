@@ -8,54 +8,65 @@ import {
   FileText,
   AlertTriangle,
   Users,
-  Grid3X3,
+  ShoppingCart,
   Settings,
   ChevronLeft,
   ChevronRight,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { useState } from 'react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/documents', label: 'Documents', icon: FileText },
-  { href: '/alerts', label: 'Alerts', icon: AlertTriangle },
+  { href: '/alerts', label: 'Alerts', icon: AlertTriangle, badge: 15 },
   { href: '/stakeholders', label: 'Stakeholders', icon: Users },
-  { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 },
+  { href: '/evidence', label: 'Evidence', icon: Gauge },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/';
+    return pathname.startsWith(href);
+  };
+
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r bg-sidebar transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        'flex h-full flex-col bg-sidebar transition-all duration-300 shrink-0',
+        collapsed ? 'w-14' : 'w-[210px]'
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">C</span>
-          </div>
-          {!collapsed && (
-            <span className="text-lg font-semibold text-sidebar-foreground">
-              Coherence
-            </span>
-          )}
+      <div className="flex items-center gap-2 px-4 py-4">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary to-[hsl(187,100%,28%)]">
+          <span className="font-mono text-xs font-bold text-primary-foreground">C2</span>
         </div>
+        {!collapsed && (
+          <span className="font-mono text-sm font-semibold tracking-tight text-sidebar-foreground">
+            C2Pro
+          </span>
+        )}
       </div>
 
+      {/* Project Context */}
+      {!collapsed && (
+        <div className="px-4 pb-3">
+          <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Torre Skyline
+          </span>
+        </div>
+      )}
+
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-0.5 px-0">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const active = isActive(item.href);
           const Icon = item.icon;
 
           return (
@@ -63,45 +74,52 @@ export function AppSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                'flex items-center gap-2 px-4 py-2 text-[13px] transition-all duration-150',
+                'border-l-[3px]',
+                active
+                  ? 'border-sidebar-primary bg-sidebar-accent font-medium text-white'
+                  : 'border-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
-              <Icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2 : 1.5} />
+              {!collapsed && (
+                <>
+                  <span>{item.label}</span>
+                  {item.badge && (
+                    <span className="ml-auto rounded-full bg-destructive px-1.5 py-px font-mono text-[10px] font-semibold text-destructive-foreground">
+                      {item.badge}
+                    </span>
+                  )}
+                </>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <Separator />
-
       {/* Footer */}
-      <div className="p-2">
+      <div className="border-t border-sidebar-border p-2">
         <Link
           href="/settings"
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+            'flex items-center gap-2 rounded-md px-3 py-2 text-[13px] text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
           )}
         >
-          <Settings className="h-5 w-5 shrink-0" />
+          <Settings className="h-4 w-4 shrink-0" strokeWidth={1.5} />
           {!collapsed && <span>Settings</span>}
         </Link>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mt-2 w-full justify-center"
+        <button
+          className="mt-1 flex w-full items-center justify-center rounded-md py-1.5 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />
           ) : (
             <ChevronLeft className="h-4 w-4" />
           )}
-        </Button>
+        </button>
       </div>
     </aside>
   );

@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
+  FolderKanban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +29,7 @@ const mockProjects = [
   {
     id: 'PROJ-001',
     name: 'Petrochemical Plant EPC',
-    description: 'Engineering, Procurement, and Construction project for new petrochemical facility',
+    description: 'Full EPC delivery for greenfield petrochemical facility',
     status: 'Active',
     coherenceScore: 78,
     scoreTrend: -3,
@@ -42,7 +43,7 @@ const mockProjects = [
   {
     id: 'PROJ-002',
     name: 'Refinery Modernization',
-    description: 'Upgrade and modernization of existing refinery infrastructure',
+    description: 'Equipment upgrades and process optimization',
     status: 'Active',
     coherenceScore: 64,
     scoreTrend: 2,
@@ -56,7 +57,7 @@ const mockProjects = [
   {
     id: 'PROJ-003',
     name: 'Gas Pipeline Extension',
-    description: 'Extension of natural gas pipeline network across three regions',
+    description: '120km pipeline with 3 compression stations',
     status: 'On Hold',
     coherenceScore: 92,
     scoreTrend: 0,
@@ -70,7 +71,7 @@ const mockProjects = [
   {
     id: 'PROJ-004',
     name: 'Solar Farm Installation',
-    description: '500MW solar power generation facility with battery storage',
+    description: '500MW utility-scale solar installation',
     status: 'Active',
     coherenceScore: 85,
     scoreTrend: 5,
@@ -84,7 +85,7 @@ const mockProjects = [
   {
     id: 'PROJ-005',
     name: 'LNG Terminal Phase 2',
-    description: 'Expansion of liquefied natural gas import/export terminal',
+    description: 'Capacity expansion of existing LNG terminal',
     status: 'Completed',
     coherenceScore: 94,
     scoreTrend: 1,
@@ -98,7 +99,7 @@ const mockProjects = [
   {
     id: 'PROJ-006',
     name: 'Water Treatment Facility',
-    description: 'Industrial wastewater treatment and recycling plant',
+    description: 'Industrial water treatment and recycling plant',
     status: 'Active',
     coherenceScore: 71,
     scoreTrend: -2,
@@ -114,7 +115,6 @@ const mockProjects = [
 export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   const filteredProjects = mockProjects.filter((project) => {
     const matchesSearch =
@@ -125,32 +125,34 @@ export default function ProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status) {
       case 'Active':
-        return 'bg-slate-900 text-white';
+        return 'default';
       case 'On Hold':
-        return 'bg-gray-100 text-gray-700';
+        return 'secondary';
       case 'Completed':
-        return 'bg-blue-100 text-blue-700';
+        return 'success';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'secondary';
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-amber-600';
-    return 'text-red-600';
+  const getScoreClass = (score: number) => {
+    if (score >= 80) return 'score-good';
+    if (score >= 60) return 'score-fair';
+    return 'score-poor';
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Projects
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Manage and monitor all your projects
           </p>
         </div>
@@ -161,7 +163,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -172,7 +174,7 @@ export default function ProjectsPage() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
@@ -185,107 +187,87 @@ export default function ProjectsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Projects</p>
-          <p className="text-2xl font-bold">{mockProjects.length}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-md border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Total Projects</p>
+          <p className="mt-1 font-mono text-2xl font-bold">{mockProjects.length}</p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Active</p>
-          <p className="text-2xl font-bold text-green-600">
+        <div className="rounded-md border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Active</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-success">
             {mockProjects.filter((p) => p.status === 'Active').length}
           </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Alerts</p>
-          <p className="text-2xl font-bold text-amber-600">
+        <div className="rounded-md border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Total Alerts</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-warning">
             {mockProjects.reduce((sum, p) => sum + p.alerts, 0)}
           </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Critical Issues</p>
-          <p className="text-2xl font-bold text-red-600">
+        <div className="rounded-md border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Critical Issues</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-destructive">
             {mockProjects.reduce((sum, p) => sum + p.criticalAlerts, 0)}
           </p>
         </div>
       </div>
 
       {/* Projects Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-md border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b bg-muted/50">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Project
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Score
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Alerts
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Budget
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Progress
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Timeline
-                </th>
-                <th className="px-4 py-3"></th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Score</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Alerts</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Budget</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Timeline</th>
+                <th className="px-4 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {filteredProjects.map((project) => (
                 <tr
                   key={project.id}
-                  className="hover:bg-muted/50 transition-colors"
+                  className="transition-colors hover:bg-muted/30"
                 >
                   <td className="px-4 py-3">
                     <Link
                       href={`/projects/${project.id}`}
-                      className="hover:underline"
+                      className="group"
                     >
-                      <div className="font-medium">{project.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {project.id}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                          <FolderKanban className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium group-hover:text-primary">{project.name}</div>
+                          <div className="font-mono text-xs text-muted-foreground">{project.id}</div>
+                        </div>
                       </div>
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge className={getStatusColor(project.status)}>
+                    <Badge variant={getStatusVariant(project.status) as "default" | "secondary" | "success"}>
                       {project.status}
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'text-xl font-bold',
-                          getScoreColor(project.coherenceScore)
-                        )}
-                      >
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn('font-mono text-lg font-bold', getScoreClass(project.coherenceScore))}>
                         {project.coherenceScore}
                       </span>
                       {project.scoreTrend !== 0 && (
                         <div className="flex items-center text-xs">
                           {project.scoreTrend > 0 ? (
-                            <TrendingUp className="h-3 w-3 text-green-600" />
+                            <TrendingUp className="h-3 w-3 text-success" />
                           ) : (
-                            <TrendingDown className="h-3 w-3 text-red-600" />
+                            <TrendingDown className="h-3 w-3 text-destructive" />
                           )}
-                          <span
-                            className={
-                              project.scoreTrend > 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                            }
-                          >
+                          <span className={project.scoreTrend > 0 ? 'text-success' : 'text-destructive'}>
                             {Math.abs(project.scoreTrend)}
                           </span>
                         </div>
@@ -294,36 +276,32 @@ export default function ProjectsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <span className="font-medium">{project.alerts}</span>
+                      <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                      <span className="text-sm font-medium">{project.alerts}</span>
                       {project.criticalAlerts > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="bg-red-100 text-red-700 border-red-200"
-                        >
+                        <Badge variant="destructive" className="text-[10px]">
                           {project.criticalAlerts} Critical
                         </Badge>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 font-medium">{project.budget}</td>
+                  <td className="px-4 py-3 text-sm font-medium">{project.budget}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Progress value={project.completion} className="w-20" />
-                      <span className="text-sm font-medium">
-                        {project.completion}%
-                      </span>
+                      <Progress value={project.completion} className="h-1.5 w-16" />
+                      <span className="font-mono text-xs">{project.completion}%</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
                       <span>{project.endDate}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreVertical className="h-4 w-4" />
+                      <span className="sr-only">More options</span>
                     </Button>
                   </td>
                 </tr>
@@ -333,7 +311,7 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      <div className="text-sm text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         Showing {filteredProjects.length} of {mockProjects.length} projects
       </div>
     </div>
