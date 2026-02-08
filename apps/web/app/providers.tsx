@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DevRoleSwitcher } from "@/components/dev-role-switcher";
 import { createQueryClient } from "@/lib/api/queryClient";
 import "@/lib/api/config";
 
@@ -33,7 +34,10 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={client}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        {children}
+        <DevRoleSwitcher />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

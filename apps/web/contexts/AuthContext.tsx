@@ -26,6 +26,7 @@ interface AuthContextType {
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
   refreshUserData: () => Promise<void>;
+  setDemoRole?: (role: 'user' | 'tenant_admin' | 'c2pro_admin') => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [tenant, setTenant] = useState<TenantResponse | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [demoRole, setDemoRole] = useState<'user' | 'tenant_admin' | 'c2pro_admin' | null>(null);
   const router = useRouter();
 
   /**
@@ -248,11 +250,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     accessToken,
     isAuthenticated: !!user && !!accessToken,
     isLoading,
-    userRole: (user?.role as 'user' | 'tenant_admin' | 'c2pro_admin') || 'user',
+    userRole: demoRole || (user?.role as 'user' | 'tenant_admin' | 'c2pro_admin') || 'user',
     login,
     register,
     logout,
     refreshUserData,
+    setDemoRole: process.env.NODE_ENV === 'development' ? setDemoRole : undefined,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
