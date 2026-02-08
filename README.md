@@ -1,4 +1,4 @@
-﻿# C2Pro - Contract Intelligence Platform
+# C2Pro - Contract Intelligence Platform
 
 [![Tests](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml)
 [![E2E Security](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml)
@@ -251,3 +251,4 @@ Propietario - © 2025-2026 C2Pro
 ## 🤝 Contribuir
 
 Este es un proyecto privado. Contacta al equipo para colaborar.
+
