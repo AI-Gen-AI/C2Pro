@@ -1,10 +1,8 @@
-'use client';
-
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
-export default function LandingPage() {
+export default function LandingPageContent() {
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -57,7 +55,7 @@ export default function LandingPage() {
               <span className="ml-2">→</span>
             </Button>
           </Link>
-          <Link href="/dashboard">
+          <Link href="/dashboard/projects">
             <Button size="lg" variant="outline">
               View Live Demo
             </Button>
@@ -66,7 +64,7 @@ export default function LandingPage() {
       </section>
 
       {/* Statistics Section */}
-      <section className="border-b bg-background px-6 py-16">
+      <section id="stats" className="border-b bg-background px-6 py-16">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 md:grid-cols-4">
           <div className="space-y-2 text-center">
             <div className="text-4xl font-bold text-primary">94%</div>
