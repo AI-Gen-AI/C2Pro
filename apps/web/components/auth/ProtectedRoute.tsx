@@ -27,7 +27,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
+        <div
+          className="text-center space-y-4"
+          role="status"
+          aria-label="Auth loading"
+          aria-live="polite"
+        >
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>

@@ -24,12 +24,13 @@ from src.core.mcp.router import router as mcp_router
 
 # Import routers
 from src.core.auth.router import router as auth_router
-from src.coherence.router import router as coherence_router
+from src.coherence.router import router as coherence_router, dashboard_router as coherence_dashboard_router
 # from src.documents.adapters.http.router import router as documents_router  # TODO: GREEN phase - incomplete
 from src.core.observability.router import router as observability_router
 from src.projects.adapters.http.router import router as projects_router  # GREEN phase implementation
 # from src.analysis.adapters.http.router import router as analysis_router  # TODO: GREEN phase - incomplete
-# from src.analysis.adapters.http.alerts_router import router as alerts_router  # TODO: GREEN phase - incomplete
+from src.alerts.router import router as alerts_router  # GREEN phase - TS-E2E-FLW-ALR-001
+from src.bulk_operations.router import router as bulk_operations_router  # GREEN phase - TS-E2E-FLW-BLK-001
 from src.core.routers.health import router as health_router
 # from src.stakeholders.adapters.http.approvals_router import router as approvals_router  # TODO: GREEN phase - incomplete
 # from src.stakeholders.adapters.http.raci_router import router as raci_router  # TODO: GREEN phase - incomplete
@@ -203,6 +204,16 @@ def create_application() -> FastAPI:
     )
 
     app.include_router(
+        alerts_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        bulk_operations_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
         mcp_router,
         prefix=api_v1_prefix,
     )
@@ -250,6 +261,9 @@ def create_application() -> FastAPI:
 
     # Coherence Engine v0 router (no v1 prefix)
     app.include_router(coherence_router)
+
+    # Coherence Dashboard router (for E2E tests)
+    app.include_router(coherence_dashboard_router)
 
     # TODO: Añadir más routers conforme se implementen
     # app.include_router(stakeholders_router, prefix=api_v1_prefix)

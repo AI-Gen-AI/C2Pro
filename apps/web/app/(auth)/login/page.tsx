@@ -13,8 +13,8 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implementar autenticación real
-    router.push("/");
+    // Temporary demo access until Clerk auth is wired end-to-end.
+    router.push("/demo/projects");
   };
 
   return (
@@ -54,8 +54,11 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full">
-              Entrar
+              Entrar (Demo)
             </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Acceso temporal en modo demo.
+            </p>
             <p className="text-center text-sm text-muted-foreground">
               ¿No tienes cuenta?{" "}
               <a href="/register" className="text-primary hover:underline">
