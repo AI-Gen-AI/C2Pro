@@ -1,14 +1,16 @@
 import path from "path";
 
-import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  plugins: [react()],
+  esbuild: {
+    jsxInject: "import React from 'react'",
+  },
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
+    exclude: ["src/tests/e2e/**", "node_modules/**", ".next/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -27,5 +29,3 @@ export default defineConfig({
     },
   },
 });
-
-https://dc374a124792ae061c949999122d205a@o4510540096077824.ingest.de.sentry.io/4510804751089744

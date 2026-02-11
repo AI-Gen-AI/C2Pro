@@ -53,13 +53,19 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
           <Input
             placeholder="Search..."
             className="w-64 pl-9"
+            aria-label="Search"
           />
         </div>
 
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label="Notifications"
+            >
               <Bell className="h-5 w-5" />
               <Badge
                 variant="destructive"
@@ -100,7 +106,12 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
         {/* User Avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label="User menu"
+            >
               <Avatar className="h-8 w-8">
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">

@@ -55,7 +55,7 @@ export default function LandingPageContent() {
               <span className="ml-2">→</span>
             </Button>
           </Link>
-          <Link href="/dashboard/projects">
+          <Link href="/demo/projects">
             <Button size="lg" variant="outline">
               View Live Demo
             </Button>

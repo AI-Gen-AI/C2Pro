@@ -1,10 +1,37 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import { Providers } from "@/app/providers";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const inter = localFont({
+  src: [
+    {
+      path: "../fonts/InterVariable-roman.woff2",
+      style: "normal",
+      weight: "100 900",
+    },
+    {
+      path: "../fonts/InterVariable-italic.woff2",
+      style: "italic",
+      weight: "100 900",
+    },
+  ],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrains = localFont({
+  src: [
+    {
+      path: "../fonts/JetBrainsMono-Regular.woff2",
+      style: "normal",
+      weight: "400",
+    },
+  ],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "C2Pro v3.0 - Coherence Monitor",
@@ -24,7 +51,11 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
+    >
       <body className="bg-background font-sans text-foreground antialiased">
         <Providers>{children}</Providers>
       </body>

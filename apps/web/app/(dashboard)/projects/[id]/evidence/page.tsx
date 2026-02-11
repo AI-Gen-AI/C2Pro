@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { use, useState, useRef, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -162,12 +162,13 @@ const mockExtractedEntities: ExtractedEntity[] = [
 ];
 
 interface EvidencePageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function EvidencePage({ params }: EvidencePageProps) {
+  const { id } = use(params);
   const [selectedDocument, setSelectedDocument] = useState(mockDocuments[0]);
   const [highlights, setHighlights] = useState([]);
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
@@ -220,7 +221,7 @@ export default function EvidencePage({ params }: EvidencePageProps) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
           <p className="text-muted-foreground">
-            Proyecto: {params.id}
+            Proyecto: {id}
           </p>
         </div>
         <div className="flex items-center gap-2">
