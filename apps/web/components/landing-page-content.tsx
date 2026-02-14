@@ -49,9 +49,9 @@ export default function LandingPageContent() {
           Quality, Technical, Legal, and Time.
         </p>
         <div className="flex justify-center gap-4">
-          <Link href="/signup">
+          <Link href="/login">
             <Button size="lg" className="bg-primary hover:bg-primary/90">
-              Start Free Trial
+              Access Real Workspace
               <span className="ml-2">→</span>
             </Button>
           </Link>
@@ -187,11 +187,18 @@ export default function LandingPageContent() {
           <p className="mt-4 text-lg text-muted-foreground">
             Join enterprise teams detecting millions in savings with C2Pro.
           </p>
-          <Link href="/signup" className="mt-8 inline-block">
-            <Button size="lg" className="bg-primary hover:bg-primary/90">
-              Start Your Free Trial
-            </Button>
-          </Link>
+          <div className="mt-8 flex justify-center gap-4">
+            <Link href="/login" className="inline-block">
+              <Button size="lg" className="bg-primary hover:bg-primary/90">
+                Go to Real Platform
+              </Button>
+            </Link>
+            <Link href="/demo/projects" className="inline-block">
+              <Button size="lg" variant="outline">
+                Try Demo First
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -5,6 +5,7 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
+  SheetDescription,
   SheetTitle,
   SheetTrigger,
 } from "./sheet";
@@ -20,6 +21,7 @@ describe("Sheet", () => {
         <SheetContent>
           <SheetHeader>
             <SheetTitle>Panel</SheetTitle>
+            <SheetDescription>Panel details</SheetDescription>
           </SheetHeader>
         </SheetContent>
       </Sheet>,

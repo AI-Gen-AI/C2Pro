@@ -1,0 +1,111 @@
+"""
+Test de Integración para el R2StorageService usando Testcontainers.
+
+Suite ID: [TEST-INT-STORAGE-01]
+"""
+import io
+import uuid
+from uuid import UUID
+
+import aioboto3
+import pytest
+from httpx import AsyncClient
+from testcontainers.minio import MinioContainer
+
+from src.config import settings
+
+
+@pytest.fixture(scope="module")
+def minio_container():
+    """Fixture para levantar un contenedor de MinIO para los tests."""
+    with MinioContainer("minio/minio:RELEASE.2023-09-07T22-05-05Z") as minio:
+        yield minio
+
+
+@pytest.fixture(scope="module")
+async def setup_minio_bucket(minio_container: MinioContainer):
+    """
+    Configura el cliente S3 y crea el bucket necesario antes de los tests.
+    """
+    endpoint_url = minio_container.get_config()["endpoint"]
+    access_key = minio_container.get_config()["username"]
+    secret_key = minio_container.get_config()["password"]
+    bucket_name = settings.R2_BUCKET_NAME
+
+    session = aioboto3.Session()
+    async with session.client(
+        "s3",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+    ) as s3_client:
+        await s3_client.create_bucket(Bucket=bucket_name)
+        yield
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_upload_document_saves_to_minio(
+    client: AsyncClient,
+    minio_container: MinioContainer,
+    monkeypatch,
+    setup_minio_bucket,
+):
+    """
+    [TEST-INT-STORAGE-01]: Verifica que el endpoint de subida guarda el archivo
+    en el bucket de MinIO.
+    """
+    # Arrange: Sobrescribir settings para apuntar al contenedor MinIO
+    minio_config = minio_container.get_config()
+    monkeypatch.setattr(settings, "STORAGE_PROVIDER", "r2")
+    monkeypatch.setattr(settings, "R2_ENDPOINT_URL", minio_config["endpoint"])
+    monkeypatch.setattr(settings, "R2_ACCESS_KEY_ID", minio_config["username"])
+    monkeypatch.setattr(settings, "R2_SECRET_ACCESS_KEY", minio_config["password"])
+    monkeypatch.setattr(settings, "R2_BUCKET_NAME", settings.R2_BUCKET_NAME)
+
+    # Arrange: Datos del test
+    project_id = uuid.uuid4()
+    fake_pdf_content = b"%PDF-1.5-FAKE-CONTENT"
+    files = {"file": ("contract.pdf", io.BytesIO(fake_pdf_content), "application/pdf")}
+    data = {"project_id": str(project_id)}
+
+    # Act: Llamar al endpoint de subida
+    response = await client.post("/api/v1/documents/upload", files=files, data=data)
+
+    # Assert (API Response): Verificar que la API aceptó el archivo
+    assert response.status_code == 202
+    response_data = response.json()
+    document_id = UUID(response_data["document_id"])
+
+    # Assert (Storage Verification): Verificar que el archivo existe en MinIO
+    session = aioboto3.Session()
+    async with session.client(
+        "s3",
+        endpoint_url=minio_config["endpoint"],
+        aws_access_key_id=minio_config["username"],
+        aws_secret_access_key=minio_config["password"],
+    ) as s3_client:
+        try:
+            # Construir la ruta esperada
+            expected_key = f"tenant-placeholder/{project_id}/{document_id}.pdf"
+
+            # Verificar que el objeto existe
+            head_response = await s3_client.head_object(
+                Bucket=settings.R2_BUCKET_NAME, Key=expected_key
+            )
+            assert head_response["ResponseMetadata"]["HTTPStatusCode"] == 200
+            assert head_response["ContentLength"] == len(fake_pdf_content)
+            assert head_response["ContentType"] == "application/pdf"
+
+        except s3_client.exceptions.NoSuchKey:
+            pytest.fail(f"El archivo con la clave '{expected_key}' no se encontró en el bucket.")
+        except Exception as e:
+            pytest.fail(f"Ocurrió un error al verificar el archivo en MinIO: {e}")
+
+```
+
+**Estado:** Test de integración listo. Este test fallará hasta que el `UploadDocumentUseCase` y el `R2StorageService` estén completamente implementados y conectados. `@backend-tdd`, puedes usar este test como guía para la implementación final.
+
+<!--
+[PROMPT_SUGGESTION]Ahora, como @backend-tdd, implementa la lógica restante en `UploadDocumentUseCase` para que este test de integración pase.[/PROMPT_SUGGESTION]
+[PROMPT_SUGGESTION]Ahora, como @docs-agent, actualiza la documentación de testing en `README.md` para explicar cómo ejecutar los tests de integración que requieren Docker (como este).[/PROMPT_SUGGESTION]

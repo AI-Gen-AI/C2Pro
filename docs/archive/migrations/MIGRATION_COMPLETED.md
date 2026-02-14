@@ -255,3 +255,10 @@ Then visit:
 - Evidence Viewer: http://localhost:3000/projects/any-id/evidence
 
 The components should now render with the rich UI from Lovable, adapted for Next.js! 🎉
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

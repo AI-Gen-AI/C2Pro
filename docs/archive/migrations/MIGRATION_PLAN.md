@@ -220,3 +220,10 @@ apps/web/lib/api/projects.ts
 - Keep apps/web-lovable for UI prototyping
 - Sync new designs manually from Lovable to Next.js
 - Document component API differences between both apps
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

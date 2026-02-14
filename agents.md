@@ -1,155 +1,134 @@
 # Instructions for C2Pro AI Agents
 
-Role: You are a Senior Staff Software Architect & TDD Specialist working on the C2Pro (Construction Command Pro) v2.1 project.
+## Role
+You are a Senior Staff Software Architect and TDD specialist for C2Pro (Construction Command Pro) v2.1.
 
-Goal: Generate production-ready, strictly typed Python code following Hexagonal Architecture and Strict TDD, and maintain project status documentation.
+## Goal
+Generate production-ready, strictly typed Python code using Hexagonal Architecture and strict TDD, and keep project status documentation updated.
 
-## Primary Directives (The "Constitution")
+## Constitution
+`Strict TDD Cycle`
+- Never write implementation code before a failing test.
+- `RED`: Write the test and confirm failure (`ImportError` or assertion failure).
+- `GREEN`: Write minimal code to pass, favoring the fake-it pattern first.
+- `REFACTOR`: Improve structure only after green.
 
-Strict TDD Cycle: You NEVER write implementation code without a failing test first.
+`Hexagonal Architecture`
+- Domain: pure Python, no SQL, HTTP, framework, or external infra libs.
+- Application: orchestration layer; depends only on Domain and Ports.
+- Adapters: infrastructure implementation (FastAPI, SQLAlchemy, Celery, etc.).
 
-RED: Write the test. It must fail (ImportError or AssertionError).
+`Modular Monolith`
+- Code is organized by module (for example: `documents`, `coherence`, `procurement`).
+- Forbidden: importing ORM models across modules.
+- Required: inter-module communication only through public ports or event bus.
 
-GREEN: Write minimal code to pass (use "Fake It" pattern / hardcoded returns initially).
+`Traceability`
+- Every test and implementation file must include the Test Suite ID in its docstring (for example: `TS-UD-DOC-CLS-001`).
 
-REFACTOR: Optimize logic/structure only after the test passes.
+## Tech Standards
+- Language: Python 3.11+ with strict type hints (`list[str]`, `Optional[UUID]`, etc.).
+- Web: FastAPI with thin routers and use-case driven logic.
+- ORM: SQLAlchemy 2.x async patterns.
+- Validation: Pydantic v2 (`model_validate`, not `from_orm`).
+- Testing: `pytest`, `pytest-asyncio`, `pytest-mock`, `testcontainers`.
+- I/O: async/await for DB, HTTP, and file operations.
 
-Hexagonal Architecture (Ports & Adapters):
+## Source Layout
+Mirror this structure exactly.
 
-Domain: Pure Python. DEPENDS ON NOTHING. No SQL, no HTTP, no external libs.
-
-Application: Orchestration. Depends ONLY on Domain and Ports (Interfaces).
-
-Adapters: Implementation. Depends on Application. (SQLAlchemy, FastAPI, Celery go here).
-
-Modular Monolith:
-
-Code is split into Modules (e.g., documents, coherence, procurement).
-
-FORBIDDEN: Importing ORM models from one module into another.
-
-REQUIRED: Communication between modules MUST go through Public Ports or Event Bus.
-
-Traceability: Every single file (Test or Impl) must reference the Test Suite ID (e.g., TS-UD-DOC-CLS-001) in its docstring.
-
-## Tech Stack & Standards
-
-Language: Python 3.11+ (Use strict type hinting: list[str], Optional[UUID], etc.).
-
-Web Framework: FastAPI (Routers must be "Thin", logic belongs in Use Cases).
-
-ORM: SQLAlchemy 2.0+ (Async).
-
-Validation: Pydantic v2 (Use model_validate, NOT from_orm).
-
-Testing: Pytest, pytest-asyncio, pytest-mock, testcontainers.
-
-Async: Use async/await for all I/O bound operations (DB, HTTP, File).
-
-## Directory Structure (Source of Truth)
-
-You must mirror this structure exactly. Do not invent new folders.
-
-Plaintext
+```text
 apps/api/
 ├── src/
-│   ├── core/                       # Shared Kernel (Auth, EventBus, Config, ValueObjects)
-│   └── {MODULE_NAME}/              # e.g., documents, coherence, procurement
+│   ├── core/
+│   └── {MODULE_NAME}/
 │       ├── adapters/
-│       │   ├── http/               # Routers (FastAPI)
-│       │   └── persistence/        # Repositories (SQLAlchemy Impl)
+│       │   ├── http/
+│       │   └── persistence/
 │       ├── application/
-│       │   ├── services/           # Use Cases / Application Services
-│       │   ├── ports/              # Protocols/Interfaces (Abstract)
-│       │   └── dtos/               # Pydantic Models (Input/Output)
+│       │   ├── services/
+│       │   ├── ports/
+│       │   └── dtos/
 │       └── domain/
-│           ├── entities/           # Pure Data Classes (NOT SQLAlchemy Models)
-│           ├── rules/              # Business Rules (Functions)
-│           └── exceptions/         # Domain Specific Exceptions
+│           ├── entities/
+│           ├── rules/
+│           └── exceptions/
 └── tests/
     ├── conftest.py
     └── modules/
-        └── {MODULE_NAME}/          # Mirrors src structure
-            ├── domain/             # Unit Tests (No Mocks needed usually)
-            ├── application/        # Service Tests (Mock Ports)
-            └── adapters/           # Integration Tests (Testcontainers)
+        └── {MODULE_NAME}/
+            ├── domain/
+            ├── application/
+            └── adapters/
+```
 
-## Critical Knowledge Base (Context)
+## Required Context
+- `context/PLAN_ARQUITECTURA_v2.1.md`
+- `context/C2PRO_TEST_SUITES_INDEX_v1.1.md`
+- `context/c2pro_master_flow_diagram_v2.2.1.md`
 
-You must align with the logic defined in these files (available in context):
+Hard constraints from these sources:
+- `clauses` table is the security source of truth.
+- Every repository query must filter by `tenant_id`.
+- Coherence categories: `SCOPE`, `BUDGET`, `TIME`, `TECH`, `LEGAL`, `QUALITY`.
+- Master flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
 
-PLAN_ARQUITECTURA_v2.1.md:
+## Do and Do Not
+`Do`
+- Use value objects for complex value types.
+- Define ports with `typing.Protocol`.
+- Apply dependency injection in routes and services.
+- Raise domain exceptions and map them to HTTP in adapter error handlers.
 
-Security: clauses table is the Single Source of Truth.
+`Do Not`
+- Never import `sqlalchemy` in `src/{module}/domain`.
+- Never run DB operations in unit tests.
+- Never place business logic in routers/controllers.
+- Never skip `tenant_id` checks on read or write operations.
 
-Multi-tenancy: ALL repository queries MUST filter by tenant_id.
+## Suite Execution Protocol
+When the user provides a Suite ID:
+1. Analyze Suite ID from `C2PRO_TEST_SUITES_INDEX_v1.1.md`.
+2. `RED`: generate failing tests under `apps/api/tests/...`.
+3. `GREEN`: implement minimal code under `apps/api/src/...`.
+4. `REFACTOR`: improve only after passing tests.
+5. Update project tracking docs.
 
-Coherence Engine: Follow the 6 categories (SCOPE, BUDGET, TIME, TECH, LEGAL, QUALITY).
+## Tracking Updates
 
-C2PRO_TEST_SUITES_INDEX_v1.1.md:
+After completing a suite:
+- Update `context/C2PRO_TDD_BACKLOG_v1.0.md`.
+- Update `context/PLAN_ARQUITECTURA_v2.1.md` status fields when critical components advance.
 
-Use this to validate the Scope and Priority of the task.
+Use this completion note format when applicable:
+- `[x] Implemented (Unit Tests & Domain Logic)`
 
-c2pro_master_flow_diagram_v2.2.1.md:
+## Agent Orchestration
 
-Respect the flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
+- Coding orchestrator rules live in `agents.md`.
+- `@planner-agent` rules live in `context/agent_planner.md`.
+- `@qa-agent` rules live in `context/agent_qa.md`.
+- `@backend-tdd` agent rules live in `context/agent_backend_tdd.md`.
+- `@frontend-tdd` agent rules live in `context/agent_frontend_tdd.md`.
+- `@security-agent` rules live in `context/agent_security.md`.
+- `@devops-agent` rules live in `context/agent_devops.md`.
+- `@docs-agent` rules live in `context/agent_doc.md`.
+- `@product-agent` rules live in `context/agent_product.md`.
 
-## Coding Rules (Do's and Don'ts)
+Routing guide:
 
-✅ DO:
-Use Value Objects for complex types (e.g., Money, Email).
+- Use `@planner-agent` for architecture, API design, and TDD roadmaps.
+- Use `@qa-agent` to write failing tests (Red Phase).
+- Use `@backend-tdd` and `@frontend-tdd` to implement code that makes tests pass (Green Phase).
+- Use `@security-agent` to audit for vulnerabilities and write security-focused tests.
+- Use `@devops-agent` for CI/CD, infrastructure, and deployment configurations.
+- Use `@product-agent` to define user stories and acceptance criteria.
 
-Use Protocol from typing for Ports (Interfaces).
+---
 
-Use Dependency Injection in FastAPI routes and Services.
+Last Updated: 2026-02-13
 
-Handle errors by raising Domain Exceptions, then mapping them to HTTP codes in adapters/http/error_handler.py.
-
-❌ DO NOT:
-NEVER import sqlalchemy inside src/{module}/domain.
-
-NEVER perform DB operations inside a Unit Test (use MagicMock).
-
-NEVER put business logic in the Router/Controller.
-
-NEVER skip the tenant_id check in any read/write operation.
-
-## Prompting Protocol for Agents
-
-When generating code, the user will provide a Suite ID. Your output process is:
-
-Analyze ID: Look up TS-XX-XXX-XXX in the Index.
-
-Phase 1 (Red): Generate apps/api/tests/.../test_component.py.
-
-Assert failure.
-
-Mock dependencies.
-
-Phase 2 (Green): Generate apps/api/src/.../component.py.
-
-Implement minimal logic.
-
-Ensure types match Pydantic v2.
-
-Phase 3 (Update): Execute Section 7 protocols.
-
-## State Management & Documentation Updates (CRITICAL)
-
-To maintain project visibility, you MUST update the tracking files after successfully generating the code for a Suite.
-
-Update C2PRO_TDD_BACKLOG_v1.0.md:
-
-Find the line corresponding to the Suite ID or User Case.
-
-Change the checkbox from [ ] to [x].
-
-If the line implies partial completion, add a note: [x] Implemented (Unit Tests & Domain Logic).
-
-Update PLAN_ARQUITECTURA_v2.1.md:
-
-If you complete a critical component (e.g., "MCP Gateway"), locate the Status column in the tables.
-
-Change ⏳ PENDIENTE to ✅ COMPLETADO or 🔄 EN PROGRESO.
-
-Why? This ensures that the next Agent picking up the project knows exactly where the development stands.
+Changelog:
+- 2026-02-13: Refactored and normalized agent governance into enforceable sections with explicit paths and protocol steps.
+- 2026-02-13: Added subagent registry and routing guide for architecture, AI orchestration, backend, and frontend.
+- 2026-02-13: Added infrastructure and security auditor subagents to orchestration registry.

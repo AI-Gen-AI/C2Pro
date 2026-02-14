@@ -37,3 +37,10 @@ Esto significa:
 ## Justificación
 
 Esta decisión ataca directamente el problema raíz (falta de límites y alto acoplamiento) sin introducir la complejidad masiva de los microservicios, para la cual el sistema y el equipo no están maduros. Prioriza la creación de una base de código sana y evolucionable sobre la adopción de tendencias. Evita el riesgo de "distribuir el caos".
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

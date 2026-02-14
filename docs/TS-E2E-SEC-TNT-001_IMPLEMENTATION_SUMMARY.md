@@ -289,3 +289,10 @@ pytest apps/api/tests/e2e/security/test_multi_tenant_isolation.py --cov=src.core
 **Last Updated:** 2026-02-05
 **Author:** Claude Code (Sonnet 4.5)
 **Suite ID:** TS-E2E-SEC-TNT-001
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

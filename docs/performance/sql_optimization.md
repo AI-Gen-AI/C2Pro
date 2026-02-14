@@ -254,3 +254,10 @@ for project in projects:
 - **Preferir `selectinload`** para relaciones "one-to-many" para evitar `JOIN`s masivos y mejorar la eficiencia.
 
 En todos los endpoints que devuelven listas (como `GET /projects`), se debe auditar el código y aplicar `selectinload` o `joinedload` para las relaciones que se acceden con frecuencia.
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

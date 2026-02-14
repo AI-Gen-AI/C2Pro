@@ -241,3 +241,10 @@ Tests ubicados en `apps/api/tests/coherence/test_engine_v2.py`:
 **Implementado por:** Claude Code
 **Revisado:** Pendiente
 **Versión:** 1.0.0
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

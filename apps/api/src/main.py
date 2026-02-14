@@ -25,7 +25,7 @@ from src.core.mcp.router import router as mcp_router
 # Import routers
 from src.core.auth.router import router as auth_router
 from src.coherence.router import router as coherence_router, dashboard_router as coherence_dashboard_router
-# from src.documents.adapters.http.router import router as documents_router  # TODO: GREEN phase - incomplete
+from src.documents.adapters.http.router import router as documents_router
 from src.core.observability.router import router as observability_router
 from src.projects.adapters.http.router import router as projects_router  # GREEN phase implementation
 # from src.analysis.adapters.http.router import router as analysis_router  # TODO: GREEN phase - incomplete
@@ -223,11 +223,10 @@ def create_application() -> FastAPI:
         prefix=api_v1_prefix,
     )
 
-    # TODO: GREEN phase - Uncomment when modules are fully implemented
-    # app.include_router(
-    #     documents_router,
-    #     prefix=api_v1_prefix,
-    # )
+    app.include_router(
+        documents_router,
+        prefix=api_v1_prefix,
+    )
 
     # app.include_router(
     #     analysis_router,

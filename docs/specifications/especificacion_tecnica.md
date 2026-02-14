@@ -364,3 +364,10 @@ Los prompts se versionan en código para trazabilidad:
 *© 2024 Todos los derechos reservados*
 
 </div>
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

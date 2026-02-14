@@ -451,3 +451,10 @@ pytest tests/security/test_mcp_security.py -v
 **Última actualización:** 2026-01-06 19:30
 **Mantenido por:** Claude Sonnet 4.5
 **Sprint:** Security Foundation - Semana 1
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

@@ -438,3 +438,10 @@ Proyección fin sprint: 3 SP ███
 **Última actualización:** 2026-01-23
 **Próxima revisión:** 2026-01-27 (inicio Sprint S3)
 **Responsable:** Claude Opus 4.5
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

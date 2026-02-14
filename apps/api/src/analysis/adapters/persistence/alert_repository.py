@@ -11,6 +11,7 @@ from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.ports.alert_repository import AlertRepository
 from src.core.pagination import Page, paginate
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SqlAlchemyAlertRepository(AlertRepository):
@@ -20,6 +21,7 @@ class SqlAlchemyAlertRepository(AlertRepository):
     async def list_for_project(
         self,
         project_id: UUID,
+        tenant_id: UUID | None = None,
         severities: Optional[List[AlertSeverity]] = None,
         statuses: Optional[List[AlertStatus]] = None,
         category: Optional[str] = None,
@@ -27,6 +29,10 @@ class SqlAlchemyAlertRepository(AlertRepository):
         limit: int = 20,
     ) -> Page[Alert]:
         query = select(Alert).where(Alert.project_id == project_id)
+        if tenant_id is not None:
+            query = query.join(ProjectORM, ProjectORM.id == Alert.project_id).where(
+                ProjectORM.tenant_id == tenant_id
+            )
 
         if severities:
             query = query.where(Alert.severity.in_(severities))
@@ -46,9 +52,14 @@ class SqlAlchemyAlertRepository(AlertRepository):
             order_direction="desc",
         )
 
-    async def get_stats(self, project_id: UUID) -> dict[str, int]:
+    async def get_stats(self, project_id: UUID, tenant_id: UUID | None = None) -> dict[str, int]:
+        query = select(Alert).where(Alert.project_id == project_id)
+        if tenant_id is not None:
+            query = query.join(ProjectORM, ProjectORM.id == Alert.project_id).where(
+                ProjectORM.tenant_id == tenant_id
+            )
         result = await self.session.execute(
-            select(Alert).where(Alert.project_id == project_id)
+            query
         )
         alerts = result.scalars().all()
 
@@ -63,10 +74,13 @@ class SqlAlchemyAlertRepository(AlertRepository):
             "low": sum(1 for a in alerts if a.severity == AlertSeverity.LOW),
         }
 
-    async def get_by_id(self, alert_id: UUID) -> Alert | None:
-        result = await self.session.execute(
-            select(Alert).where(Alert.id == alert_id)
-        )
+    async def get_by_id(self, alert_id: UUID, tenant_id: UUID | None = None) -> Alert | None:
+        query = select(Alert).where(Alert.id == alert_id)
+        if tenant_id is not None:
+            query = query.join(ProjectORM, ProjectORM.id == Alert.project_id).where(
+                ProjectORM.tenant_id == tenant_id
+            )
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def create(self, payload: AlertCreate) -> Alert:
@@ -93,8 +107,8 @@ class SqlAlchemyAlertRepository(AlertRepository):
     async def update(self, alert: Alert) -> None:
         self.session.add(alert)
 
-    async def delete(self, alert_id: UUID) -> bool:
-        alert = await self.session.get(Alert, alert_id)
+    async def delete(self, alert_id: UUID, tenant_id: UUID | None = None) -> bool:
+        alert = await self.get_by_id(alert_id=alert_id, tenant_id=tenant_id)
         if not alert:
             return False
         await self.session.delete(alert)

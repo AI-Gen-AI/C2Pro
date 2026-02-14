@@ -1201,3 +1201,23 @@ ESTRATEGIA GREEN para este suite:
 > **Versión:** 1.0  
 > **Estado:** PENDIENTE APROBACIÓN  
 > **Próxima revisión:** Después de Sprint 2
+
+---
+
+## 6. Plan de Ejecución por Sprints
+
+### Sprint 1 (Frontend v4.0)
+
+- [x] S1-15 - Document layer rules ADR (Server vs Client Components) — Implemented (Documentation + CI test)
+
+### Sprint 2 (Frontend v4.0)
+
+- [x] S2-01 - @mswjs/data seed models (8 entities) — Implemented (Seeded demo DB + integration test)
+- [x] S2-02 - Custom MSW handlers (demo data + SSE) — Implemented (Handlers + integration test)
+- [x] S2-03 - Orval CI check enforcement — Implemented (frontend-ci.yml includes `pnpm generate:api:check`)
+- [x] S2-04 - `useProcessingStore` (Zustand) — Implemented (Store + unit tests)
+- [x] S2-05 - Project list page (Server Component) — Implemented (Server fetch + table component + unit test)
+- [x] S2-06 - Project detail layout (7 tabs) — Implemented (ProjectTabs component + layout)
+- [x] S2-07 - Custom SVG CoherenceGauge + 6 ScoreCards — Implemented (SVG gauge + ScoreCard component)
+- [x] S2-08 - Weight adjuster (UI-only) — Implemented (client component + unit tests)
+

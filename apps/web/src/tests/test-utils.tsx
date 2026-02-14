@@ -2,7 +2,10 @@ import React, { type ReactNode } from "react";
 import { render, type RenderOptions } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { ClerkProvider } from "@clerk/nextjs";
+
+function TestClerkProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
 
 function AllProviders({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({
@@ -14,13 +17,13 @@ function AllProviders({ children }: { children: ReactNode }) {
   });
 
   return (
-    <ClerkProvider>
+    <TestClerkProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
         </ThemeProvider>
       </QueryClientProvider>
-    </ClerkProvider>
+    </TestClerkProvider>
   );
 }
 

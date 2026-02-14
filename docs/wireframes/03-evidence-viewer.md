@@ -434,3 +434,10 @@ Contract Clause ⇄ WBS Item ⇄ Schedule Activity ⇄ BOM Item ⇄ Stakeholder
 - [ ] Evidence templates
 - [ ] Custom evidence chains
 - [ ] Integration with project chat
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

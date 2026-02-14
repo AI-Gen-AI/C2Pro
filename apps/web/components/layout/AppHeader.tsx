@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/src/components/layout/theme/ThemeToggle';
 
 interface AppHeaderProps {
   title?: string;
@@ -25,7 +26,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
       {/* Left: Breadcrumb / Title */}
       <div className="flex items-center gap-2">
         {breadcrumb && breadcrumb.length > 0 ? (
-          <nav className="flex items-center gap-2 text-sm">
+          <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
             {breadcrumb.map((item, index) => (
               <span key={index} className="flex items-center gap-2">
                 {index > 0 && <span className="text-muted-foreground">/</span>}
@@ -56,6 +57,8 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
             aria-label="Search"
           />
         </div>
+
+        <ThemeToggle />
 
         {/* Notifications */}
         <DropdownMenu>

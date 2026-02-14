@@ -370,3 +370,10 @@ docker-compose -f docker-compose.test.yml exec postgres-test psql -U test -d c2p
 
 **Generado:** 2026-01-06 19:40
 **Estado:** Listo para ejecutar
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

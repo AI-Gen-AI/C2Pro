@@ -42,7 +42,7 @@ describe("AppLayout shell", () => {
       </AppLayout>,
     );
 
-    const nav = screen.getByRole("navigation");
+    const nav = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(nav).toHaveTextContent("Projects");
     expect(nav).toHaveTextContent("Alpha");
   });

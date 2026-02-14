@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Search, Upload } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -13,140 +14,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  FileText,
-  Upload,
-  Search,
-  Download,
-  Eye,
-  MoreVertical,
-  FileSpreadsheet,
-  File,
-  Image as ImageIcon,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  ArrowLeft,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { formatFileSize } from '@/types/document';
 
-// Mock data - in real app this would come from API
-const mockDocuments: Record<string, any[]> = {
-  'PROJ-001': [
-    {
-      id: 'DOC-001',
-      name: 'Contract_Final.pdf',
-      type: 'Contract',
-      uploadDate: '2026-01-15',
-      size: '2.4 MB',
-      pages: 58,
-      status: 'Analyzed',
-      alertsFound: 7,
-      criticalAlerts: 1,
-      icon: File,
-    },
-    {
-      id: 'DOC-002',
-      name: 'Schedule_v3.xlsx',
-      type: 'Schedule',
-      uploadDate: '2026-01-14',
-      size: '856 KB',
-      pages: 15,
-      status: 'Analyzed',
-      alertsFound: 4,
-      criticalAlerts: 2,
-      icon: FileSpreadsheet,
-    },
-  ],
-  'PROJ-002': [
-    {
-      id: 'DOC-003',
-      name: 'Budget_Breakdown_Q1.pdf',
-      type: 'Budget',
-      uploadDate: '2026-01-13',
-      size: '1.8 MB',
-      pages: 32,
-      status: 'Analyzed',
-      alertsFound: 12,
-      criticalAlerts: 5,
-      icon: File,
-    },
-  ],
-};
+type DocumentStatus = 'Analyzed' | 'Processing' | 'Uploaded' | 'Error';
 
-const projectNames: Record<string, string> = {
-  'PROJ-001': 'Petrochemical Plant EPC',
-  'PROJ-002': 'Refinery Modernization',
-};
+function normalizeStatus(status: string): DocumentStatus {
+  switch (status) {
+    case 'parsed':
+      return 'Analyzed';
+    case 'processing':
+      return 'Processing';
+    case 'queued':
+      return 'Uploaded';
+    default:
+      return 'Error';
+  }
+}
+
+function getStatusIcon(status: DocumentStatus) {
+  switch (status) {
+    case 'Analyzed':
+      return CheckCircle2;
+    case 'Processing':
+      return Clock;
+    default:
+      return AlertTriangle;
+  }
+}
+
+function getStatusColor(status: DocumentStatus): string {
+  switch (status) {
+    case 'Analyzed':
+      return 'bg-green-100 text-green-700 border-green-200';
+    case 'Processing':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'Uploaded':
+      return 'bg-gray-100 text-gray-700 border-gray-200';
+    default:
+      return 'bg-red-100 text-red-700 border-red-200';
+  }
+}
+
+function labelType(type: string): string {
+  if (!type) {
+    return 'Document';
+  }
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
 
 export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { documents, loading, error } = useProjectDocuments(projectId);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All Types');
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const projectDocs = mockDocuments[projectId] || [];
-  const projectName = projectNames[projectId] || 'Unknown Project';
+  const rows = useMemo(
+    () =>
+      documents.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        type: labelType(doc.type),
+        status: normalizeStatus((doc as { status?: string }).status ?? ''),
+        uploadedAt: doc.uploadedAt,
+        size: formatFileSize(doc.fileSize),
+      })),
+    [documents]
+  );
 
-  const filteredDocuments = projectDocs.filter((doc) => {
-    const matchesSearch = doc.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === 'All Types' || doc.type === typeFilter;
-    const matchesStatus =
-      statusFilter === 'All Status' || doc.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
-  });
+  const typeOptions = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.type))).sort(),
+    [rows]
+  );
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Analyzed':
-        return CheckCircle2;
-      case 'Processing':
-        return Clock;
-      case 'Uploaded':
-        return AlertTriangle;
-      default:
-        return FileText;
-    }
-  };
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        const matchesSearch = row.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesType = typeFilter === 'all' || row.type === typeFilter;
+        const matchesStatus = statusFilter === 'all' || row.status === statusFilter;
+        return matchesSearch && matchesType && matchesStatus;
+      }),
+    [rows, searchQuery, typeFilter, statusFilter]
+  );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Analyzed':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'Processing':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'Uploaded':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'Contract':
-        return 'bg-blue-100 text-blue-700';
-      case 'Schedule':
-        return 'bg-orange-100 text-orange-700';
-      case 'Budget':
-        return 'bg-green-100 text-green-700';
-      case 'Technical':
-        return 'bg-purple-100 text-purple-700';
-      case 'Quality':
-        return 'bg-indigo-100 text-indigo-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
+  const analyzedCount = rows.filter((row) => row.status === 'Analyzed').length;
+  const processingCount = rows.filter((row) => row.status === 'Processing').length;
+  const errorCount = rows.filter((row) => row.status === 'Error').length;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <Button
@@ -159,9 +120,7 @@ export default function ProjectDocumentsPage() {
             Back to Project
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-          <p className="text-muted-foreground">
-            {projectName} • {projectId}
-          </p>
+          <p className="text-muted-foreground">Project: {projectId}</p>
         </div>
         <Button>
           <Upload className="mr-2 h-4 w-4" />
@@ -169,14 +128,19 @@ export default function ProjectDocumentsPage() {
         </Button>
       </div>
 
-      {/* Filters */}
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          Failed to load documents: {error.message}
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search documents..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="pl-9"
           />
         </div>
@@ -185,12 +149,12 @@ export default function ProjectDocumentsPage() {
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="All Types">All Types</SelectItem>
-            <SelectItem value="Contract">Contract</SelectItem>
-            <SelectItem value="Schedule">Schedule</SelectItem>
-            <SelectItem value="Budget">Budget</SelectItem>
-            <SelectItem value="Technical">Technical</SelectItem>
-            <SelectItem value="Quality">Quality</SelectItem>
+            <SelectItem value="all">All Types</SelectItem>
+            {typeOptions.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -198,151 +162,91 @@ export default function ProjectDocumentsPage() {
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="All Status">All Status</SelectItem>
+            <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="Analyzed">Analyzed</SelectItem>
             <SelectItem value="Processing">Processing</SelectItem>
             <SelectItem value="Uploaded">Uploaded</SelectItem>
+            <SelectItem value="Error">Error</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Documents</p>
-          <p className="text-2xl font-bold">{projectDocs.length}</p>
+          <p className="text-2xl font-bold">{rows.length}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Analyzed</p>
-          <p className="text-2xl font-bold text-green-600">
-            {projectDocs.filter((d) => d.status === 'Analyzed').length}
-          </p>
+          <p className="text-2xl font-bold text-green-600">{analyzedCount}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Alerts</p>
-          <p className="text-2xl font-bold text-amber-600">
-            {projectDocs.reduce((sum, d) => sum + d.alertsFound, 0)}
-          </p>
+          <p className="text-sm text-muted-foreground">Processing</p>
+          <p className="text-2xl font-bold text-blue-600">{processingCount}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Critical Issues</p>
-          <p className="text-2xl font-bold text-red-600">
-            {projectDocs.reduce((sum, d) => sum + d.criticalAlerts, 0)}
-          </p>
+          <p className="text-sm text-muted-foreground">Errors</p>
+          <p className="text-2xl font-bold text-red-600">{errorCount}</p>
         </div>
       </div>
 
-      {/* Documents Table */}
       <div className="rounded-lg border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b bg-muted/50">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Document
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Alerts
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Size
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Upload Date
-                </th>
-                <th className="px-4 py-3"></th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Document</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Type</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Size</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Upload Date</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredDocuments.length > 0 ? (
-                filteredDocuments.map((doc) => {
-                  const Icon = doc.icon;
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    Loading documents...
+                  </td>
+                </tr>
+              ) : filteredRows.length > 0 ? (
+                filteredRows.map((doc) => {
                   const StatusIcon = getStatusIcon(doc.status);
                   return (
-                    <tr
-                      key={doc.id}
-                      className="hover:bg-muted/50 transition-colors"
-                    >
+                    <tr key={doc.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3">
                         <Link
-                          href={`/projects/${projectId}/evidence/${doc.id}`}
+                          href={`/projects/${projectId}/evidence?documentId=${doc.id}`}
                           className="flex items-center gap-3 hover:underline"
                         >
                           <div className="rounded-lg bg-muted p-2">
-                            <Icon className="h-5 w-5" />
+                            <FileText className="h-5 w-5" />
                           </div>
                           <div>
                             <div className="font-medium">{doc.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {doc.id}
-                              {doc.pages > 0 && ` • ${doc.pages} pages`}
-                            </div>
+                            <div className="text-sm text-muted-foreground">{doc.id}</div>
                           </div>
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge className={getTypeColor(doc.type)}>
-                          {doc.type}
-                        </Badge>
+                        <Badge variant="outline">{doc.type}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge
-                          variant="outline"
-                          className={getStatusColor(doc.status)}
-                        >
+                        <Badge variant="outline" className={getStatusColor(doc.status)}>
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {doc.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
-                        {doc.alertsFound > 0 ? (
-                          <div className="flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-600" />
-                            <span className="font-medium">{doc.alertsFound}</span>
-                            {doc.criticalAlerts > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="bg-red-100 text-red-700 border-red-200"
-                              >
-                                {doc.criticalAlerts}
-                              </Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{doc.size}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {doc.size}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {doc.uploadDate}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {doc.uploadedAt ? doc.uploadedAt.toLocaleDateString() : '-'}
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                     No documents found for this project
                   </td>
                 </tr>
@@ -353,7 +257,7 @@ export default function ProjectDocumentsPage() {
       </div>
 
       <div className="text-sm text-muted-foreground">
-        Showing {filteredDocuments.length} of {projectDocs.length} documents
+        Showing {filteredRows.length} of {rows.length} documents
       </div>
     </div>
   );

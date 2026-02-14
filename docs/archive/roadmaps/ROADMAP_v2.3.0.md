@@ -2051,3 +2051,10 @@ def calculate_optimal_order_date(
 *Próxima revisión programada: Tras completar MVP (Semana 12)*
 
 </div>
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

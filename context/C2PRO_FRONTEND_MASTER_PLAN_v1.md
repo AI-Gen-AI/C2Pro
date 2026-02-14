@@ -4,6 +4,7 @@
 > **Version:** 1.0 — Implementation-Ready  
 > **Date:** 2026-02-10  
 > **Supersedes:** TDD v3.0 frontend sections, FRONTEND_TESTING_PLAN.md  
+> **Supersedes:** TDD v3.0 frontend sections, C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0
 > **Source:** Phase 1 (12 Expert Agents) → Phase 2 (6 Cross-Reviewers, 31 Flags) → Phase 3 (10 Verifiers)  
 > **Stack:** Next.js 15.3 · React 19.1 · TypeScript 5.7 · Tailwind 4.1 · Zustand 5 · TanStack Query 5 · Orval 7 · Clerk · Vitest · Playwright
 
@@ -13,7 +14,7 @@
 
 ### 1.1 Corrected Architecture (Post-Verification)
 
-The TDD v3.0 is the baseline. This section documents every deviation from the TDD based on Phase 1–3 analysis.
+This document is the baseline. This section documents every deviation from previous plans based on Phase 1–3 analysis.
 
 **ADR-001: Auth Architecture — Clerk-Synchronized Zustand Cache**
 
@@ -786,7 +787,7 @@ Dense data tables: 24×24px with 8px spacing between targets.
 
 ## 7. Testing Strategy — Corrected
 
-### 7.1 Test Infrastructure
+### 7.1 Test Infrastructure (Supersedes FRONTEND_TESTING_PLAN.md)
 
 ```typescript
 // src/tests/test-utils.tsx — CORRECTED (FLAG-26: includes Clerk mock)

@@ -20,3 +20,10 @@
 | - Suggested action                                                             |
 | - Related entities                                                             |
 +--------------------------------------------------------------------------------+
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

@@ -143,3 +143,10 @@ act pull_request
 # Run with secrets
 act -s SUPABASE_URL=xxx -s SUPABASE_ANON_KEY=xxx
 ```
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

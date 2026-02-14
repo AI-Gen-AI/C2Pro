@@ -21,6 +21,8 @@
 
 **¿Primera vez aquí?** Lee la [Guía de Inicio Rápido](./QUICK_START.md) para poner en marcha el backend en 5 minutos.
 
+**¿Desarrollas en Windows?** Revisa nuestra [Guía de Configuración para Windows](./docs/development/windows-setup.md) para evitar problemas comunes.
+
 **Desarrollador?** Ve a [apps/api/README.md](./apps/api/README.md) para documentación técnica completa.
 
 ---
@@ -251,4 +253,3 @@ Propietario - © 2025-2026 C2Pro
 ## 🤝 Contribuir
 
 Este es un proyecto privado. Contacta al equipo para colaborar.
-
