@@ -1,9 +1,12 @@
 # C2Pro - ÍNDICE EXHAUSTIVO DE TEST SUITES v1.1
 
-> **Versión:** 1.1  
+> **Versión:** 1.1.1  
 > **Fecha:** 2026-01-31  
+> **Última Actualización:** 2026-02-14  
 > **Objetivo:** Cobertura 100% Core, >80% Módulos  
-> **Metodología:** TDD Estricto (Red → Green → Refactor)
+> **Metodología:** TDD Estricto (Red → Green → Refactor)  
+> **Nota:** Los conteos de Sec 1.1 (846 tests) y Sec 2.3 (1,406 tests) difieren porque  
+> Sec 2.3 incluye edge cases y sub-tests detallados por suite. Sec 1.1 cuenta solo tests principales.
 
 ---
 
@@ -26,15 +29,15 @@
 
 ### 1.1 Objetivos de Cobertura por Capa
 
-| Capa | Target | Mínimo | Tests Planificados |
-|------|--------|--------|-------------------|
-| **CORE (Security, MCP, Anonymizer)** | **100%** | 98% | 156 |
-| **Domain Entities** | **95%** | 90% | 198 |
-| **Application (Use Cases)** | **90%** | 85% | 145 |
-| **Adapters (HTTP/Persistence)** | **85%** | 80% | 112 |
-| **Integration** | **90%** | 85% | 167 |
-| **E2E** | **80%** | 75% | 68 |
-| **TOTAL** | **92%** | 87% | **846** |
+| Capa                                 | Target   | Mínimo | Tests Planificados |
+| ------------------------------------ | -------- | ------ | ------------------ |
+| **CORE (Security, MCP, Anonymizer)** | **100%** | 98%    | 156                |
+| **Domain Entities**                  | **95%**  | 90%    | 198                |
+| **Application (Use Cases)**          | **90%**  | 85%    | 145                |
+| **Adapters (HTTP/Persistence)**      | **85%**  | 80%    | 112                |
+| **Integration**                      | **90%**  | 85%    | 167                |
+| **E2E**                              | **80%**  | 75%    | 68                 |
+| **TOTAL**                            | **92%**  | 87%    | **846**            |
 
 ### 1.2 Resumen Numérico Total
 
@@ -82,7 +85,7 @@
 TS-[CAPA]-[MÓDULO]-[COMPONENTE]-[SECUENCIA]
 
 Donde:
-- CAPA: UC (Unit Core), UD (Unit Domain), UA (Unit Application), 
+- CAPA: UC (Unit Core), UD (Unit Domain), UA (Unit Application),
         UAD (Unit Adapter), INT (Integration), E2E (End-to-End)
 - MÓDULO: SEC, DOC, COH, PRJ, PROC, STK, ANA, ASY, OBS, API
 - COMPONENTE: Abreviatura del componente
@@ -91,169 +94,169 @@ Donde:
 
 ### 2.2 Índice Completo de Test Suites (89 Suites)
 
-| # | Suite ID | Nombre | Tests | Cobertura | Prioridad |
-|---|----------|--------|-------|-----------|-----------|
-| **CORE - SECURITY (100%)** |||||
-| 1 | TS-UC-SEC-MCP-001 | MCP Gateway Allowlist | 18 | 100% | 🔴 P0 |
-| 2 | TS-UC-SEC-MCP-002 | MCP Gateway Rate Limiting | 14 | 100% | 🔴 P0 |
-| 3 | TS-UC-SEC-MCP-003 | MCP Gateway Query Limits | 12 | 100% | 🔴 P0 |
-| 4 | TS-UC-SEC-MCP-004 | MCP Gateway Audit | 10 | 100% | 🔴 P0 |
-| 5 | TS-UC-SEC-ANO-001 | Anonymizer PII Detection | 24 | 100% | 🔴 P0 |
-| 6 | TS-UC-SEC-ANO-002 | Anonymizer Strategies | 16 | 100% | 🔴 P0 |
-| 7 | TS-UC-SEC-ANO-003 | Anonymizer Tenant Config | 8 | 100% | 🟠 P1 |
-| 8 | TS-UC-SEC-TNT-001 | Tenant Context & Isolation | 14 | 100% | 🔴 P0 |
-| 9 | TS-UC-SEC-JWT-001 | JWT Validation | 12 | 100% | 🔴 P0 |
-| 10 | TS-UC-SEC-AUD-001 | Audit Trail Core | 16 | 100% | 🔴 P0 |
-| 11 | TS-UC-SEC-GAM-001 | Anti-Gaming Detection | 12 | 100% | 🔴 P0 |
-| **SUBTOTAL CORE** | | | **156** | **100%** | |
-| **DOMAIN - DOCUMENTS (95%)** |||||
-| 12 | TS-UD-DOC-CLS-001 | Clause Entity | 22 | 98% | 🔴 P0 |
-| 13 | TS-UD-DOC-CLS-002 | Clause Types & Classification | 14 | 95% | 🟠 P1 |
-| 14 | TS-UD-DOC-CLS-003 | SubClause Hierarchy | 10 | 95% | 🟠 P1 |
-| 15 | TS-UD-DOC-ENT-001 | Entity Extraction - Dates | 16 | 98% | 🔴 P0 |
-| 16 | TS-UD-DOC-ENT-002 | Entity Extraction - Money | 14 | 98% | 🔴 P0 |
-| 17 | TS-UD-DOC-ENT-003 | Entity Extraction - Durations | 12 | 95% | 🟠 P1 |
-| 18 | TS-UD-DOC-ENT-004 | Entity Extraction - Stakeholders | 10 | 95% | 🟠 P1 |
-| 19 | TS-UD-DOC-DOC-001 | Document Entity | 14 | 95% | 🟠 P1 |
-| 20 | TS-UD-DOC-CNF-001 | Confidence Scoring | 8 | 90% | 🟡 P2 |
-| **SUBTOTAL DOCUMENTS** | | | **120** | **95%** | |
-| **DOMAIN - COHERENCE (98%)** |||||
-| 21 | TS-UD-COH-CAT-001 | Category Enum & Weights | 12 | 100% | 🔴 P0 |
-| 22 | TS-UD-COH-RUL-001 | Rules Engine - SCOPE | 18 | 100% | 🔴 P0 |
-| 23 | TS-UD-COH-RUL-002 | Rules Engine - BUDGET | 16 | 100% | 🔴 P0 |
-| 24 | TS-UD-COH-RUL-003 | Rules Engine - TIME | 16 | 100% | 🔴 P0 |
-| 25 | TS-UD-COH-RUL-004 | Rules Engine - TECHNICAL | 12 | 98% | 🔴 P0 |
-| 26 | TS-UD-COH-RUL-005 | Rules Engine - LEGAL | 10 | 98% | 🔴 P0 |
-| 27 | TS-UD-COH-RUL-006 | Rules Engine - QUALITY | 8 | 98% | 🟠 P1 |
-| 28 | TS-UD-COH-SCR-001 | Score Calculator - SubScores | 14 | 100% | 🔴 P0 |
-| 29 | TS-UD-COH-SCR-002 | Score Calculator - Global | 12 | 100% | 🔴 P0 |
-| 30 | TS-UD-COH-SCR-003 | Score Calculator - Custom Weights | 10 | 98% | 🟠 P1 |
-| 31 | TS-UD-COH-GAM-001 | Anti-Gaming Policy | 16 | 100% | 🔴 P0 |
-| 32 | TS-UD-COH-ALR-001 | Alert Entity & Mapping | 12 | 95% | 🟠 P1 |
-| **SUBTOTAL COHERENCE** | | | **156** | **98%** | |
-| **DOMAIN - PROJECTS (90%)** |||||
-| 33 | TS-UD-PRJ-WBS-001 | WBS Item Entity | 18 | 95% | 🔴 P0 |
-| 34 | TS-UD-PRJ-WBS-002 | WBS Hierarchy & Codes | 14 | 95% | 🟠 P1 |
-| 35 | TS-UD-PRJ-WBS-003 | WBS Validation Rules | 12 | 90% | 🟠 P1 |
-| 36 | TS-UD-PRJ-WBS-004 | WBS CRUD Operations | 10 | 90% | 🟠 P1 |
-| 37 | TS-UD-PRJ-PRJ-001 | Project Entity | 12 | 90% | 🟠 P1 |
-| 38 | TS-UD-PRJ-DTO-001 | WBSItemDTO & IWBSQueryPort | 10 | 95% | 🔴 P0 |
-| **SUBTOTAL PROJECTS** | | | **76** | **92%** | |
-| **DOMAIN - PROCUREMENT (90%)** |||||
-| 39 | TS-UD-PROC-BOM-001 | BOM Item Entity | 14 | 95% | 🔴 P0 |
-| 40 | TS-UD-PROC-BOM-002 | BOM Validation Rules | 10 | 90% | 🟠 P1 |
-| 41 | TS-UD-PROC-LTM-001 | Lead Time Calculator - Basic | 16 | 98% | 🔴 P0 |
-| 42 | TS-UD-PROC-LTM-002 | Lead Time Calculator - Incoterms | 14 | 95% | 🟠 P1 |
-| 43 | TS-UD-PROC-LTM-003 | Lead Time Calculator - Customs | 10 | 90% | 🟠 P1 |
-| 44 | TS-UD-PROC-LTM-004 | Lead Time Alerts | 8 | 90% | 🟠 P1 |
-| 45 | TS-UD-PROC-PLN-001 | Procurement Plan Generation | 10 | 85% | 🟡 P2 |
-| **SUBTOTAL PROCUREMENT** | | | **82** | **92%** | |
-| **DOMAIN - STAKEHOLDERS (88%)** |||||
-| 46 | TS-UD-STK-ENT-001 | Stakeholder Entity | 12 | 95% | 🟠 P1 |
-| 47 | TS-UD-STK-CLS-001 | Power/Interest Classification | 14 | 95% | 🟠 P1 |
-| 48 | TS-UD-STK-CLS-002 | Quadrant Assignment | 10 | 90% | 🟠 P1 |
-| 49 | TS-UD-STK-RAC-001 | RACI Entry Validation | 10 | 95% | 🟠 P1 |
-| 50 | TS-UD-STK-RAC-002 | RACI Matrix Generation | 14 | 90% | 🟠 P1 |
-| 51 | TS-UD-STK-RAC-003 | RACI from Clauses | 10 | 85% | 🟡 P2 |
-| 52 | TS-UD-STK-MAP-001 | Stakeholder Map Data | 8 | 85% | 🟡 P2 |
-| **SUBTOTAL STAKEHOLDERS** | | | **78** | **90%** | |
-| **DOMAIN - ANALYSIS (85%)** |||||
-| 53 | TS-UD-ANA-ALR-001 | Alert Entity Complete | 12 | 95% | 🟠 P1 |
-| 54 | TS-UD-ANA-GRP-001 | Graph Node Entity | 10 | 90% | 🟠 P1 |
-| 55 | TS-UD-ANA-GRP-002 | Graph Relationship Entity | 10 | 90% | 🟠 P1 |
-| 56 | TS-UD-ANA-SRC-001 | Semantic Search Result | 8 | 85% | 🟡 P2 |
-| 57 | TS-UD-ANA-HYB-001 | Hybrid Search Result | 8 | 85% | 🟡 P2 |
-| **SUBTOTAL ANALYSIS** | | | **48** | **89%** | |
-| **APPLICATION - USE CASES (90%)** |||||
-| 58 | TS-UA-DOC-UC-001 | Upload Document Use Case | 12 | 95% | 🔴 P0 |
-| 59 | TS-UA-DOC-UC-002 | Extract Clauses Use Case | 14 | 95% | 🔴 P0 |
-| 60 | TS-UA-DOC-UC-003 | Extract Entities Use Case | 12 | 90% | 🟠 P1 |
-| 61 | TS-UA-COH-UC-001 | Calculate Coherence Use Case | 16 | 98% | 🔴 P0 |
-| 62 | TS-UA-COH-UC-002 | Recalculate on Alert Use Case | 10 | 95% | 🟠 P1 |
-| 63 | TS-UA-PRJ-UC-001 | Generate WBS Use Case | 12 | 90% | 🟠 P1 |
-| 64 | TS-UA-PRJ-UC-002 | CRUD WBS Item Use Case | 14 | 90% | 🟠 P1 |
-| 65 | TS-UA-PROC-UC-001 | Generate BOM Use Case | 10 | 90% | 🟠 P1 |
-| 66 | TS-UA-PROC-UC-002 | Calculate Lead Time Use Case | 12 | 95% | 🔴 P0 |
-| 67 | TS-UA-STK-UC-001 | Extract Stakeholders Use Case | 10 | 90% | 🟠 P1 |
-| 68 | TS-UA-STK-UC-002 | Generate RACI Use Case | 10 | 90% | 🟠 P1 |
-| 69 | TS-UA-ANA-UC-001 | Run Analysis Use Case | 12 | 90% | 🟠 P1 |
-| 70 | TS-UA-ANA-UC-002 | Graph Query Use Case | 10 | 85% | 🟡 P2 |
-| 71 | TS-UA-SEC-UC-001 | Validate MCP Operation Use Case | 10 | 100% | 🔴 P0 |
-| 72 | TS-UA-SEC-UC-002 | Anonymize Document Use Case | 12 | 100% | 🔴 P0 |
-| **SUBTOTAL USE CASES** | | | **176** | **93%** | |
-| **APPLICATION - SERVICES (88%)** |||||
-| 73 | TS-UA-SVC-EXT-001 | Clause Extraction Service | 14 | 95% | 🔴 P0 |
-| 74 | TS-UA-SVC-EXT-002 | Entity Extraction Service | 12 | 90% | 🟠 P1 |
-| 75 | TS-UA-SVC-COH-001 | Coherence Calculation Service | 14 | 98% | 🔴 P0 |
-| 76 | TS-UA-SVC-PII-001 | PII Detection Service | 16 | 100% | 🔴 P0 |
-| 77 | TS-UA-SVC-ANO-001 | Anonymization Service | 12 | 100% | 🔴 P0 |
-| 78 | TS-UA-SVC-RTL-001 | Rate Limit Service | 10 | 100% | 🔴 P0 |
-| 79 | TS-UA-SVC-BDG-001 | Budget Tracking Service | 12 | 95% | 🟠 P1 |
-| **SUBTOTAL SERVICES** | | | **90** | **96%** | |
-| **APPLICATION - DTOs (95%)** |||||
-| 80 | TS-UA-DTO-ALL-001 | All DTOs Validation | 24 | 98% | 🔴 P0 |
-| 81 | TS-UA-DTO-SER-001 | Serialization/Deserialization | 16 | 95% | 🟠 P1 |
-| **SUBTOTAL DTOs** | | | **40** | **96%** | |
-| **ADAPTERS - HTTP (85%)** |||||
-| 82 | TS-UAD-HTTP-RTR-001 | All Routers Validation | 32 | 90% | 🟠 P1 |
-| 83 | TS-UAD-HTTP-MDW-001 | Middleware (Auth, Tenant) | 18 | 95% | 🔴 P0 |
-| 84 | TS-UAD-HTTP-ERR-001 | Error Handlers | 12 | 90% | 🟠 P1 |
-| **SUBTOTAL HTTP** | | | **62** | **91%** | |
-| **ADAPTERS - PERSISTENCE (85%)** |||||
-| 85 | TS-UAD-PER-REP-001 | All Repositories | 28 | 90% | 🟠 P1 |
-| 86 | TS-UAD-PER-GRP-001 | Graph Adapters (Neo4j) | 14 | 85% | 🟠 P1 |
-| 87 | TS-UAD-PER-RDS-001 | Redis Adapters | 10 | 90% | 🟠 P1 |
-| 88 | TS-UAD-PER-R2-001 | R2 Storage Adapters | 8 | 85% | 🟡 P2 |
-| **SUBTOTAL PERSISTENCE** | | | **60** | **87%** | |
-| **INTEGRATION (90%)** |||||
-| 89 | TS-INT-DB-CLS-001 | Clause Repository + DB | 14 | 95% | 🔴 P0 |
-| 90 | TS-INT-DB-DOC-001 | Document Repository + DB | 12 | 90% | 🟠 P1 |
-| 91 | TS-INT-DB-WBS-001 | WBS Repository + DB | 12 | 90% | 🟠 P1 |
-| 92 | TS-INT-DB-BOM-001 | BOM Repository + DB | 10 | 90% | 🟠 P1 |
-| 93 | TS-INT-DB-COH-001 | Coherence Repository + DB | 12 | 95% | 🔴 P0 |
-| 94 | TS-INT-DB-AUD-001 | Audit Repository + DB | 10 | 95% | 🟠 P1 |
-| 95 | TS-INT-EXT-LLM-001 | LLM Client Integration | 14 | 85% | 🟠 P1 |
-| 96 | TS-INT-EXT-LLM-002 | LLM Fallback Integration | 10 | 90% | 🟠 P1 |
-| 97 | TS-INT-GRP-NEO-001 | Neo4j Integration | 14 | 85% | 🟠 P1 |
-| 98 | TS-INT-MOD-WBS-001 | WBS → Procurement Integration | 12 | 95% | 🔴 P0 |
-| 99 | TS-INT-MOD-DOC-001 | Documents → Analysis Integration | 10 | 90% | 🟠 P1 |
-| 100 | TS-INT-MOD-ANA-001 | Analysis → Coherence Integration | 12 | 95% | 🔴 P0 |
-| 101 | TS-INT-MOD-STK-001 | Stakeholders → RACI Integration | 8 | 85% | 🟡 P2 |
-| 102 | TS-INT-EVT-BUS-001 | Event Bus Publish/Subscribe | 14 | 95% | 🔴 P0 |
-| 103 | TS-INT-EVT-CEL-001 | Celery Job Queue | 12 | 90% | 🟠 P1 |
-| 104 | TS-INT-EVT-DLQ-001 | Dead Letter Queue | 8 | 85% | 🟡 P2 |
-| **SUBTOTAL INTEGRATION** | | | **184** | **91%** | |
-| **E2E (80%)** |||||
-| 105 | TS-E2E-FLW-DOC-001 | Document Upload to Coherence | 12 | 85% | 🔴 P0 |
-| 106 | TS-E2E-FLW-ALR-001 | Alert Review Workflow | 10 | 85% | 🟠 P1 |
-| 107 | TS-E2E-FLW-BLK-001 | Bulk Operations | 8 | 80% | 🟠 P1 |
-| 108 | TS-E2E-SEC-TNT-001 | Multi-tenant Isolation | 10 | 90% | 🔴 P0 |
-| 109 | TS-E2E-SEC-MCP-001 | MCP Gateway E2E | 8 | 90% | 🔴 P0 |
-| 110 | TS-E2E-ERR-TIM-001 | Timeout & Fallback Scenarios | 8 | 80% | 🟠 P1 |
-| 111 | TS-E2E-ERR-CON-001 | Concurrent Modifications | 8 | 80% | 🟠 P1 |
-| 112 | TS-E2E-ERR-REC-001 | Error Recovery | 8 | 80% | 🟠 P1 |
-| 113 | TS-E2E-PER-LRG-001 | Large Document Processing | 6 | 75% | 🟡 P2 |
-| **SUBTOTAL E2E** | | | **78** | **83%** | |
+| #                                 | Suite ID            | Nombre                            | Tests   | Cobertura | Prioridad |
+| --------------------------------- | ------------------- | --------------------------------- | ------- | --------- | --------- |
+| **CORE - SECURITY (100%)**        |                     |                                   |         |           |
+| 1                                 | TS-UC-SEC-MCP-001   | MCP Gateway Allowlist             | 18      | 100%      | 🔴 P0     |
+| 2                                 | TS-UC-SEC-MCP-002   | MCP Gateway Rate Limiting         | 14      | 100%      | 🔴 P0     |
+| 3                                 | TS-UC-SEC-MCP-003   | MCP Gateway Query Limits          | 12      | 100%      | 🔴 P0     |
+| 4                                 | TS-UC-SEC-MCP-004   | MCP Gateway Audit                 | 10      | 100%      | 🔴 P0     |
+| 5                                 | TS-UC-SEC-ANO-001   | Anonymizer PII Detection          | 24      | 100%      | 🔴 P0     |
+| 6                                 | TS-UC-SEC-ANO-002   | Anonymizer Strategies             | 16      | 100%      | 🔴 P0     |
+| 7                                 | TS-UC-SEC-ANO-003   | Anonymizer Tenant Config          | 8       | 100%      | 🟠 P1     |
+| 8                                 | TS-UC-SEC-TNT-001   | Tenant Context & Isolation        | 14      | 100%      | 🔴 P0     |
+| 9                                 | TS-UC-SEC-JWT-001   | JWT Validation                    | 12      | 100%      | 🔴 P0     |
+| 10                                | TS-UC-SEC-AUD-001   | Audit Trail Core                  | 16      | 100%      | 🔴 P0     |
+| 11                                | TS-UC-SEC-GAM-001   | Anti-Gaming Detection             | 12      | 100%      | 🔴 P0     |
+| **SUBTOTAL CORE**                 |                     |                                   | **156** | **100%**  |           |
+| **DOMAIN - DOCUMENTS (95%)**      |                     |                                   |         |           |
+| 12                                | TS-UD-DOC-CLS-001   | Clause Entity                     | 22      | 98%       | 🔴 P0     |
+| 13                                | TS-UD-DOC-CLS-002   | Clause Types & Classification     | 14      | 95%       | 🟠 P1     |
+| 14                                | TS-UD-DOC-CLS-003   | SubClause Hierarchy               | 10      | 95%       | 🟠 P1     |
+| 15                                | TS-UD-DOC-ENT-001   | Entity Extraction - Dates         | 16      | 98%       | 🔴 P0     |
+| 16                                | TS-UD-DOC-ENT-002   | Entity Extraction - Money         | 14      | 98%       | 🔴 P0     |
+| 17                                | TS-UD-DOC-ENT-003   | Entity Extraction - Durations     | 12      | 95%       | 🟠 P1     |
+| 18                                | TS-UD-DOC-ENT-004   | Entity Extraction - Stakeholders  | 10      | 95%       | 🟠 P1     |
+| 19                                | TS-UD-DOC-DOC-001   | Document Entity                   | 14      | 95%       | 🟠 P1     |
+| 20                                | TS-UD-DOC-CNF-001   | Confidence Scoring                | 8       | 90%       | 🟡 P2     |
+| **SUBTOTAL DOCUMENTS**            |                     |                                   | **120** | **95%**   |           |
+| **DOMAIN - COHERENCE (98%)**      |                     |                                   |         |           |
+| 21                                | TS-UD-COH-CAT-001   | Category Enum & Weights           | 12      | 100%      | 🔴 P0     |
+| 22                                | TS-UD-COH-RUL-001   | Rules Engine - SCOPE              | 18      | 100%      | 🔴 P0     |
+| 23                                | TS-UD-COH-RUL-002   | Rules Engine - BUDGET             | 16      | 100%      | 🔴 P0     |
+| 24                                | TS-UD-COH-RUL-003   | Rules Engine - TIME               | 16      | 100%      | 🔴 P0     |
+| 25                                | TS-UD-COH-RUL-004   | Rules Engine - TECHNICAL          | 12      | 98%       | 🔴 P0     |
+| 26                                | TS-UD-COH-RUL-005   | Rules Engine - LEGAL              | 10      | 98%       | 🔴 P0     |
+| 27                                | TS-UD-COH-RUL-006   | Rules Engine - QUALITY            | 8       | 98%       | 🟠 P1     |
+| 28                                | TS-UD-COH-SCR-001   | Score Calculator - SubScores      | 14      | 100%      | 🔴 P0     |
+| 29                                | TS-UD-COH-SCR-002   | Score Calculator - Global         | 12      | 100%      | 🔴 P0     |
+| 30                                | TS-UD-COH-SCR-003   | Score Calculator - Custom Weights | 10      | 98%       | 🟠 P1     |
+| 31                                | TS-UD-COH-GAM-001   | Anti-Gaming Policy                | 16      | 100%      | 🔴 P0     |
+| 32                                | TS-UD-COH-ALR-001   | Alert Entity & Mapping            | 12      | 95%       | 🟠 P1     |
+| **SUBTOTAL COHERENCE**            |                     |                                   | **156** | **98%**   |           |
+| **DOMAIN - PROJECTS (90%)**       |                     |                                   |         |           |
+| 33                                | TS-UD-PRJ-WBS-001   | WBS Item Entity                   | 18      | 95%       | 🔴 P0     |
+| 34                                | TS-UD-PRJ-WBS-002   | WBS Hierarchy & Codes             | 14      | 95%       | 🟠 P1     |
+| 35                                | TS-UD-PRJ-WBS-003   | WBS Validation Rules              | 12      | 90%       | 🟠 P1     |
+| 36                                | TS-UD-PRJ-WBS-004   | WBS CRUD Operations               | 10      | 90%       | 🟠 P1     |
+| 37                                | TS-UD-PRJ-PRJ-001   | Project Entity                    | 12      | 90%       | 🟠 P1     |
+| 38                                | TS-UD-PRJ-DTO-001   | WBSItemDTO & IWBSQueryPort        | 10      | 95%       | 🔴 P0     |
+| **SUBTOTAL PROJECTS**             |                     |                                   | **76**  | **92%**   |           |
+| **DOMAIN - PROCUREMENT (90%)**    |                     |                                   |         |           |
+| 39                                | TS-UD-PROC-BOM-001  | BOM Item Entity                   | 14      | 95%       | 🔴 P0     |
+| 40                                | TS-UD-PROC-BOM-002  | BOM Validation Rules              | 10      | 90%       | 🟠 P1     |
+| 41                                | TS-UD-PROC-LTM-001  | Lead Time Calculator - Basic      | 16      | 98%       | 🔴 P0     |
+| 42                                | TS-UD-PROC-LTM-002  | Lead Time Calculator - Incoterms  | 14      | 95%       | 🟠 P1     |
+| 43                                | TS-UD-PROC-LTM-003  | Lead Time Calculator - Customs    | 10      | 90%       | 🟠 P1     |
+| 44                                | TS-UD-PROC-LTM-004  | Lead Time Alerts                  | 8       | 90%       | 🟠 P1     |
+| 45                                | TS-UD-PROC-PLN-001  | Procurement Plan Generation       | 10      | 85%       | 🟡 P2     |
+| **SUBTOTAL PROCUREMENT**          |                     |                                   | **82**  | **92%**   |           |
+| **DOMAIN - STAKEHOLDERS (88%)**   |                     |                                   |         |           |
+| 46                                | TS-UD-STK-ENT-001   | Stakeholder Entity                | 12      | 95%       | 🟠 P1     |
+| 47                                | TS-UD-STK-CLS-001   | Power/Interest Classification     | 14      | 95%       | 🟠 P1     |
+| 48                                | TS-UD-STK-CLS-002   | Quadrant Assignment               | 10      | 90%       | 🟠 P1     |
+| 49                                | TS-UD-STK-RAC-001   | RACI Entry Validation             | 10      | 95%       | 🟠 P1     |
+| 50                                | TS-UD-STK-RAC-002   | RACI Matrix Generation            | 14      | 90%       | 🟠 P1     |
+| 51                                | TS-UD-STK-RAC-003   | RACI from Clauses                 | 10      | 85%       | 🟡 P2     |
+| 52                                | TS-UD-STK-MAP-001   | Stakeholder Map Data              | 8       | 85%       | 🟡 P2     |
+| **SUBTOTAL STAKEHOLDERS**         |                     |                                   | **78**  | **90%**   |           |
+| **DOMAIN - ANALYSIS (85%)**       |                     |                                   |         |           |
+| 53                                | TS-UD-ANA-ALR-001   | Alert Entity Complete             | 12      | 95%       | 🟠 P1     |
+| 54                                | TS-UD-ANA-GRP-001   | Graph Node Entity                 | 10      | 90%       | 🟠 P1     |
+| 55                                | TS-UD-ANA-GRP-002   | Graph Relationship Entity         | 10      | 90%       | 🟠 P1     |
+| 56                                | TS-UD-ANA-SRC-001   | Semantic Search Result            | 8       | 85%       | 🟡 P2     |
+| 57                                | TS-UD-ANA-HYB-001   | Hybrid Search Result              | 8       | 85%       | 🟡 P2     |
+| **SUBTOTAL ANALYSIS**             |                     |                                   | **48**  | **89%**   |           |
+| **APPLICATION - USE CASES (90%)** |                     |                                   |         |           |
+| 58                                | TS-UA-DOC-UC-001    | Upload Document Use Case          | 12      | 95%       | 🔴 P0     |
+| 59                                | TS-UA-DOC-UC-002    | Extract Clauses Use Case          | 14      | 95%       | 🔴 P0     |
+| 60                                | TS-UA-DOC-UC-003    | Extract Entities Use Case         | 12      | 90%       | 🟠 P1     |
+| 61                                | TS-UA-COH-UC-001    | Calculate Coherence Use Case      | 16      | 98%       | 🔴 P0     |
+| 62                                | TS-UA-COH-UC-002    | Recalculate on Alert Use Case     | 10      | 95%       | 🟠 P1     |
+| 63                                | TS-UA-PRJ-UC-001    | Generate WBS Use Case             | 12      | 90%       | 🟠 P1     |
+| 64                                | TS-UA-PRJ-UC-002    | CRUD WBS Item Use Case            | 14      | 90%       | 🟠 P1     |
+| 65                                | TS-UA-PROC-UC-001   | Generate BOM Use Case             | 10      | 90%       | 🟠 P1     |
+| 66                                | TS-UA-PROC-UC-002   | Calculate Lead Time Use Case      | 12      | 95%       | 🔴 P0     |
+| 67                                | TS-UA-STK-UC-001    | Extract Stakeholders Use Case     | 10      | 90%       | 🟠 P1     |
+| 68                                | TS-UA-STK-UC-002    | Generate RACI Use Case            | 10      | 90%       | 🟠 P1     |
+| 69                                | TS-UA-ANA-UC-001    | Run Analysis Use Case             | 12      | 90%       | 🟠 P1     |
+| 70                                | TS-UA-ANA-UC-002    | Graph Query Use Case              | 10      | 85%       | 🟡 P2     |
+| 71                                | TS-UA-SEC-UC-001    | Validate MCP Operation Use Case   | 10      | 100%      | 🔴 P0     |
+| 72                                | TS-UA-SEC-UC-002    | Anonymize Document Use Case       | 12      | 100%      | 🔴 P0     |
+| **SUBTOTAL USE CASES**            |                     |                                   | **176** | **93%**   |           |
+| **APPLICATION - SERVICES (88%)**  |                     |                                   |         |           |
+| 73                                | TS-UA-SVC-EXT-001   | Clause Extraction Service         | 14      | 95%       | 🔴 P0     |
+| 74                                | TS-UA-SVC-EXT-002   | Entity Extraction Service         | 12      | 90%       | 🟠 P1     |
+| 75                                | TS-UA-SVC-COH-001   | Coherence Calculation Service     | 14      | 98%       | 🔴 P0     |
+| 76                                | TS-UA-SVC-PII-001   | PII Detection Service             | 16      | 100%      | 🔴 P0     |
+| 77                                | TS-UA-SVC-ANO-001   | Anonymization Service             | 12      | 100%      | 🔴 P0     |
+| 78                                | TS-UA-SVC-RTL-001   | Rate Limit Service                | 10      | 100%      | 🔴 P0     |
+| 79                                | TS-UA-SVC-BDG-001   | Budget Tracking Service           | 12      | 95%       | 🟠 P1     |
+| **SUBTOTAL SERVICES**             |                     |                                   | **90**  | **96%**   |           |
+| **APPLICATION - DTOs (95%)**      |                     |                                   |         |           |
+| 80                                | TS-UA-DTO-ALL-001   | All DTOs Validation               | 24      | 98%       | 🔴 P0     |
+| 81                                | TS-UA-DTO-SER-001   | Serialization/Deserialization     | 16      | 95%       | 🟠 P1     |
+| **SUBTOTAL DTOs**                 |                     |                                   | **40**  | **96%**   |           |
+| **ADAPTERS - HTTP (85%)**         |                     |                                   |         |           |
+| 82                                | TS-UAD-HTTP-RTR-001 | All Routers Validation            | 32      | 90%       | 🟠 P1     |
+| 83                                | TS-UAD-HTTP-MDW-001 | Middleware (Auth, Tenant)         | 18      | 95%       | 🔴 P0     |
+| 84                                | TS-UAD-HTTP-ERR-001 | Error Handlers                    | 12      | 90%       | 🟠 P1     |
+| **SUBTOTAL HTTP**                 |                     |                                   | **62**  | **91%**   |           |
+| **ADAPTERS - PERSISTENCE (85%)**  |                     |                                   |         |           |
+| 85                                | TS-UAD-PER-REP-001  | All Repositories                  | 28      | 90%       | 🟠 P1     |
+| 86                                | TS-UAD-PER-GRP-001  | Graph Adapters (Neo4j)            | 14      | 85%       | 🟠 P1     |
+| 87                                | TS-UAD-PER-RDS-001  | Redis Adapters                    | 10      | 90%       | 🟠 P1     |
+| 88                                | TS-UAD-PER-R2-001   | R2 Storage Adapters               | 8       | 85%       | 🟡 P2     |
+| **SUBTOTAL PERSISTENCE**          |                     |                                   | **60**  | **87%**   |           |
+| **INTEGRATION (90%)**             |                     |                                   |         |           |
+| 89                                | TS-INT-DB-CLS-001   | Clause Repository + DB            | 14      | 95%       | 🔴 P0     |
+| 90                                | TS-INT-DB-DOC-001   | Document Repository + DB          | 12      | 90%       | 🟠 P1     |
+| 91                                | TS-INT-DB-WBS-001   | WBS Repository + DB               | 12      | 90%       | 🟠 P1     |
+| 92                                | TS-INT-DB-BOM-001   | BOM Repository + DB               | 10      | 90%       | 🟠 P1     |
+| 93                                | TS-INT-DB-COH-001   | Coherence Repository + DB         | 12      | 95%       | 🔴 P0     |
+| 94                                | TS-INT-DB-AUD-001   | Audit Repository + DB             | 10      | 95%       | 🟠 P1     |
+| 95                                | TS-INT-EXT-LLM-001  | LLM Client Integration            | 14      | 85%       | 🟠 P1     |
+| 96                                | TS-INT-EXT-LLM-002  | LLM Fallback Integration          | 10      | 90%       | 🟠 P1     |
+| 97                                | TS-INT-GRP-NEO-001  | Neo4j Integration                 | 14      | 85%       | 🟠 P1     |
+| 98                                | TS-INT-MOD-WBS-001  | WBS → Procurement Integration     | 12      | 95%       | 🔴 P0     |
+| 99                                | TS-INT-MOD-DOC-001  | Documents → Analysis Integration  | 10      | 90%       | 🟠 P1     |
+| 100                               | TS-INT-MOD-ANA-001  | Analysis → Coherence Integration  | 12      | 95%       | 🔴 P0     |
+| 101                               | TS-INT-MOD-STK-001  | Stakeholders → RACI Integration   | 8       | 85%       | 🟡 P2     |
+| 102                               | TS-INT-EVT-BUS-001  | Event Bus Publish/Subscribe       | 14      | 95%       | 🔴 P0     |
+| 103                               | TS-INT-EVT-CEL-001  | Celery Job Queue                  | 12      | 90%       | 🟠 P1     |
+| 104                               | TS-INT-EVT-DLQ-001  | Dead Letter Queue                 | 8       | 85%       | 🟡 P2     |
+| **SUBTOTAL INTEGRATION**          |                     |                                   | **184** | **91%**   |           |
+| **E2E (80%)**                     |                     |                                   |         |           |
+| 105                               | TS-E2E-FLW-DOC-001  | Document Upload to Coherence      | 12      | 85%       | 🔴 P0     |
+| 106                               | TS-E2E-FLW-ALR-001  | Alert Review Workflow             | 10      | 85%       | 🟠 P1     |
+| 107                               | TS-E2E-FLW-BLK-001  | Bulk Operations                   | 8       | 80%       | 🟠 P1     |
+| 108                               | TS-E2E-SEC-TNT-001  | Multi-tenant Isolation            | 10      | 90%       | 🔴 P0     |
+| 109                               | TS-E2E-SEC-MCP-001  | MCP Gateway E2E                   | 8       | 90%       | 🔴 P0     |
+| 110                               | TS-E2E-ERR-TIM-001  | Timeout & Fallback Scenarios      | 8       | 80%       | 🟠 P1     |
+| 111                               | TS-E2E-ERR-CON-001  | Concurrent Modifications          | 8       | 80%       | 🟠 P1     |
+| 112                               | TS-E2E-ERR-REC-001  | Error Recovery                    | 8       | 80%       | 🟠 P1     |
+| 113                               | TS-E2E-PER-LRG-001  | Large Document Processing         | 6       | 75%       | 🟡 P2     |
+| **SUBTOTAL E2E**                  |                     |                                   | **78**  | **83%**   |           |
 
 ### 2.3 Totales por Categoría
 
-| Categoría | Suites | Tests | Cobertura Promedio |
-|-----------|--------|-------|-------------------|
-| **CORE (Security)** | 11 | 156 | 100% |
-| **Domain - Documents** | 9 | 120 | 95% |
-| **Domain - Coherence** | 12 | 156 | 98% |
-| **Domain - Projects** | 6 | 76 | 92% |
-| **Domain - Procurement** | 7 | 82 | 92% |
-| **Domain - Stakeholders** | 7 | 78 | 90% |
-| **Domain - Analysis** | 5 | 48 | 89% |
-| **Application - Use Cases** | 15 | 176 | 93% |
-| **Application - Services** | 7 | 90 | 96% |
-| **Application - DTOs** | 2 | 40 | 96% |
-| **Adapters - HTTP** | 3 | 62 | 91% |
-| **Adapters - Persistence** | 4 | 60 | 87% |
-| **Integration** | 16 | 184 | 91% |
-| **E2E** | 9 | 78 | 83% |
-| **TOTAL** | **113** | **1,406** | **92%** |
+| Categoría                   | Suites  | Tests     | Cobertura Promedio |
+| --------------------------- | ------- | --------- | ------------------ |
+| **CORE (Security)**         | 11      | 156       | 100%               |
+| **Domain - Documents**      | 9       | 120       | 95%                |
+| **Domain - Coherence**      | 12      | 156       | 98%                |
+| **Domain - Projects**       | 6       | 76        | 92%                |
+| **Domain - Procurement**    | 7       | 82        | 92%                |
+| **Domain - Stakeholders**   | 7       | 78        | 90%                |
+| **Domain - Analysis**       | 5       | 48        | 89%                |
+| **Application - Use Cases** | 15      | 176       | 93%                |
+| **Application - Services**  | 7       | 90        | 96%                |
+| **Application - DTOs**      | 2       | 40        | 96%                |
+| **Adapters - HTTP**         | 3       | 62        | 91%                |
+| **Adapters - Persistence**  | 4       | 60        | 87%                |
+| **Integration**             | 16      | 184       | 91%                |
+| **E2E**                     | 9       | 78        | 83%                |
+| **TOTAL**                   | **113** | **1,406** | **92%**            |
 
 ---
 
@@ -804,18 +807,16 @@ COMPARACIÓN (2):
 
 ---
 
- RELEASE READY
-```
+> **Nota (2026-02-14):** Las secciones 5 (Integration), 6 (E2E), 7 (Matriz de Cobertura),  
+> y 8 (Plan de Ejecución) fueron truncadas en una edición anterior.  
+> Consultar `C2PRO_TDD_BACKLOG_v1.0.md` para el detalle completo de Integration y E2E tests.  
+> Secciones 9-10 a continuación fueron parcialmente recuperadas.
 
 ---
 
 ## 9. Detalle de Test Suites por Agente
 
-### 9.1 AGENTE 1: Security Core (188 tests)
-
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                         |
+> **Nota:** Sección 9.1 parcialmente corrupta en versión anterior. Datos de ruta crítica preservados.
 
 ### 10.3 Ruta Crítica
 
@@ -919,12 +920,12 @@ SEMANAS 25-28 (S13-S14):
 
 ## Firmas de Aprobación
 
-| Rol | Nombre | Fecha | Firma |
-|-----|--------|-------|-------|
-| Lead Software Architect | _________________ | 2026-01-31 | ☐ |
-| QA Lead | _________________ | 2026-01-31 | ☐ |
-| Tech Lead | _________________ | 2026-01-31 | ☐ |
-| Product Owner | _________________ | 2026-01-31 | ☐ |
+| Rol                     | Nombre                     | Fecha      | Firma |
+| ----------------------- | -------------------------- | ---------- | ----- |
+| Lead Software Architect | **\*\*\*\***\_**\*\*\*\*** | 2026-01-31 | ☐     |
+| QA Lead                 | **\*\*\*\***\_**\*\*\*\*** | 2026-01-31 | ☐     |
+| Tech Lead               | **\*\*\*\***\_**\*\*\*\*** | 2026-01-31 | ☐     |
+| Product Owner           | **\*\*\*\***\_**\*\*\*\*** | 2026-01-31 | ☐     |
 
 ---
 

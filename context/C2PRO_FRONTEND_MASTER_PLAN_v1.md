@@ -4,7 +4,8 @@
 > **Version:** 1.0 — Implementation-Ready  
 > **Date:** 2026-02-10  
 > **Supersedes:** TDD v3.0 frontend sections, FRONTEND_TESTING_PLAN.md  
-> **Supersedes:** TDD v3.0 frontend sections, C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0
+> **Supersedes:** TDD v3.0 frontend sections  
+> **Complementa:** C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0 (ambos son v4.0, feb 2026)
 > **Source:** Phase 1 (12 Expert Agents) → Phase 2 (6 Cross-Reviewers, 31 Flags) → Phase 3 (10 Verifiers)  
 > **Stack:** Next.js 15.3 · React 19.1 · TypeScript 5.7 · Tailwind 4.1 · Zustand 5 · TanStack Query 5 · Orval 7 · Clerk · Vitest · Playwright
 
@@ -78,8 +79,8 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
 
 ```typescript
 // src/stores/auth.ts — REFACTORED: Write-only from AuthSync
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
 
 interface AuthState {
   token: string | null;
@@ -89,33 +90,36 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>()(
-  devtools((set) => ({
-    token: null,
-    tenantId: null,
-    setAuth: ({ token, tenantId }) => set({ token, tenantId }),
-    clear: () => set({ token: null, tenantId: null }),
-  }), { name: 'c2pro-auth' })
+  devtools(
+    (set) => ({
+      token: null,
+      tenantId: null,
+      setAuth: ({ token, tenantId }) => set({ token, tenantId }),
+      clear: () => set({ token: null, tenantId: null }),
+    }),
+    { name: "c2pro-auth" },
+  ),
 );
 // ⛔ RULE: Only AuthSync.tsx may call setAuth(). No other file.
 ```
 
 ```typescript
 // src/lib/api/client.ts — CORRECTED: No require(), no useAuth()
-import Axios, { type AxiosRequestConfig } from 'axios';
-import { env } from '@/config/env';
-import { useAuthStore } from '@/stores/auth'; // Direct import (no circular dep)
+import Axios, { type AxiosRequestConfig } from "axios";
+import { env } from "@/config/env";
+import { useAuthStore } from "@/stores/auth"; // Direct import (no circular dep)
 
 const axiosInstance = Axios.create({
   baseURL: env.API_BASE_URL,
   timeout: 30_000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { "Content-Type": "application/json" },
 });
 
 axiosInstance.interceptors.request.use((config) => {
   // Synchronous read from Zustand — always has latest Clerk token
   const { token, tenantId } = useAuthStore.getState();
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (tenantId) config.headers['X-Tenant-ID'] = tenantId;
+  if (tenantId) config.headers["X-Tenant-ID"] = tenantId;
   return config;
 });
 
@@ -127,29 +131,33 @@ axiosInstance.interceptors.response.use(
     // Network error retry (exponential backoff, max 3)
     if (!error.response && (config._retryCount ?? 0) < 3) {
       config._retryCount = (config._retryCount ?? 0) + 1;
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, config._retryCount)));
+      await new Promise((r) =>
+        setTimeout(r, 1000 * Math.pow(2, config._retryCount)),
+      );
       return axiosInstance(config);
     }
 
     if (error.response?.status === 401) {
       useAuthStore.getState().clear();
-      if (typeof window !== 'undefined') window.location.href = '/login';
+      if (typeof window !== "undefined") window.location.href = "/login";
     }
 
     if (error.response?.status === 429) {
       // Let TanStack Query handle retry — just surface to UI
-      console.warn('[C2Pro] Rate limited');
+      console.warn("[C2Pro] Rate limited");
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export const apiClient = <T>(config: AxiosRequestConfig): Promise<T> => {
   const source = Axios.CancelToken.source();
-  const promise = axiosInstance({ ...config, cancelToken: source.token }).then(({ data }) => data);
+  const promise = axiosInstance({ ...config, cancelToken: source.token }).then(
+    ({ data }) => data,
+  );
   // @ts-expect-error — Orval expects cancel on the promise
-  promise.cancel = () => source.cancel('Query cancelled');
+  promise.cancel = () => source.cancel("Query cancelled");
   return promise;
 };
 ```
@@ -202,29 +210,32 @@ export function useDocumentProcessing(projectId: string) {
     // withCredentials sends Clerk's __clerk_db_jwt cookie
     const source = new EventSource(
       `${env.API_BASE_URL}/api/v1/projects/${projectId}/process/stream`,
-      { withCredentials: true }
+      { withCredentials: true },
     );
 
-    source.addEventListener('stage', (e) => {
+    source.addEventListener("stage", (e) => {
       const stage = JSON.parse(e.data);
-      setStages(prev => [...prev, stage]);
+      setStages((prev) => [...prev, stage]);
       // FLAG-22: Persist to Zustand for cross-page visibility
       updateProcessing(projectId, stage);
     });
 
-    source.addEventListener('complete', async (e) => {
+    source.addEventListener("complete", async (e) => {
       const result = JSON.parse(e.data);
       // FLAG-25: Await refetch BEFORE navigation
       await queryClient.refetchQueries({
-        queryKey: ['coherence'],
+        queryKey: ["coherence"],
         predicate: (q) => q.queryKey.includes(projectId),
       });
-      await queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      await queryClient.invalidateQueries({ queryKey: ["alerts"] });
       source.close();
-      updateProcessing(projectId, { complete: true, score: result.global_score });
+      updateProcessing(projectId, {
+        complete: true,
+        score: result.global_score,
+      });
     });
 
-    source.addEventListener('error', () => {
+    source.addEventListener("error", () => {
       // Safari reconnection quirk: EventSource auto-reconnects
       // but Safari may drop after ~60s. Manual fallback:
       setTimeout(() => {
@@ -258,25 +269,25 @@ const decoder = new TextDecoder();
 
 ### 1.2 Technology Stack — Final Validated Decisions
 
-| Technology | Version | Verdict | Notes |
-|-----------|---------|---------|-------|
-| Next.js | 15.3 | ✅ Keep | PPR incremental, Turbopack, React Compiler |
-| React | 19.1 | ✅ Keep | Server Components, use() hook |
-| TypeScript | 5.7 | ✅ Keep | Strict mode enabled |
-| Tailwind CSS | 4.1 | ⚠️ Keep + fallback | Pin ≥4.1, keep CSS var approach for v3.4 rollback |
-| Zustand | 5 | ✅ Keep | 4 stores: auth (refactored), app-mode, sidebar, filters + 2 new: onboarding, processing |
-| TanStack Query | 5 | ✅ Keep | Orval-generated hooks exclusively |
-| Orval | 7 | ✅ Keep | `orval --check` in CI, never commit generated files |
-| Clerk | ^6.12 | ✅ Keep | Sole auth source, AuthSync pattern |
-| Recharts | 2.15 | ⚠️ Keep for complex charts | Custom SVG for hero gauge (see §3.3) |
-| Vitest | 3.2 | ✅ Keep | jsdom, v8 coverage |
-| Playwright | 1.50 | ✅ Keep | Dual-mode E2E |
-| MSW | 2.7 | ✅ Keep | Demo mode + test mode |
-| Sentry | Latest | ✅ Keep | Error tracking Sprint 1, Replay Sprint 3 (post-consent) |
-| Storybook | Latest | ⚠️ Deferred | Sprint 2 for `ui/` only, not feature components |
-| Chromatic | Latest | ⚠️ Sprint 3 | After design stabilizes |
-| @fontsource | — | ❌ Replace | Switch to `next/font/local` (FLAG-10) |
-| Tremor | 3.x | ⚠️ Sprint 4 | Lazy-load, admin only |
+| Technology     | Version | Verdict                    | Notes                                                                                   |
+| -------------- | ------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| Next.js        | 15.3    | ✅ Keep                    | PPR incremental, Turbopack, React Compiler                                              |
+| React          | 19.1    | ✅ Keep                    | Server Components, use() hook                                                           |
+| TypeScript     | 5.7     | ✅ Keep                    | Strict mode enabled                                                                     |
+| Tailwind CSS   | 4.1     | ⚠️ Keep + fallback         | Pin ≥4.1, keep CSS var approach for v3.4 rollback                                       |
+| Zustand        | 5       | ✅ Keep                    | 4 stores: auth (refactored), app-mode, sidebar, filters + 2 new: onboarding, processing |
+| TanStack Query | 5       | ✅ Keep                    | Orval-generated hooks exclusively                                                       |
+| Orval          | 7       | ✅ Keep                    | `orval --check` in CI, never commit generated files                                     |
+| Clerk          | ^6.12   | ✅ Keep                    | Sole auth source, AuthSync pattern                                                      |
+| Recharts       | 2.15    | ⚠️ Keep for complex charts | Custom SVG for hero gauge (see §3.3)                                                    |
+| Vitest         | 3.2     | ✅ Keep                    | jsdom, v8 coverage                                                                      |
+| Playwright     | 1.50    | ✅ Keep                    | Dual-mode E2E                                                                           |
+| MSW            | 2.7     | ✅ Keep                    | Demo mode + test mode                                                                   |
+| Sentry         | Latest  | ✅ Keep                    | Error tracking Sprint 1, Replay Sprint 3 (post-consent)                                 |
+| Storybook      | Latest  | ⚠️ Deferred                | Sprint 2 for `ui/` only, not feature components                                         |
+| Chromatic      | Latest  | ⚠️ Sprint 3                | After design stabilizes                                                                 |
+| @fontsource    | —       | ❌ Replace                 | Switch to `next/font/local` (FLAG-10)                                                   |
+| Tremor         | 3.x     | ⚠️ Sprint 4                | Lazy-load, admin only                                                                   |
 
 ---
 
@@ -286,20 +297,20 @@ const decoder = new TextDecoder();
 
 Computed contrast ratios (verified programmatically):
 
-| Color | Hex | On White | On #162A38 | Usage |
-|-------|-----|----------|------------|-------|
-| `--primary` | `#00ACC1` | **2.74:1 ❌** | — | Backgrounds, decorative, large text ≥18px only |
-| `--primary-text` | `#00838F` | **4.52:1 ✅ AA** | — | **All text on light backgrounds** |
-| `--primary` (dark) | `#4DD0E1` | — | **8.03:1 ✅ AAA** | Text on dark backgrounds |
+| Color              | Hex       | On White         | On #162A38        | Usage                                          |
+| ------------------ | --------- | ---------------- | ----------------- | ---------------------------------------------- |
+| `--primary`        | `#00ACC1` | **2.74:1 ❌**    | —                 | Backgrounds, decorative, large text ≥18px only |
+| `--primary-text`   | `#00838F` | **4.52:1 ✅ AA** | —                 | **All text on light backgrounds**              |
+| `--primary` (dark) | `#4DD0E1` | —                | **8.03:1 ✅ AAA** | Text on dark backgrounds                       |
 
 Updated `globals.css`:
 
 ```css
 @layer base {
   :root {
-    --primary: oklch(0.56 0.12 195);           /* #00ACC1 — bg, decorative, large text */
-    --primary-foreground: oklch(1 0 0);         /* white on primary bg */
-    --primary-text: oklch(0.42 0.10 195);       /* #00838F — ALL text on light bg */
+    --primary: oklch(0.56 0.12 195); /* #00ACC1 — bg, decorative, large text */
+    --primary-foreground: oklch(1 0 0); /* white on primary bg */
+    --primary-text: oklch(0.42 0.1 195); /* #00838F — ALL text on light bg */
 
     /* ... rest unchanged from TDD ... */
   }
@@ -321,6 +332,7 @@ ESLint rule to flag `text-primary` usage on light backgrounds (Sprint 2).
 ### 2.2 Font Loading Fix (FLAG-10)
 
 Remove from `globals.css`:
+
 ```css
 /* ❌ DELETE these lines */
 @import "@fontsource-variable/inter";
@@ -328,6 +340,7 @@ Remove from `globals.css`:
 ```
 
 Replace in `layout.tsx`:
+
 ```typescript
 // src/app/layout.tsx
 import localFont from 'next/font/local';
@@ -376,52 +389,70 @@ Triple encoding confirmed accessible by 9/10 verifiers:
 
 ### 3.1 Store Inventory (6 Stores Total)
 
-| Store | Purpose | Persistence | Sprint |
-|-------|---------|-------------|--------|
-| `useAuthStore` | Clerk token cache (read-only except AuthSync) | None | 1 |
-| `useAppModeStore` | Demo/production toggle | None (env-derived) | 1 |
-| `useSidebarStore` | Sidebar state + width | `localStorage` | 1 |
-| `useFilterStore` | Alert severity/category/search filters | `sessionStorage` (FLAG-30) | 1 (no persist), 3 (add persist) |
-| `useOnboardingStore` | 4-step onboarding progress | `localStorage` | 2 |
-| `useProcessingStore` | SSE processing state per project (FLAG-22) | None (transient) | 2 |
+| Store                | Purpose                                       | Persistence                | Sprint                          |
+| -------------------- | --------------------------------------------- | -------------------------- | ------------------------------- |
+| `useAuthStore`       | Clerk token cache (read-only except AuthSync) | None                       | 1                               |
+| `useAppModeStore`    | Demo/production toggle                        | None (env-derived)         | 1                               |
+| `useSidebarStore`    | Sidebar state + width                         | `localStorage`             | 1                               |
+| `useFilterStore`     | Alert severity/category/search filters        | `sessionStorage` (FLAG-30) | 1 (no persist), 3 (add persist) |
+| `useOnboardingStore` | 4-step onboarding progress                    | `localStorage`             | 2                               |
+| `useProcessingStore` | SSE processing state per project (FLAG-22)    | None (transient)           | 2                               |
 
 ```typescript
 // src/stores/processing.ts — NEW (FLAG-22)
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
 
 interface ProcessingState {
-  activeJobs: Record<string, {
-    stages: ProcessingStage[];
-    progress: number;
-    complete: boolean;
-    score?: number;
-    fallbackToPolling: boolean;
-  }>;
-  update: (projectId: string, data: Partial<ProcessingState['activeJobs'][string]> | { stage: ProcessingStage }) => void;
+  activeJobs: Record<
+    string,
+    {
+      stages: ProcessingStage[];
+      progress: number;
+      complete: boolean;
+      score?: number;
+      fallbackToPolling: boolean;
+    }
+  >;
+  update: (
+    projectId: string,
+    data:
+      | Partial<ProcessingState["activeJobs"][string]>
+      | { stage: ProcessingStage },
+  ) => void;
   clear: (projectId: string) => void;
 }
 
 export const useProcessingStore = create<ProcessingState>()(
-  devtools((set) => ({
-    activeJobs: {},
-    update: (projectId, data) => set((state) => ({
-      activeJobs: {
-        ...state.activeJobs,
-        [projectId]: {
-          ...state.activeJobs[projectId],
-          ...(('stage' in data) ? {
-            stages: [...(state.activeJobs[projectId]?.stages ?? []), data.stage],
-            progress: data.stage.progress,
-          } : data),
-        },
-      },
-    })),
-    clear: (projectId) => set((state) => {
-      const { [projectId]: _, ...rest } = state.activeJobs;
-      return { activeJobs: rest };
+  devtools(
+    (set) => ({
+      activeJobs: {},
+      update: (projectId, data) =>
+        set((state) => ({
+          activeJobs: {
+            ...state.activeJobs,
+            [projectId]: {
+              ...state.activeJobs[projectId],
+              ...("stage" in data
+                ? {
+                    stages: [
+                      ...(state.activeJobs[projectId]?.stages ?? []),
+                      data.stage,
+                    ],
+                    progress: data.stage.progress,
+                  }
+                : data),
+            },
+          },
+        })),
+      clear: (projectId) =>
+        set((state) => {
+          const { [projectId]: _, ...rest } = state.activeJobs;
+          return { activeJobs: rest };
+        }),
     }),
-  }), { name: 'c2pro-processing' })
+    { name: "c2pro-processing" },
+  ),
 );
 ```
 
@@ -445,6 +476,7 @@ ZUSTAND (Client State)              TANSTACK QUERY (Server State)
 ```
 
 ESLint custom rule (`eslint-plugin-c2pro`):
+
 ```javascript
 // Flag: Zustand store receiving TanStack Query data
 // Pattern: useXxxStore(s => s.set(useQueryResult.data))
@@ -455,17 +487,17 @@ ESLint custom rule (`eslint-plugin-c2pro`):
 
 ```typescript
 // src/lib/query-client.ts
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient } from "@tanstack/react-query";
 
 export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60_000,           // 1 minute
-        gcTime: 5 * 60_000,          // 5 minutes
+        staleTime: 60_000, // 1 minute
+        gcTime: 5 * 60_000, // 5 minutes
         retry: 2,
         retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
-        refetchOnWindowFocus: false,  // Opt-in per query (FLAG-23)
+        refetchOnWindowFocus: false, // Opt-in per query (FLAG-23)
         refetchOnReconnect: true,
       },
       mutations: {
@@ -477,12 +509,13 @@ export function createQueryClient() {
 ```
 
 **Coherence dashboard override** (solves FLAG-25 staleTime race):
+
 ```typescript
 // In Orval override config or wrapper hook:
 useGetCoherenceDashboard(projectId, {
-  staleTime: 30_000,           // Shorter for the most important view
-  refetchOnMount: 'always',    // Always fresh on navigation
-  refetchOnWindowFocus: true,  // Cross-tab freshness (FLAG-23)
+  staleTime: 30_000, // Shorter for the most important view
+  refetchOnMount: "always", // Always fresh on navigation
+  refetchOnWindowFocus: true, // Cross-tab freshness (FLAG-23)
 });
 ```
 
@@ -492,14 +525,14 @@ useGetCoherenceDashboard(projectId, {
 
 ### 4.1 Bundle Budgets (Gzipped)
 
-| Route | Budget | Strategy | Change from TDD |
-|-------|--------|----------|----------------|
-| Shared JS (framework) | ≤ 90 KB | React Compiler tree-shaking | Unchanged |
-| Dashboard (coherence) | ≤ **80 KB** | Custom SVG gauge + ScoreCards | ↑ from 50KB (FLAG-9) |
-| Evidence Viewer | ≤ 120 KB | PDF viewer `next/dynamic ssr:false` | Unchanged |
-| Alert Review | ≤ 60 KB | Server Component + client table | New |
-| Admin | ≤ 100 KB | Tremor lazy, admin-only chunk | ↑ from 80KB (FLAG-24) |
-| Fonts | ≤ **40 KB** | `next/font/local` latin subset | ↓ from ~140KB (FLAG-10) |
+| Route                 | Budget      | Strategy                            | Change from TDD         |
+| --------------------- | ----------- | ----------------------------------- | ----------------------- |
+| Shared JS (framework) | ≤ 90 KB     | React Compiler tree-shaking         | Unchanged               |
+| Dashboard (coherence) | ≤ **80 KB** | Custom SVG gauge + ScoreCards       | ↑ from 50KB (FLAG-9)    |
+| Evidence Viewer       | ≤ 120 KB    | PDF viewer `next/dynamic ssr:false` | Unchanged               |
+| Alert Review          | ≤ 60 KB     | Server Component + client table     | New                     |
+| Admin                 | ≤ 100 KB    | Tremor lazy, admin-only chunk       | ↑ from 80KB (FLAG-24)   |
+| Fonts                 | ≤ **40 KB** | `next/font/local` latin subset      | ↓ from ~140KB (FLAG-10) |
 
 ### 4.2 Hero Gauge — Custom SVG (FLAG-9 Resolution)
 
@@ -507,22 +540,32 @@ The CoherenceGauge is the hero metric. Recharts `RadialBarChart` adds ~50-65KB g
 
 ```tsx
 // src/components/features/coherence/CoherenceGauge.tsx
-'use client';
+"use client";
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
 interface CoherenceGaugeProps {
-  score: number;       // 0-100
+  score: number; // 0-100
   label?: string;
-  size?: number;       // px, default 200
+  size?: number; // px, default 200
   strokeWidth?: number; // px, default 12
 }
 
-export function CoherenceGauge({ score, label = 'Coherence Score', size = 200, strokeWidth = 12 }: CoherenceGaugeProps) {
+export function CoherenceGauge({
+  score,
+  label = "Coherence Score",
+  size = 200,
+  strokeWidth = 12,
+}: CoherenceGaugeProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = ((100 - score) / 100) * circumference;
-  const color = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--error)';
+  const color =
+    score >= 80
+      ? "var(--success)"
+      : score >= 60
+        ? "var(--warning)"
+        : "var(--error)";
 
   return (
     <figure className="flex flex-col items-center gap-2">
@@ -535,13 +578,21 @@ export function CoherenceGauge({ score, label = 'Coherence Score', size = 200, s
       >
         {/* Background track */}
         <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none" stroke="var(--muted)" strokeWidth={strokeWidth}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--muted)"
+          strokeWidth={strokeWidth}
         />
         {/* Score arc */}
         <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none" stroke={color} strokeWidth={strokeWidth}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={progress}
           strokeLinecap="round"
@@ -550,8 +601,10 @@ export function CoherenceGauge({ score, label = 'Coherence Score', size = 200, s
         />
         {/* Score text */}
         <text
-          x="50%" y="50%"
-          textAnchor="middle" dominantBaseline="central"
+          x="50%"
+          y="50%"
+          textAnchor="middle"
+          dominantBaseline="central"
           className="fill-foreground font-mono text-4xl font-bold tabular-nums"
         >
           {score}
@@ -564,6 +617,7 @@ export function CoherenceGauge({ score, label = 'Coherence Score', size = 200, s
 ```
 
 **Recharts is KEPT** for complex charts (StakeholderMap scatter, admin dashboards) where it's lazy-loaded:
+
 ```typescript
 const StakeholderChart = dynamic(
   () => import('./StakeholderScatter').then(m => m.StakeholderScatter),
@@ -573,16 +627,17 @@ const StakeholderChart = dynamic(
 
 ### 4.3 Lighthouse Targets
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| LCP | ≤ 2.5s | Coherence dashboard with 6 ScoreCards |
-| INP | ≤ 200ms | Weight slider drag interaction |
-| CLS | ≤ 0.1 | Page with skeleton → content swap |
-| FCP | ≤ 1.8s | First paint after login redirect |
-| TTFB | ≤ 800ms | PPR static shell delivery |
-| TBT | ≤ 200ms | Main thread during hydration |
+| Metric | Target  | Measurement                           |
+| ------ | ------- | ------------------------------------- |
+| LCP    | ≤ 2.5s  | Coherence dashboard with 6 ScoreCards |
+| INP    | ≤ 200ms | Weight slider drag interaction        |
+| CLS    | ≤ 0.1   | Page with skeleton → content swap     |
+| FCP    | ≤ 1.8s  | First paint after login redirect      |
+| TTFB   | ≤ 800ms | PPR static shell delivery             |
+| TBT    | ≤ 200ms | Main thread during hydration          |
 
 **CI enforcement** (Sprint 2):
+
 ```bash
 # .github/workflows/ci.yml
 - name: Bundle analysis
@@ -652,7 +707,7 @@ export function RequirePermission({ permission, children, fallback = null }: {
 
 ```tsx
 // Use hashed short ID instead of raw email
-const watermarkText = `${user.publicMetadata.shortId} · ${format(new Date(), 'yyyy-MM-dd HH:mm')}`;
+const watermarkText = `${user.publicMetadata.shortId} · ${format(new Date(), "yyyy-MM-dd HH:mm")}`;
 // Maps to real email only in backend audit logs
 ```
 
@@ -660,29 +715,32 @@ const watermarkText = `${user.publicMetadata.shortId} · ${format(new Date(), 'y
 
 ```typescript
 // src/components/layout/CookieConsent.tsx — Sprint 3
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
-type ConsentLevel = 'essential' | 'analytics';
+type ConsentLevel = "essential" | "analytics";
 
 export function CookieConsent() {
-  const [consent, setConsent] = useState<ConsentLevel[]>(['essential']);
+  const [consent, setConsent] = useState<ConsentLevel[]>(["essential"]);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('c2pro-consent');
-    if (!stored) { setVisible(true); return; }
+    const stored = localStorage.getItem("c2pro-consent");
+    if (!stored) {
+      setVisible(true);
+      return;
+    }
     const parsed = JSON.parse(stored) as ConsentLevel[];
     setConsent(parsed);
-    if (parsed.includes('analytics')) initSentryReplay();
+    if (parsed.includes("analytics")) initSentryReplay();
   }, []);
 
   const accept = (levels: ConsentLevel[]) => {
-    localStorage.setItem('c2pro-consent', JSON.stringify(levels));
+    localStorage.setItem("c2pro-consent", JSON.stringify(levels));
     setConsent(levels);
     setVisible(false);
-    if (levels.includes('analytics')) initSentryReplay();
+    if (levels.includes("analytics")) initSentryReplay();
   };
 
   if (!visible) return null;
@@ -691,7 +749,7 @@ export function CookieConsent() {
 
 function initSentryReplay() {
   // Dynamically import and initialize Sentry Replay ONLY after consent
-  import('@sentry/nextjs').then(Sentry => {
+  import("@sentry/nextjs").then((Sentry) => {
     Sentry.addIntegration(Sentry.replayIntegration());
   });
 }
@@ -739,7 +797,11 @@ function AlertReviewCenter() {
 
 ```tsx
 // Every chart component wraps with AccessibleChart
-function AccessibleChart({ data, label, children }: {
+function AccessibleChart({
+  data,
+  label,
+  children,
+}: {
   data: Array<{ name: string; value: number }>;
   label: string;
   children: React.ReactNode;
@@ -751,18 +813,30 @@ function AccessibleChart({ data, label, children }: {
         {showTable ? (
           <table>
             <caption className="sr-only">{label}</caption>
-            <thead><tr><th>Category</th><th>Score</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Score</th>
+              </tr>
+            </thead>
             <tbody>
-              {data.map(d => <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>)}
+              {data.map((d) => (
+                <tr key={d.name}>
+                  <td>{d.name}</td>
+                  <td>{d.value}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        ) : children}
+        ) : (
+          children
+        )}
       </div>
       <button
-        onClick={() => setShowTable(s => !s)}
+        onClick={() => setShowTable((s) => !s)}
         className="mt-2 text-xs underline text-primary-text"
       >
-        {showTable ? 'Show chart' : 'Show as table'}
+        {showTable ? "Show chart" : "Show as table"}
       </button>
     </figure>
   );
@@ -776,12 +850,12 @@ Dense data tables: 24×24px with 8px spacing between targets.
 
 ### 6.4 A11y Pipeline
 
-| Tool | Sprint | Purpose |
-|------|--------|---------|
-| `eslint-plugin-jsx-a11y` | 1 | Static analysis on every commit |
-| `@axe-core/playwright` | 3 | Automated E2E a11y testing |
-| NVDA + VoiceOver manual | 4 | Screen reader verification |
-| `@storybook/addon-a11y` | 4 | Component-level a11y dev |
+| Tool                     | Sprint | Purpose                         |
+| ------------------------ | ------ | ------------------------------- |
+| `eslint-plugin-jsx-a11y` | 1      | Static analysis on every commit |
+| `@axe-core/playwright`   | 3      | Automated E2E a11y testing      |
+| NVDA + VoiceOver manual  | 4      | Screen reader verification      |
+| `@storybook/addon-a11y`  | 4      | Component-level a11y dev        |
 
 ---
 
@@ -862,46 +936,71 @@ Layer 3 — E2E (Playwright):
 
 ```typescript
 // src/mocks/handlers/custom/processing-stream.ts
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse } from "msw";
 
 export const processingStreamHandler = http.get(
-  '/api/v1/projects/:projectId/process/stream',
+  "/api/v1/projects/:projectId/process/stream",
   () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         const stages = [
-          { event: 'stage', data: { name: 'Extracting text', progress: 16, stage: 1 } },
-          { event: 'stage', data: { name: 'Identifying clauses', progress: 33, stage: 2 } },
-          { event: 'stage', data: { name: 'Cross-referencing', progress: 50, stage: 3 } },
-          { event: 'stage', data: { name: 'Detecting anomalies', progress: 66, stage: 4 } },
-          { event: 'stage', data: { name: 'Calculating weights', progress: 83, stage: 5 } },
-          { event: 'complete', data: { global_score: 78, documents_analyzed: 8 } },
+          {
+            event: "stage",
+            data: { name: "Extracting text", progress: 16, stage: 1 },
+          },
+          {
+            event: "stage",
+            data: { name: "Identifying clauses", progress: 33, stage: 2 },
+          },
+          {
+            event: "stage",
+            data: { name: "Cross-referencing", progress: 50, stage: 3 },
+          },
+          {
+            event: "stage",
+            data: { name: "Detecting anomalies", progress: 66, stage: 4 },
+          },
+          {
+            event: "stage",
+            data: { name: "Calculating weights", progress: 83, stage: 5 },
+          },
+          {
+            event: "complete",
+            data: { global_score: 78, documents_analyzed: 8 },
+          },
         ];
 
         for (const s of stages) {
-          await new Promise(r => setTimeout(r, 50)); // Fast in tests
-          controller.enqueue(encoder.encode(`event: ${s.event}\ndata: ${JSON.stringify(s.data)}\n\n`));
+          await new Promise((r) => setTimeout(r, 50)); // Fast in tests
+          controller.enqueue(
+            encoder.encode(
+              `event: ${s.event}\ndata: ${JSON.stringify(s.data)}\n\n`,
+            ),
+          );
         }
         controller.close();
       },
     });
 
     return new HttpResponse(stream, {
-      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+      },
     });
-  }
+  },
 );
 ```
 
 ### 7.5 Test Phasing (FLAG-28 — Realistic for Solo Developer)
 
-| Sprint | Unit | Integration | E2E | Total | Cumulative |
-|--------|------|-------------|-----|-------|------------|
-| 1 | 30 | 5 | 2 | **37** | 37 |
-| 2 | 35 | 12 | 4 | **51** | 88 |
-| 3 | 40 | 15 | 6 | **61** | 149 |
-| 4 | 27 | 10 | 6 | **43** | **192** |
+| Sprint | Unit | Integration | E2E | Total  | Cumulative |
+| ------ | ---- | ----------- | --- | ------ | ---------- |
+| 1      | 30   | 5           | 2   | **37** | 37         |
+| 2      | 35   | 12          | 4   | **51** | 88         |
+| 3      | 40   | 15          | 6   | **61** | 149        |
+| 4      | 27   | 10          | 6   | **43** | **192**    |
 
 **Sprint 1 priority tests:** Auth flow (5), app shell (5), project list (10), ScoreCard (5), Zustand stores (5), Orval codegen validation (2), E2E login + empty dashboard (2).
 
@@ -950,8 +1049,8 @@ Step 4: Guided Review → Highlight first alert, explain score
 const approveMutation = useMutation({
   mutationFn: postAlertApprove,
   onSettled: () => {
-    queryClient.invalidateQueries({ queryKey: ['coherence'] });
-    queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    queryClient.invalidateQueries({ queryKey: ["coherence"] });
+    queryClient.invalidateQueries({ queryKey: ["alerts"] });
   },
 });
 
@@ -959,8 +1058,8 @@ const approveMutation = useMutation({
 const undoMutation = useMutation({
   mutationFn: postAlertUndo,
   onSettled: () => {
-    queryClient.invalidateQueries({ queryKey: ['coherence'] }); // Same invalidation!
-    queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    queryClient.invalidateQueries({ queryKey: ["coherence"] }); // Same invalidation!
+    queryClient.invalidateQueries({ queryKey: ["alerts"] });
   },
 });
 ```
@@ -974,7 +1073,7 @@ Global indicator in sidebar when any project is processing:
 function ProcessingIndicator() {
   const activeJobs = useProcessingStore((s) => s.activeJobs);
   const jobCount = Object.keys(activeJobs).filter(
-    id => !activeJobs[id].complete
+    (id) => !activeJobs[id].complete,
   ).length;
 
   if (jobCount === 0) return null;
@@ -983,7 +1082,9 @@ function ProcessingIndicator() {
     <div className="mx-3 rounded-md bg-primary/10 p-2 text-xs">
       <div className="flex items-center gap-2">
         <Spinner className="h-3 w-3" />
-        <span>{jobCount} project{jobCount > 1 ? 's' : ''} processing</span>
+        <span>
+          {jobCount} project{jobCount > 1 ? "s" : ""} processing
+        </span>
       </div>
     </div>
   );
@@ -998,29 +1099,30 @@ function ProcessingIndicator() {
 
 **Goal:** `pnpm dev:demo` shows styled app shell with mock data. All critical flags resolved.
 
-| Day | Task | Flag Resolution | Deliverable |
-|-----|------|-----------------|-------------|
-| 1 | Next.js 15.3 + Turbopack init | — | `apps/web/` boots <2s |
-| 1 | `pnpm-workspace.yaml` + monorepo basics | FLAG-16 | Root config |
-| 2-3 | Tailwind v4 CSS-first + corrected tokens | **FLAG-8** | `--primary-text` token, all vars |
-| 3 | `next/font/local` Inter + JetBrains | **FLAG-10** | ~40KB fonts |
-| 4 | Shadcn/ui init (15 components) | — | Button, Card, Badge, Dialog... |
-| 5 | App shell (sidebar + header + breadcrumb) | — | Responsive layout |
-| 6 | Clerk auth + **AuthSync component** | **FLAG-1, FLAG-2** | Sole auth source |
-| 6 | Refactored `stores/auth.ts` | **FLAG-5** | No more `require()` |
-| 7 | Org-switch cache clear | **FLAG-4** | `queryClient.clear()` |
-| 7 | Zustand stores (app-mode, sidebar, filters) | — | 4 stores |
-| 8 | MSW v2 setup (browser + node + instrumentation) | — | Demo mode |
-| 8 | Orval config + first codegen | — | Generated hooks + mocks |
-| 9 | **Delete manual queryKeys**, use Orval-generated | **FLAG-21** | Single cache key source |
-| 9 | Test-utils with **Clerk mock** | **FLAG-26** | Shared test wrapper |
-| 9 | Document layer rules (Server vs Client) | **FLAG-6** | ADR-002 |
-| 10 | CI pipeline (typecheck + lint + test + orval --check) | **FLAG-11** (supersede old test plan) | Green CI |
-| 10 | Sentry error tracking (no Replay yet) | — | Error capture |
+| Day | Task                                                  | Flag Resolution                       | Deliverable                      |
+| --- | ----------------------------------------------------- | ------------------------------------- | -------------------------------- |
+| 1   | Next.js 15.3 + Turbopack init                         | —                                     | `apps/web/` boots <2s            |
+| 1   | `pnpm-workspace.yaml` + monorepo basics               | FLAG-16                               | Root config                      |
+| 2-3 | Tailwind v4 CSS-first + corrected tokens              | **FLAG-8**                            | `--primary-text` token, all vars |
+| 3   | `next/font/local` Inter + JetBrains                   | **FLAG-10**                           | ~40KB fonts                      |
+| 4   | Shadcn/ui init (15 components)                        | —                                     | Button, Card, Badge, Dialog...   |
+| 5   | App shell (sidebar + header + breadcrumb)             | —                                     | Responsive layout                |
+| 6   | Clerk auth + **AuthSync component**                   | **FLAG-1, FLAG-2**                    | Sole auth source                 |
+| 6   | Refactored `stores/auth.ts`                           | **FLAG-5**                            | No more `require()`              |
+| 7   | Org-switch cache clear                                | **FLAG-4**                            | `queryClient.clear()`            |
+| 7   | Zustand stores (app-mode, sidebar, filters)           | —                                     | 4 stores                         |
+| 8   | MSW v2 setup (browser + node + instrumentation)       | —                                     | Demo mode                        |
+| 8   | Orval config + first codegen                          | —                                     | Generated hooks + mocks          |
+| 9   | **Delete manual queryKeys**, use Orval-generated      | **FLAG-21**                           | Single cache key source          |
+| 9   | Test-utils with **Clerk mock**                        | **FLAG-26**                           | Shared test wrapper              |
+| 9   | Document layer rules (Server vs Client)               | **FLAG-6**                            | ADR-002                          |
+| 10  | CI pipeline (typecheck + lint + test + orval --check) | **FLAG-11** (supersede old test plan) | Green CI                         |
+| 10  | Sentry error tracking (no Replay yet)                 | —                                     | Error capture                    |
 
 **Sprint 1 Flag Resolution: 10 flags (FLAG-1, 2, 4, 5, 6, 8, 10, 11, 21, 26)**
 
 **Acceptance criteria:**
+
 - Login → empty dashboard with sidebar/header/demo banner
 - Auth works exclusively through Clerk → AuthSync → Zustand
 - `text-primary-text` used for all text on light backgrounds (2.74:1 → 4.52:1)
@@ -1034,25 +1136,26 @@ function ProcessingIndicator() {
 
 **Goal:** Project list and Coherence Dashboard render with real/mock data.
 
-| Day | Task | Flag Resolution | Deliverable |
-|-----|------|-----------------|-------------|
-| 1-2 | @mswjs/data seed models (8 entities) | — | Deterministic demo |
-| 2 | Custom MSW handlers (**SSE streaming**) | **FLAG-12** | Test-ready stream |
-| 3 | Orval CI check enforcement | — | Blocks merge on drift |
-| 3 | `useProcessingStore` (Zustand) | **FLAG-22** | Cross-page processing state |
-| 4-5 | Project list page (Server Component) | — | Tenant-filtered |
-| 5 | Project detail layout (7 tabs) | — | Tab navigation |
-| 6-7 | **Custom SVG CoherenceGauge** + 6 ScoreCards | **FLAG-9** | <80KB dashboard |
-| 8 | Weight adjuster (sliders, sum=100%) | — | PUT via Orval |
-| 8 | Optimistic update with weighted average | — | Instant feedback |
-| 9 | Document upload (drag-drop, PDF/XLSX/BC3) | — | Chunked upload |
-| 9 | **SSE processing stepper** + `withCredentials` | **FLAG-3** | Authenticated stream |
-| 10 | Bundle analyzer CI check | — | Budget enforcement |
-| 10 | Three-layer test strategy documented | **FLAG-13** | SC testing approach |
+| Day | Task                                           | Flag Resolution | Deliverable                 |
+| --- | ---------------------------------------------- | --------------- | --------------------------- |
+| 1-2 | @mswjs/data seed models (8 entities)           | —               | Deterministic demo          |
+| 2   | Custom MSW handlers (**SSE streaming**)        | **FLAG-12**     | Test-ready stream           |
+| 3   | Orval CI check enforcement                     | —               | Blocks merge on drift       |
+| 3   | `useProcessingStore` (Zustand)                 | **FLAG-22**     | Cross-page processing state |
+| 4-5 | Project list page (Server Component)           | —               | Tenant-filtered             |
+| 5   | Project detail layout (7 tabs)                 | —               | Tab navigation              |
+| 6-7 | **Custom SVG CoherenceGauge** + 6 ScoreCards   | **FLAG-9**      | <80KB dashboard             |
+| 8   | Weight adjuster (sliders, sum=100%)            | —               | PUT via Orval               |
+| 8   | Optimistic update with weighted average        | —               | Instant feedback            |
+| 9   | Document upload (drag-drop, PDF/XLSX/BC3)      | —               | Chunked upload              |
+| 9   | **SSE processing stepper** + `withCredentials` | **FLAG-3**      | Authenticated stream        |
+| 10  | Bundle analyzer CI check                       | —               | Budget enforcement          |
+| 10  | Three-layer test strategy documented           | **FLAG-13**     | SC testing approach         |
 
 **Sprint 2 Flag Resolution: 5 flags (FLAG-3, 9, 12, 13, 22)**
 
 **Acceptance criteria:**
+
 - Navigate → project → Coherence Score (animated SVG gauge) → adjust weights → upload → stepper
 - SSE stream authenticated via Clerk cookie
 - Processing visible from sidebar when navigating away
@@ -1065,26 +1168,27 @@ function ProcessingIndicator() {
 
 **Goal:** All P0 views functional. WCAG 2.2 audit pass 1. GDPR consent.
 
-| Day | Task | Flag Resolution | Deliverable |
-|-----|------|-----------------|-------------|
-| 1-3 | PDF renderer (lazy) + clause highlighting | — | ≤120KB |
-| 3 | **Mobile Evidence Viewer** (tab interface) | **FLAG-18** | Responsive |
-| 4 | Dynamic watermark (**pseudonymized ID**) | **FLAG-31** | No raw PII |
-| 5-6 | Alert Review Center + approve/reject modal | — | Full CRUD |
-| 6 | **Focus-scoped keyboard shortcuts** | **FLAG-7** | WCAG 2.1.4 |
-| 6 | **Undo pattern** with double invalidation | **FLAG-17** | Coherence stays fresh |
-| 7 | Severity badge (triple-encoded) | — | Color+shape+text |
-| 8 | Stakeholder Map + RACI Matrix | — | Scatter + grid |
-| 9 | Legal disclaimer modal (Gate 8) | — | Backend-persisted |
-| 9 | **Cookie consent banner** | **FLAG-14** | GDPR compliance |
-| 9 | `sessionStorage` persistence for filters | FLAG-30 | Preserved on refresh |
-| 10 | **Onboarding sample project** frontend | **FLAG-19** | Time-to-value <5min |
-| 10 | A11y audit pass 1 (axe-core) | — | Zero critical violations |
-| 10 | Responsive pass (tablet `@container`) | — | Tablet-friendly |
+| Day | Task                                       | Flag Resolution | Deliverable              |
+| --- | ------------------------------------------ | --------------- | ------------------------ |
+| 1-3 | PDF renderer (lazy) + clause highlighting  | —               | ≤120KB                   |
+| 3   | **Mobile Evidence Viewer** (tab interface) | **FLAG-18**     | Responsive               |
+| 4   | Dynamic watermark (**pseudonymized ID**)   | **FLAG-31**     | No raw PII               |
+| 5-6 | Alert Review Center + approve/reject modal | —               | Full CRUD                |
+| 6   | **Focus-scoped keyboard shortcuts**        | **FLAG-7**      | WCAG 2.1.4               |
+| 6   | **Undo pattern** with double invalidation  | **FLAG-17**     | Coherence stays fresh    |
+| 7   | Severity badge (triple-encoded)            | —               | Color+shape+text         |
+| 8   | Stakeholder Map + RACI Matrix              | —               | Scatter + grid           |
+| 9   | Legal disclaimer modal (Gate 8)            | —               | Backend-persisted        |
+| 9   | **Cookie consent banner**                  | **FLAG-14**     | GDPR compliance          |
+| 9   | `sessionStorage` persistence for filters   | FLAG-30         | Preserved on refresh     |
+| 10  | **Onboarding sample project** frontend     | **FLAG-19**     | Time-to-value <5min      |
+| 10  | A11y audit pass 1 (axe-core)               | —               | Zero critical violations |
+| 10  | Responsive pass (tablet `@container`)      | —               | Tablet-friendly          |
 
 **Sprint 3 Flag Resolution: 7 flags (FLAG-7, 14, 17, 18, 19, 30, 31)**
 
 **Acceptance criteria:**
+
 - Full flow: Dashboard → Evidence → PDF highlighting → alert approve → undo → RACI
 - Mobile Evidence Viewer works on 375px viewport
 - `axe-core` returns zero critical/serious violations
@@ -1097,20 +1201,20 @@ function ProcessingIndicator() {
 
 **Goal:** Production-ready. Admin portal. Performance targets met. WCAG verified.
 
-| Task | Flag Resolution | Deliverable |
-|------|-----------------|-------------|
-| Admin layout + Tremor (lazy-loaded) | FLAG-24 | Role-gated admin |
-| Tenant management, AI cost dashboard | — | Admin views |
-| Onboarding flow (4 steps, full) | — | Welcome→Upload→Process→Review |
-| Error boundaries (root → dashboard → feature) | — | Graceful degradation |
-| Loading skeletons (all pages, zero CLS) | — | Skeleton per component |
-| Performance optimization (Lighthouse ≥90) | — | Verified targets |
-| WCAG 2.2 full audit (NVDA + VoiceOver) | — | Manual SR testing |
-| E2E test suite (Playwright, dual-mode) | — | 15+ specs |
-| `refetchOnWindowFocus` for coherence/alerts | FLAG-23 | Cross-tab freshness |
-| Command palette scope definition | FLAG-29 | `Cmd+K` navigation |
-| OpenTelemetry + Sentry correlation | — | Frontend→backend traces |
-| Production deploy checklist | — | Env vars, CSP, headers |
+| Task                                          | Flag Resolution | Deliverable                   |
+| --------------------------------------------- | --------------- | ----------------------------- |
+| Admin layout + Tremor (lazy-loaded)           | FLAG-24         | Role-gated admin              |
+| Tenant management, AI cost dashboard          | —               | Admin views                   |
+| Onboarding flow (4 steps, full)               | —               | Welcome→Upload→Process→Review |
+| Error boundaries (root → dashboard → feature) | —               | Graceful degradation          |
+| Loading skeletons (all pages, zero CLS)       | —               | Skeleton per component        |
+| Performance optimization (Lighthouse ≥90)     | —               | Verified targets              |
+| WCAG 2.2 full audit (NVDA + VoiceOver)        | —               | Manual SR testing             |
+| E2E test suite (Playwright, dual-mode)        | —               | 15+ specs                     |
+| `refetchOnWindowFocus` for coherence/alerts   | FLAG-23         | Cross-tab freshness           |
+| Command palette scope definition              | FLAG-29         | `Cmd+K` navigation            |
+| OpenTelemetry + Sentry correlation            | —               | Frontend→backend traces       |
+| Production deploy checklist                   | —               | Env vars, CSP, headers        |
 
 **Sprint 4 Flag Resolution: remaining flags (23, 24, 29 + monitoring 15, 20, 25, 27)**
 
@@ -1120,31 +1224,31 @@ function ProcessingIndicator() {
 
 ### 10.1 State Desync Scenarios
 
-| Scenario | Detection | Mitigation |
-|----------|-----------|------------|
-| Clerk token expires, Zustand holds stale | AuthSync re-syncs every 50s. 401 interceptor calls `clear()`. | Automatic. Monitored via Sentry breadcrumb "auth-sync-expired". |
-| SSE completes but TanStack serves cached score | `refetchOnMount: 'always'` for coherence dashboard. SSE handler awaits `refetchQueries` before navigation. | Automatic per ADR-004. |
-| User opens Tab 2, approves alert, Tab 1 stale | Sprint 4: `refetchOnWindowFocus: true` for coherence + alerts. | Self-correcting on tab focus. |
-| Org switch leaves old tenant data in memory | `queryClient.clear()` in AuthSync on org change. | Automatic per ADR-001. |
-| Processing store shows stale progress after page refresh | Store has no persistence. On page mount, check `GET /api/v1/projects/{id}/processing/status`. | REST fallback + SSE reconnect. |
+| Scenario                                                 | Detection                                                                                                  | Mitigation                                                      |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Clerk token expires, Zustand holds stale                 | AuthSync re-syncs every 50s. 401 interceptor calls `clear()`.                                              | Automatic. Monitored via Sentry breadcrumb "auth-sync-expired". |
+| SSE completes but TanStack serves cached score           | `refetchOnMount: 'always'` for coherence dashboard. SSE handler awaits `refetchQueries` before navigation. | Automatic per ADR-004.                                          |
+| User opens Tab 2, approves alert, Tab 1 stale            | Sprint 4: `refetchOnWindowFocus: true` for coherence + alerts.                                             | Self-correcting on tab focus.                                   |
+| Org switch leaves old tenant data in memory              | `queryClient.clear()` in AuthSync on org change.                                                           | Automatic per ADR-001.                                          |
+| Processing store shows stale progress after page refresh | Store has no persistence. On page mount, check `GET /api/v1/projects/{id}/processing/status`.              | REST fallback + SSE reconnect.                                  |
 
 ### 10.2 UX Regression Risks
 
-| Risk | Trigger | Prevention |
-|------|---------|------------|
-| Score count-up animation breaks with custom gauge | Switching from Recharts to SVG | Count-up is CSS `transition-[stroke-dashoffset]` — test with `prefers-reduced-motion` |
-| Dark mode breaks chart colors | Inline hex in Recharts, missing CSS var in custom gauge | `useThemeColors()` hook + Chromatic snapshots in both themes |
-| Onboarding dead-ends if sample project API fails | Network error on `POST /api/v1/onboarding/sample-project` | Fallback: "Upload your own documents" CTA, don't block onboarding |
-| Legal disclaimer blocks navigation after session clear | Clerk session drops, disclaimer state lost | Re-check disclaimer via API on each authenticated load, not `localStorage` |
-| Filter reset frustrates power users | Page refresh clears complex filter sets | Sprint 3: `sessionStorage` persistence (FLAG-30) |
+| Risk                                                   | Trigger                                                   | Prevention                                                                            |
+| ------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Score count-up animation breaks with custom gauge      | Switching from Recharts to SVG                            | Count-up is CSS `transition-[stroke-dashoffset]` — test with `prefers-reduced-motion` |
+| Dark mode breaks chart colors                          | Inline hex in Recharts, missing CSS var in custom gauge   | `useThemeColors()` hook + Chromatic snapshots in both themes                          |
+| Onboarding dead-ends if sample project API fails       | Network error on `POST /api/v1/onboarding/sample-project` | Fallback: "Upload your own documents" CTA, don't block onboarding                     |
+| Legal disclaimer blocks navigation after session clear | Clerk session drops, disclaimer state lost                | Re-check disclaimer via API on each authenticated load, not `localStorage`            |
+| Filter reset frustrates power users                    | Page refresh clears complex filter sets                   | Sprint 3: `sessionStorage` persistence (FLAG-30)                                      |
 
 ### 10.3 Bundle Size Creep Prevention
 
-| Checkpoint | Where | Action |
-|------------|-------|--------|
-| PR-level | `next build && npx @next/bundle-analyzer` in CI | Hard fail if any route exceeds budget |
-| Weekly | Manual `npx depcheck` for unused deps | Remove dead dependencies |
-| Per-sprint | `importcost` VS Code extension for new imports | Catch heavy imports early |
+| Checkpoint   | Where                                                   | Action                                      |
+| ------------ | ------------------------------------------------------- | ------------------------------------------- |
+| PR-level     | `next build && npx @next/bundle-analyzer` in CI         | Hard fail if any route exceeds budget       |
+| Weekly       | Manual `npx depcheck` for unused deps                   | Remove dead dependencies                    |
+| Per-sprint   | `importcost` VS Code extension for new imports          | Catch heavy imports early                   |
 | Before merge | ESLint `no-restricted-imports` for known heavy packages | Block top-level Recharts/Tremor/PDF imports |
 
 ```javascript
@@ -1162,14 +1266,14 @@ rules: {
 
 ### 10.4 Browser/Device Edge Cases
 
-| Edge Case | Affected | Detection | Fix |
-|-----------|----------|-----------|-----|
-| Safari SSE drops after ~60s idle | Safari 16-17 | `source.readyState === CLOSED` in `setTimeout` | Fallback to polling (implemented in ADR-004) |
-| `oklch()` parse failure | Chrome <111, Firefox <113 | CSS `@supports not (color: oklch(0 0 0))` | Hex fallback in token layer (Tailwind v4 handles) |
-| PDF.js Web Worker blocked by CSP | All browsers if worker-src missing | Blank PDF viewer + console error | `worker-src blob: 'self'` in CSP (§5.1) |
-| iOS Safari viewport resize on keyboard show | iPhone | CLS spike when input focused | `height: 100dvh` instead of `100vh` in layout |
-| Pinch-zoom on PDF interferes with page zoom | Mobile Safari | Inadvertent page zoom | `touch-action: pan-x pan-y` on PDF container |
-| Zustand `persist` hydration mismatch (SSR) | All — Next.js SSR | Hydration warning in console | Use `onRehydrateStorage` callback, skip SSR for persisted values |
+| Edge Case                                   | Affected                           | Detection                                      | Fix                                                              |
+| ------------------------------------------- | ---------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
+| Safari SSE drops after ~60s idle            | Safari 16-17                       | `source.readyState === CLOSED` in `setTimeout` | Fallback to polling (implemented in ADR-004)                     |
+| `oklch()` parse failure                     | Chrome <111, Firefox <113          | CSS `@supports not (color: oklch(0 0 0))`      | Hex fallback in token layer (Tailwind v4 handles)                |
+| PDF.js Web Worker blocked by CSP            | All browsers if worker-src missing | Blank PDF viewer + console error               | `worker-src blob: 'self'` in CSP (§5.1)                          |
+| iOS Safari viewport resize on keyboard show | iPhone                             | CLS spike when input focused                   | `height: 100dvh` instead of `100vh` in layout                    |
+| Pinch-zoom on PDF interferes with page zoom | Mobile Safari                      | Inadvertent page zoom                          | `touch-action: pan-x pan-y` on PDF container                     |
+| Zustand `persist` hydration mismatch (SSR)  | All — Next.js SSR                  | Hydration warning in console                   | Use `onRehydrateStorage` callback, skip SSR for persisted values |
 
 ---
 
@@ -1178,32 +1282,32 @@ rules: {
 ```typescript
 // src/stores/app-mode.ts — Extended with feature flags
 export const useAppModeStore = create<{
-  mode: 'production' | 'demo';
+  mode: "production" | "demo";
   features: {
-    ppr: boolean;              // Partial Pre-Rendering
-    reactCompiler: boolean;    // React Compiler optimizations
-    sentryReplay: boolean;     // Sentry session replay (post-consent)
-    onboarding: boolean;       // 4-step onboarding flow
-    adminPortal: boolean;      // Admin portal access
-    commandPalette: boolean;   // Cmd+K command palette
-    keyboardShortcuts: boolean;// j/k/a/r shortcuts
+    ppr: boolean; // Partial Pre-Rendering
+    reactCompiler: boolean; // React Compiler optimizations
+    sentryReplay: boolean; // Sentry session replay (post-consent)
+    onboarding: boolean; // 4-step onboarding flow
+    adminPortal: boolean; // Admin portal access
+    commandPalette: boolean; // Cmd+K command palette
+    keyboardShortcuts: boolean; // j/k/a/r shortcuts
   };
   demoProjectId: string;
   showDemoBanner: boolean;
-}>()( /* ... */ );
+}>()(/* ... */);
 ```
 
 **Rollout schedule:**
 
-| Feature | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 |
-|---------|----------|----------|----------|----------|
-| PPR | ✅ ON (coherence only) | ✅ ON | ✅ ON | ✅ ON |
-| React Compiler | ✅ ON | ✅ ON (monitor) | ✅ ON | ✅ ON |
-| Sentry Replay | ❌ OFF | ❌ OFF | ✅ ON (post-consent) | ✅ ON |
-| Onboarding | ❌ OFF | ❌ OFF | ✅ ON (Beta) | ✅ ON |
-| Admin Portal | ❌ OFF | ❌ OFF | ❌ OFF | ✅ ON |
-| Command Palette | ❌ OFF | ❌ OFF | ❌ OFF | ✅ ON (Beta) |
-| Keyboard Shortcuts | ❌ OFF | ❌ OFF | ✅ ON (focus-scoped) | ✅ ON |
+| Feature            | Sprint 1               | Sprint 2        | Sprint 3             | Sprint 4     |
+| ------------------ | ---------------------- | --------------- | -------------------- | ------------ |
+| PPR                | ✅ ON (coherence only) | ✅ ON           | ✅ ON                | ✅ ON        |
+| React Compiler     | ✅ ON                  | ✅ ON (monitor) | ✅ ON                | ✅ ON        |
+| Sentry Replay      | ❌ OFF                 | ❌ OFF          | ✅ ON (post-consent) | ✅ ON        |
+| Onboarding         | ❌ OFF                 | ❌ OFF          | ✅ ON (Beta)         | ✅ ON        |
+| Admin Portal       | ❌ OFF                 | ❌ OFF          | ❌ OFF               | ✅ ON        |
+| Command Palette    | ❌ OFF                 | ❌ OFF          | ❌ OFF               | ✅ ON (Beta) |
+| Keyboard Shortcuts | ❌ OFF                 | ❌ OFF          | ✅ ON (focus-scoped) | ✅ ON        |
 
 ---
 
@@ -1299,25 +1403,25 @@ NEXT_PUBLIC_IS_DEMO=false
 
 ### 13.2 Production Checklist
 
-| Item | Status | Sprint | Owner |
-|------|--------|--------|-------|
-| CSP headers configured | ⬜ → ✅ | 1 | FE |
-| Security headers (X-Frame, X-Content-Type, Referrer) | ✅ | 1 | FE |
-| Sentry error tracking (no Replay) | ⬜ → ✅ | 1 | FE |
-| Environment variables validated at build | ⬜ → ✅ | 1 | FE |
-| `next/font/local` (no @fontsource) | ⬜ → ✅ | 1 | FE |
-| `--primary-text` contrast fix | ⬜ → ✅ | 1 | FE |
-| AuthSync pattern (no dual auth) | ⬜ → ✅ | 1 | FE |
-| Bundle size budgets enforced in CI | ⬜ → ✅ | 2 | FE |
-| SSE authentication (withCredentials) | ⬜ → ✅ | 2 | FE + BE |
-| Cookie consent (GDPR) | ⬜ → ✅ | 3 | FE |
-| Sentry Replay (post-consent only) | ⬜ → ✅ | 3 | FE |
-| WCAG 2.2 AA audit (automated + manual) | ⬜ → ✅ | 4 | FE |
-| Lighthouse ≥90 all routes | ⬜ → ✅ | 4 | FE |
-| E2E suite green (dual-mode) | ⬜ → ✅ | 4 | FE |
-| OpenTelemetry trace correlation | ⬜ → ✅ | 4 | FE + BE |
-| Source maps hidden from client | ✅ | 1 | FE |
-| Vercel preview deployments on PR | ⬜ → ✅ | 1 | DevOps |
+| Item                                                 | Status  | Sprint | Owner   |
+| ---------------------------------------------------- | ------- | ------ | ------- |
+| CSP headers configured                               | ⬜ → ✅ | 1      | FE      |
+| Security headers (X-Frame, X-Content-Type, Referrer) | ✅      | 1      | FE      |
+| Sentry error tracking (no Replay)                    | ⬜ → ✅ | 1      | FE      |
+| Environment variables validated at build             | ⬜ → ✅ | 1      | FE      |
+| `next/font/local` (no @fontsource)                   | ⬜ → ✅ | 1      | FE      |
+| `--primary-text` contrast fix                        | ⬜ → ✅ | 1      | FE      |
+| AuthSync pattern (no dual auth)                      | ⬜ → ✅ | 1      | FE      |
+| Bundle size budgets enforced in CI                   | ⬜ → ✅ | 2      | FE      |
+| SSE authentication (withCredentials)                 | ⬜ → ✅ | 2      | FE + BE |
+| Cookie consent (GDPR)                                | ⬜ → ✅ | 3      | FE      |
+| Sentry Replay (post-consent only)                    | ⬜ → ✅ | 3      | FE      |
+| WCAG 2.2 AA audit (automated + manual)               | ⬜ → ✅ | 4      | FE      |
+| Lighthouse ≥90 all routes                            | ⬜ → ✅ | 4      | FE      |
+| E2E suite green (dual-mode)                          | ⬜ → ✅ | 4      | FE      |
+| OpenTelemetry trace correlation                      | ⬜ → ✅ | 4      | FE + BE |
+| Source maps hidden from client                       | ✅      | 1      | FE      |
+| Vercel preview deployments on PR                     | ⬜ → ✅ | 1      | DevOps  |
 
 ---
 
@@ -1325,14 +1429,14 @@ NEXT_PUBLIC_IS_DEMO=false
 
 This Frontend Master Plan v1.0 **supersedes** the following sections and documents:
 
-| Document | Sections Superseded | Reason |
-|----------|-------------------|--------|
-| TDD v3.0 §2.2.1 | API Client (Axios interceptor) | AUTH redesign (FLAG-1, 2, 5) |
-| TDD v3.0 §2.3 | globals.css `@import` fonts | Replaced with `next/font/local` (FLAG-10) |
-| TDD v3.0 §2.3 | `--primary` color definition | Extended with `--primary-text` (FLAG-8) |
-| TDD v3.0 §7.3 | State boundary rules | `Auth token + tenant ID` moved from Zustand-owned to Clerk-synced |
-| TDD v3.0 §3 | Directory: `stores/auth.ts` | Refactored to sync-only cache |
-| `FRONTEND_TESTING_PLAN.md` | **Entire document** | Outdated (Next.js 14, custom JWT) — replaced by §7 (FLAG-11) |
+| Document                   | Sections Superseded            | Reason                                                            |
+| -------------------------- | ------------------------------ | ----------------------------------------------------------------- |
+| TDD v3.0 §2.2.1            | API Client (Axios interceptor) | AUTH redesign (FLAG-1, 2, 5)                                      |
+| TDD v3.0 §2.3              | globals.css `@import` fonts    | Replaced with `next/font/local` (FLAG-10)                         |
+| TDD v3.0 §2.3              | `--primary` color definition   | Extended with `--primary-text` (FLAG-8)                           |
+| TDD v3.0 §7.3              | State boundary rules           | `Auth token + tenant ID` moved from Zustand-owned to Clerk-synced |
+| TDD v3.0 §3                | Directory: `stores/auth.ts`    | Refactored to sync-only cache                                     |
+| `FRONTEND_TESTING_PLAN.md` | **Entire document**            | Outdated (Next.js 14, custom JWT) — replaced by §7 (FLAG-11)      |
 
 All other TDD v3.0 sections remain valid and are incorporated by reference.
 

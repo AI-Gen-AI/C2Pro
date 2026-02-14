@@ -50,5 +50,8 @@ jobs:
       - name: Unit and integration tests
         run: pnpm test
 
+      - name: E2E smoke tests
+        run: pnpm test:e2e
+
       - name: API generation drift check
         run: pnpm generate:api:check
