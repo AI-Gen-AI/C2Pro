@@ -1,5 +1,6 @@
 """
 I3 - Clause Extraction Domain Tests
+Test Suite ID: TS-I3-CLS-DOM-001
 
 Tests for ExtractedClause entity validation and contract tests.
 Refers to I3.3: Contract test - normalized clause schema.

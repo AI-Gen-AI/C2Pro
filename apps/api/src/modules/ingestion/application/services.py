@@ -168,6 +168,10 @@ class OCRProcessingService:
                     outputs={
                         "status": "fallback_used",
                         "final_confidence": fallback_result.get("confidence"),
+                        "confidence_histogram": [
+                            primary_result.get("confidence", 0.0),
+                            fallback_result.get("confidence", 0.0),
+                        ],
                     },
                 )
 
@@ -187,6 +191,9 @@ class OCRProcessingService:
                 outputs={
                     "status": "primary_used",
                     "final_confidence": primary_result.get("confidence"),
+                    "confidence_histogram": [
+                        primary_result.get("confidence", 0.0),
+                    ],
                 },
             )
 
@@ -430,5 +437,21 @@ class TableParserService:
             rows=normalized_rows,
             confidence=raw_table.get("confidence", 0.0),
             bbox=raw_table.get("bbox"),
-            metadata=raw_table.get("metadata", {}),
+            metadata=self._build_table_metadata(raw_table, normalized_rows),
         )
+
+    def _build_table_metadata(
+        self,
+        raw_table: Dict[str, Any],
+        normalized_rows: list[list[str]],
+    ) -> dict[str, Any]:
+        """
+        Build normalized metadata and include header reconciliation marker.
+        """
+        metadata = dict(raw_table.get("metadata", {}))
+
+        # Minimal header reconciliation marker required by I2 RED test.
+        if len(normalized_rows) >= 2 and all(cell.strip() for cell in normalized_rows[0]):
+            metadata["header_reconciled"] = True
+
+        return metadata

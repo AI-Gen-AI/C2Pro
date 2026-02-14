@@ -1,5 +1,6 @@
 """
 C2Pro - Increment I1: Canonical Ingestion Contract Tests
+Test Suite ID: TS-I1-CIC-001
 
 Phase 4: AI Core - TDD Implementation
 
@@ -56,6 +57,7 @@ def test_i1_chunk_contract_includes_all_required_fields():
     mock_version_id = uuid4()
     mock_bbox = [0.1, 0.2, 0.3, 0.4]
     mock_confidence = 0.95
+    mock_source_hash = "a1b2c3d4e5f6" * 5 + "a1b2"
 
     chunk_data = {
         "doc_id": mock_doc_id,
@@ -63,7 +65,7 @@ def test_i1_chunk_contract_includes_all_required_fields():
         "page": 1,
         "content": "This is a test chunk.",
         "bbox": mock_bbox,
-        "source_hash": "a1b2c3d4e5f6",
+        "source_hash": mock_source_hash,
         "confidence": mock_confidence,
         "metadata": {"key": "value"}
     }
@@ -81,7 +83,7 @@ def test_i1_chunk_contract_includes_all_required_fields():
     assert isinstance(chunk.bbox, list)
     assert chunk.bbox == mock_bbox
     assert isinstance(chunk.source_hash, str)
-    assert chunk.source_hash == "a1b2c3d4e5f6"
+    assert chunk.source_hash == mock_source_hash
     assert isinstance(chunk.confidence, float)
     assert chunk.confidence == mock_confidence
     assert isinstance(chunk.metadata, dict)
@@ -171,7 +173,7 @@ def test_i1_low_confidence_chunk_routes_to_manual_queue_conceptually():
         "page": 1,
         "content": "This text has low confidence.",
         "bbox": low_confidence_bbox,
-        "source_hash": "f6e5d4c3b2a1",
+        "source_hash": "f6e5d4c3b2a1" * 5 + "f6e5",
         "confidence": low_confidence,
         "metadata": {"needs_review": True} # Conceptual flag for routing
     }
@@ -180,3 +182,33 @@ def test_i1_low_confidence_chunk_routes_to_manual_queue_conceptually():
 
     assert chunk.confidence < 0.3 # Assert the low confidence
     assert chunk.metadata.get("needs_review") is True # This implies the routing system would act on this flag
+
+
+def test_i1_chunk_contract_rejects_non_sha256_source_hash():
+    """TS-I1-CIC-001 - RED: provenance source hash must be a 64-char SHA-256 hex string."""
+    with pytest.raises(ValidationError):
+        IngestionChunk(
+            doc_id=uuid4(),
+            version_id=uuid4(),
+            page=1,
+            content="Chunk content with invalid source hash.",
+            bbox=[0.1, 0.1, 0.9, 0.9],
+            source_hash="short_hash",
+            confidence=0.8,
+            metadata={"parser_backend": "mock_ocr"},
+        )
+
+
+def test_i1_chunk_contract_rejects_non_monotonic_bbox_coordinates():
+    """TS-I1-CIC-001 - RED: bbox must satisfy x1<x2 and y1<y2 for valid provenance geometry."""
+    with pytest.raises(ValidationError):
+        IngestionChunk(
+            doc_id=uuid4(),
+            version_id=uuid4(),
+            page=1,
+            content="Chunk content with malformed bbox.",
+            bbox=[0.9, 0.8, 0.2, 0.1],
+            source_hash="a" * 64,
+            confidence=0.8,
+            metadata={"parser_backend": "mock_ocr"},
+        )

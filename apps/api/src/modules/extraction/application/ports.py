@@ -208,9 +208,16 @@ class ClauseExtractionService:
                     chunk.doc_id, chunk.version_id, chunk.page
                 )
 
-                # Convert string UUIDs to UUID objects
-                if isinstance(item.get("clause_id"), str):
-                    item["clause_id"] = UUID(item["clause_id"])
+                # Ensure clause_id exists and is a UUID.
+                # If missing, generate a deterministic provenance ID from chunk + text.
+                clause_id_raw = item.get("clause_id")
+                if isinstance(clause_id_raw, str):
+                    item["clause_id"] = UUID(clause_id_raw)
+                elif clause_id_raw is None:
+                    item["clause_id"] = self._generate_clause_id(
+                        chunk_id=chunk_id,
+                        clause_text=item.get("text", ""),
+                    )
 
                 # Add provenance metadata
                 item["document_id"] = chunk.doc_id
@@ -233,13 +240,16 @@ class ClauseExtractionService:
 
                 # Step 5: Flag high-impact + ambiguous clauses for manual review
                 # Refers to I3.6: Human-in-the-loop checkpoints
-                if self._requires_manual_validation(clause):
+                manual_reason = self._manual_validation_reason(clause)
+                if manual_reason:
                     clause.metadata["requires_manual_validation"] = True
+                    clause.metadata["manual_validation_reason"] = manual_reason
                     logger.info(
                         "clause_flagged_for_manual_review",
                         clause_id=str(clause.clause_id),
                         confidence=clause.confidence,
                         ambiguity_flag=clause.ambiguity_flag,
+                        reason=manual_reason,
                         impact=clause.metadata.get("impact"),
                     )
 
@@ -310,15 +320,20 @@ class ClauseExtractionService:
         Returns:
             True if the clause requires manual validation
         """
+        return self._manual_validation_reason(clause) is not None
+
+    def _manual_validation_reason(self, clause: ExtractedClause) -> Optional[str]:
+        """Return explicit reason code when manual validation is required."""
         is_high_impact = clause.metadata.get("impact") == "high"
         is_ambiguous = clause.ambiguity_flag
 
-        # High-impact + ambiguous = requires manual validation
-        if is_high_impact and is_ambiguous:
-            return True
-
-        # Also flag very low confidence clauses
         if clause.confidence < self.low_confidence_threshold:
-            return True
+            return "low_confidence"
+        if is_high_impact and is_ambiguous:
+            return "high_impact_ambiguity"
+        return None
 
-        return False
+    def _generate_clause_id(self, chunk_id: UUID, clause_text: str) -> UUID:
+        """Generate deterministic clause provenance ID when LLM does not provide one."""
+        basis = f"{chunk_id}:{clause_text.strip()}"
+        return uuid5(NAMESPACE_DNS, basis)

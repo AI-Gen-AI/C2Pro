@@ -158,6 +158,32 @@ class ExtractedClause(BaseModel):
             )
         return v
 
+    @field_validator("actors", mode="before")
+    @classmethod
+    def normalize_actors(cls, value):
+        """
+        Normalize actor names by trimming whitespace, removing empties,
+        and deduplicating while preserving order.
+        """
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("actors must be a list of strings")
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for actor in value:
+            if actor is None:
+                continue
+            cleaned = str(actor).strip()
+            if not cleaned:
+                continue
+            if cleaned in seen:
+                continue
+            seen.add(cleaned)
+            normalized.append(cleaned)
+        return normalized
+
     model_config = {
         "frozen": False,
         "str_strip_whitespace": True,
