@@ -1,0 +1,5 @@
+"""
+C2Pro - Scoring Module
+Test Suite IDs: TS-I7-SCORE-DOM-001, TS-I7-SCORE-PROFILES-001, TS-I7-SCORE-SVC-001
+"""
+

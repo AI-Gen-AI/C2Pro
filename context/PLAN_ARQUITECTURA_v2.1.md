@@ -125,10 +125,11 @@ apps/api/src/
 | Anonymizer Service      | 🔄 En Progreso  | 75%      | Detección + Estrategias OK, falta audit + tests       |
 | Seguridad Multitenant   | 🔄 En Progreso  | 70%      | Middleware + Context OK, falta repo filters + RLS     |
 | Observabilidad Completa | 🔄 En Progreso  | 40%      |                                                       |
-| TDD Suites              | 🔄 En Progreso  | 93%      | 83/89 suites completadas (ver TDD Backlog v1.3)       |
+| TDD Suites              | 🔄 En Progreso  | 98%      | 87/89 suites completadas (ver TDD Backlog v1.4)       |
 | AI Pipeline (I1-I2)     | ✅ Completado   | 100%     | Ingestion contract + OCR/table reliability completados |
 | AI Pipeline (I3-I4)     | ✅ Completado   | 100%     | Clause extraction normalization + hybrid retrieval/rerank/gating completados |
 | AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados |
+| AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados |
 
 ---
 
@@ -1319,3 +1320,4 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 | Sec 3 / Phase 4    | AI Pipeline I1-I2 (Ingestion + OCR/Table) → ✅       | Cierre de Sprint 1 Core AI con suites TS-I1-CIC-001 y TS-I2-OCR-TBL-001 |
 | Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅      | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001 |
 | Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
+| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + TS-SEC-S4-001 |
