@@ -1,6 +1,6 @@
 # C2Pro - TDD Backlog Completo v1.0
 
-> **Versión:** 1.3  
+> **Versión:** 1.4  
 > **Fecha:** 2026-02-14  
 > **Última Actualización:** 2026-02-14  
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
@@ -1196,6 +1196,7 @@ ESTRATEGIA GREEN para este suite:
 | 1.1     | 2026-02-14 | Architecture Review Board | Actualización de estado S1 Core AI (I1/I2) en plan por sprints |
 | 1.2     | 2026-02-14 | Architecture Review Board | Actualización de estado S2 Core AI (I3/I4) + security gate assertions |
 | 1.3     | 2026-02-14 | Architecture Review Board | Actualización de estado S3 Core AI (I5/I6) + security assertions graph/coherence |
+| 1.4     | 2026-02-14 | Architecture Review Board | Actualización de estado S4 Core AI (I7/I8/I9) + security assertions scoring/wbs/procurement |
 
 ---
 
@@ -1239,6 +1240,11 @@ ESTRATEGIA GREEN para este suite:
 - [x] S2-11 - Three-layer SC test strategy — Implemented (FLAG-13 ADR + CI/E2E workflow guardrails)
 - [x] S2-12 - Sprint 2 test inventory gate (35 unit + 12 integration + 4 E2E) — Implemented (S2-12 scaffold suites + acceptance flow spec)
 
+### Sprint 3 (Frontend v4.0)
+
+- [x] S3-01 - PDF renderer (lazy) + clause highlighting — Implemented (PdfEvidenceViewer + highlight mapper/style/navigation + integration coverage)
+- [x] S3-02 - Mobile Evidence Viewer (tab interface) — Implemented (MobileEvidenceViewer tab shell + ARIA semantics + state continuity + integration coverage)
+
 ### Sprint 1 (Core AI Pipeline v4.0)
 
 - [x] TS-I1-CIC-001 - Canonical Ingestion Contract - [x] Implemented (Unit Tests & Domain Logic)
@@ -1255,3 +1261,10 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-I5-GRAPH-DOM-001 / TS-I5-GRAPH-APP-001 - Graph Schema + Relationship Integrity - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I6-COH-RULES-001 / TS-I6-COH-CONTRACT-001 / TS-I6-COH-SVC-001 - Coherence Rule Engine + Alert Contract - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-SEC-GRAPH-COH-001 - Security Assertions (referential validation, rules/scoring decoupling, High/Critical review flags) - [x] Implemented (Unit Tests & Domain Logic)
+
+### Sprint 4 (Core AI Pipeline v4.0)
+
+- [x] TS-I7-SCORE-DOM-001 / TS-I7-SCORE-PROFILES-001 / TS-I7-SCORE-SVC-001 - Risk Scoring + Coherence Score Aggregation - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I8-WBS-BOM-DOM-001 / TS-I8-WBS-BOM-APP-001 - WBS/BOM Generation Integrity + Traceability - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I9-PROC-DOM-001 / TS-I9-PROC-APP-001 - Procurement Planning Intelligence (lead-time/conflict deterministic logic) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-SEC-S4-001 - Security Assertions (no cross-tenant profile leakage, traceability enforcement, no high-impact bypass) - [x] Implemented (Unit Tests & Domain Logic)
