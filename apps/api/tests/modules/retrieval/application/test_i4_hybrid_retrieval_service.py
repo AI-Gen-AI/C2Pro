@@ -1,11 +1,16 @@
+"""
+I4 - Hybrid Retrieval Application Tests
+Test Suite ID: TS-I4-RAG-SVC-001
+"""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from typing import List, Dict, Any
-from uuid import UUID, uuid4
+from typing import Dict, Any
+from uuid import uuid4
 
 # Assuming these will be defined in the skeleton
-from apps.api.src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
-from apps.api.src.modules.retrieval.application.ports import (
+from src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
+from src.modules.retrieval.application.ports import (
     VectorStore, KeywordSearch, Reranker, RetrievalService, QueryRouter,
     LangSmithClientProtocol # Re-use protocol from I3 if in conftest, or define locally
 )
@@ -101,7 +106,6 @@ def mock_query_router():
     return mock
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Integration test for RAG service, will fail until RetrievalService is implemented.")
 async def test_i4_top_k_includes_expected_clause_and_evidence(
     mock_vector_store, mock_keyword_search, mock_reranker, mock_query_router
 ):
@@ -122,7 +126,6 @@ async def test_i4_top_k_includes_expected_clause_and_evidence(
     assert all(r.score > 0 for r in results) # Ensure scores are present and non-zero
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Negative test for retrieval, will fail if vector-only retrieval is used where keyword is needed.")
 async def test_i4_vector_only_retrieval_misses_exact_legal_language(
     mock_vector_store, mock_keyword_search, mock_reranker, mock_query_router
 ):
@@ -158,7 +161,6 @@ async def test_i4_vector_only_retrieval_misses_exact_legal_language(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Negative test for reranker, will fail if reranker is absent or non-deterministic.")
 async def test_i4_reranker_deterministcally_orders_results(
     mock_vector_store, mock_keyword_search, mock_reranker
 ):
@@ -197,7 +199,6 @@ async def test_i4_reranker_deterministcally_orders_results(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Eval test, will fail until RetrievalService implements recall/groundedness metrics conceptually.")
 async def test_i4_recall_at_5_threshold_met_conceptually(
     mock_vector_store, mock_keyword_search, mock_reranker, mock_query_router
 ):
@@ -229,7 +230,6 @@ async def test_i4_recall_at_5_threshold_met_conceptually(
     assert relevant_count >= 2 # Assuming 2 relevant clauses are expected in top-5
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Observability hook test, will fail until LangSmith logs retrieved IDs, rerank scores, and miss reasons.")
 async def test_i4_langsmith_logs_retrieved_ids_and_rerank_scores(
     mock_vector_store, mock_keyword_search, mock_reranker, mock_query_router, mock_langsmith_client
 ):
@@ -256,7 +256,6 @@ async def test_i4_langsmith_logs_retrieved_ids_and_rerank_scores(
     assert "miss_reasons" in logged_span["outputs"] # Expecting this field, even if empty
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Human-in-the-loop checkpoint, will fail until RetrievalService flags low evidence for review.")
 async def test_i4_evidence_threshold_failure_requires_reviewer(
     mock_vector_store, mock_keyword_search, mock_reranker, mock_query_router
 ):

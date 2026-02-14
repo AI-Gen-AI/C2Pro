@@ -15,8 +15,8 @@ import structlog
 from abc import ABC, abstractmethod
 from typing import Optional, Protocol, Any
 
-from apps.api.src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
-from apps.api.src.modules.retrieval.domain.services import QueryRouter
+from src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
+from src.modules.retrieval.domain.services import QueryRouter
 
 logger = structlog.get_logger(__name__)
 
@@ -288,6 +288,10 @@ class RetrievalService:
             initial_count=len(retrieved_results),
         )
         reranked_results = await self.reranker.rerank(retrieved_results, query)
+        reranked_results = self._validate_reranked_results(
+            original_results=retrieved_results,
+            reranked_results=reranked_results,
+        )
         reranked_scores = [
             {
                 "clause_id": str(r.clause_id) if r.clause_id else None,
@@ -350,3 +354,35 @@ class RetrievalService:
             )
 
         return final_results
+
+    def _result_identity(self, result: RetrievalResult) -> str:
+        """Build a stable identity key for retrieval/rerank integrity checks."""
+        if result.clause_id:
+            return f"clause:{result.clause_id}"
+        return f"doc:{result.doc_id}|version:{result.version_id}|text:{result.text}"
+
+    def _validate_reranked_results(
+        self,
+        original_results: list[RetrievalResult],
+        reranked_results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
+        """
+        Ensure reranker output only contains items from original retrieval results.
+
+        Rerankers should reorder candidates, not introduce synthetic/unseen items.
+        If invalid output is detected, fall back to original retrieval ordering.
+        """
+        original_ids = {self._result_identity(r) for r in original_results}
+        filtered: list[RetrievalResult] = [
+            r for r in reranked_results if self._result_identity(r) in original_ids
+        ]
+
+        if not filtered and original_results:
+            logger.warning(
+                "reranker_output_invalid_fallback_original",
+                original_count=len(original_results),
+                reranked_count=len(reranked_results),
+            )
+            return original_results
+
+        return filtered

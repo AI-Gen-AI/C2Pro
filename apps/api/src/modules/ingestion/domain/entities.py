@@ -14,6 +14,7 @@ Increment I2: OCR + Table Parsing Reliability
 from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
 from typing import Optional
+import re
 
 
 class IngestionChunk(BaseModel):
@@ -84,10 +85,23 @@ class IngestionChunk(BaseModel):
     @field_validator("bbox")
     @classmethod
     def validate_bbox_values(cls, v: list[float]) -> list[float]:
-        """Validate that bbox coordinates are normalized between 0 and 1."""
+        """Validate normalized coordinates and monotonic bbox geometry."""
         for coord in v:
             if not (0.0 <= coord <= 1.0):
                 raise ValueError(f"BBox coordinate {coord} must be between 0.0 and 1.0 (normalized)")
+
+        x1, y1, x2, y2 = v
+        if not (x1 < x2 and y1 < y2):
+            raise ValueError("BBox must satisfy x1 < x2 and y1 < y2")
+
+        return v
+
+    @field_validator("source_hash")
+    @classmethod
+    def validate_source_hash_sha256(cls, v: str) -> str:
+        """Validate source hash is a SHA-256 hex string."""
+        if not re.fullmatch(r"[a-fA-F0-9]{64}", v):
+            raise ValueError("source_hash must be a 64-character SHA-256 hex string")
         return v
 
     model_config = {

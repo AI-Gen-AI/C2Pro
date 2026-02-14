@@ -8,7 +8,7 @@ Increment I4: Hybrid RAG Retrieval Correctness
 """
 
 import structlog
-from apps.api.src.modules.retrieval.domain.entities import QueryIntent
+from src.modules.retrieval.domain.entities import QueryIntent
 
 logger = structlog.get_logger(__name__)
 

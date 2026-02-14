@@ -1,5 +1,6 @@
 """
 I3 - Clause Extraction Service Tests
+Test Suite ID: TS-I3-CLS-SVC-001
 
 Integration and observability tests for ClauseExtractionService.
 Refers to I3.2: Integration tests - extraction preserves clause IDs and obligation actors.
@@ -100,7 +101,7 @@ def mock_ingestion_chunks() -> list[IngestionChunk]:
             page=1,
             content="1. The Contractor shall complete the work. 2. The Client shall pay invoice within 30 days.",
             bbox=[0, 0, 1, 1],
-            source_hash="hash1",
+            source_hash="a1b2c3d4e5f6" * 5 + "a1b2",
             confidence=0.99
         )
     ]
@@ -215,3 +216,62 @@ async def test_i3_ambiguous_high_impact_clauses_require_mandatory_validation(
     assert clause.metadata.get("impact") == "high"
     # The service's responsibility would be to add a "requires_manual_validation" flag
     assert clause.metadata.get("requires_manual_validation") is True
+
+
+@pytest.mark.asyncio
+async def test_i3_clause_normalization_trims_and_deduplicates_actors_red(
+    mock_llm_adapter, mock_ingestion_chunks
+):
+    """TS-I3-CLS-SVC-001 - RED: actors must be normalized (trimmed + deduplicated)."""
+    mock_llm_adapter.extract_structured_data.return_value = {
+        "clauses": [
+            {
+                "clause_id": str(uuid4()),
+                "text": "The Contractor and Client shall approve the change order.",
+                "type": "Approval Obligation",
+                "modality": "Shall",
+                "due_date": None,
+                "penalty_linkage": None,
+                "confidence": 0.9,
+                "ambiguity_flag": False,
+                "actors": [" Contractor ", "Client", "Client", ""],
+                "metadata": {},
+            }
+        ],
+        "prompt_version": "v1.0",
+    }
+
+    extraction_service = ClauseExtractionService(llm_adapter=mock_llm_adapter)
+    extracted = await extraction_service.extract_clauses(mock_ingestion_chunks)
+
+    assert extracted[0].actors == ["Contractor", "Client"]
+
+
+@pytest.mark.asyncio
+async def test_i3_low_confidence_manual_validation_includes_reason_red(
+    mock_llm_adapter, mock_ingestion_chunks
+):
+    """TS-I3-CLS-SVC-001 - RED: manual validation flag must include explicit reason code."""
+    mock_llm_adapter.extract_structured_data.return_value = {
+        "clauses": [
+            {
+                "clause_id": str(uuid4()),
+                "text": "The project might be delayed if market conditions change.",
+                "type": "Uncertainty",
+                "modality": "Might",
+                "due_date": None,
+                "penalty_linkage": None,
+                "confidence": 0.3,
+                "ambiguity_flag": True,
+                "actors": ["Contractor"],
+                "metadata": {},
+            }
+        ],
+        "prompt_version": "v1.0",
+    }
+
+    extraction_service = ClauseExtractionService(llm_adapter=mock_llm_adapter)
+    extracted = await extraction_service.extract_clauses(mock_ingestion_chunks)
+
+    assert extracted[0].metadata.get("requires_manual_validation") is True
+    assert extracted[0].metadata.get("manual_validation_reason") == "low_confidence"

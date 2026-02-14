@@ -1,5 +1,6 @@
 """
 C2Pro - Increment I2: OCR + Table Parsing Reliability Tests
+Test Suite ID: TS-I2-OCR-TBL-001
 
 Phase 4: AI Core - TDD Implementation
 
@@ -18,13 +19,14 @@ Refers to: PHASE4_TDD_IMPLEMENTATION_ROADMAP.md - I2
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from typing import List, Dict, Any
-from uuid import UUID, uuid4
+from unittest.mock import AsyncMock
+from typing import Dict, Any
+from uuid import uuid4
 
 # ✅ CORRECTED IMPORTS (pythonpath = ["src"] in pyproject.toml)
 from src.modules.ingestion.application.ports import OCRAdapter
-from src.modules.ingestion.domain.entities import TableData, IngestionError
+from src.modules.ingestion.application.services import OCRProcessingService, TableParserService
+from src.modules.ingestion.domain.entities import TableData
 
 # Mock LangSmith Client (copied from I1, or would be in conftest.py)
 class MockLangSmithClient:
@@ -79,41 +81,14 @@ def mock_fallback_ocr_adapter():
     return mock
 
 @pytest.fixture
-def mock_table_parser_service():
-    """Mock for a table parsing service."""
+def mock_table_extractor():
+    """Mock for a table extraction adapter used by TableParserService."""
     mock = AsyncMock()
     mock.extract_tables_from_pdf_page.return_value = [
-        TableData(rows=[["Header 1", "Header 2"], ["Data 1", "Data 2"]], confidence=0.9),
-        TableData(rows=[["Merged Cell", "Col 2"], ["Data 3", "Data 4"]], confidence=0.85)
+        {"rows": [["Header 1", "Header 2"], ["Data 1", "Data 2"]], "confidence": 0.9},
+        {"rows": [["Merged Cell", "Col 2"], ["Data 3", "Data 4"]], "confidence": 0.85},
     ]
     return mock
-
-# Assuming an OCR Processing Service that orchestrates OCR adapters
-# This service would be part of the application layer.
-# For red phase, we mock the service or directly test adapter interactions.
-class OCRProcessingService:
-    def __init__(self, primary_ocr: OCRAdapter, fallback_ocr: OCRAdapter, low_confidence_threshold: float = 0.5):
-        self.primary_ocr = primary_ocr
-        self.fallback_ocr = fallback_ocr
-        self.low_confidence_threshold = low_confidence_threshold
-
-    async def process_page_with_fallback(self, page_content: bytes, mock_langsmith: MockLangSmithClient = None):
-        primary_result = await self.primary_ocr.process_pdf_page(page_content)
-
-        if mock_langsmith:
-            span_name = "ocr_processing_with_fallback"
-            input_data = {"page_content_len": len(page_content), "primary_confidence": primary_result.get("confidence")}
-            span = mock_langsmith.start_span(span_name, input=input_data, run_type="chain", provider_choice=primary_result.get("provider"))
-
-        if primary_result.get("confidence", 0.0) < self.low_confidence_threshold:
-            fallback_result = await self.fallback_ocr.process_pdf_page(page_content)
-            if mock_langsmith:
-                mock_langsmith.end_span(span, outputs={"status": "fallback_used", "final_confidence": fallback_result.get("confidence")})
-            return fallback_result
-
-        if mock_langsmith:
-            mock_langsmith.end_span(span, outputs={"status": "primary_used", "final_confidence": primary_result.get("confidence")})
-        return primary_result
 
 @pytest.mark.asyncio
 async def test_i2_scanned_pdf_returns_text_bbox_confidence(mock_primary_ocr_adapter, mock_scanned_pdf_bytes):
@@ -135,10 +110,11 @@ async def test_i2_scanned_pdf_returns_text_bbox_confidence(mock_primary_ocr_adap
     assert 0.0 <= result["confidence"] <= 1.0
 
 @pytest.mark.asyncio
-async def test_i2_table_extraction_preserves_row_column_counts(mock_table_parser_service):
+async def test_i2_table_extraction_preserves_row_column_counts(mock_table_extractor):
     """Refers to I2.2: Integration test - table extraction preserves row/column counts on fixture tables."""
     mock_pdf_page_with_table = b"mock_pdf_content_with_table"
-    tables = await mock_table_parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_table)
+    parser_service = TableParserService(table_extractor=mock_table_extractor, low_confidence_threshold=0.5)
+    tables = await parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_table)
 
     assert isinstance(tables, list)
     assert len(tables) > 0
@@ -172,18 +148,18 @@ async def test_i2_ocr_fallback_engages_on_low_confidence(mock_primary_ocr_adapte
     assert result["confidence"] > mock_primary_ocr_adapter.process_pdf_page.return_value["confidence"]
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Negative test, will fail until table normalization rules prevent incorrect cell collapsing.")
-async def test_i2_table_parser_does_not_collapse_merged_cells_incorrectly(mock_table_parser_service):
+async def test_i2_table_parser_does_not_collapse_merged_cells_incorrectly(mock_table_extractor):
     """Refers to I2.2: Expected failure - Table parser collapses merged cells incorrectly."""
     # This test expects the table parser to correctly handle merged cells.
     # We configure the mock to simulate an incorrect collapse, and the assertion should fail initially.
     # The actual implementation should then correct this.
-    mock_table_parser_service.extract_tables_from_pdf_page.return_value = [
-        TableData(rows=[["Col1", "Col2"], ["Merged Cell Data", "Data B"]], confidence=0.9)
+    mock_table_extractor.extract_tables_from_pdf_page.return_value = [
+        {"rows": [["Col1", "Col2"], ["Merged Cell Data"]], "confidence": 0.9}
     ]
 
     mock_pdf_page_with_complex_table = b"mock_pdf_content_with_merged_cells"
-    tables = await mock_table_parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_complex_table)
+    parser_service = TableParserService(table_extractor=mock_table_extractor, low_confidence_threshold=0.5)
+    tables = await parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_complex_table)
 
     assert isinstance(tables, list)
     assert len(tables) == 1
@@ -196,11 +172,10 @@ async def test_i2_table_parser_does_not_collapse_merged_cells_incorrectly(mock_t
     assert tables[0].rows[0][1] == "Col2"
     assert len(tables[0].rows[1]) == 2
     assert tables[0].rows[1][0] == "Merged Cell Data" # Should be extracted as full content
-    assert tables[0].rows[1][1] == "Data B"
+    assert tables[0].rows[1][1] == ""
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Observability hook test, will fail until LangSmith integration logs provider choice.")
 async def test_i2_ocr_provider_choice_logged_to_langsmith(mock_primary_ocr_adapter, mock_fallback_ocr_adapter, mock_scanned_pdf_bytes, mock_langsmith_client):
     """Refers to I2.5: Observability hooks (LangSmith) - Log OCR provider choice, confidence histograms, table extraction score."""
     # Configure primary OCR to return low confidence to force fallback
@@ -223,22 +198,47 @@ async def test_i2_ocr_provider_choice_logged_to_langsmith(mock_primary_ocr_adapt
     assert logged_span["outputs"]["final_confidence"] == mock_fallback_ocr_adapter.process_pdf_page.return_value["confidence"]
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Human-in-the-loop checkpoint test, will fail until table normalization flags low confidence reconstructions.")
-async def test_i2_low_confidence_table_routes_to_human_review_conceptually(mock_table_parser_service):
+async def test_i2_low_confidence_table_routes_to_human_review_conceptually(mock_table_extractor):
     """Refers to I2.6: Human-in-the-loop checkpoints - Reviewer confirms low-confidence table reconstructions."""
     # Configure mock table parser to return a low confidence table
-    mock_table_parser_service.extract_tables_from_pdf_page.return_value = [
-        TableData(
-            rows=[["Item", "Value"], ["Product A", "100"]],
-            confidence=0.3, # Low confidence
-            metadata={"needs_human_review": True, "reason": "low_table_confidence"}
-        )
+    mock_table_extractor.extract_tables_from_pdf_page.return_value = [
+        {
+            "rows": [["Item", "Value"], ["Product A", "100"]],
+            "confidence": 0.3,
+            "metadata": {},
+        }
     ]
 
     mock_pdf_page_with_low_conf_table = b"mock_pdf_content_with_low_conf_table"
-    tables = await mock_table_parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_low_conf_table)
+    parser_service = TableParserService(table_extractor=mock_table_extractor, low_confidence_threshold=0.5)
+    tables = await parser_service.extract_tables_from_pdf_page(mock_pdf_page_with_low_conf_table)
 
     assert len(tables) == 1
     assert tables[0].confidence < 0.5
     assert tables[0].metadata.get("needs_human_review") is True
     assert tables[0].metadata.get("reason") == "low_table_confidence"
+
+
+@pytest.mark.asyncio
+async def test_i2_table_parser_reconciles_header_metadata_red(mock_table_extractor):
+    """TS-I2-OCR-TBL-001 - RED: normalized tables should mark reconciled header metadata."""
+    mock_table_extractor.extract_tables_from_pdf_page.return_value = [
+        {"rows": [["Item", "Qty"], ["Rebar", "500"]], "confidence": 0.92, "metadata": {}}
+    ]
+    parser_service = TableParserService(table_extractor=mock_table_extractor, low_confidence_threshold=0.5)
+
+    tables = await parser_service.extract_tables_from_pdf_page(b"table-with-header")
+    assert tables[0].metadata.get("header_reconciled") is True
+
+
+@pytest.mark.asyncio
+async def test_i2_ocr_logs_confidence_histogram_red(
+    mock_primary_ocr_adapter, mock_fallback_ocr_adapter, mock_scanned_pdf_bytes, mock_langsmith_client
+):
+    """TS-I2-OCR-TBL-001 - RED: OCR span should include confidence histogram output for observability."""
+    ocr_service = OCRProcessingService(mock_primary_ocr_adapter, mock_fallback_ocr_adapter, low_confidence_threshold=0.5)
+    await ocr_service.process_page_with_fallback(mock_scanned_pdf_bytes, mock_langsmith_client)
+
+    ocr_spans = mock_langsmith_client.get_spans_by_name("ocr_processing_with_fallback")
+    assert len(ocr_spans) == 1
+    assert "confidence_histogram" in ocr_spans[0]["outputs"]
