@@ -1,9 +1,16 @@
 # C2Pro — Phase 4 TDD Implementation Roadmap
 
+> **Versión:** 1.1  
+> **Fecha Original:** 2026-02-01  
+> **Última Actualización:** 2026-02-14  
+> **Estado:** EN EJECUCIÓN — Increments I1-I10 en implementación activa
+
 ## Purpose
-This roadmap converts the approved AI Master Plan into an incremental, test-first delivery plan for C2Pro’s AI core.
+
+This roadmap converts the approved AI Master Plan into an incremental, test-first delivery plan for C2Pro's AI core.
 
 It enforces:
+
 - strict TDD (fail -> pass -> refactor)
 - traceability from each capability to tests
 - mandatory human-in-the-loop controls
@@ -12,29 +19,54 @@ It enforces:
 
 ---
 
+## Implementation Status (2026-02-14)
+
+| Increment | Capability                   | Status           | Test Suite Location                         |
+| --------- | ---------------------------- | ---------------- | ------------------------------------------- |
+| **I1**    | Canonical Ingestion Contract | ✅ Tests written | `tests/` root + `apps/api/tests/modules/`   |
+| **I2**    | OCR + Table Parsing          | ✅ Tests written | `tests/` root                               |
+| **I3**    | Clause Extraction            | ✅ Tests written | `tests/` root                               |
+| **I4**    | Hybrid RAG Retrieval         | ✅ Tests written | `apps/api/tests/modules/retrieval/`         |
+| **I5**    | Graph RAG Schema             | ✅ Tests written | `tests/` root                               |
+| **I6**    | Coherence Rule Engine        | ✅ Tests written | `tests/` root + `apps/api/tests/coherence/` |
+| **I7**    | Risk Scoring                 | ✅ Tests written | `tests/` root                               |
+| **I8**    | WBS/BOM Generation           | ✅ Tests written | `tests/` root                               |
+| **I9**    | Procurement Intelligence     | ✅ Tests written | `tests/` root                               |
+| **I10**   | Stakeholder + RACI           | ✅ Tests written | `tests/` root                               |
+| **I11**   | Human-in-the-Loop            | ✅ Tests written | `tests/` root                               |
+| **I12**   | LangSmith Observability      | ✅ Tests written | `tests/` root                               |
+| **I13**   | E2E Decision Support         | ✅ Tests written | `tests/` root                               |
+| **I14**   | Governance/Safety            | ✅ Tests written | `tests/` root                               |
+
+> **Note:** All 14 increment test files exist. Implementation (Green Phase) status varies.  
+> See `TEST_SUITE_REPORT.md` for file path details.
+
+---
+
 ## Master Plan Traceability Matrix
 
-| Capability (AI Master Plan) | Primary Test Suites | Increment(s) |
-|---|---|---|
-| Document ingestion + normalization | ingestion unit/integration/contract tests | I1, I2 |
-| Clause extraction + obligation normalization | extraction unit/integration/eval tests | I3 |
-| Hybrid RAG retrieval | retrieval unit/integration/eval tests | I4 |
-| Graph RAG schema + relationships | graph schema + relationship tests | I5 |
-| Contract vs reality coherence checks | coherence rule tests + integration tests | I6 |
-| Risk scoring + Coherence Score | scoring unit/integration tests | I7 |
-| WBS/BOM generation | generation unit/integration/eval tests | I8 |
-| Procurement intelligence | planning tests | I9 |
-| Stakeholder + RACI intelligence | stakeholder and mapping tests | I10 |
-| Human-in-the-loop validation | review queue + SLA tests | I11 |
-| LangSmith observability + drift | trace + evaluation tests | I12 |
-| End-to-end explainable decision support | E2E scenario tests | I13 |
-| Governance/safety/legal safeguards | policy tests (hallucination/source/confidence/disclaimer) | I14 |
+| Capability (AI Master Plan)                  | Primary Test Suites                                       | Increment(s) |
+| -------------------------------------------- | --------------------------------------------------------- | ------------ |
+| Document ingestion + normalization           | ingestion unit/integration/contract tests                 | I1, I2       |
+| Clause extraction + obligation normalization | extraction unit/integration/eval tests                    | I3           |
+| Hybrid RAG retrieval                         | retrieval unit/integration/eval tests                     | I4           |
+| Graph RAG schema + relationships             | graph schema + relationship tests                         | I5           |
+| Contract vs reality coherence checks         | coherence rule tests + integration tests                  | I6           |
+| Risk scoring + Coherence Score               | scoring unit/integration tests                            | I7           |
+| WBS/BOM generation                           | generation unit/integration/eval tests                    | I8           |
+| Procurement intelligence                     | planning tests                                            | I9           |
+| Stakeholder + RACI intelligence              | stakeholder and mapping tests                             | I10          |
+| Human-in-the-loop validation                 | review queue + SLA tests                                  | I11          |
+| LangSmith observability + drift              | trace + evaluation tests                                  | I12          |
+| End-to-end explainable decision support      | E2E scenario tests                                        | I13          |
+| Governance/safety/legal safeguards           | policy tests (hallucination/source/confidence/disclaimer) | I14          |
 
 ---
 
 ## TDD Increments
 
 ## I1 — Canonical Ingestion Contract
+
 1. **Tests to write first**
    - Contract test: each chunk must include `doc_id`, `version_id`, `page`, `bbox`, `source_hash`, `confidence`.
    - Unit test: blank pages produce zero chunks.
@@ -53,6 +85,7 @@ It enforces:
    - Route ingestion failures or low OCR confidence docs to manual preprocessing queue.
 
 ## I2 — OCR + Table Parsing Reliability
+
 1. **Tests to write first**
    - Integration test: scanned PDF returns text + bbox + confidence.
    - Integration test: table extraction preserves row/column counts on fixture tables.
@@ -71,6 +104,7 @@ It enforces:
    - Reviewer confirms low-confidence table reconstructions.
 
 ## I3 — Clause Extraction + Normalization
+
 1. **Tests to write first**
    - Unit test: clause boundary detection with numbered and nested clauses.
    - Integration test: extraction preserves clause IDs and obligation actors.
@@ -89,6 +123,7 @@ It enforces:
    - Mandatory validation for ambiguous/high-impact clauses.
 
 ## I4 — Hybrid RAG Retrieval Correctness
+
 1. **Tests to write first**
    - Unit test: query router selects retrieval strategy by intent.
    - Integration test: top-k includes expected clause and evidence chunk.
@@ -107,6 +142,7 @@ It enforces:
    - If evidence threshold fails, require reviewer before downstream decision output.
 
 ## I5 — Graph Schema + Relationship Integrity
+
 1. **Tests to write first**
    - Unit test: valid node/edge creation for Clause→Obligation→WBS→BOM→Cost→Stakeholder.
    - Unit test: duplicate edge behavior (merge or reject) is explicit.
@@ -125,6 +161,7 @@ It enforces:
    - Review queue for high-impact broken linkages (e.g., payment milestone disconnected).
 
 ## I6 — Coherence Rule Engine (Contract vs Reality)
+
 1. **Tests to write first**
    - Unit tests for schedule mismatch, budget mismatch, execution variance, scope-procurement mismatch.
    - Integration test: neutral result when required data missing.
@@ -142,6 +179,7 @@ It enforces:
    - Review flagged critical coherence conflicts.
 
 ## I7 — Risk Scoring + Coherence Score Aggregation
+
 1. **Tests to write first**
    - Unit tests for weighted score aggregation and severity mapping.
    - Unit tests for tenant/project specific score profiles.
@@ -159,6 +197,7 @@ It enforces:
    - High-severity risk clusters require explicit reviewer acknowledgment.
 
 ## I8 — WBS/BOM Generation
+
 1. **Tests to write first**
    - Unit tests for WBS node validity and BOM unit normalization.
    - Integration test: doc set -> WBS/BOM candidates with confidence.
@@ -177,6 +216,7 @@ It enforces:
    - Engineering reviewer approves generated WBS/BOM before publication.
 
 ## I9 — Procurement Planning Intelligence
+
 1. **Tests to write first**
    - Unit tests for lead-time calculations (calendar + business-day variants).
    - Integration test: BOM + vendor data -> procurement plan.
@@ -194,6 +234,7 @@ It enforces:
    - Procurement lead approves fallback-derived plan lines.
 
 ## I10 — Stakeholder Resolution + RACI Inference
+
 1. **Tests to write first**
    - Unit tests for stakeholder entity resolution and canonical IDs.
    - Unit tests for RACI role constraints (single accountable rule by task).
@@ -212,6 +253,7 @@ It enforces:
    - PMO/legal operations validate ambiguous stakeholder mappings.
 
 ## I11 — Human-in-the-Loop Workflow Enforcement
+
 1. **Tests to write first**
    - Unit tests: confidence gate routing.
    - Integration tests: high-impact outputs blocked pending review.
@@ -229,6 +271,7 @@ It enforces:
    - Explicit `approved_by` and `approved_at` required for release.
 
 ## I12 — LangSmith Observability + Evaluation Harness
+
 1. **Tests to write first**
    - Unit tests for trace envelope completeness.
    - Integration tests for run creation + correlated step IDs.
@@ -246,6 +289,7 @@ It enforces:
    - Ops review for drift alerts before model/prompt rollout.
 
 ## I13 — End-to-End Decision Intelligence Flow
+
 1. **Tests to write first**
    - E2E: upload docs -> coherence score + risks + evidence links.
    - E2E: low-confidence or missing-source output cannot be finalized.
@@ -263,6 +307,7 @@ It enforces:
    - Final decision pack only generated after mandatory sign-off.
 
 ## I14 — Governance & Safety Hardening (Mandatory)
+
 1. **Tests to write first**
    - Hallucination detection test: claims without evidence must be blocked.
    - Missing source test: output without citation fails policy check.
@@ -285,7 +330,9 @@ It enforces:
 ---
 
 ## Mandatory Safety Test Pack (Cross-Cutting)
+
 These tests are non-optional and run in CI for every increment after I6:
+
 - Hallucination detection
 - Missing source rejection
 - Low-confidence gating
@@ -295,6 +342,7 @@ These tests are non-optional and run in CI for every increment after I6:
 ---
 
 ## Recommended Delivery Sequence
+
 1. I1-I3 foundation (ingestion + extraction)
 2. I4-I5 knowledge layer (retrieval + graph)
 3. I6-I7 reasoning core (rules + scoring)
@@ -305,7 +353,9 @@ These tests are non-optional and run in CI for every increment after I6:
 ---
 
 ## Definition of Done (Program Level)
+
 A capability is done only if:
+
 1. Failing tests were written first.
 2. Minimal implementation turns tests green.
 3. Refactor keeps tests green.
@@ -316,6 +366,7 @@ A capability is done only if:
 ---
 
 ## Legal Disclaimer Requirement (Always-On)
+
 All user-facing outputs must include:
 
 > "C2Pro provides AI-assisted project intelligence for operational decision support. It does not provide legal advice. All legal, contractual, and commercial conclusions require qualified human review and approval."
@@ -325,4 +376,5 @@ This is validated through automated tests in I14 and enforced through runtime po
 ---
 
 ## Next Step Prompt
+
 Do you want to start implementation with a specific vertical (**contracts, WBS, procurement, or end-to-end**), or generate the **full test backlog** first?

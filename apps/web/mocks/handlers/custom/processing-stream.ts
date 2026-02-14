@@ -1,8 +1,26 @@
+/**
+ * Test Suite ID: S2-10
+ * Roadmap Reference: S2-10 SSE processing stepper + withCredentials (FLAG-3)
+ */
 import { http, HttpResponse } from "msw";
 
 export const processingStreamHandler = http.get(
   "/api/v1/projects/:projectId/process/stream",
-  () => {
+  ({ request }) => {
+    const url = new URL(request.url);
+    const isChunked = url.searchParams.get("chunked") === "1";
+    const isInterrupted = url.searchParams.get("interrupt") === "1";
+
+    if (request.credentials === "omit") {
+      return HttpResponse.json(
+        {
+          code: "UNAUTHORIZED_STREAM",
+          detail: "Authenticated SSE session required",
+        },
+        { status: 401 },
+      );
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -15,10 +33,33 @@ export const processingStreamHandler = http.get(
           { event: "complete", data: { global_score: 78, documents_analyzed: 8 } },
         ];
 
-        for (const s of stages) {
+        const streamStages = isInterrupted
+          ? stages.filter((entry) => entry.event !== "complete").slice(0, 3)
+          : stages;
+
+        for (const s of streamStages) {
           await new Promise((r) => setTimeout(r, 50));
+          const frame = `event: ${s.event}\ndata: ${JSON.stringify(s.data)}\n\n`;
+
+          if (isChunked) {
+            const splitAt = Math.floor(frame.length / 2);
+            controller.enqueue(encoder.encode(frame.slice(0, splitAt)));
+            await new Promise((r) => setTimeout(r, 10));
+            controller.enqueue(encoder.encode(frame.slice(splitAt)));
+            continue;
+          }
+
+          controller.enqueue(encoder.encode(frame));
+        }
+
+        if (isInterrupted) {
           controller.enqueue(
-            encoder.encode(`event: ${s.event}\ndata: ${JSON.stringify(s.data)}\n\n`),
+            encoder.encode(
+              `event: error\ndata: ${JSON.stringify({
+                code: "STREAM_INTERRUPTED",
+                retryable: true,
+              })}\n\n`,
+            ),
           );
         }
         controller.close();
