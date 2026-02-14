@@ -228,3 +228,10 @@ interface CoherenceScoreDetail {
 2. Validar con usuario/stakeholder
 3. Desglosar en tickets de trabajo
 4. Comenzar implementación por fases
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

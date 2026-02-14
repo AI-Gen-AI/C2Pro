@@ -15,6 +15,7 @@ class AlertRepository(ABC):
     async def list_for_project(
         self,
         project_id: UUID,
+        tenant_id: UUID | None = None,
         severities: Optional[List[AlertSeverity]] = None,
         statuses: Optional[List[AlertStatus]] = None,
         category: Optional[str] = None,
@@ -24,11 +25,13 @@ class AlertRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_stats(self, project_id: UUID) -> dict[str, int]:
+    async def get_stats(self, project_id: UUID, tenant_id: UUID | None = None) -> dict[str, int]:
         ...
 
     @abstractmethod
-    async def get_by_id(self, alert_id: UUID) -> AlertRecord | None:
+    async def get_by_id(
+        self, alert_id: UUID, tenant_id: UUID | None = None
+    ) -> AlertRecord | None:
         ...
 
     @abstractmethod
@@ -40,7 +43,7 @@ class AlertRepository(ABC):
         ...
 
     @abstractmethod
-    async def delete(self, alert_id: UUID) -> bool:
+    async def delete(self, alert_id: UUID, tenant_id: UUID | None = None) -> bool:
         ...
 
     @abstractmethod

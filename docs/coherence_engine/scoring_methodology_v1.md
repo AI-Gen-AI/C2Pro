@@ -100,3 +100,10 @@ Estos pesos fueron validados contra un dataset de 20 proyectos reales, logrando 
     *   Una vez lograda la alineación, la configuración actual de pesos se considera la versión calibrada del modelo de score.
 
 Este proceso garantiza que el Coherence Score sea una medida robusta y significativa de la coherencia del proyecto, que puede ser utilizada para la toma de decisiones.
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

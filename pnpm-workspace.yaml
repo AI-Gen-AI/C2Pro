@@ -1,2 +1,11 @@
 packages:
-  - "apps/*"
+  - apps/*
+
+ignoredBuiltDependencies:
+  - '@clerk/shared'
+  - '@swc/core'
+  - esbuild
+  - msw
+  - sharp
+  - supabase
+  - unrs-resolver

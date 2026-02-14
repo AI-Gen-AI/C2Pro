@@ -405,3 +405,10 @@ pytest tests/security/test_jwt_validation.py::test_protected_endpoint_with_missi
 **Por:** Claude Sonnet 4.5
 **Sprint:** Security Foundation - Semana 1
 **Estado:** 🟢 Exitoso con limitaciones de infraestructura
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

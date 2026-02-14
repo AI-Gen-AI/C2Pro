@@ -17,8 +17,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Importar Base y todos los modelos
+# --- C2Pro: Import all ORM models for autogenerate ---
 from src.core.database import Base
+from src.projects.adapters.persistence.models import *
+from src.documents.adapters.persistence.models import *
+# Agrega aquí futuros modelos ORM para que Alembic los detecte
+# from src.analysis.adapters.persistence.models import *
+# ----------------------------------------------------
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))

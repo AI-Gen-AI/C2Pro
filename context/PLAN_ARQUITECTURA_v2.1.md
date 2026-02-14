@@ -1112,6 +1112,7 @@ El sistema requiere aceptación explícita de términos de uso antes de acceder:
 | ADR-005 | Cloudflare R2 para Storage | Aprobado | 2026-01-28 |
 | ADR-006 | Coherence Engine v2 con 6 Categorías | Draft | 2026-01-31 |
 | ADR-007 | MCP Gateway Security Model | Pendiente | - |
+| ADR-008 | Reglas de Capa Frontend (Server vs Client Components) | Aprobado | 2026-02-12 |
 
 ### 15.2 Tareas de Documentación
 

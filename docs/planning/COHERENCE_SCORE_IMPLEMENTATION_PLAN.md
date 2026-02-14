@@ -546,3 +546,10 @@ FASE 1 (Modelos) → FASE 2 (Reglas) → FASE 3 (Scoring)
 - Continuar con backend completo
 
 ¿Cuál prefieres?
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

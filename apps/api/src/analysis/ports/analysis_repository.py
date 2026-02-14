@@ -17,11 +17,13 @@ class IAnalysisRepository(ABC):
         ...
 
     @abstractmethod
-    async def list_recent(self, *, limit: int, offset: int) -> list[AnalysisRecord]:
+    async def list_recent(
+        self, *, limit: int, offset: int, tenant_id: UUID | None = None
+    ) -> list[AnalysisRecord]:
         ...
 
     @abstractmethod
-    async def count_all(self) -> int:
+    async def count_all(self, tenant_id: UUID | None = None) -> int:
         ...
 
     @abstractmethod

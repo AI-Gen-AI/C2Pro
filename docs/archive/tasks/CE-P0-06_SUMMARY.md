@@ -390,3 +390,10 @@ mkdir evidence/staging_migration_$(date +%Y%m%d)
 **Last Updated**: 2026-01-08
 **Status**: Ready for team review
 **Next Review**: Before staging execution
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

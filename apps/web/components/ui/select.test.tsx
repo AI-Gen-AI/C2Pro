@@ -25,10 +25,10 @@ describe("Select", () => {
       </Select>,
     );
 
-    const trigger = screen.getByRole("button", { name: /project/i });
+    const trigger = screen.getByRole("combobox", { name: /project/i });
     await user.click(trigger);
 
-    const option = screen.getByRole("option", { name: /beta/i });
+    const option = await screen.findByRole("option", { name: /beta/i });
     await user.click(option);
 
     expect(screen.getByText("Beta")).toBeInTheDocument();

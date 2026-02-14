@@ -16,12 +16,20 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, stakeholder_id: UUID) -> Stakeholder | None:
+    async def get_by_id(
+        self, stakeholder_id: UUID, tenant_id: UUID | None = None
+    ) -> Stakeholder | None:
         """Retrieves a stakeholder by its ID."""
         pass
 
     @abstractmethod
-    async def get_stakeholders_by_project(self, project_id: UUID, skip: int = 0, limit: int = 100) -> Tuple[List[Stakeholder], int]:
+    async def get_stakeholders_by_project(
+        self,
+        project_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+        tenant_id: UUID | None = None,
+    ) -> Tuple[List[Stakeholder], int]:
         """Retrieves all stakeholders for a given project with pagination."""
         pass
 
@@ -31,7 +39,7 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
-    async def delete(self, stakeholder_id: UUID) -> None:
+    async def delete(self, stakeholder_id: UUID, tenant_id: UUID | None = None) -> None:
         """Deletes a stakeholder by its ID."""
         pass
 
@@ -41,13 +49,19 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_raci_assignments(self, project_id: UUID) -> List[RaciAssignment]:
+    async def list_raci_assignments(
+        self, project_id: UUID, tenant_id: UUID | None = None
+    ) -> List[RaciAssignment]:
         """Lists RACI assignments for a project."""
         pass
 
     @abstractmethod
     async def get_raci_assignment(
-        self, project_id: UUID, wbs_item_id: UUID, stakeholder_id: UUID
+        self,
+        project_id: UUID,
+        wbs_item_id: UUID,
+        stakeholder_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> RaciAssignment | None:
         """Retrieves a single RACI assignment by composite key."""
         pass
@@ -58,6 +72,7 @@ class IStakeholderRepository(ABC):
         project_id: UUID,
         wbs_item_id: UUID,
         exclude_stakeholder_id: UUID | None = None,
+        tenant_id: UUID | None = None,
     ) -> RaciAssignment | None:
         """Finds an existing ACCOUNTABLE assignment for a task."""
         pass

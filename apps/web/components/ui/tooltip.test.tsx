@@ -18,6 +18,8 @@ describe("Tooltip", () => {
     );
 
     await user.hover(screen.getByRole("button", { name: /info/i }));
-    expect(await screen.findByText("Details")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("tooltip", { name: /details/i }),
+    ).toBeInTheDocument();
   });
 });

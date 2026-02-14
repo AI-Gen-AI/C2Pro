@@ -33,7 +33,7 @@ describe("AppHeader", () => {
   it("renders breadcrumb navigation when provided", () => {
     renderWithProviders(<AppHeader breadcrumb={["Projects", "Alpha"]} />);
 
-    const nav = screen.getByRole("navigation");
+    const nav = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(nav).toHaveTextContent("Projects");
     expect(nav).toHaveTextContent("Alpha");
   });
@@ -53,6 +53,8 @@ describe("AppHeader", () => {
     expect(
       screen.getByRole("menuitem", { name: /view all notifications/i }),
     ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
 
     const userMenu = screen.getByRole("button", { name: /user menu/i });
     await user.click(userMenu);

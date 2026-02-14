@@ -122,3 +122,10 @@ Definir los puntos de integracion permitidos entre modulos. Cualquier uso cross-
 ## Cumplimiento
 - Cualquier import cross-modulo fuera de esta lista se considera **violacion**.
 - Validar con `rg` y actualizar este documento al introducir un nuevo contrato publico.
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Added metadata block during repository-wide docs format pass.

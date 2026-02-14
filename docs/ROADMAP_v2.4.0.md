@@ -1964,7 +1964,7 @@ class AntiGamingPolicy:
 ### 15.2 Tests Críticos de Seguridad
 
 ```python
-# tests/security/test_tenant_isolation.py
+tests/security/test_tenant_isolation.py
 
 class TestTenantIsolation:
     """Tests CRÍTICOS de aislamiento multi-tenant"""
@@ -2000,7 +2000,7 @@ class TestTenantIsolation:
 ### 15.3 Tests de Trazabilidad
 
 ```python
-# tests/traceability/test_clause_fks.py
+tests/traceability/test_clause_fks.py
 
 class TestClauseTraceability:
     """Tests de trazabilidad legal (Gate 4)"""
@@ -2024,7 +2024,7 @@ class TestClauseTraceability:
 ### 15.4 Tests de Coherence Score
 
 ```python
-# tests/coherence/test_score.py
+tests/coherence/test_score.py
 
 class TestCoherenceScore:
     """Tests del Coherence Score (Gate 5)"""
@@ -2126,7 +2126,7 @@ deployment:
 ### 17.1 Catálogo de Reglas de Coherencia
 
 ```yaml
-# coherence_rules.yaml - Versión 1.0
+coherence_rules.yaml - Versión 1.0
 
 rules:
   - id: "R1"
@@ -2483,3 +2483,10 @@ golden_dataset:
 *Próxima revisión: Tras completar Sprint 0*
 
 </div>
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Normalized inline sample labels that were being interpreted as H1 headings by markdown linters.

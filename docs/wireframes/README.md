@@ -247,12 +247,19 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 
 ## Resources
 
-- [C2Pro Product Roadmap](../ROADMAP_v2.3.0.md)
-- [Sprint 1 Plan](../SPRINT_1_PLAN.md)
-- [Sprint 1 Completed](../SPRINT_1_COMPLETED.md)
+- [C2Pro Product Roadmap](../archive/roadmaps/ROADMAP_v2.3.0.md)
+- [Sprint 1 Plan](../archive/sprints/SPRINT_1_PLAN.md)
+- [Sprint 1 Completed](../archive/sprints/SPRINT_1_COMPLETED.md)
 - [Chronogram Master](../C2PRO_CRONOGRAMA_MAESTRO_v1.0.csv)
 
 ---
 
 **Status:** ✅ Complete - All 6 core view wireframes documented
 **Ready for:** Frontend development (Sprint 2-4)
+
+---
+
+Last Updated: 2026-02-13
+
+Changelog:
+- 2026-02-13: Fixed broken links to roadmap and sprint documents moved to `docs/archive/`.

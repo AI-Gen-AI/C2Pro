@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
-import { Toast, ToastDescription, ToastTitle } from "./toast";
+import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "./toast";
 
 describe("Toast", () => {
   it("renders title and description", () => {
     renderWithProviders(
-      <Toast>
-        <ToastTitle>Saved</ToastTitle>
-        <ToastDescription>Changes applied</ToastDescription>
-      </Toast>,
+      <ToastProvider>
+        <Toast>
+          <ToastTitle>Saved</ToastTitle>
+          <ToastDescription>Changes applied</ToastDescription>
+        </Toast>
+        <ToastViewport />
+      </ToastProvider>,
     );
 
     expect(screen.getByText("Saved")).toBeInTheDocument();
