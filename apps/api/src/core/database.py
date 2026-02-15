@@ -11,7 +11,8 @@ from uuid import UUID
 
 import structlog
 from fastapi import Request  # Import Request
-from sqlalchemy import text
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -34,6 +35,29 @@ class Base(DeclarativeBase):
 # Engine global
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+@event.listens_for(Engine, "connect")
+def _initialize_tenant_guc(dbapi_connection, connection_record) -> None:
+    """
+    Ensure PostgreSQL custom GUC exists on every new DB connection.
+
+    This keeps `SHOW app.current_tenant` available across sessions and enables
+    deterministic RLS context checks in tests and runtime diagnostics.
+    """
+    try:
+        # sqlite doesn't support custom GUC; skip silently.
+        if settings.database_url.startswith("sqlite"):
+            return
+
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SET SESSION app.current_tenant = ''")
+        finally:
+            cursor.close()
+    except Exception:
+        # Never block connection creation due to GUC bootstrap.
+        return
 
 
 async def init_db() -> None:

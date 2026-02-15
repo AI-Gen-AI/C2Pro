@@ -469,6 +469,10 @@ async def seeded_auth_context() -> dict[str, str]:
     )
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
+    _ensure_test_fk_stub_tables()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     async with session_factory() as session:
         tenant_result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
         tenant = tenant_result.scalar_one_or_none()
@@ -736,7 +740,7 @@ async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
     Creates an HTTP client for testing API endpoints.
     """
-    async def override_get_session(*args, **kwargs):
+    async def override_get_session():
         yield db
 
     app.dependency_overrides[get_session] = override_get_session

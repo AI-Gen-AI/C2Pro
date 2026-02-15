@@ -30,7 +30,7 @@ async def test_project(db: AsyncSession, test_tenant: Tenant) -> ProjectORM:
         id=uuid4(),
         tenant_id=test_tenant.id,
         name="Test Project",
-        project_code="TEST-001",
+        code="TEST-001",
         description="Test project for coherence repository",
     )
     db.add(project)

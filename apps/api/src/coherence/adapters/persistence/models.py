@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Index, Integer
+from sqlalchemy import DateTime, Index, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -61,7 +61,7 @@ class CoherenceResultORM(Base):
     # Gaming detection
     is_gaming_detected: Mapped[bool] = mapped_column(default=False)
     gaming_violations: Mapped[list[str]] = mapped_column(
-        ARRAY(PGUUID(as_uuid=False)), nullable=False, default=[]
+        ARRAY(String), nullable=False, default=[]
     )
     penalty_points: Mapped[int] = mapped_column(Integer, default=0)
 

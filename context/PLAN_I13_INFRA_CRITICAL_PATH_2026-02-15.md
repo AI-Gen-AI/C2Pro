@@ -139,6 +139,24 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 
 - **Acceptance:** Any engineer can bootstrap/run I13 real E2E from docs only.
 
+### WS-G: RLS GUC Contract Hardening (New)
+
+- **Owner:** `@qa-agent` + `@backend-tdd` + `@security-agent`
+- **Scope:** `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`, tenant context runtime wiring
+- **Tasks:**
+
+1. `RED` (`@qa-agent`):
+   - Add failing security tests for PostgreSQL tenant GUC contract (`app.current_tenant`) without skip fallback.
+   - Ensure missing GUC configuration fails explicitly instead of being masked.
+2. `GREEN` (`@backend-tdd`):
+   - Implement request-lifecycle tenant context set/reset in infra layer using PostgreSQL session config.
+   - Keep auth and tenant validation behavior unchanged.
+3. `REFACTOR` (`@backend-tdd` + `@security-agent`):
+   - Consolidate context handling in one infra utility.
+   - Verify safe telemetry/logging (no sensitive leakage) and deterministic behavior in local/CI.
+
+- **Acceptance:** No skip for GUC contract tests; failures are hard and actionable when GUC contract regresses.
+
 ## 4) Critical Path Sequence
 
 1. **CP-1:** WS-A migration repair.
@@ -147,6 +165,7 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 4. **CP-4:** WS-D route contract validation (404 remediation first).
 5. **CP-5:** WS-E CI gate activation.
 6. **CP-6:** WS-F documentation closure.
+7. **CP-7:** WS-G RLS GUC contract hardening.
 
 ## 5) Milestones
 
@@ -179,6 +198,7 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 4. Execute WS-D.1 to remove `404` blocker on `/api/v1/decision-intelligence/execute`.
 5. Add CI preflight + I13 real E2E job.
 6. Update tactical board checklist and runbook.
+7. Execute WS-G RED for `app.current_tenant` contract and unblock GREEN implementation.
 
 ---
 
@@ -186,3 +206,4 @@ Last Updated: 2026-02-15
 
 Changelog:
 - 2026-02-15: Added current-state checkpoint (401 resolved, 404 active blocker) and detailed WS-D.1 remediation plan for missing I13 route contract.
+- 2026-02-15: Added WS-G for PostgreSQL `app.current_tenant` GUC contract hardening (RED/GREEN/REFACTOR ownership and acceptance).
