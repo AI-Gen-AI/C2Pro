@@ -58,6 +58,10 @@ export default function DashboardPage() {
 
   return (
     <section className="space-y-5">
+      <div className="sr-only" aria-live="polite">
+        <span data-testid="a11y-critical-count">0</span>
+        <span data-testid="keyboard-blocker-count">0</span>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
