@@ -1,8 +1,8 @@
 # C2Pro - TDD Backlog Completo v1.0
 
-> **Versión:** 1.4  
+> **Versión:** 1.5  
 > **Fecha:** 2026-02-14  
-> **Última Actualización:** 2026-02-14  
+> **Última Actualización:** 2026-02-15  
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
 > **Metodología:** TDD Estricto (Red → Green (Fake It) → Refactor (Triangulation))
 
@@ -1197,6 +1197,7 @@ ESTRATEGIA GREEN para este suite:
 | 1.2     | 2026-02-14 | Architecture Review Board | Actualización de estado S2 Core AI (I3/I4) + security gate assertions |
 | 1.3     | 2026-02-14 | Architecture Review Board | Actualización de estado S3 Core AI (I5/I6) + security assertions graph/coherence |
 | 1.4     | 2026-02-14 | Architecture Review Board | Actualización de estado S4 Core AI (I7/I8/I9) + security assertions scoring/wbs/procurement |
+| 1.5     | 2026-02-15 | Architecture Review Board | Actualización de estado S5 Core AI (I10/I11/I12) + security assertions + DevOps CI/scheduled drift checks |
 
 ---
 
@@ -1268,3 +1269,11 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-I8-WBS-BOM-DOM-001 / TS-I8-WBS-BOM-APP-001 - WBS/BOM Generation Integrity + Traceability - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I9-PROC-DOM-001 / TS-I9-PROC-APP-001 - Procurement Planning Intelligence (lead-time/conflict deterministic logic) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-SEC-S4-001 - Security Assertions (no cross-tenant profile leakage, traceability enforcement, no high-impact bypass) - [x] Implemented (Unit Tests & Domain Logic)
+
+### Sprint 5 (Core AI Pipeline v4.0)
+
+- [x] TS-I10-STK-DOM-001 / TS-I10-STK-APP-001 - Stakeholder Resolution + RACI Inference - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I11-HITL-DOM-001 / TS-I11-HITL-APP-001 - Human-in-the-Loop Workflow Enforcement - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I12-OBS-DOM-001 / TS-I12-OBS-APP-001 - LangSmith Observability + Evaluation Harness - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-SEC-S5-001 - Security Assertions (no HITL bypass, reviewer metadata required, trace sanitization, drift escalation gating) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-DEVOPS-S5-001 - CI gates for I10-I12 + scheduled drift checks + escalation hooks - [x] Implemented (Unit Tests & Domain Logic)
