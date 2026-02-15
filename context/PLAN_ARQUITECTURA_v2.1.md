@@ -2,7 +2,7 @@
 
 > **Versión:** 2.1.1  
 > **Fecha:** 2026-01-31  
-> **Última Actualización:** 2026-02-14  
+> **Última Actualización:** 2026-02-15  
 > **Estado:** APROBADO por Architecture Review Board  
 > **Alineado con:** Diagrama Maestro v2.2.1
 
@@ -110,7 +110,7 @@ apps/api/src/
 
 > **Nota (2026-02-14):** Estructura actualizada para reflejar el estado real del codebase.  
 > Los módulos `alerts/`, `bulk_operations/` son stubs pendientes de implementación.  
-> `modules/` contiene sub-módulos del pipeline IA (Phase 4 increments I1-I4).
+> `modules/` contiene sub-módulos del pipeline IA (Phase 4 increments I1-I12).
 
 ### Métricas de Progreso
 
@@ -130,6 +130,7 @@ apps/api/src/
 | AI Pipeline (I3-I4)     | ✅ Completado   | 100%     | Clause extraction normalization + hybrid retrieval/rerank/gating completados |
 | AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados |
 | AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados |
+| AI Pipeline (I10-I12)   | ✅ Completado   | 100%     | Stakeholder/RACI + HITL workflow + LangSmith/eval harness + S5 security assertions + DevOps CI gates/scheduled drift checks completados |
 
 ---
 
@@ -1321,3 +1322,4 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 | Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅      | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001 |
 | Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
 | Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + TS-SEC-S4-001 |
+| Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅ | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001 |
