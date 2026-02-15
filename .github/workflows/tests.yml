@@ -139,30 +139,9 @@ jobs:
           pip install -r requirements.txt
           pip install python-magic  # File MIME type detection (Linux)
 
-      - name: Verify test database setup files
+      - name: Bootstrap test infrastructure
         run: |
-          ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
-          if [ -f infrastructure/database/test-init/01-setup.sql ]; then
-            cat infrastructure/database/test-init/01-setup.sql
-          fi
-
-      - name: Start test database
-        run: |
-          echo "Starting PostgreSQL test container..."
-          docker compose -f docker-compose.test.yml up -d
-          sleep 5
-          docker ps -a | grep postgres || echo "No postgres container found!"
-          sleep 10
-
-      - name: Verify database is running
-        run: |
-          docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
-
-      - name: Run database migrations
-        working-directory: apps/api
-        run: |
-          DATABASE_URL="postgresql://postgres:postgres@localhost:5433/c2pro_test" python -m alembic upgrade head
-        continue-on-error: true
+          python apps/api/scripts/bootstrap_test_infra.py --start-services
 
       - name: Run integration tests
         working-directory: apps/api
@@ -228,32 +207,9 @@ jobs:
           pip install pytest-cov
           pip install python-magic  # File MIME type detection (Linux)
 
-      - name: Verify test database setup files
+      - name: Bootstrap test infrastructure
         run: |
-          ls -la infrastructure/database/test-init/ || echo "WARNING: test-init directory not found"
-          if [ -f infrastructure/database/test-init/01-setup.sql ]; then
-            cat infrastructure/database/test-init/01-setup.sql
-          fi
-
-      - name: Start test database
-        run: |
-          echo "Starting PostgreSQL test container..."
-          docker compose -f docker-compose.test.yml up -d
-          echo "Waiting for container..."
-          sleep 5
-          docker ps -a | grep postgres || echo "No postgres container found!"
-          echo "Waiting for PostgreSQL..."
-          sleep 10
-
-      - name: Verify database setup
-        run: |
-          docker ps | grep postgres || (echo "Container not running!" && docker ps -a && exit 1)
-          echo "Listing databases..."
-          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "\l"
-          echo "Listing users..."
-          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -c "\du"
-          echo "Checking current database..."
-          docker compose -f docker-compose.test.yml exec -T -e PGUSER=postgres postgres-test psql -d c2pro_test -c "SELECT current_database();"
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
 
       - name: Run E2E Security Tests
         working-directory: apps/api
