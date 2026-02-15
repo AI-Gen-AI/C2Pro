@@ -41,24 +41,24 @@
 
 ## Execution Checklist
 
-- [ ] `S4-QA-01` unskip/normalize I7 scoring tests and enforce strict RED.
-- [ ] `S4-QA-02` activate I8 WBS/BOM integrity RED suites.
-- [ ] `S4-QA-03` activate I9 procurement planning RED suites.
-- [ ] `S4-BE-01` make I7 green (deterministic aggregation + profile isolation).
-- [ ] `S4-BE-02` make I8 green (generation integrity + traceability).
-- [ ] `S4-BE-03` make I9 green (lead-time/conflict intelligence).
-- [ ] `S4-SEC-01` verify no leakage/bypass and traceability safety.
-- [ ] `S4-DOC-01` update backlog/architecture docs.
+- [x] `S4-QA-01` unskip/normalize I7 scoring tests and enforce strict RED.
+- [x] `S4-QA-02` activate I8 WBS/BOM integrity RED suites.
+- [x] `S4-QA-03` activate I9 procurement planning RED suites.
+- [x] `S4-BE-01` make I7 green (deterministic aggregation + profile isolation).
+- [x] `S4-BE-02` make I8 green (generation integrity + traceability).
+- [x] `S4-BE-03` make I9 green (lead-time/conflict intelligence).
+- [x] `S4-SEC-01` verify no leakage/bypass and traceability safety.
+- [x] `S4-DOC-01` update backlog/architecture docs.
 
-- [ ] `S5-QA-01` unskip/normalize I10 stakeholder + RACI RED tests.
-- [ ] `S5-QA-02` unskip/normalize I11 HITL workflow RED tests.
-- [ ] `S5-QA-03` unskip/normalize I12 observability/eval RED tests.
-- [ ] `S5-BE-01` make I10 green (resolution + RACI inference/validation).
-- [ ] `S5-BE-02` make I11 green (confidence gates + SLA escalation + release checks).
-- [ ] `S5-BE-03` make I12 green (trace lineage + drift harness).
-- [ ] `S5-SEC-01` validate HITL and observability security invariants.
-- [ ] `S5-DEVOPS-01` enable CI gates and scheduled drift checks.
-- [ ] `S5-DOC-01` update backlog/architecture docs.
+- [x] `S5-QA-01` unskip/normalize I10 stakeholder + RACI RED tests.
+- [x] `S5-QA-02` unskip/normalize I11 HITL workflow RED tests.
+- [x] `S5-QA-03` unskip/normalize I12 observability/eval RED tests.
+- [x] `S5-BE-01` make I10 green (resolution + RACI inference/validation).
+- [x] `S5-BE-02` make I11 green (confidence gates + SLA escalation + release checks).
+- [x] `S5-BE-03` make I12 green (trace lineage + drift harness).
+- [x] `S5-SEC-01` validate HITL and observability security invariants.
+- [x] `S5-DEVOPS-01` enable CI gates and scheduled drift checks.
+- [x] `S5-DOC-01` update backlog/architecture docs.
 
 - [ ] `S6-QA-01` unskip/normalize I13 E2E RED tests.
 - [ ] `S6-QA-02` unskip/normalize I14 governance RED tests.
@@ -70,8 +70,9 @@
 
 ---
 
-Last Updated: 2026-02-14
+Last Updated: 2026-02-15
 
 Changelog:
 
 - 2026-02-14: Created S4-S6 tactical board and execution checklist for I7-I14.
+- 2026-02-15: Marked S4 and S5 execution checklist items as completed based on implemented QA/BE/SEC/DEVOPS/DOC outcomes.

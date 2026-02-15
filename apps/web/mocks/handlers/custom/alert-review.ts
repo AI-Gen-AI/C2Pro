@@ -103,4 +103,39 @@ export const alertReviewHandlers = [
       preservedDraft: payload.localDraft ?? null,
     });
   }),
+
+  http.get("/api/v1/projects/:projectId/coherence/summary", () => {
+    return HttpResponse.json({
+      freshness: "fresh",
+      alertsConsistent: true,
+      coherenceConsistent: true,
+    });
+  }),
+
+  http.post("/api/v1/projects/:projectId/alerts/:alertId/undo", async ({ params, request }) => {
+    const alertId = String(params.alertId);
+    if (alertId === "a-stale") {
+      return HttpResponse.json(
+        { code: "UNDO_CONFLICT", detail: "Undo could not be applied" },
+        { status: 409 },
+      );
+    }
+
+    const payload = (await request.json()) as { targetStatus?: "pending" | "approved" | "rejected" };
+    const targetStatus = payload.targetStatus ?? "pending";
+    reviewState.set(alertId, { status: targetStatus });
+
+    return HttpResponse.json({
+      id: alertId,
+      status: targetStatus,
+      coherenceDelta: -1,
+    });
+  }),
+
+  http.post("/api/v1/projects/:projectId/alerts/coherence-sync", async () => {
+    return HttpResponse.json({
+      alertsConsistent: true,
+      coherenceConsistent: true,
+    });
+  }),
 ];
