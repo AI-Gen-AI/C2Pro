@@ -8,18 +8,15 @@ Endpoints:
 - GET /api/v1/bulk-operations/{job_id}/progress - Track operation progress
 """
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.bulk_operations.store import get_job
 
 router = APIRouter(prefix="/bulk-operations", tags=["bulk-operations"])
-
-
-# In-memory storage for fake jobs
-_fake_jobs: dict[str, dict] = {}
 
 
 @router.get("/{job_id}/progress")
@@ -42,8 +39,7 @@ async def get_bulk_operation_progress(
     Raises:
         404: Job not found
     """
-    # Check if job exists
-    job = _fake_jobs.get(job_id)
+    job = get_job(job_id)
 
     if not job:
         raise HTTPException(
@@ -51,31 +47,13 @@ async def get_bulk_operation_progress(
             detail="Job not found",
         )
 
-    # GREEN PHASE: Return fake progress
-    # In real implementation, this would:
-    # - Query job status from background worker
-    # - Calculate actual progress percentage
-    # - Estimate remaining time
-
     return {
         "job_id": job_id,
-        "status": "processing",
-        "percentage": 65,
-        "processed_items": 65,
-        "total_items": 100,
-        "estimated_seconds_remaining": 10,
-        "started_at": "2024-01-15T10:00:00Z",
+        "status": job.get("status", "processing"),
+        "percentage": job.get("percentage", 0),
+        "processed_items": job.get("processed_items", 0),
+        "total_items": job.get("total_items", 0),
+        "eta_seconds": job.get("eta_seconds", 0),
+        "started_at": job.get("started_at"),
+        "updated_at": job.get("updated_at"),
     }
-
-
-def _register_job(job_id: str, job_data: dict) -> None:
-    """
-    Register a job for progress tracking.
-
-    Helper function for other modules to register jobs.
-
-    Args:
-        job_id: UUID of the job
-        job_data: Job metadata
-    """
-    _fake_jobs[job_id] = job_data

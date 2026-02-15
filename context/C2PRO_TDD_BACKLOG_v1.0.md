@@ -1,6 +1,6 @@
 # C2Pro - TDD Backlog Completo v1.0
 
-> **Versión:** 1.7  
+> **Versión:** 1.8  
 > **Fecha:** 2026-02-14  
 > **Última Actualización:** 2026-02-15  
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
@@ -1201,6 +1201,7 @@ ESTRATEGIA GREEN para este suite:
 | 1.5     | 2026-02-15 | Architecture Review Board | Actualización de estado S5 Core AI (I10/I11/I12) + security assertions + DevOps CI/scheduled drift checks |
 | 1.6     | 2026-02-15 | Architecture Review Board | Cierre Redis Event Bus: hardening de seguridad/telemetría + bootstrap Redis determinístico local/CI |
 | 1.7     | 2026-02-15 | Architecture Review Board | Cierre WS-F S6: runbook I13 real E2E + checklist de prerrequisitos + rationale/riesgos de parche de migración |
+| 1.8     | 2026-02-15 | Architecture Review Board | Cierre WS-G S6: contrato RLS GUC `app.current_tenant` (RED→GREEN), bootstrap a nivel conexión PostgreSQL y validación E2E de aislamiento tenant |
 
 ---
 
@@ -1286,3 +1287,7 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-I13-E2E-REAL-001 - I13 Decision Intelligence real E2E path (route contract + deterministic auth/tenant harness) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-DEVOPS-S6-001 - Blocking CI gate `i13-real-e2e` + scheduled reliability workflow with infra preflight and diagnostics artifacts - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-DOC-S6-001 - WS-F documentation closure (tactical checklist prerequisites + architecture/backlog updates + `docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-E2E-SEC-TNT-001 - WS-G RLS GUC contract hardening (`app.current_tenant`) + deterministic tenant-isolation E2E assertions - [x] Implemented (RED/GREEN validated in E2E Security Suite)
+- [x] TS-E2E-FLW-BLK-001 - Bulk Operations E2E flow contract (limits, async jobs, progress, partial success, atomic rollback, throttling, tenant isolation) - [x] Implemented (RED/GREEN validated in E2E Flow Suite)
+- [x] TS-E2E-ERR-TIM-001 - Timeout & fallback resilience contract (timeout mapping, retry budget, circuit open/close, tenant isolation, traceability headers) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
+- [x] TS-E2E-ERR-CON-001 - Concurrent modifications resilience contract (optimistic locking, ETag/If-Match preconditions, conflict codes, idempotency replay protection) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
