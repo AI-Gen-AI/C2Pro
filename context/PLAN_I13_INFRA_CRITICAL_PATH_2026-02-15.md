@@ -10,10 +10,22 @@
 Current real I13 E2E is blocked by infrastructure, not business logic:
 
 1. Alembic migration chain fails (`20260124_0001` references missing `stakeholder_wbs_raci`).
-2. Test runtime depends on tenant validation + DB readiness; requests fail as `401` before I13 assertions.
+2. Test runtime previously failed on tenant validation (`401`) before I13 assertions.
 3. Redis is unavailable in local test runtime (degraded startup path).
 4. Docker control is not consistently available from current terminal session.
-5. No deterministic DB seed for auth/tenant context in real E2E flows.
+5. Deterministic DB seed for auth/tenant context was missing in real E2E flows.
+6. Current active blocker: `POST /api/v1/decision-intelligence/execute` returns `404` (route contract not wired/available).
+
+## 1.1) Current Verified Status (2026-02-15)
+
+- `WS-C` auth/bootstrap stabilization is now in place:
+  - deterministic seeded tenant/user fixture aligned with JWT claims.
+  - random JWT tenant IDs removed from I13 real E2E harness.
+  - lifespan startup/shutdown remains active in real E2E (`LifespanManager`).
+- Real I13 E2E requests now pass authentication and reach app routing.
+- Active failure class moved from `401` to `404` across all 5 tests:
+  - `pytest apps/api/tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py -q`
+  - Result: `5 failed`, all `404 Not Found`.
 
 ## 2) Target State (Exit Criteria)
 
@@ -69,11 +81,39 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 - **Scope:** router wiring + endpoint contract
 - **Tasks:**
 
-1. Confirm and register `POST /api/v1/decision-intelligence/execute`.
-2. Add minimal contract behavior if full implementation is pending.
-3. Add request/response contract tests.
+1. Locate or create I13 HTTP router module under hexagonal adapter boundary:
+   - expected route: `POST /api/v1/decision-intelligence/execute`
+   - keep router thin and use use-case orchestration only.
+2. Register router in `create_application()` with `api_v1_prefix`.
+3. Define/lock request-response contract for real E2E path:
+   - success path (`200`) includes coherence/evidence/citations fields.
+   - gated paths (`409`) include explicit blocking reasons.
+4. Add route contract tests to detect missing wiring regressions:
+   - one smoke test ensuring endpoint exists (not `404`) under valid auth.
+   - one contract test per main branch (`200`, `409` low confidence, `409` missing citations, `409` mandatory sign-off).
+5. Keep service layer non-mocked for real E2E; only infra prerequisites are seeded.
 
 - **Acceptance:** Deterministic route response in all environments.
+
+### WS-D.1: Immediate 404 Remediation Plan (New)
+
+- **Trigger:** All I13 real E2E scenarios now fail with `404`, not `401`.
+- **Execution Steps:**
+
+1. `RED`:
+   - Add a focused test: authenticated call to `/api/v1/decision-intelligence/execute` must be `!= 404`.
+   - Verify failure reproduces current blocker.
+2. `GREEN`:
+   - Wire route in app router registration.
+   - Implement minimal contract adapter/use-case path to return controlled `200/409` responses per existing I13 assertions.
+3. `REFACTOR`:
+   - align DTO naming, error mapping, and route docs with architecture plan.
+   - keep tenant validation and auth dependency unchanged.
+4. Verify:
+   - re-run `apps/api/tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py`.
+   - confirm failures, if any, are functional assertions (not missing route).
+
+- **Acceptance:** I13 suite reaches business assertions (`200/409`) and no test fails by `404`.
 
 ### WS-E: CI Gate and Scheduled Reliability
 
@@ -104,7 +144,7 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 1. **CP-1:** WS-A migration repair.
 2. **CP-2:** WS-B bootstrap + preflight.
 3. **CP-3:** WS-C seeded auth/tenant harness.
-4. **CP-4:** WS-D route contract validation.
+4. **CP-4:** WS-D route contract validation (404 remediation first).
 5. **CP-5:** WS-E CI gate activation.
 6. **CP-6:** WS-F documentation closure.
 
@@ -135,6 +175,14 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 
 1. Patch/validate `20260124_0001_add_raci_evidence_text.py`.
 2. Add deterministic tenant/user seed fixture for I13 real E2E.
-3. Re-run I13 real E2E locally with lifespan and seeded auth.
-4. Add CI preflight + I13 real E2E job.
-5. Update tactical board checklist and runbook.
+3. Re-run I13 real E2E locally with lifespan and seeded auth (expect no `401`).
+4. Execute WS-D.1 to remove `404` blocker on `/api/v1/decision-intelligence/execute`.
+5. Add CI preflight + I13 real E2E job.
+6. Update tactical board checklist and runbook.
+
+---
+
+Last Updated: 2026-02-15
+
+Changelog:
+- 2026-02-15: Added current-state checkpoint (401 resolved, 404 active blocker) and detailed WS-D.1 remediation plan for missing I13 route contract.

@@ -1,6 +1,6 @@
 
 import pytest
-from uuid import uuid4
+from uuid import UUID, uuid4
 from typing import List, NamedTuple, Dict, Optional
 from enum import Enum, auto
 from datetime import date, timedelta
@@ -208,4 +208,3 @@ class TestCoherenceRuleEngine:
             assert r14_result.status == expected_status
             assert r14_result.severity == expected_severity
             assert order.id in r14_result.affected_entities
-

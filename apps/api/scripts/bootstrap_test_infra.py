@@ -38,6 +38,10 @@ def start_postgres_with_docker_compose(root: Path) -> None:
     run_command(["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "postgres-test"], cwd=root)
 
 
+def start_redis_with_docker_compose(root: Path) -> None:
+    run_command(["docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "redis-test"], cwd=root)
+
+
 def ensure_database_exists(admin_url: str, database_name: str) -> None:
     with psycopg.connect(admin_url, autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -120,6 +124,14 @@ def main() -> int:
 
     print("== Preflight: Redis ==")
     redis_ok = is_port_open(args.redis_host, args.redis_port)
+    if not redis_ok and args.start_services:
+        print("Redis port closed. Starting redis-test via docker compose...")
+        try:
+            start_redis_with_docker_compose(repo_root)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to start redis-test with docker compose: {exc}") from exc
+        redis_ok = wait_for_port(args.redis_host, args.redis_port, args.wait_seconds)
+
     if redis_ok:
         print(f"OK Redis reachable: {args.redis_host}:{args.redis_port}")
     elif args.require_redis:

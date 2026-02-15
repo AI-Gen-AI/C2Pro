@@ -19,10 +19,11 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 import jwt
-from sqlalchemy import text
+from sqlalchemy import Column, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 # ===========================================
 # OPTIONAL DEPENDENCY STUBS
@@ -101,6 +102,21 @@ from src.core.database import Base, get_session
 from src.main import create_application
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
+
+
+def _ensure_test_fk_stub_tables() -> None:
+    """Register minimal stub tables required by cross-module FKs in test metadata."""
+    if "wbs_items" not in Base.metadata.tables:
+        # Stakeholder RACI model references this table via FK, but the canonical
+        # table model is not part of Base metadata in this test layout.
+        from sqlalchemy import Table
+
+        Table(
+            "wbs_items",
+            Base.metadata,
+            Column("id", PGUUID(as_uuid=True), primary_key=True),
+            extend_existing=True,
+        )
 
 
 def _auth_schema_available(session: Session) -> bool:
@@ -249,6 +265,7 @@ async def test_engine():
         )
 
         # Test connection and create tables
+        _ensure_test_fk_stub_tables()
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
             await conn.run_sync(Base.metadata.create_all)
@@ -276,6 +293,7 @@ async def test_engine():
             echo=False,
         )
 
+        _ensure_test_fk_stub_tables()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
@@ -427,6 +445,105 @@ async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
     await db.refresh(user)
 
     return user
+
+
+@pytest_asyncio.fixture
+async def seeded_auth_context() -> dict[str, str]:
+    """
+    Deterministic tenant/user seed for real E2E auth.
+
+    Refers to Suite ID: TS-I13-E2E-REAL-001.
+    """
+    tenant_id = UUID("00000000-0000-0000-0000-00000000a113")
+    user_id = UUID("00000000-0000-0000-0000-00000000b113")
+
+    database_url = settings.database_url
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
+    )
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session:
+        tenant_result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is None:
+            tenant = Tenant(
+                id=tenant_id,
+                name="I13 Real E2E Tenant",
+                slug="i13-real-e2e-tenant",
+                subscription_plan=SubscriptionPlan.PROFESSIONAL,
+                subscription_status="active",
+                ai_budget_monthly=100.0,
+                ai_spend_current=0.0,
+                max_projects=100,
+                max_users=25,
+                max_storage_gb=100,
+                is_active=True,
+            )
+            session.add(tenant)
+        else:
+            tenant.is_active = True
+            tenant.subscription_status = "active"
+
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if user is None:
+            user = User(
+                id=user_id,
+                tenant_id=tenant_id,
+                email="i13-real-e2e-user@c2pro.test",
+                hashed_password=hash_password("TestPassword123!"),
+                first_name="I13",
+                last_name="E2E",
+                role=UserRole.ADMIN,
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(user)
+        else:
+            user.tenant_id = tenant_id
+            user.email = "i13-real-e2e-user@c2pro.test"
+            user.role = UserRole.ADMIN
+            user.is_active = True
+            user.is_verified = True
+
+        await session.commit()
+        await session.refresh(tenant)
+        await session.refresh(user)
+
+    await engine.dispose()
+
+    return {
+        "tenant_id": str(tenant.id),
+        "user_id": str(user.id),
+        "email": user.email,
+        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+    }
+
+
+@pytest_asyncio.fixture
+async def seeded_auth_headers(
+    seeded_auth_context: dict[str, str],
+    generate_token: Callable,
+) -> dict[str, str]:
+    """
+    Build deterministic auth headers aligned with seeded tenant/user IDs.
+
+    Refers to Suite ID: TS-I13-E2E-REAL-001.
+    """
+    token = generate_token(
+        user_id=UUID(seeded_auth_context["user_id"]),
+        tenant_id=UUID(seeded_auth_context["tenant_id"]),
+        email=seeded_auth_context["email"],
+        role=seeded_auth_context["role"],
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ===========================================
