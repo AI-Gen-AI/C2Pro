@@ -1,0 +1,92 @@
+name: Scheduled Drift Checks
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  drift-checks:
+    name: Drift Checks + Escalation Hook
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: apps/api
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pyyaml
+
+      - name: Run scheduled drift checks
+        id: drift_tests
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/modules/observability/application/test_i12_eval_drift_detection.py \
+            tests/security/test_s5_stakeholders_hitl_observability_security.py::test_s5_i12_drift_escalation_only_triggers_on_true_drift \
+            -q --maxfail=1 \
+            --junit-xml=scheduled-drift-checks.xml
+
+      - name: Load alert routing config
+        if: always()
+        id: routing
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import yaml
+          path = pathlib.Path("ops/alert_routing.yml")
+          config = yaml.safe_load(path.read_text(encoding="utf-8"))
+          channels = config.get("drift_escalation", {}).get("channels", [])
+          recipients = config.get("drift_escalation", {}).get("recipients", [])
+          print(f"channels={','.join(channels)}")
+          print(f"recipients={','.join(recipients)}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"channels={','.join(channels)}\n")
+              f.write(f"recipients={','.join(recipients)}\n")
+          PY
+
+      - name: Send escalation webhook on failure
+        if: failure()
+        env:
+          DRIFT_ALERT_WEBHOOK_URL: ${{ secrets.DRIFT_ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DRIFT_ALERT_WEBHOOK_URL" ]; then
+            echo "DRIFT_ALERT_WEBHOOK_URL secret not configured. Skipping webhook."
+            exit 0
+          fi
+          payload=$(cat <<EOF
+          {
+            "event": "scheduled_drift_check_failed",
+            "repository": "${{ github.repository }}",
+            "run_id": "${{ github.run_id }}",
+            "workflow": "${{ github.workflow }}",
+            "channels": "${{ steps.routing.outputs.channels }}",
+            "recipients": "${{ steps.routing.outputs.recipients }}"
+          }
+          EOF
+          )
+          curl -X POST "$DRIFT_ALERT_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
+
+      - name: Upload scheduled drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-drift-check-report
+          path: apps/api/scheduled-drift-checks.xml

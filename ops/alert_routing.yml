@@ -1,0 +1,10 @@
+drift_escalation:
+  channels:
+    - slack
+    - email
+  recipients:
+    - ops@c2pro.ai
+    - sre@c2pro.ai
+  severity: high
+  require_acknowledgement: true
+
