@@ -72,6 +72,9 @@ markers = [
     "slow: Slow tests",
     "security: Security tests (critical)",
     "critical: P0 critical tests",
+    "contract: Contract tests (API/frontend alignment)",
+    "red_phase: RED phase TDD tests",
+    "green_phase: GREEN phase TDD tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

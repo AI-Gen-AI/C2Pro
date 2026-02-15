@@ -36,6 +36,7 @@ from src.modules.decision_intelligence.adapters.http.router import (
 from src.alerts.router import router as alerts_router  # GREEN phase - TS-E2E-FLW-ALR-001
 from src.bulk_operations.router import router as bulk_operations_router  # GREEN phase - TS-E2E-FLW-BLK-001
 from src.core.routers.health import router as health_router
+from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
 # from src.stakeholders.adapters.http.approvals_router import router as approvals_router  # TODO: GREEN phase - incomplete
 # from src.stakeholders.adapters.http.raci_router import router as raci_router  # TODO: GREEN phase - incomplete
 # from src.stakeholders.adapters.http.router import router as stakeholders_router  # TODO: GREEN phase - incomplete
@@ -216,6 +217,12 @@ def create_application() -> FastAPI:
 
     app.include_router(
         projects_router,
+        prefix=api_v1_prefix,
+    )
+
+    # WBS router - GREEN phase TS-CT-WBS-API-001
+    app.include_router(
+        wbs_router,
         prefix=api_v1_prefix,
     )
 

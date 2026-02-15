@@ -1,0 +1,956 @@
+openapi: 3.0.3
+info:
+  title: C2Pro WBS & Procurement API
+  version: 1.0.0
+  description: |
+    API contracts for WBS Management and Procurement Intelligence modules.
+    These endpoints expose the fully-implemented backend features to the frontend.
+
+servers:
+  - url: /api/v1
+    description: Production API
+
+paths:
+  # WBS Module
+  /projects/{projectId}/wbs:
+    get:
+      summary: Get WBS hierarchy
+      description: Retrieve the complete Work Breakdown Structure tree for a project
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Project UUID
+      responses:
+        "200":
+          description: WBS tree structure with coverage metrics and alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSHierarchyResponse"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Project not found
+
+  /projects/{projectId}/wbs/items:
+    post:
+      summary: Create WBS item
+      description: Create a new WBS item (Tenant Admin and above only)
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWBSItemRequest"
+      responses:
+        "201":
+          description: WBS item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSItem"
+        "400":
+          description: Invalid request - validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - requires tenant admin role
+        "409":
+          description: Conflict - duplicate code or invalid hierarchy
+
+  /projects/{projectId}/wbs/items/{itemId}:
+    get:
+      summary: Get WBS item details
+      description: Retrieve detailed information about a specific WBS item
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: WBS item details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSItemDetail"
+        "404":
+          description: WBS item not found
+
+    patch:
+      summary: Update WBS item
+      description: Update an existing WBS item (Tenant Admin and above only)
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWBSItemRequest"
+      responses:
+        "200":
+          description: WBS item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSItem"
+        "400":
+          description: Invalid request
+        "403":
+          description: Forbidden
+        "404":
+          description: WBS item not found
+        "409":
+          description: Conflict - would create circular reference
+
+    delete:
+      summary: Delete WBS item
+      description: Delete a WBS item (Tenant Admin and above only)
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cascade
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: If true, also delete all child items
+      responses:
+        "204":
+          description: WBS item deleted successfully
+        "400":
+          description: Cannot delete - has children (use cascade=true)
+        "403":
+          description: Forbidden
+        "404":
+          description: WBS item not found
+
+  /projects/{projectId}/wbs/items/{itemId}/move:
+    post:
+      summary: Move WBS item
+      description: Move a WBS item to a new parent (drag & drop)
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newParentId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: New parent item ID (null for root level)
+                position:
+                  type: integer
+                  description: Position among siblings (0-based)
+              required:
+                - newParentId
+      responses:
+        "200":
+          description: WBS item moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSItem"
+        "400":
+          description: Invalid move - would exceed max depth or create circular reference
+        "403":
+          description: Forbidden
+        "404":
+          description: Item not found
+
+  /projects/{projectId}/wbs/validate:
+    post:
+      summary: Validate WBS
+      description: Run coherence rules on WBS and return coverage report
+      tags: [WBS]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WBSValidationResult"
+
+  # Procurement Module
+  /projects/{projectId}/procurement/bom:
+    get:
+      summary: Get Bill of Materials
+      description: Retrieve the BOM generated from WBS
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bill of Materials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BOMResponse"
+
+    post:
+      summary: Regenerate BOM
+      description: Regenerate BOM from current WBS (Tenant Admin and above)
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: BOM regenerated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BOMResponse"
+        "403":
+          description: Forbidden
+
+  /projects/{projectId}/procurement/lead-times:
+    post:
+      summary: Calculate lead times
+      description: Calculate lead times for BOM items with given parameters
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadTimeCalculationRequest"
+      responses:
+        "200":
+          description: Lead time calculations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadTimeResult"
+
+  /projects/{projectId}/procurement/lead-times/{bomItemId}:
+    patch:
+      summary: Update lead time parameters
+      description: Override lead time parameters for a BOM item
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: bomItemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadTimeRequest"
+      responses:
+        "200":
+          description: Lead time parameters updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadTimeResult"
+        "403":
+          description: Forbidden - requires tenant admin role
+
+  /projects/{projectId}/procurement/plan:
+    get:
+      summary: Get procurement plan
+      description: Retrieve the procurement plan with optimal order dates
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Procurement plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcurementPlanResponse"
+
+    post:
+      summary: Generate procurement plan
+      description: Generate/update procurement plan based on lead times
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectStartDate:
+                  type: string
+                  format: date
+                projectEndDate:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Procurement plan generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcurementPlanResponse"
+
+  /projects/{projectId}/procurement/plan/items/{planItemId}/status:
+    patch:
+      summary: Update procurement item status
+      description: Mark procurement item as ordered, in transit, delivered, etc.
+      tags: [Procurement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: planItemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [planned, ordered, in_transit, customs, delivered]
+                actualOrderDate:
+                  type: string
+                  format: date
+                  nullable: true
+                actualDeliveryDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcurementPlanItem"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Money type
+    Money:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: EUR
+      required:
+        - amount
+        - currency
+
+    # WBS Schemas
+    WBSItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^\d+(\.\d+){0,3}$'
+          example: 2.1.3.1
+        name:
+          type: string
+          example: Reinforcement
+        description:
+          type: string
+          nullable: true
+        level:
+          type: integer
+          minimum: 1
+          maximum: 4
+          example: 4
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        projectId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        budget:
+          $ref: "#/components/schemas/Money"
+          nullable: true
+        completion:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 45
+        linkedClauses:
+          type: array
+          items:
+            type: string
+            format: uuid
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/WBSItem"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - code
+        - name
+        - level
+        - projectId
+        - completion
+
+    WBSItemDetail:
+      allOf:
+        - $ref: "#/components/schemas/WBSItem"
+        - type: object
+          properties:
+            alerts:
+              type: array
+              items:
+                $ref: "#/components/schemas/WBSAlert"
+            linkedDocuments:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  type:
+                    type: string
+
+    CreateWBSItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        budget:
+          $ref: "#/components/schemas/Money"
+        code:
+          type: string
+          pattern: '^\d+(\.\d+){0,3}$'
+          description: Optional - will auto-generate if not provided
+      required:
+        - name
+
+    UpdateWBSItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        budget:
+          $ref: "#/components/schemas/Money"
+          nullable: true
+        completion:
+          type: number
+          minimum: 0
+          maximum: 100
+        linkedClauses:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    WBSCoverage:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+          example: 47
+        withActivities:
+          type: integer
+          example: 43
+        withBudget:
+          type: integer
+          example: 42
+        withDates:
+          type: integer
+          example: 38
+        coveragePercentage:
+          type: number
+          example: 91.5
+
+    WBSAlert:
+      type: object
+      properties:
+        rule:
+          type: string
+          enum: [R11, R12, R13, R14, R15, R16]
+          description: Coherence rule code
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        message:
+          type: string
+          example: 4 WBS items lack defined activities
+        affectedItemIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    WBSHierarchyResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WBSItem"
+        coverage:
+          $ref: "#/components/schemas/WBSCoverage"
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/WBSAlert"
+
+    WBSValidationResult:
+      type: object
+      properties:
+        isValid:
+          type: boolean
+        coverage:
+          $ref: "#/components/schemas/WBSCoverage"
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/WBSAlert"
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              itemId:
+                type: string
+                format: uuid
+
+    # Procurement Schemas
+    BOMItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        wbsItemId:
+          type: string
+          format: uuid
+        wbsItemCode:
+          type: string
+          example: 2.1.3.1
+        wbsItemName:
+          type: string
+          example: Reinforcement
+        material:
+          type: string
+          example: Steel Rebar Grade B500B
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+          example: 1250
+        unit:
+          type: string
+          example: tonnes
+        unitCost:
+          $ref: "#/components/schemas/Money"
+        totalCost:
+          $ref: "#/components/schemas/Money"
+        supplier:
+          type: string
+          nullable: true
+          example: ArcelorMittal
+        supplierLocation:
+          type: string
+          nullable: true
+        incoterm:
+          type: string
+          enum: [EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP]
+          example: CIF
+      required:
+        - id
+        - wbsItemId
+        - material
+        - quantity
+        - unit
+        - totalCost
+
+    BOMResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BOMItem"
+        totalCost:
+          $ref: "#/components/schemas/Money"
+        itemCount:
+          type: integer
+        generatedAt:
+          type: string
+          format: date-time
+
+    LeadTimeCalculationRequest:
+      type: object
+      properties:
+        projectLocation:
+          type: string
+          description: Project delivery location
+          example: Barcelona, Spain
+        calculationDate:
+          type: string
+          format: date
+          description: Date from which to calculate (defaults to today)
+      required:
+        - projectLocation
+
+    LeadTimeResult:
+      type: object
+      properties:
+        bomItemId:
+          type: string
+          format: uuid
+        material:
+          type: string
+        productionDays:
+          type: integer
+          example: 45
+        transitDays:
+          type: integer
+          example: 12
+        customsDays:
+          type: integer
+          example: 5
+        bufferDays:
+          type: integer
+          example: 7
+        totalDays:
+          type: integer
+          example: 69
+        requiredOnSite:
+          type: string
+          format: date
+          example: 2025-05-15
+        orderByDate:
+          type: string
+          format: date
+          example: 2025-03-07
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+          example: medium
+        notes:
+          type: string
+          nullable: true
+          example: Customs clearance may vary based on documentation
+
+    UpdateLeadTimeRequest:
+      type: object
+      properties:
+        productionDays:
+          type: integer
+          minimum: 0
+        transitDays:
+          type: integer
+          minimum: 0
+        customsDays:
+          type: integer
+          minimum: 0
+        bufferDays:
+          type: integer
+          minimum: 0
+        incoterm:
+          type: string
+          enum: [EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP]
+        supplier:
+          type: string
+
+    ProcurementPlanItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bomItemId:
+          type: string
+          format: uuid
+        material:
+          type: string
+        quantity:
+          type: number
+        orderDate:
+          type: string
+          format: date
+        deliveryDate:
+          type: string
+          format: date
+        requiredOnSite:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [planned, ordered, in_transit, customs, delivered]
+        supplier:
+          type: string
+        incoterm:
+          type: string
+        actualOrderDate:
+          type: string
+          format: date
+          nullable: true
+        actualDeliveryDate:
+          type: string
+          format: date
+          nullable: true
+        isOnCriticalPath:
+          type: boolean
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcurementAlert"
+
+    ProcurementAlert:
+      type: object
+      properties:
+        rule:
+          type: string
+          enum: [R14, R15, R16]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        message:
+          type: string
+          example: Steel Rebar order deadline in 2 days
+        suggestedAction:
+          type: string
+          example: Order immediately or risk foundation delay
+        daysUntilDeadline:
+          type: integer
+          nullable: true
+
+    ProcurementPlanResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcurementPlanItem"
+        projectStartDate:
+          type: string
+          format: date
+        projectEndDate:
+          type: string
+          format: date
+        criticalPath:
+          type: array
+          items:
+            type: string
+            format: uuid
+        totalItems:
+          type: integer
+        orderedItems:
+          type: integer
+        deliveredItems:
+          type: integer
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcurementAlert"
