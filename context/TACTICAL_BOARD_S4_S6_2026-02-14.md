@@ -29,6 +29,8 @@
 
 ## S6 Tactical Board
 
+Reference Plan: `context/PLAN_I13_INFRA_CRITICAL_PATH_2026-02-15.md`
+
 | Sprint | Task ID | Owner | Files | Action | Depends On | Exit Evidence ||---|---|---|---|---|---|---|
 
 | S6 | S6-QA-01 | `@qa-agent` | `apps/api/tests/modules/decision_intelligence/e2e/test_i13_full_decision_flow.py` | Remove skips, strict RED for end-to-end gating (citations/confidence/sign-off), state separation, failure paths | S5 done | Failing E2E tests for finalization gating and mandatory sign-off |
@@ -76,3 +78,4 @@ Changelog:
 
 - 2026-02-14: Created S4-S6 tactical board and execution checklist for I7-I14.
 - 2026-02-15: Marked S4 and S5 execution checklist items as completed based on implemented QA/BE/SEC/DEVOPS/DOC outcomes.
+- 2026-02-15: Added S6 reference link to critical path infra plan (`PLAN_I13_INFRA_CRITICAL_PATH_2026-02-15.md`).
