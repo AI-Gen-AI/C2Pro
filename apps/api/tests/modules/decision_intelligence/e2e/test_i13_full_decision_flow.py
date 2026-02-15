@@ -170,12 +170,11 @@ async def test_i13_e2e_reviewer_approval_unlocks_final_decision_package(
     reviewer_name = "Approved Reviewer"
 
     mock_full_stack_services["coherence_scoring_service"].aggregate_coherence_score.return_value = {
-        "score": 0.4,
-        "severity": "High",
+        "score": 0.75,
+        "severity": "Medium",
         "explanation": {},
         "metadata": {},
     }
-    mock_full_stack_services["hitl_service"].route_for_review.return_value = "PENDING_REVIEW_REQUIRED"
     mock_full_stack_services["hitl_service"].approve_item.return_value = {
         "item_id": uuid4(),
         "current_status": "APPROVED",

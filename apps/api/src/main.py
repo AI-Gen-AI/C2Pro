@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config import settings
 from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
+from src.core.events import build_event_bus
 from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
     RateLimitMiddleware,
@@ -28,6 +29,9 @@ from src.coherence.router import router as coherence_router, dashboard_router as
 from src.documents.adapters.http.router import router as documents_router
 from src.core.observability.router import router as observability_router
 from src.projects.adapters.http.router import router as projects_router  # GREEN phase implementation
+from src.modules.decision_intelligence.adapters.http.router import (
+    router as decision_intelligence_router,
+)
 # from src.analysis.adapters.http.router import router as analysis_router  # TODO: GREEN phase - incomplete
 from src.alerts.router import router as alerts_router  # GREEN phase - TS-E2E-FLW-ALR-001
 from src.bulk_operations.router import router as bulk_operations_router  # GREEN phase - TS-E2E-FLW-BLK-001
@@ -66,6 +70,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await init_cache()
     logger.info("cache_initialized")
 
+    app.state.event_bus = build_event_bus(
+        redis_url=settings.redis_url,
+        environment=settings.environment,
+    )
+    logger.info("event_bus_initialized", adapter=type(app.state.event_bus).__name__)
+
     # TODO: Inicializar Sentry cuando esté configurado
 
     logger.info("application_started")
@@ -81,6 +91,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     await close_cache()
     logger.info("cache_closed")
+
+    if hasattr(app.state, "event_bus"):
+        close_event_bus = getattr(app.state.event_bus, "close", None)
+        if callable(close_event_bus):
+            await close_event_bus()
+            logger.info("event_bus_closed")
 
     # TODO: Flush Sentry events
 
@@ -225,6 +241,11 @@ def create_application() -> FastAPI:
 
     app.include_router(
         documents_router,
+        prefix=api_v1_prefix,
+    )
+
+    app.include_router(
+        decision_intelligence_router,
         prefix=api_v1_prefix,
     )
 

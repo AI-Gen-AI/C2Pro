@@ -1,6 +1,6 @@
 # C2Pro - TDD Backlog Completo v1.0
 
-> **Versión:** 1.5  
+> **Versión:** 1.7  
 > **Fecha:** 2026-02-14  
 > **Última Actualización:** 2026-02-15  
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
@@ -779,6 +779,7 @@ tests/
 #### 4.8.1 Estado de Suites (Async/Events)
 
 - [x] TS-INT-EVT-BUS-001 - Event Bus Publish/Subscribe (Implemented: Integration Tests & Core Event Bus Logic)
+- [x] TS-INT-EVT-BUS-001 - Redis Event Bus Runtime Hardening (tenant transport isolation + safe telemetry metadata + correlation-id replay protection) - [x] Implemented (Unit Tests & Adapter Logic)
 - [x] TS-INT-EVT-CEL-001 - Celery Job Queue (Implemented: Integration Tests & Task Queue Adapter Logic)
 - [x] TS-INT-EVT-DLQ-001 - Dead Letter Queue (Implemented: Integration Tests & Core Event Bus Logic)
 
@@ -1198,6 +1199,8 @@ ESTRATEGIA GREEN para este suite:
 | 1.3     | 2026-02-14 | Architecture Review Board | Actualización de estado S3 Core AI (I5/I6) + security assertions graph/coherence |
 | 1.4     | 2026-02-14 | Architecture Review Board | Actualización de estado S4 Core AI (I7/I8/I9) + security assertions scoring/wbs/procurement |
 | 1.5     | 2026-02-15 | Architecture Review Board | Actualización de estado S5 Core AI (I10/I11/I12) + security assertions + DevOps CI/scheduled drift checks |
+| 1.6     | 2026-02-15 | Architecture Review Board | Cierre Redis Event Bus: hardening de seguridad/telemetría + bootstrap Redis determinístico local/CI |
+| 1.7     | 2026-02-15 | Architecture Review Board | Cierre WS-F S6: runbook I13 real E2E + checklist de prerrequisitos + rationale/riesgos de parche de migración |
 
 ---
 
@@ -1277,3 +1280,9 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-I12-OBS-DOM-001 / TS-I12-OBS-APP-001 - LangSmith Observability + Evaluation Harness - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-SEC-S5-001 - Security Assertions (no HITL bypass, reviewer metadata required, trace sanitization, drift escalation gating) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-DEVOPS-S5-001 - CI gates for I10-I12 + scheduled drift checks + escalation hooks - [x] Implemented (Unit Tests & Domain Logic)
+
+### Sprint 6 (Core AI Pipeline v4.0)
+
+- [x] TS-I13-E2E-REAL-001 - I13 Decision Intelligence real E2E path (route contract + deterministic auth/tenant harness) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-DEVOPS-S6-001 - Blocking CI gate `i13-real-e2e` + scheduled reliability workflow with infra preflight and diagnostics artifacts - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-DOC-S6-001 - WS-F documentation closure (tactical checklist prerequisites + architecture/backlog updates + `docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) - [x] Implemented (Unit Tests & Domain Logic)

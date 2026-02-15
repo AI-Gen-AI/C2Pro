@@ -27,6 +27,9 @@ python apps/api/scripts/bootstrap_test_infra.py --start-services
 4. Runs `alembic upgrade head`.
 5. Verifies applied `alembic_version` equals expected head revision.
 6. Checks Redis reachability (`localhost:6379`):
+   - if unreachable and `--start-services` is passed:
+     - runs `docker compose -f docker-compose.test.yml up -d redis-test`
+     - waits for Redis port to become reachable.
    - default: warning only (soft fail)
    - `--require-redis`: hard fail.
 
@@ -39,13 +42,15 @@ python apps/api/scripts/bootstrap_test_infra.py --start-services
 `tests.yml` integration and e2e-security jobs now call:
 
 ```yaml
-python apps/api/scripts/bootstrap_test_infra.py --start-services
+python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
 ```
 
-For jobs where Redis is mandatory:
+This enforces deterministic Redis availability for Event Bus integration paths.
+
+For local runs where Redis is optional (soft-fail):
 
 ```yaml
-python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
+python apps/api/scripts/bootstrap_test_infra.py --start-services
 ```
 
 ## Optional Flags
@@ -62,3 +67,11 @@ OK migrations at head: <revision>
 OK Redis reachable ...  OR  WARN Redis not reachable ... Continuing (soft fail policy).
 == Test infra bootstrap complete ==
 ```
+
+---
+
+Last Updated: 2026-02-15
+
+Changelog:
+- 2026-02-15: Added deterministic Redis startup via `redis-test` service when `--start-services` is used.
+- 2026-02-15: Updated CI guidance to require Redis for integration and e2e-security bootstrap paths.

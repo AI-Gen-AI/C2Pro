@@ -1,0 +1,110 @@
+name: Scheduled I13 Real E2E Reliability
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  i13-real-e2e-reliability:
+    name: I13 Real E2E Reliability
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
+      SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
+      ANTHROPIC_API_KEY: sk-ant-test-mock-key
+      REDIS_URL: redis://localhost:6379/0
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install python-magic
+
+      - name: Infra preflight
+        run: |
+          mkdir -p apps/api/ci-artifacts
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis | tee apps/api/ci-artifacts/i13-scheduled-preflight.log
+
+      - name: Run I13 real E2E reliability suite
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/e2e/flows/test_i13_decision_intelligence_route_contract.py \
+            tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py \
+            -v \
+            --tb=short \
+            --junit-xml=i13-scheduled-real-e2e-results.xml
+
+      - name: Collect infra diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p apps/api/ci-artifacts
+          echo "=== Docker Compose Services ===" > apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log
+          docker compose -f docker-compose.test.yml ps >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log || true
+          echo "=== All Containers ===" >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log
+          docker ps -a >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log || true
+          echo "=== PostgreSQL Logs ===" >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log
+          docker compose -f docker-compose.test.yml logs postgres-test >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log || true
+          echo "=== Redis Logs ===" >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log
+          docker compose -f docker-compose.test.yml logs redis-test >> apps/api/ci-artifacts/i13-scheduled-infra-diagnostics.log || true
+
+      - name: Upload scheduled I13 junit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i13-scheduled-real-e2e-junit
+          path: apps/api/i13-scheduled-real-e2e-results.xml
+          retention-days: 14
+
+      - name: Upload scheduled I13 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i13-scheduled-real-e2e-diagnostics
+          path: apps/api/ci-artifacts/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

@@ -131,6 +131,7 @@ apps/api/src/
 | AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados |
 | AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados |
 | AI Pipeline (I10-I12)   | ✅ Completado   | 100%     | Stakeholder/RACI + HITL workflow + LangSmith/eval harness + S5 security assertions + DevOps CI gates/scheduled drift checks completados |
+| AI Pipeline (I13)       | ✅ Completado   | 100%     | Real E2E route contract estabilizado (`/api/v1/decision-intelligence/execute`) + auth/tenant deterministic harness + S6 blocking CI gate |
 
 ---
 
@@ -884,6 +885,11 @@ class LeadTimeCalculator:
 | `alert.resolved`     | API       | Coherence, Audit            |
 | `coherence.updated`  | Coherence | UI Dashboard, Audit         |
 
+Reglas de transporte (Redis Pub/Sub):
+- Canal canónico: `c2pro.{env}.{tenant_id}.{topic}`
+- Scope multi-tenant obligatorio: suscripciones y publicación por `tenant_id`
+- Metadatos mínimos de observabilidad por evento: `correlation_id`, `tenant_id`, `topic`
+
 ### 10.3 Flujo Async - Document Processing
 
 ```
@@ -899,7 +905,7 @@ Upload → API → Job Queue → Worker → [
 | 10.4.1 | Configurar Celery + Redis      | ✅ COMPLETADO | M        |
 | 10.4.2 | Implementar Event Bus          | ✅ COMPLETADO | M        |
 | 10.4.3 | Migrar docs processing a async | ⏳ PENDIENTE  | L        |
-| 10.4.4 | Documentar catálogo eventos    | ⏳ PENDIENTE  | S        |
+| 10.4.4 | Documentar catálogo eventos    | ✅ COMPLETADO | S        |
 | 10.4.5 | Dead letter queue              | ✅ COMPLETADO | M        |
 | 10.4.6 | Monitoring workers             | ⏳ PENDIENTE  | M        |
 
@@ -993,6 +999,34 @@ Upload → API → Job Queue → Worker → [
 | PII Detection | Detección correcta   | 100 docs sintéticos |
 | Anonimización | Estrategia aplicada  | Por tipo PII        |
 | Audit Log     | Registro sin valores | Verificación manual |
+
+### 12.7 I13 Real E2E Contract (WS-C/WS-D/WS-E/WS-F)
+
+Estado: `✅ COMPLETADO (2026-02-15)`
+
+Prerrequisitos normativos para ejecución real E2E (sin mocks de servicio):
+1. Infra preflight obligatorio:
+   `python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis`
+2. Tenant/auth deterministic seed en harness E2E:
+   `apps/api/tests/conftest.py`
+3. Endpoint contractual disponible:
+   `POST /api/v1/decision-intelligence/execute`
+4. CI blocking gate activo:
+   job `i13-real-e2e` en `.github/workflows/tests.yml`.
+
+Rationale del parche de migración (bloqueo infra):
+- Archivo: `apps/api/alembic/versions/20260124_0001_add_raci_evidence_text.py`
+- Cambio: guards idempotentes para existencia de tabla/columna en `upgrade/downgrade`.
+- Motivo: evitar fallas de bootstrap por estados parciales de esquema no relacionados con lógica I13.
+
+Riesgos conocidos y mitigación:
+1. Riesgo: los guards pueden ocultar drift estructural severo.
+   Mitigación: verificación de head alembic en bootstrap + artefactos de diagnóstico CI.
+2. Riesgo: fallback manual omita Redis y de falsos positivos.
+   Mitigación: `--require-redis` en rutas CI/S6 bloqueantes.
+
+Runbook operativo:
+- `docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`
 
 ---
 
@@ -1323,3 +1357,6 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 | Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
 | Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + TS-SEC-S4-001 |
 | Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅ | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001 |
+| Sec 3 / Phase 4    | AI Pipeline I13 real E2E path → ✅ | Contrato de ruta I13 + harness auth/tenant determinístico + CI S6 bloqueante `i13-real-e2e` |
+| Sec 12.7           | Nuevo contrato operativo I13 real E2E + rationale de parche de migración | Formaliza prerrequisitos, riesgos y runbook (`docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) |
+| Sec 10.2 / 10.4.4  | Catálogo Event Bus Redis + reglas de tenant scope/metadata → ✅ | Formaliza canal `c2pro.{env}.{tenant_id}.{topic}` y cierre documental del Event Bus |
