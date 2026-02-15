@@ -47,8 +47,8 @@
 
 ### TS-I13-STATE-001: GraphState & Enums (12 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-STATE-001-01` | `test_intent_type_enum_values` | IntentType has all 7 values (DOCUMENT, PROJECT, STAKEHOLDER, PROCUREMENT, ANALYSIS, COHERENCE, UNKNOWN) | P0 | ⬜ |
 | `TS-I13-STATE-001-02` | `test_hitl_status_enum_values` | HITLStatus has all 5 values (NOT_REQUIRED, PENDING, APPROVED, REJECTED, ESCALATED) | P0 | ⬜ |
 | `TS-I13-STATE-001-03` | `test_coherence_category_enum_values` | CoherenceCategory has all 6 values (SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME) | P0 | ⬜ |
@@ -66,8 +66,8 @@
 
 ### TS-I13-MAP-001: Category Mappings (8 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-MAP-001-01` | `test_clause_type_time_mapping` | Delivery Term, Milestone, Schedule, Deadline, Duration → TIME | P0 | ⬜ |
 | `TS-I13-MAP-001-02` | `test_clause_type_budget_mapping` | Payment Obligation, Price, Cost, Invoice, Budget → BUDGET | P0 | ⬜ |
 | `TS-I13-MAP-001-03` | `test_clause_type_scope_mapping` | Scope Definition, Deliverable, Work Package, Exclusion → SCOPE | P0 | ⬜ |
@@ -81,8 +81,8 @@
 
 ### TS-I13-EDGE-001: Conditional Edges (14 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-EDGE-001-01` | `test_route_by_intent_document` | intent=DOCUMENT → "document_ingestion" | P0 | ⬜ |
 | `TS-I13-EDGE-001-02` | `test_route_by_intent_project` | intent=PROJECT → "wbs_generator" | P0 | ⬜ |
 | `TS-I13-EDGE-001-03` | `test_route_by_intent_stakeholder` | intent=STAKEHOLDER → "stakeholder_extractor" | P0 | ⬜ |
@@ -102,8 +102,8 @@
 
 ### TS-I13-NODE-001: Intent Classifier Node (6 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-001-01` | `test_intent_classifier_document_query` | Query about documents → intent=DOCUMENT | P0 | ⬜ |
 | `TS-I13-NODE-001-02` | `test_intent_classifier_project_query` | Query about WBS/project → intent=PROJECT | P0 | ⬜ |
 | `TS-I13-NODE-001-03` | `test_intent_classifier_returns_confidence` | Returns confidence score [0-1] | P0 | ⬜ |
@@ -115,8 +115,8 @@
 
 ### TS-I13-NODE-002: Clause Extractor Node (8 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-002-01` | `test_clause_extractor_extracts_clauses` | Extracts list of clauses from chunks | P0 | ⬜ |
 | `TS-I13-NODE-002-02` | `test_clause_extractor_classifies_time_clauses` | Clauses with dates/deadlines → clauses_by_category["TIME"] | P0 | ⬜ |
 | `TS-I13-NODE-002-03` | `test_clause_extractor_classifies_budget_clauses` | Clauses with payments/costs → clauses_by_category["BUDGET"] | P0 | ⬜ |
@@ -130,8 +130,8 @@
 
 ### TS-I13-NODE-003: Entity Extractor Node (9 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-003-01` | `test_entity_extractor_extracts_dates` | Extracts date entities → extracted_dates | P0 | ⬜ |
 | `TS-I13-NODE-003-02` | `test_entity_extractor_extracts_money` | Extracts money entities → extracted_money | P0 | ⬜ |
 | `TS-I13-NODE-003-03` | `test_entity_extractor_extracts_durations` | Extracts duration entities → extracted_durations | P0 | ⬜ |
@@ -146,8 +146,8 @@
 
 ### TS-I13-NODE-004: Coherence Evaluator Node (10 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-004-01` | `test_coherence_evaluator_runs_time_rules` | Runs TIME category rules (R1, R2, R5, R14) | P0 | ⬜ |
 | `TS-I13-NODE-004-02` | `test_coherence_evaluator_runs_budget_rules` | Runs BUDGET category rules (R6, R15, R16) | P0 | ⬜ |
 | `TS-I13-NODE-004-03` | `test_coherence_evaluator_runs_scope_rules` | Runs SCOPE category rules (R11, R12, R13) | P0 | ⬜ |
@@ -163,8 +163,8 @@
 
 ### TS-I13-NODE-005: HITL Gate Node (6 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-005-01` | `test_hitl_gate_low_confidence_pending` | coherence_score < 0.5 → hitl_status=PENDING | P0 | ⬜ |
 | `TS-I13-NODE-005-02` | `test_hitl_gate_high_impact_pending` | Critical alerts present → hitl_status=PENDING | P0 | ⬜ |
 | `TS-I13-NODE-005-03` | `test_hitl_gate_high_confidence_not_required` | score >= 0.8, no critical alerts → hitl_status=NOT_REQUIRED | P0 | ⬜ |
@@ -176,8 +176,8 @@
 
 ### TS-I13-NODE-006: Other Nodes (8 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-NODE-006-01` | `test_document_ingestion_returns_chunks` | N2 returns ingestion_result, chunks | P1 | ⬜ |
 | `TS-I13-NODE-006-02` | `test_evidence_retriever_returns_evidence` | N5 returns retrieved_evidence, evidence_threshold_met | P1 | ⬜ |
 | `TS-I13-NODE-006-03` | `test_risk_aggregator_clusters_risks` | N7 returns risk_clusters grouped by severity | P1 | ⬜ |
@@ -191,8 +191,8 @@
 
 ### TS-I13-GRAPH-001: Graph Compilation (10 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-GRAPH-001-01` | `test_graph_compiles_without_error` | StateGraph compiles successfully | P0 | ⬜ |
 | `TS-I13-GRAPH-001-02` | `test_graph_has_all_nodes` | Graph contains all 17 nodes | P0 | ⬜ |
 | `TS-I13-GRAPH-001-03` | `test_graph_starts_with_intent_classifier` | Entry point is intent_classifier | P0 | ⬜ |
@@ -208,8 +208,8 @@
 
 ### TS-I13-HITL-001: HITL Interrupts (8 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-HITL-001-01` | `test_hitl_interrupt_pauses_execution` | Graph pauses at human_approval_checkpoint when PENDING | P0 | ⬜ |
 | `TS-I13-HITL-001-02` | `test_hitl_state_persisted` | State is saved to checkpointer on interrupt | P0 | ⬜ |
 | `TS-I13-HITL-001-03` | `test_hitl_resume_with_approval` | Graph resumes after approval, sets hitl_approved_by | P0 | ⬜ |
@@ -223,8 +223,8 @@
 
 ### TS-I13-E2E-001: End-to-End Flow (4 tests)
 
-| Test ID | Test Name | Description | Priority | Status |
-|---------|-----------|-------------|----------|--------|
+| Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
+
 | `TS-I13-E2E-001-01` | `test_e2e_document_to_coherence_score` | Upload doc → extract → coherence score with 6 subscores | P0 | ⬜ |
 | `TS-I13-E2E-001-02` | `test_e2e_low_confidence_requires_approval` | Low confidence → HITL pause → approve → final package | P0 | ⬜ |
 | `TS-I13-E2E-001-03` | `test_e2e_missing_citations_blocked` | Missing citations → FinalizationBlockedError | P0 | ⬜ |
@@ -234,7 +234,7 @@
 
 ## Test Dependencies
 
-```
+
 TS-I13-STATE-001  ──┐
                     ├──► TS-I13-EDGE-001 ──┐
 TS-I13-MAP-001   ──┘                       │
@@ -252,8 +252,8 @@ TS-I13-NODE-005  ──┘
 
 ## Execution Order (Recommended)
 
-| Phase | Suites | Tests | Description |
-|-------|--------|-------|-------------|
+| Phase | Suites | Tests | Description ||-------|--------|-------|-------------|
+
 | **Phase 1** | TS-I13-STATE-001, TS-I13-MAP-001 | 20 | Foundation: State & Mappings |
 | **Phase 2** | TS-I13-EDGE-001 | 14 | Routing Logic |
 | **Phase 3** | TS-I13-NODE-001 to TS-I13-NODE-005 | 39 | Core Nodes |
@@ -266,13 +266,16 @@ TS-I13-NODE-005  ──┘
 ## Summary Checklist
 
 ### Phase 1: Foundation (20 tests)
+
 - [ ] TS-I13-STATE-001: 12 tests — GraphState & Enums
 - [ ] TS-I13-MAP-001: 8 tests — Category Mappings
 
 ### Phase 2: Routing (14 tests)
+
 - [ ] TS-I13-EDGE-001: 14 tests — Conditional Edges
 
 ### Phase 3: Core Nodes (39 tests)
+
 - [ ] TS-I13-NODE-001: 6 tests — Intent Classifier
 - [ ] TS-I13-NODE-002: 8 tests — Clause Extractor
 - [ ] TS-I13-NODE-003: 9 tests — Entity Extractor
@@ -280,21 +283,24 @@ TS-I13-NODE-005  ──┘
 - [ ] TS-I13-NODE-005: 6 tests — HITL Gate
 
 ### Phase 4: Supporting Nodes (8 tests)
+
 - [ ] TS-I13-NODE-006: 8 tests — Other Nodes
 
 ### Phase 5: Integration (18 tests)
+
 - [ ] TS-I13-GRAPH-001: 10 tests — Graph Compilation
 - [ ] TS-I13-HITL-001: 8 tests — HITL Interrupts
 
 ### Phase 6: E2E (4 tests)
+
 - [ ] TS-I13-E2E-001: 4 tests — End-to-End Flow
 
 ---
 
 ## Audit Plan Summary (for @qa-agent)
 
-| Audit Focus | Test Suites | Key Assertions |
-|-------------|-------------|----------------|
+| Audit Focus | Test Suites | Key Assertions ||-------------|-------------|----------------|
+
 | **State Transition Correctness** | TS-I13-EDGE-001 | intent routes to correct node |
 | **HITL Interruption** | TS-I13-NODE-005, TS-I13-HITL-001 | graph pauses when confidence < threshold |
 | **Fallback Trigger** | TS-I13-NODE-006-08, TS-I13-E2E-001-04 | switches to GPT-4o on Anthropic timeout |

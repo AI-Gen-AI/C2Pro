@@ -23,15 +23,62 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from asgi_lifespan import LifespanManager
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
+from src.core.database import get_session
+from src.config import settings
+from src.main import create_application
 
 
 # ===========================================
 # ADDITIONAL FIXTURES FOR TENANT ISOLATION
 # ===========================================
+
+
+@pytest_asyncio.fixture
+async def app():
+    """
+    Build app with rate limiting disabled for deterministic isolation assertions.
+
+    The rate-limit wrapper can alter endpoint signatures in test mode and produce
+    422 validation errors unrelated to tenant-boundary behavior.
+    """
+    previous_rate_limit = settings.rate_limit_enabled
+    settings.rate_limit_enabled = False
+    try:
+        yield create_application()
+    finally:
+        settings.rate_limit_enabled = previous_rate_limit
+
+
+@pytest_asyncio.fixture
+async def client(app, db):
+    """
+    Override shared client fixture to run app lifespan.
+
+    This ensures startup initializes infra (including DB manager) while tests
+    still use the isolated test session via dependency override.
+    """
+    async def override_get_session():
+        yield db
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            timeout=30.0,
+        ) as test_client:
+            yield test_client
+
+    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
@@ -53,7 +100,7 @@ async def tenant_a(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.flush()
+    await db.commit()
     await db.refresh(tenant)
     return tenant
 
@@ -77,7 +124,7 @@ async def tenant_b(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.flush()
+    await db.commit()
     await db.refresh(tenant)
     return tenant
 
@@ -99,7 +146,7 @@ async def user_a(db, tenant_a: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -121,7 +168,7 @@ async def user_b(db, tenant_b: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -653,12 +700,61 @@ async def test_010_rls_context_set_and_reset(
 
     assert response.status_code == 200
 
-    # After request, verify RLS context is reset
-    # Check that app.current_tenant is NULL in a new session
+    # After request, verify RLS context is reset when GUC is available.
+    # Some test runtimes do not define the custom app.current_tenant setting.
+    try:
+        result = await db.execute(text("SHOW app.current_tenant"))
+    except ProgrammingError:
+        pytest.skip("RLS GUC app.current_tenant is not configured in this DB runtime")
+
+    current_tenant = result.scalar_one_or_none()
+    assert current_tenant in (None, "", "NULL")
+
+
+# ===========================================
+# TEST 11: RLS GUC Contract Must Exist (RED)
+# ===========================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+@pytest.mark.e2e
+@pytest.mark.skipif(
+    "sqlite" in __import__("src.config", fromlist=["settings"]).settings.database_url,
+    reason="RLS is PostgreSQL-specific",
+)
+async def test_011_rls_guc_contract_is_available(
+    client,
+    db,
+    user_a: User,
+    tenant_a: Tenant,
+    generate_token,
+):
+    """
+    GIVEN Protected runtime is active under PostgreSQL
+    WHEN A request is executed and DB session checks tenant RLS GUC
+    THEN `SHOW app.current_tenant` is available (no missing GUC contract)
+
+    RED objective: fail explicitly while GUC contract is not wired.
+    """
+    token_a = generate_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        email=user_a.email,
+        role="admin",
+    )
+    headers_a = {"Authorization": f"Bearer {token_a}"}
+
+    response = await client.get(
+        "/api/v1/projects",
+        headers=headers_a,
+    )
+
+    assert response.status_code == 200
+
+    # RED: current runtime raises if GUC contract is not configured.
     result = await db.execute(text("SHOW app.current_tenant"))
     current_tenant = result.scalar_one_or_none()
-
-    # Should be reset (empty string or None)
     assert current_tenant in (None, "", "NULL")
 
 
@@ -680,10 +776,9 @@ async def test_edge_001_cross_tenant_user_id_blocked(
     """
     GIVEN A manipulated JWT with Tenant A's tenant_id but User B's user_id
     WHEN User makes a request
-    THEN Request succeeds (tenant_id is authoritative)
-    BUT User can only access Tenant A's data (not User B's tenant)
+    THEN Request is rejected with 401 (invalid user in tenant context)
 
-    Security: Validates tenant_id takes precedence over user_id for isolation.
+    Security: Validates strict user-tenant binding and blocks token tampering.
     """
     # Create malicious token: Tenant A's tenant_id + User B's user_id
     malicious_token = generate_token(
@@ -700,9 +795,8 @@ async def test_edge_001_cross_tenant_user_id_blocked(
         headers=headers,
     )
 
-    # Should succeed (valid tenant_id)
-    assert response.status_code == 200
-
-    # But should only see Tenant A's projects (RLS enforced by tenant_id)
+    # Strict auth must reject mismatched user_id/tenant_id combinations
+    assert response.status_code == 401
     body = response.json()
-    # Cannot verify project IDs without actual data, but at least not 401
+    assert "detail" in body
+    assert "invalid user" in body["detail"].lower()
