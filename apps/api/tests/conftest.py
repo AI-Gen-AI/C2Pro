@@ -65,7 +65,8 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
 
 # Database
-os.environ.setdefault("DATABASE_URL", "postgresql://nonsuperuser:test@localhost:5433/c2pro_test")
+# Align default local test URL with docker-compose.test.yml credentials.
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test")
 
 # Supabase
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
