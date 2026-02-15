@@ -5,8 +5,8 @@ Revises: 20260104_0000
 Create Date: 2026-01-24
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 
 # revision identifiers, used by Alembic.
@@ -17,8 +17,34 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("stakeholder_wbs_raci", sa.Column("evidence_text", sa.Text(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    table_name = "stakeholder_wbs_raci"
+    column_name = "evidence_text"
+
+    if not inspector.has_table(table_name):
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+    if column_name in existing_columns:
+        return
+
+    op.add_column(table_name, sa.Column(column_name, sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("stakeholder_wbs_raci", "evidence_text")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    table_name = "stakeholder_wbs_raci"
+    column_name = "evidence_text"
+
+    if not inspector.has_table(table_name):
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+    if column_name not in existing_columns:
+        return
+
+    op.drop_column(table_name, column_name)
