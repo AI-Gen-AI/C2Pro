@@ -1279,6 +1279,7 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-I9-PROC-ADP-002 - Procurement persistence adapter transactional boundary (rollback on second write failure + idempotent retry by fingerprint) - [x] Implemented (Adapter Tests & Adapter Logic)
 - [x] TS-I9-PROC-HTTP-001 - Procurement HTTP planning endpoint contract + error mapping - [x] Implemented (Adapter HTTP Tests & Router Logic)
 - [x] TS-I9-PROC-INT-001 - Procurement pipeline integration (`WBS/BOM -> plan`) with traceability and cross-tenant guard - [x] Implemented (Integration Tests & Application Integration Logic)
+- [x] TS-I9-PROC-INT-002 - Procurement integrated pipeline atomicity (rollback on persistence failure + idempotent retry by fingerprint) - [x] Implemented (Integration Tests & Application Integration Logic)
 - [x] TS-SEC-I9-001 - I9 security hardening (tenant header auth, 503 sanitization, cross-tenant -> 403) - [x] Implemented (Security Tests & HTTP Hardening)
 - [x] TS-SEC-S4-001 - Security Assertions (no cross-tenant profile leakage, traceability enforcement, no high-impact bypass) - [x] Implemented (Unit Tests & Domain Logic)
 
