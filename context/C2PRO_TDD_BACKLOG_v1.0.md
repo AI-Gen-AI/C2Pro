@@ -1,8 +1,8 @@
 # C2Pro - TDD Backlog Completo v1.0
 
-> **Versión:** 1.8  
-> **Fecha:** 2026-02-14  
-> **Última Actualización:** 2026-02-15  
+> **Versión:** 1.9  
+> **Fecha:** 2026-02-17  
+> **Última Actualización:** 2026-02-17  
 > **Alineado con:** PLAN_ARQUITECTURA_v2.1.md, Diagrama Maestro v2.2.1  
 > **Metodología:** TDD Estricto (Red → Green (Fake It) → Refactor (Triangulation))
 
@@ -1202,6 +1202,7 @@ ESTRATEGIA GREEN para este suite:
 | 1.6     | 2026-02-15 | Architecture Review Board | Cierre Redis Event Bus: hardening de seguridad/telemetría + bootstrap Redis determinístico local/CI |
 | 1.7     | 2026-02-15 | Architecture Review Board | Cierre WS-F S6: runbook I13 real E2E + checklist de prerrequisitos + rationale/riesgos de parche de migración |
 | 1.8     | 2026-02-15 | Architecture Review Board | Cierre WS-G S6: contrato RLS GUC `app.current_tenant` (RED→GREEN), bootstrap a nivel conexión PostgreSQL y validación E2E de aislamiento tenant |
+| 1.9     | 2026-02-17 | Architecture Review Board | Sincronización documental de cambios 2026-02-16/17: alta TS-UD-WBS-001 (completada) + seguimiento TS-I13-MAP-001 (completada) y TS-I13-EDGE-001 (en progreso) |
 
 ---
 
@@ -1271,7 +1272,14 @@ ESTRATEGIA GREEN para este suite:
 
 - [x] TS-I7-SCORE-DOM-001 / TS-I7-SCORE-PROFILES-001 / TS-I7-SCORE-SVC-001 - Risk Scoring + Coherence Score Aggregation - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I8-WBS-BOM-DOM-001 / TS-I8-WBS-BOM-APP-001 - WBS/BOM Generation Integrity + Traceability - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-UD-WBS-001 - WBS Item Entity (módulo `wbs`) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I9-PROC-DOM-001 / TS-I9-PROC-APP-001 - Procurement Planning Intelligence (lead-time/conflict deterministic logic) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I9-PROC-APP-002 - Procurement app-repository contract (`tenant_id` scope + fail-fast propagation) - [x] Implemented (Unit Tests & Application Logic)
+- [x] TS-I9-PROC-ADP-001 - Procurement persistence adapter tenant filtering contract - [x] Implemented (Adapter Tests & Adapter Logic)
+- [x] TS-I9-PROC-ADP-002 - Procurement persistence adapter transactional boundary (rollback on second write failure + idempotent retry by fingerprint) - [x] Implemented (Adapter Tests & Adapter Logic)
+- [x] TS-I9-PROC-HTTP-001 - Procurement HTTP planning endpoint contract + error mapping - [x] Implemented (Adapter HTTP Tests & Router Logic)
+- [x] TS-I9-PROC-INT-001 - Procurement pipeline integration (`WBS/BOM -> plan`) with traceability and cross-tenant guard - [x] Implemented (Integration Tests & Application Integration Logic)
+- [x] TS-SEC-I9-001 - I9 security hardening (tenant header auth, 503 sanitization, cross-tenant -> 403) - [x] Implemented (Security Tests & HTTP Hardening)
 - [x] TS-SEC-S4-001 - Security Assertions (no cross-tenant profile leakage, traceability enforcement, no high-impact bypass) - [x] Implemented (Unit Tests & Domain Logic)
 
 ### Sprint 5 (Core AI Pipeline v4.0)
@@ -1285,9 +1293,14 @@ ESTRATEGIA GREEN para este suite:
 ### Sprint 6 (Core AI Pipeline v4.0)
 
 - [x] TS-I13-E2E-REAL-001 - I13 Decision Intelligence real E2E path (route contract + deterministic auth/tenant harness) - [x] Implemented (Unit Tests & Domain Logic)
+- [x] TS-I13-MAP-001 - Category mappings para orquestación LangGraph (core orchestration) - [x] Implemented (Unit Tests & Core Orchestration Logic)
+- [ ] TS-I13-EDGE-001 - Conditional edges para orquestación LangGraph - [ ] En progreso (ruteo por `intent` + `evidence gate` parcial; faltan casos HITL/citations)
 - [x] TS-DEVOPS-S6-001 - Blocking CI gate `i13-real-e2e` + scheduled reliability workflow with infra preflight and diagnostics artifacts - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-DOC-S6-001 - WS-F documentation closure (tactical checklist prerequisites + architecture/backlog updates + `docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-E2E-SEC-TNT-001 - WS-G RLS GUC contract hardening (`app.current_tenant`) + deterministic tenant-isolation E2E assertions - [x] Implemented (RED/GREEN validated in E2E Security Suite)
 - [x] TS-E2E-FLW-BLK-001 - Bulk Operations E2E flow contract (limits, async jobs, progress, partial success, atomic rollback, throttling, tenant isolation) - [x] Implemented (RED/GREEN validated in E2E Flow Suite)
 - [x] TS-E2E-ERR-TIM-001 - Timeout & fallback resilience contract (timeout mapping, retry budget, circuit open/close, tenant isolation, traceability headers) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
 - [x] TS-E2E-ERR-CON-001 - Concurrent modifications resilience contract (optimistic locking, ETag/If-Match preconditions, conflict codes, idempotency replay protection) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
+- [x] TS-E2E-ERR-REC-001 - Error recovery resilience contract (DLQ enqueue/replay, quarantine policy, max-attempt guard, tenant-scoped replay, duplicate correlation handling, replay audit event) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
+- [x] TS-E2E-PER-LRG-001 - Large-load performance contract (bulk throughput metadata, p95 guardrail, structured 429 + Retry-After, Server-Timing, observability snapshot endpoint) - [x] Implemented (RED/GREEN validated in E2E Performance Suite)
+- [x] TS-UD-ANA-HYB-001 - Hybrid Search Result domain contract (weighted fusion score, normalization bounds, rank/text/score validations) - [x] Implemented (RED/GREEN validated in Analysis Domain Unit Suite)

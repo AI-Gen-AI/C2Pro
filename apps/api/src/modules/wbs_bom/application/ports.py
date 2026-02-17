@@ -27,11 +27,19 @@ class WBSBOMRepository(ABC):
 class WBSBOMGenerationService:
     """Generates normalized WBS/BOM artifacts from extracted clauses."""
 
+    MIN_CONFIDENCE_THRESHOLD: float = 0.5
+
     def __init__(self, repository: WBSBOMRepository):
         self.repository = repository
         self.integrity_service = WBSBOMIntegrityService()
 
     async def generate_from_clauses(self, clauses: list[ExtractedClause]) -> dict[str, list]:
+        low_confidence_clauses = [
+            clause for clause in clauses if clause.confidence < self.MIN_CONFIDENCE_THRESHOLD
+        ]
+        if low_confidence_clauses:
+            raise ValueError("low confidence clauses are blocked from auto-generation")
+
         wbs_items: list[WBSItem] = []
         bom_items: list[BOMItem] = []
 

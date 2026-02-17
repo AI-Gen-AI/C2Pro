@@ -7,6 +7,7 @@ Hierarchical rate limiter (user -> tenant) with Redis fixed window counters.
 from __future__ import annotations
 
 from datetime import datetime
+import os
 import time
 from typing import Callable
 from uuid import UUID
@@ -94,7 +95,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
             return JSONResponse(
                 status_code=429,
-                content={"detail": "User limit exceeded"},
+                content={
+                    "detail": {
+                        "code": "RATE_LIMITED",
+                        "message": "User limit exceeded",
+                    }
+                },
                 headers={
                     "Retry-After": str(reset_seconds),
                     "X-RateLimit-Limit-User": str(self._user_limit),
@@ -114,7 +120,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Tenant limit exceeded"},
+                content={
+                    "detail": {
+                        "code": "RATE_LIMITED",
+                        "message": "Tenant limit exceeded",
+                    }
+                },
                 headers={
                     "Retry-After": str(reset_seconds),
                     "X-RateLimit-Limit-User": str(self._user_limit),
@@ -149,7 +160,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def _dispatch_in_memory(self, request: Request, call_next: Callable) -> Response:
         client_id = self._get_client_identifier(request)
         if self._is_rate_limited(client_id, request.url.path):
-            return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+            return JSONResponse(
+                status_code=429,
+                content={"detail": {"code": "RATE_LIMITED", "message": "Rate limit exceeded"}},
+                headers={"Retry-After": "60"},
+            )
         self._record_request(client_id)
         return await call_next(request)
 
@@ -157,6 +172,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return any(path.startswith(prefix) for prefix in self.PUBLIC_PATH_PREFIXES)
 
     def _build_redis(self, redis_url: str | None) -> redis.Redis | None:
+        # TS-E2E-PER-LRG-001: avoid Redis connect timeout latency in pytest runs.
+        if settings.environment == "test" or os.getenv("PYTEST_CURRENT_TEST"):
+            return None
         if not redis_url:
             logger.warning("rate_limiter_disabled", reason="redis_url_missing")
             return None

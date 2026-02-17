@@ -11,12 +11,7 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  webServer: {
-    command: "pnpm exec next dev --port 3000",
-    url: baseURL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  // webServer disabled - using existing dev server on port 3000
   projects: [
     {
       name: "chromium",

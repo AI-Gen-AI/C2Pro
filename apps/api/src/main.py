@@ -17,6 +17,7 @@ from src.core.database import close_db, init_db
 from src.core.events import build_event_bus
 from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
+    APIContractMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
@@ -174,6 +175,7 @@ def create_application() -> FastAPI:
     )
 
     # Custom middleware
+    app.add_middleware(APIContractMiddleware)  # Adds X-API-Version and X-Response-Time headers
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(TenantIsolationMiddleware)
