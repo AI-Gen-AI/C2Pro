@@ -1275,12 +1275,14 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-UD-WBS-001 - WBS Item Entity (módulo `wbs`) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I9-PROC-DOM-001 / TS-I9-PROC-APP-001 - Procurement Planning Intelligence (lead-time/conflict deterministic logic) - [x] Implemented (Unit Tests & Domain Logic)
 - [x] TS-I9-PROC-APP-002 - Procurement app-repository contract (`tenant_id` scope + fail-fast propagation) - [x] Implemented (Unit Tests & Application Logic)
+- [x] TS-I9-PROC-TXN-001 - Procurement application transactional atomicity (rollback on save/commit failure + idempotent retry by fingerprint) - [x] Implemented (Unit Tests & Application Logic)
 - [x] TS-I9-PROC-ADP-001 - Procurement persistence adapter tenant filtering contract - [x] Implemented (Adapter Tests & Adapter Logic)
 - [x] TS-I9-PROC-ADP-002 - Procurement persistence adapter transactional boundary (rollback on second write failure + idempotent retry by fingerprint) - [x] Implemented (Adapter Tests & Adapter Logic)
 - [x] TS-I9-PROC-HTTP-001 - Procurement HTTP planning endpoint contract + error mapping - [x] Implemented (Adapter HTTP Tests & Router Logic)
 - [x] TS-I9-PROC-INT-001 - Procurement pipeline integration (`WBS/BOM -> plan`) with traceability and cross-tenant guard - [x] Implemented (Integration Tests & Application Integration Logic)
 - [x] TS-I9-PROC-INT-002 - Procurement integrated pipeline atomicity (rollback on persistence failure + idempotent retry by fingerprint) - [x] Implemented (Integration Tests & Application Integration Logic)
 - [x] TS-SEC-I9-001 - I9 security hardening (tenant header auth, 503 sanitization, cross-tenant -> 403) - [x] Implemented (Security Tests & HTTP Hardening)
+- [x] TS-SEC-I9-002 - I9 atomicity security hardening (sanitized transactional errors + no partial-state leakage in rollback path) - [x] Implemented (Security Tests & Application Integration Hardening)
 - [x] TS-SEC-S4-001 - Security Assertions (no cross-tenant profile leakage, traceability enforcement, no high-impact bypass) - [x] Implemented (Unit Tests & Domain Logic)
 
 ### Sprint 5 (Core AI Pipeline v4.0)
@@ -1305,3 +1307,40 @@ ESTRATEGIA GREEN para este suite:
 - [x] TS-E2E-ERR-REC-001 - Error recovery resilience contract (DLQ enqueue/replay, quarantine policy, max-attempt guard, tenant-scoped replay, duplicate correlation handling, replay audit event) - [x] Implemented (RED/GREEN validated in E2E Resilience Suite)
 - [x] TS-E2E-PER-LRG-001 - Large-load performance contract (bulk throughput metadata, p95 guardrail, structured 429 + Retry-After, Server-Timing, observability snapshot endpoint) - [x] Implemented (RED/GREEN validated in E2E Performance Suite)
 - [x] TS-UD-ANA-HYB-001 - Hybrid Search Result domain contract (weighted fusion score, normalization bounds, rank/text/score validations) - [x] Implemented (RED/GREEN validated in Analysis Domain Unit Suite)
+
+### Sprint 7 (Week 1 - E2E Foundation)
+
+**Fecha:** 2026-02-17  
+**Enfoque:** Implementación GREEN Phase para E2E Test Suites de Week 1
+
+- [x] **TS-E2E-J2-001** - Weekly Project Review Journey (GREEN Phase) - [x] Implemented
+  - Backend API endpoints implemented:
+    - [x] Auth: POST /auth/login (existente)
+    - [x] Projects: GET /projects, GET /projects/{id} (existente)
+    - [x] Coherence: GET /api/coherence/dashboard/{project_id} (existente)
+    - [x] Alerts: GET /projects/{project_id}/alerts (existente)
+    - [x] WBS: GET /projects/{project_id}/wbs (existente)
+    - [x] Budget: GET /projects/{project_id}/budget (implementado en GREEN phase)
+    - [x] Documents: GET /projects/{project_id}/documents (existente)
+  - Frontend E2E tests: 8 tests en `apps/web/src/tests/e2e/journeys/journey-2-review.spec.ts`
+  - Playwright config: Proyecto `e2e-j2-weekly-review` añadido con metadata
+  - Estado: **GREEN Phase completada** - Todos los endpoints listos para testing
+
+---
+
+**Last Updated:** 2026-02-17  
+**Status:** Sprint 7 en progreso - TS-E2E-J2-001 GREEN Phase completada
+
+- [x] **TS-UAD-WBS-FILTER-001** - WBS Filter by Status Tests (REFACTOR Phase) - [x] Implemented
+  - Hook: `useWbsFilter` in `apps/web/hooks/useWbsFilter.ts`
+  - Refactoring improvements:
+    - [x] Strict typing with `WBSFilterType` union type
+    - [x] Strategy pattern for filter implementations
+    - [x] Input validation with `isValidFilter()` guard
+    - [x] Centralized configuration constants
+    - [x] Comprehensive error handling (SSR, storage failures)
+    - [x] Improved JSDoc documentation
+    - [x] Optimized `useEffect` with `useRef` for first-render check
+    - [x] Better code organization with helper functions
+  - Tests: 11 tests passing in `hooks/__tests__/useWbsFilter.test.ts`
+  - Estado: **REFACTOR Phase completada** - Triangulation complete, all tests passing

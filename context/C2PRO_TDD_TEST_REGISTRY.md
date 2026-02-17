@@ -112,15 +112,22 @@ _Execution Order: 12-25 | Goal: Make Week 1 tests PASS_
 
 ### Week 2 Test Details
 
-#### TS-UAD-WBS-FILTER-001: WBS Filter by Status Tests (6 tests)
+#### TS-UAD-WBS-FILTER-001: WBS Filter by Status Tests (7 tests) - 🔴 RED Phase Complete
 
-- `should filter not-started items (completion = 0%)`
-- `should filter in-progress items (completion = 1-99%)`
-- `should filter complete items (completion = 100%)`
-- `should update URL query params when filter changes`
-- `should read filter from URL on mount`
-- `should persist filter in localStorage`
-- `should combine multiple filters`
+**Status:** Failing tests written, awaiting GREEN phase implementation  
+**Last Updated:** 2026-02-17  
+**Tests:** 7 tests (originally 6 + 1 added for completeness)
+
+- [x] `should filter not-started items (completion = 0%)`
+- [x] `should filter in-progress items (completion = 1-99%)`
+- [x] `should filter complete items (completion = 100%)`
+- [x] `should update URL query params when filter changes`
+- [x] `should read filter from URL on mount`
+- [x] `should persist filter in localStorage`
+- [x] `should combine multiple filters`
+- [x] `should clear filter and show all items` (additional test)
+- [x] `should return all items when no filter is set` (additional test)
+- [x] `should handle empty items array` (additional test)
 
 #### TS-UAD-WBS-SEARCH-001: WBS Search Tests (7 tests)
 

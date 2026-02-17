@@ -11,10 +11,10 @@ Documento de estado de implementación y plan de pruebas para I9:
 - `TS-I9-PROC-HTTP-001`
 - `TS-I9-PROC-INT-001`
 - `TS-SEC-I9-001`
-- `TS-I9-PROC-TXN-001` (pendiente)
-- `TS-I9-PROC-ADP-002` (pendiente)
-- `TS-I9-PROC-INT-002` (pendiente)
-- `TS-SEC-I9-002` (pendiente)
+- `TS-I9-PROC-TXN-001`
+- `TS-I9-PROC-ADP-002`
+- `TS-I9-PROC-INT-002`
+- `TS-SEC-I9-002`
 - `TS-SEC-S4-001` (cobertura transversal de seguridad I7-I9)
 
 ## Checklist Done
@@ -39,6 +39,10 @@ Documento de estado de implementación y plan de pruebas para I9:
   - `apps/api/tests/modules/procurement/adapters/http/test_i9_planning_router.py`
 - [x] Existe suite de integración de pipeline I9:
   - `apps/api/tests/modules/integration/test_i9_procurement_pipeline_integration.py`
+- [x] Existe suite de integración transaccional I9:
+  - `apps/api/tests/modules/integration/test_i9_procurement_pipeline_atomicity_integration.py`
+- [x] Existe suite de seguridad transaccional I9:
+  - `apps/api/tests/security/test_i9_procurement_atomicity_security_red.py`
 - [x] Implementación `src/modules/procurement` expandida a capas adapter/integration:
   - `apps/api/src/modules/procurement/adapters/persistence/snapshot_repository.py`
   - `apps/api/src/modules/procurement/adapters/http/router.py`
@@ -48,6 +52,16 @@ Documento de estado de implementación y plan de pruebas para I9:
     - `pytest apps/api/tests/modules/procurement/domain/test_i9_procurement_intelligence.py apps/api/tests/modules/procurement/application/test_i9_procurement_planning_service.py apps/api/tests/modules/procurement/application/test_i9_repository_contracts.py apps/api/tests/modules/procurement/adapters/test_i9_persistence_tenant_filters.py apps/api/tests/modules/procurement/adapters/http/test_i9_planning_router.py apps/api/tests/modules/integration/test_i9_procurement_pipeline_integration.py apps/api/tests/security/test_i9_procurement_security_red.py apps/api/tests/security/test_s4_scoring_wbs_procurement_security.py -q`
   - Resultado:
     - `18 passed`
+- [x] Verificación de cierre transaccional I9 ejecutada:
+  - Comando:
+    - `pytest apps/api/tests/security/test_i9_procurement_atomicity_security_red.py apps/api/tests/modules/integration/test_i9_procurement_pipeline_atomicity_integration.py apps/api/tests/modules/integration/test_i9_procurement_pipeline_integration.py -q`
+  - Resultado:
+    - `6 passed`
+- [x] Verificación de atomicidad transaccional en capa aplicación I9 ejecutada:
+  - Comando:
+    - `pytest apps/api/tests/modules/procurement/application/test_i9_transactional_atomicity.py -q`
+  - Resultado:
+    - `3 passed`
 
 ## Checklist Pending
 
@@ -59,10 +73,10 @@ Documento de estado de implementación y plan de pruebas para I9:
 - [x] Añadir hardening de seguridad I9:
   - No bypass de `requires_human_review` cuando hay conflictos `HIGH/CRITICAL`.
   - No leakage cross-tenant.
-- [ ] `TS-I9-PROC-TXN-001`: atomicidad en capa aplicación (sin estado parcial en fallos `save/commit`).
-- [ ] `TS-I9-PROC-ADP-002`: frontera transaccional en adapter de persistencia.
-- [ ] `TS-I9-PROC-INT-002`: atomicidad de pipeline integrado y consistencia tras retry.
-- [ ] `TS-SEC-I9-002`: hardening de seguridad sobre atomicidad y no exposición de estado parcial.
+- [x] `TS-I9-PROC-TXN-001`: atomicidad en capa aplicación (sin estado parcial en fallos `save/commit`).
+- [x] `TS-I9-PROC-ADP-002`: frontera transaccional en adapter de persistencia.
+- [x] `TS-I9-PROC-INT-002`: atomicidad de pipeline integrado y consistencia tras retry.
+- [x] `TS-SEC-I9-002`: hardening de seguridad sobre atomicidad y no exposición de estado parcial.
 
 ## Plan de Pruebas para Cierre de I9
 
@@ -71,10 +85,10 @@ Documento de estado de implementación y plan de pruebas para I9:
 - [x] `TS-I9-PROC-HTTP-001` (nuevo): contrato HTTP, errores y auth/tenant context.
 - [x] `TS-I9-PROC-INT-001` (nuevo): flujo integrado y consistencia de salida.
 - [x] `TS-SEC-I9-001` (nuevo/expansión): hardening de bypass y manipulación de impacto.
-- [ ] `TS-I9-PROC-TXN-001` (nuevo): atomicidad transaccional en application service.
-- [ ] `TS-I9-PROC-ADP-002` (nuevo): rollback transaccional en persistence adapter.
-- [ ] `TS-I9-PROC-INT-002` (nuevo): integración con rollback/no partial-write.
-- [ ] `TS-SEC-I9-002` (nuevo): seguridad de atomicidad y sanitización de error en fallos transaccionales.
+- [x] `TS-I9-PROC-TXN-001` (nuevo): atomicidad transaccional en application service.
+- [x] `TS-I9-PROC-ADP-002` (nuevo): rollback transaccional en persistence adapter.
+- [x] `TS-I9-PROC-INT-002` (nuevo): integración con rollback/no partial-write.
+- [x] `TS-SEC-I9-002` (nuevo): seguridad de atomicidad y sanitización de error en fallos transaccionales.
 
 ## Criterio de Cierre (Definition of Done)
 
@@ -95,3 +109,5 @@ Changelog:
 - 2026-02-16: Creado checklist de implementación I9 con estado `done/pending` y plan de pruebas de cierre.
 - 2026-02-16: Actualizado estado a cierre de suites I9 (`APP-002`, `ADP-001`, `HTTP-001`, `INT-001`, `SEC-I9-001`) con evidencia de ejecución (`18 passed`).
 - 2026-02-17: Añadido plan pendiente de pruebas transaccionales (`TS-I9-PROC-TXN-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-002`).
+- 2026-02-17: Actualizado estado tras cierre transaccional I9 (`TS-I9-PROC-ADP-002`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-002`) con evidencia de ejecución (`6 passed`).
+- 2026-02-17: Cerrado `TS-I9-PROC-TXN-001` (idempotencia por fingerprint en capa aplicación) con evidencia de ejecución (`3 passed`).

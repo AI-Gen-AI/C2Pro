@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable
+from typing import Any, Iterable
 from uuid import UUID, uuid4
 
 import structlog
@@ -12,12 +12,14 @@ from src.stakeholders.application.list_project_stakeholders_use_case import (
     ListProjectStakeholdersUseCase,
 )
 from src.stakeholders.application.dtos import (
+    RaciGenerationAssignment,
     RaciGenerationResult,
     RaciStakeholderInput,
     RaciWBSItemInput,
 )
 from src.stakeholders.domain.models import RaciAssignment
 from src.stakeholders.ports.raci_generator import RaciGeneratorPort
+from src.stakeholders.ports.raci_inference_service import IRaciInferenceService
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 logger = structlog.get_logger()
@@ -33,6 +35,7 @@ class RaciGenerationService:
         document_repository: IDocumentRepository,
         raci_generator: RaciGeneratorPort,
         stakeholder_repository: IStakeholderRepository,
+        raci_inference_service: IRaciInferenceService | None = None,
     ) -> None:
         self.tenant_id = tenant_id
         self.list_stakeholders_use_case = list_stakeholders_use_case
@@ -40,6 +43,7 @@ class RaciGenerationService:
         self.document_repository = document_repository
         self.raci_generator = raci_generator
         self.stakeholder_repository = stakeholder_repository
+        self.raci_inference_service = raci_inference_service
 
     async def generate_and_persist(self, project_id: UUID) -> RaciGenerationResult:
         wbs_items = await self._load_leaf_wbs_items(project_id)
@@ -48,15 +52,31 @@ class RaciGenerationService:
         if not wbs_items or not stakeholders:
             return RaciGenerationResult(assignments=[], warnings=[])
 
+        i10_warnings = await self._run_optional_i10_inference(
+            project_id=project_id,
+            wbs_items=wbs_items,
+        )
+        if i10_warnings:
+            raise ValueError("requires PMO/legal validation")
+
         result = await self.raci_generator.generate_assignments(
             wbs_items=wbs_items,
             stakeholders=stakeholders,
         )
+        result.warnings = _merge_warnings(result.warnings, i10_warnings)
 
-        await self._persist_assignments(
-            project_id=project_id,
-            assignments=result.assignments,
-        )
+        try:
+            await self._persist_assignments(
+                project_id=project_id,
+                assignments=result.assignments,
+                known_stakeholder_ids={stakeholder.id for stakeholder in stakeholders},
+            )
+        except Exception:
+            logger.warning(
+                "raci_assignments_persist_failed",
+                project_id=str(project_id),
+            )
+            raise ValueError("unable to persist raci assignments") from None
 
         return result
 
@@ -104,18 +124,27 @@ class RaciGenerationService:
     async def _persist_assignments(
         self,
         project_id: UUID,
-        assignments: list,
+        assignments: list[RaciGenerationAssignment],
+        known_stakeholder_ids: set[UUID] | None = None,
     ) -> None:
         if not assignments:
             return
 
-        existing_rows = await self.stakeholder_repository.list_raci_assignments(project_id)
+        if known_stakeholder_ids is None:
+            known_stakeholder_ids = set()
+
+        existing_rows = await self.stakeholder_repository.list_raci_assignments(
+            project_id,
+            tenant_id=self.tenant_id,
+        )
         existing_keys = {
             (row.wbs_item_id, row.stakeholder_id, row.raci_role) for row in existing_rows
         }
 
         new_rows: list[RaciAssignment] = []
         for assignment in assignments:
+            if assignment.stakeholder_id not in known_stakeholder_ids:
+                raise ValueError("unresolved stakeholder identity")
             key = (assignment.wbs_item_id, assignment.stakeholder_id, assignment.role)
             if key in existing_keys:
                 continue
@@ -146,3 +175,47 @@ class RaciGenerationService:
             project_id=str(project_id),
             assignments=len(new_rows),
         )
+
+    async def _run_optional_i10_inference(
+        self,
+        *,
+        project_id: UUID,
+        wbs_items: list[RaciWBSItemInput],
+    ) -> list[str]:
+        if self.raci_inference_service is None:
+            return []
+
+        contract_statements = [
+            {"text": item.clause_text}
+            for item in wbs_items
+            if item.clause_text is not None
+        ]
+        _, ambiguities = await self.raci_inference_service.generate_raci_matrix(
+            contract_statements=contract_statements,
+            tenant_id=self.tenant_id,
+            project_id=project_id,
+        )
+        return _build_ambiguity_warnings(ambiguities)
+
+
+def _build_ambiguity_warnings(ambiguities: list[dict[str, Any]]) -> list[str]:
+    labels: set[str] = set()
+    for item in ambiguities:
+        name = item.get("entity_name")
+        if isinstance(name, str):
+            normalized = " ".join(name.split()).strip().lower()
+            if normalized:
+                labels.add(normalized)
+    return [f"ambiguous stakeholder mapping: {name}" for name in sorted(labels)]
+
+
+def _merge_warnings(existing: list[str], inferred: list[str]) -> list[str]:
+    """Append inferred warnings without duplicates, preserving existing order."""
+    merged = list(existing)
+    seen = set(existing)
+    for warning in inferred:
+        if warning in seen:
+            continue
+        merged.append(warning)
+        seen.add(warning)
+    return merged

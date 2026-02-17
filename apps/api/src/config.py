@@ -89,6 +89,25 @@ class Settings(BaseSettings):
     bcrypt_rounds: int = Field(default=12, ge=10, le=14)
 
     # ===========================================
+    # CLERK (Authentication)
+    # ===========================================
+
+    clerk_secret_key: str | None = Field(
+        default=None, description="Clerk secret key for JWT verification"
+    )
+    clerk_publishable_key: str | None = Field(
+        default=None,
+        validation_alias="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        description="Clerk publishable key",
+    )
+    clerk_jwks_url: str | None = Field(
+        default=None, description="Clerk JWKS URL (auto-constructed if not provided)"
+    )
+    clerk_issuer: str | None = Field(
+        default=None, description="Clerk JWT issuer for validation"
+    )
+
+    # ===========================================
     # CACHE (Redis/Upstash)
     # ===========================================
 

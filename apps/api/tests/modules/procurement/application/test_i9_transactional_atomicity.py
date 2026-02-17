@@ -96,3 +96,41 @@ async def test_i9_txn_rolls_back_when_commit_fails_red(
     decision_repository.save_conflicts.assert_awaited_once()
     uow.commit.assert_awaited_once()
     uow.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_i9_txn_retry_same_fingerprint_is_idempotent_red(
+    snapshot_repository: AsyncMock,
+) -> None:
+    """
+    TS-I9-PROC-TXN-001:
+    retrying the same transactional request fingerprint must not duplicate staged writes.
+    """
+    decision_repository = AsyncMock()
+    decision_repository.save_plan_items.return_value = None
+    decision_repository.save_conflicts.return_value = None
+    uow = AsyncMock()
+
+    service = ProcurementPlanningService(
+        repository=snapshot_repository,
+        decision_repository=decision_repository,
+        uow=uow,
+    )
+
+    await service.build_and_persist_procurement_plan(
+        project_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        tenant_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        required_on_site=date(2026, 9, 1),
+        fingerprint="f" * 64,
+    )
+    await service.build_and_persist_procurement_plan(
+        project_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        tenant_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        required_on_site=date(2026, 9, 1),
+        fingerprint="f" * 64,
+    )
+
+    decision_repository.save_plan_items.assert_awaited_once()
+    decision_repository.save_conflicts.assert_awaited_once()
+    uow.commit.assert_awaited_once()
+    uow.rollback.assert_not_awaited()

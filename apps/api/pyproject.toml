@@ -57,6 +57,7 @@ ignore_missing_imports = true
 minversion = "7.0"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+cache_dir = ".pytest_cache_local"
 addopts = [
     "-ra",
     "-q",
