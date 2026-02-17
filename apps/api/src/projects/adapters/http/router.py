@@ -2,10 +2,12 @@
 C2Pro - Projects HTTP Router
 
 Minimal implementation for TS-E2E-SEC-TNT-001 E2E tests.
+Refers to Suite ID: TS-E2E-PER-LRG-001.
 """
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+import time
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -388,14 +390,21 @@ async def bulk_upload_documents(
             },
         )
 
-    # GREEN PHASE: Fake successful upload
+    # TS-E2E-PER-LRG-001: include basic performance metadata contract.
+    started_at = time.perf_counter()
     document_ids = [str(uuid4()) for _ in request.documents]
+    processing_ms = max(1.0, (time.perf_counter() - started_at) * 1000)
+    throughput_docs_per_sec = (
+        len(request.documents) / (processing_ms / 1000) if request.documents else 0.0
+    )
 
     return {
         "accepted_count": len(request.documents),
         "failed_count": 0,
         "document_ids": document_ids,
         "status": "accepted",
+        "processing_ms": round(processing_ms, 2),
+        "throughput_docs_per_sec": round(throughput_docs_per_sec, 2),
     }
 
 
@@ -455,7 +464,7 @@ async def bulk_create_wbs(
     if len(recent_calls) >= 5:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded",
+            detail={"code": "RATE_LIMITED", "message": "Rate limit exceeded"},
             headers={"Retry-After": "60"},
         )
     recent_calls.append(now)

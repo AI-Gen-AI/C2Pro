@@ -5,36 +5,9 @@ Test Suite ID: TS-I9-PROC-DOM-001
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
-from uuid import uuid4
 
-import pytest
-from pydantic import BaseModel, Field
-
-try:
-    from src.modules.procurement.domain.entities import ProcurementPlanItem, ProcurementConflict
-    from src.modules.procurement.domain.services import ProcurementIntelligenceService
-except ImportError:
-    class ProcurementPlanItem(BaseModel):
-        item_id: str = Field(default_factory=lambda: str(uuid4()))
-        item_name: str
-        required_on_site_date: date
-        optimal_order_date: date
-        total_cost: Decimal
-
-    class ProcurementConflict(BaseModel):
-        item_id: str
-        reason_code: str
-        impact: str
-        message: str
-
-    class ProcurementIntelligenceService:
-        def detect_conflicts(self, items: list[ProcurementPlanItem], current_date: date) -> list[ProcurementConflict]:
-            return []
-
-        def generate_plan_fingerprint(self, items: list[ProcurementPlanItem]) -> str:
-            return ""
-
+from src.modules.procurement.domain.entities import ProcurementPlanItem
+from src.modules.procurement.domain.services import ProcurementIntelligenceService
 
 def test_i9_detects_schedule_procurement_conflicts_for_late_orders() -> None:
     """Refers to I9.1: conflict intelligence must flag late order dates with explicit reason codes."""

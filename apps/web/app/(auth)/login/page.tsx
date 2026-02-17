@@ -13,12 +13,13 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push("/dashboard/projects");
+    // GREEN Phase: Navigate to dashboard after login
+    router.push("/dashboard");
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md" data-testid="login-card">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
             Iniciar Sesión
@@ -32,6 +33,7 @@ export default function LoginPage() {
               </label>
               <Input
                 id="email"
+                data-testid="email-input"
                 type="email"
                 placeholder="tu@email.com"
                 value={email}
@@ -45,6 +47,7 @@ export default function LoginPage() {
               </label>
               <Input
                 id="password"
+                data-testid="password-input"
                 type="password"
                 placeholder="••••••••"
                 value={password}
@@ -52,7 +55,7 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" data-testid="login-button" className="w-full">
               Entrar
             </Button>
             <p className="text-center text-xs text-muted-foreground">

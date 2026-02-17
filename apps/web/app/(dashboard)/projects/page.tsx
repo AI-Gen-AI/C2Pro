@@ -1,6 +1,9 @@
 import { ProjectsService } from "@/lib/api/generated/services/ProjectsService";
 import type { ProjectListItemResponse } from "@/lib/api/generated/models";
 import { ProjectListTable } from "@/src/components/features/projects/ProjectListTable";
+import { Button } from "@/components/ui/button";
+import { PlusCircle } from "lucide-react";
+import Link from "next/link";
 
 export default async function ProjectsPage() {
   let projects: ProjectListItemResponse[] = [];
@@ -17,7 +20,7 @@ export default async function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-testid="projects-list">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -28,9 +31,17 @@ export default async function ProjectsPage() {
             Manage and monitor all your projects
           </p>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {projects.length} projects
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-muted-foreground">
+            {projects.length} projects
+          </span>
+          <Button asChild>
+            <Link href="/projects/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New Project
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {loadError ? (

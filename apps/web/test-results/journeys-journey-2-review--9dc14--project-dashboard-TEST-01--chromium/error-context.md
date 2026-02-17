@@ -1,0 +1,82 @@
+# Page snapshot
+
+```yaml
+- generic:
+  - alert [ref=e1]
+  - generic [active]:
+    - generic [ref=e6] [cursor=pointer]:
+      - button "Open Next.js Dev Tools" [ref=e7]:
+        - img [ref=e8]
+      - button "Open issues overlay" [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]: "0"
+          - generic [ref=e15]: "1"
+        - generic [ref=e16]: Issue
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - navigation [ref=e22]:
+            - button "previous" [disabled] [ref=e23]:
+              - img "previous" [ref=e24]
+            - generic [ref=e26]:
+              - generic [ref=e27]: 1/
+              - text: "1"
+            - button "next" [disabled] [ref=e28]:
+              - img "next" [ref=e29]
+          - img
+        - generic [ref=e31]:
+          - link "Next.js 15.3.9 (outdated) Webpack" [ref=e32] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+            - img [ref=e33]
+            - generic "An outdated version detected (latest is 16.1.6), upgrade is highly recommended!" [ref=e35]: Next.js 15.3.9 (outdated)
+            - generic [ref=e36]: Webpack
+          - img
+      - generic [ref=e37]:
+        - dialog "Build Error" [ref=e38]:
+          - generic [ref=e40]:
+            - generic [ref=e41]:
+              - generic [ref=e42]:
+                - generic [ref=e43]:
+                  - generic [ref=e45]: Build Error
+                  - generic [ref=e46]:
+                    - button "Copy Stack Trace" [ref=e47] [cursor=pointer]:
+                      - img [ref=e48]
+                    - button "No related documentation found" [disabled] [ref=e50]:
+                      - img [ref=e51]
+                    - link "Learn more about enabling Node.js inspector for server code with Chrome DevTools" [ref=e53] [cursor=pointer]:
+                      - /url: https://nextjs.org/docs/app/building-your-application/configuring/debugging#server-side-code
+                      - img [ref=e54]
+                - paragraph [ref=e63]: "Error: x Unexpected token `ProtectedRoute`. Expected jsx identifier"
+              - generic [ref=e65]:
+                - generic [ref=e67]:
+                  - img [ref=e69]
+                  - generic [ref=e72]: ./app/dashboard/projects/page.tsx
+                  - button "Open in editor" [ref=e73] [cursor=pointer]:
+                    - img [ref=e75]
+                - generic [ref=e77]:
+                  - generic [ref=e78]: "Error:"
+                  - text: x
+                  - generic [ref=e79]: "Unexpected token `ProtectedRoute`. Expected jsx identifier ,-["
+                  - text: C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\app\dashboard\projects\page.tsx
+                  - generic [ref=e80]: :17:1]
+                  - text: "14"
+                  - generic [ref=e81]: "| const [searchQuery, setSearchQuery] = useState(\"\");"
+                  - text: "15"
+                  - generic [ref=e82]: "|"
+                  - text: "16"
+                  - generic [ref=e83]: "| return ("
+                  - text: "17"
+                  - generic [ref=e84]: "| <ProtectedRoute> :"
+                  - generic [ref=e85]: ^^^^^^^^^^^^^^
+                  - text: "18"
+                  - generic [ref=e86]: "| <div className=\"min-h-screen bg-background\">"
+                  - text: "19"
+                  - generic [ref=e87]: "| {/* Header */}"
+                  - text: "20"
+                  - generic [ref=e88]: "| <header className=\"border-b bg-card\"> `---- Caused by: Syntax Error"
+            - generic [ref=e89]:
+              - generic [ref=e90]: "1"
+              - generic [ref=e91]: "2"
+        - contentinfo [ref=e92]:
+          - paragraph [ref=e93]: This error occurred during the build process and can only be dismissed by fixing the error.
+```

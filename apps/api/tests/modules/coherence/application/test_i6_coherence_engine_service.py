@@ -4,47 +4,13 @@ Test Suite ID: TS-I6-COH-SVC-001
 """
 
 from datetime import date
-from typing import Any, Optional
+from typing import Optional
 from uuid import uuid4
 
 import pytest
-from pydantic import BaseModel, Field
 
-try:
-    from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
-    from src.modules.coherence.application.ports import CoherenceEngineService
-except ImportError:
-    class CoherenceAlert(BaseModel):
-        alert_id: str = Field(default_factory=lambda: str(uuid4()))
-        type: str
-        severity: str
-        message: str
-        evidence: dict[str, Any] = Field(default_factory=dict)
-        triggered_by_rule: str
-        doc_id: Optional[str] = None
-        metadata: dict[str, Any] = Field(default_factory=dict)
-
-    class RuleInput(BaseModel):
-        doc_id: str = Field(default_factory=lambda: str(uuid4()))
-        schedule_data: Optional[dict[str, Any]] = None
-        actual_dates: Optional[dict[str, Any]] = None
-        budget_data: Optional[dict[str, Any]] = None
-        actual_costs: Optional[dict[str, Any]] = None
-        scope_data: Optional[dict[str, Any]] = None
-        procurement_items: Optional[dict[str, Any]] = None
-
-    class CoherenceEngineService:
-        def __init__(self, rules: list[Any], langsmith_client: Any = None):
-            self.rules = rules
-            self.langsmith_client = langsmith_client
-
-        async def run_coherence_checks(self, rule_input: RuleInput) -> list[CoherenceAlert]:
-            alerts: list[CoherenceAlert] = []
-            for rule in self.rules:
-                alert = rule.evaluate(rule_input)
-                if alert:
-                    alerts.append(alert)
-            return alerts
+from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
+from src.modules.coherence.application.ports import CoherenceEngineService
 
 
 class MockCoherenceRule:
@@ -56,7 +22,7 @@ class MockCoherenceRule:
     def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
         if self.will_trigger:
             return CoherenceAlert(
-                alert_id=str(uuid4()),
+                alert_id=uuid4(),
                 type=f"{self.name} Alert",
                 severity=self.severity,
                 message=f"Alert from {self.name}",
@@ -77,7 +43,7 @@ async def test_i6_coherence_engine_returns_neutral_when_data_missing() -> None:
 
     engine = CoherenceEngineService(rules=rules)
     rule_input = RuleInput(
-        doc_id=str(uuid4()),
+        doc_id=uuid4(),
         schedule_data=None,
         actual_dates=None,
         budget_data={"allocated": 100000},
@@ -99,7 +65,7 @@ async def test_i6_critical_coherence_conflicts_flagged_for_review() -> None:
 
     engine = CoherenceEngineService(rules=rules)
     rule_input = RuleInput(
-        doc_id=str(uuid4()),
+        doc_id=uuid4(),
         schedule_data={"project_end": date(2024, 12, 31)},
         actual_dates={"project_end": date(2025, 1, 15)},
     )
@@ -109,3 +75,41 @@ async def test_i6_critical_coherence_conflicts_flagged_for_review() -> None:
     assert len(alerts) == 1
     assert alerts[0].metadata.get("requires_human_review") is True
     assert alerts[0].metadata.get("review_reason") == "Critical Coherence Conflict"
+
+
+@pytest.mark.asyncio
+async def test_i6_high_coherence_conflicts_flagged_for_review() -> None:
+    """Refers to I6.6: high severity alerts must include explicit human-review metadata."""
+    rules = [MockCoherenceRule(name="BudgetRule", will_trigger=True, severity="High")]
+
+    engine = CoherenceEngineService(rules=rules)
+    rule_input = RuleInput(
+        doc_id=uuid4(),
+        budget_data={"allocated": 100000},
+        actual_costs={"actual_spend": 120000},
+    )
+
+    alerts = await engine.run_coherence_checks(rule_input)
+
+    assert len(alerts) == 1
+    assert alerts[0].metadata.get("requires_human_review") is True
+    assert alerts[0].metadata.get("review_reason") == "High Coherence Conflict"
+
+
+@pytest.mark.asyncio
+async def test_i6_medium_coherence_conflicts_not_flagged_for_review() -> None:
+    """Refers to I6.6: medium severity alerts should not be forced into mandatory human review."""
+    rules = [MockCoherenceRule(name="ScopeRule", will_trigger=True, severity="Medium")]
+
+    engine = CoherenceEngineService(rules=rules)
+    rule_input = RuleInput(
+        doc_id=uuid4(),
+        scope_data={"required_items": ["Material A"]},
+        procurement_items={"items_procured": []},
+    )
+
+    alerts = await engine.run_coherence_checks(rule_input)
+
+    assert len(alerts) == 1
+    assert alerts[0].metadata.get("requires_human_review") is None
+    assert alerts[0].metadata.get("review_reason") is None

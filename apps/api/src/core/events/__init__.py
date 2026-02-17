@@ -8,6 +8,7 @@ from src.core.events.event_publisher import EventPublisher
 from src.core.events.event_bus import EventBus
 from src.core.events.redis_event_bus import RedisEventBusAdapter, build_event_bus
 from src.core.events.dead_letter_queue import DeadLetterQueue, DLQMessage
+from src.core.events.replay import DLQReplayService
 
 __all__ = [
     "EventPublisher",
@@ -16,4 +17,5 @@ __all__ = [
     "build_event_bus",
     "DeadLetterQueue",
     "DLQMessage",
+    "DLQReplayService",
 ]
