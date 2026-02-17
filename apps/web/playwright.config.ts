@@ -17,5 +17,17 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "e2e-j2-weekly-review",
+      testMatch: /journey-2-review\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      metadata: {
+        suite: "TS-E2E-J2-001",
+        phase: "red",
+        type: "e2e",
+        priority: "p0",
+        description: "Weekly Project Review Journey",
+      },
+    },
   ],
 });

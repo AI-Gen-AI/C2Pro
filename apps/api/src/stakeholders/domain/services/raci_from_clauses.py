@@ -7,6 +7,7 @@ Refers to Suite ID: TS-UD-STK-RAC-003.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.stakeholders.domain.models import RACIRole, RaciAssignment
@@ -14,9 +15,13 @@ from src.stakeholders.domain.models import RACIRole, RaciAssignment
 
 def generate_raci_assignments_from_clauses(
     clauses: list[dict],
+    *,
+    known_stakeholder_ids: set[UUID] | None = None,
+    strict_identity: bool = False,
 ) -> list[RaciAssignment]:
     """Create RACI assignments from extracted clause payloads."""
     assignments: list[RaciAssignment] = []
+    known_ids = known_stakeholder_ids or set()
 
     for clause in clauses:
         if not isinstance(clause, dict):
@@ -40,6 +45,14 @@ def generate_raci_assignments_from_clauses(
                 or not isinstance(wbs_item_id, UUID)
             ):
                 continue
+
+            _validate_identity_constraints(
+                raw=raw,
+                stakeholder_id=stakeholder_id,
+                known_ids=known_ids,
+                strict_identity=strict_identity,
+            )
+
             assignments.append(
                 RaciAssignment(
                     id=uuid4(),
@@ -65,3 +78,18 @@ def _parse_role(value: object) -> RACIRole | None:
             if role.value == normalized or role.name == normalized:
                 return role
     return None
+
+
+def _validate_identity_constraints(
+    *,
+    raw: dict[str, Any],
+    stakeholder_id: UUID,
+    known_ids: set[UUID],
+    strict_identity: bool,
+) -> None:
+    if not strict_identity:
+        return
+    if bool(raw.get("ambiguity_flag")):
+        raise ValueError("ambiguous stakeholder mapping")
+    if stakeholder_id not in known_ids:
+        raise ValueError("unresolved stakeholder identity")

@@ -1,75 +1,12 @@
-"use client";
+/**
+ * Login Page - DEPRECATED
+ *
+ * This page now redirects to /sign-in which uses Clerk authentication.
+ * Kept for backwards compatibility with existing links/bookmarks.
+ */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { redirect } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    // GREEN Phase: Navigate to dashboard after login
-    router.push("/dashboard");
-  };
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md" data-testid="login-card">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
-            Iniciar Sesión
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                data-testid="email-input"
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Contraseña
-              </label>
-              <Input
-                id="password"
-                data-testid="password-input"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" data-testid="login-button" className="w-full">
-              Entrar
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              Continuar al dashboard de proyectos.
-            </p>
-            <p className="text-center text-sm text-muted-foreground">
-              ¿No tienes cuenta?{" "}
-              <a href="/register" className="text-primary hover:underline">
-                Regístrate
-              </a>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  redirect("/sign-in");
 }

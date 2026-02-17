@@ -133,6 +133,7 @@ class ProcurementPlanningService:
         self.decision_repository = decision_repository or NoopProcurementDecisionRepository()
         self.uow = uow or NoopProcurementUnitOfWork()
         self.intelligence = ProcurementIntelligenceService()
+        self._persisted_fingerprints: set[str] = set()
 
     async def build_procurement_plan(
         self,
@@ -160,7 +161,11 @@ class ProcurementPlanningService:
         project_id: UUID,
         tenant_id: UUID,
         required_on_site: date,
+        fingerprint: str | None = None,
     ) -> PlanningDecision:
+        if fingerprint is not None and fingerprint in self._persisted_fingerprints:
+            return PlanningDecision(plan_fingerprint=fingerprint, conflicts=[], requires_human_review=False)
+
         decision = await self.build_procurement_plan(
             project_id=project_id,
             tenant_id=tenant_id,
@@ -184,6 +189,8 @@ class ProcurementPlanningService:
                 conflicts=decision.conflicts,
             )
             await self.uow.commit()
+            if fingerprint is not None:
+                self._persisted_fingerprints.add(fingerprint)
             return decision
         except Exception:
             await self.uow.rollback()

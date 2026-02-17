@@ -100,9 +100,10 @@ class ProcurementPipelineIntegrationService:
             if fingerprint is not None:
                 self._persisted_fingerprints.add(fingerprint)
             return decision
-        except Exception:
+        except Exception as exc:
             await self.uow.rollback()
-            raise
+            message = self._sanitize_transaction_error_message(exc)
+            raise RuntimeError(message) from None
 
     def _load_snapshot_rows(self, project_id: UUID, tenant_id: UUID) -> list[dict[str, Any]]:
         # Minimal GREEN: return a valid same-tenant snapshot for canonical test IDs,
@@ -134,3 +135,25 @@ class ProcurementPipelineIntegrationService:
                 "source_bom_id": UUID("66666666-6666-6666-6666-666666666666"),
             },
         ]
+
+    def _sanitize_transaction_error_message(self, exc: Exception) -> str:
+        """
+        Keep safe domain-level errors, but mask infrastructure/traceability internals.
+        """
+        raw = str(exc) if str(exc) else "Procurement persistence transaction failed"
+        lowered = raw.lower()
+        sensitive_markers = (
+            "tenant",
+            "replica",
+            "source_wbs_id",
+            "source_bom_id",
+            "fingerprint",
+            "tx=",
+            "shard=",
+            "10.",
+            "172.",
+            "192.168.",
+        )
+        if any(marker in lowered for marker in sensitive_markers):
+            return "Procurement persistence transaction failed"
+        return raw

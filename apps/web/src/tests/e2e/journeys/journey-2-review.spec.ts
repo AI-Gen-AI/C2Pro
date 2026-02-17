@@ -359,11 +359,3 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
 // ===========================================
 // END OF TEST SUITE
 // ===========================================
-
-// Test metadata for CI/CD integration
-test.meta = {
-  phase: "red",
-  suite: "TS-E2E-J2-001",
-  type: "e2e",
-  priority: "p0",
-};

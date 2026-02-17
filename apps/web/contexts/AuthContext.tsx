@@ -4,6 +4,12 @@ import { createContext, useContext, type ReactNode, useMemo } from "react";
 import { useAuth as useClerkAuth, useOrganization, useUser } from "@clerk/nextjs";
 import { useAuthStore } from "@/stores/auth";
 
+// =============================================================================
+// Types
+// =============================================================================
+
+export type ServiceTier = "free" | "pro" | "enterprise";
+
 interface AuthContextType {
   user: {
     id: string;
@@ -16,6 +22,14 @@ interface AuthContextType {
     id: string;
     name: string;
   } | null;
+  // New: Supabase tenant_id from Clerk org metadata
+  tenantId: string | null;
+  // New: Demo mode flag from Clerk org metadata
+  isDemoMode: boolean;
+  // New: Service tier from Clerk org metadata
+  serviceTier: ServiceTier;
+  // New: Whether user has valid tenant (authorized for RLS)
+  isAuthorized: boolean;
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -43,6 +57,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       (user?.unsafeMetadata?.role as string | undefined) ??
       null;
 
+    // Extract tenant metadata from organization publicMetadata
+    const orgMetadata = organization?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
+
+    // tenant_id maps Clerk org -> Supabase RLS tenant
+    const tenantId = (orgMetadata?.tenant_id as string | undefined) ?? null;
+
+    // Demo mode flag for read-only demo workspaces
+    const isDemoMode = orgMetadata?.is_demo === true;
+
+    // Service tier for feature gating (default to "free")
+    const rawTier = orgMetadata?.tier as string | undefined;
+    const serviceTier: ServiceTier =
+      rawTier && ["free", "pro", "enterprise"].includes(rawTier)
+        ? (rawTier as ServiceTier)
+        : "free";
+
+    // User is authorized if they have a valid tenant_id
+    const isAuthorized = !!tenantId;
+
     return {
       user: user
         ? {
@@ -59,6 +94,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             name: organization.name,
           }
         : null,
+      tenantId,
+      isDemoMode,
+      serviceTier,
+      isAuthorized,
       accessToken,
       isAuthenticated: !!isSignedIn,
       isLoading: !isLoaded,

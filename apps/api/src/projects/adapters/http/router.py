@@ -617,3 +617,73 @@ async def export_project_data(
         "status": "processing",
         "message": "Export job queued",
     }
+
+
+# ===========================================
+# BUDGET ENDPOINTS (for TS-E2E-J2-001)
+# GREEN PHASE: Minimal "Fake It" implementation
+# ===========================================
+
+
+@router.get(
+    "/{project_id}/budget",
+    summary="Get Project Budget",
+    description="""
+    Returns budget information for a project.
+
+    **For TS-E2E-J2-001 E2E tests.**
+
+    Returns:
+    - Total budget
+    - Spent amount
+    - Utilization percentage
+    - Budget variance status
+    """,
+)
+async def get_project_budget(
+    project_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    """
+    Get budget data for project.
+
+    GREEN PHASE implementation using "Fake It" pattern.
+
+    Args:
+        project_id: UUID of the project
+        current_user: Authenticated user
+
+    Returns:
+        Budget data with utilization stats
+
+    Raises:
+        404: Project not found or belongs to another tenant
+    """
+    # Check if project exists and belongs to tenant
+    project = _fake_projects.get(project_id)
+
+    if not project or project["tenant_id"] != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # GREEN PHASE: Return fake budget data
+    # In real implementation, this would aggregate from WBS items
+    total_budget = project.get("estimated_budget", 2500000.0)
+    spent_amount = 1550000.0  # Fake spent amount
+    utilization = round((spent_amount / total_budget) * 100, 0)
+
+    return {
+        "project_id": str(project_id),
+        "total_budget": total_budget,
+        "spent_amount": spent_amount,
+        "utilization_percentage": utilization,
+        "variance_status": "On Track",
+        "currency": project.get("currency", "EUR"),
+        "chart_data": {
+            "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+            "planned": [400000, 800000, 1200000, 1600000, 2000000, 2500000],
+            "actual": [350000, 750000, 1100000, 1550000, None, None],
+        },
+    }
