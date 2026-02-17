@@ -1355,7 +1355,7 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 | Sec 3 / Phase 4    | AI Pipeline I1-I2 (Ingestion + OCR/Table) → ✅       | Cierre de Sprint 1 Core AI con suites TS-I1-CIC-001 y TS-I2-OCR-TBL-001 |
 | Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅      | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001 |
 | Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
-| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + extensiones I9 (`TS-I9-PROC-APP-002`, `TS-I9-PROC-ADP-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-HTTP-001`, `TS-I9-PROC-INT-001`, `TS-SEC-I9-001`) + TS-SEC-S4-001 |
+| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + extensiones I9 (`TS-I9-PROC-APP-002`, `TS-I9-PROC-ADP-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-HTTP-001`, `TS-I9-PROC-INT-001`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-001`) + TS-SEC-S4-001 |
 | Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅ | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001 |
 | Sec 3 / Phase 4    | AI Pipeline I13 real E2E path → ✅ | Contrato de ruta I13 + harness auth/tenant determinístico + CI S6 bloqueante `i13-real-e2e` |
 | Sec 12.7           | Nuevo contrato operativo I13 real E2E + rationale de parche de migración | Formaliza prerrequisitos, riesgos y runbook (`docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) |
