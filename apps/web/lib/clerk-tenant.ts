@@ -270,8 +270,10 @@ export function hasFeature(
     return featureValue;
   }
 
+  // For numeric values: -1 means unlimited (enabled), positive means enabled
+  // All our tier limits are non-zero, so any number means the feature is available
   if (typeof featureValue === "number") {
-    return featureValue !== 0;
+    return true;
   }
 
   return !!featureValue;
