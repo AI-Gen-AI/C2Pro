@@ -31,8 +31,13 @@
   - Resultado: `PHASE2_COMPONENT_AUDIT.md`
 - [x] **2.2** Para cada duplicado, elegir la mejor implementación y consolidar
   - Resultado: `PHASE2_DUPLICATE_CONSOLIDATION.md`
-- [ ] **2.3** Mover todos los componentes de `src/components/features/` a `components/features/`
-- [ ] **2.4** Actualizar todos los imports (`@/src/components` -> `@/components/features`)
+- [x] **2.3** Mover todos los componentes de `src/components/features/` a `components/features/`
+  - 70 archivos movidos: features/ (11 subdirectorios), layout/ (ProjectTabs, ThemeToggle), providers/ (SentryInit)
+  - `src/components/` eliminado completamente
+- [x] **2.4** Actualizar todos los imports (`@/src/components` -> `@/components/features`)
+  - 53 imports actualizados en 48 archivos
+  - Layout/providers aplanados: `@/components/layout/ProjectTabs`, `@/components/layout/ThemeToggle`, `@/components/providers/SentryInit`
+  - Verificado: 0 referencias restantes a `@/src/components`
 - [ ] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`)
 - [ ] **2.6** Eliminar `app/demo/` (demo se controla por env variable, no por ruta)
 - [ ] **2.7** Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica

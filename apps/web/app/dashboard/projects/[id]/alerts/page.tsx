@@ -8,7 +8,7 @@ import { use } from "react";
 import {
   AlertReviewCenter,
   type ReviewAlert,
-} from "@/src/components/features/alerts/AlertReviewCenter";
+} from "@/components/features/alerts/AlertReviewCenter";
 
 interface AlertsPageProps {
   params: Promise<{

@@ -9,7 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { createQueryClient } from "@/lib/api/queryClient";
 import "@/lib/api/config";
 import { env } from "@/config/env";
-import { SentryInit } from "@/src/components/providers/sentry/SentryInit";
+import { SentryInit } from "@/components/providers/SentryInit";
 
 interface ProvidersProps {
   children: ReactNode;

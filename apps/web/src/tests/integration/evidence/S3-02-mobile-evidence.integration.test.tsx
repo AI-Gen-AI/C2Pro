@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { MobileEvidenceViewer } from "@/src/components/features/evidence/MobileEvidenceViewer";
+import { MobileEvidenceViewer } from "@/components/features/evidence/MobileEvidenceViewer";
 
 describe("S3-02 RED - mobile evidence integration", () => {
   it("[S3-02-RED-INT-01] keeps desktop split-view off under mobile tab contract", () => {

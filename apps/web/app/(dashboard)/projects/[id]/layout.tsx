@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ProjectTabs } from "@/src/components/layout/projects/ProjectTabs";
+import { ProjectTabs } from "@/components/layout/ProjectTabs";
 
 export default async function ProjectLayout({
   children,
