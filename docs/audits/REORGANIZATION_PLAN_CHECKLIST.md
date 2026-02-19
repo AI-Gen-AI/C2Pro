@@ -16,9 +16,10 @@
   - Resultado: `PHASE1_PAGE_ENDPOINT_MATRIX.md`
 - [x] **1.4** Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta"
   - Resultado: `DEMO_VS_PROD_CONTRACT.md`
-- [ ] **1.5** Definir qué endpoints backend son necesarios para que las pages funcionen sin mock
+- [x] **1.5** Definir qué endpoints backend son necesarios para que las pages funcionen sin mock
+  - Resultado: `PHASE1_REQUIRED_ENDPOINTS.md`
 
-**Entregable:** `DEMO_VS_PROD_CONTRACT.md`
+**Entregable:** `DEMO_VS_PROD_CONTRACT.md` ✅
 
 ---
 
