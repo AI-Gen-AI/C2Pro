@@ -50,7 +50,10 @@
   - Renombrado directorio: 18 archivos movidos sin cambio de contenido
   - Zero imports afectados (Next.js route groups son transparentes a @/ aliases)
   - Actualizadas 19 docs con referencia `(dashboard)` → `(app)` (excluido context/Legacy/)
-- [ ] **2.8** Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`
+- [x] **2.8** Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`
+  - `lib/mockData.ts` tenia zero imports — codigo muerto (303 lineas)
+  - Datos migrados a `mocks/data/seed.ts` via @mswjs/data factory: 6 projects, 8 alerts, 7 stakeholders
+  - Archivo eliminado
 - [ ] **2.9** Verificar que MSW handlers cubren todos los endpoints que las pages necesitan
 - [ ] **2.10** Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional
 
