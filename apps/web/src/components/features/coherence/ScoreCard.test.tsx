@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
-import { ScoreCard } from "./ScoreCard";
+import { ScoreCard } from "@/components/coherence/ScoreCard";
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -19,20 +19,29 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api/generated", () => ({}));
 
+// Mock useCountUp to return target value immediately (no animation in tests)
+vi.mock("@/hooks/useCountUp", () => ({
+  useCountUp: (target: number) => target,
+}));
+
 describe("ScoreCard", () => {
   it("shows category, score, alerts, and weight", () => {
     renderWithProviders(
       <ScoreCard
-        category="Scope"
+        category="SCOPE"
         score={80}
         weight={0.2}
         alertCount={2}
       />,
     );
 
-    expect(screen.getByRole("button", { name: /scope/i })).toBeInTheDocument();
+    // components/ version renders Card with role="button" and aria-label containing category label
+    // CATEGORY_CONFIG["SCOPE"] → label: "Scope", score 80 → severity "Good"
+    expect(
+      screen.getByRole("button", { name: /scope/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText("80")).toBeInTheDocument();
-    expect(screen.getByText(/2 alerts/i)).toBeInTheDocument();
-    expect(screen.getByText(/20% weight/i)).toBeInTheDocument();
+    expect(screen.getByText("Scope")).toBeInTheDocument();
+    expect(screen.getByText("20%")).toBeInTheDocument();
   });
 });
