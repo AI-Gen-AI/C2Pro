@@ -1016,7 +1016,7 @@ apps/web/
     │   │   ├── processing/page.tsx
     │   │   └── guided-review/page.tsx
     │   │
-    │   ├── (dashboard)/             # Protected app
+    │   ├── (app)/             # Protected app
     │   │   ├── layout.tsx           # AppSidebar + Header + DemoBanner + ProcessingIndicator
     │   │   ├── error.tsx            # Dashboard error boundary
     │   │   ├── page.tsx             # Redirect → projects

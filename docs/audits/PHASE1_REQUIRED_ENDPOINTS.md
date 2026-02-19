@@ -22,7 +22,7 @@
 
 ## Endpoint Map por Page del Frontend
 
-### Page: Dashboard Principal (`(dashboard)/page.tsx`)
+### Page: Dashboard Principal (`(app)/page.tsx`)
 
 **Datos que necesita:** Score global de coherencia, alertas por severidad, tendencias, nombre del proyecto.
 
@@ -69,7 +69,7 @@ Implementacion:
 
 ---
 
-### Page: Lista de Documentos (`(dashboard)/documents/page.tsx`)
+### Page: Lista de Documentos (`(app)/documents/page.tsx`)
 
 **Datos que necesita:** Lista de documentos del proyecto con nombre, tipo, estado, clausulas.
 
@@ -87,7 +87,7 @@ Implementacion:
 
 ---
 
-### Page: Lista de Alertas (`(dashboard)/alerts/page.tsx`)
+### Page: Lista de Alertas (`(app)/alerts/page.tsx`)
 
 **Datos que necesita:** Alertas filtradas por severidad, categoria, estado.
 
@@ -108,7 +108,7 @@ Implementacion:
 
 ---
 
-### Page: Matriz RACI (`(dashboard)/raci/page.tsx`)
+### Page: Matriz RACI (`(app)/raci/page.tsx`)
 
 **Datos que necesita:** Actividades x stakeholders x roles RACI.
 
@@ -127,7 +127,7 @@ Implementacion:
 
 ---
 
-### Page: Project Overview (`(dashboard)/projects/[id]/page.tsx`)
+### Page: Project Overview (`(app)/projects/[id]/page.tsx`)
 
 **Datos que necesita:** Detalles del proyecto + metricas (documents, alerts, score).
 
@@ -141,7 +141,7 @@ Implementacion:
 
 ---
 
-### Page: Project Coherence (`(dashboard)/projects/[id]/coherence/page.tsx`)
+### Page: Project Coherence (`(app)/projects/[id]/coherence/page.tsx`)
 
 **Datos que necesita:** Score de coherencia, breakdown por categoria, pesos, alertas.
 
@@ -156,7 +156,7 @@ Implementacion:
 
 ---
 
-### Page: Project Documents (`(dashboard)/projects/[id]/documents/page.tsx`)
+### Page: Project Documents (`(app)/projects/[id]/documents/page.tsx`)
 
 | Endpoint | Metodo | Ruta completa | Existe? | Estado | Accion |
 |----------|--------|---------------|---------|--------|--------|
@@ -166,7 +166,7 @@ Implementacion:
 
 ---
 
-### Page: Project Evidence (`(dashboard)/projects/[id]/evidence/page.tsx`)
+### Page: Project Evidence (`(app)/projects/[id]/evidence/page.tsx`)
 
 | Endpoint | Metodo | Ruta completa | Existe? | Estado | Accion |
 |----------|--------|---------------|---------|--------|--------|
@@ -178,7 +178,7 @@ Implementacion:
 
 ---
 
-### Page: Lista de Proyectos (`(dashboard)/projects/page.tsx`)
+### Page: Lista de Proyectos (`(app)/projects/page.tsx`)
 
 | Endpoint | Metodo | Ruta completa | Existe? | Estado | Accion |
 |----------|--------|---------------|---------|--------|--------|
@@ -188,7 +188,7 @@ Implementacion:
 
 ---
 
-### Page: Observability (`(dashboard)/observability/page.tsx`)
+### Page: Observability (`(app)/observability/page.tsx`)
 
 | Endpoint | Metodo | Ruta completa | Existe? | Estado | Accion |
 |----------|--------|---------------|---------|--------|--------|
@@ -199,7 +199,7 @@ Implementacion:
 
 ---
 
-### Page: Stakeholders (`(dashboard)/stakeholders/page.tsx`)
+### Page: Stakeholders (`(app)/stakeholders/page.tsx`)
 
 | Endpoint | Metodo | Ruta completa | Existe? | Estado | Accion |
 |----------|--------|---------------|---------|--------|--------|

@@ -20,7 +20,7 @@
 
 **Acciones realizadas:**
 1. Eliminado `src/components/features/coherence/CoherenceGauge.tsx`
-2. Actualizado `app/(dashboard)/projects/[id]/coherence/page.tsx`:
+2. Actualizado `app/(app)/projects/[id]/coherence/page.tsx`:
    - Import cambiado de `@/src/components/features/coherence/` a `@/components/coherence/`
    - Removido prop `label="Good"` (ahora auto-generado por `getScoreLabel(78)` = "Good")
 3. Actualizado `CoherenceGauge.test.tsx`:
