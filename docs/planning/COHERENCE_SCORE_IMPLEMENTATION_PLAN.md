@@ -388,7 +388,7 @@ export const CATEGORY_COLORS = {
 ### 🔗 FASE 7: Frontend - Integración (Prioridad: ALTA)
 
 #### Task 7.1: Integrar modal en Dashboard
-**Archivo:** `apps/web/app/(dashboard)/page.tsx`
+**Archivo:** `apps/web/app/(app)/page.tsx`
 
 **Cambios:**
 ```typescript

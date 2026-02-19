@@ -56,34 +56,34 @@
 
 ---
 
-### Grupo: `app/(dashboard)/` — RUTAS PRINCIPALES
+### Grupo: `app/(app)/` — RUTAS PRINCIPALES
 
 | # | Archivo | Tipo | Clasificacion | Fuente de Datos | Notas |
 |---|---------|------|---------------|-----------------|-------|
-| 6 | `(dashboard)/layout.tsx` | layout | STATIC | Componentes `AppSidebar`, `AppHeader`, `DemoBanner` | Layout principal del dashboard |
-| 7 | `(dashboard)/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 78, categories: [...], alerts: [...], trends: [...] }` | Dashboard principal. Nombre de proyecto "Torre Skyline" hardcodeado. Zero llamadas API |
-| 8 | `(dashboard)/alerts/page.tsx` | page | **MOCK_INLINE** | `const mockAlerts = [...]` (7 alertas ficticias) | Alertas globales. Severities, timestamps, descriptions inventados |
-| 9 | `(dashboard)/documents/page.tsx` | page | **MOCK_INLINE** | `const mockDocuments = [...]` (8 documentos ficticios) | Lista de documentos. Nombres como "Contrato Principal", "Presupuesto Detallado" |
-| 10 | `(dashboard)/evidence/page.tsx` | page | STATIC | Redirect | Redirige a `/projects` |
-| 11 | `(dashboard)/observability/page.tsx` | page | **API_REAL** | `fetch(${API_BASE_URL}/api/v1/observability/status)`, `fetch(.../analyses)` | Llama API real con `fetch()`. Auto-refresh 30s. Manejo de errores |
-| 12 | `(dashboard)/raci/page.tsx` | page | **MOCK_INLINE** | `const mockRaciData = [...]` (8 actividades), `const raciTypes = {...}` | Matriz RACI completa con datos ficticios. 5 stakeholders inventados |
-| 13 | `(dashboard)/settings/page.tsx` | page | STATIC | Estado local (form inputs) | Formulario de configuracion, sin fetch |
-| 14 | `(dashboard)/stakeholders/page.tsx` | page | STATIC | Delega a `<StakeholderMatrix>` | El componente puede tener sus propios datos |
+| 6 | `(app)/layout.tsx` | layout | STATIC | Componentes `AppSidebar`, `AppHeader`, `DemoBanner` | Layout principal del dashboard |
+| 7 | `(app)/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 78, categories: [...], alerts: [...], trends: [...] }` | Dashboard principal. Nombre de proyecto "Torre Skyline" hardcodeado. Zero llamadas API |
+| 8 | `(app)/alerts/page.tsx` | page | **MOCK_INLINE** | `const mockAlerts = [...]` (7 alertas ficticias) | Alertas globales. Severities, timestamps, descriptions inventados |
+| 9 | `(app)/documents/page.tsx` | page | **MOCK_INLINE** | `const mockDocuments = [...]` (8 documentos ficticios) | Lista de documentos. Nombres como "Contrato Principal", "Presupuesto Detallado" |
+| 10 | `(app)/evidence/page.tsx` | page | STATIC | Redirect | Redirige a `/projects` |
+| 11 | `(app)/observability/page.tsx` | page | **API_REAL** | `fetch(${API_BASE_URL}/api/v1/observability/status)`, `fetch(.../analyses)` | Llama API real con `fetch()`. Auto-refresh 30s. Manejo de errores |
+| 12 | `(app)/raci/page.tsx` | page | **MOCK_INLINE** | `const mockRaciData = [...]` (8 actividades), `const raciTypes = {...}` | Matriz RACI completa con datos ficticios. 5 stakeholders inventados |
+| 13 | `(app)/settings/page.tsx` | page | STATIC | Estado local (form inputs) | Formulario de configuracion, sin fetch |
+| 14 | `(app)/stakeholders/page.tsx` | page | STATIC | Delega a `<StakeholderMatrix>` | El componente puede tener sus propios datos |
 
 ---
 
-### Grupo: `app/(dashboard)/projects/` — RUTAS DE PROYECTOS
+### Grupo: `app/(app)/projects/` — RUTAS DE PROYECTOS
 
 | # | Archivo | Tipo | Clasificacion | Fuente de Datos | Notas |
 |---|---------|------|---------------|-----------------|-------|
-| 15 | `(dashboard)/projects/page.tsx` | page | **API_REAL** | `ProjectsService.getProjects()` de `@/lib/api/generated/services` | Usa cliente API generado (Orval). Patron correcto |
-| 16 | `(dashboard)/projects/new/page.tsx` | page | STATIC | Ninguna | Placeholder: "Pendiente de wireframes" |
-| 17 | `(dashboard)/projects/[id]/layout.tsx` | layout | STATIC | Componente `ProjectTabs` | Tabs de navegacion del proyecto |
-| 18 | `(dashboard)/projects/[id]/page.tsx` | page | **MOCK_INLINE** | `const stats = [...]`, alertas hardcodeadas | Overview de proyecto con metricas ficticias |
-| 19 | `(dashboard)/projects/[id]/analysis/page.tsx` | page | STATIC | Ninguna | Placeholder minimal |
-| 20 | `(dashboard)/projects/[id]/coherence/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 72, categories: [...] }` | Score de coherencia hardcodeado |
-| 21 | `(dashboard)/projects/[id]/documents/page.tsx` | page | **API_REAL** | `useProjectDocuments()` hook | Usa hook custom que llama API |
-| 22 | `(dashboard)/projects/[id]/evidence/page.tsx` | page | **API_REAL** | `useProjectDocuments()`, `useDocumentEntities()`, `useDocumentAlerts()` | Multiples hooks API. Patron correcto |
+| 15 | `(app)/projects/page.tsx` | page | **API_REAL** | `ProjectsService.getProjects()` de `@/lib/api/generated/services` | Usa cliente API generado (Orval). Patron correcto |
+| 16 | `(app)/projects/new/page.tsx` | page | STATIC | Ninguna | Placeholder: "Pendiente de wireframes" |
+| 17 | `(app)/projects/[id]/layout.tsx` | layout | STATIC | Componente `ProjectTabs` | Tabs de navegacion del proyecto |
+| 18 | `(app)/projects/[id]/page.tsx` | page | **MOCK_INLINE** | `const stats = [...]`, alertas hardcodeadas | Overview de proyecto con metricas ficticias |
+| 19 | `(app)/projects/[id]/analysis/page.tsx` | page | STATIC | Ninguna | Placeholder minimal |
+| 20 | `(app)/projects/[id]/coherence/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 72, categories: [...] }` | Score de coherencia hardcodeado |
+| 21 | `(app)/projects/[id]/documents/page.tsx` | page | **API_REAL** | `useProjectDocuments()` hook | Usa hook custom que llama API |
+| 22 | `(app)/projects/[id]/evidence/page.tsx` | page | **API_REAL** | `useProjectDocuments()`, `useDocumentEntities()`, `useDocumentAlerts()` | Multiples hooks API. Patron correcto |
 
 ---
 
@@ -91,15 +91,15 @@
 
 | # | Archivo | Tipo | Clasificacion | Fuente de Datos | Notas |
 |---|---------|------|---------------|-----------------|-------|
-| 23 | `dashboard/layout.tsx` | layout | STATIC | `AppSidebar`, `AppHeader`, `DemoBanner` | **Duplicado** de `(dashboard)/layout.tsx` |
-| 24 | `dashboard/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 78, ... }` | **Duplicado** de `(dashboard)/page.tsx` |
+| 23 | `dashboard/layout.tsx` | layout | STATIC | `AppSidebar`, `AppHeader`, `DemoBanner` | **Duplicado** de `(app)/layout.tsx` |
+| 24 | `dashboard/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 78, ... }` | **Duplicado** de `(app)/page.tsx` |
 | 25 | `dashboard/projects/[id]/layout.tsx` | layout | STATIC | Tabs hardcodeados inline | **Duplicado** con navegacion inline |
-| 26 | `dashboard/projects/[id]/page.tsx` | page | **MOCK_INLINE** | `const stats = [...]` | **Duplicado** de `(dashboard)/projects/[id]/page.tsx` |
+| 26 | `dashboard/projects/[id]/page.tsx` | page | **MOCK_INLINE** | `const stats = [...]` | **Duplicado** de `(app)/projects/[id]/page.tsx` |
 | 27 | `dashboard/projects/[id]/alerts/page.tsx` | page | **MOCK_INLINE** | `const DEMO_ALERTS = [...]` | Datos demo de alertas para S3-04 |
 | 28 | `dashboard/projects/[id]/analysis/page.tsx` | page | STATIC | Ninguna | Placeholder |
-| 29 | `dashboard/projects/[id]/coherence/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 72, ... }` | **Duplicado** de `(dashboard)/projects/[id]/coherence/page.tsx` |
-| 30 | `dashboard/projects/[id]/documents/page.tsx` | page | **API_REAL** | `useProjectDocuments()` | **Duplicado** de `(dashboard)/projects/[id]/documents/page.tsx` |
-| 31 | `dashboard/projects/[id]/evidence/page.tsx` | page | **API_REAL** | `useProjectDocuments()`, `useDocumentEntities()`, `useDocumentAlerts()` | **Duplicado** de `(dashboard)/projects/[id]/evidence/page.tsx` |
+| 29 | `dashboard/projects/[id]/coherence/page.tsx` | page | **MOCK_INLINE** | `const DATA = { score: 72, ... }` | **Duplicado** de `(app)/projects/[id]/coherence/page.tsx` |
+| 30 | `dashboard/projects/[id]/documents/page.tsx` | page | **API_REAL** | `useProjectDocuments()` | **Duplicado** de `(app)/projects/[id]/documents/page.tsx` |
+| 31 | `dashboard/projects/[id]/evidence/page.tsx` | page | **API_REAL** | `useProjectDocuments()`, `useDocumentEntities()`, `useDocumentAlerts()` | **Duplicado** de `(app)/projects/[id]/evidence/page.tsx` |
 
 ---
 
@@ -109,13 +109,13 @@
 |---|---------|------|---------------|-----------------|-------|
 | 32 | `demo/layout.tsx` | layout | STATIC | `AppSidebar`, `AppHeader`, `DemoBanner` | Tercer layout duplicado |
 | 33 | `demo/page.tsx` | page | STATIC | Redirect a `/demo/projects` | Solo redirige |
-| 34 | `demo/projects/page.tsx` | page | **API_REAL** | Re-exporta `(dashboard)/projects/page.tsx` | Re-export, usa `ProjectsService` |
+| 34 | `demo/projects/page.tsx` | page | **API_REAL** | Re-exporta `(app)/projects/page.tsx` | Re-export, usa `ProjectsService` |
 
 ---
 
 ## Analisis de Datos Mock Encontrados
 
-### Mock Data: `(dashboard)/page.tsx` — Dashboard Principal
+### Mock Data: `(app)/page.tsx` — Dashboard Principal
 
 ```typescript
 const DATA = {
@@ -142,7 +142,7 @@ const DATA = {
 
 ---
 
-### Mock Data: `(dashboard)/documents/page.tsx` — Lista de Documentos
+### Mock Data: `(app)/documents/page.tsx` — Lista de Documentos
 
 ```typescript
 const mockDocuments = [
@@ -157,7 +157,7 @@ const mockDocuments = [
 
 ---
 
-### Mock Data: `(dashboard)/alerts/page.tsx` — Alertas
+### Mock Data: `(app)/alerts/page.tsx` — Alertas
 
 ```typescript
 const mockAlerts = [
@@ -169,7 +169,7 @@ const mockAlerts = [
 
 ---
 
-### Mock Data: `(dashboard)/raci/page.tsx` — Matriz RACI
+### Mock Data: `(app)/raci/page.tsx` — Matriz RACI
 
 ```typescript
 const mockRaciData = [
@@ -188,7 +188,7 @@ const mockRaciData = [
 
 ---
 
-### Mock Data: `(dashboard)/projects/[id]/coherence/page.tsx` — Score Coherencia
+### Mock Data: `(app)/projects/[id]/coherence/page.tsx` — Score Coherencia
 
 ```typescript
 const DATA = {
@@ -205,7 +205,7 @@ const DATA = {
 
 ## Duplicacion Entre Grupos de Rutas
 
-| Ruta en `(dashboard)/` | Duplicado en `dashboard/` | Identico? |
+| Ruta en `(app)/` | Duplicado en `dashboard/` | Identico? |
 |-------------------------|---------------------------|-----------|
 | `page.tsx` (Dashboard) | `page.tsx` | Si, mismos datos mock |
 | `projects/[id]/page.tsx` | `projects/[id]/page.tsx` | Si |
@@ -216,7 +216,7 @@ const DATA = {
 | `alerts/page.tsx` | `projects/[id]/alerts/page.tsx` | No — diferente scope |
 | `layout.tsx` | `layout.tsx` | Si, mismo componente |
 
-**Conclusion:** `app/dashboard/` es un duplicado completo de `app/(dashboard)/` y debe eliminarse.
+**Conclusion:** `app/dashboard/` es un duplicado completo de `app/(app)/` y debe eliminarse.
 
 ---
 
@@ -255,7 +255,7 @@ Archivo existente pero no importado por ninguna page (los mocks estan inline).
 
 ```
 app/
-├── (dashboard)/
+├── (app)/
 │   ├── page.tsx ---------> const DATA = {...}        ❌ MOCK
 │   ├── documents/page.tsx -> const mockDocuments = [...]  ❌ MOCK
 │   ├── alerts/page.tsx ----> const mockAlerts = [...]     ❌ MOCK

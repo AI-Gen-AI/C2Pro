@@ -47,12 +47,12 @@ Esto viola la regla **R22** del contrato Demo vs Prod: *"Existe UN solo director
 
 | Archivo | Lineas | Dependencias | Importado por | Estado |
 |---------|--------|--------------|---------------|--------|
-| `CoherenceGauge.tsx` | 111 | recharts, useCountUp | `(dashboard)/page.tsx`, `dashboard/page.tsx` | ACTIVO - **DUPLICADO** |
-| `ScoreCard.tsx` | 125 | Card, Badge, lucide, useCountUp | `(dashboard)/page.tsx`, `dashboard/page.tsx` | ACTIVO - **DUPLICADO** |
-| `BreakdownChart.tsx` | 73 | recharts BarChart | `(dashboard)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
-| `RadarView.tsx` | 53 | recharts RadarChart | `(dashboard)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
-| `AlertsDistribution.tsx` | ~60 | recharts | `(dashboard)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
-| `CategoryDetail.tsx` | ~80 | — | `(dashboard)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
+| `CoherenceGauge.tsx` | 111 | recharts, useCountUp | `(app)/page.tsx`, `dashboard/page.tsx` | ACTIVO - **DUPLICADO** |
+| `ScoreCard.tsx` | 125 | Card, Badge, lucide, useCountUp | `(app)/page.tsx`, `dashboard/page.tsx` | ACTIVO - **DUPLICADO** |
+| `BreakdownChart.tsx` | 73 | recharts BarChart | `(app)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
+| `RadarView.tsx` | 53 | recharts RadarChart | `(app)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
+| `AlertsDistribution.tsx` | ~60 | recharts | `(app)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
+| `CategoryDetail.tsx` | ~80 | — | `(app)/page.tsx`, `dashboard/page.tsx`, `coherence/page.tsx` | ACTIVO |
 | `CoherenceScoreModal.tsx` | ~50 | Dialog | Ninguna page | DEAD CODE |
 | `CategoryBreakdownCard.tsx` | ~40 | Card | Ninguna page | DEAD CODE |
 
@@ -107,7 +107,7 @@ Esto viola la regla **R22** del contrato Demo vs Prod: *"Existe UN solo director
 
 | Archivo | Lineas | Dependencias | Importado por | Estado |
 |---------|--------|--------------|---------------|--------|
-| `StakeholderMatrix.tsx` | 244 | @dnd-kit/core, hooks/use-stakeholders | `(dashboard)/stakeholders/page.tsx` | ACTIVO |
+| `StakeholderMatrix.tsx` | 244 | @dnd-kit/core, hooks/use-stakeholders | `(app)/stakeholders/page.tsx` | ACTIVO |
 
 #### `components/landing-page-content.tsx` (1 componente)
 
@@ -193,7 +193,7 @@ Todos son primitivos de shadcn/ui. Usados extensivamente por toda la app. **No r
 
 | Archivo | Lineas | Dependencias | Importado por | Estado |
 |---------|--------|--------------|---------------|--------|
-| `ProjectListTable.tsx` | 60 | ProjectListItemResponse, Link | `(dashboard)/projects/page.tsx` | ACTIVO |
+| `ProjectListTable.tsx` | 60 | ProjectListItemResponse, Link | `(app)/projects/page.tsx` | ACTIVO |
 
 #### `src/components/features/shortcuts/` (2 componentes + 1 harness + 2 tests)
 
@@ -217,7 +217,7 @@ Todos son primitivos de shadcn/ui. Usados extensivamente por toda la app. **No r
 
 | Archivo | Lineas | Dependencias | Importado por | Estado |
 |---------|--------|--------------|---------------|--------|
-| `ProjectTabs.tsx` | 43 | Link, lucide | `(dashboard)/projects/[id]/layout.tsx` | ACTIVO |
+| `ProjectTabs.tsx` | 43 | Link, lucide | `(app)/projects/[id]/layout.tsx` | ACTIVO |
 
 #### `src/components/layout/theme/` (1 componente + 1 test)
 
@@ -289,7 +289,7 @@ Todos son primitivos de shadcn/ui. Usados extensivamente por toda la app. **No r
 | Interaccion | `@dnd-kit` drag-and-drop | Click para asignar rol |
 | Data source | `useStakeholders(projectId)` hook con API | Estado local hardcodeado |
 | Business rules | `mapStakeholderQuadrant()` | `resolveRaciGridViolations()` |
-| Imports activos | `(dashboard)/stakeholders/page.tsx` | Solo integration tests |
+| Imports activos | `(app)/stakeholders/page.tsx` | Solo integration tests |
 
 **Veredicto**: **AMBOS SE NECESITAN** — son funcionalidades distintas (Power/Interest matrix vs RACI grid). Consolidar en `components/stakeholders/`.
 
@@ -317,7 +317,7 @@ Todos son primitivos de shadcn/ui. Usados extensivamente por toda la app. **No r
 | 14 | `StakeholderMatrix` | `components/stakeholders/` | stakeholders/page.tsx |
 | 15 | `ProtectedRoute` | `components/auth/` | dashboard/projects/page.tsx |
 | 16 | `LandingPageContent` | `components/` | page.tsx |
-| 17 | `ProjectListTable` | `src/components/features/projects/` | (dashboard)/projects/page.tsx |
+| 17 | `ProjectListTable` | `src/components/features/projects/` | (app)/projects/page.tsx |
 | 18 | `ProjectTabs` | `src/components/layout/projects/` | projects/[id]/layout.tsx |
 | 19 | `AlertReviewCenter` | `src/components/features/alerts/` | dashboard/projects/[id]/alerts/page.tsx |
 | 20 | Primitivos `ui/` (37) | `components/ui/` | Toda la app |
@@ -378,12 +378,12 @@ app/providers.tsx
 ├── @/components/providers/AuthSync
 └── @/src/components/providers/sentry/SentryInit
 
-app/(dashboard)/layout.tsx
+app/(app)/layout.tsx
 ├── @/components/layout/AppSidebar
 ├── @/components/layout/AppHeader
 └── @/components/layout/DemoBanner
 
-app/(dashboard)/page.tsx
+app/(app)/page.tsx
 ├── @/components/coherence/CoherenceGauge      ← components/
 ├── @/components/coherence/ScoreCard           ← components/
 ├── @/components/coherence/BreakdownChart      ← components/
@@ -391,16 +391,16 @@ app/(dashboard)/page.tsx
 ├── @/components/coherence/AlertsDistribution  ← components/
 └── @/components/coherence/CategoryDetail      ← components/
 
-app/(dashboard)/projects/page.tsx
+app/(app)/projects/page.tsx
 └── @/src/components/features/projects/ProjectListTable  ← src/
 
-app/(dashboard)/projects/[id]/layout.tsx
+app/(app)/projects/[id]/layout.tsx
 └── @/src/components/layout/projects/ProjectTabs  ← src/
 
-app/(dashboard)/stakeholders/page.tsx
+app/(app)/stakeholders/page.tsx
 └── @/components/stakeholders/StakeholderMatrix  ← components/
 
-app/(dashboard)/projects/[id]/evidence/page.tsx
+app/(app)/projects/[id]/evidence/page.tsx
 └── @/components/evidence (EntityValidationList)  ← components/
 
 app/dashboard/projects/[id]/alerts/page.tsx  (RUTA DUPLICADA)

@@ -25,7 +25,7 @@ The C2Pro frontend is built with:
 apps/web/
 ├── app/                      # Next.js App Router
 │   ├── (auth)/              # Authentication routes (login, register)
-│   ├── (dashboard)/         # Dashboard routes (protected)
+│   ├── (app)/         # Dashboard routes (protected)
 │   │   ├── projects/
 │   │   ├── alerts/
 │   │   ├── documents/
@@ -179,7 +179,7 @@ npm run lint
 - `/login` - User login
 - `/register` - User registration
 
-### Protected Routes (dashboard)
+### Protected Routes (app)
 - `/` - Dashboard home
 - `/projects` - Projects list
 - `/projects/new` - Create new project

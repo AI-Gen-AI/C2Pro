@@ -745,7 +745,7 @@ Una vez validado el mockup con stakeholders:
 ```bash
 # Copiar componentes aprobados a apps/web
 cp -r vision-matched-repo/src/components/* apps/web/components/
-cp -r vision-matched-repo/src/pages/* apps/web/app/(dashboard)/
+cp -r vision-matched-repo/src/pages/* apps/web/app/(app)/
 
 # Adaptar rutas Next.js
 # Lovable usa react-router, C2Pro usa Next.js App Router

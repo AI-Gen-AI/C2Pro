@@ -94,7 +94,7 @@ Priority 1 components (Essential):
 ### 6. Pages Updated ✅
 
 #### Evidence Viewer
-**File:** `apps/web/app/(dashboard)/projects/[id]/evidence/page.tsx`
+**File:** `apps/web/app/(app)/projects/[id]/evidence/page.tsx`
 
 **Features:**
 - ✅ PDF Viewer with controls
@@ -108,7 +108,7 @@ Priority 1 components (Essential):
 - ✅ Integrated with params for project ID
 
 #### Dashboard
-**File:** `apps/web/app/(dashboard)/page.tsx`
+**File:** `apps/web/app/(app)/page.tsx`
 
 **Features:**
 - ✅ Gauge chart for coherence score
@@ -141,7 +141,7 @@ apps/web/ (Next.js - Production)
 │   ├── exportUtils.ts   # Export utilities
 │   └── utils.ts         # Utility functions
 └── app/
-    └── (dashboard)/
+    └── (app)/
         ├── page.tsx                    # ✅ Dashboard (MIGRATED)
         └── projects/[id]/
             └── evidence/page.tsx       # ✅ Evidence Viewer (MIGRATED)
@@ -226,8 +226,8 @@ Gradually port additional features from Lovable:
 
 ### Modified:
 - apps/web/package.json (dependencies)
-- apps/web/app/(dashboard)/page.tsx
-- apps/web/app/(dashboard)/projects/[id]/evidence/page.tsx
+- apps/web/app/(app)/page.tsx
+- apps/web/app/(app)/projects/[id]/evidence/page.tsx
 
 ## Repository Structure Now
 

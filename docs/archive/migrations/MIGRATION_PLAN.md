@@ -168,7 +168,7 @@ apps/web-lovable/src/data/mockData.ts → apps/web/lib/mockData.ts (temporary)
 ### Steps:
 1. Copy full page component:
    - apps/web-lovable/src/pages/EvidenceViewer.tsx →
-   - apps/web/app/(dashboard)/projects/[id]/evidence/page.tsx
+   - apps/web/app/(app)/projects/[id]/evidence/page.tsx
 
 2. Add "use client" directive at top
 3. Adapt imports for Next.js structure
@@ -179,7 +179,7 @@ apps/web-lovable/src/data/mockData.ts → apps/web/lib/mockData.ts (temporary)
 
 ### Steps:
 1. Copy dashboard page logic from apps/web-lovable/src/pages/Dashboard.tsx
-2. Update apps/web/app/(dashboard)/page.tsx
+2. Update apps/web/app/(app)/page.tsx
 3. Add "use client" directive
 4. Integrate with real backend API for KPIs
 

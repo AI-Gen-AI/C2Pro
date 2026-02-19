@@ -39,8 +39,8 @@
 ### 3. Project Management Interface
 *   **Description:** Develop pages for listing and creating projects.
 *   **Pages to Develop:**
-    *   `apps/web/app/(dashboard)/projects/page.tsx`: Should fetch and display the list of projects for the user.
-    *   `apps/web/app/(dashboard)/projects/new/page.tsx`: Should contain a form to submit new project information to the API.
+    *   `apps/web/app/(app)/projects/page.tsx`: Should fetch and display the list of projects for the user.
+    *   `apps/web/app/(app)/projects/new/page.tsx`: Should contain a form to submit new project information to the API.
 
 ---
 

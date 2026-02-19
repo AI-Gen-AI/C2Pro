@@ -59,7 +59,7 @@ apps/web/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   └── register/page.tsx
-│   ├── (dashboard)/
+│   ├── (app)/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx (dashboard home)
 │   │   └── projects/
@@ -941,7 +941,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@/tests/helpers/test-utils'
 import { server } from '@/tests/mocks/server'
 import { http, HttpResponse } from 'msw'
-import ProjectsPage from '@/app/(dashboard)/projects/page'
+import ProjectsPage from '@/app/(app)/projects/page'
 
 describe('Projects List Page', () => {
   beforeEach(() => {

@@ -38,15 +38,18 @@
   - 53 imports actualizados en 48 archivos
   - Layout/providers aplanados: `@/components/layout/ProjectTabs`, `@/components/layout/ThemeToggle`, `@/components/providers/SentryInit`
   - Verificado: 0 referencias restantes a `@/src/components`
-- [x] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`)
+- [x] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(app)/`)
   - Comparados 9 pares: 5 identicos, 4 con diferencias menores (dashboard/ era version demo/prototipo)
-  - Movido unico archivo exclusivo: `projects/[id]/alerts/page.tsx` → `(dashboard)/projects/[id]/alerts/`
+  - Movido unico archivo exclusivo: `projects/[id]/alerts/page.tsx` → `(app)/projects/[id]/alerts/`
   - Eliminado `app/dashboard/` completo (10 archivos)
 - [x] **2.6** Eliminar `app/demo/` (demo se controla por env variable, no por ruta)
   - Eliminados 3 archivos (layout, redirect page, re-export page) — zero contenido unico
   - Actualizados 2 links en landing-page-content.tsx: `/demo/projects` → `/projects`
   - Actualizado e2e test s1-12-demo-access.spec.ts para rutas sin `/demo/`
-- [ ] **2.7** Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica
+- [x] **2.7** Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica
+  - Renombrado directorio: 18 archivos movidos sin cambio de contenido
+  - Zero imports afectados (Next.js route groups son transparentes a @/ aliases)
+  - Actualizadas 19 docs con referencia `(dashboard)` → `(app)` (excluido context/Legacy/)
 - [ ] **2.8** Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`
 - [ ] **2.9** Verificar que MSW handlers cubren todos los endpoints que las pages necesitan
 - [ ] **2.10** Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional

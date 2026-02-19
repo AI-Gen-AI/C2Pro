@@ -173,12 +173,12 @@
 
 | Page | Violacion | Accion |
 |------|-----------|--------|
-| `(dashboard)/page.tsx` | R1: `const DATA = { score: 78 }` | Crear hook `useDashboardSummary()` que llame `GET /api/v1/dashboard/summary` |
-| `(dashboard)/documents/page.tsx` | R1: `const mockDocuments = [...]` | Usar `useProjectDocuments(projectId)` existente |
-| `(dashboard)/alerts/page.tsx` | R1: `const mockAlerts = [...]` | Crear hook `useAlerts(projectId)` que llame `GET /api/v1/projects/{id}/alerts` |
-| `(dashboard)/raci/page.tsx` | R1: `const mockRaciData = [...]` | Crear hook `useRaciMatrix(projectId)` que llame `GET /api/v1/projects/{id}/raci` |
-| `(dashboard)/projects/[id]/page.tsx` | R1: `const stats = [...]` | Usar `useProject(id)` existente |
-| `(dashboard)/projects/[id]/coherence/page.tsx` | R1: `const DATA = { score: 72 }` | Crear hook `useCoherenceScore(projectId)` que llame `GET /api/v1/projects/{id}/coherence` |
+| `(app)/page.tsx` | R1: `const DATA = { score: 78 }` | Crear hook `useDashboardSummary()` que llame `GET /api/v1/dashboard/summary` |
+| `(app)/documents/page.tsx` | R1: `const mockDocuments = [...]` | Usar `useProjectDocuments(projectId)` existente |
+| `(app)/alerts/page.tsx` | R1: `const mockAlerts = [...]` | Crear hook `useAlerts(projectId)` que llame `GET /api/v1/projects/{id}/alerts` |
+| `(app)/raci/page.tsx` | R1: `const mockRaciData = [...]` | Crear hook `useRaciMatrix(projectId)` que llame `GET /api/v1/projects/{id}/raci` |
+| `(app)/projects/[id]/page.tsx` | R1: `const stats = [...]` | Usar `useProject(id)` existente |
+| `(app)/projects/[id]/coherence/page.tsx` | R1: `const DATA = { score: 72 }` | Crear hook `useCoherenceScore(projectId)` que llame `GET /api/v1/projects/{id}/coherence` |
 
 ### 5.2 Frontend — Infraestructura que falta
 
@@ -225,7 +225,7 @@ Falta para cubrir todas las pages:
 | `projects/router.py` | R17-R18: `_fake_projects` dict en memoria | Reescribir con SQLAlchemy repository |
 | `alerts/router.py` | R17-R18: `_fake_alerts` dict en memoria | Reescribir con SQLAlchemy repository |
 | `bulk_operations/router.py` | R17: `percentage: 65` hardcodeado | Conectar con job tracking real |
-| `coherence/router.py` (dashboard) | R17: `coherence_score: 78` hardcodeado | Conectar con CoherenceEngine + DB |
+| `coherence/router.py` (app) | R17: `coherence_score: 78` hardcodeado | Conectar con CoherenceEngine + DB |
 | `coherence/service.py` | R17: `MOCK_PROJECT_DB`, `MOCK_SCORE_DB` | Eliminar, usar repositorio real |
 | `decision_intelligence/router.py` | R19: `_Default*Service` con datos ficticios | Inyectar dependencias reales o lanzar error |
 

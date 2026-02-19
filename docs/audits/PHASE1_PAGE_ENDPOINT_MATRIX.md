@@ -79,14 +79,14 @@ Estado: MSW esta configurado pero NINGUNA page lo usa porque las pages
 
 | # | Page | Endpoint que DEBERIA llamar | Endpoint que REALMENTE llama | Backend | Flujo Real |
 |---|------|-----------------------------|-------------------------------|---------|------------|
-| 1 | `(dashboard)/page.tsx` | `GET /api/v1/dashboard/summary` | **NINGUNO** — usa `const DATA = { score: 78, project: "Torre Skyline" }` | -- | **MOCK_INLINE** |
-| 2 | `(dashboard)/documents/page.tsx` | `GET /api/v1/projects/{id}/documents` | **NINGUNO** — usa `const mockDocuments = [8 docs]` | -- | **MOCK_INLINE** |
-| 3 | `(dashboard)/alerts/page.tsx` | `GET /api/v1/projects/{id}/alerts` | **NINGUNO** — usa `const mockAlerts = [7 alertas]` | -- | **MOCK_INLINE** |
-| 4 | `(dashboard)/raci/page.tsx` | `GET /api/v1/projects/{id}/raci` | **NINGUNO** — usa `const mockRaciData = [8 actividades]` | -- | **MOCK_INLINE** |
-| 5 | `(dashboard)/observability/page.tsx` | `GET /api/v1/observability/status` + `GET /api/v1/observability/analyses` | `fetch("${API_BASE_URL}/api/v1/observability/status")` + `fetch(".../analyses")` | `ObservabilityService` -> SQLAlchemy | **API->DB_REAL** |
-| 6 | `(dashboard)/settings/page.tsx` | -- | -- (formulario local) | -- | **STATIC** |
-| 7 | `(dashboard)/evidence/page.tsx` | -- | -- (redirect a /projects) | -- | **STATIC** |
-| 8 | `(dashboard)/stakeholders/page.tsx` | `GET /api/v1/stakeholders/projects/{id}` | Delega a `<StakeholderMatrix>` componente | -- | **STATIC** (datos en componente) |
+| 1 | `(app)/page.tsx` | `GET /api/v1/dashboard/summary` | **NINGUNO** — usa `const DATA = { score: 78, project: "Torre Skyline" }` | -- | **MOCK_INLINE** |
+| 2 | `(app)/documents/page.tsx` | `GET /api/v1/projects/{id}/documents` | **NINGUNO** — usa `const mockDocuments = [8 docs]` | -- | **MOCK_INLINE** |
+| 3 | `(app)/alerts/page.tsx` | `GET /api/v1/projects/{id}/alerts` | **NINGUNO** — usa `const mockAlerts = [7 alertas]` | -- | **MOCK_INLINE** |
+| 4 | `(app)/raci/page.tsx` | `GET /api/v1/projects/{id}/raci` | **NINGUNO** — usa `const mockRaciData = [8 actividades]` | -- | **MOCK_INLINE** |
+| 5 | `(app)/observability/page.tsx` | `GET /api/v1/observability/status` + `GET /api/v1/observability/analyses` | `fetch("${API_BASE_URL}/api/v1/observability/status")` + `fetch(".../analyses")` | `ObservabilityService` -> SQLAlchemy | **API->DB_REAL** |
+| 6 | `(app)/settings/page.tsx` | -- | -- (formulario local) | -- | **STATIC** |
+| 7 | `(app)/evidence/page.tsx` | -- | -- (redirect a /projects) | -- | **STATIC** |
+| 8 | `(app)/stakeholders/page.tsx` | `GET /api/v1/stakeholders/projects/{id}` | Delega a `<StakeholderMatrix>` componente | -- | **STATIC** (datos en componente) |
 
 ---
 
@@ -94,13 +94,13 @@ Estado: MSW esta configurado pero NINGUNA page lo usa porque las pages
 
 | # | Page | Endpoint que DEBERIA llamar | Endpoint que REALMENTE llama | Backend | Flujo Real |
 |---|------|-----------------------------|-------------------------------|---------|------------|
-| 9 | `(dashboard)/projects/page.tsx` | `GET /api/v1/projects` | `ProjectsService.getProjects()` -> `GET /api/v1/projects` | `projects/router.py` -> `_fake_projects` dict | **API->FAKE_MEM** |
-| 10 | `(dashboard)/projects/new/page.tsx` | -- | -- (placeholder) | -- | **STATIC** |
-| 11 | `(dashboard)/projects/[id]/page.tsx` | `GET /api/v1/projects/{id}` | **NINGUNO** — usa `const stats = [...]` hardcodeado | -- | **MOCK_INLINE** |
-| 12 | `(dashboard)/projects/[id]/analysis/page.tsx` | `POST /api/v1/analyze` | -- (placeholder) | -- | **STATIC** |
-| 13 | `(dashboard)/projects/[id]/coherence/page.tsx` | `GET /api/v1/projects/{id}/coherence` o `GET /api/coherence/dashboard/{id}` | **NINGUNO** — usa `const DATA = { score: 72 }` | -- | **MOCK_INLINE** |
-| 14 | `(dashboard)/projects/[id]/documents/page.tsx` | `GET /api/v1/projects/{id}/documents` | `useProjectDocuments()` -> `apiClient.get("/projects/{id}/documents")` | `documents/router.py` -> `ListProjectDocumentsUseCase` -> SQLAlchemy | **API->DB_REAL** |
-| 15 | `(dashboard)/projects/[id]/evidence/page.tsx` | Multiples: documents + entities + alerts | `useProjectDocuments()` + `useDocumentEntities()` + `useDocumentAlerts()` | `documents/router.py` -> SQLAlchemy | **API->DB_REAL** |
+| 9 | `(app)/projects/page.tsx` | `GET /api/v1/projects` | `ProjectsService.getProjects()` -> `GET /api/v1/projects` | `projects/router.py` -> `_fake_projects` dict | **API->FAKE_MEM** |
+| 10 | `(app)/projects/new/page.tsx` | -- | -- (placeholder) | -- | **STATIC** |
+| 11 | `(app)/projects/[id]/page.tsx` | `GET /api/v1/projects/{id}` | **NINGUNO** — usa `const stats = [...]` hardcodeado | -- | **MOCK_INLINE** |
+| 12 | `(app)/projects/[id]/analysis/page.tsx` | `POST /api/v1/analyze` | -- (placeholder) | -- | **STATIC** |
+| 13 | `(app)/projects/[id]/coherence/page.tsx` | `GET /api/v1/projects/{id}/coherence` o `GET /api/coherence/dashboard/{id}` | **NINGUNO** — usa `const DATA = { score: 72 }` | -- | **MOCK_INLINE** |
+| 14 | `(app)/projects/[id]/documents/page.tsx` | `GET /api/v1/projects/{id}/documents` | `useProjectDocuments()` -> `apiClient.get("/projects/{id}/documents")` | `documents/router.py` -> `ListProjectDocumentsUseCase` -> SQLAlchemy | **API->DB_REAL** |
+| 15 | `(app)/projects/[id]/evidence/page.tsx` | Multiples: documents + entities + alerts | `useProjectDocuments()` + `useDocumentEntities()` + `useDocumentAlerts()` | `documents/router.py` -> SQLAlchemy | **API->DB_REAL** |
 
 ---
 
@@ -117,13 +117,13 @@ Estado: MSW esta configurado pero NINGUNA page lo usa porque las pages
 
 | # | Page | Duplicado de | Flujo Real | Notas |
 |---|------|-------------|------------|-------|
-| 18 | `dashboard/page.tsx` | `(dashboard)/page.tsx` | **MOCK_INLINE** | Mismo `const DATA = {...}` |
-| 19 | `dashboard/projects/[id]/page.tsx` | `(dashboard)/projects/[id]/page.tsx` | **MOCK_INLINE** | Mismo mock |
+| 18 | `dashboard/page.tsx` | `(app)/page.tsx` | **MOCK_INLINE** | Mismo `const DATA = {...}` |
+| 19 | `dashboard/projects/[id]/page.tsx` | `(app)/projects/[id]/page.tsx` | **MOCK_INLINE** | Mismo mock |
 | 20 | `dashboard/projects/[id]/alerts/page.tsx` | -- (no tiene equivalente) | **MOCK_INLINE** | `const DEMO_ALERTS = [...]` para test S3-04 |
-| 21 | `dashboard/projects/[id]/coherence/page.tsx` | `(dashboard)/projects/[id]/coherence/page.tsx` | **MOCK_INLINE** | Mismo mock |
-| 22 | `dashboard/projects/[id]/documents/page.tsx` | `(dashboard)/projects/[id]/documents/page.tsx` | **API->DB_REAL** | Mismo hook |
-| 23 | `dashboard/projects/[id]/evidence/page.tsx` | `(dashboard)/projects/[id]/evidence/page.tsx` | **API->DB_REAL** | Mismo hook |
-| 24 | `dashboard/projects/[id]/analysis/page.tsx` | `(dashboard)/projects/[id]/analysis/page.tsx` | **STATIC** | Placeholder |
+| 21 | `dashboard/projects/[id]/coherence/page.tsx` | `(app)/projects/[id]/coherence/page.tsx` | **MOCK_INLINE** | Mismo mock |
+| 22 | `dashboard/projects/[id]/documents/page.tsx` | `(app)/projects/[id]/documents/page.tsx` | **API->DB_REAL** | Mismo hook |
+| 23 | `dashboard/projects/[id]/evidence/page.tsx` | `(app)/projects/[id]/evidence/page.tsx` | **API->DB_REAL** | Mismo hook |
+| 24 | `dashboard/projects/[id]/analysis/page.tsx` | `(app)/projects/[id]/analysis/page.tsx` | **STATIC** | Placeholder |
 
 ---
 
@@ -132,7 +132,7 @@ Estado: MSW esta configurado pero NINGUNA page lo usa porque las pages
 | # | Page | Flujo Real | Notas |
 |---|------|------------|-------|
 | 25 | `demo/page.tsx` | **STATIC** | Solo redirect a /demo/projects |
-| 26 | `demo/projects/page.tsx` | **API->FAKE_MEM** | Re-exporta `(dashboard)/projects/page` |
+| 26 | `demo/projects/page.tsx` | **API->FAKE_MEM** | Re-exporta `(app)/projects/page` |
 
 ---
 
@@ -140,12 +140,12 @@ Estado: MSW esta configurado pero NINGUNA page lo usa porque las pages
 
 | Endpoint MSW Handler | Page que DEBERIA usarlo | Page REALMENTE lo usa? |
 |----------------------|--------------------------|------------------------|
-| `GET /api/v1/projects` | `(dashboard)/projects/page.tsx` | SI — pero backend responde FAKE_MEM de todos modos |
-| `GET /api/v1/projects/:id` | `(dashboard)/projects/[id]/page.tsx` | **NO** — page usa mock inline |
-| `GET /api/v1/projects/:id/documents` | `(dashboard)/documents/page.tsx` | **NO** — page usa mock inline |
-| `GET /api/v1/projects/:id/documents` | `(dashboard)/projects/[id]/documents/page.tsx` | SI — hook llama API |
-| `GET /api/v1/projects/:id/alerts` | `(dashboard)/alerts/page.tsx` | **NO** — page usa mock inline |
-| `GET /api/v1/projects/:id/stakeholders` | `(dashboard)/stakeholders/page.tsx` | Parcial — delega a componente |
+| `GET /api/v1/projects` | `(app)/projects/page.tsx` | SI — pero backend responde FAKE_MEM de todos modos |
+| `GET /api/v1/projects/:id` | `(app)/projects/[id]/page.tsx` | **NO** — page usa mock inline |
+| `GET /api/v1/projects/:id/documents` | `(app)/documents/page.tsx` | **NO** — page usa mock inline |
+| `GET /api/v1/projects/:id/documents` | `(app)/projects/[id]/documents/page.tsx` | SI — hook llama API |
+| `GET /api/v1/projects/:id/alerts` | `(app)/alerts/page.tsx` | **NO** — page usa mock inline |
+| `GET /api/v1/projects/:id/stakeholders` | `(app)/stakeholders/page.tsx` | Parcial — delega a componente |
 | `GET /api/v1/projects/:id/wbs` | (ninguna page lo muestra) | NO |
 | `GET /api/v1/documents/:id/clauses` | (dentro de evidence page) | Parcial |
 
