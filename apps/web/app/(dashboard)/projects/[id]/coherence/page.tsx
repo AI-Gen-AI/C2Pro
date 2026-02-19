@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { CoherenceGauge } from '@/src/components/features/coherence/CoherenceGauge';
-import { ScoreCard } from '@/src/components/features/coherence/ScoreCard';
+import { CoherenceGauge } from '@/components/coherence/CoherenceGauge';
+import { ScoreCard } from '@/components/coherence/ScoreCard';
 import { BreakdownChart } from '@/components/coherence/BreakdownChart';
 import { RadarView } from '@/components/coherence/RadarView';
 import { AlertsDistribution } from '@/components/coherence/AlertsDistribution';
@@ -70,7 +70,6 @@ export default function ProjectCoherencePage() {
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <CoherenceGauge
           score={DATA.score}
-          label="Good"
           documentsAnalyzed={DATA.docs}
           dataPointsChecked={DATA.points}
         />

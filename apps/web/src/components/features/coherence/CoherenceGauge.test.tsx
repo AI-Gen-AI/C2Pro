@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
-import { CoherenceGauge } from "./CoherenceGauge";
+import { CoherenceGauge } from "@/components/coherence/CoherenceGauge";
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -19,17 +19,29 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api/generated", () => ({}));
 
+// Mock useCountUp to return target value immediately (no animation in tests)
+vi.mock("@/hooks/useCountUp", () => ({
+  useCountUp: (target: number) => target,
+}));
+
+// Mock recharts to render simple DOM elements
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  RadialBarChart: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  RadialBar: () => <div />,
+}));
+
 describe("CoherenceGauge", () => {
-  it("renders an accessible SVG gauge with score metadata", () => {
+  it("renders an accessible gauge with score metadata", () => {
     renderWithProviders(
       <CoherenceGauge
         score={82}
-        label="Good"
         documentsAnalyzed={8}
         dataPointsChecked={2847}
       />,
     );
 
+    // components/ version auto-generates label via getScoreLabel(82) = "Good"
     expect(
       screen.getByRole("img", { name: /coherence score: 82\/100/i }),
     ).toBeInTheDocument();
