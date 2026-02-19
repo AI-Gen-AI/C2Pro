@@ -10,7 +10,8 @@
 
 - [x] **1.1** Inventariar cada page del frontend y clasificarla: ¿usa API real o datos mock?
   - Resultado: `PHASE1_FRONTEND_PAGE_INVENTORY.md`
-- [ ] **1.2** Inventariar cada endpoint del backend y clasificar: ¿tiene mock data hardcodeada?
+- [x] **1.2** Inventariar cada endpoint del backend y clasificar: ¿tiene mock data hardcodeada?
+  - Resultado: `PHASE1_BACKEND_ENDPOINT_INVENTORY.md`
 - [ ] **1.3** Documentar la matriz page <-> endpoint <-> fuente de datos
 - [ ] **1.4** Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta"
 - [ ] **1.5** Definir qué endpoints backend son necesarios para que las pages funcionen sin mock
