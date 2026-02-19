@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ThemeToggle } from '@/src/components/layout/theme/ThemeToggle';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 interface AppHeaderProps {
   title?: string;

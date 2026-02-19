@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { FilterPersistenceHarness } from "@/src/components/features/filters/FilterPersistenceHarness";
+import { FilterPersistenceHarness } from "@/components/features/filters/FilterPersistenceHarness";
 
 describe("S3-10 RED - session filter persistence integration", () => {
   it("[S3-10-RED-INT-01] restores filters after remount refresh", () => {

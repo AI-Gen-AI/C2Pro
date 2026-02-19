@@ -1,6 +1,6 @@
 import { ProjectsService } from "@/lib/api/generated/services/ProjectsService";
 import type { ProjectListItemResponse } from "@/lib/api/generated/models";
-import { ProjectListTable } from "@/src/components/features/projects/ProjectListTable";
+import { ProjectListTable } from "@/components/features/projects/ProjectListTable";
 
 export default async function ProjectsPage() {
   let projects: ProjectListItemResponse[] = [];
