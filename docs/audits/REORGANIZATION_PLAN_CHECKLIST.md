@@ -14,7 +14,8 @@
   - Resultado: `PHASE1_BACKEND_ENDPOINT_INVENTORY.md`
 - [x] **1.3** Documentar la matriz page <-> endpoint <-> fuente de datos
   - Resultado: `PHASE1_PAGE_ENDPOINT_MATRIX.md`
-- [ ] **1.4** Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta"
+- [x] **1.4** Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta"
+  - Resultado: `DEMO_VS_PROD_CONTRACT.md`
 - [ ] **1.5** Definir qué endpoints backend son necesarios para que las pages funcionen sin mock
 
 **Entregable:** `DEMO_VS_PROD_CONTRACT.md`
