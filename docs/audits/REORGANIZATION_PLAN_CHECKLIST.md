@@ -29,7 +29,8 @@
 
 - [x] **2.1** Auditar `components/` vs `src/components/features/` componente por componente
   - Resultado: `PHASE2_COMPONENT_AUDIT.md`
-- [ ] **2.2** Para cada duplicado, elegir la mejor implementación y consolidar
+- [x] **2.2** Para cada duplicado, elegir la mejor implementación y consolidar
+  - Resultado: `PHASE2_DUPLICATE_CONSOLIDATION.md`
 - [ ] **2.3** Mover todos los componentes de `src/components/features/` a `components/features/`
 - [ ] **2.4** Actualizar todos los imports (`@/src/components` -> `@/components/features`)
 - [ ] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`)
