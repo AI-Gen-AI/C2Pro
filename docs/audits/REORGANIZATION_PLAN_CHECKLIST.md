@@ -38,7 +38,10 @@
   - 53 imports actualizados en 48 archivos
   - Layout/providers aplanados: `@/components/layout/ProjectTabs`, `@/components/layout/ThemeToggle`, `@/components/providers/SentryInit`
   - Verificado: 0 referencias restantes a `@/src/components`
-- [ ] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`)
+- [x] **2.5** Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`)
+  - Comparados 9 pares: 5 identicos, 4 con diferencias menores (dashboard/ era version demo/prototipo)
+  - Movido unico archivo exclusivo: `projects/[id]/alerts/page.tsx` → `(dashboard)/projects/[id]/alerts/`
+  - Eliminado `app/dashboard/` completo (10 archivos)
 - [ ] **2.6** Eliminar `app/demo/` (demo se controla por env variable, no por ruta)
 - [ ] **2.7** Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica
 - [ ] **2.8** Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`
