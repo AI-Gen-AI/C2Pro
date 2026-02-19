@@ -42,7 +42,10 @@
   - Comparados 9 pares: 5 identicos, 4 con diferencias menores (dashboard/ era version demo/prototipo)
   - Movido unico archivo exclusivo: `projects/[id]/alerts/page.tsx` → `(dashboard)/projects/[id]/alerts/`
   - Eliminado `app/dashboard/` completo (10 archivos)
-- [ ] **2.6** Eliminar `app/demo/` (demo se controla por env variable, no por ruta)
+- [x] **2.6** Eliminar `app/demo/` (demo se controla por env variable, no por ruta)
+  - Eliminados 3 archivos (layout, redirect page, re-export page) — zero contenido unico
+  - Actualizados 2 links en landing-page-content.tsx: `/demo/projects` → `/projects`
+  - Actualizado e2e test s1-12-demo-access.spec.ts para rutas sin `/demo/`
 - [ ] **2.7** Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica
 - [ ] **2.8** Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`
 - [ ] **2.9** Verificar que MSW handlers cubren todos los endpoints que las pages necesitan
