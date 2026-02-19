@@ -55,7 +55,7 @@ export default function LandingPageContent() {
               <span className="ml-2">→</span>
             </Button>
           </Link>
-          <Link href="/demo/projects">
+          <Link href="/projects">
             <Button size="lg" variant="outline">
               View Live Demo
             </Button>
@@ -193,7 +193,7 @@ export default function LandingPageContent() {
                 Go to Real Platform
               </Button>
             </Link>
-            <Link href="/demo/projects" className="inline-block">
+            <Link href="/projects" className="inline-block">
               <Button size="lg" variant="outline">
                 Try Demo First
               </Button>
