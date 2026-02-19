@@ -27,7 +27,8 @@
 
 **Objetivo:** Una sola estructura de componentes, una sola estructura de rutas.
 
-- [ ] **2.1** Auditar `components/` vs `src/components/features/` componente por componente
+- [x] **2.1** Auditar `components/` vs `src/components/features/` componente por componente
+  - Resultado: `PHASE2_COMPONENT_AUDIT.md`
 - [ ] **2.2** Para cada duplicado, elegir la mejor implementación y consolidar
 - [ ] **2.3** Mover todos los componentes de `src/components/features/` a `components/features/`
 - [ ] **2.4** Actualizar todos los imports (`@/src/components` -> `@/components/features`)
