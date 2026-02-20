@@ -53,8 +53,15 @@ class ExecuteDecisionResponseDTO(BaseModel):
 
 
 def get_decision_orchestration_service() -> DecisionOrchestrationService:
-    """Refers to Suite ID: TS-I13-E2E-REAL-001."""
-    return DecisionOrchestrationService()
+    """Refers to Suite ID: TS-I13-E2E-REAL-001.
+
+    TODO: Wire real port implementations once they exist.
+    """
+    raise NotImplementedError(
+        "DecisionOrchestrationService requires real port implementations. "
+        "Wire IngestionPort, ExtractionPort, RetrievalPort, "
+        "CoherenceScoringPort and HITLPort before enabling this endpoint."
+    )
 
 
 @router.post(
