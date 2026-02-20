@@ -54,7 +54,19 @@
   - `lib/mockData.ts` tenia zero imports — codigo muerto (303 lineas)
   - Datos migrados a `mocks/data/seed.ts` via @mswjs/data factory: 6 projects, 8 alerts, 7 stakeholders
   - Archivo eliminado
-- [ ] **2.9** Verificar que MSW handlers cubren todos los endpoints que las pages necesitan
+- [x] **2.9** Verificar que MSW handlers cubren todos los endpoints que las pages necesitan
+  - Auditoria completa: hooks/pages vs MSW handlers
+  - Gaps encontrados y corregidos en `mocks/handlers/custom/demo-data.ts`:
+    - GET `/api/v1/alerts?document_id=` — nuevo (useDocumentAlerts)
+    - GET `/api/v1/stakeholders?project_id=` — nuevo (useStakeholders)
+    - PATCH `/api/v1/stakeholders/:id` — nuevo (useUpdateStakeholder)
+    - POST `/api/v1/auth/login` — nuevo
+    - POST `/api/v1/auth/register` — nuevo
+    - POST `/api/v1/auth/refresh` — nuevo
+    - GET `/api/v1/auth/me` — nuevo
+    - POST `/api/v1/auth/logout` — nuevo
+  - Fix: GET `/projects` ahora retorna `{ items, total, page, ... }` (ProjectListResponse)
+  - Nota: `getDocumentEntities` es placeholder (retorna `[]`), no necesita handler
 - [ ] **2.10** Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional
 
 **Entregable:** Frontend con estructura única y limpia. Zero datos mock en pages.
