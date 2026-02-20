@@ -95,7 +95,11 @@
 - [x] **3.3** Mover `core/ai/example_prompts.py` a tests o docs
   - `git mv apps/api/src/core/ai/example_prompts.py docs/api/example_prompts.py`
   - Actualizadas 2 refs en PROMPT_TEMPLATES_GUIDE.md y CE-S2-008_IMPLEMENTATION_SUMMARY.md
-- [ ] **3.4** Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)
+- [x] **3.4** Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)
+  - **Eleccion: dataclass** (`src/projects/domain/models.py`) — entidad de dominio canonica con validacion y state machine
+  - Eliminado `src/projects/domain/project.py` — duplicado Pydantic (zero imports, codigo muerto)
+  - Router HTTP: eliminados `ProjectResponse` y `ProjectListResponse` inline → importa `ProjectDetailResponse` y `ProjectListResponse` de `dtos.py`
+  - Helper `_to_response()` mapea `_fake_projects` dict a `ProjectDetailResponse` con defaults sensibles
 - [ ] **3.5** Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)
 - [ ] **3.6** Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio
 - [ ] **3.7** Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`
