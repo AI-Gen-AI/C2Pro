@@ -83,7 +83,10 @@
 
 **Objetivo:** Eliminar mock data de producción, corregir bounded contexts.
 
-- [ ] **3.1** Eliminar `MOCK_PROJECT_DB` y `MOCK_SCORE_DB` de `coherence/service.py`
+- [x] **3.1** Eliminar `MOCK_PROJECT_DB` y `MOCK_SCORE_DB` de `coherence/service.py`
+  - Removidos `MOCK_PROJECT_DB`, `MOCK_SCORE_DB`, la clase `CoherenceScore` mock, y `get_coherence_service()` singleton
+  - `CoherenceService` reescrito como facade async sobre repos reales (`SqlAlchemyCoherenceRepository`, `SQLAlchemyProjectRepository`)
+  - Test `test_full_scoring_loop.py`: eliminado import roto (`src.modules.coherence`) y 3 inyecciones a dicts mock
 - [ ] **3.2** Eliminar `_DefaultExtractionService` y `_DefaultIngestionService` de `decision_intelligence/ports.py` — reemplazar con errores explícitos
 - [ ] **3.3** Mover `core/ai/example_prompts.py` a tests o docs
 - [ ] **3.4** Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)
