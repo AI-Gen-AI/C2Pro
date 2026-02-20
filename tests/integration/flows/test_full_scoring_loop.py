@@ -20,7 +20,6 @@ from src.core import database as db_module
 from src.core.database import Base
 from src.modules.analysis.models import Alert, Analysis, Extraction
 from src.modules.auth.models import Tenant, User
-from src.modules.coherence import service as coherence_service
 from src.modules.documents.models import DocumentStatus
 from src.modules.documents.models import Clause, Document
 from src.modules.projects.models import Project
@@ -187,8 +186,6 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
         headers = _make_auth_header(user_id, tenant_id)
         print(f"DEBUG: seeded tenant={tenant_id} user={user_id}")
 
-        coherence_service.MOCK_PROJECT_DB[str(tenant_id)] = {"name": "Test Project"}
-
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",
@@ -200,15 +197,6 @@ async def test_upload_and_calculate_score(monkeypatch) -> None:
             assert project_response.status_code == 201
             project_id = project_response.json()["id"]
             print(f"DEBUG: project created id={project_id}")
-
-            # Ensure coherence service has data for this project_id
-            coherence_service.MOCK_PROJECT_DB[project_id] = {"name": "Integration Project"}
-            coherence_service.MOCK_SCORE_DB[project_id] = coherence_service.CoherenceScore(
-                project_id=UUID(project_id),
-                score=82,
-                breakdown={"critical": 0, "high": 1, "medium": 1, "low": 0},
-                top_drivers=["Budget variance detected"],
-            )
 
             with FIXTURE_PDF.open("rb") as pdf_file:
                 files = {"file": ("contract_sample.pdf", pdf_file, "application/pdf")}
