@@ -21,4 +21,16 @@ describe("useAppModeStore", () => {
     useAppModeStore.getState().setMode("prod");
     expect(useAppModeStore.getState().mode).toBe("prod");
   });
+
+  it("selectIsDemoMode returns true only in demo mode", async () => {
+    vi.resetModules();
+    delete process.env.NEXT_PUBLIC_APP_MODE;
+    const { useAppModeStore, selectIsDemoMode } = await import("./app-mode");
+
+    useAppModeStore.getState().setMode("prod");
+    expect(selectIsDemoMode(useAppModeStore.getState())).toBe(false);
+
+    useAppModeStore.getState().setMode("demo");
+    expect(selectIsDemoMode(useAppModeStore.getState())).toBe(true);
+  });
 });

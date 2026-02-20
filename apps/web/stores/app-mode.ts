@@ -20,3 +20,7 @@ export const useAppModeStore = create<AppModeState>()(
     { name: "c2pro-app-mode" },
   ),
 );
+
+/** Convenience selector — avoids `mode === "demo"` scattered everywhere. */
+export const selectIsDemoMode = (state: AppModeState) =>
+  state.mode === "demo";
