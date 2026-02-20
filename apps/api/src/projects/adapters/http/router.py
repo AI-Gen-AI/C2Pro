@@ -4,6 +4,7 @@ C2Pro - Projects HTTP Router
 Minimal implementation for TS-E2E-SEC-TNT-001 E2E tests.
 """
 
+from datetime import datetime, timezone
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -12,28 +13,10 @@ from pydantic import BaseModel, Field
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.projects.application.dtos import ProjectDetailResponse, ProjectListResponse
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-class ProjectResponse(BaseModel):
-    """Project response schema (minimal)."""
-
-    id: UUID
-    tenant_id: UUID
-    name: str
-    code: str
-    project_type: str
-    estimated_budget: float
-    currency: str
-
-
-class ProjectListResponse(BaseModel):
-    """Project list response."""
-
-    items: list[ProjectResponse]
-    total: int
 
 
 # In-memory storage for fake implementation
@@ -49,11 +32,33 @@ def _add_fake_project(project_data: dict) -> None:
     _fake_projects[project_data["id"]] = project_data
 
 
-@router.get("/{project_id}", response_model=ProjectResponse)
+def _to_response(project: dict) -> ProjectDetailResponse:
+    """Map a _fake_projects dict to the canonical ProjectDetailResponse."""
+    now = datetime.now(timezone.utc)
+    return ProjectDetailResponse(
+        id=project["id"],
+        tenant_id=project["tenant_id"],
+        name=project["name"],
+        description=project.get("description"),
+        code=project.get("code"),
+        project_type=project.get("project_type", "construction"),
+        status=project.get("status", "draft"),
+        estimated_budget=project.get("estimated_budget"),
+        currency=project.get("currency", "EUR"),
+        start_date=project.get("start_date"),
+        end_date=project.get("end_date"),
+        coherence_score=project.get("coherence_score"),
+        last_analysis_at=project.get("last_analysis_at"),
+        created_at=project.get("created_at", now),
+        updated_at=project.get("updated_at", now),
+    )
+
+
+@router.get("/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     project_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> ProjectResponse:
+) -> ProjectDetailResponse:
     """
     Get project by ID.
 
@@ -69,7 +74,7 @@ async def get_project(
             detail="Project not found",
         )
 
-    return ProjectResponse(**project)
+    return _to_response(project)
 
 
 @router.get("", response_model=ProjectListResponse)
@@ -82,7 +87,7 @@ async def list_projects(
     Filters by tenant_id automatically.
     """
     tenant_projects = [
-        ProjectResponse(**p)
+        _to_response(p)
         for p in _fake_projects.values()
         if p["tenant_id"] == current_user.tenant_id
     ]
@@ -90,15 +95,17 @@ async def list_projects(
     return ProjectListResponse(
         items=tenant_projects,
         total=len(tenant_projects),
+        page=1,
+        page_size=len(tenant_projects),
     )
 
 
-@router.patch("/{project_id}", response_model=ProjectResponse)
+@router.patch("/{project_id}", response_model=ProjectDetailResponse)
 async def update_project(
     project_id: UUID,
     updates: dict,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> ProjectResponse:
+) -> ProjectDetailResponse:
     """
     Update project.
 
@@ -116,7 +123,7 @@ async def update_project(
     project.update(updates)
     _fake_projects[project_id] = project
 
-    return ProjectResponse(**project)
+    return _to_response(project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -138,12 +145,6 @@ async def delete_project(
         )
 
     del _fake_projects[project_id]
-
-
-# Helper function for tests to inject fake data
-def _add_fake_project(project_data: dict) -> None:
-    """Add a fake project to in-memory storage (for testing)."""
-    _fake_projects[project_data["id"]] = project_data
 
 
 # ===========================================
@@ -180,16 +181,6 @@ async def upload_document(
     Upload document for processing.
 
     GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        current_user: Authenticated user
-
-    Returns:
-        Acceptance message for async processing
-
-    Raises:
-        404: Project not found or belongs to another tenant
     """
     # Check if project exists and belongs to tenant
     project = _fake_projects.get(project_id)
@@ -199,12 +190,6 @@ async def upload_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
-
-    # GREEN PHASE: Just accept the upload
-    # In real implementation, this would:
-    # - Store file in R2
-    # - Create document record in DB
-    # - Queue processing job
 
     return {
         "status": "accepted",
@@ -266,37 +251,13 @@ _fake_jobs: dict[str, dict] = {}
     "/{project_id}/documents/bulk",
     status_code=202,
     summary="Bulk Upload Documents",
-    description="""
-    Upload multiple documents for processing.
-
-    **For TS-E2E-FLW-BLK-001 E2E tests.**
-
-    Processes up to 100 documents in a single request.
-    Returns summary of accepted/failed documents.
-    """,
 )
 async def bulk_upload_documents(
     project_id: UUID,
     request: BulkDocumentRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Bulk upload documents.
-
-    GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        request: Bulk upload request with list of documents
-        current_user: Authenticated user
-
-    Returns:
-        Summary of accepted/failed documents
-
-    Raises:
-        404: Project not found or belongs to another tenant
-    """
-    # Check if project exists and belongs to tenant
+    """Bulk upload documents. GREEN PHASE."""
     project = _fake_projects.get(project_id)
 
     if not project or project["tenant_id"] != current_user.tenant_id:
@@ -305,7 +266,6 @@ async def bulk_upload_documents(
             detail="Project not found",
         )
 
-    # GREEN PHASE: Fake successful upload
     document_ids = [str(uuid4()) for _ in request.documents]
 
     return {
@@ -320,40 +280,13 @@ async def bulk_upload_documents(
     "/{project_id}/wbs/bulk",
     status_code=201,
     summary="Bulk Create WBS Items",
-    description="""
-    Create multiple WBS items in bulk.
-
-    **For TS-E2E-FLW-BLK-001 E2E tests.**
-
-    Supports:
-    - Partial success (some items fail, others succeed)
-    - Atomic transactions (atomic=true, all or nothing)
-    - Parent-child hierarchy validation
-    """,
 )
 async def bulk_create_wbs(
     project_id: UUID,
     request: BulkWBSRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Bulk create WBS items.
-
-    GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        request: Bulk WBS creation request
-        current_user: Authenticated user
-
-    Returns:
-        Summary of created/failed items
-
-    Raises:
-        404: Project not found or belongs to another tenant
-        400: Atomic transaction failed (all or nothing)
-    """
-    # Check if project exists and belongs to tenant
+    """Bulk create WBS items. GREEN PHASE."""
     project = _fake_projects.get(project_id)
 
     if not project or project["tenant_id"] != current_user.tenant_id:
@@ -362,13 +295,11 @@ async def bulk_create_wbs(
             detail="Project not found",
         )
 
-    # Validate items
     valid_items = []
     invalid_items = []
     errors = []
 
     for idx, item in enumerate(request.items):
-        # Check required fields
         if not item.code or not item.name or item.level is None:
             invalid_items.append(idx)
             errors.append({
@@ -379,9 +310,7 @@ async def bulk_create_wbs(
         else:
             valid_items.append(item)
 
-    # Handle atomic transactions
     if request.atomic and invalid_items:
-        # All or nothing - reject entire batch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -392,7 +321,6 @@ async def bulk_create_wbs(
             },
         )
 
-    # GREEN PHASE: Fake creation of valid items
     if project_id not in _fake_wbs_items:
         _fake_wbs_items[project_id] = []
 
@@ -404,10 +332,7 @@ async def bulk_create_wbs(
             "parent_code": item.parent_code,
         })
 
-    # Return 207 Multi-Status if partial success, 201 if all succeeded
-    status_code = 207 if invalid_items else 201
-
-    response = {
+    response: dict = {
         "created_count": len(valid_items),
         "failed_count": len(invalid_items),
     }
@@ -422,37 +347,13 @@ async def bulk_create_wbs(
     "/{project_id}/export",
     status_code=202,
     summary="Export Project Data",
-    description="""
-    Export complete project data in various formats.
-
-    **For TS-E2E-FLW-BLK-001 E2E tests.**
-
-    Supports formats: json, csv, xlsx, zip
-    Includes: documents, wbs, alerts, coherence, etc.
-    """,
 )
 async def export_project_data(
     project_id: UUID,
     request: BulkExportRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Export project data.
-
-    GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        request: Export request with format and includes
-        current_user: Authenticated user
-
-    Returns:
-        Export job ID and status
-
-    Raises:
-        404: Project not found or belongs to another tenant
-    """
-    # Check if project exists and belongs to tenant
+    """Export project data. GREEN PHASE."""
     project = _fake_projects.get(project_id)
 
     if not project or project["tenant_id"] != current_user.tenant_id:
@@ -461,7 +362,6 @@ async def export_project_data(
             detail="Project not found",
         )
 
-    # GREEN PHASE: Create fake export job
     export_id = str(uuid4())
     _fake_jobs[export_id] = {
         "export_id": export_id,
