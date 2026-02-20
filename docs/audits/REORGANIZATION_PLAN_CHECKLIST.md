@@ -92,7 +92,9 @@
   - `DecisionOrchestrationService.__init__`: 5 ports ahora requeridos, `_require()` lanza `TypeError` explicito si falta alguno
   - Router: `get_decision_orchestration_service()` lanza `NotImplementedError` hasta que se conecten ports reales
   - Test `test_i13_i14_security_controls.py`: actualizado con stubs explicitos locales en vez de depender de `_Default*`
-- [ ] **3.3** Mover `core/ai/example_prompts.py` a tests o docs
+- [x] **3.3** Mover `core/ai/example_prompts.py` a tests o docs
+  - `git mv apps/api/src/core/ai/example_prompts.py docs/api/example_prompts.py`
+  - Actualizadas 2 refs en PROMPT_TEMPLATES_GUIDE.md y CE-S2-008_IMPLEMENTATION_SUMMARY.md
 - [ ] **3.4** Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)
 - [ ] **3.5** Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)
 - [ ] **3.6** Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio
