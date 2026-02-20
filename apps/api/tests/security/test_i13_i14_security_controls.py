@@ -6,7 +6,9 @@ Test Suite ID: TS-SEC-S6-001
 
 from __future__ import annotations
 
-from uuid import uuid4
+from datetime import datetime, timezone
+from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -17,9 +19,58 @@ from src.modules.governance.domain.entities import RiskLevel
 from src.modules.governance.domain.exceptions import GovernancePolicyViolation
 
 
+class _StubIngestion:
+    async def ingest_document(self, doc_bytes: bytes) -> dict[str, Any]:
+        return {"doc_id": uuid4(), "version_id": uuid4(), "chunks": [{"id": uuid4(), "content": "chunk"}]}
+
+
+class _StubExtraction:
+    async def extract_clauses(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [{"clause_id": uuid4(), "text": "clause", "confidence": 0.9, "metadata": {"citations": ["c1"]}}]
+
+
+class _StubRetrieval:
+    async def retrieve(self, query: str) -> list[dict[str, Any]]:
+        return [{"text": "evidence", "score": 0.88}]
+
+
+class _StubCoherenceScoring:
+    async def aggregate_coherence_score(
+        self, alerts: list[dict[str, Any]], tenant_id: UUID, project_id: UUID
+    ) -> dict[str, Any]:
+        return {"score": 0.78, "severity": "Medium", "explanation": {}, "metadata": {}}
+
+
+class _StubHITL:
+    async def route_for_review(
+        self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
+    ) -> str:
+        if confidence < 0.5:
+            return "PENDING_REVIEW_REQUIRED"
+        return "APPROVED"
+
+    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]:
+        return {
+            "item_id": item_id,
+            "current_status": "APPROVED",
+            "approved_by": reviewer_name,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+def _make_service() -> DecisionOrchestrationService:
+    return DecisionOrchestrationService(
+        ingestion_service=_StubIngestion(),
+        extraction_service=_StubExtraction(),
+        retrieval_service=_StubRetrieval(),
+        coherence_scoring_service=_StubCoherenceScoring(),
+        hitl_service=_StubHITL(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_s6_i13_low_confidence_cannot_be_bypassed_with_inline_approval() -> None:
-    service = DecisionOrchestrationService()
+    service = _make_service()
 
     with pytest.raises(FinalizationBlockedError, match="Item requires review"):
         await service.execute_full_decision_flow(

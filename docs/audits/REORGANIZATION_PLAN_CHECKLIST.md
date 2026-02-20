@@ -87,7 +87,11 @@
   - Removidos `MOCK_PROJECT_DB`, `MOCK_SCORE_DB`, la clase `CoherenceScore` mock, y `get_coherence_service()` singleton
   - `CoherenceService` reescrito como facade async sobre repos reales (`SqlAlchemyCoherenceRepository`, `SQLAlchemyProjectRepository`)
   - Test `test_full_scoring_loop.py`: eliminado import roto (`src.modules.coherence`) y 3 inyecciones a dicts mock
-- [ ] **3.2** Eliminar `_DefaultExtractionService` y `_DefaultIngestionService` de `decision_intelligence/ports.py` — reemplazar con errores explícitos
+- [x] **3.2** Eliminar `_DefaultExtractionService` y `_DefaultIngestionService` de `decision_intelligence/ports.py` — reemplazar con errores explícitos
+  - Eliminadas las 5 clases `_Default*` (Ingestion, Extraction, Retrieval, CoherenceScoring, HITL) — mismo anti-patron
+  - `DecisionOrchestrationService.__init__`: 5 ports ahora requeridos, `_require()` lanza `TypeError` explicito si falta alguno
+  - Router: `get_decision_orchestration_service()` lanza `NotImplementedError` hasta que se conecten ports reales
+  - Test `test_i13_i14_security_controls.py`: actualizado con stubs explicitos locales en vez de depender de `_Default*`
 - [ ] **3.3** Mover `core/ai/example_prompts.py` a tests o docs
 - [ ] **3.4** Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)
 - [ ] **3.5** Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)
