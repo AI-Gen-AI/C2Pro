@@ -67,7 +67,13 @@
     - POST `/api/v1/auth/logout` — nuevo
   - Fix: GET `/projects` ahora retorna `{ items, total, page, ... }` (ProjectListResponse)
   - Nota: `getDocumentEntities` es placeholder (retorna `[]`), no necesita handler
-- [ ] **2.10** Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional
+- [x] **2.10** Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional
+  - Store: exporta `selectIsDemoMode` selector para evitar `mode === "demo"` disperso
+  - Layout: `DemoBanner` ahora condicional via `useAppModeStore(selectIsDemoMode)` en `(app)/layout.tsx`
+  - Providers: MSW init usa store en vez de `env.IS_DEMO` directo
+  - DemoBanner: proyecto default actualizado a "Petrochemical Plant EPC" (match seed data)
+  - `instrumentation.ts` mantiene `process.env` directo (server-side, pre-React)
+  - Test: nuevo caso para `selectIsDemoMode`
 
 **Entregable:** Frontend con estructura única y limpia. Zero datos mock en pages.
 
