@@ -1,124 +1,60 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Eye, Check, Search } from 'lucide-react';
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Eye, Check, Search } from "lucide-react";
 
-const mockAlerts = [
-  {
-    id: 'AL-001',
-    severity: 'Critical',
-    type: 'Legal',
-    title: 'Contract Penalty Clause Violation Risk',
-    description: 'Clause 4.2.1 specifies 30-day delay penalty. Current trajectory shows 45-day delay.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-002',
-    severity: 'Critical',
-    type: 'Financial',
-    title: 'Budget Overrun Threshold Exceeded',
-    description: 'Equipment procurement costs 25% above baseline estimates.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-003',
-    severity: 'Critical',
-    type: 'Technical',
-    title: 'Equipment Compatibility Issue',
-    description: 'New compressor specifications conflict with existing infrastructure.',
-    project: 'Refinery Modernization',
-    status: 'In Progress',
-  },
-  {
-    id: 'AL-004',
-    severity: 'High',
-    type: 'Schedule',
-    title: 'Critical Path Delay - Foundation Work',
-    description: 'Foundation completion delayed by 12 days due to ground conditions.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-005',
-    severity: 'High',
-    type: 'Scope',
-    title: 'Grid Connection Requirements Changed',
-    description: 'Utility company issued new interconnection requirements.',
-    project: 'Solar Farm Installation',
-    status: 'Open',
-  },
-  {
-    id: 'AL-006',
-    severity: 'Medium',
-    type: 'Financial',
-    title: 'Material Cost Variance',
-    description: 'Steel prices increased 8% above budgeted rates.',
-    project: 'Refinery Modernization',
-    status: 'Open',
-  },
-  {
-    id: 'AL-007',
-    severity: 'Medium',
-    type: 'Legal',
-    title: 'Permit Renewal Pending',
-    description: 'Environmental permit expires in 45 days. Renewal application in progress.',
-    project: 'Water Treatment Facility',
-    status: 'In Progress',
-  },
-];
+import { demoAlertsCenter } from "@/lib/demo-data/alerts";
 
 export default function AlertsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [severityFilter, setSeverityFilter] = useState('All Severity');
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("All Severity");
+  const [statusFilter, setStatusFilter] = useState("All Status");
 
-  const filteredAlerts = mockAlerts.filter((alert) => {
+  const filteredAlerts = demoAlertsCenter.filter((alert) => {
     const matchesSearch =
       alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       alert.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity =
-      severityFilter === 'All Severity' || alert.severity === severityFilter;
+      severityFilter === "All Severity" || alert.severity === severityFilter;
     const matchesStatus =
-      statusFilter === 'All Status' || alert.status === statusFilter;
+      statusFilter === "All Status" || alert.status === statusFilter;
     return matchesSearch && matchesSeverity && matchesStatus;
   });
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'Critical':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'High':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case "Critical":
+        return "bg-red-100 text-red-700 border-red-200";
+      case "High":
+        return "bg-orange-100 text-orange-700 border-orange-200";
+      case "Medium":
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
       default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return "bg-gray-100 text-gray-700 border-gray-200";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Open':
-        return 'bg-slate-900 text-white';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-700';
-      case 'Resolved':
-        return 'bg-green-100 text-green-700';
+      case "Open":
+        return "bg-slate-900 text-white";
+      case "In Progress":
+        return "bg-blue-100 text-blue-700";
+      case "Resolved":
+        return "bg-green-100 text-green-700";
       default:
-        return 'bg-gray-100 text-gray-700';
+        return "bg-gray-100 text-gray-700";
     }
   };
 
@@ -127,14 +63,14 @@ export default function AlertsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alerts Center</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Alerts Center
+          </h1>
           <p className="text-sm text-muted-foreground">
             Monitor and manage all project alerts
           </p>
         </div>
-        <Button>
-          + New Alert
-        </Button>
+        <Button>+ New Alert</Button>
       </div>
 
       {/* Filters */}
@@ -186,8 +122,12 @@ export default function AlertsPage() {
                 <th className="px-4 py-3 text-left text-sm font-medium">
                   Severity
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Type</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Title</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">
+                  Type
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium">
+                  Title
+                </th>
                 <th className="px-4 py-3 text-left text-sm font-medium">
                   Project
                 </th>
