@@ -534,8 +534,13 @@ class CoherenceEngineV2:
 
         alerts = self._evaluate_deterministic_rules(project)
         score = self.scoring_service.compute_score(alerts)
+        category_breakdown = self.scoring_service.compute_category_breakdown(alerts)
 
-        return CoherenceResult(alerts=alerts, score=score)
+        return CoherenceResult(
+            overall_score=score,
+            alerts=alerts,
+            category_breakdown=category_breakdown,
+        )
 
     async def evaluate_async(self, project: ProjectContext) -> CoherenceResult:
         """
@@ -692,5 +697,6 @@ def create_engine_v2(
 # ===========================================
 
 
-# Alias for backward compatibility
+# Aliases for backward compatibility
 EnhancedCoherenceEngine = CoherenceEngineV2
+CoherenceEngine = CoherenceEngineV2
