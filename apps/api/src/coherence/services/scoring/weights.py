@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.analysis.domain.enums import AlertSeverity
+from src.shared_kernel.enums import AlertSeverity
 
 SEVERITY_WEIGHTS: dict[AlertSeverity, int] = {
     AlertSeverity.CRITICAL: 25,

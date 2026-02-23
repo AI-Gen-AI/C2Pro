@@ -18,11 +18,7 @@ from uuid import UUID, uuid4
 # ===========================================
 
 
-class WBSItemType(str, Enum):
-    """Types of WBS items."""
-    DELIVERABLE = "deliverable"
-    WORK_PACKAGE = "work_package"
-    ACTIVITY = "activity"
+from src.shared_kernel.enums import WBSItemType  # noqa: F401 — re-export
 
 
 class BOMCategory(str, Enum):

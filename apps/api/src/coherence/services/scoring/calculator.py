@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
+from src.shared_kernel.enums import AlertSeverity, AlertStatus
 from src.analysis.ports.types import AlertRecord
 from src.services.scoring.weights import DEFAULT_SENSITIVITY, SEVERITY_WEIGHTS
 

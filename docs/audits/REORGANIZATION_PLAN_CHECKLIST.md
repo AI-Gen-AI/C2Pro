@@ -108,9 +108,18 @@
   - `test_engine_v2.py`: imports corregidos, misma corrección `score` → `overall_score`
   - Alias `CoherenceEngine = CoherenceEngineV2` añadido para backward compatibility
   - README y `__init__.py` actualizados para reflejar solo v2
-- [ ] **3.6** Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio
+- [x] **3.6** Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio
+  - Creado `src/shared_kernel/` con `enums.py` y `dtos.py`
+  - `enums.py`: `AlertSeverity`, `AlertStatus`, `RACIRole`, `WBSItemType` — definiciones canónicas
+  - `dtos.py`: `WBSItemDTO` — DTO cross-context para transferencia WBS
+  - Módulos propietarios (`analysis/domain/enums.py`, `stakeholders/domain/models.py`, `procurement/domain/models.py`, `projects/domain/wbs_item_dto.py`) re-exportan para backward compat
+  - 4 archivos coherence actualizados: `alert_generator.py`, `services/alerts/generator.py`, `services/scoring/calculator.py`, `services/scoring/weights.py` → `from src.shared_kernel.enums`
+  - 2 archivos analysis actualizados: `raci_generator.py` (RACIRole), `nodes.py` (AlertSeverity, WBSItemType) → `from src.shared_kernel.enums`
+  - 1 archivo procurement actualizado: `import_wbs_from_projects_use_case.py` → `from src.shared_kernel.dtos`
+  - `knowledge_graph.py`: RACIRole migrado a shared_kernel (entity imports quedan para 3.7)
 - [ ] **3.7** Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`
-- [ ] **3.8** Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo
+- [x] **3.8** Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo
+  - Completado como parte de 3.6 — `AlertSeverity` y `AlertStatus` en `src/shared_kernel/enums.py`
 
 **Entregable:** Backend sin mock data en src/, bounded contexts respetados.
 
