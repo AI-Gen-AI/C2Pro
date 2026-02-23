@@ -117,7 +117,11 @@
   - 2 archivos analysis actualizados: `raci_generator.py` (RACIRole), `nodes.py` (AlertSeverity, WBSItemType) → `from src.shared_kernel.enums`
   - 1 archivo procurement actualizado: `import_wbs_from_projects_use_case.py` → `from src.shared_kernel.dtos`
   - `knowledge_graph.py`: RACIRole migrado a shared_kernel (entity imports quedan para 3.7)
-- [ ] **3.7** Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`
+- [x] **3.7** Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`
+  - Creado `src/analysis/ports/graph_entities.py` con 4 `Protocol` classes: `ClauseView`, `WBSTaskView`, `StakeholderView`, `RaciAssignmentView`
+  - `knowledge_graph.py`: eliminados 3 imports de domain (`documents.domain.models.Clause`, `procurement.domain.models.WBSItem`, `stakeholders.domain.models.{RaciAssignment, Stakeholder}`)
+  - Type hints actualizados en `_load_*` methods para usar protocols
+  - Cero cambios en repositorios — entidades satisfacen protocols por structural typing
 - [x] **3.8** Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo
   - Completado como parte de 3.6 — `AlertSeverity` y `AlertStatus` en `src/shared_kernel/enums.py`
 

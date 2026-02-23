@@ -8,13 +8,16 @@ import networkx as nx
 
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.ports.alert_repository import AlertRepository
+from src.analysis.ports.graph_entities import (
+    ClauseView,
+    RaciAssignmentView,
+    StakeholderView,
+    WBSTaskView,
+)
 from src.analysis.ports.knowledge_graph import KnowledgeGraphPort
-from src.documents.domain.models import Clause
 from src.documents.ports.document_repository import IDocumentRepository
-from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.shared_kernel.enums import RACIRole
-from src.stakeholders.domain.models import RaciAssignment, Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 
@@ -168,7 +171,7 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
     def degree_centrality(self) -> dict[str, float]:
         return nx.degree_centrality(self.graph)
 
-    async def _load_stakeholders(self, project_id: UUID) -> list[Stakeholder]:
+    async def _load_stakeholders(self, project_id: UUID) -> list[StakeholderView]:
         stakeholders, _ = await self.stakeholder_repository.get_stakeholders_by_project(
             project_id=project_id,
             skip=0,
@@ -176,7 +179,7 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
         )
         return list(stakeholders)
 
-    async def _load_tasks(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def _load_tasks(self, project_id: UUID, tenant_id: UUID) -> list[WBSTaskView]:
         return await self.wbs_repository.get_by_project(project_id, tenant_id)
 
     async def _load_risks(self, project_id: UUID) -> list[Alert]:
@@ -190,15 +193,15 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
     async def _load_clauses(
         self,
         risks: Iterable[Alert],
-        tasks: Iterable[WBSItem],
-    ) -> list[Clause]:
+        tasks: Iterable[WBSTaskView],
+    ) -> list[ClauseView]:
         clause_ids = {risk.source_clause_id for risk in risks if risk.source_clause_id}
         clause_ids.update({task.source_clause_id for task in tasks if task.source_clause_id})
         if not clause_ids:
             return []
         return await self.document_repository.get_clauses_by_ids(list(clause_ids))
 
-    async def _load_raci(self, project_id: UUID) -> list[RaciAssignment]:
+    async def _load_raci(self, project_id: UUID) -> list[RaciAssignmentView]:
         return await self.stakeholder_repository.list_raci_assignments(project_id)
 
     def _add_node(self, node_id: str, *, node_type: str, label: str, properties: dict[str, Any]):
