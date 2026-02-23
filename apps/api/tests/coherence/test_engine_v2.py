@@ -8,16 +8,16 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.modules.coherence.engine_v2 import (
+from src.coherence.engine_v2 import (
     CoherenceEngineV2,
     EngineConfig,
     ExecutionMode,
     LLMResultCache,
     create_engine_v2,
 )
-from src.modules.coherence.models import Clause, ProjectContext
-from src.modules.coherence.rules import Rule
-from src.modules.coherence.rules_engine.base import Finding
+from src.coherence.models import Clause, ProjectContext
+from src.coherence.rules import Rule
+from src.coherence.rules_engine.base import Finding
 
 
 # ===========================================
@@ -180,8 +180,8 @@ class TestDeterministicEvaluation:
         engine = CoherenceEngineV2(rules=deterministic_rules, config=default_config)
         result = engine.evaluate(sample_project)
 
-        assert result.score is not None
-        assert 0 <= result.score <= 100
+        assert result.overall_score is not None
+        assert 0 <= result.overall_score <= 100
 
     def test_evaluate_clean_project(self, deterministic_rules, default_config):
         """Test evaluation of a clean project."""
@@ -200,7 +200,7 @@ class TestDeterministicEvaluation:
         result = engine.evaluate(clean_project)
 
         # Should have high score with no alerts
-        assert result.score >= 80
+        assert result.overall_score >= 80
 
 
 # ===========================================

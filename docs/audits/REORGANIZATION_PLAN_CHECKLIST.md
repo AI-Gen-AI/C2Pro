@@ -100,7 +100,14 @@
   - Eliminado `src/projects/domain/project.py` — duplicado Pydantic (zero imports, codigo muerto)
   - Router HTTP: eliminados `ProjectResponse` y `ProjectListResponse` inline → importa `ProjectDetailResponse` y `ProjectListResponse` de `dtos.py`
   - Helper `_to_response()` mapea `_fake_projects` dict a `ProjectDetailResponse` con defaults sensibles
-- [ ] **3.5** Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)
+- [x] **3.5** Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)
+  - Eliminado `engine.py` — todo el tráfico migrado a `CoherenceEngineV2` en `engine_v2.py`
+  - Router: `get_coherence_engine()` ahora crea `CoherenceEngineV2` con `enable_llm_rules=False`
+  - v2 sync `evaluate()` corregido: retorna `overall_score` + `category_breakdown` (era `score` — bug Pydantic)
+  - `test_engine.py`: imports corregidos (`src.coherence.engine_v2`), `result.score` → `result.overall_score`
+  - `test_engine_v2.py`: imports corregidos, misma corrección `score` → `overall_score`
+  - Alias `CoherenceEngine = CoherenceEngineV2` añadido para backward compatibility
+  - README y `__init__.py` actualizados para reflejar solo v2
 - [ ] **3.6** Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio
 - [ ] **3.7** Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`
 - [ ] **3.8** Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo
