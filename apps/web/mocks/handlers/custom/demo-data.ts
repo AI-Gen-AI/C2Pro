@@ -136,6 +136,45 @@ export const demoDataHandlers = [
     return HttpResponse.json(items);
   }),
 
+  // ── Coherence Dashboard ─────────────────────────────────
+  http.get("/api/coherence/dashboard/:projectId", ({ params }) => {
+    const projectId = String(params.projectId);
+    const project = db.project.findFirst({
+      where: { id: { equals: projectId } },
+    });
+
+    if (!project) {
+      return new HttpResponse(null, { status: 404 });
+    }
+
+    return HttpResponse.json({
+      project_id: projectId,
+      tenant_id: DEMO_TENANT_ID,
+      coherence_score: 78,
+      global_score: 78,
+      sub_scores: {
+        SCOPE: 80,
+        BUDGET: 62,
+        QUALITY: 85,
+        TECHNICAL: 72,
+        LEGAL: 90,
+        TIME: 75,
+      },
+      weights_used: {
+        SCOPE: 0.2,
+        BUDGET: 0.2,
+        QUALITY: 0.15,
+        TECHNICAL: 0.15,
+        LEGAL: 0.15,
+        TIME: 0.15,
+      },
+      alert_count: 15,
+      document_count: 8,
+      methodology_version: "2.0",
+      last_updated: new Date().toISOString(),
+    });
+  }),
+
   // ── Auth ──────────────────────────────────────────────────
   http.post("/api/v1/auth/login", async ({ request }) => {
     const body = (await request.json()) as { email?: string; password?: string };
