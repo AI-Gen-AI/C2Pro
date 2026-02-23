@@ -133,7 +133,14 @@
 
 **Objetivo:** Cada page solo hace fetch + renderiza componentes.
 
-- [ ] **4.1** `(app)/page.tsx` -> Server component que llama a `DashboardService.getSummary()`
+- [x] **4.1** `(app)/page.tsx` -> Server component que llama a `DashboardService.getSummary()`
+  - `page.tsx`: eliminado `'use client'` + hardcoded `const DATA` → async server component
+  - Flujo: `ProjectsService.getProjects()` → primer proyecto → `DashboardService.getSummary(id)`
+  - Error state con mensaje contextual si API no disponible o sin proyectos
+  - `DashboardService.ts`: `fetch()` a `GET /api/coherence/dashboard/{id}` con `revalidate: 60`
+  - `DashboardClient.tsx`: client component extraido con `useState` (view toggle, category selection)
+  - `DashboardSummary` type añadido a `models/index.ts`
+  - MSW handler `GET /api/coherence/dashboard/:projectId` añadido a `demo-data.ts`
 - [ ] **4.2** `(app)/documents/page.tsx` -> Server component que llama a `DocumentsService.list()`
 - [ ] **4.3** `(app)/projects/[id]/coherence/page.tsx` -> llama a `CoherenceService.getScore(id)`
 - [ ] **4.4** Asegurar que cada page tiene: loading state, error state, empty state
