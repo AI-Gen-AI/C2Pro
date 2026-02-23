@@ -13,7 +13,8 @@ from src.documents.domain.models import Clause
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
-from src.stakeholders.domain.models import RACIRole, RaciAssignment, Stakeholder
+from src.shared_kernel.enums import RACIRole
+from src.stakeholders.domain.models import RaciAssignment, Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 

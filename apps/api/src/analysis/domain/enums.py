@@ -3,6 +3,8 @@ Domain enums for Analysis module.
 """
 from enum import Enum
 
+from src.shared_kernel.enums import AlertSeverity, AlertStatus  # noqa: F401 — re-export
+
 class AnalysisType(str, Enum):
     COHERENCE = "coherence"
     RISK = "risk"
@@ -16,15 +18,3 @@ class AnalysisStatus(str, Enum):
     COMPLETED = "completed"
     ERROR = "error"
     CANCELLED = "cancelled"
-
-class AlertSeverity(str, Enum):
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-class AlertStatus(str, Enum):
-    OPEN = "open"
-    ACKNOWLEDGED = "acknowledged"
-    RESOLVED = "resolved"
-    DISMISSED = "dismissed"

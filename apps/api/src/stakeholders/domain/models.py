@@ -32,12 +32,7 @@ class StakeholderQuadrant(str, Enum):
     MONITOR = "monitor"  # low/low
 
 
-class RACIRole(str, Enum):
-    """RACI roles."""
-    RESPONSIBLE = "R"
-    ACCOUNTABLE = "A"
-    CONSULTED = "C"
-    INFORMED = "I"
+from src.shared_kernel.enums import RACIRole  # noqa: F401 — re-export
 
 
 @dataclass

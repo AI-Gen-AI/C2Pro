@@ -11,7 +11,7 @@ from uuid import UUID
 
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
-from src.projects.domain.wbs_item_dto import WBSItemDTO
+from src.shared_kernel.dtos import WBSItemDTO
 
 
 class ImportWBSFromProjectsUseCase:

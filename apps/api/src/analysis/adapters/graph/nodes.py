@@ -13,9 +13,10 @@ from src.core.database import get_session_with_tenant
 from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractorAgent
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 from src.analysis.adapters.persistence.models import Alert, Analysis
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity
+from src.analysis.domain.enums import AnalysisStatus, AnalysisType
+from src.shared_kernel.enums import AlertSeverity, WBSItemType
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.domain.models import WBSItem, WBSItemType
+from src.procurement.domain.models import WBSItem
 
 DOC_TYPES: tuple[str, ...] = ("contract", "technical_spec", "budget")
 
