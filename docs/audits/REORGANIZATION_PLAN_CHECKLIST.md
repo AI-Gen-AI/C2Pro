@@ -205,7 +205,14 @@
 
 ## Fase 5 — Consolidación y Validación (Semana 9-10)
 
-- [ ] **5.1** Ejecutar todos los tests existentes y verificar que pasan
+- [x] **5.1** Ejecutar todos los tests existentes y verificar que pasan
+  - **Inventario:** 162 test files (132 unit/component + 48 integration + 35 S2.12 unit + 18 E2E Playwright)
+  - **Resultado:** 159/162 pass, 290/295 tests pass
+  - **5 failures pre-existentes** (S3-02 MobileEvidenceViewer RED-phase TDD tests) — confirmado que fallan igual en branch base, no son regresión
+  - **2 test files corregidos** por cambios en seed data:
+    - `S2-01-seed-data.test.ts`: actualizado counts (6 projects, 8 docs, 8 alerts, 7 stakeholders)
+    - `S2-02-custom-handlers.test.ts`: actualizado a `data.items` (paginated response), nombre "Petrochemical Plant EPC", counts correctos
+  - `tsc --noEmit` → 0 errores propios (solo pre-existente en `api/[...proxy]`)
 - [ ] **5.2** Verificar flujo completo en modo demo (MSW)
 - [ ] **5.3** Verificar flujo completo en modo producción (API real)
 - [ ] **5.4** Documentar la arquitectura final en un ADR
