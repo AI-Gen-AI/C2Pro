@@ -253,7 +253,13 @@
   - **Next.js config:** no `APP_MODE` conditionals, only Sentry rewrite. `api/[...proxy]` route forwards auth headers to backend
   - **TypeScript:** `tsc --noEmit` → 0 errores propios
   - **Tests:** 162/162 pass, 295/295 pass
-- [ ] **5.4** Documentar la arquitectura final en un ADR
+- [x] **5.4** Documentar la arquitectura final en un ADR
+  - **ADR-006**: `docs/architecture/decisions/006-post-reorganization-architecture.md`
+  - **Secciones:** Context (5 problemas P1–P5), Decision (6 secciones: demo/prod separation, frontend arch, backend arch, API contract, testing, eliminated artifacts), Consequences (5 positivas, 4 trade-offs, 3 mitigaciones), Alternatives Considered (4)
+  - **Frontend:** route structure, data flow patterns, component organization, state management, provider hierarchy, MSW handler coverage table (12 files, ~50 endpoints)
+  - **Backend:** hexagonal module layout, 9 bounded contexts with status, shared kernel (enums + DTOs), core infrastructure (DB RLS, auth, middleware, cache, events, MCP), 5-layer multi-tenancy, coherence engine v2, LangGraph workflow
+  - **API contract:** endpoint parity table (16 implemented, 4 not wired, 4 MSW-only)
+  - **Follows convention:** ADR-NNN format, matches style of ADR-005
 - [ ] **5.5** Actualizar los diagramas de flujo para reflejar la realidad del código
 - [ ] **5.6** Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes
 - [ ] **5.7** Implementar HITL service real (no solo ports)
