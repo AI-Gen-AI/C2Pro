@@ -176,10 +176,10 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
 
 
 async def budget_parser_node(state: ProjectState) -> ProjectState:
-    state["extracted_wbs"] = []
-    state["confidence_score"] = 0.0
-    state["messages"].append(AIMessage(content="Budget parser not implemented yet."))
-    return state
+    """N9 — Delegates to the extended budget parser with BOM extraction."""
+    from src.analysis.adapters.graph.nodes_extended import budget_parser_extended_node
+
+    return await budget_parser_extended_node(state)
 
 
 async def critique_node(state: ProjectState) -> ProjectState:
