@@ -16,6 +16,7 @@ export interface SafeWatermarkPayload {
   timestampIso?: string;
   environment?: string;
   note?: string;
+  [key: string]: string | undefined;
 }
 
 function scrubPotentialPii(value: string): string {

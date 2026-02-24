@@ -15,7 +15,7 @@ test("S3-11 RED - new user reaches sample project workspace quickly", async ({ p
 test("S3-11 RED - retry after transient provisioning error recovers to ready", async ({ page }) => {
   await page.goto("/dashboard?onboardingFail=1");
 
-  await expect(page.getByRole("alert")).toHaveTextContent(/provisioning timed out/i);
+  await expect(page.getByRole("alert")).toContainText(/provisioning timed out/i);
   await page.getByRole("button", { name: /retry setup/i }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/projects\/proj_sample_001/i);

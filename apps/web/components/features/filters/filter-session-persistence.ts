@@ -25,7 +25,7 @@ export function makeFilterStorageKey(routeKey: string, projectId: string): strin
   return `filters:${routeKey}:${projectId}`;
 }
 
-export function persistFilters<TFilters extends Record<string, unknown>>(
+export function persistFilters<TFilters extends object>(
   key: string,
   filters: TFilters,
 ): void {
@@ -41,7 +41,7 @@ function isLegacyEnvelope(value: unknown): value is LegacyEnvelope {
   return (value as { version?: string }).version === "legacy-v1";
 }
 
-export function hydrateFiltersWithMeta<TFilters extends Record<string, unknown>>(
+export function hydrateFiltersWithMeta<TFilters extends object>(
   key: string,
   defaults: TFilters,
 ): HydrateResult<TFilters> {
@@ -72,7 +72,7 @@ export function hydrateFiltersWithMeta<TFilters extends Record<string, unknown>>
   }
 }
 
-export function hydrateFilters<TFilters extends Record<string, unknown>>(
+export function hydrateFilters<TFilters extends object>(
   key: string,
   defaults: TFilters,
 ): TFilters {

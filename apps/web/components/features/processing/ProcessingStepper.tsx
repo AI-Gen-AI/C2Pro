@@ -99,8 +99,8 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
 
     const onStage = (event: MessageEvent<string>) => {
       const parsed = {
-        event: "stage",
-        data: JSON.parse(event.data),
+        event: "stage" as const,
+        data: JSON.parse(event.data) as StageData,
       };
       if (!isProcessingSseEvent(parsed)) return;
 
@@ -116,8 +116,8 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
 
     const onComplete = (event: MessageEvent<string>) => {
       const parsed = {
-        event: "complete",
-        data: JSON.parse(event.data),
+        event: "complete" as const,
+        data: JSON.parse(event.data) as CompleteData,
       };
       if (!isProcessingSseEvent(parsed)) return;
 
