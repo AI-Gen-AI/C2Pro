@@ -173,7 +173,13 @@
   - Los 3 son `'use client'` con `useEffect` para log de error en console
   - `error.digest` se muestra cuando disponible (server-side error tracking)
   - `tsc --noEmit` → 0 errors
-- [ ] **4.6** Agregar MSW handlers para cada endpoint nuevo que las pages necesiten
+- [x] **4.6** Agregar MSW handlers para cada endpoint nuevo que las pages necesiten
+  - `mocks/handlers/custom/document-viewer.ts`: `GET /api/v1/documents/:documentId/download` (devuelve PDF blank-page válido), `GET /api/v1/documents/:documentId/entities` (devuelve entidades derivadas de clauses en db)
+  - `mocks/handlers/custom/observability.ts`: `GET /api/v1/observability/status` (api_status + database_status OK), `GET /api/v1/observability/analyses` (genera analyses a partir de projects en db)
+  - Registrados en `mocks/handlers/index.ts`
+  - `lib/api/index.ts`: `getDocumentEntities()` ahora llama al API real (`apiClient.get`) en vez de retornar `[]` — MSW lo intercepta en demo mode
+  - Gap analysis: 0 endpoints sin handler restantes
+  - `tsc --noEmit` → 0 errors
 - [ ] **4.7** Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión)
 - [ ] **4.8** Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages
 
