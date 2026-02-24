@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import structlog
 from langgraph.graph import END, StateGraph
@@ -15,6 +16,17 @@ from src.analysis.adapters.graph.nodes import (
     wbs_extractor_node,
     _next_after_critique,
 )
+from src.analysis.adapters.graph.nodes_extended import (
+    citation_validator_node,
+    coherence_scorer_node,
+    decision_intelligence_node,
+    document_ingestion_node,
+    final_assembler_node,
+    knowledge_graph_builder_node,
+    pii_anonymizer_node,
+    raci_generator_node,
+    stakeholder_extractor_node,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.config import settings
 
@@ -23,19 +35,105 @@ logger = structlog.get_logger()
 _graph_app = None
 
 
+# ── Conditional edge: route after critique ──────────────────────────────────
+
+def _next_after_critique_v2(state: ProjectState) -> Literal[
+    "risk_extractor",
+    "wbs_extractor",
+    "budget_parser",
+    "human_interrupt",
+    "stakeholder_extractor",
+]:
+    """Extended critique router — sends to N13/14 (HITL) or enrichment nodes."""
+    if state.get("human_approval_required"):
+        return "human_interrupt"
+    if state.get("critique_notes") and state.get("retry_count", 0) > 0:
+        retry_count = state["retry_count"]
+        if retry_count <= 2:
+            if state.get("doc_type") == "contract":
+                return "risk_extractor"
+            if state.get("doc_type") == "budget":
+                return "budget_parser"
+            return "wbs_extractor"
+    # Critique passed — proceed to enrichment pipeline
+    return "stakeholder_extractor"
+
+
+# ── Graph builder ────────────────────────────────────────────────────────────
+
 def build_workflow() -> StateGraph:
+    """Build the full N1–N17 orchestration graph.
+
+    Graph topology::
+
+        N1 (document_ingestion)
+         │
+        N2 (pii_anonymizer)
+         │
+        N3 (router) ──► [N4 risk | N5 wbs | N9 budget]
+                              │
+                         N12 (critique)
+                              │
+              ┌───────────────┼──────────────┐
+              ▼               ▼              ▼
+         (retry N4/5/9)   N13/14 (HITL)   N6 (stakeholder_extractor)
+                              │              │
+                              ▼              ▼
+                         N6 (stakeholder)  N7 (raci_generator)
+                                             │
+                                            N8 (coherence_scorer)
+                                             │
+                                           N15 (citation_validator)
+                                             │
+                                           N10 (knowledge_graph)
+                                             │
+                                           N17 (save_to_db)
+                                             │
+                                           N11 (decision_intelligence)
+                                             │
+                                           N16 (final_assembler)
+                                             │
+                                            END
+    """
     workflow = StateGraph(ProjectState)
 
-    workflow.add_node("router", router_node)
-    workflow.add_node("risk_extractor", risk_extractor_node)
-    workflow.add_node("wbs_extractor", wbs_extractor_node)
-    workflow.add_node("budget_parser", budget_parser_node)
-    workflow.add_node("critique", critique_node)
-    workflow.add_node("human_interrupt", human_interrupt_node)
-    workflow.add_node("save_to_db", save_to_db_node)
+    # ── Register all 17 nodes ──
+    # Pre-processing
+    workflow.add_node("document_ingestion", document_ingestion_node)    # N1
+    workflow.add_node("pii_anonymizer", pii_anonymizer_node)           # N2
 
-    workflow.set_entry_point("router")
+    # Classification & extraction
+    workflow.add_node("router", router_node)                            # N3
+    workflow.add_node("risk_extractor", risk_extractor_node)            # N4
+    workflow.add_node("wbs_extractor", wbs_extractor_node)              # N5
+    workflow.add_node("budget_parser", budget_parser_node)              # N9
 
+    # QA & HITL
+    workflow.add_node("critique", critique_node)                        # N12
+    workflow.add_node("human_interrupt", human_interrupt_node)          # N13/N14
+
+    # Enrichment
+    workflow.add_node("stakeholder_extractor", stakeholder_extractor_node)  # N6
+    workflow.add_node("raci_generator", raci_generator_node)                # N7
+    workflow.add_node("coherence_scorer", coherence_scorer_node)            # N8
+
+    # Validation & persistence
+    workflow.add_node("citation_validator", citation_validator_node)    # N15
+    workflow.add_node("knowledge_graph", knowledge_graph_builder_node)  # N10
+    workflow.add_node("save_to_db", save_to_db_node)                   # N17
+
+    # Assembly
+    workflow.add_node("decision_intelligence", decision_intelligence_node)  # N11
+    workflow.add_node("final_assembler", final_assembler_node)              # N16
+
+    # ── Entry point ──
+    workflow.set_entry_point("document_ingestion")
+
+    # ── Pre-processing chain: N1 → N2 → N3 ──
+    workflow.add_edge("document_ingestion", "pii_anonymizer")
+    workflow.add_edge("pii_anonymizer", "router")
+
+    # ── Router (N3) → extraction branch ──
     workflow.add_conditional_edges(
         "router",
         lambda state: state["doc_type"],
@@ -46,27 +144,45 @@ def build_workflow() -> StateGraph:
         },
     )
 
+    # ── Extraction → Critique ──
     workflow.add_edge("risk_extractor", "critique")
     workflow.add_edge("wbs_extractor", "critique")
     workflow.add_edge("budget_parser", "critique")
 
+    # ── Critique (N12) → retry / HITL / enrichment ──
     workflow.add_conditional_edges(
         "critique",
-        _next_after_critique,
+        _next_after_critique_v2,
         {
             "risk_extractor": "risk_extractor",
             "wbs_extractor": "wbs_extractor",
             "budget_parser": "budget_parser",
             "human_interrupt": "human_interrupt",
-            "save_to_db": "save_to_db",
+            "stakeholder_extractor": "stakeholder_extractor",
         },
     )
 
-    workflow.add_edge("human_interrupt", "save_to_db")
-    workflow.add_edge("save_to_db", END)
+    # ── HITL (N13/14) → enrichment ──
+    workflow.add_edge("human_interrupt", "stakeholder_extractor")
+
+    # ── Enrichment chain: N6 → N7 → N8 ──
+    workflow.add_edge("stakeholder_extractor", "raci_generator")
+    workflow.add_edge("raci_generator", "coherence_scorer")
+
+    # ── Validation & persistence: N8 → N15 → N10 → N17 ──
+    workflow.add_edge("coherence_scorer", "citation_validator")
+    workflow.add_edge("citation_validator", "knowledge_graph")
+    workflow.add_edge("knowledge_graph", "save_to_db")
+
+    # ── Assembly: N17 → N11 → N16 → END ──
+    workflow.add_edge("save_to_db", "decision_intelligence")
+    workflow.add_edge("decision_intelligence", "final_assembler")
+    workflow.add_edge("final_assembler", END)
 
     return workflow
 
+
+# ── Infrastructure helpers (unchanged) ───────────────────────────────────────
 
 def _build_checkpointer():
     if settings.database_url_async.startswith("sqlite"):

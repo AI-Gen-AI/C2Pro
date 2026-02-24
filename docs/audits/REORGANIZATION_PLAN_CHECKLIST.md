@@ -277,7 +277,29 @@
     12. LangGraph workflow (router → extractors → critique → HITL → save)
   - **Bonus diagramas:** frontend component tree, MSW handler registration, endpoint parity matrix
   - **Nota:** audit files (`STRATEGIC_ARCHITECTURE_AUDIT`, `PHASE1_*`) quedan como registros historicos pre-reorganizacion
-- [ ] **5.6** Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes
+- [x] **5.6** Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes
+  - **Archivos creados:**
+    - `src/analysis/adapters/graph/nodes_extended.py` — 10 nuevos nodos (N1, N2, N6–N11, N15, N16)
+    - `tests/modules/analysis/adapters/graph/test_nodes_extended.py` — 20 tests unitarios
+  - **Archivos modificados:**
+    - `src/analysis/adapters/graph/schema.py` — ProjectState extendido de 14 a 34 campos
+    - `src/analysis/adapters/graph/workflow.py` — grafo rewired con 16 nodos (N13/N14 comparten slot)
+    - `src/analysis/adapters/graph/nodes.py` — budget_parser_node delega a N9 extendido
+  - **Nodos implementados (wrapping use cases existentes):**
+    - N1 `document_ingestion_node` → keyword classification (SCOPE/BUDGET/TIME/QUALITY/TECHNICAL/LEGAL)
+    - N2 `pii_anonymizer_node` → wraps `AnonymizationService` + `PiiDetectorService`
+    - N6 `stakeholder_extractor_node` → wraps `extract_stakeholders.ExtractStakeholdersUseCase`
+    - N7 `raci_generator_node` → AI-powered RACI from state (stakeholders + WBS)
+    - N8 `coherence_scorer_node` → wraps `CoherenceCalculationService.calculate_coherence()`
+    - N9 `budget_parser_extended_node` → AI budget extraction with BOM output
+    - N10 `knowledge_graph_builder_node` → wraps `BuildProjectKnowledgeGraphUseCase`
+    - N11 `decision_intelligence_node` → assembles `FinalDecisionPackage` from state
+    - N15 `citation_validator_node` → validates source quotes against document text
+    - N16 `final_assembler_node` → aggregates all results into final report dict
+  - **Topologia del grafo:**
+    ```
+    N1→N2→N3→[N4|N5|N9]→N12→[retry|N13/14|N6]→N7→N8→N15→N10→N17→N11→N16→END
+    ```
 - [ ] **5.7** Implementar HITL service real (no solo ports)
 - [ ] **5.8** Verificar que feature flags del backend realmente bloquean endpoints no-ready
 
