@@ -56,6 +56,7 @@ describe("S3-02 RED - mobile evidence integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /insurance gap/i }));
 
     // Contract expects explicit viewport-resize handler signal.
+    Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 430 });
     fireEvent(window, new Event("resize"));
     expect(screen.getByTestId("mobile-viewport-state")).toHaveTextContent(
       /width: 430/i,

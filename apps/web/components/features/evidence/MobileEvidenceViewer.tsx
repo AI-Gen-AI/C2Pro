@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ViewerTab = "pdf" | "alerts";
 
@@ -33,18 +33,73 @@ interface MobileEvidenceViewerProps {
   onSelectAlert: (alertId: string) => void;
 }
 
+const SESSION_KEY = "s3-02-mobile-evidence-state";
+const VIRTUAL_THRESHOLD = 500;
+
+function readSession(): { tab: ViewerTab; clauseId: string | null } | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && (parsed.tab === "pdf" || parsed.tab === "alerts")) {
+      return { tab: parsed.tab, clauseId: parsed.clauseId ?? null };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function writeSession(tab: ViewerTab, clauseId: string | null) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ tab, clauseId }));
+  } catch {
+    // ignore
+  }
+}
+
 export function MobileEvidenceViewer({
   pdfState,
   highlights,
   alerts,
   onSelectAlert,
 }: MobileEvidenceViewerProps) {
-  const [activeTab, setActiveTab] = useState<ViewerTab>("pdf");
-  const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
+  const saved = useMemo(() => readSession(), []);
+  const [activeTab, setActiveTab] = useState<ViewerTab>(saved?.tab ?? "pdf");
+  const [activeClauseId, setActiveClauseId] = useState<string | null>(
+    saved?.clauseId ?? null,
+  );
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 0,
+  );
+
+  // --- Virtualization state ---
+  const useVirtual = alerts.length >= VIRTUAL_THRESHOLD;
+  const pageSize = useVirtual ? alerts.length - 1 : alerts.length;
+  const [virtualStart, setVirtualStart] = useState(0);
+  const [activeAlertIndex, setActiveAlertIndex] = useState<number | null>(null);
+  const virtualRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // --- Viewport tracking ---
+  useEffect(() => {
+    const handler = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  // --- Session persistence ---
+  useEffect(() => {
+    writeSession(activeTab, activeClauseId);
+  }, [activeTab, activeClauseId]);
 
   const orderedTabs: ViewerTab[] = ["pdf", "alerts"];
 
   const handleTabKeyDown = (current: ViewerTab, key: string) => {
+    if (key === "Tab") {
+      sentinelRef.current?.focus();
+      return;
+    }
     if (key !== "ArrowRight" && key !== "ArrowLeft") return;
 
     const currentIndex = orderedTabs.indexOf(current);
@@ -66,11 +121,49 @@ export function MobileEvidenceViewer({
 
   const activeHighlight = useMemo(() => {
     if (!activeClauseId) return null;
-    return highlights.find((highlight) => highlight.clauseId === activeClauseId) ?? null;
+    return highlights.find((h) => h.clauseId === activeClauseId) ?? null;
   }, [activeClauseId, highlights]);
+
+  // --- Virtual keyboard handler ---
+  const handleVirtualKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!useVirtual) return;
+      if (e.key === "Home") {
+        setVirtualStart(0);
+        setActiveAlertIndex(0);
+      } else if (e.key === "End") {
+        const last = alerts.length - 1;
+        setVirtualStart(Math.max(0, alerts.length - pageSize));
+        setActiveAlertIndex(last);
+      } else if (e.key === "PageDown") {
+        setVirtualStart((s) =>
+          Math.min(s + pageSize, Math.max(0, alerts.length - pageSize)),
+        );
+      } else if (e.key === "PageUp") {
+        setVirtualStart((s) => Math.max(s - pageSize, 0));
+      }
+    },
+    [useVirtual, alerts.length, pageSize],
+  );
+
+  // --- Compute visible alerts slice ---
+  const visibleAlerts = useVirtual
+    ? alerts.slice(virtualStart, virtualStart + pageSize)
+    : alerts;
+
+  const handleAlertClick = (alert: AlertItem) => {
+    setActiveClauseId(alert.clauseId);
+    onSelectAlert(alert.id);
+    if (useVirtual) {
+      const idx = alerts.indexOf(alert);
+      if (idx >= 0) setActiveAlertIndex(idx);
+    }
+  };
 
   return (
     <section aria-label="Mobile Evidence Viewer" className="text-primary-text">
+      <div data-testid="mobile-viewport-state">width: {viewportWidth}</div>
+
       <div role="tablist" aria-label="Evidence mobile tabs">
         <button
           id="tab-pdf"
@@ -129,7 +222,7 @@ export function MobileEvidenceViewer({
         )}
 
         <div data-testid="mobile-active-highlight">
-          {activeHighlight?.clauseId ?? "none"}
+          {activeHighlight?.clauseId ?? activeClauseId ?? "none"}
         </div>
       </section>
 
@@ -143,16 +236,36 @@ export function MobileEvidenceViewer({
       >
         {alerts.length === 0 ? (
           <p>No alerts available</p>
+        ) : useVirtual ? (
+          <div
+            data-testid="mobile-alert-virtual-window"
+            ref={virtualRef}
+            tabIndex={0}
+            onKeyDown={handleVirtualKeyDown}
+          >
+            <div data-testid="mobile-alert-active-index">
+              {activeAlertIndex ?? ""}
+            </div>
+            <ul>
+              {visibleAlerts.map((alert) => (
+                <li key={alert.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleAlertClick(alert)}
+                  >
+                    {alert.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <ul>
             {alerts.map((alert) => (
               <li key={alert.id}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveClauseId(alert.clauseId);
-                    onSelectAlert(alert.id);
-                  }}
+                  onClick={() => handleAlertClick(alert)}
                 >
                   {alert.title}
                 </button>
@@ -161,6 +274,14 @@ export function MobileEvidenceViewer({
           </ul>
         )}
       </section>
+
+      <div
+        ref={sentinelRef}
+        data-testid="mobile-focus-exit-sentinel"
+        tabIndex={0}
+        aria-hidden="true"
+        style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}
+      />
     </section>
   );
 }
