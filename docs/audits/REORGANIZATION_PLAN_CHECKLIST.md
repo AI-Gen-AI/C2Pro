@@ -166,7 +166,13 @@
   - **Empty state — dashboard**: ya manejaba caso "No projects found" con mensaje contextual (creado en 4.1)
   - Fix: `CoherenceGauge.test.tsx` matcher function retornaba `boolean | undefined` — añadido `?? false` para satisfacer `MatcherFunction` type
   - `tsc --noEmit` → 0 errors
-- [ ] **4.5** Implementar error boundaries a nivel de layout
+- [x] **4.5** Implementar error boundaries a nivel de layout
+  - `app/(app)/error.tsx`: captura errores en cualquier page bajo `(app)/`, muestra icono AlertTriangle + mensaje + botón "Try again" dentro del layout con sidebar/header
+  - `app/(app)/projects/[id]/error.tsx`: captura errores en sub-pages de proyecto, muestra mensaje + botón "Try again" + link "Back to projects"
+  - `app/global-error.tsx`: captura errores en root layout (incluye `<html>`/`<body>` propio, inline SVG sin dependencias externas)
+  - Los 3 son `'use client'` con `useEffect` para log de error en console
+  - `error.digest` se muestra cuando disponible (server-side error tracking)
+  - `tsc --noEmit` → 0 errors
 - [ ] **4.6** Agregar MSW handlers para cada endpoint nuevo que las pages necesiten
 - [ ] **4.7** Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión)
 - [ ] **4.8** Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages
