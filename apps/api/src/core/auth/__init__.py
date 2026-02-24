@@ -2,75 +2,56 @@
 C2Pro - Core Authentication Module
 
 Infraestructura transversal de autenticación y multi-tenancy.
+
+Uses lazy imports (PEP 562) to avoid pulling in JWT, cryptography,
+passlib, and database drivers at ``import src.core.auth`` time.
 """
 
-# Models
-from src.core.auth.models import (
-    SubscriptionPlan,
-    Tenant,
-    User,
-    UserRole,
-)
+from __future__ import annotations
 
-# Schemas
-from src.core.auth.schemas import (
-    LoginRequest,
-    LoginResponse,
-    MeResponse,
-    PasswordChangeRequest,
-    RefreshTokenRequest,
-    RegisterRequest,
-    RegisterResponse,
-    TenantResponse,
-    TokenPayload,
-    TokenResponse,
-    UserResponse,
-    UserUpdateRequest,
-)
+import importlib
+from typing import Any
 
-# Service
-from src.core.auth.service import (
-    AuthService,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    get_user_by_email,
-    get_user_by_id,
-    hash_password,
-    verify_password,
-)
-
-# Router
-from src.core.auth.router import router
-
-__all__ = [
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # Models
-    "User",
-    "Tenant",
-    "UserRole",
-    "SubscriptionPlan",
+    "User":             ("src.core.auth.models", "User"),
+    "Tenant":           ("src.core.auth.models", "Tenant"),
+    "UserRole":         ("src.core.auth.models", "UserRole"),
+    "SubscriptionPlan": ("src.core.auth.models", "SubscriptionPlan"),
     # Schemas
-    "LoginRequest",
-    "LoginResponse",
-    "RegisterRequest",
-    "RegisterResponse",
-    "TokenResponse",
-    "TokenPayload",
-    "RefreshTokenRequest",
-    "UserResponse",
-    "TenantResponse",
-    "MeResponse",
-    "UserUpdateRequest",
-    "PasswordChangeRequest",
+    "LoginRequest":          ("src.core.auth.schemas", "LoginRequest"),
+    "LoginResponse":         ("src.core.auth.schemas", "LoginResponse"),
+    "RegisterRequest":       ("src.core.auth.schemas", "RegisterRequest"),
+    "RegisterResponse":      ("src.core.auth.schemas", "RegisterResponse"),
+    "TokenResponse":         ("src.core.auth.schemas", "TokenResponse"),
+    "TokenPayload":          ("src.core.auth.schemas", "TokenPayload"),
+    "RefreshTokenRequest":   ("src.core.auth.schemas", "RefreshTokenRequest"),
+    "MeResponse":            ("src.core.auth.schemas", "MeResponse"),
+    "UserResponse":          ("src.core.auth.schemas", "UserResponse"),
+    "TenantResponse":        ("src.core.auth.schemas", "TenantResponse"),
+    "UserUpdateRequest":     ("src.core.auth.schemas", "UserUpdateRequest"),
+    "PasswordChangeRequest": ("src.core.auth.schemas", "PasswordChangeRequest"),
     # Service
-    "AuthService",
-    "create_access_token",
-    "create_refresh_token",
-    "decode_token",
-    "hash_password",
-    "verify_password",
-    "get_user_by_email",
-    "get_user_by_id",
+    "AuthService":          ("src.core.auth.service", "AuthService"),
+    "create_access_token":  ("src.core.auth.service", "create_access_token"),
+    "create_refresh_token": ("src.core.auth.service", "create_refresh_token"),
+    "decode_token":         ("src.core.auth.service", "decode_token"),
+    "get_user_by_email":    ("src.core.auth.service", "get_user_by_email"),
+    "get_user_by_id":       ("src.core.auth.service", "get_user_by_id"),
+    "hash_password":        ("src.core.auth.service", "hash_password"),
+    "verify_password":      ("src.core.auth.service", "verify_password"),
     # Router
-    "router",
-]
+    "router":               ("src.core.auth.router", "router"),
+}
+
+__all__ = list(_LAZY_IMPORTS.keys())
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(module_path)
+        value = getattr(mod, attr)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'src.core.auth' has no attribute {name!r}")
