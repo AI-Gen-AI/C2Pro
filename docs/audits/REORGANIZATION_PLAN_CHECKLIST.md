@@ -157,7 +157,15 @@
   - `CoherenceClient.tsx`: client component extraído con `useState` (view toggle breakdown/radar/alerts, category selection)
   - Datos derivados de `DashboardSummary`: `sub_scores` → barData/radarData, `weights_used` → ScoreCards, `coherence_score` → gauge
   - MSW handler ya existente: `GET /api/coherence/dashboard/:projectId` (creado en 4.1)
-- [ ] **4.4** Asegurar que cada page tiene: loading state, error state, empty state
+- [x] **4.4** Asegurar que cada page tiene: loading state, error state, empty state
+  - **Loading state**: creados `loading.tsx` con Skeleton en `(app)/` (cubre dashboard, documents, projects, alerts, raci, stakeholders, settings) y `projects/[id]/` (cubre coherence, documents, evidence, overview, alerts, analysis)
+  - **Error state**: los 4 server component pages (dashboard, documents, projects, coherence) ya tienen try/catch con banner destructive
+  - **Empty state — documents**: `DocumentsListClient` retorna empty state con icono FolderOpen y CTA cuando `groups.length === 0`
+  - **Empty state — projects**: `ProjectListTable` retorna empty state con icono FolderOpen y CTA cuando `projects.length === 0`
+  - **Empty state — coherence**: `page.tsx` muestra empty state con icono BarChart3 cuando `!loadError && !summary`
+  - **Empty state — dashboard**: ya manejaba caso "No projects found" con mensaje contextual (creado en 4.1)
+  - Fix: `CoherenceGauge.test.tsx` matcher function retornaba `boolean | undefined` — añadido `?? false` para satisfacer `MatcherFunction` type
+  - `tsc --noEmit` → 0 errors
 - [ ] **4.5** Implementar error boundaries a nivel de layout
 - [ ] **4.6** Agregar MSW handlers para cada endpoint nuevo que las pages necesiten
 - [ ] **4.7** Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión)

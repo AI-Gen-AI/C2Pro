@@ -1,11 +1,25 @@
 import type { ProjectListItemResponse } from "@/lib/api/generated/models";
 import Link from "next/link";
+import { FolderOpen } from "lucide-react";
 
 interface ProjectListTableProps {
   projects: ProjectListItemResponse[];
 }
 
 export function ProjectListTable({ projects }: ProjectListTableProps) {
+  if (projects.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-16 text-center">
+        <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/50" />
+        <h3 className="text-sm font-medium text-foreground">No projects yet</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Create your first project to start tracking coherence, documents, and
+          alerts.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border bg-card">
       <div className="overflow-x-auto">
@@ -42,16 +56,6 @@ export function ProjectListTable({ projects }: ProjectListTableProps) {
                 </td>
               </tr>
             ))}
-            {projects.length === 0 ? (
-              <tr>
-                <td
-                  className="px-4 py-6 text-center text-sm text-muted-foreground"
-                  colSpan={3}
-                >
-                  No projects found.
-                </td>
-              </tr>
-            ) : null}
           </tbody>
         </table>
       </div>

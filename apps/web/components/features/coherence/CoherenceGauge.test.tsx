@@ -51,8 +51,8 @@ describe("CoherenceGauge", () => {
         if (!element) return false;
         return (
           content.includes("Based on") &&
-          element.textContent?.includes("8") &&
-          element.textContent?.includes("documents")
+          (element.textContent?.includes("8") ?? false) &&
+          (element.textContent?.includes("documents") ?? false)
         );
       }),
     ).toBeInTheDocument();
