@@ -141,7 +141,15 @@
   - `DashboardClient.tsx`: client component extraido con `useState` (view toggle, category selection)
   - `DashboardSummary` type añadido a `models/index.ts`
   - MSW handler `GET /api/coherence/dashboard/:projectId` añadido a `demo-data.ts`
-- [ ] **4.2** `(app)/documents/page.tsx` -> Server component que llama a `DocumentsService.list()`
+- [x] **4.2** `(app)/documents/page.tsx` -> Server component que llama a `DocumentsService.list()`
+  - `page.tsx`: eliminado `'use client'` + hardcoded `mockDocuments[]` → async server component
+  - Flujo: `DocumentsService.list()` → fetches all projects → documents per project in parallel via `Promise.allSettled`
+  - Error state con mensaje contextual si API no disponible
+  - `DocumentsService.ts`: `list()` agrega documentos de todos los proyectos, `getProjectDocuments(id)` para un proyecto
+  - `DocumentsListClient.tsx`: client component extraído con `useState` (search, status filter, accordion table)
+  - Types añadidos a `models/index.ts`: `DocumentPollingStatus`, `DocumentListItem`, `DocumentListResponse`, `ProjectDocumentsGroup`
+  - MSW: db.document enriquecido con `filename`, `document_type`, `uploaded_at`, `file_size_bytes`; seed con 8 docs en 5 proyectos
+  - MSW handler retorna `{ items, total_count, skip, limit }` (DocumentListResponse shape)
 - [ ] **4.3** `(app)/projects/[id]/coherence/page.tsx` -> llama a `CoherenceService.getScore(id)`
 - [ ] **4.4** Asegurar que cada page tiene: loading state, error state, empty state
 - [ ] **4.5** Implementar error boundaries a nivel de layout
