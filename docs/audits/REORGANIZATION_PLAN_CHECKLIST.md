@@ -233,7 +233,26 @@
   - **Zero hardcoded mock data** en pages (verificado por grep en tasks anteriores)
   - **TypeScript:** `tsc --noEmit` → 0 errores propios
   - **Tests:** 162/162 pass, 295/295 pass
-- [ ] **5.3** Verificar flujo completo en modo producción (API real)
+- [x] **5.3** Verificar flujo completo en modo producción (API real)
+  - **MSW exclusion verified (4 gates):**
+    1. `stores/app-mode.ts`: default mode is `"prod"` when env unset — MSW never triggers
+    2. `providers.tsx`: `!isDemoMode` → early return, `mswReady` starts `true` — zero loading screen
+    3. `instrumentation.ts`: `NEXT_PUBLIC_APP_MODE !== "demo"` → early return — no server-side MSW
+    4. `config/env.ts`: `IS_DEMO` is `false`
+  - **Tree-shaking safety:** all MSW imports are dynamic `await import()` — excluded from production bundle. Zero static `import ... from "msw"` outside `mocks/` directory
+  - **API client (axios):**
+    - Base URL: `NEXT_PUBLIC_API_URL` (fallback `http://localhost:8000/api/v1`)
+    - Auth interceptor: injects `Authorization: Bearer` + `X-Tenant-ID` headers from Zustand store
+    - Error handling: 401 → clear auth + redirect `/login`, 403 → error toast
+    - OpenAPI generated client synced with same base URL
+  - **Backend endpoint parity (16/24 implemented, 8 gaps documented):**
+    - **Implemented:** auth (5 endpoints), projects (2), project documents (1), project alerts (1), stakeholders/projects/:id (1), WBS (1), RACI per-project (1), documents/:id + download (2), coherence dashboard (1), observability (2)
+    - **Not yet wired (routers exist but commented out in main.py):** stakeholders flat query, RACI global, procurement — marked `# TODO: GREEN phase - incomplete`
+    - **Path gaps (MSW-only):** `/documents/:id/clauses`, `/documents/:id/entities`, `/alerts?document_id=`, alert approve/reject (backend uses `/alerts/:id/review` with `decision` field instead), alert PATCH/DELETE
+  - **Bug fixed:** observability router had `APIRouter()` with no prefix → registered at `/api/v1/status` instead of `/api/v1/observability/status`. Added `prefix="/observability"` to `APIRouter` in `core/observability/router.py`
+  - **Next.js config:** no `APP_MODE` conditionals, only Sentry rewrite. `api/[...proxy]` route forwards auth headers to backend
+  - **TypeScript:** `tsc --noEmit` → 0 errores propios
+  - **Tests:** 162/162 pass, 295/295 pass
 - [ ] **5.4** Documentar la arquitectura final en un ADR
 - [ ] **5.5** Actualizar los diagramas de flujo para reflejar la realidad del código
 - [ ] **5.6** Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes
