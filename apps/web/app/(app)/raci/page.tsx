@@ -12,65 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Search, Download } from 'lucide-react';
-
-const mockRaciData = [
-  {
-    activity: 'Project Planning',
-    projectManager: 'R',
-    technicalLead: 'A',
-    stakeholder: 'C',
-    contractor: 'I',
-  },
-  {
-    activity: 'Budget Approval',
-    projectManager: 'R',
-    technicalLead: 'C',
-    stakeholder: 'A',
-    contractor: 'I',
-  },
-  {
-    activity: 'Design Review',
-    projectManager: 'A',
-    technicalLead: 'R',
-    stakeholder: 'I',
-    contractor: 'C',
-  },
-  {
-    activity: 'Contract Negotiation',
-    projectManager: 'R',
-    technicalLead: 'C',
-    stakeholder: 'A',
-    contractor: 'C',
-  },
-  {
-    activity: 'Risk Assessment',
-    projectManager: 'R',
-    technicalLead: 'R',
-    stakeholder: 'I',
-    contractor: 'C',
-  },
-  {
-    activity: 'Quality Control',
-    projectManager: 'A',
-    technicalLead: 'R',
-    stakeholder: 'I',
-    contractor: 'R',
-  },
-  {
-    activity: 'Procurement',
-    projectManager: 'A',
-    technicalLead: 'C',
-    stakeholder: 'I',
-    contractor: 'R',
-  },
-  {
-    activity: 'Site Inspection',
-    projectManager: 'R',
-    technicalLead: 'R',
-    stakeholder: 'I',
-    contractor: 'A',
-  },
-];
+import { useRaci } from '@/hooks/useRaci';
 
 const raciTypes = {
   R: { label: 'Responsible', color: 'bg-blue-100 text-blue-700' },
@@ -80,10 +22,27 @@ const raciTypes = {
 };
 
 export default function RaciPage() {
+  const { data: raciData, loading, error } = useRaci();
   const [searchQuery, setSearchQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState('all');
 
-  const filteredData = mockRaciData.filter((row) =>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        Loading RACI matrix…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24 text-destructive">
+        {error.message}
+      </div>
+    );
+  }
+
+  const filteredData = raciData.filter((row) =>
     row.activity.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -173,7 +132,7 @@ export default function RaciPage() {
                     <Badge
                       className={
                         raciTypes[row.projectManager as keyof typeof raciTypes]
-                          .color
+                          ?.color
                       }
                     >
                       {row.projectManager}
@@ -183,7 +142,7 @@ export default function RaciPage() {
                     <Badge
                       className={
                         raciTypes[row.technicalLead as keyof typeof raciTypes]
-                          .color
+                          ?.color
                       }
                     >
                       {row.technicalLead}
@@ -193,7 +152,7 @@ export default function RaciPage() {
                     <Badge
                       className={
                         raciTypes[row.stakeholder as keyof typeof raciTypes]
-                          .color
+                          ?.color
                       }
                     >
                       {row.stakeholder}
@@ -202,7 +161,7 @@ export default function RaciPage() {
                   <td className="px-4 py-3 text-center">
                     <Badge
                       className={
-                        raciTypes[row.contractor as keyof typeof raciTypes].color
+                        raciTypes[row.contractor as keyof typeof raciTypes]?.color
                       }
                     >
                       {row.contractor}

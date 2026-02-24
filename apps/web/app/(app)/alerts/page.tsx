@@ -13,79 +13,31 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, Check, Search } from 'lucide-react';
-
-const mockAlerts = [
-  {
-    id: 'AL-001',
-    severity: 'Critical',
-    type: 'Legal',
-    title: 'Contract Penalty Clause Violation Risk',
-    description: 'Clause 4.2.1 specifies 30-day delay penalty. Current trajectory shows 45-day delay.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-002',
-    severity: 'Critical',
-    type: 'Financial',
-    title: 'Budget Overrun Threshold Exceeded',
-    description: 'Equipment procurement costs 25% above baseline estimates.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-003',
-    severity: 'Critical',
-    type: 'Technical',
-    title: 'Equipment Compatibility Issue',
-    description: 'New compressor specifications conflict with existing infrastructure.',
-    project: 'Refinery Modernization',
-    status: 'In Progress',
-  },
-  {
-    id: 'AL-004',
-    severity: 'High',
-    type: 'Schedule',
-    title: 'Critical Path Delay - Foundation Work',
-    description: 'Foundation completion delayed by 12 days due to ground conditions.',
-    project: 'Petrochemical Plant EPC',
-    status: 'Open',
-  },
-  {
-    id: 'AL-005',
-    severity: 'High',
-    type: 'Scope',
-    title: 'Grid Connection Requirements Changed',
-    description: 'Utility company issued new interconnection requirements.',
-    project: 'Solar Farm Installation',
-    status: 'Open',
-  },
-  {
-    id: 'AL-006',
-    severity: 'Medium',
-    type: 'Financial',
-    title: 'Material Cost Variance',
-    description: 'Steel prices increased 8% above budgeted rates.',
-    project: 'Refinery Modernization',
-    status: 'Open',
-  },
-  {
-    id: 'AL-007',
-    severity: 'Medium',
-    type: 'Legal',
-    title: 'Permit Renewal Pending',
-    description: 'Environmental permit expires in 45 days. Renewal application in progress.',
-    project: 'Water Treatment Facility',
-    status: 'In Progress',
-  },
-];
+import { useAlerts } from '@/hooks/useAlerts';
 
 export default function AlertsPage() {
+  const { alerts, loading, error } = useAlerts();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('All Severity');
   const [statusFilter, setStatusFilter] = useState('All Status');
 
-  const filteredAlerts = mockAlerts.filter((alert) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        Loading alerts…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24 text-destructive">
+        {error.message}
+      </div>
+    );
+  }
+
+  const filteredAlerts = alerts.filter((alert) => {
     const matchesSearch =
       alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       alert.description.toLowerCase().includes(searchQuery.toLowerCase());
