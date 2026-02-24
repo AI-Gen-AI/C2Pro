@@ -44,5 +44,10 @@
     "recharts": "^3.7.0",
     "tailwindcss": "^4.1.18",
     "tailwindcss-animate": "^1.0.7"
+  },
+  "msw": {
+    "workerDirectory": [
+      "apps/web/public"
+    ]
   }
 }

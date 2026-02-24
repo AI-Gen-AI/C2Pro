@@ -5,10 +5,8 @@
 "use client";
 
 import { use } from "react";
-import {
-  AlertReviewCenter,
-  type ReviewAlert,
-} from "@/components/features/alerts/AlertReviewCenter";
+import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
+import { useProjectAlerts } from "@/hooks/useProjectAlerts";
 
 interface AlertsPageProps {
   params: Promise<{
@@ -16,31 +14,29 @@ interface AlertsPageProps {
   }>;
 }
 
-const DEMO_ALERTS: ReviewAlert[] = [
-  {
-    id: "a-1",
-    title: "Delay penalty mismatch",
-    severity: "high",
-    status: "pending",
-    clauseId: "c-101",
-    assignee: "legal.reviewer",
-  },
-  {
-    id: "a-2",
-    title: "Insurance gap",
-    severity: "critical",
-    status: "pending",
-    clauseId: "c-202",
-    assignee: "risk.owner",
-  },
-];
-
 export default function AlertsPage({ params }: AlertsPageProps) {
   const { id } = use(params);
+  const { alerts, loading, error } = useProjectAlerts(id);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        Loading alerts…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24 text-destructive">
+        {error.message}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <AlertReviewCenter projectId={id} alerts={DEMO_ALERTS} />
+      <AlertReviewCenter projectId={id} alerts={alerts} />
     </div>
   );
 }

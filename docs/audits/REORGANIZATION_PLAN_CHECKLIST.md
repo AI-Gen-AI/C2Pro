@@ -180,7 +180,15 @@
   - `lib/api/index.ts`: `getDocumentEntities()` ahora llama al API real (`apiClient.get`) en vez de retornar `[]` — MSW lo intercepta en demo mode
   - Gap analysis: 0 endpoints sin handler restantes
   - `tsc --noEmit` → 0 errors
-- [ ] **4.7** Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión)
+- [x] **4.7** Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión)
+  - **Pipeline auditado:** `NEXT_PUBLIC_APP_MODE=demo` → `useAppModeStore(selectIsDemoMode)` → `providers.tsx` lazy-imports `mocks/browser` → `seedDemoData()` + `worker.start()` → loading screen blocks render hasta ready
+  - **Fix crítico:** Generado `public/mockServiceWorker.js` (faltaba — sin él, `worker.start()` fallaba con 404)
+  - **Fix regresión:** `projects/[id]/alerts/page.tsx` tenía `DEMO_ALERTS` hardcoded → reemplazado por `useProjectAlerts(id)` hook que llama `GET /api/v1/projects/:id/alerts` (interceptado por MSW)
+  - Nuevo hook `hooks/useProjectAlerts.ts`: fetch + transform (`message→title`, `open→pending`, `category→assignee`)
+  - **9/9 pages verificadas**: todas obtienen datos vía hooks/services → MSW intercepta → no hay data hardcoded restante
+  - Race condition protegida: `mswReady` flag bloquea render hasta que service worker registre
+  - `tsc --noEmit` → 0 errors · `eslint` → 0 errors
+  - `next build` falla solo por issue pre-existente en `api/[...proxy]/route.ts` (no relacionado)
 - [ ] **4.8** Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages
 
 **Entregable:** Frontend donde toda data viene de API (real o mock via MSW).
