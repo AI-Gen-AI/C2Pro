@@ -1,3 +1,6 @@
+'use client';
+
+import { use } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,25 +12,43 @@ import {
   DollarSign,
   ArrowRight,
 } from 'lucide-react';
+import { useProjectOverview } from '@/hooks/useProjectOverview';
 
-const stats = [
-  { label: 'Coherence Score', value: '78', icon: Gauge, color: 'text-primary' },
-  { label: 'Open Alerts', value: '7', icon: AlertTriangle, color: 'text-warning' },
-  { label: 'Documents', value: '12', icon: FileText, color: 'text-chart-quality' },
-  { label: 'Budget Used', value: '62%', icon: DollarSign, color: 'text-chart-budget' },
-];
-
-export default async function ProjectOverviewPage({
+export default function ProjectOverviewPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id } = use(params);
+  const { stats, loading, error } = useProjectOverview(id);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        Loading project overview…
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="flex items-center justify-center py-24 text-destructive">
+        {error?.message ?? 'Failed to load project overview'}
+      </div>
+    );
+  }
+
+  const statCards = [
+    { label: 'Coherence Score', value: String(stats.coherenceScore), icon: Gauge, color: 'text-primary' },
+    { label: 'Open Alerts', value: String(stats.openAlerts), icon: AlertTriangle, color: 'text-warning' },
+    { label: 'Documents', value: String(stats.documentCount), icon: FileText, color: 'text-chart-quality' },
+    { label: 'Budget Used', value: `${stats.budgetUsed}%`, icon: DollarSign, color: 'text-chart-budget' },
+  ];
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
+        {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.label} className="card-interactive">
@@ -57,18 +78,14 @@ export default async function ProjectOverviewPage({
             </div>
             <div className="flex justify-between">
               <span>Budget Utilization</span>
-              <span className="font-mono font-medium text-foreground">62%</span>
+              <span className="font-mono font-medium text-foreground">{stats.budgetUsed}%</span>
             </div>
-            <Progress value={62} className="h-1.5" />
+            <Progress value={stats.budgetUsed} className="h-1.5" />
             <div className="flex justify-between">
-              <span>Completion</span>
-              <span className="font-mono font-medium text-foreground">45%</span>
+              <span>Coherence Score</span>
+              <span className="font-mono font-medium text-foreground">{stats.coherenceScore}</span>
             </div>
-            <Progress value={45} className="h-1.5" />
-            <div className="flex justify-between">
-              <span>Timeline</span>
-              <span className="text-foreground">Jan 2025 - Dec 2026</span>
-            </div>
+            <Progress value={stats.coherenceScore} className="h-1.5" />
           </CardContent>
         </Card>
 
@@ -85,11 +102,7 @@ export default async function ProjectOverviewPage({
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {[
-              { severity: 'critical', title: 'Contract Penalty Clause Violation Risk' },
-              { severity: 'high', title: 'Critical Path Delay - Foundation Work' },
-              { severity: 'medium', title: 'Material Cost Variance' },
-            ].map((alert, i) => (
+            {stats.recentAlerts.map((alert, i) => (
               <div key={i} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
                 <div className={`h-2 w-2 shrink-0 rounded-full ${
                   alert.severity === 'critical' ? 'bg-destructive animate-pulse-critical' :
@@ -104,6 +117,9 @@ export default async function ProjectOverviewPage({
                 </Badge>
               </div>
             ))}
+            {stats.recentAlerts.length === 0 && (
+              <p className="text-sm text-muted-foreground">No open alerts</p>
+            )}
           </CardContent>
         </Card>
       </div>

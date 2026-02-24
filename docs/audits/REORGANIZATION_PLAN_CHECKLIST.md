@@ -189,7 +189,15 @@
   - Race condition protegida: `mswReady` flag bloquea render hasta que service worker registre
   - `tsc --noEmit` → 0 errors · `eslint` → 0 errors
   - `next build` falla solo por issue pre-existente en `api/[...proxy]/route.ts` (no relacionado)
-- [ ] **4.8** Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages
+- [x] **4.8** Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages
+  - `(app)/alerts/page.tsx`: eliminado `mockAlerts` (7 items hardcoded) → usa `useAlerts()` hook que llama `GET /alerts` + `GET /projects` y mapea a la forma de UI
+  - `(app)/raci/page.tsx`: eliminado `mockRaciData` (8 rows hardcoded) → usa `useRaci()` hook que llama `GET /raci`
+  - `(app)/projects/[id]/page.tsx`: eliminado `const stats = [...]` y alert array inline → usa `useProjectOverview(id)` que llama `GET /coherence/dashboard/:id` + `GET /projects/:id/alerts`
+  - Nuevo MSW handler `raci.ts`: `GET /api/v1/raci` y `GET /api/v1/projects/:projectId/raci`
+  - Nuevos hooks: `useAlerts.ts`, `useRaci.ts`, `useProjectOverview.ts`
+  - `raciTypes` (R/A/C/I legend) se mantiene en page ya que es config de UI, no data
+  - Grep `mock*|DEMO_|DATA|SAMPLE_|FAKE_` en pages → 0 matches
+  - `tsc --noEmit` → solo errores pre-existentes en `api/[...proxy]/route.ts`
 
 **Entregable:** Frontend donde toda data viene de API (real o mock via MSW).
 
