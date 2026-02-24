@@ -20,6 +20,32 @@ export interface ProjectListResponse {
   has_prev?: boolean;
 }
 
+export type DocumentPollingStatus = "queued" | "processing" | "parsed" | "error";
+
+export interface DocumentListItem {
+  id: string;
+  filename: string;
+  document_type?: string | null;
+  status: DocumentPollingStatus;
+  error_message?: string | null;
+  uploaded_at?: string | null;
+  file_size_bytes?: number | null;
+  project_id: string;
+}
+
+export interface DocumentListResponse {
+  items: DocumentListItem[];
+  total_count: number;
+  skip: number;
+  limit: number;
+}
+
+export interface ProjectDocumentsGroup {
+  projectId: string;
+  projectName: string;
+  documents: DocumentListItem[];
+}
+
 export interface DashboardSummary {
   project_id: string;
   tenant_id: string;

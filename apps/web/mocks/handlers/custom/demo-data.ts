@@ -35,7 +35,22 @@ export const demoDataHandlers = [
       where: { projectId: { equals: projectId } },
     });
 
-    return HttpResponse.json(documents);
+    const items = documents.map((d) => ({
+      id: d.id,
+      filename: d.filename || d.name,
+      document_type: d.document_type || null,
+      status: d.status || "queued",
+      error_message: null,
+      uploaded_at: d.uploaded_at || null,
+      file_size_bytes: d.file_size_bytes || null,
+    }));
+
+    return HttpResponse.json({
+      items,
+      total_count: items.length,
+      skip: 0,
+      limit: 50,
+    });
   }),
 
   http.get("/api/v1/documents/:documentId/clauses", ({ params }) => {

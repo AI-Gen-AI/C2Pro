@@ -75,14 +75,88 @@ export function seedDemoData() {
     id: "doc_demo_001",
     projectId: DEMO_PROJECT_ID,
     name: "Contract - Petrochemical Plant.pdf",
-    status: "analyzed",
+    filename: "Contract_Final.pdf",
+    status: "parsed",
+    document_type: "contract",
+    uploaded_at: "2026-01-15T10:30:00Z",
+    file_size_bytes: 2516582,
   });
 
   db.document.create({
     id: "doc_demo_002",
+    projectId: DEMO_PROJECT_ID,
+    name: "Schedule v3",
+    filename: "Schedule_v3.xlsx",
+    status: "parsed",
+    document_type: "schedule",
+    uploaded_at: "2026-01-14T09:00:00Z",
+    file_size_bytes: 876544,
+  });
+
+  db.document.create({
+    id: "doc_demo_003",
     projectId: "proj_demo_002",
-    name: "Spec Sheet - Refinery Modernization.pdf",
+    name: "Budget Breakdown Q1",
+    filename: "Budget_Breakdown_Q1.pdf",
+    status: "parsed",
+    document_type: "budget",
+    uploaded_at: "2026-01-13T14:20:00Z",
+    file_size_bytes: 1887436,
+  });
+
+  db.document.create({
+    id: "doc_demo_004",
+    projectId: "proj_demo_004",
+    name: "Technical Specs Rev2",
+    filename: "Technical_Specs_Rev2.pdf",
     status: "processing",
+    document_type: "specification",
+    uploaded_at: "2026-01-12T08:15:00Z",
+    file_size_bytes: 5452595,
+  });
+
+  db.document.create({
+    id: "doc_demo_005",
+    projectId: "proj_demo_003",
+    name: "Pipeline Route Survey",
+    filename: "Pipeline_Route_Survey.pdf",
+    status: "queued",
+    document_type: "other",
+    uploaded_at: "2026-01-10T16:45:00Z",
+    file_size_bytes: 44371148,
+  });
+
+  db.document.create({
+    id: "doc_demo_006",
+    projectId: "proj_demo_006",
+    name: "Amendment No. 3",
+    filename: "Amendment_No3.pdf",
+    status: "parsed",
+    document_type: "contract",
+    uploaded_at: "2026-01-09T11:00:00Z",
+    file_size_bytes: 1258291,
+  });
+
+  db.document.create({
+    id: "doc_demo_007",
+    projectId: "proj_demo_002",
+    name: "Quality Report Dec",
+    filename: "Quality_Report_Dec.pdf",
+    status: "parsed",
+    document_type: "other",
+    uploaded_at: "2026-01-08T13:30:00Z",
+    file_size_bytes: 3250585,
+  });
+
+  db.document.create({
+    id: "doc_demo_008",
+    projectId: "proj_demo_005",
+    name: "Procurement List",
+    filename: "Procurement_List.xlsx",
+    status: "parsed",
+    document_type: "other",
+    uploaded_at: "2026-01-05T10:00:00Z",
+    file_size_bytes: 657408,
   });
 
   // --- Clauses ---
