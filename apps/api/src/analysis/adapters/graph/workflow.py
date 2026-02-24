@@ -14,7 +14,6 @@ from src.analysis.adapters.graph.nodes import (
     router_node,
     save_to_db_node,
     wbs_extractor_node,
-    _next_after_critique,
 )
 from src.analysis.adapters.graph.nodes_extended import (
     citation_validator_node,
@@ -28,7 +27,6 @@ from src.analysis.adapters.graph.nodes_extended import (
     stakeholder_extractor_node,
 )
 from src.analysis.adapters.graph.schema import ProjectState
-from src.config import settings
 
 logger = structlog.get_logger()
 
@@ -185,6 +183,8 @@ def build_workflow() -> StateGraph:
 # ── Infrastructure helpers (unchanged) ───────────────────────────────────────
 
 def _build_checkpointer():
+    from src.config import settings
+
     if settings.database_url_async.startswith("sqlite"):
         raise RuntimeError("Postgres checkpointer requires a PostgreSQL database URL.")
 
@@ -200,6 +200,8 @@ def _build_checkpointer():
 
 
 def _persist_graph_diagram(app) -> None:
+    from src.config import settings
+
     try:
         png_bytes = app.get_graph().draw_png()
     except Exception:

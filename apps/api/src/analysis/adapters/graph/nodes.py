@@ -6,17 +6,7 @@ from uuid import UUID
 
 from langchain_core.messages import AIMessage
 
-from src.analysis.adapters.ai.agents.wbs_agent import WBSExtractionAgent
-from src.analysis.adapters.ai.anthropic_client import AIService
 from src.analysis.adapters.graph.schema import ProjectState
-from src.core.database import get_session_with_tenant
-from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractorAgent
-from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
-from src.analysis.adapters.persistence.models import Alert, Analysis
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType
-from src.shared_kernel.enums import AlertSeverity, WBSItemType
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.domain.models import WBSItem
 
 DOC_TYPES: tuple[str, ...] = ("contract", "technical_spec", "budget")
 
@@ -70,6 +60,8 @@ def _augment_document(text: str, critique_notes: str, human_feedback: str) -> st
 
 
 async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
+    from src.analysis.adapters.ai.anthropic_client import AIService
+
     service = AIService(tenant_id=tenant_id)
     try:
         payload = await service.run_extraction(ROUTER_SYSTEM_PROMPT, text)
@@ -82,7 +74,10 @@ async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
     return _fallback_doc_type(text)
 
 
-def _to_wbs_items(project_id: UUID, items: list[dict[str, Any]]) -> list[WBSItem]:
+def _to_wbs_items(project_id: UUID, items: list[dict[str, Any]]) -> list:
+    from src.shared_kernel.enums import WBSItemType
+    from src.procurement.domain.models import WBSItem
+
     wbs_items: list[WBSItem] = []
     for item in items:
         code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
@@ -116,6 +111,8 @@ async def _critique_extraction(
     doc_type: str,
     tenant_id: str | None,
 ) -> dict[str, str]:
+    from src.analysis.adapters.ai.anthropic_client import AIService
+
     service = AIService(tenant_id=tenant_id)
     try:
         payload = await service.run_extraction(
@@ -232,6 +229,12 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
 
+    from src.core.database import get_session_with_tenant
+    from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
+    from src.analysis.adapters.persistence.models import Alert, Analysis
+    from src.analysis.domain.enums import AnalysisStatus, AnalysisType
+    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+
     project_id = UUID(state["project_id"])
     tenant_id = UUID(state["tenant_id"])
     analysis_type = AnalysisType.RISK if state["extracted_risks"] else AnalysisType.SCHEDULE
@@ -314,7 +317,9 @@ def _risk_item_to_dict(risk) -> dict[str, Any]:
     }
 
 
-def _map_risk_severity(item: dict[str, Any]) -> AlertSeverity:
+def _map_risk_severity(item: dict[str, Any]):
+    from src.shared_kernel.enums import AlertSeverity
+
     severity_source = item.get("severity") or item.get("impact") or "low"
     severity_value = str(severity_source).lower()
     for candidate in AlertSeverity:
