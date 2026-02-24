@@ -120,6 +120,20 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Empty state: no documents across any project
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-16 text-center">
+        <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/50" />
+        <h3 className="text-sm font-medium text-foreground">No documents yet</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Upload documents to your projects to start analyzing them. Documents
+          will appear here grouped by project.
+        </p>
+      </div>
+    );
+  }
+
   const allDocuments = groups.flatMap((g) => g.documents);
 
   // Filter documents within each group
