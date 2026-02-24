@@ -150,7 +150,13 @@
   - Types añadidos a `models/index.ts`: `DocumentPollingStatus`, `DocumentListItem`, `DocumentListResponse`, `ProjectDocumentsGroup`
   - MSW: db.document enriquecido con `filename`, `document_type`, `uploaded_at`, `file_size_bytes`; seed con 8 docs en 5 proyectos
   - MSW handler retorna `{ items, total_count, skip, limit }` (DocumentListResponse shape)
-- [ ] **4.3** `(app)/projects/[id]/coherence/page.tsx` -> llama a `CoherenceService.getScore(id)`
+- [x] **4.3** `(app)/projects/[id]/coherence/page.tsx` -> llama a `CoherenceService.getScore(id)`
+  - `page.tsx`: eliminado `'use client'` + hardcoded `const DATA` → async server component con `params: Promise<{ id }>`
+  - Flujo: `CoherenceService.getScore(id)` → delega a `DashboardService.getSummary()` (mismo endpoint coherence)
+  - `CoherenceService.ts`: facade sobre `DashboardService` con naming de dominio coherence
+  - `CoherenceClient.tsx`: client component extraído con `useState` (view toggle breakdown/radar/alerts, category selection)
+  - Datos derivados de `DashboardSummary`: `sub_scores` → barData/radarData, `weights_used` → ScoreCards, `coherence_score` → gauge
+  - MSW handler ya existente: `GET /api/coherence/dashboard/:projectId` (creado en 4.1)
 - [ ] **4.4** Asegurar que cada page tiene: loading state, error state, empty state
 - [ ] **4.5** Implementar error boundaries a nivel de layout
 - [ ] **4.6** Agregar MSW handlers para cada endpoint nuevo que las pages necesiten
