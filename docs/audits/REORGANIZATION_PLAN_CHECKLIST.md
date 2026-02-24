@@ -260,7 +260,23 @@
   - **Backend:** hexagonal module layout, 9 bounded contexts with status, shared kernel (enums + DTOs), core infrastructure (DB RLS, auth, middleware, cache, events, MCP), 5-layer multi-tenancy, coherence engine v2, LangGraph workflow
   - **API contract:** endpoint parity table (16 implemented, 4 not wired, 4 MSW-only)
   - **Follows convention:** ADR-NNN format, matches style of ADR-005
-- [ ] **5.5** Actualizar los diagramas de flujo para reflejar la realidad del código
+- [x] **5.5** Actualizar los diagramas de flujo para reflejar la realidad del código
+  - **Documento:** `docs/architecture/FLOW_DIAGRAMS.md` — 12 diagramas Mermaid
+  - **Diagramas creados:**
+    1. Provider tree & MSW gate (initialization flow completo)
+    2. Server-side MSW (instrumentation.ts)
+    3. Authentication flow (Clerk → AuthSync → Zustand → apiClient → Backend, sequenceDiagram)
+    4. Server Component data flow pattern (dashboard, documents, coherence)
+    5. Client Component data flow pattern (alerts, stakeholders, RACI)
+    6. React Query caching pattern (staleTime, background refetch)
+    7. Demo vs Production mode (side-by-side comparison)
+    8. Backend request pipeline (CORS → TenantIsolation → RateLimit → Router → RLS)
+    9. Multi-tenancy 5 layers (middleware, request state, session, RLS, cache)
+    10. Hexagonal module pattern (inbound → app → domain → ports → outbound)
+    11. Bounded context map (9 contexts with shared kernel, color-coded by status)
+    12. LangGraph workflow (router → extractors → critique → HITL → save)
+  - **Bonus diagramas:** frontend component tree, MSW handler registration, endpoint parity matrix
+  - **Nota:** audit files (`STRATEGIC_ARCHITECTURE_AUDIT`, `PHASE1_*`) quedan como registros historicos pre-reorganizacion
 - [ ] **5.6** Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes
 - [ ] **5.7** Implementar HITL service real (no solo ports)
 - [ ] **5.8** Verificar que feature flags del backend realmente bloquean endpoints no-ready
