@@ -6,7 +6,6 @@ a running database or external services.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -26,13 +25,6 @@ from src.modules.hitl.adapters.notifications.log_notification_service import (
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
-
-_SETTINGS_AVAILABLE = bool(os.environ.get("DATABASE_URL"))
-
-requires_settings = pytest.mark.skipif(
-    not _SETTINGS_AVAILABLE,
-    reason="Requires DATABASE_URL and other env vars for settings/ORM import",
-)
 
 
 def _make_review_item(**overrides) -> ReviewItem:
@@ -95,7 +87,6 @@ class TestLogNotificationService:
 
 
 class TestReviewItemORM:
-    @requires_settings
     def test_orm_model_has_required_columns(self):
         from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 
@@ -108,13 +99,11 @@ class TestReviewItemORM:
         }
         assert expected.issubset(columns), f"Missing columns: {expected - columns}"
 
-    @requires_settings
     def test_orm_table_name(self):
         from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 
         assert ReviewItemORM.__tablename__ == "review_items"
 
-    @requires_settings
     def test_orm_has_rls_info(self):
         from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 
@@ -126,7 +115,6 @@ class TestReviewItemORM:
 
 
 class TestRepositoryMappers:
-    @requires_settings
     def test_to_orm_maps_all_fields(self):
         from src.modules.hitl.adapters.persistence.repository import (
             SqlAlchemyReviewQueueRepository,
@@ -148,7 +136,6 @@ class TestRepositoryMappers:
         assert orm.sla_due_date == item.sla_due_date
         assert orm.item_data == item.item_data
 
-    @requires_settings
     def test_to_domain_round_trips(self):
         from src.modules.hitl.adapters.persistence.models import ReviewItemORM
         from src.modules.hitl.adapters.persistence.repository import (

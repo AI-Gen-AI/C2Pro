@@ -21,8 +21,6 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from src.config import settings
-
 logger = structlog.get_logger()
 
 
@@ -46,6 +44,8 @@ def _initialize_tenant_guc(dbapi_connection, connection_record) -> None:
     deterministic RLS context checks in tests and runtime diagnostics.
     """
     try:
+        from src.config import settings
+
         # sqlite doesn't support custom GUC; skip silently.
         if settings.database_url.startswith("sqlite"):
             return
@@ -66,6 +66,8 @@ async def init_db() -> None:
     Llamar en startup de la aplicación.
     """
     global _engine, _session_factory
+
+    from src.config import settings
 
     # Import all models to register them with SQLAlchemy
     # This is necessary for relationship resolution
@@ -132,6 +134,8 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """
     if _session_factory is None:
         raise RuntimeError("Database not initialized. Call init_db() first.")
+
+    from src.config import settings
 
     async with _session_factory() as session:
         try:
