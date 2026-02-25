@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.modules.coherence.models import Clause
-from src.modules.coherence.rules_engine.base import Finding
+from src.coherence.models import Clause
+from src.coherence.rules_engine.base import Finding
 
 
 # ===========================================
@@ -27,7 +27,7 @@ class TestLlmRuleEvaluatorInit:
 
     def test_evaluator_initializes_with_required_params(self, patch_anthropic_wrapper):
         """Test that evaluator initializes correctly with required parameters."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-001",
@@ -45,7 +45,7 @@ class TestLlmRuleEvaluatorInit:
 
     def test_evaluator_initializes_with_all_params(self, patch_anthropic_wrapper):
         """Test that evaluator initializes correctly with all parameters."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
         from uuid import uuid4
 
         tenant_id = uuid4()
@@ -82,7 +82,7 @@ class TestLlmRuleEvaluatorEvaluate:
         sample_clause_ambiguous,
     ):
         """Test that evaluate returns Finding when rule is violated."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="R-SCOPE-CLARITY-01",
@@ -109,10 +109,10 @@ class TestLlmRuleEvaluatorEvaluate:
         sample_clause_clear,
     ):
         """Test that evaluate returns None when no violation is found."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         with patch(
-            "src.modules.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
+            "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
             return_value=mock_anthropic_wrapper_no_violation
         ):
             evaluator = LlmRuleEvaluator(
@@ -133,7 +133,7 @@ class TestLlmRuleEvaluatorEvaluate:
         sample_clause_ambiguous,
     ):
         """Test that evaluate updates evaluator statistics."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-STATS",
@@ -158,7 +158,7 @@ class TestLlmRuleEvaluatorEvaluate:
         sample_clause_ambiguous,
     ):
         """Test that cached responses are handled correctly."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -167,7 +167,7 @@ class TestLlmRuleEvaluatorEvaluate:
         )
 
         with patch(
-            "src.modules.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
+            "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             evaluator = LlmRuleEvaluator(
@@ -193,7 +193,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 
     def test_build_evaluation_prompt_includes_clause_text(self, patch_anthropic_wrapper):
         """Test that evaluation prompt includes clause text."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-PROMPT",
@@ -210,7 +210,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 
     def test_build_evaluation_prompt_includes_detection_logic(self, patch_anthropic_wrapper):
         """Test that evaluation prompt includes detection logic."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         detection_logic = "Check for ambiguous terms like 'razonable'"
         evaluator = LlmRuleEvaluator(
@@ -227,7 +227,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 
     def test_build_evaluation_prompt_includes_clause_data(self, patch_anthropic_wrapper):
         """Test that evaluation prompt includes clause data when present."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-PROMPT",
@@ -248,7 +248,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 
     def test_build_system_prompt_includes_rule_info(self, patch_anthropic_wrapper):
         """Test that system prompt includes rule information."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-SYSTEM",
@@ -275,7 +275,7 @@ class TestLlmRuleEvaluatorResponseParsing:
 
     def test_parse_valid_json_response(self, patch_anthropic_wrapper):
         """Test parsing of valid JSON response."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-PARSE",
@@ -292,7 +292,7 @@ class TestLlmRuleEvaluatorResponseParsing:
 
     def test_parse_json_with_markdown_code_block(self, patch_anthropic_wrapper):
         """Test parsing JSON wrapped in markdown code block."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-PARSE",
@@ -308,7 +308,7 @@ class TestLlmRuleEvaluatorResponseParsing:
 
     def test_parse_invalid_json_returns_safe_default(self, patch_anthropic_wrapper):
         """Test that invalid JSON returns safe default."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-PARSE",
@@ -339,7 +339,7 @@ class TestLlmRuleEvaluatorStatistics:
         sample_clause_ambiguous,
     ):
         """Test that get_statistics returns correct data."""
-        from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
             rule_id="TEST-STATS",
@@ -371,7 +371,7 @@ class TestFactoryFunctions:
 
     def test_create_llm_evaluator_from_rule(self, patch_anthropic_wrapper):
         """Test creating evaluator from rule dictionary."""
-        from src.modules.coherence.rules_engine.llm_evaluator import (
+        from src.coherence.rules_engine.llm_evaluator import (
             create_llm_evaluator_from_rule,
         )
 
@@ -396,7 +396,7 @@ class TestFactoryFunctions:
 
     def test_get_predefined_llm_evaluators(self, patch_anthropic_wrapper):
         """Test getting predefined evaluators."""
-        from src.modules.coherence.rules_engine.llm_evaluator import (
+        from src.coherence.rules_engine.llm_evaluator import (
             get_predefined_llm_evaluators,
             QUALITATIVE_RULES,
         )
@@ -418,7 +418,7 @@ class TestQualitativeRules:
 
     def test_qualitative_rules_have_required_fields(self):
         """Test that all qualitative rules have required fields."""
-        from src.modules.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
+        from src.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
 
         required_fields = ["id", "name", "description", "detection_logic", "category"]
 
@@ -428,7 +428,7 @@ class TestQualitativeRules:
 
     def test_qualitative_rules_have_valid_severities(self):
         """Test that all rules have valid severity levels."""
-        from src.modules.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
+        from src.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
 
         valid_severities = {"critical", "high", "medium", "low"}
 
@@ -438,7 +438,7 @@ class TestQualitativeRules:
 
     def test_qualitative_rules_have_unique_ids(self):
         """Test that all qualitative rules have unique IDs."""
-        from src.modules.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
+        from src.coherence.rules_engine.llm_evaluator import QUALITATIVE_RULES
 
         ids = [rule["id"] for rule in QUALITATIVE_RULES]
         assert len(ids) == len(set(ids)), "Duplicate rule IDs found"
