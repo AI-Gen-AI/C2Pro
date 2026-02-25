@@ -372,3 +372,98 @@ class TestHTTPSchemas:
         resp = ReviewQueueResponse(items=[], total=0)
         assert resp.total == 0
         assert resp.items == []
+
+
+# ── HITLServiceAdapter (bridges to HITLPort protocol) ────────────────────────
+
+
+class TestHITLServiceAdapter:
+    @pytest.mark.asyncio
+    async def test_route_for_review_returns_str_not_enum(self, mock_repo, mock_notification):
+        from src.modules.hitl.adapters.hitl_port_adapter import HITLServiceAdapter
+
+        service = HumanInTheLoopService(
+            review_queue_repo=mock_repo,
+            notification_service=mock_notification,
+            confidence_router=ConfidenceRouter(),
+        )
+        adapter = HITLServiceAdapter(service)
+
+        # HITLPort expects impact_level as str, returns str
+        result = await adapter.route_for_review(
+            item_id=uuid4(),
+            item_type="risk_extraction",
+            confidence=0.1,
+            impact_level="LOW",
+            item_data={},
+        )
+        assert isinstance(result, str)
+        assert result == "PENDING_REVIEW_REQUIRED"
+
+    @pytest.mark.asyncio
+    async def test_route_for_review_handles_case_insensitive_impact(
+        self, mock_repo, mock_notification
+    ):
+        from src.modules.hitl.adapters.hitl_port_adapter import HITLServiceAdapter
+
+        adapter = HITLServiceAdapter(
+            HumanInTheLoopService(
+                review_queue_repo=mock_repo,
+                notification_service=mock_notification,
+                confidence_router=ConfidenceRouter(),
+            )
+        )
+        result = await adapter.route_for_review(
+            item_id=uuid4(),
+            item_type="x",
+            confidence=0.99,
+            impact_level="critical",  # lowercase
+            item_data={},
+        )
+        assert result == "PENDING_REVIEW_REQUIRED"  # critical always requires review
+
+    @pytest.mark.asyncio
+    async def test_approve_item_returns_dict_not_review_item(
+        self, mock_repo, mock_notification
+    ):
+        from src.modules.hitl.adapters.hitl_port_adapter import HITLServiceAdapter
+
+        pending = _make_review_item(
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        )
+        mock_repo.get_review_item.return_value = pending
+
+        adapter = HITLServiceAdapter(
+            HumanInTheLoopService(
+                review_queue_repo=mock_repo,
+                notification_service=mock_notification,
+                confidence_router=ConfidenceRouter(),
+            )
+        )
+        result = await adapter.approve_item(
+            item_id=pending.item_id,
+            reviewer_id=uuid4(),
+            reviewer_name="Maria Garcia",
+        )
+        # HITLPort expects dict[str, Any]
+        assert isinstance(result, dict)
+        assert result["approved_by"] == "Maria Garcia"
+        assert result["current_status"] == "APPROVED"
+        assert result.get("approved_at") is not None
+
+    @pytest.mark.asyncio
+    async def test_adapter_satisfies_hitl_port_protocol(self, mock_repo, mock_notification):
+        """Verify structural typing: adapter has both methods with correct signatures."""
+        from src.modules.hitl.adapters.hitl_port_adapter import HITLServiceAdapter
+
+        adapter = HITLServiceAdapter(
+            HumanInTheLoopService(
+                review_queue_repo=mock_repo,
+                notification_service=mock_notification,
+                confidence_router=ConfidenceRouter(),
+            )
+        )
+        assert hasattr(adapter, "route_for_review")
+        assert hasattr(adapter, "approve_item")
+        assert callable(adapter.route_for_review)
+        assert callable(adapter.approve_item)
