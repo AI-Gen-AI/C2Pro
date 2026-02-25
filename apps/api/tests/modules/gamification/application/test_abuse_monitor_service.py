@@ -4,8 +4,7 @@ from unittest.mock import MagicMock, AsyncMock, call
 import time
 from typing import NamedTuple, List
 
-# These imports will fail as the modules do not exist yet.
-from apps.api.src.gamification.application.abuse_monitor_service import (
+from src.gamification.application.abuse_monitor_service import (
     AbuseMonitorService,
     GamificationAbuseRepository,
     AlertingService,

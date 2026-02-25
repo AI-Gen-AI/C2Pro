@@ -4,8 +4,7 @@ from typing import List, NamedTuple, Dict
 from enum import Enum, auto
 from datetime import datetime, timedelta
 
-# This import will fail as the modules do not exist yet.
-from apps.api.src.coherence.domain.gamification_rules import (
+from src.coherence.domain.gamification_rules import (
     MassChangeRule,
     ResolveReintroduceRule,
     HighScoreLowDocsRule,

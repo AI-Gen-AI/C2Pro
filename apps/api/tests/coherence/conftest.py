@@ -289,7 +289,7 @@ def mock_anthropic_wrapper_no_violation(mock_llm_response_no_violation):
 def patch_anthropic_wrapper(mock_anthropic_wrapper):
     """Patch get_anthropic_wrapper to return mock."""
     with patch(
-        "src.modules.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
+        "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
         return_value=mock_anthropic_wrapper
     ):
         yield mock_anthropic_wrapper
@@ -299,7 +299,7 @@ def patch_anthropic_wrapper(mock_anthropic_wrapper):
 def patch_anthropic_wrapper_for_integration(mock_anthropic_wrapper):
     """Patch get_anthropic_wrapper in llm_integration module."""
     with patch(
-        "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+        "src.coherence.llm_integration.get_anthropic_wrapper",
         return_value=mock_anthropic_wrapper
     ):
         yield mock_anthropic_wrapper
@@ -313,7 +313,7 @@ def patch_anthropic_wrapper_for_integration(mock_anthropic_wrapper):
 @pytest.fixture
 def llm_evaluator_scope_clarity(patch_anthropic_wrapper):
     """LlmRuleEvaluator for scope clarity with mocked wrapper."""
-    from src.modules.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+    from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
     return LlmRuleEvaluator(
         rule_id="R-SCOPE-CLARITY-01",

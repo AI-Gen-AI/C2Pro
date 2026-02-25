@@ -5,8 +5,7 @@ from typing import List, NamedTuple, Dict, Optional
 from enum import Enum, auto
 from datetime import date, timedelta
 
-# This import will fail as the modules do not exist yet.
-from apps.api.src.coherence.domain.coherence_rule_engine import (
+from src.coherence.domain.coherence_rule_engine import (
     CoherenceRuleEngine,
     ProjectData,
     CoherenceResult,
