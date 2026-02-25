@@ -3,8 +3,8 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
-from src.modules.auth.models import Tenant, User  # For direct database interaction
-from src.modules.auth.service import (
+from src.core.auth.models import Tenant, User  # For direct database interaction
+from src.core.auth.service import (
     hash_password,  # For setting up test users with hashed passwords
 )
 

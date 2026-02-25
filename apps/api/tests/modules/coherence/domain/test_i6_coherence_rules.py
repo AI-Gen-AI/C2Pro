@@ -11,8 +11,8 @@ import pytest
 from pydantic import BaseModel, Field
 
 try:
-    from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
-    from src.modules.coherence.domain.rules import (
+    from src.coherence.domain.entities import CoherenceAlert, RuleInput
+    from src.coherence.domain.rules import (
         ScheduleMismatchRule,
         BudgetMismatchRule,
         ScopeProcurementMismatchRule,

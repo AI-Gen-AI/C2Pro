@@ -28,9 +28,9 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.analysis.models import Analysis
-from src.modules.auth.models import Tenant, User
-from src.modules.projects.models import Project
+from src.analysis.adapters.persistence.models import Analysis
+from src.core.auth.models import Tenant, User
+from src.projects.domain.models import Project
 
 
 @pytest.mark.gate_verification

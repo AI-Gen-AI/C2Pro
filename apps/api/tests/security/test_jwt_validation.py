@@ -4,8 +4,8 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
-from src.modules.auth.models import Tenant, User  # Import models for database setup
-from src.modules.projects.models import Project
+from src.core.auth.models import Tenant, User  # Import models for database setup
+from src.projects.domain.models import Project
 
 
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ async def test_jwt_refresh_token_valid(client: AsyncClient, create_test_token, c
     # === Arrange ===
     # Create tenant and user directly in database, bypassing test transaction
     from src.core.database import _session_factory
-    from src.modules.auth.models import Tenant, User
+    from src.core.auth.models import Tenant, User
 
     test_user_id = uuid4()
     test_tenant_id = uuid4()

@@ -11,8 +11,8 @@ import pytest
 from pydantic import BaseModel, Field
 
 try:
-    from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
-    from src.modules.coherence.application.ports import CoherenceEngineService
+    from src.coherence.domain.entities import CoherenceAlert, RuleInput
+    from src.coherence.application.ports import CoherenceEngineService
 except ImportError:
     class CoherenceAlert(BaseModel):
         alert_id: str = Field(default_factory=lambda: str(uuid4()))
