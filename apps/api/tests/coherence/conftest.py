@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.modules.coherence.models import Clause, ProjectContext
+from src.coherence.models import Clause, ProjectContext
 
 
 # ===========================================

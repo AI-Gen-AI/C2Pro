@@ -1,5 +1,5 @@
 """
-JWT Validation & Tenant Middleware Tests (TDD - RED Phase)
+JWT Validation & Tenant Middleware Tests
 
 Refers to Suite ID: TS-UC-SEC-JWT-001.
 Refers to Suite ID: TS-UAD-HTTP-MDW-001.
@@ -8,25 +8,26 @@ Refers to Suite ID: TS-UAD-HTTP-MDW-001.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.testclient import TestClient
-import jwt
+import jwt as pyjwt
 
 from src.core.middleware import TenantIsolationMiddleware
 from src.core.auth.jwt_validator import JwtValidator
+from src.core.auth.service import create_access_token
+from src.core.auth.models import UserRole
 
 
 class TestJwtValidation:
     """Refers to Suite ID: TS-UC-SEC-JWT-001."""
 
-    def test_expired_token_raises_401(self, mocker):
-        """
-        RED: Expired token must raise 401.
-        """
-        public_key_provider = mocker.Mock()
+    def test_expired_token_raises_401(self):
+        """Expired token must raise 401."""
+        public_key_provider = Mock()
         public_key_provider.get_public_key.return_value = "test-secret-key"
         validator = JwtValidator(public_key_provider=public_key_provider)
 
@@ -36,7 +37,7 @@ class TestJwtValidation:
             "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
             "type": "access",
         }
-        token = jwt.encode(expired_payload, "test-secret-key", algorithm="HS256")
+        token = pyjwt.encode(expired_payload, "test-secret-key", algorithm="HS256")
 
         with pytest.raises(HTTPException) as exc_info:
             validator.decode(token)
@@ -48,10 +49,17 @@ class TestJwtValidation:
 class TestTenantMiddlewareHeaderExtraction:
     """Refers to Suite ID: TS-UAD-HTTP-MDW-001."""
 
-    def test_x_tenant_id_header_is_injected_into_request_context(self):
-        """
-        RED: X-Tenant-ID header should populate request.state.tenant_id.
-        """
+    @pytest.fixture(autouse=True)
+    def _bypass_tenant_db(self, monkeypatch):
+        """Avoid hitting DB during middleware unit tests."""
+        monkeypatch.setattr(
+            TenantIsolationMiddleware,
+            "_validate_tenant_exists",
+            AsyncMock(return_value=True),
+        )
+
+    def test_jwt_tenant_id_is_injected_into_request_context(self):
+        """JWT tenant_id populates request.state.tenant_id."""
         app = FastAPI()
         app.add_middleware(TenantIsolationMiddleware)
 
@@ -62,8 +70,15 @@ class TestTenantMiddlewareHeaderExtraction:
 
         client = TestClient(app)
         tenant_id = uuid4()
+        user_id = uuid4()
+        token = create_access_token(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            email="test@example.com",
+            role=UserRole.ADMIN,
+        )
 
-        response = client.get("/protected", headers={"X-Tenant-ID": str(tenant_id)})
+        response = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 200
         assert response.json()["tenant_id"] == str(tenant_id)
