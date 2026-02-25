@@ -210,6 +210,57 @@ async def critique_node(state: ProjectState) -> ProjectState:
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     from langgraph.types import interrupt
 
+    from src.modules.hitl.domain.entities import ImpactLevel
+
+    # Route item through the real HITL service when a tenant is available.
+    tenant_id = state.get("tenant_id")
+    if tenant_id:
+        try:
+            from src.core.database import get_session_with_tenant
+            from src.modules.hitl.adapters.persistence.repository import (
+                SqlAlchemyReviewQueueRepository,
+            )
+            from src.modules.hitl.adapters.notifications.log_notification_service import (
+                LogNotificationService,
+            )
+            from src.modules.hitl.application.ports import HumanInTheLoopService
+            from src.modules.hitl.domain.services import ConfidenceRouter
+
+            impact = (
+                ImpactLevel.HIGH
+                if state.get("confidence_score", 0) < 0.5
+                else ImpactLevel.MEDIUM
+            )
+
+            async with get_session_with_tenant(UUID(tenant_id)) as session:
+                repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=UUID(tenant_id))
+                service = HumanInTheLoopService(
+                    review_queue_repo=repo,
+                    notification_service=LogNotificationService(),
+                    confidence_router=ConfidenceRouter(),
+                )
+                await service.route_for_review(
+                    item_id=UUID(state["document_id"]),
+                    item_type=state.get("doc_type") or "unknown",
+                    confidence=state.get("confidence_score", 0.0),
+                    impact_level=impact,
+                    item_data={
+                        "project_id": state["project_id"],
+                        "document_id": state["document_id"],
+                        "doc_type": state.get("doc_type"),
+                        "retry_count": state.get("retry_count", 0),
+                        "critique_notes": state.get("critique_notes", ""),
+                    },
+                )
+        except Exception:
+            import structlog
+            structlog.get_logger().warning(
+                "hitl_routing_failed_falling_back_to_interrupt",
+                document_id=state.get("document_id"),
+                exc_info=True,
+            )
+
+    # Always fire the LangGraph interrupt so the workflow pauses.
     interrupt(
         {
             "reason": "approval_required",
