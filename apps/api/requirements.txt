@@ -57,6 +57,9 @@ httpx==0.27.0
 # Task Queue
 celery[redis]==5.3.6
 
+# Text Matching
+rapidfuzz>=3.0.0
+
 # Utilities
 # python-magic - File MIME type validation (install separately per platform)
 # Linux/Mac: pip install python-magic (requires system libmagic)

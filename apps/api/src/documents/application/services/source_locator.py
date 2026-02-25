@@ -7,28 +7,14 @@ fuzzy text matching.
 """
 
 import re
-import sys
-import subprocess
 from typing import List, Optional
 from uuid import UUID
 
 import structlog
 from pydantic import BaseModel, Field
+from rapidfuzz import fuzz, process
 
 from src.documents.ports.document_repository import IDocumentRepository
-
-# --- Dependency Check ---
-try:
-    from rapidfuzz import fuzz, process
-except ImportError:
-    print("rapidfuzz library not found. Attempting to install...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "rapidfuzz"])
-        from rapidfuzz import fuzz, process
-        print("rapidfuzz installed successfully.")
-    except Exception as e:
-        print(f"Failed to install rapidfuzz: {e}. Please install it manually: pip install rapidfuzz")
-        sys.exit(1)
 
 
 logger = structlog.get_logger()
