@@ -314,7 +314,21 @@
   - **Router registered** in `main.py` at `/api/v1/hitl/*`
   - **Systemic fix:** `database.py` settings import moved to function bodies — `Base` class no longer triggers `Settings()` on import
   - **Tests:** 32/32 HITL pass (0 skipped), 23/23 graph pass
-- [ ] **5.8** Verificar que feature flags del backend realmente bloquean endpoints no-ready
+- [x] **5.8** Verificar que feature flags del backend realmente bloquean endpoints no-ready
+  - **Finding:** 7 feature flags defined in `config.py` (lines 229-238) were COMPLETELY UNUSED — routers manually commented out instead
+  - **Fix — Registration-time gating:** `main.py` now conditionally registers routers based on `settings.feature_*` flags:
+    - `feature_coherence_analysis` → `coherence_router`, `coherence_dashboard_router`
+    - `feature_stakeholder_extraction` → `stakeholders_router`, `approvals_router`
+    - `feature_raci_generation` → `raci_router`
+    - `feature_rfq_generation` → `procurement_router`
+    - Core routers (health, auth, projects, documents, alerts, HITL, DI) always registered
+    - Incomplete modules protected by `try/except ImportError` — flipping the flag auto-enables when code is ready
+  - **Fix — Runtime gating:** `src/core/middleware/feature_flags.py` provides `require_feature(flag_name)` FastAPI dependency:
+    - Returns HTTP 404 when flag is `False` (endpoints invisible, not 403)
+    - Applied to coherence routers as defense-in-depth via `dependencies=[Depends(require_feature(...))]`
+  - **Logging:** Feature flag state logged at startup via `logger.info("feature_flags", ...)` + per-router `router_registered`/`router_skipped`
+  - **Missing storage adapter:** Created `src/documents/adapters/storage/local_file_storage_service.py` (was missing, blocked test collection)
+  - **Tests:** 10/10 new feature flag tests pass (dependency gating, registration gating, logging), 226/226 existing tests pass (0 skipped)
 
 ---
 

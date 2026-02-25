@@ -23,24 +23,18 @@ from src.core.middleware import (
 )
 from src.core.mcp.router import router as mcp_router
 
-# Import routers
+# Import core routers (always enabled)
 from src.core.auth.router import router as auth_router
-from src.coherence.router import router as coherence_router, dashboard_router as coherence_dashboard_router
 from src.documents.adapters.http.router import router as documents_router
 from src.core.observability.router import router as observability_router
-from src.projects.adapters.http.router import router as projects_router  # GREEN phase implementation
+from src.projects.adapters.http.router import router as projects_router
 from src.modules.decision_intelligence.adapters.http.router import (
     router as decision_intelligence_router,
 )
-# from src.analysis.adapters.http.router import router as analysis_router  # TODO: GREEN phase - incomplete
-from src.alerts.router import router as alerts_router  # GREEN phase - TS-E2E-FLW-ALR-001
-from src.bulk_operations.router import router as bulk_operations_router  # GREEN phase - TS-E2E-FLW-BLK-001
+from src.alerts.router import router as alerts_router
+from src.bulk_operations.router import router as bulk_operations_router
 from src.core.routers.health import router as health_router
 from src.modules.hitl.adapters.http.router import router as hitl_router
-# from src.stakeholders.adapters.http.approvals_router import router as approvals_router  # TODO: GREEN phase - incomplete
-# from src.stakeholders.adapters.http.raci_router import router as raci_router  # TODO: GREEN phase - incomplete
-# from src.stakeholders.adapters.http.router import router as stakeholders_router  # TODO: GREEN phase - incomplete
-# from src.procurement.adapters.http.router import router as procurement_router  # TODO: GREEN phase - incomplete
 
 logger = structlog.get_logger()
 
@@ -205,96 +199,84 @@ def create_application() -> FastAPI:
             "health": "/health",
         }
 
-    # API v1 routers
     api_v1_prefix = settings.api_v1_prefix
 
+    # --- Core routers (always enabled) ---
     app.include_router(health_router)
+    app.include_router(auth_router, prefix=api_v1_prefix)
+    app.include_router(projects_router, prefix=api_v1_prefix)
+    app.include_router(documents_router, prefix=api_v1_prefix)
+    app.include_router(alerts_router, prefix=api_v1_prefix)
+    app.include_router(bulk_operations_router, prefix=api_v1_prefix)
+    app.include_router(mcp_router, prefix=api_v1_prefix)
+    app.include_router(observability_router, prefix=api_v1_prefix)
+    app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
+    app.include_router(hitl_router, prefix=api_v1_prefix)
 
-    app.include_router(
-        auth_router,
-        prefix=api_v1_prefix,
-    )
+    # --- Feature-gated routers ---
+    _feature_flags = {
+        "coherence_analysis": settings.feature_coherence_analysis,
+        "stakeholder_extraction": settings.feature_stakeholder_extraction,
+        "raci_generation": settings.feature_raci_generation,
+        "rfq_generation": settings.feature_rfq_generation,
+        "expediting_vision": settings.feature_expediting_vision,
+    }
 
-    app.include_router(
-        projects_router,
-        prefix=api_v1_prefix,
-    )
+    logger.info("feature_flags", **_feature_flags)
 
-    app.include_router(
-        alerts_router,
-        prefix=api_v1_prefix,
-    )
+    # Coherence Analysis (feature_coherence_analysis)
+    if settings.feature_coherence_analysis:
+        from src.coherence.router import (
+            router as coherence_router,
+            dashboard_router as coherence_dashboard_router,
+        )
+        app.include_router(coherence_router)
+        app.include_router(coherence_dashboard_router)
+        logger.info("router_registered", feature="coherence_analysis")
+    else:
+        logger.info("router_skipped", feature="coherence_analysis", reason="feature_flag_disabled")
 
-    app.include_router(
-        bulk_operations_router,
-        prefix=api_v1_prefix,
-    )
+    # Stakeholder Extraction (feature_stakeholder_extraction)
+    if settings.feature_stakeholder_extraction:
+        try:
+            from src.stakeholders.adapters.http.router import router as stakeholders_router
+            app.include_router(stakeholders_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="stakeholder_extraction")
+        except ImportError:
+            logger.warning("router_unavailable", feature="stakeholder_extraction", reason="module_not_ready")
 
-    app.include_router(
-        mcp_router,
-        prefix=api_v1_prefix,
-    )
+        try:
+            from src.stakeholders.adapters.http.approvals_router import router as approvals_router
+            app.include_router(approvals_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="stakeholder_approvals")
+        except ImportError:
+            logger.warning("router_unavailable", feature="stakeholder_approvals", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="stakeholder_extraction", reason="feature_flag_disabled")
 
-    app.include_router(
-        observability_router,
-        prefix=api_v1_prefix,
-    )
+    # RACI Generation (feature_raci_generation)
+    if settings.feature_raci_generation:
+        try:
+            from src.stakeholders.adapters.http.raci_router import router as raci_router
+            app.include_router(raci_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="raci_generation")
+        except ImportError:
+            logger.warning("router_unavailable", feature="raci_generation", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="raci_generation", reason="feature_flag_disabled")
 
-    app.include_router(
-        documents_router,
-        prefix=api_v1_prefix,
-    )
+    # RFQ / Procurement (feature_rfq_generation)
+    if settings.feature_rfq_generation:
+        try:
+            from src.procurement.adapters.http.router import router as procurement_router
+            app.include_router(procurement_router, prefix=api_v1_prefix)
+            logger.info("router_registered", feature="rfq_generation")
+        except ImportError:
+            logger.warning("router_unavailable", feature="rfq_generation", reason="module_not_ready")
+    else:
+        logger.info("router_skipped", feature="rfq_generation", reason="feature_flag_disabled")
 
-    app.include_router(
-        decision_intelligence_router,
-        prefix=api_v1_prefix,
-    )
-
-    app.include_router(
-        hitl_router,
-        prefix=api_v1_prefix,
-    )
-
-    # app.include_router(
-    #     analysis_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # app.include_router(
-    #     alerts_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # app.include_router(
-    #     approvals_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # app.include_router(
-    #     stakeholders_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # app.include_router(
-    #     raci_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # app.include_router(
-    #     procurement_router,
-    #     prefix=api_v1_prefix,
-    # )
-
-    # Coherence Engine v0 router (no v1 prefix)
-    app.include_router(coherence_router)
-
-    # Coherence Dashboard router (for E2E tests)
-    app.include_router(coherence_dashboard_router)
-
-    # TODO: Añadir más routers conforme se implementen
-    # app.include_router(stakeholders_router, prefix=api_v1_prefix)
-
-    logger.info("application_configured")
+    logger.info("application_configured", enabled_features=[k for k, v in _feature_flags.items() if v])
 
     return app
 
