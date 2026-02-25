@@ -11,8 +11,8 @@ import pytest
 from httpx import AsyncClient
 from uuid import uuid4
 
-from src.modules.documents.models import Document, DocumentStatus, DocumentType
-from src.modules.projects.models import Project
+from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.projects.domain.models import Project
 
 # Mark all tests in this file as using the asyncio backend
 pytestmark = pytest.mark.anyio

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from src.modules.documents.models import Clause
+from src.documents.domain.models import Clause
 from src.documents.application.services.source_locator import SourceLocation, SourceLocator
 
 # Ensure rapidfuzz is imported or mocked

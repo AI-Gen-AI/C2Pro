@@ -3,9 +3,9 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
-from src.modules.auth.models import Tenant, User
-from src.modules.documents.models import DocumentType
-from src.modules.projects.models import Project
+from src.core.auth.models import Tenant, User
+from src.documents.domain.models import DocumentType
+from src.projects.domain.models import Project
 
 
 @pytest.mark.asyncio

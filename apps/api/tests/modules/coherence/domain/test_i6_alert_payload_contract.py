@@ -10,7 +10,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 try:
-    from src.modules.coherence.domain.entities import CoherenceAlert, CoherenceAlertEvidence
+    from src.coherence.domain.entities import CoherenceAlert, CoherenceAlertEvidence
 except ImportError:
     class CoherenceAlertEvidence(dict[str, Any]):
         pass
