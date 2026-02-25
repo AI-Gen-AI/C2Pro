@@ -300,7 +300,20 @@
     ```
     N1→N2→N3→[N4|N5|N9]→N12→[retry|N13/14|N6]→N7→N8→N15→N10→N17→N11→N16→END
     ```
-- [ ] **5.7** Implementar HITL service real (no solo ports)
+- [x] **5.7** Implementar HITL service real (no solo ports)
+  - **Adapters creados (15 archivos):**
+    - `src/modules/hitl/adapters/persistence/models.py` — `ReviewItemORM` (review_items table, UUID PK, JSONB, RLS tenant_isolation)
+    - `src/modules/hitl/adapters/persistence/repository.py` — `SqlAlchemyReviewQueueRepository` (4 port methods + `list_by_status`)
+    - `src/modules/hitl/adapters/notifications/log_notification_service.py` — `LogNotificationService` (structlog-based, swap for Slack/email later)
+    - `src/modules/hitl/adapters/http/router.py` — 7 endpoints: POST `/route`, GET `/queue`, GET `/queue/{id}`, POST `approve/reject/release`, POST `/escalate`
+    - `src/modules/hitl/adapters/http/schemas.py` — Pydantic request/response schemas (standalone, no database import chain)
+    - `src/modules/hitl/adapters/http/dependencies.py` — FastAPI `Depends()` wiring: session -> repo -> service
+    - `src/modules/hitl/adapters/hitl_port_adapter.py` — `HITLServiceAdapter` bridges `HumanInTheLoopService` to `HITLPort` protocol (str/dict return types)
+  - **Migration:** `alembic/versions/20260225_0001_create_review_items.py` — table + indexes + RLS policies
+  - **Graph integration:** `human_interrupt_node` routes through real `HumanInTheLoopService` before LangGraph `interrupt()`
+  - **Router registered** in `main.py` at `/api/v1/hitl/*`
+  - **Systemic fix:** `database.py` settings import moved to function bodies — `Base` class no longer triggers `Settings()` on import
+  - **Tests:** 32/32 HITL pass (0 skipped), 23/23 graph pass
 - [ ] **5.8** Verificar que feature flags del backend realmente bloquean endpoints no-ready
 
 ---
