@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from src.core.middleware.feature_flags import require_feature
 from .engine_v2 import CoherenceEngineV2, EngineConfig
 from .models import CoherenceResult, ProjectContext
 from .rules import load_rules
@@ -13,12 +14,14 @@ router = APIRouter(
     prefix="/v0/coherence",
     tags=["Coherence Engine"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_feature("feature_coherence_analysis"))],
 )
 
 # API dashboard router (no prefix for compatibility with test suite)
 dashboard_router = APIRouter(
     prefix="/api/coherence",
     tags=["Coherence Dashboard"],
+    dependencies=[Depends(require_feature("feature_coherence_analysis"))],
 )
 
 

@@ -16,6 +16,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "TenantIsolationMiddleware": ("src.core.middleware.tenant_isolation", "TenantIsolationMiddleware"),
     "RequestLoggingMiddleware":  ("src.core.middleware.request_logging", "RequestLoggingMiddleware"),
     "RateLimitMiddleware":       ("src.core.middleware.rate_limiter", "RateLimitMiddleware"),
+    "require_feature":           ("src.core.middleware.feature_flags", "require_feature"),
     "logger":                    ("src.core.middleware.request_logging", "logger"),
     "settings":                  ("src.config", "settings"),
     "structlog":                 ("structlog", "structlog"),
@@ -25,6 +26,7 @@ __all__ = [
     "TenantIsolationMiddleware",
     "RequestLoggingMiddleware",
     "RateLimitMiddleware",
+    "require_feature",
     "logger",
     "settings",
 ]
