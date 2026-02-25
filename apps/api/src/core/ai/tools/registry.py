@@ -129,7 +129,10 @@ class ToolRegistry:
             )
 
         tool_class = tool_versions[version]
-        return tool_class(**init_kwargs)
+        tool = tool_class(**init_kwargs)
+        # Ensure the instance reflects the registered version, not the class default
+        tool.version = version
+        return tool
 
     def get_by_task_type(
         self, task_type: AITaskType
