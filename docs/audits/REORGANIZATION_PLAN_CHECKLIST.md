@@ -377,19 +377,18 @@
 
 ### Backend
 
-- [ ] No existe `MOCK_*` variables en codigo fuente (fuera de tests)
-  - **FAIL:** `MOCK_DB` y `MOCK_STORAGE` en `src/core/tasks/ingestion_tasks.py:19-20`
-  - Tambien: `_fake_projects` en `src/projects/adapters/http/router.py:34` y `_fake_jobs` en `src/bulk_operations/router.py:22` (estos son stubs Green Phase TDD, no mock data — aceptable transitoriamente)
+- [x] No existe `MOCK_*` variables en codigo fuente (fuera de tests)
+  - **FIXED:** `MOCK_DB`/`MOCK_STORAGE` reemplazados por `DocumentRepository` + `LocalFileStorageService` en `ingestion_tasks.py`
+  - `_fake_projects` y `_fake_jobs` son stubs Green Phase TDD (aceptable transitoriamente)
 - [x] No existen `_Default*Service` que retornen datos ficticios
   - grep `class _Default` en src/ → 0 matches — eliminados en fase 3.2
 - [x] La entidad `Project` tiene una sola definicion canonica
   - Unica definicion: `src/projects/domain/models.py:31` (dataclass con validacion y state machine)
   - Otros `Project*` son DTOs, ORM adapters, o TypedDicts — no duplicados de dominio
-- [ ] Ningun modulo importa `from src.{otro_modulo}.domain.models`
-  - **FAIL:** `src/analysis/adapters/graph/nodes.py:79` importa `from src.procurement.domain.models import WBSItem`
-  - Es la unica violacion cross-context restante (todos los demas imports son intra-contexto)
-- [ ] Si se comparte un enum (ej: `AlertSeverity`), esta en un shared kernel
-  - **FAIL:** `AlertSeverity` duplicado en `src/shared_kernel/enums.py` (canonical, lowercase values) Y `src/coherence/domain/alert_mapping.py:24` (uppercase values: "LOW","MEDIUM","HIGH","CRITICAL")
+- [x] Ningun modulo importa `from src.{otro_modulo}.domain.models`
+  - **FIXED:** `_to_wbs_items` movido a `SQLAlchemyWBSRepository.bulk_create_from_dicts()` en procurement — analysis ya no importa domain models de procurement
+- [x] Si se comparte un enum (ej: `AlertSeverity`), esta en un shared kernel
+  - **FIXED:** `AlertSeverity` duplicado eliminado de `coherence/domain/alert_mapping.py` — ahora re-exporta desde `shared_kernel.enums`
   - `AlertStatus`, `RACIRole`, `WBSItemType` estan correctamente solo en shared_kernel
 - [x] `coherence/engine.py` legacy esta eliminado (solo `engine_v2.py`)
   - Confirmado: no existe `src/coherence/engine.py` — solo `engine_v2.py`
@@ -403,7 +402,7 @@
   - Cada contexto tiene tests en `tests/modules/{context}/` (domain, application, adapters)
   - Sin dependencias circulares entre contextos
 
-**Backend: 6/9 PASS, 3 FAIL**
+**Backend: 9/9 PASS**
 
 ### Orquestacion
 
@@ -460,13 +459,13 @@
 | Seccion | PASS | FAIL | Total |
 |---------|------|------|-------|
 | Frontend | 13 | 0 | 13 |
-| Backend | 6 | 3 | 9 |
+| Backend | 9 | 0 | 9 |
 | Orquestacion | 5 | 0 | 5 |
 | Demo/Produccion | 6 | 0 | 6 |
-| **Total** | **30** | **3** | **33** |
+| **Total** | **33** | **0** | **33** |
 
-### Issues pendientes (3 FAIL)
+### Issues resueltos
 
-1. **`MOCK_DB`/`MOCK_STORAGE` en `src/core/tasks/ingestion_tasks.py`** — Reemplazar con repositorios reales o mover a tests
-2. **Cross-context import en `src/analysis/adapters/graph/nodes.py:79`** — `WBSItem` importado de `procurement.domain` — usar protocol o shared DTO
-3. **`AlertSeverity` duplicada** — `coherence/domain/alert_mapping.py` define su propia version con valores UPPERCASE vs shared_kernel (lowercase) — consolidar en shared_kernel
+1. **`MOCK_DB`/`MOCK_STORAGE`** — Reemplazados por `DocumentRepository` + `LocalFileStorageService` en `ingestion_tasks.py`
+2. **Cross-context import** — `_to_wbs_items` movido a `SQLAlchemyWBSRepository.bulk_create_from_dicts()` en procurement
+3. **`AlertSeverity` duplicada** — Eliminada de `coherence/domain/alert_mapping.py`, ahora re-exporta desde `shared_kernel.enums`
