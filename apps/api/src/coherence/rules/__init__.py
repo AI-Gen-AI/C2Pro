@@ -51,9 +51,19 @@ class Rule(BaseModel):
         return self.evaluator_type == "llm"
 
 
+class _StrictRule(Rule):
+    """Rule subclass with stricter validation for YAML loading."""
+
+    inputs: list[str] = Field(
+        ..., description="List of project context fields this rule depends on."
+    )
+
+
 def load_rules(file_path: str) -> list[Rule]:
     """
     Loads rules from a YAML file and validates them against the Rule Pydantic model.
+
+    Uses strict validation that requires 'inputs' field when loading from files.
     """
     with open(file_path, encoding="utf-8") as f:
         rules_data = yaml.safe_load(f)
@@ -61,4 +71,4 @@ def load_rules(file_path: str) -> list[Rule]:
     if not isinstance(rules_data, list):
         raise ValueError("YAML file must contain a list of rules.")
 
-    return [Rule(**rule_data) for rule_data in rules_data]
+    return [_StrictRule(**rule_data) for rule_data in rules_data]
