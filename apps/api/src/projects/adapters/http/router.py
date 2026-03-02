@@ -19,6 +19,17 @@ from src.projects.application.dtos import ProjectDetailResponse, ProjectListResp
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+# ===========================================
+# HEALTH CHECK ENDPOINT (must be before /{project_id})
+# ===========================================
+
+
+@router.get("/health", summary="Projects Service Health Check")
+async def health_check() -> dict:
+    """Health check endpoint (no authentication required)."""
+    return {"status": "ok", "service": "projects"}
+
+
 # In-memory storage for fake implementation
 _fake_projects: dict[UUID, dict] = {}
 
@@ -377,3 +388,5 @@ async def export_project_data(
         "status": "processing",
         "message": "Export job queued",
     }
+
+

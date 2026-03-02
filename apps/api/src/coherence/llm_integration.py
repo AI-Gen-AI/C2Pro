@@ -151,19 +151,19 @@ CLÁUSULAS A ANALIZAR:
 {clauses_text}
 
 RESPONDE EN JSON:
-{
+{{
     "cross_clause_issues": [
-        {
+        {{
             "type": "contradiction|inconsistency|gap|overlap",
             "severity": "low|medium|high|critical",
             "affected_clauses": ["clause_id_1", "clause_id_2"],
             "description": "Descripción del problema",
             "evidence": "Citas relevantes de ambas cláusulas"
-        }
+        }}
     ],
     "overall_coherence_score": 0-100,
     "summary": "Resumen del análisis"
-}"""
+}}"""
 
 
 # ===========================================

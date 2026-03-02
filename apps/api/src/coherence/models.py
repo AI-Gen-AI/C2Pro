@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 # Define valid alert categories as a type
-AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality"]
+AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality", "general"]
 
 
 class Clause(BaseModel):
@@ -57,7 +57,7 @@ class Alert(BaseModel):
         ..., description="The severity of the triggered alert (e.g., critical, high, medium, low)."
     )
     category: AlertCategory = Field(
-        ..., description="The category of the alert (legal, financial, technical, schedule, scope)."
+        default="general", description="The category of the alert (legal, financial, technical, schedule, scope)."
     )
     message: str = Field(..., description="A descriptive message for the alert.")
     evidence: Evidence = Field(..., description="Structured evidence supporting the alert.")
