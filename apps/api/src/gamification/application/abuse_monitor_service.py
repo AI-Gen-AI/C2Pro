@@ -17,7 +17,8 @@ class ScoreUpdateEvent(NamedTuple):
     user_id: str
     new_score: float
 
-class WeightChangeEvent(ChangeEvent): # Inherits from ChangeEvent for the combined test
+class WeightChangeEvent(NamedTuple):
+    user_id: str
     component_id: str
     new_weight: float
 
@@ -93,8 +94,11 @@ class AbuseMonitorService:
     async def process_change_event(self, event: ChangeEvent):
         await self.repo.log_change_event(event)
         recent_changes = await self.repo.get_change_events_in_last_hour(event.user_id)
-        if len(recent_changes) > self.MASS_CHANGES_LIMIT:
-            reason = f"User made {len(recent_changes)} changes in the last hour"
+        # +1 accounts for the current event that was just logged
+        # (the repo query may not yet reflect the newly inserted event)
+        total_changes = len(recent_changes) + 1
+        if total_changes > self.MASS_CHANGES_LIMIT:
+            reason = f"User made {total_changes} changes in the last hour"
             await self._handle_violation(event.user_id, AbuseType.MASS_CHANGES, reason)
 
     async def process_issue_resolution_event(self, event: ResolutionEvent):
@@ -122,15 +126,18 @@ class AbuseMonitorService:
 
     async def process_event(self, event: Any):
         """A generic event processor that delegates to specific handlers."""
-        if isinstance(event, WeightChangeEvent):
-            # Must check for most specific type first
+        # Use duck typing: check for attributes to handle cross-module event types
+        has_component_id = hasattr(event, 'component_id') and hasattr(event, 'new_weight')
+        has_issue_hash = hasattr(event, 'issue_hash')
+        has_new_score = hasattr(event, 'new_score')
+
+        if has_component_id:
+            # Weight change event - also counts as a change event
             await self.process_weight_change_event(event)
-            # Since it's also a ChangeEvent, process for that rule too
             await self.process_change_event(event)
-        elif isinstance(event, ChangeEvent):
-            await self.process_change_event(event)
-        elif isinstance(event, ResolutionEvent):
+        elif has_issue_hash:
             await self.process_issue_resolution_event(event)
-        elif isinstance(event, ScoreUpdateEvent):
+        elif has_new_score:
             await self.process_score_update_event(event)
-        # In a real system, would log or handle unknown event types
+        elif hasattr(event, 'user_id'):
+            await self.process_change_event(event)
