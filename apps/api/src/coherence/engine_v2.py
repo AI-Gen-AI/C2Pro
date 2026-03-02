@@ -120,16 +120,19 @@ class LLMResultCache:
         """Get cached result if available."""
         key = self._generate_key(rule_id, clause_id, clause_text)
 
-        try:
-            # Try Redis first
-            if self._redis_client:
+        # Try Redis first
+        if self._redis_client:
+            try:
                 cached = self._redis_client.get(key)
                 if cached:
                     data = json.loads(cached)
                     logger.debug("llm_cache_hit_redis", rule_id=rule_id, clause_id=clause_id)
                     return self._deserialize_finding(data)
+            except Exception as e:
+                logger.warning("llm_cache_get_redis_error", error=str(e))
 
-            # Fall back to memory cache
+        # Fall back to memory cache
+        try:
             import time
             if key in self._memory_cache:
                 timestamp, data = self._memory_cache[key]
@@ -138,9 +141,8 @@ class LLMResultCache:
                     return self._deserialize_finding(data)
                 else:
                     del self._memory_cache[key]
-
         except Exception as e:
-            logger.warning("llm_cache_get_error", error=str(e))
+            logger.warning("llm_cache_get_memory_error", error=str(e))
 
         return None
 
@@ -149,19 +151,20 @@ class LLMResultCache:
         key = self._generate_key(rule_id, clause_id, clause_text)
         data = self._serialize_finding(finding)
 
-        try:
-            # Try Redis first
-            if self._redis_client:
+        redis_ok = False
+        if self._redis_client:
+            try:
                 self._redis_client.setex(key, self.ttl, json.dumps(data))
                 logger.debug("llm_cache_set_redis", rule_id=rule_id, clause_id=clause_id)
-            else:
-                # Fall back to memory cache
-                import time
-                self._memory_cache[key] = (time.time(), data)
-                logger.debug("llm_cache_set_memory", rule_id=rule_id, clause_id=clause_id)
+                redis_ok = True
+            except Exception as e:
+                logger.warning("llm_cache_set_redis_error", error=str(e))
 
-        except Exception as e:
-            logger.warning("llm_cache_set_error", error=str(e))
+        if not redis_ok:
+            # Fall back to memory cache
+            import time
+            self._memory_cache[key] = (time.time(), data)
+            logger.debug("llm_cache_set_memory", rule_id=rule_id, clause_id=clause_id)
 
     def _serialize_finding(self, finding: Optional[Finding]) -> dict:
         """Serialize a Finding for caching."""

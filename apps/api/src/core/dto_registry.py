@@ -23,7 +23,6 @@ def get_all_dtos() -> Iterable[tuple[type[BaseModel], dict[str, Any]]]:
     from uuid import uuid4
 
     user_id = str(uuid4())
-    tenant_id = str(uuid4())
 
     return [
         (
@@ -39,13 +38,24 @@ def get_all_dtos() -> Iterable[tuple[type[BaseModel], dict[str, Any]]]:
             UserResponse,
             {
                 "id": user_id,
-                "tenant_id": tenant_id,
                 "email": "test@example.com",
                 "first_name": "Test",
                 "last_name": "User",
+                "full_name": "Test User",
+                "avatar_url": None,
+                "phone": None,
                 "role": "admin",
                 "is_active": True,
                 "is_verified": False,
+                "is_admin": True,
+                "is_viewer": False,
+                "can_edit": True,
+                "can_manage_users": True,
+                "last_login": None,
+                "last_activity": None,
+                "login_count": 0,
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-01T00:00:00",
             },
         ),
     ]
