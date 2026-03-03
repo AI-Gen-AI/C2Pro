@@ -3,7 +3,7 @@ import { db, DEMO_TENANT_ID, DEMO_USER_ID } from "../../data";
 
 export const demoDataHandlers = [
   // ── Projects ──────────────────────────────────────────────
-  http.get("/api/v1/projects", () => {
+  http.get("*/api/v1/projects", () => {
     const items = db.project.getAll();
     return HttpResponse.json({
       items,
@@ -16,7 +16,7 @@ export const demoDataHandlers = [
     });
   }),
 
-  http.get("/api/v1/projects/:projectId", ({ params }) => {
+  http.get("*/api/v1/projects/:projectId", ({ params }) => {
     const project = db.project.findFirst({
       where: { id: { equals: String(params.projectId) } },
     });
@@ -29,7 +29,7 @@ export const demoDataHandlers = [
   }),
 
   // ── Documents ─────────────────────────────────────────────
-  http.get("/api/v1/projects/:projectId/documents", ({ params }) => {
+  http.get("*/api/v1/projects/:projectId/documents", ({ params }) => {
     const projectId = String(params.projectId);
     const documents = db.document.findMany({
       where: { projectId: { equals: projectId } },
@@ -53,7 +53,7 @@ export const demoDataHandlers = [
     });
   }),
 
-  http.get("/api/v1/documents/:documentId/clauses", ({ params }) => {
+  http.get("*/api/v1/documents/:documentId/clauses", ({ params }) => {
     const documentId = String(params.documentId);
     const clauses = db.clause.findMany({
       where: { documentId: { equals: documentId } },
@@ -64,7 +64,7 @@ export const demoDataHandlers = [
 
   // ── Alerts ────────────────────────────────────────────────
   // Nested route used by project detail views
-  http.get("/api/v1/projects/:projectId/alerts", ({ params }) => {
+  http.get("*/api/v1/projects/:projectId/alerts", ({ params }) => {
     const projectId = String(params.projectId);
     const alerts = db.alert.findMany({
       where: { projectId: { equals: projectId } },
@@ -74,7 +74,7 @@ export const demoDataHandlers = [
   }),
 
   // Flat route used by useDocumentAlerts → GET /alerts?document_id=...
-  http.get("/api/v1/alerts", ({ request }) => {
+  http.get("*/api/v1/alerts", ({ request }) => {
     const url = new URL(request.url);
     const documentId = url.searchParams.get("document_id");
 
@@ -96,7 +96,7 @@ export const demoDataHandlers = [
 
   // ── Stakeholders ──────────────────────────────────────────
   // Nested route used by project detail views
-  http.get("/api/v1/projects/:projectId/stakeholders", ({ params }) => {
+  http.get("*/api/v1/projects/:projectId/stakeholders", ({ params }) => {
     const projectId = String(params.projectId);
     const stakeholders = db.stakeholder.findMany({
       where: { projectId: { equals: projectId } },
@@ -106,7 +106,7 @@ export const demoDataHandlers = [
   }),
 
   // Flat route used by useStakeholders → GET /stakeholders?project_id=...
-  http.get("/api/v1/stakeholders", ({ request }) => {
+  http.get("*/api/v1/stakeholders", ({ request }) => {
     const url = new URL(request.url);
     const projectId = url.searchParams.get("project_id");
 
@@ -121,7 +121,7 @@ export const demoDataHandlers = [
   }),
 
   // PATCH used by useUpdateStakeholder
-  http.patch("/api/v1/stakeholders/:stakeholderId", async ({ params, request }) => {
+  http.patch("*/api/v1/stakeholders/:stakeholderId", async ({ params, request }) => {
     const stakeholderId = String(params.stakeholderId);
     const body = (await request.json()) as Record<string, unknown>;
 
@@ -142,7 +142,7 @@ export const demoDataHandlers = [
   }),
 
   // ── WBS ───────────────────────────────────────────────────
-  http.get("/api/v1/projects/:projectId/wbs", ({ params }) => {
+  http.get("*/api/v1/projects/:projectId/wbs", ({ params }) => {
     const projectId = String(params.projectId);
     const items = db.wbsItem.findMany({
       where: { projectId: { equals: projectId } },
@@ -152,7 +152,7 @@ export const demoDataHandlers = [
   }),
 
   // ── Coherence Dashboard ─────────────────────────────────
-  http.get("/api/coherence/dashboard/:projectId", ({ params }) => {
+  http.get("*/api/coherence/dashboard/:projectId", ({ params }) => {
     const projectId = String(params.projectId);
     const project = db.project.findFirst({
       where: { id: { equals: projectId } },
@@ -191,7 +191,7 @@ export const demoDataHandlers = [
   }),
 
   // ── Auth ──────────────────────────────────────────────────
-  http.post("/api/v1/auth/login", async ({ request }) => {
+  http.post("*/api/v1/auth/login", async ({ request }) => {
     const body = (await request.json()) as { email?: string; password?: string };
 
     if (!body.email || !body.password) {
@@ -226,7 +226,7 @@ export const demoDataHandlers = [
     });
   }),
 
-  http.post("/api/v1/auth/register", async ({ request }) => {
+  http.post("*/api/v1/auth/register", async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
 
     return HttpResponse.json(
@@ -250,7 +250,7 @@ export const demoDataHandlers = [
     );
   }),
 
-  http.post("/api/v1/auth/refresh", () => {
+  http.post("*/api/v1/auth/refresh", () => {
     return HttpResponse.json({
       access_token: "msw_demo_access_token_refreshed",
       refresh_token: "msw_demo_refresh_token_refreshed",
@@ -258,7 +258,7 @@ export const demoDataHandlers = [
     });
   }),
 
-  http.get("/api/v1/auth/me", () => {
+  http.get("*/api/v1/auth/me", () => {
     const user = db.user.findFirst({
       where: { id: { equals: DEMO_USER_ID } },
     });
@@ -269,7 +269,7 @@ export const demoDataHandlers = [
     return HttpResponse.json({ user, tenant });
   }),
 
-  http.post("/api/v1/auth/logout", () => {
+  http.post("*/api/v1/auth/logout", () => {
     return new HttpResponse(null, { status: 204 });
   }),
 ];
