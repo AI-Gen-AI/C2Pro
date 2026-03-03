@@ -119,13 +119,13 @@ def create_access_token(
     return encoded_jwt
 
 
-def create_refresh_token(user_id: UUID, tenant_id: UUID) -> str:
+def create_refresh_token(user_id: UUID, tenant_id: UUID | None = None) -> str:
     """
     Crea JWT refresh token.
 
     Args:
         user_id: ID del usuario
-        tenant_id: ID del tenant (necesario para generar nuevos access tokens)
+        tenant_id: ID del tenant (optional, included when available)
 
     Returns:
         Token JWT firmado
@@ -135,11 +135,13 @@ def create_refresh_token(user_id: UUID, tenant_id: UUID) -> str:
 
     payload = {
         "sub": str(user_id),
-        "tenant_id": str(tenant_id),
         "exp": expire,
         "iat": datetime.utcnow(),
         "type": "refresh",
     }
+
+    if tenant_id is not None:
+        payload["tenant_id"] = str(tenant_id)
 
     encoded_jwt = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
@@ -162,10 +164,23 @@ def decode_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
 
-        user_id = UUID(payload.get("sub"))
-        tenant_id = UUID(payload.get("tenant_id"))
+        sub_raw = payload.get("sub")
+        if not sub_raw:
+            raise AuthenticationError("Invalid token")
+
+        user_id = UUID(sub_raw)
+
+        tenant_id_raw = payload.get("tenant_id")
+        if not tenant_id_raw:
+            raise AuthenticationError("Invalid token")
+        tenant_id = UUID(tenant_id_raw)
+
         email = payload.get("email")
-        role = UserRole(payload.get("role"))
+        role_raw = payload.get("role")
+        if not role_raw:
+            raise AuthenticationError("Invalid token")
+        role = UserRole(role_raw)
+
         exp = datetime.fromtimestamp(payload.get("exp"))
         iat = datetime.fromtimestamp(payload.get("iat"))
 
@@ -176,9 +191,11 @@ def decode_token(token: str) -> TokenPayload:
     except jwt.PyJWTError as e:
         logger.warning("jwt_decode_error", error=str(e))
         raise AuthenticationError("Invalid token")
-    except (KeyError, ValueError) as e:
+    except AuthenticationError:
+        raise
+    except (KeyError, ValueError, TypeError) as e:
         logger.warning("jwt_payload_error", error=str(e))
-        raise AuthenticationError("Invalid token payload")
+        raise AuthenticationError("Invalid token")
 
 
 # ===========================================
@@ -200,8 +217,8 @@ def generate_tenant_slug(name: str) -> str:
     slug = name.lower().strip()
     slug = slug.replace(" ", "-")
 
-    # Remover caracteres no alfanuméricos (excepto guiones)
-    slug = "".join(c for c in slug if c.isalnum() or c == "-")
+    # Remover caracteres no ASCII y no alfanuméricos (excepto guiones)
+    slug = "".join(c for c in slug if c.isascii() and (c.isalnum() or c == "-"))
 
     # Remover guiones múltiples
     while "--" in slug:

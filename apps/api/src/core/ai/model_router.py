@@ -776,9 +776,10 @@ class ModelRouter:
         """Lista todas las tareas disponibles."""
         return [task.value for task in TaskType]
 
-    def get_tasks_for_tier(self, tier: ModelTier) -> list[str]:
+    @classmethod
+    def get_tasks_for_tier(cls, tier: ModelTier) -> list[str]:
         """Lista tareas recomendadas para un tier."""
-        return [task.value for task, task_tier in self.task_routing.items() if task_tier == tier]
+        return [task.value for task, task_tier in _FALLBACK_TASK_TO_TIER.items() if task_tier == tier]
 
 
 # ===========================================
