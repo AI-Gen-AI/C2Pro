@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { AuthSync } from "@/components/providers/AuthSync";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DemoModeProvider } from "@/contexts/demo-mode";
 import { createQueryClient } from "@/lib/api/queryClient";
 import "@/lib/api/config";
 import { SentryInit } from "@/components/providers/SentryInit";
@@ -48,7 +49,9 @@ export function Providers({ children }: ProvidersProps) {
       <QueryClientProvider client={client}>
         <AuthSync>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <DemoModeProvider>{children}</DemoModeProvider>
+            </AuthProvider>
           </ThemeProvider>
         </AuthSync>
       </QueryClientProvider>

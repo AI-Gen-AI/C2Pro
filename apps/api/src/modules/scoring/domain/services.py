@@ -18,6 +18,8 @@ class ScoreAggregator:
         total_score = 0.0
 
         for alert in alerts:
+            if alert.severity not in self.config.severity_weights:
+                raise ValueError(f"Unknown severity '{alert.severity}' in scoring input")
             severity_weight = self.config.severity_weights.get(alert.severity, 0.0)
             type_multiplier = self.config.alert_type_multipliers.get(alert.type, 1.0)
             contribution = severity_weight * type_multiplier
@@ -49,4 +51,3 @@ class ScoreAggregator:
         if score >= thresholds.get("Medium", float("inf")):
             return "Medium"
         return "Low"
-

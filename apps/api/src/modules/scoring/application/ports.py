@@ -3,6 +3,9 @@ I7 Coherence Scoring Application Service
 Test Suite ID: TS-I7-SCORE-SVC-001
 """
 
+import asyncio
+import inspect
+from typing import Protocol
 from uuid import UUID
 
 from src.modules.coherence.domain.entities import CoherenceAlert
@@ -10,10 +13,20 @@ from src.modules.scoring.domain.entities import OverallScore, ScoreConfig
 from src.modules.scoring.domain.services import ScoreAggregator
 
 
+class ScoreProfileRepositoryProtocol(Protocol):
+    """Optional port for tenant/project scoring profile resolution."""
+
+    def get_profile(self, tenant_id: UUID, project_id: UUID) -> ScoreConfig | None: ...
+
+
 class CoherenceScoringService:
     """Aggregates coherence alerts into a deterministic overall score."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        profile_repository: ScoreProfileRepositoryProtocol | None = None,
+    ) -> None:
+        self._profile_repository = profile_repository
         self._default_profile = ScoreConfig(
             severity_weights={"Critical": 1.0, "High": 0.7, "Medium": 0.4, "Low": 0.1},
             alert_type_multipliers={
@@ -48,6 +61,23 @@ class CoherenceScoringService:
         return aggregator.aggregate_score(alerts)
 
     def _resolve_profile(self, tenant_id: UUID, project_id: UUID) -> ScoreConfig:
+        if self._profile_repository is not None:
+            get_profile = getattr(self._profile_repository, "get_profile", None)
+            if callable(get_profile):
+                profile = get_profile(tenant_id, project_id)
+                if inspect.isawaitable(profile):
+                    # Sync resolution cannot safely await when event loop is already running.
+                    try:
+                        asyncio.get_running_loop()
+                        close = getattr(profile, "close", None)
+                        if callable(close):
+                            close()
+                        profile = None
+                    except RuntimeError:
+                        profile = asyncio.run(profile)
+                if isinstance(profile, ScoreConfig):
+                    return profile.model_copy(deep=True)
+
         # Project-specific configuration always takes precedence.
         if (tenant_id, project_id) in self._project_profiles:
             return self._project_profiles[(tenant_id, project_id)].model_copy(deep=True)

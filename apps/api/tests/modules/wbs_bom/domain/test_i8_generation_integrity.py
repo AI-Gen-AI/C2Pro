@@ -3,39 +3,12 @@ I8 - WBS/BOM Domain Generation Integrity
 Test Suite ID: TS-I8-WBS-BOM-DOM-001
 """
 
-from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
 
-try:
-    from src.modules.wbs_bom.domain.entities import WBSItem, BOMItem
-    from src.modules.wbs_bom.domain.services import WBSBOMIntegrityService
-except ImportError:
-    @dataclass
-    class WBSItem:  # type: ignore[override]
-        wbs_id: UUID
-        code: str
-        name: str
-        level: int
-        clause_id: UUID | None = None
-        parent_wbs_id: UUID | None = None
-
-    @dataclass
-    class BOMItem:  # type: ignore[override]
-        bom_id: UUID
-        wbs_id: UUID
-        description: str
-        quantity: float
-        unit_cost: float
-        clause_id: UUID | None = None
-
-    class WBSBOMIntegrityService:  # type: ignore[override]
-        def validate_hierarchy(self, items: list[WBSItem]) -> list[str]:
-            return []
-
-        def validate_traceability(self, wbs_items: list[WBSItem], bom_items: list[BOMItem]) -> list[str]:
-            return []
+from src.modules.wbs_bom.domain.entities import WBSItem, BOMItem
+from src.modules.wbs_bom.domain.services import WBSBOMIntegrityService
 
 
 def test_i8_wbs_hierarchy_constraints_require_valid_parent_chain() -> None:

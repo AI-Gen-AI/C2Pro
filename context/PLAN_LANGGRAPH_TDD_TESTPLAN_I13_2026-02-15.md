@@ -1,7 +1,8 @@
 # C2Pro LangGraph Orchestration — TDD Test Plan I13
 
-> **Version:** 1.0
+> **Version:** 1.1
 > **Date:** 2026-02-15
+> **Last Updated:** 2026-02-17
 > **Status:** APPROVED
 > **Aligned with:** PLAN_LANGGRAPH_ORCHESTRATION_I13_2026-02-15.md
 > **Methodology:** TDD Strict (Red → Green → Refactor)
@@ -49,18 +50,18 @@
 
 | Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
 
-| `TS-I13-STATE-001-01` | `test_intent_type_enum_values` | IntentType has all 7 values (DOCUMENT, PROJECT, STAKEHOLDER, PROCUREMENT, ANALYSIS, COHERENCE, UNKNOWN) | P0 | ⬜ |
-| `TS-I13-STATE-001-02` | `test_hitl_status_enum_values` | HITLStatus has all 5 values (NOT_REQUIRED, PENDING, APPROVED, REJECTED, ESCALATED) | P0 | ⬜ |
-| `TS-I13-STATE-001-03` | `test_coherence_category_enum_values` | CoherenceCategory has all 6 values (SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME) | P0 | ⬜ |
-| `TS-I13-STATE-001-04` | `test_default_category_weights_sum_to_one` | DEFAULT_CATEGORY_WEIGHTS sum = 1.0 | P0 | ⬜ |
-| `TS-I13-STATE-001-05` | `test_default_category_weights_values` | SCOPE=0.20, BUDGET=0.20, QUALITY=0.15, TECHNICAL=0.15, LEGAL=0.15, TIME=0.15 | P0 | ⬜ |
-| `TS-I13-STATE-001-06` | `test_graph_state_identity_fields` | GraphState accepts run_id, tenant_id, project_id, user_id | P0 | ⬜ |
-| `TS-I13-STATE-001-07` | `test_graph_state_input_fields` | GraphState accepts document_bytes, query | P0 | ⬜ |
-| `TS-I13-STATE-001-08` | `test_graph_state_extraction_fields` | GraphState accepts clauses_by_category, extracted_* fields | P0 | ⬜ |
-| `TS-I13-STATE-001-09` | `test_graph_state_coherence_fields` | GraphState accepts coherence_subscores, coherence_score, alerts_by_category | P0 | ⬜ |
-| `TS-I13-STATE-001-10` | `test_graph_state_hitl_fields` | GraphState accepts hitl_status, hitl_item_id, hitl_approved_by, hitl_approved_at | P0 | ⬜ |
-| `TS-I13-STATE-001-11` | `test_graph_state_optional_fields` | All fields are optional (total=False) | P1 | ⬜ |
-| `TS-I13-STATE-001-12` | `test_graph_state_serializable` | GraphState can be JSON serialized (excluding bytes) | P1 | ⬜ |
+| `TS-I13-STATE-001-01` | `test_intent_type_enum_values` | IntentType has all 7 values (DOCUMENT, PROJECT, STAKEHOLDER, PROCUREMENT, ANALYSIS, COHERENCE, UNKNOWN) | P0 | ✅ |
+| `TS-I13-STATE-001-02` | `test_hitl_status_enum_values` | HITLStatus has all 5 values (NOT_REQUIRED, PENDING, APPROVED, REJECTED, ESCALATED) | P0 | ✅ |
+| `TS-I13-STATE-001-03` | `test_coherence_category_enum_values` | CoherenceCategory has all 6 values (SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME) | P0 | ✅ |
+| `TS-I13-STATE-001-04` | `test_default_category_weights_sum_to_one` | DEFAULT_CATEGORY_WEIGHTS sum = 1.0 | P0 | ✅ |
+| `TS-I13-STATE-001-05` | `test_default_category_weights_values` | SCOPE=0.20, BUDGET=0.20, QUALITY=0.15, TECHNICAL=0.15, LEGAL=0.15, TIME=0.15 | P0 | ✅ |
+| `TS-I13-STATE-001-06` | `test_graph_state_identity_fields` | GraphState accepts run_id, tenant_id, project_id, user_id | P0 | ✅ |
+| `TS-I13-STATE-001-07` | `test_graph_state_input_fields` | GraphState accepts document_bytes, query | P0 | ✅ |
+| `TS-I13-STATE-001-08` | `test_graph_state_extraction_fields` | GraphState accepts clauses_by_category, extracted_* fields | P0 | ✅ |
+| `TS-I13-STATE-001-09` | `test_graph_state_coherence_fields` | GraphState accepts coherence_subscores, coherence_score, alerts_by_category | P0 | ✅ |
+| `TS-I13-STATE-001-10` | `test_graph_state_hitl_fields` | GraphState accepts hitl_status, hitl_item_id, hitl_approved_by, hitl_approved_at | P0 | ✅ |
+| `TS-I13-STATE-001-11` | `test_graph_state_optional_fields` | All fields are optional (total=False) | P1 | ✅ |
+| `TS-I13-STATE-001-12` | `test_graph_state_serializable` | GraphState can be JSON serialized (excluding bytes) | P1 | ✅ |
 
 ---
 
@@ -68,14 +69,14 @@
 
 | Test ID | Test Name | Description | Priority | Status ||---------|-----------|-------------|----------|--------|
 
-| `TS-I13-MAP-001-01` | `test_clause_type_time_mapping` | Delivery Term, Milestone, Schedule, Deadline, Duration → TIME | P0 | ⬜ |
-| `TS-I13-MAP-001-02` | `test_clause_type_budget_mapping` | Payment Obligation, Price, Cost, Invoice, Budget → BUDGET | P0 | ⬜ |
-| `TS-I13-MAP-001-03` | `test_clause_type_scope_mapping` | Scope Definition, Deliverable, Work Package, Exclusion → SCOPE | P0 | ⬜ |
-| `TS-I13-MAP-001-04` | `test_clause_type_quality_mapping` | Quality Standard, Certification, Inspection, Testing → QUALITY | P0 | ⬜ |
-| `TS-I13-MAP-001-05` | `test_clause_type_technical_mapping` | Technical Specification, Requirement, Dependency, Interface → TECHNICAL | P0 | ⬜ |
-| `TS-I13-MAP-001-06` | `test_clause_type_legal_mapping` | Penalty, Termination, Warranty, Approval, Liability, Indemnification → LEGAL | P0 | ⬜ |
-| `TS-I13-MAP-001-07` | `test_entity_type_to_category_mapping` | dates→TIME, money→BUDGET, standards→QUALITY, penalties→LEGAL, specs→TECHNICAL | P0 | ⬜ |
-| `TS-I13-MAP-001-08` | `test_unknown_clause_type_default` | Unknown clause types default to SCOPE or raise | P1 | ⬜ |
+| `TS-I13-MAP-001-01` | `test_clause_type_time_mapping` | Delivery Term, Milestone, Schedule, Deadline, Duration → TIME | P0 | ✅ |
+| `TS-I13-MAP-001-02` | `test_clause_type_budget_mapping` | Payment Obligation, Price, Cost, Invoice, Budget → BUDGET | P0 | ✅ |
+| `TS-I13-MAP-001-03` | `test_clause_type_scope_mapping` | Scope Definition, Deliverable, Work Package, Exclusion → SCOPE | P0 | ✅ |
+| `TS-I13-MAP-001-04` | `test_clause_type_quality_mapping` | Quality Standard, Certification, Inspection, Testing → QUALITY | P0 | ✅ |
+| `TS-I13-MAP-001-05` | `test_clause_type_technical_mapping` | Technical Specification, Requirement, Dependency, Interface → TECHNICAL | P0 | ✅ |
+| `TS-I13-MAP-001-06` | `test_clause_type_legal_mapping` | Penalty, Termination, Warranty, Approval, Liability, Indemnification → LEGAL | P0 | ✅ |
+| `TS-I13-MAP-001-07` | `test_entity_type_to_category_mapping` | dates→TIME, money→BUDGET, standards→QUALITY, penalties→LEGAL, specs→TECHNICAL | P0 | ✅ |
+| `TS-I13-MAP-001-08` | `test_unknown_clause_type_default` | Unknown clause types default to SCOPE or raise | P1 | ✅ |
 
 ---
 
@@ -265,14 +266,14 @@ TS-I13-NODE-005  ──┘
 
 ## Summary Checklist
 
-### Phase 1: Foundation (20 tests)
+### Phase 1: Foundation (20 tests) ✅
 
-- [ ] TS-I13-STATE-001: 12 tests — GraphState & Enums
-- [ ] TS-I13-MAP-001: 8 tests — Category Mappings
+- [x] TS-I13-STATE-001: 12 tests — GraphState & Enums ✅
+- [x] TS-I13-MAP-001: 8 tests — Category Mappings ✅
 
 ### Phase 2: Routing (14 tests)
 
-- [ ] TS-I13-EDGE-001: 14 tests — Conditional Edges
+- [ ] TS-I13-EDGE-001: 14 tests — Conditional Edges (In progress: 001-01..001-09 implemented in workspace; 001-10..001-14 pending)
 
 ### Phase 3: Core Nodes (39 tests)
 
@@ -297,6 +298,14 @@ TS-I13-NODE-005  ──┘
 
 ---
 
+## Progress Update (2026-02-17)
+
+- `TS-I13-MAP-001`: maintained as completed with aligned implementation in `apps/api/src/core/ai/orchestration/mappings.py`.
+- `TS-I13-EDGE-001`: partial implementation detected in `apps/api/src/core/ai/orchestration/edges.py` and `apps/api/tests/unit/core/ai/orchestration/test_edges.py` (intent routing + evidence gate).
+- Pending scope for `TS-I13-EDGE-001`: HITL routing and citation validation cases (`001-10` to `001-14`) still not fully covered.
+
+---
+
 ## Audit Plan Summary (for @qa-agent)
 
 | Audit Focus | Test Suites | Key Assertions ||-------------|-------------|----------------|
@@ -306,6 +315,15 @@ TS-I13-NODE-005  ──┘
 | **Fallback Trigger** | TS-I13-NODE-006-08, TS-I13-E2E-001-04 | switches to GPT-4o on Anthropic timeout |
 | **6 Category Subscores** | TS-I13-NODE-004 | calculates subscores for all 6 categories |
 | **Citation Validation** | TS-I13-EDGE-001-13/14, TS-I13-E2E-001-03 | blocks finalization without citations |
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+| ------- | ---- | ------- |
+| 1.0 | 2026-02-15 | Initial approved plan |
+| 1.1 | 2026-02-17 | Progress sync for `TS-I13-EDGE-001` (partial workspace implementation) and metadata update (`Last Updated`) |
 
 ---
 

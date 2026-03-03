@@ -19,6 +19,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "build_event_bus":      ("src.core.events.redis_event_bus", "build_event_bus"),
     "DeadLetterQueue":      ("src.core.events.dead_letter_queue", "DeadLetterQueue"),
     "DLQMessage":           ("src.core.events.dead_letter_queue", "DLQMessage"),
+    "DLQReplayService":     ("src.core.events.replay", "DLQReplayService"),
 }
 
 __all__ = list(_LAZY_IMPORTS.keys())

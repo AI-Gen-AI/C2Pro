@@ -19,6 +19,7 @@ from src.core.database import close_db, init_db
 from src.core.events import build_event_bus
 from src.core.handlers import register_exception_handlers
 from src.core.middleware import (
+    APIContractMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
@@ -37,6 +38,7 @@ from src.alerts.router import router as alerts_router
 from src.bulk_operations.router import router as bulk_operations_router
 from src.core.routers.health import router as health_router
 from src.modules.hitl.adapters.http.router import router as hitl_router
+from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
 
 logger = structlog.get_logger()
 
@@ -180,6 +182,7 @@ def create_application() -> FastAPI:
     )
 
     # Custom middleware
+    app.add_middleware(APIContractMiddleware)  # Adds X-API-Version and X-Response-Time headers
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(TenantIsolationMiddleware)
@@ -223,6 +226,7 @@ def create_application() -> FastAPI:
     app.include_router(observability_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
+    app.include_router(wbs_router, prefix=api_v1_prefix)
 
     try:
         app.include_router(_load_mcp_router(), prefix=api_v1_prefix)

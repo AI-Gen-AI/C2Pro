@@ -4,29 +4,11 @@ Test Suite ID: TS-I9-PROC-APP-001
 """
 
 from datetime import date
-from decimal import Decimal
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from pydantic import BaseModel, Field
 
-try:
-    from src.modules.procurement.application.ports import ProcurementPlanningService
-except ImportError:
-    class PlanningDecision(BaseModel):
-        plan_fingerprint: str
-        conflicts: list[dict[str, Any]] = Field(default_factory=list)
-        requires_human_review: bool = False
-
-    class ProcurementPlanningService:
-        async def build_procurement_plan(
-            self,
-            project_id: UUID,
-            tenant_id: UUID,
-            required_on_site: date,
-        ) -> PlanningDecision:
-            return PlanningDecision(plan_fingerprint="", conflicts=[], requires_human_review=False)
+from src.modules.procurement.application.ports import ProcurementPlanningService
 
 
 @pytest.mark.asyncio
