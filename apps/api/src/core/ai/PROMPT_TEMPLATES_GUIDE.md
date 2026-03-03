@@ -679,7 +679,7 @@ async def test_contract_extraction_e2e():
 - **Roadmap**: `docs/ROADMAP_v2.4.0.md` § 6.2 y 17.2
 - **AI Service**: `apps/api/src/core/ai/service.py`
 - **Model Router**: `apps/api/src/core/ai/model_router.py`
-- **Ejemplos**: `apps/api/src/core/ai/example_prompts.py`
+- **Ejemplos**: `docs/api/example_prompts.py`
 
 ---
 

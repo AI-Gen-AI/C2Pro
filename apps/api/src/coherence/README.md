@@ -15,7 +15,7 @@ coherence/
 ├── README.md                 # Este documento
 ├── config.py                 # Configuración (pesos de severidad)
 ├── models.py                 # Modelos Pydantic (Clause, Alert, Evidence, etc.)
-├── engine.py                 # CoherenceEngine principal
+├── engine_v2.py              # CoherenceEngineV2 principal (determinista + LLM)
 ├── service.py                # CoherenceService para DI
 ├── router.py                 # FastAPI router (POST /v0/coherence/evaluate)
 ├── rules.py                  # Rule model y YAML loader
@@ -36,7 +36,7 @@ coherence/
 - **`rules.py`**: Define el esquema de las reglas de coherencia usando Pydantic y una función para cargarlas desde un archivo YAML.
 - **`models.py`**: Contiene los modelos Pydantic para las estructuras de datos principales: `ProjectContext`, `Clause`, `Evidence`, `Alert`, y `CoherenceResult`.
 - **`config.py`**: Almacena la configuración del motor, como los pesos de severidad para el cálculo del score.
-- **`engine.py`**: El corazón del motor. Contiene la clase `CoherenceEngine` que evalúa un `ProjectContext` contra las reglas cargadas.
+- **`engine_v2.py`**: El corazón del motor. Contiene la clase `CoherenceEngineV2` que evalúa un `ProjectContext` contra reglas deterministas y LLM.
 - **`scoring.py`**: Implementa el `ScoringService` para calcular el score final basado en las alertas generadas.
 - **`router.py`**: Expone la funcionalidad del motor a través de un endpoint API de FastAPI.
 
@@ -359,7 +359,8 @@ tests/coherence/
 ├── conftest.py              # Fixtures y mocks para LLM testing
 ├── test_llm_evaluator.py    # Unit tests para LlmRuleEvaluator
 ├── test_llm_integration.py  # Integration tests para CoherenceLLMService
-├── test_engine.py           # Tests del CoherenceEngine
+├── test_engine.py           # Tests del CoherenceEngineV2 (determinista)
+├── test_engine_v2.py        # Tests del CoherenceEngineV2 (async + LLM)
 └── test_scoring.py          # Tests del ScoringService
 ```
 

@@ -10,7 +10,7 @@ Valida que el routing de modelos funciona correctamente:
 
 import pytest
 
-from src.modules.ai.model_router import (
+from src.core.ai.model_router import (
     ModelRouter,
     ModelTier,
     TaskType,

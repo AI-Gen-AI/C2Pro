@@ -6,7 +6,6 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
@@ -40,54 +39,13 @@ class HITLPort(Protocol):
     async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]: ...
 
 
-class _DefaultIngestionService:
-    async def ingest_document(self, doc_bytes: bytes) -> dict[str, Any]:
-        return {
-            "doc_id": uuid4(),
-            "version_id": uuid4(),
-            "chunks": [{"id": uuid4(), "content": f"len:{len(doc_bytes)}"}],
-        }
-
-
-class _DefaultExtractionService:
-    async def extract_clauses(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [
-            {
-                "clause_id": uuid4(),
-                "text": "Payment term must include due date.",
-                "confidence": 0.92,
-                "metadata": {"citations": ["clause-1"]},
-            }
-        ]
-
-
-class _DefaultRetrievalService:
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
-        return [{"text": f"evidence for {query}", "score": 0.88}]
-
-
-class _DefaultCoherenceScoringService:
-    async def aggregate_coherence_score(
-        self, alerts: list[dict[str, Any]], tenant_id: UUID, project_id: UUID
-    ) -> dict[str, Any]:
-        return {"score": 0.78, "severity": "Medium", "explanation": {}, "metadata": {}}
-
-
-class _DefaultHITLService:
-    async def route_for_review(
-        self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
-    ) -> str:
-        if confidence < 0.5:
-            return "PENDING_REVIEW_REQUIRED"
-        return "APPROVED"
-
-    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]:
-        return {
-            "item_id": item_id,
-            "current_status": "APPROVED",
-            "approved_by": reviewer_name,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
-        }
+def _require(name: str, value: object) -> None:
+    """Raise immediately when a required port is not wired."""
+    if value is None:
+        raise TypeError(
+            f"DecisionOrchestrationService requires a real '{name}' implementation. "
+            f"Pass it explicitly instead of relying on a silent stub."
+        )
 
 
 class DecisionOrchestrationService:
@@ -100,18 +58,24 @@ class DecisionOrchestrationService:
     def __init__(
         self,
         *,
-        ingestion_service: IngestionPort | None = None,
-        extraction_service: ExtractionPort | None = None,
-        retrieval_service: RetrievalPort | None = None,
-        coherence_scoring_service: CoherenceScoringPort | None = None,
-        hitl_service: HITLPort | None = None,
+        ingestion_service: IngestionPort,
+        extraction_service: ExtractionPort,
+        retrieval_service: RetrievalPort,
+        coherence_scoring_service: CoherenceScoringPort,
+        hitl_service: HITLPort,
         langsmith_adapter: Any | None = None,
     ) -> None:
-        self.ingestion_service = ingestion_service or _DefaultIngestionService()
-        self.extraction_service = extraction_service or _DefaultExtractionService()
-        self.retrieval_service = retrieval_service or _DefaultRetrievalService()
-        self.coherence_scoring_service = coherence_scoring_service or _DefaultCoherenceScoringService()
-        self.hitl_service = hitl_service or _DefaultHITLService()
+        _require("ingestion_service", ingestion_service)
+        _require("extraction_service", extraction_service)
+        _require("retrieval_service", retrieval_service)
+        _require("coherence_scoring_service", coherence_scoring_service)
+        _require("hitl_service", hitl_service)
+
+        self.ingestion_service = ingestion_service
+        self.extraction_service = extraction_service
+        self.retrieval_service = retrieval_service
+        self.coherence_scoring_service = coherence_scoring_service
+        self.hitl_service = hitl_service
         self.langsmith_adapter = langsmith_adapter
 
     async def execute_full_decision_flow(

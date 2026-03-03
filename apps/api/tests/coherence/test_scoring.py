@@ -1,12 +1,12 @@
 # apps/api/tests/coherence/test_scoring.py
 import pytest
-from apps.api.src.modules.coherence.config import (
+from src.coherence.config import (
     DECAY_FACTOR,
     RULE_WEIGHT_OVERRIDES,
     SEVERITY_WEIGHTS,
 )
-from apps.api.src.modules.coherence.models import Alert, Evidence
-from apps.api.src.modules.coherence.scoring import ScoringService
+from src.coherence.models import Alert, Evidence
+from src.coherence.scoring import ScoringService
 
 
 @pytest.fixture

@@ -14,8 +14,8 @@ from uuid import uuid4
 
 from src.main import app
 from src.core.database import get_session
-from src.modules.projects.models import Project, ProjectStatus, ProjectType
-from src.modules.auth.models import User, UserRole
+from src.projects.domain.models import Project, ProjectStatus, ProjectType
+from src.core.auth.models import User, UserRole
 
 
 # ===========================================

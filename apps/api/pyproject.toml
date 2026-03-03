@@ -70,6 +70,7 @@ markers = [
     "e2e: End-to-end tests",
     "flow: E2E workflow tests",
     "ai: AI-related tests (may use API)",
+    "auth: Authentication and authorization tests",
     "slow: Slow tests",
     "security: Security tests (critical)",
     "critical: P0 critical tests",

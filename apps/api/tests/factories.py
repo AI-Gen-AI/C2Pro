@@ -14,9 +14,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.auth.models import Tenant, User
-from src.modules.documents.models import Document
-from src.modules.projects.models import Project
+from src.core.auth.models import Tenant, User
+from src.documents.domain.models import Document
+from src.projects.domain.models import Project
 
 # ===========================================
 # TENANT FACTORIES

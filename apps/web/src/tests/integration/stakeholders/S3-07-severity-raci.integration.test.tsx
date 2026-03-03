@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { StakeholderRaciWorkbench } from "@/src/components/features/stakeholders/StakeholderRaciWorkbench";
+import { StakeholderRaciWorkbench } from "@/components/features/stakeholders/StakeholderRaciWorkbench";
 
 describe("S3-07 RED - severity/map/raci integration", () => {
   it("[S3-07-RED-INT-01] alert row severity badge links to stakeholder node highlight", () => {

@@ -366,12 +366,16 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     else:
         # En desarrollo, incluir más detalles para debugging
         user_message = f"Internal error: {type(exc).__name__}: {str(exc)}"
+        # Strip the "Traceback ..." header — only keep frame lines
+        preview_lines = [
+            line for line in stack_trace.split("\n")
+            if line and not line.startswith("Traceback ")
+        ][:5]
         details = {
             "reference_id": error_reference_id,
             "error_type": type(exc).__name__,
             "error_message": str(exc),
-            # NO incluir stack trace completo, solo las primeras líneas
-            "stack_trace_preview": stack_trace.split("\n")[:5],
+            "stack_trace_preview": preview_lines,
         }
 
     # Crear respuesta de error

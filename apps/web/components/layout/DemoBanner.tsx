@@ -6,7 +6,7 @@ interface DemoBannerProps {
 }
 
 export function DemoBanner({
-  projectName = "Torre Skyline",
+  projectName = "Petrochemical Plant EPC",
   onDismiss,
 }: DemoBannerProps) {
   return (

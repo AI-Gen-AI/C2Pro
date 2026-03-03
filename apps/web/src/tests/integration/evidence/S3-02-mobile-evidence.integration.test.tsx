@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { MobileEvidenceViewer } from "@/src/components/features/evidence/MobileEvidenceViewer";
+import { MobileEvidenceViewer } from "@/components/features/evidence/MobileEvidenceViewer";
 
 describe("S3-02 RED - mobile evidence integration", () => {
   it("[S3-02-RED-INT-01] keeps desktop split-view off under mobile tab contract", () => {
@@ -56,6 +56,7 @@ describe("S3-02 RED - mobile evidence integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /insurance gap/i }));
 
     // Contract expects explicit viewport-resize handler signal.
+    Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 430 });
     fireEvent(window, new Event("resize"));
     expect(screen.getByTestId("mobile-viewport-state")).toHaveTextContent(
       /width: 430/i,

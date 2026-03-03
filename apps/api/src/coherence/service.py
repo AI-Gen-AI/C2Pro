@@ -1,74 +1,37 @@
 """
-C2Pro - Coherence Service (Mock Implementation)
+C2Pro - Coherence Service
 
-This module provides a service to calculate or retrieve the coherence score
-for a project.
-
-This is a MOCK implementation for dependency injection purposes. The real
-implementation would involve complex business logic and database queries.
+Thin façade over the real persistence layer.
+Replaces the former MOCK_PROJECT_DB / MOCK_SCORE_DB dictionaries
+with proper async repository queries.
 """
 
-from datetime import datetime, timedelta
 from uuid import UUID
-from typing import Optional, Dict, Any
 
-# Mocking the response object structure for the service layer
-class CoherenceScore:
-    def __init__(self, project_id: UUID, score: int, breakdown: Dict[str, int], top_drivers: list[str]):
-        self.project_id = project_id
-        self.score = score
-        self.breakdown = breakdown
-        self.top_drivers = top_drivers
-        self.calculated_at = datetime.utcnow()
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Mocking a database of projects and scores
-# In a real app, this would be queried from a database.
-MOCK_PROJECT_DB = {
-    # This project will have a score
-    "00000000-0000-0000-0000-000000000001": {"name": "Project with Score"},
-    # This project exists but has no score yet
-    "00000000-0000-0000-0000-000000000002": {"name": "Project Pending Score"},
-}
+from src.coherence.adapters.persistence.sqlalchemy_coherence_repository import (
+    SqlAlchemyCoherenceRepository,
+)
+from src.coherence.application.dtos import CoherenceCalculationResult
+from src.projects.adapters.persistence.project_repository import (
+    SQLAlchemyProjectRepository,
+)
 
-MOCK_SCORE_DB = {
-    "00000000-0000-0000-0000-000000000001": CoherenceScore(
-        project_id=UUID("00000000-0000-0000-0000-000000000001"),
-        score=85,
-        breakdown={"critical": 1, "high": 3, "medium": 5, "low": 2},
-        top_drivers=[
-            "Missing budget information for WBS item 1.2.3",
-            "Schedule dates conflict with contract milestones",
-            "Ambiguous liability clause in contract section 8.4"
-        ]
-    )
-}
 
 class CoherenceService:
-    """
-    A mock service to manage project coherence scores.
-    """
-    def project_exists(self, project_id: UUID) -> bool:
-        """Simulates checking if a project exists in the database."""
-        return str(project_id) in MOCK_PROJECT_DB
+    """Async service that delegates to SQLAlchemy repositories."""
 
-    def get_latest_score_for_project(self, project_id: UUID) -> Optional[CoherenceScore]:
-        """
-        Simulates retrieving the latest calculated coherence score for a project.
+    def __init__(self, db: AsyncSession) -> None:
+        self._project_repo = SQLAlchemyProjectRepository(session=db)
+        self._coherence_repo = SqlAlchemyCoherenceRepository(db=db)
 
-        Returns:
-            A CoherenceScore object if a score exists, otherwise None.
-        """
-        # This deterministic mock will return a score for a known UUID,
-        # and None for another known UUID to test the 'pending' state.
-        return MOCK_SCORE_DB.get(str(project_id))
+    async def project_exists(self, project_id: UUID, tenant_id: UUID) -> bool:
+        """Check whether a project exists (with tenant isolation)."""
+        return await self._project_repo.exists_by_id(project_id, tenant_id)
 
-# --- Dependency Injection ---
-# In a real FastAPI app, you'd have a more robust dependency management system.
-_coherence_service_instance = None
-
-def get_coherence_service() -> CoherenceService:
-    """Singleton factory for the CoherenceService."""
-    global _coherence_service_instance
-    if _coherence_service_instance is None:
-        _coherence_service_instance = CoherenceService()
-    return _coherence_service_instance
+    async def get_latest_score(
+        self, project_id: UUID
+    ) -> CoherenceCalculationResult | None:
+        """Return the most recent coherence result for a project, or None."""
+        return await self._coherence_repo.get_latest_for_project(project_id)

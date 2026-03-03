@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Iterable
 
 from src.analysis.application.dtos import AlertCreate
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
+from src.shared_kernel.enums import AlertSeverity, AlertStatus
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
 from src.coherence.alert_generator import AlertGenerator

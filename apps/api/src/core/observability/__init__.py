@@ -2,45 +2,44 @@
 C2Pro - Core Observability Module
 
 Infraestructura de observabilidad: logging, métricas, error tracking, y endpoints de monitoreo.
+
+Uses lazy imports (PEP 562) to avoid pulling in Sentry SDK,
+prometheus_client, and structlog at ``import src.core.observability`` time.
 """
 
-# Monitoring (logging, sentry, prometheus)
-from src.core.observability.monitoring import (
-    METRICS_AVAILABLE,
-    configure_logging,
-    get_version,
-    init_sentry,
-    record_ai_metric,
-    record_cache_hit,
-    record_cache_miss,
-    record_request_metric,
-)
+from __future__ import annotations
 
-# Service & Router (endpoints de monitoreo)
-from src.core.observability.router import router
-from src.core.observability.schemas import (
-    AnalysisStatus,
-    RecentAnalysesResponse,
-    SystemStatusResponse,
-)
-from src.core.observability.service import ObservabilityService
+import importlib
+from typing import Any
 
-__all__ = [
-    # Monitoring
-    "configure_logging",
-    "init_sentry",
-    "get_version",
-    "record_request_metric",
-    "record_ai_metric",
-    "record_cache_hit",
-    "record_cache_miss",
-    "METRICS_AVAILABLE",
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    # Monitoring (logging, sentry, prometheus)
+    "configure_logging":     ("src.core.observability.monitoring", "configure_logging"),
+    "init_sentry":           ("src.core.observability.monitoring", "init_sentry"),
+    "get_version":           ("src.core.observability.monitoring", "get_version"),
+    "record_request_metric": ("src.core.observability.monitoring", "record_request_metric"),
+    "record_ai_metric":      ("src.core.observability.monitoring", "record_ai_metric"),
+    "record_cache_hit":      ("src.core.observability.monitoring", "record_cache_hit"),
+    "record_cache_miss":     ("src.core.observability.monitoring", "record_cache_miss"),
+    "METRICS_AVAILABLE":     ("src.core.observability.monitoring", "METRICS_AVAILABLE"),
     # Service
-    "ObservabilityService",
+    "ObservabilityService":  ("src.core.observability.service", "ObservabilityService"),
     # Schemas
-    "SystemStatusResponse",
-    "RecentAnalysesResponse",
-    "AnalysisStatus",
+    "SystemStatusResponse":   ("src.core.observability.schemas", "SystemStatusResponse"),
+    "RecentAnalysesResponse": ("src.core.observability.schemas", "RecentAnalysesResponse"),
+    "AnalysisStatus":         ("src.core.observability.schemas", "AnalysisStatus"),
     # Router
-    "router",
-]
+    "router":                ("src.core.observability.router", "router"),
+}
+
+__all__ = list(_LAZY_IMPORTS.keys())
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(module_path)
+        value = getattr(mod, attr)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'src.core.observability' has no attribute {name!r}")

@@ -1,0 +1,89 @@
+/**
+ * useProjectOverview Hook
+ * Fetches project overview stats (coherence, alerts, documents, budget)
+ */
+
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api/client';
+
+export interface ProjectOverviewStats {
+  coherenceScore: number;
+  openAlerts: number;
+  documentCount: number;
+  budgetUsed: number;
+  recentAlerts: { severity: string; title: string }[];
+}
+
+interface CoherenceDashboard {
+  coherence_score: number;
+  alert_count: number;
+  document_count: number;
+  sub_scores: Record<string, number>;
+}
+
+interface AlertResponse {
+  id: string;
+  severity: string;
+  status: string;
+  message: string;
+}
+
+interface UseProjectOverviewResult {
+  stats: ProjectOverviewStats | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+export function useProjectOverview(projectId: string): UseProjectOverviewResult {
+  const [stats, setStats] = useState<ProjectOverviewStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function fetchOverview() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [dashboardRes, alertsRes] = await Promise.all([
+          apiClient.get<CoherenceDashboard>(
+            `/coherence/dashboard/${projectId}`,
+            { baseURL: apiClient.defaults.baseURL?.replace('/api/v1', '/api') }
+          ),
+          apiClient.get<AlertResponse[]>(`/projects/${projectId}/alerts`),
+        ]);
+
+        if (!active) return;
+
+        const dashboard = dashboardRes.data;
+        const alerts = alertsRes.data;
+
+        const openAlerts = alerts.filter((a) => a.status === 'open');
+        const budgetScore = dashboard.sub_scores?.BUDGET ?? 0;
+
+        setStats({
+          coherenceScore: dashboard.coherence_score,
+          openAlerts: openAlerts.length,
+          documentCount: dashboard.document_count,
+          budgetUsed: 100 - budgetScore,
+          recentAlerts: openAlerts.slice(0, 3).map((a) => ({
+            severity: a.severity,
+            title: a.message.split(' — ')[0],
+          })),
+        });
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err : new Error('Failed to fetch project overview'));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    fetchOverview();
+    return () => { active = false; };
+  }, [projectId]);
+
+  return { stats, loading, error };
+}
