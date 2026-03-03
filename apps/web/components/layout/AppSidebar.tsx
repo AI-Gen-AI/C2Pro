@@ -13,26 +13,41 @@ import {
   ChevronLeft,
   ChevronRight,
   Gauge,
+  Grid3X3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/documents', label: 'Documents', icon: FileText },
-  { href: '/alerts', label: 'Alerts', icon: AlertTriangle, badge: 15 },
-  { href: '/stakeholders', label: 'Stakeholders', icon: Users },
   { href: '/evidence', label: 'Evidence', icon: Gauge },
+  { href: '/alerts', label: 'Alerts', icon: AlertTriangle, badge: 7 },
+  { href: '/stakeholders', label: 'Stakeholders', icon: Users },
+  { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
+  // Check if we're in demo mode based on the current path
+  const isDemoMode = pathname.startsWith('/demo');
+  const basePrefix = isDemoMode ? '/demo' : '';
+
+  const getHref = (href: string) => {
+    if (href === '/dashboard') {
+      return isDemoMode ? '/demo' : '/dashboard';
+    }
+    return `${basePrefix}${href}`;
+  };
+
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
-    return pathname.startsWith(href);
+    const fullHref = getHref(href);
+    if (href === '/dashboard') {
+      return isDemoMode ? pathname === '/demo' : pathname === '/dashboard';
+    }
+    return pathname.startsWith(fullHref);
   };
 
   return (
@@ -58,7 +73,7 @@ export function AppSidebar() {
       {!collapsed && (
         <div className="px-4 pb-3">
           <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Torre Skyline
+            {isDemoMode ? 'Demo Workspace' : 'Torre Skyline'}
           </span>
         </div>
       )}
@@ -72,7 +87,7 @@ export function AppSidebar() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={getHref(item.href)}
               aria-current={active ? "page" : undefined}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 text-[13px] transition-all duration-150',
@@ -101,7 +116,7 @@ export function AppSidebar() {
       {/* Footer */}
       <div className="border-t border-sidebar-border p-2">
         <Link
-          href="/settings"
+          href={`${basePrefix}/settings`}
           className={cn(
             'flex items-center gap-2 rounded-md px-3 py-2 text-[13px] text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
           )}

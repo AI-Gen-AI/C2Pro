@@ -11,16 +11,23 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  webServer: {
-    command: "pnpm exec next dev --port 3000",
-    url: baseURL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  // webServer disabled - using existing dev server on port 3000
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "e2e-j2-weekly-review",
+      testMatch: /journey-2-review\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      metadata: {
+        suite: "TS-E2E-J2-001",
+        phase: "red",
+        type: "e2e",
+        priority: "p0",
+        description: "Weekly Project Review Journey",
+      },
     },
   ],
 });

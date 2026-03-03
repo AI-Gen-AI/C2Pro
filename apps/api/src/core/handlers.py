@@ -68,6 +68,7 @@ def _create_error_response(
     """
     error_response = {
         "status_code": status_code,
+        "code": error_code,  # For API contract compliance
         "error_code": error_code,
         "message": message,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -218,15 +219,26 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         detail=exc.detail,
     )
 
+    raw_detail = exc.detail
+    if isinstance(raw_detail, dict):
+        detail_payload: Any = raw_detail
+        message = str(raw_detail.get("message", "HTTP error"))
+    elif isinstance(raw_detail, list):
+        detail_payload = raw_detail
+        message = "HTTP error"
+    else:
+        detail_payload = str(raw_detail) if raw_detail else "HTTP error"
+        message = str(raw_detail) if raw_detail else "HTTP error"
+
     # Crear respuesta de error
     error_response = _create_error_response(
         status_code=exc.status_code,
         error_code=error_code,
-        message=str(exc.detail) if exc.detail else "HTTP error",
+        message=message,
         path=str(request.url.path),
     )
     # Preserve FastAPI-compatible detail field for clients/tests expecting it.
-    error_response["detail"] = str(exc.detail) if exc.detail else "HTTP error"
+    error_response["detail"] = detail_payload
 
     return JSONResponse(
         status_code=exc.status_code,

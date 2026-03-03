@@ -157,6 +157,19 @@ Current real I13 E2E is blocked by infrastructure, not business logic:
 
 - **Acceptance:** No skip for GUC contract tests; failures are hard and actionable when GUC contract regresses.
 
+#### WS-G Execution Status (2026-02-15)
+
+- `RED` completed:
+  - Added explicit failing contract test `test_011_rls_guc_contract_is_available` in `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`.
+  - Verified failure mode: `SHOW app.current_tenant` raised missing-GUC error.
+- `GREEN` completed:
+  - Implemented PostgreSQL connection bootstrap in `apps/api/src/core/database.py` to initialize session GUC (`SET SESSION app.current_tenant = ''`) on connect.
+  - Preserved existing request-level set/reset behavior in `get_session(...)`.
+- Verification:
+  - `pytest apps/api/tests/e2e/security/test_multi_tenant_isolation.py::test_011_rls_guc_contract_is_available -q -p no:cacheprovider` → pass.
+  - `pytest apps/api/tests/e2e/security/test_multi_tenant_isolation.py -q -p no:cacheprovider` → pass.
+  - Critical S5/S6 pack re-run including I13 real E2E + route contract + tenant isolation → pass.
+
 ## 4) Critical Path Sequence
 
 1. **CP-1:** WS-A migration repair.
@@ -207,3 +220,4 @@ Last Updated: 2026-02-15
 Changelog:
 - 2026-02-15: Added current-state checkpoint (401 resolved, 404 active blocker) and detailed WS-D.1 remediation plan for missing I13 route contract.
 - 2026-02-15: Added WS-G for PostgreSQL `app.current_tenant` GUC contract hardening (RED/GREEN/REFACTOR ownership and acceptance).
+- 2026-02-15: WS-G GREEN completed - PostgreSQL connection-level GUC bootstrap for `app.current_tenant` implemented and validated against RED contract test.

@@ -10,20 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.modules.extraction.domain.entities import ExtractedClause
-
-try:
-    from src.modules.wbs_bom.application.ports import WBSBOMGenerationService, WBSBOMRepository
-except ImportError:
-    class WBSBOMRepository:  # type: ignore[override]
-        async def save_wbs_items(self, items): ...
-        async def save_bom_items(self, items): ...
-
-    class WBSBOMGenerationService:  # type: ignore[override]
-        def __init__(self, repository: WBSBOMRepository):
-            self.repository = repository
-
-        async def generate_from_clauses(self, clauses: list[ExtractedClause]):
-            return {"wbs_items": [], "bom_items": []}
+from src.modules.wbs_bom.application.ports import WBSBOMGenerationService, WBSBOMRepository
 
 
 @pytest.fixture
@@ -75,6 +62,8 @@ async def test_i8_generation_produces_wbs_and_bom_with_traceable_clause_ids(
     assert len(bom_items) > 0
     assert all(getattr(item, "clause_id", None) is not None for item in wbs_items)
     assert all(getattr(item, "clause_id", None) is not None for item in bom_items)
+    mock_repository.save_wbs_items.assert_awaited_once()
+    mock_repository.save_bom_items.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -90,3 +79,22 @@ async def test_i8_generation_rejects_bom_items_without_existing_wbs_link(
 
     with pytest.raises(ValueError, match="BOM item references missing WBS"):
         await service.generate_from_clauses([clause])
+    mock_repository.save_wbs_items.assert_not_awaited()
+    mock_repository.save_bom_items.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_i8_generation_raises_and_does_not_commit_partial_on_bom_persist_failure_red(
+    mock_repository: AsyncMock,
+    extracted_clauses: list[ExtractedClause],
+) -> None:
+    """I8 hardening: persistence errors must avoid partial commit semantics."""
+    service = WBSBOMGenerationService(repository=mock_repository)
+    mock_repository.save_bom_items.side_effect = RuntimeError("db write error")
+
+    with pytest.raises(RuntimeError, match="db write error"):
+        await service.generate_from_clauses(extracted_clauses)
+
+    # Current implementation awaits WBS first then BOM; this test documents
+    # the expected rollback/transaction behavior to be enforced in GREEN hardening.
+    mock_repository.save_wbs_items.assert_awaited_once()

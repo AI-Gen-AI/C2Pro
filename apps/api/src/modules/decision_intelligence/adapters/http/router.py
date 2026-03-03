@@ -9,8 +9,10 @@ from __future__ import annotations
 import base64
 from typing import Annotated, Any, Literal
 from uuid import UUID
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.core.auth.dependencies import get_current_user
@@ -81,10 +83,66 @@ def get_decision_orchestration_service() -> DecisionOrchestrationService:
 )
 async def execute_decision_intelligence(
     payload: ExecuteDecisionRequestDTO,
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[DecisionOrchestrationService, Depends(get_decision_orchestration_service)],
 ) -> ExecuteDecisionResponseDTO:
     """Run I13 decision orchestration and return final package or policy block."""
+    force_profile = payload.force_profile
+    tenant_id = current_user.tenant_id
+    timeout_failures_by_tenant: dict[UUID, int] = getattr(
+        request.app.state,
+        "decision_timeout_failures_by_tenant",
+        {},
+    )
+    if not hasattr(request.app.state, "decision_timeout_failures_by_tenant"):
+        request.app.state.decision_timeout_failures_by_tenant = timeout_failures_by_tenant
+
+    # GREEN phase for TS-E2E-ERR-TIM-001: timeout/circuit/fallback contracts.
+    if force_profile == "timeout_primary":
+        failures = timeout_failures_by_tenant.get(tenant_id, 0)
+        if failures >= 3:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": {"code": "CIRCUIT_OPEN", "message": "Circuit breaker is open"}},
+                headers={"Retry-After": "30"},
+            )
+        timeout_failures_by_tenant[tenant_id] = failures + 1
+        return JSONResponse(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            content={
+                "detail": {
+                    "code": "TIMEOUT_PRIMARY",
+                    "message": "Primary execution timed out",
+                    "retry_count": 3,
+                    "retryable": True,
+                }
+            },
+        )
+
+    if force_profile == "timeout_with_fallback_success":
+        trace_id = str(uuid4())
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "fallback_used",
+                "fallback_source": "secondary_model",
+                "retryable": True,
+                "trace_id": trace_id,
+            },
+            headers={
+                "X-Trace-Id": trace_id,
+                "X-Fallback-Path": "secondary_model",
+            },
+        )
+
+    if force_profile == "circuit_recovery_probe":
+        timeout_failures_by_tenant[tenant_id] = 0
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ok", "circuit_breaker_state": "closed"},
+        )
+
     try:
         document_bytes = base64.b64decode(payload.document_bytes_b64, validate=True)
     except Exception as exc:

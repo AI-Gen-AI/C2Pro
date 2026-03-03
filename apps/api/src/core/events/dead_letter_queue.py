@@ -6,7 +6,7 @@ Refers to Suite ID: TS-INT-EVT-DLQ-001.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -23,6 +23,7 @@ class DLQMessage:
     created_at: datetime
     retryable: bool = True
     attempts: int = 1
+    task_id: str | None = None
 
 
 class DeadLetterQueue:
@@ -39,6 +40,7 @@ class DeadLetterQueue:
         reason: str,
         retryable: bool = True,
         attempts: int = 1,
+        task_id: str | None = None,
     ) -> DLQMessage:
         if len(self._messages) >= self._max_size:
             self._messages.pop(0)
@@ -50,9 +52,33 @@ class DeadLetterQueue:
             created_at=datetime.now(timezone.utc),
             retryable=retryable,
             attempts=attempts,
+            task_id=task_id,
         )
         self._messages.append(message)
         return message
+
+    async def enqueue(
+        self,
+        *,
+        task_id: str,
+        payload: dict[str, Any],
+        error: str,
+        retryable: bool = True,
+        attempts: int = 1,
+    ) -> DLQMessage:
+        """
+        Async compatibility API used by E2E resilience suites.
+
+        Maps enqueue contract to the existing synchronous push primitive.
+        """
+        return self.push(
+            topic="recovery",
+            payload=payload,
+            reason=error,
+            retryable=retryable,
+            attempts=attempts,
+            task_id=task_id,
+        )
 
     def list(self) -> list[DLQMessage]:
         return list(self._messages)
@@ -67,3 +93,7 @@ class DeadLetterQueue:
 
     def purge(self) -> None:
         self._messages.clear()
+
+    async def size(self) -> int:
+        """Async queue size helper for resilience flows."""
+        return len(self._messages)

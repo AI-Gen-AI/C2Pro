@@ -67,6 +67,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id
+        # TS-E2E-PER-LRG-001: expose server-side processing duration.
+        response.headers["Server-Timing"] = f"app;dur={round(duration_ms, 2)}"
 
         return response
 

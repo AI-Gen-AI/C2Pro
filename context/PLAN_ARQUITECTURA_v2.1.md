@@ -1,8 +1,8 @@
 # Plan de Saneamiento y Evolución Arquitectónica de C2Pro (v2.1)
 
-> **Versión:** 2.1.1  
+> **Versión:** 2.1.2  
 > **Fecha:** 2026-01-31  
-> **Última Actualización:** 2026-02-15  
+> **Última Actualización:** 2026-02-17  
 > **Estado:** APROBADO por Architecture Review Board  
 > **Alineado con:** Diagrama Maestro v2.2.1
 
@@ -100,7 +100,7 @@ apps/api/src/
 ├── coherence/              # 🎯 Módulo Coherence Engine
 ├── anonymizer/             # 🔒 Módulo Anonymizer (PII)
 ├── alerts/                 # 🔔 Módulo Alerts (stub)
-├── bulk_operations/        # 📦 Módulo Bulk Operations (stub)
+├── bulk_operations/        # 📦 Módulo Bulk Operations (baseline E2E contracts)
 ├── mcp/                    # 🤖 Módulo MCP Adapters
 └── modules/                # 📂 Sub-módulos AI Pipeline
     ├── ingestion/          # Document ingestion pipeline
@@ -109,7 +109,7 @@ apps/api/src/
 ```
 
 > **Nota (2026-02-14):** Estructura actualizada para reflejar el estado real del codebase.  
-> Los módulos `alerts/`, `bulk_operations/` son stubs pendientes de implementación.  
+> El módulo `alerts/` sigue como stub; `bulk_operations/` ya cuenta con contratos base E2E implementados (TS-E2E-FLW-BLK-001).  
 > `modules/` contiene sub-módulos del pipeline IA (Phase 4 increments I1-I12).
 
 ### Métricas de Progreso
@@ -125,13 +125,13 @@ apps/api/src/
 | Anonymizer Service      | 🔄 En Progreso  | 75%      | Detección + Estrategias OK, falta audit + tests       |
 | Seguridad Multitenant   | 🔄 En Progreso  | 70%      | Middleware + Context OK, falta repo filters + RLS     |
 | Observabilidad Completa | 🔄 En Progreso  | 40%      |                                                       |
-| TDD Suites              | 🔄 En Progreso  | 98%      | 87/89 suites completadas (ver TDD Backlog v1.4)       |
+| TDD Suites              | 🔄 En Progreso  | 99%      | 88/89 suites completadas (ver TDD Backlog v1.4)       |
 | AI Pipeline (I1-I2)     | ✅ Completado   | 100%     | Ingestion contract + OCR/table reliability completados |
 | AI Pipeline (I3-I4)     | ✅ Completado   | 100%     | Clause extraction normalization + hybrid retrieval/rerank/gating completados |
 | AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados |
 | AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados |
 | AI Pipeline (I10-I12)   | ✅ Completado   | 100%     | Stakeholder/RACI + HITL workflow + LangSmith/eval harness + S5 security assertions + DevOps CI gates/scheduled drift checks completados |
-| AI Pipeline (I13)       | ✅ Completado   | 100%     | Real E2E route contract estabilizado (`/api/v1/decision-intelligence/execute`) + auth/tenant deterministic harness + S6 blocking CI gate |
+| AI Pipeline (I13)       | ✅ Completado   | 100%     | Real E2E route contract estabilizado (`/api/v1/decision-intelligence/execute`) + auth/tenant deterministic harness + S6 blocking CI gate; hardening de orquestación en curso (`TS-I13-MAP-001` completada, `TS-I13-EDGE-001` parcial) |
 
 ---
 
@@ -965,7 +965,7 @@ Upload → API → Job Queue → Worker → [
 | 12.2.1 | Unit tests dominio y use cases | ⏳ PENDIENTE | L        |
 | 12.2.2 | Integración adaptadores        | ⏳ PENDIENTE | L        |
 | 12.2.3 | Contratos APIs externas        | ⏳ PENDIENTE | M        |
-| 12.2.4 | E2E flujos críticos            | ⏳ PENDIENTE | L        |
+| 12.2.4 | E2E flujos críticos            | 🔄 EN PROGRESO (TS-E2E-ERR-TIM-001 + TS-E2E-ERR-CON-001 + TS-E2E-ERR-REC-001 + TS-E2E-PER-LRG-001 implementados) | L        |
 
 ### 12.3 Tests de Integración Cross-Módulo
 
@@ -1335,7 +1335,7 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 
 **Documento generado por:** Architecture Review Board  
 **Fecha:** 2026-01-31  
-**Versión:** 2.1.1  
+**Versión:** 2.1.2  
 **Estado:** APROBADO - Pendiente firmas  
 **Próxima revisión:** 2026-02-28
 
@@ -1355,8 +1355,21 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 | Sec 3 / Phase 4    | AI Pipeline I1-I2 (Ingestion + OCR/Table) → ✅       | Cierre de Sprint 1 Core AI con suites TS-I1-CIC-001 y TS-I2-OCR-TBL-001 |
 | Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅      | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001 |
 | Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
-| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + TS-SEC-S4-001 |
+| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + extensiones I9 (`TS-I9-PROC-APP-002`, `TS-I9-PROC-TXN-001`, `TS-I9-PROC-ADP-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-HTTP-001`, `TS-I9-PROC-INT-001`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-001`, `TS-SEC-I9-002`) + TS-SEC-S4-001 |
 | Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅ | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001 |
 | Sec 3 / Phase 4    | AI Pipeline I13 real E2E path → ✅ | Contrato de ruta I13 + harness auth/tenant determinístico + CI S6 bloqueante `i13-real-e2e` |
 | Sec 12.7           | Nuevo contrato operativo I13 real E2E + rationale de parche de migración | Formaliza prerrequisitos, riesgos y runbook (`docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) |
 | Sec 10.2 / 10.4.4  | Catálogo Event Bus Redis + reglas de tenant scope/metadata → ✅ | Formaliza canal `c2pro.{env}.{tenant_id}.{topic}` y cierre documental del Event Bus |
+| Sec 6 / Sec 12.7   | Contrato RLS GUC `app.current_tenant` hardening → ✅ | Se agrega bootstrap de GUC a nivel conexión PostgreSQL + validación RED/GREEN de suite E2E de aislamiento tenant |
+
+---
+
+## Changelog v2.1.1 → v2.1.2
+
+**Fecha:** 2026-02-17
+
+| Sección            | Cambio | Razón |
+| ------------------ | ------ | ----- |
+| Encabezado         | `Versión` 2.1.1 → 2.1.2; `Última Actualización` → 2026-02-17 | Reflejar sincronización documental de avances de 2026-02-16/17 |
+| Sec 3 (Métricas)   | Nota de I13 ampliada con hardening de orquestación (`TS-I13-MAP-001` completada, `TS-I13-EDGE-001` parcial) | Trazabilidad de trabajo post-cierre E2E real I13 |
+| Backlog/Arquitectura | Se documenta cierre `TS-UD-WBS-001` (módulo `wbs`) y avances de orquestación I13 | Evitar brecha entre cambios de código recientes y estado oficial |
