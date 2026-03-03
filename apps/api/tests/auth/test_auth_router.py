@@ -14,8 +14,8 @@ from uuid import uuid4
 
 from src.main import app
 from src.core.database import get_session
-from src.modules.auth.models import User, Tenant, UserRole, SubscriptionPlan
-from src.modules.auth.service import hash_password
+from src.core.auth.models import User, Tenant, UserRole, SubscriptionPlan
+from src.core.auth.service import hash_password
 
 
 # ===========================================

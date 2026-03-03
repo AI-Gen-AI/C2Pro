@@ -378,7 +378,7 @@ Tests:
 **Total**: ~8 tests
 
 #### Task 3.3: Projects Page Tests
-**File**: `apps/web/app/(dashboard)/projects/__tests__/page.test.tsx` (NEW)
+**File**: `apps/web/app/(app)/projects/__tests__/page.test.tsx` (NEW)
 **Effort**: 4-5 hours
 
 Tests:

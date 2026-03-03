@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
 from langchain_core.messages import AIMessage
 
-from src.analysis.adapters.ai.agents.wbs_agent import WBSExtractionAgent
-from src.analysis.adapters.ai.anthropic_client import AIService
 from src.analysis.adapters.graph.schema import ProjectState
-from src.core.database import get_session_with_tenant
-from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractorAgent
-from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
-from src.analysis.adapters.persistence.models import Alert, Analysis
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.domain.models import WBSItem, WBSItemType
 
 DOC_TYPES: tuple[str, ...] = ("contract", "technical_spec", "budget")
 
@@ -39,15 +29,6 @@ def _average_confidence(items: list[dict[str, Any]]) -> float:
     return float(sum(confidences)) / float(len(confidences))
 
 
-def _parse_decimal(value: Any) -> Decimal | None:
-    if value is None:
-        return None
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return None
-
-
 def _fallback_doc_type(text: str) -> str:
     normalized = text.lower()
     if any(keyword in normalized for keyword in ("contrato", "clausula", "adenda", "partes", "obligaciones")):
@@ -69,6 +50,8 @@ def _augment_document(text: str, critique_notes: str, human_feedback: str) -> st
 
 
 async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
+    from src.analysis.adapters.ai.anthropic_client import AIService
+
     service = AIService(tenant_id=tenant_id)
     try:
         payload = await service.run_extraction(ROUTER_SYSTEM_PROMPT, text)
@@ -81,40 +64,14 @@ async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
     return _fallback_doc_type(text)
 
 
-def _to_wbs_items(project_id: UUID, items: list[dict[str, Any]]) -> list[WBSItem]:
-    wbs_items: list[WBSItem] = []
-    for item in items:
-        code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
-        level = code.count(".") + 1 if code else 1
-        item_type_raw = str(item.get("item_type") or "").lower()
-        item_type = None
-        for candidate in WBSItemType:
-            if candidate.value == item_type_raw:
-                item_type = candidate
-                break
-
-        wbs_items.append(
-            WBSItem(
-                project_id=project_id,
-                code=code,
-                name=item.get("name") or "WBS Item",
-                description=item.get("description"),
-                level=level,
-                parent_code=None,
-                item_type=item_type,
-                budget_allocated=_parse_decimal(item.get("budget_allocated")),
-                wbs_metadata={"confidence": item.get("confidence"), "raw": item},
-            )
-        )
-    return wbs_items
-
-
 async def _critique_extraction(
     *,
     items: list[dict[str, Any]],
     doc_type: str,
     tenant_id: str | None,
 ) -> dict[str, str]:
+    from src.analysis.adapters.ai.anthropic_client import AIService
+
     service = AIService(tenant_id=tenant_id)
     try:
         payload = await service.run_extraction(
@@ -175,10 +132,10 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
 
 
 async def budget_parser_node(state: ProjectState) -> ProjectState:
-    state["extracted_wbs"] = []
-    state["confidence_score"] = 0.0
-    state["messages"].append(AIMessage(content="Budget parser not implemented yet."))
-    return state
+    """N9 — Delegates to the extended budget parser with BOM extraction."""
+    from src.analysis.adapters.graph.nodes_extended import budget_parser_extended_node
+
+    return await budget_parser_extended_node(state)
 
 
 async def critique_node(state: ProjectState) -> ProjectState:
@@ -212,6 +169,57 @@ async def critique_node(state: ProjectState) -> ProjectState:
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     from langgraph.types import interrupt
 
+    from src.modules.hitl.domain.entities import ImpactLevel
+
+    # Route item through the real HITL service when a tenant is available.
+    tenant_id = state.get("tenant_id")
+    if tenant_id:
+        try:
+            from src.core.database import get_session_with_tenant
+            from src.modules.hitl.adapters.persistence.repository import (
+                SqlAlchemyReviewQueueRepository,
+            )
+            from src.modules.hitl.adapters.notifications.log_notification_service import (
+                LogNotificationService,
+            )
+            from src.modules.hitl.application.ports import HumanInTheLoopService
+            from src.modules.hitl.domain.services import ConfidenceRouter
+
+            impact = (
+                ImpactLevel.HIGH
+                if state.get("confidence_score", 0) < 0.5
+                else ImpactLevel.MEDIUM
+            )
+
+            async with get_session_with_tenant(UUID(tenant_id)) as session:
+                repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=UUID(tenant_id))
+                service = HumanInTheLoopService(
+                    review_queue_repo=repo,
+                    notification_service=LogNotificationService(),
+                    confidence_router=ConfidenceRouter(),
+                )
+                await service.route_for_review(
+                    item_id=UUID(state["document_id"]),
+                    item_type=state.get("doc_type") or "unknown",
+                    confidence=state.get("confidence_score", 0.0),
+                    impact_level=impact,
+                    item_data={
+                        "project_id": state["project_id"],
+                        "document_id": state["document_id"],
+                        "doc_type": state.get("doc_type"),
+                        "retry_count": state.get("retry_count", 0),
+                        "critique_notes": state.get("critique_notes", ""),
+                    },
+                )
+        except Exception:
+            import structlog
+            structlog.get_logger().warning(
+                "hitl_routing_failed_falling_back_to_interrupt",
+                document_id=state.get("document_id"),
+                exc_info=True,
+            )
+
+    # Always fire the LangGraph interrupt so the workflow pauses.
     interrupt(
         {
             "reason": "approval_required",
@@ -230,6 +238,12 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
+
+    from src.core.database import get_session_with_tenant
+    from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
+    from src.analysis.adapters.persistence.models import Alert, Analysis
+    from src.analysis.domain.enums import AnalysisStatus, AnalysisType
+    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     project_id = UUID(state["project_id"])
     tenant_id = UUID(state["tenant_id"])
@@ -267,8 +281,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
             await repo.add_alerts(alerts)
 
         if state["extracted_wbs"]:
-            wbs_items = _to_wbs_items(project_id, state["extracted_wbs"])
-            await wbs_repo.bulk_create(wbs_items)
+            await wbs_repo.bulk_create_from_dicts(project_id, state["extracted_wbs"])
 
         state["analysis_id"] = str(analysis.id)
         state["messages"].append(
@@ -313,7 +326,9 @@ def _risk_item_to_dict(risk) -> dict[str, Any]:
     }
 
 
-def _map_risk_severity(item: dict[str, Any]) -> AlertSeverity:
+def _map_risk_severity(item: dict[str, Any]):
+    from src.shared_kernel.enums import AlertSeverity
+
     severity_source = item.get("severity") or item.get("impact") or "low"
     severity_value = str(severity_source).lower()
     for candidate in AlertSeverity:

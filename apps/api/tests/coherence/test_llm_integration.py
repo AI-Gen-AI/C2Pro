@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.modules.coherence.models import Clause, ProjectContext
+from src.coherence.models import Clause, ProjectContext
 
 
 # ===========================================
@@ -26,7 +26,7 @@ class TestCoherenceLLMServiceInit:
 
     def test_service_initializes_with_defaults(self, patch_anthropic_wrapper_for_integration):
         """Test service initializes with default parameters."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
 
         service = CoherenceLLMService()
 
@@ -39,8 +39,8 @@ class TestCoherenceLLMServiceInit:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test service initializes with custom parameters."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
-        from src.modules.ai.model_router import AITaskType
+        from src.coherence.llm_integration import CoherenceLLMService
+        from src.core.ai.model_router import AITaskType
 
         service = CoherenceLLMService(
             default_task_type=AITaskType.COHERENCE_CHECK,
@@ -66,7 +66,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         sample_clause_ambiguous,
     ):
         """Test analyzing a clause that has issues."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -76,7 +76,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -94,7 +94,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         sample_clause_clear,
     ):
         """Test analyzing a clause that has no issues."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -104,7 +104,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -120,7 +120,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         sample_clause_ambiguous,
     ):
         """Test that clause analysis updates service statistics."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -135,7 +135,7 @@ class TestCoherenceLLMServiceClauseAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -164,7 +164,7 @@ class TestCoherenceLLMServiceRuleVerification:
         sample_clause_ambiguous,
     ):
         """Test checking a coherence rule that is violated."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -174,7 +174,7 @@ class TestCoherenceLLMServiceRuleVerification:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -196,7 +196,7 @@ class TestCoherenceLLMServiceRuleVerification:
         sample_clause_clear,
     ):
         """Test checking a coherence rule that is not violated."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -206,7 +206,7 @@ class TestCoherenceLLMServiceRuleVerification:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -235,7 +235,7 @@ class TestCoherenceLLMServiceMultiClause:
         sample_clause_payment_vague,
     ):
         """Test multi-clause analysis that finds cross-clause issues."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_response = {
@@ -259,7 +259,7 @@ class TestCoherenceLLMServiceMultiClause:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -276,14 +276,14 @@ class TestCoherenceLLMServiceMultiClause:
         self, sample_clause_ambiguous
     ):
         """Test that multi-clause analysis requires at least 2 clauses."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -310,7 +310,7 @@ class TestCoherenceLLMServiceProjectAnalysis:
         sample_project_context,
     ):
         """Test full project context analysis."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         # Mock that returns different responses for different calls
@@ -321,7 +321,7 @@ class TestCoherenceLLMServiceProjectAnalysis:
         mock_wrapper.get_statistics = MagicMock(return_value={})
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -349,7 +349,7 @@ class TestCoherenceLLMServiceHelpers:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test risk level calculation with no findings."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
 
         service = CoherenceLLMService()
         risk_level = service._calculate_risk_level([])
@@ -360,7 +360,7 @@ class TestCoherenceLLMServiceHelpers:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test risk level calculation with critical findings."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
 
         service = CoherenceLLMService()
         findings = [{"severity": "critical"}]
@@ -372,7 +372,7 @@ class TestCoherenceLLMServiceHelpers:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test risk level calculation with multiple high severity findings."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
 
         service = CoherenceLLMService()
         findings = [
@@ -387,7 +387,7 @@ class TestCoherenceLLMServiceHelpers:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test recommendation generation from findings."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
 
         service = CoherenceLLMService()
         findings = [
@@ -415,7 +415,7 @@ class TestCoherenceLLMServiceStatistics:
         sample_clause_ambiguous,
     ):
         """Test getting service statistics."""
-        from src.modules.coherence.llm_integration import CoherenceLLMService
+        from src.coherence.llm_integration import CoherenceLLMService
         from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
@@ -428,7 +428,7 @@ class TestCoherenceLLMServiceStatistics:
         })
 
         with patch(
-            "src.modules.coherence.llm_integration.get_anthropic_wrapper",
+            "src.coherence.llm_integration.get_anthropic_wrapper",
             return_value=mock_wrapper
         ):
             service = CoherenceLLMService()
@@ -455,7 +455,7 @@ class TestCoherenceLLMServiceSingleton:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test that get_coherence_llm_service returns an instance."""
-        from src.modules.coherence.llm_integration import (
+        from src.coherence.llm_integration import (
             get_coherence_llm_service,
             reset_coherence_llm_service,
         )
@@ -471,7 +471,7 @@ class TestCoherenceLLMServiceSingleton:
         self, patch_anthropic_wrapper_for_integration
     ):
         """Test that reset clears the singleton."""
-        from src.modules.coherence.llm_integration import (
+        from src.coherence.llm_integration import (
             get_coherence_llm_service,
             reset_coherence_llm_service,
         )

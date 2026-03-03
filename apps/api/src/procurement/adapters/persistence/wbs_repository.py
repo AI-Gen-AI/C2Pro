@@ -248,3 +248,52 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return created_items
 
+    async def bulk_create_from_dicts(
+        self, project_id: UUID, items: List[dict],
+    ) -> List[WBSItem]:
+        """Build WBSItem domain objects from raw dicts and persist them.
+
+        This is the cross-context entry point: callers outside the procurement
+        bounded context pass plain dicts (e.g. from AI extraction) and the
+        repository handles domain-object construction internally.
+        """
+        from decimal import Decimal
+        from typing import Any
+
+        from src.shared_kernel.enums import WBSItemType
+
+        def _parse_decimal(value: Any) -> Decimal | None:
+            if value is None:
+                return None
+            try:
+                return Decimal(str(value))
+            except Exception:
+                return None
+
+        wbs_items: List[WBSItem] = []
+        for item in items:
+            code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
+            level = code.count(".") + 1 if code else 1
+            item_type_raw = str(item.get("item_type") or "").lower()
+            item_type = None
+            for candidate in WBSItemType:
+                if candidate.value == item_type_raw:
+                    item_type = candidate
+                    break
+
+            wbs_items.append(
+                WBSItem(
+                    project_id=project_id,
+                    code=code,
+                    name=item.get("name") or "WBS Item",
+                    description=item.get("description"),
+                    level=level,
+                    parent_code=None,
+                    item_type=item_type,
+                    budget_allocated=_parse_decimal(item.get("budget_allocated")),
+                    wbs_metadata={"confidence": item.get("confidence"), "raw": item},
+                )
+            )
+
+        return await self.bulk_create(wbs_items)
+

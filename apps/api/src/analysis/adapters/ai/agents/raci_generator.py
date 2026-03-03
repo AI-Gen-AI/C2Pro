@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.analysis.adapters.ai.agents.base_agent import BaseAgent
-from src.stakeholders.domain.models import RACIRole
+from src.shared_kernel.enums import RACIRole
 
 RACI_SYSTEM_PROMPT = """
 Eres un PMP Certified Project Manager y experto en razonamiento contractual.

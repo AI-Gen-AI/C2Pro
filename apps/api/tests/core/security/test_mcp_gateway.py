@@ -14,7 +14,13 @@ import pytest
 from fastapi import HTTPException
 
 from src.core.exceptions import RateLimitExceededError, SecurityException
-from src.core.security.mcp_gateway import MCPGateway, MCPGatewayConfig
+from src.mcp.adapters.mcp_gateway import MCPGateway
+
+# MCPGatewayConfig is a RED-phase stub — defined inline until implementation
+class MCPGatewayConfig:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 from src.core.security.tenant_context import (
     TenantContext,
     TenantIsolationError,

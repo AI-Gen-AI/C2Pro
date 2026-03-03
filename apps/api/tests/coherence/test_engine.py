@@ -1,15 +1,16 @@
 # apps/api/tests/coherence/test_engine.py
+# Tests for CoherenceEngineV2 deterministic evaluation (migrated from legacy engine)
 
 import pytest
-from apps.api.src.modules.coherence.engine import CoherenceEngine
-from apps.api.src.modules.coherence.models import (
+from src.coherence.engine_v2 import CoherenceEngineV2, EngineConfig
+from src.coherence.models import (
     Alert,
     Clause,
     CoherenceResult,
     Evidence,
     ProjectContext,
 )
-from apps.api.src.modules.coherence.rules import Rule
+from src.coherence.rules import Rule
 
 
 @pytest.fixture
@@ -35,14 +36,14 @@ def mock_rules():
             severity="medium",
             evidence_fields=["schedule.status"],
         ),
-        # Removed other mock rules to focus tests on R1 and R5
     ]
 
 
 @pytest.fixture
 def coherence_engine(mock_rules):
-    """Fixture for a CoherenceEngine instance with mock rules."""
-    return CoherenceEngine(rules=mock_rules)
+    """Fixture for a CoherenceEngineV2 instance with mock rules (deterministic only)."""
+    config = EngineConfig(enable_llm_rules=False)
+    return CoherenceEngineV2(rules=mock_rules, config=config)
 
 
 # --- Helper functions to create Clause objects for tests ---
@@ -68,7 +69,7 @@ def test_evaluate_returns_coherence_result(coherence_engine):
     result = coherence_engine.evaluate(project_context)
     assert isinstance(result, CoherenceResult)
     assert isinstance(result.alerts, list)
-    assert isinstance(result.score, float)
+    assert isinstance(result.overall_score, float)
 
 
 def test_evaluate_with_no_alerts(coherence_engine):
@@ -82,7 +83,7 @@ def test_evaluate_with_no_alerts(coherence_engine):
     )
     result = coherence_engine.evaluate(project_context)
     assert len(result.alerts) == 0
-    assert result.score == 100.0
+    assert result.overall_score == 100.0
 
 
 def test_evaluate_with_schedule_delay_alert(coherence_engine):
@@ -133,9 +134,7 @@ def test_evaluate_with_multiple_alerts(coherence_engine):
     assert any(alert.rule_id == "project-budget-overrun-10" for alert in result.alerts)
     assert any(alert.rule_id == "project-schedule-delayed" for alert in result.alerts)
 
-    # Note: Score calculation will be tested more thoroughly in test_scoring.py
-    # This just checks that multiple alerts affect the score.
-    assert result.score < 100.0
+    assert result.overall_score < 100.0
 
 
 def test_evaluate_alert_structure(coherence_engine):

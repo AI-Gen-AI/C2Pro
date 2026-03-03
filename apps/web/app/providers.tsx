@@ -9,18 +9,20 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { DemoModeProvider } from "@/contexts/demo-mode";
 import { createQueryClient } from "@/lib/api/queryClient";
 import "@/lib/api/config";
-import { env } from "@/config/env";
-import { SentryInit } from "@/src/components/providers/sentry/SentryInit";
+import { SentryInit } from "@/components/providers/SentryInit";
+import { useAppModeStore, selectIsDemoMode } from "@/stores/app-mode";
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const isDemoMode = useAppModeStore(selectIsDemoMode);
   const [client] = useState(() => createQueryClient());
-  const [mswReady, setMswReady] = useState(!env.IS_DEMO);
+  const [mswReady, setMswReady] = useState(!isDemoMode);
+
   useEffect(() => {
-    if (!env.IS_DEMO) return;
+    if (!isDemoMode) return;
 
     async function initMsw() {
       const { worker } = await import("@/mocks/browser");
@@ -29,7 +31,7 @@ export function Providers({ children }: ProvidersProps) {
     }
 
     initMsw();
-  }, []);
+  }, [isDemoMode]);
 
   if (!mswReady) {
     return (

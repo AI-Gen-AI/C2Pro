@@ -6,7 +6,7 @@ from src.core.observability.schemas import RecentAnalysesResponse, SystemStatusR
 from src.core.observability.service import ObservabilityService
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 
-router = APIRouter()
+router = APIRouter(prefix="/observability", tags=["Observability"])
 
 
 @router.get("/status", response_model=SystemStatusResponse, summary="Get system health status")

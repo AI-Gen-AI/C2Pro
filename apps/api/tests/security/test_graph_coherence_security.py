@@ -11,9 +11,9 @@ import pytest
 
 from src.modules.extraction.domain.entities import ExtractedClause
 from src.modules.graph.application.ports import GraphBuilderService, GraphRepository
-from src.modules.coherence.application.ports import CoherenceEngineService
-from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
-from src.modules.coherence.domain.rules import (
+from src.coherence.application.ports import CoherenceEngineService
+from src.coherence.domain.entities import CoherenceAlert, RuleInput
+from src.coherence.domain.rules import (
     ScheduleMismatchRule,
     BudgetMismatchRule,
     ScopeProcurementMismatchRule,

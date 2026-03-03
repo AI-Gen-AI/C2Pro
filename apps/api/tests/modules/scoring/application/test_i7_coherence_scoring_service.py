@@ -10,7 +10,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 try:
-    from src.modules.coherence.domain.entities import CoherenceAlert
+    from src.coherence.domain.entities import CoherenceAlert
     from src.modules.scoring.application.ports import CoherenceScoringService
 except ImportError:
     class CoherenceAlert(BaseModel):

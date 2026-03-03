@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { PdfEvidenceViewer } from "@/src/components/features/evidence/PdfEvidenceViewer";
+import { PdfEvidenceViewer } from "@/components/features/evidence/PdfEvidenceViewer";
 
 describe("S3-03 RED - watermark integration", () => {
   it("[S3-03-RED-INT-01] renders evidence watermark in PDF viewer and persists after interactions", () => {

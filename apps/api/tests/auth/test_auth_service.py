@@ -12,7 +12,7 @@ import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4, UUID
 
-from src.modules.auth.service import (
+from src.core.auth.service import (
     hash_password,
     verify_password,
     create_access_token,
@@ -23,8 +23,8 @@ from src.modules.auth.service import (
     get_user_by_id,
     AuthService,
 )
-from src.modules.auth.models import User, Tenant, UserRole, SubscriptionPlan
-from src.modules.auth.schemas import RegisterRequest, LoginRequest
+from src.core.auth.models import User, Tenant, UserRole, SubscriptionPlan
+from src.core.auth.schemas import RegisterRequest, LoginRequest
 from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from src.config import settings
 

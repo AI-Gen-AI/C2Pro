@@ -43,8 +43,8 @@ El proyecto tiene una **base conceptual sólida** y documentación técnica exha
 
 | Archivo | Líneas | Problema |
 |---------|--------|----------|
-| `apps/web/app/(dashboard)/page.tsx` | 12-27 | `const DATA = { score: 78, project: 'Torre Skyline'... }` — Dashboard principal sin API real |
-| `apps/web/app/(dashboard)/documents/page.tsx` | 38-151 | `const mockDocuments = [...]` — 8 documentos ficticios, sin llamada API |
+| `apps/web/app/(app)/page.tsx` | 12-27 | `const DATA = { score: 78, project: 'Torre Skyline'... }` — Dashboard principal sin API real |
+| `apps/web/app/(app)/documents/page.tsx` | 38-151 | `const mockDocuments = [...]` — 8 documentos ficticios, sin llamada API |
 | `apps/web/app/dashboard/projects/[id]/coherence/page.tsx` | ~1-25 | Datos hardcodeados de coherencia |
 
 **Impacto:** Un usuario en producción navegando a `/documents` ve datos ficticios. No existe mecanismo que impida esto.
@@ -60,7 +60,7 @@ apps/web/src/components/features/coherence/CoherenceGauge.tsx → 89 líneas, us
 
 Los pages importan de ambas ubicaciones simultáneamente:
 ```typescript
-// En app/(dashboard)/projects/[id]/coherence/page.tsx:
+// En app/(app)/projects/[id]/coherence/page.tsx:
 import { CoherenceGauge } from '@/src/components/features/coherence/CoherenceGauge';
 import { BreakdownChart } from '@/components/coherence/BreakdownChart';
 ```
@@ -70,7 +70,7 @@ import { BreakdownChart } from '@/components/coherence/BreakdownChart';
 **P1.3 — Tres sistemas de rutas dashboard redundantes**
 
 ```
-app/(dashboard)/   ← Rutas principales (mezcla API real + datos mock)
+app/(app)/   ← Rutas principales (mezcla API real + datos mock)
 app/dashboard/     ← Duplicado byte-a-byte del layout + pages con mock data
 app/demo/          ← Redirige a /demo/projects pero comparte layout
 ```
@@ -152,7 +152,7 @@ await worker.start(...);
 
 Pero las pages hardcodean datos en vez de llamar a la API (que MSW interceptaría):
 ```typescript
-// (dashboard)/page.tsx — NO llama API, usa const DATA = {...}
+// (app)/page.tsx — NO llama API, usa const DATA = {...}
 ```
 
 **Resultado:** MSW es inútil porque ninguna page hace fetch que pueda interceptar.
@@ -373,7 +373,7 @@ apps/web/
 | 2.2 | Para cada duplicado, elegir la mejor implementación y consolidar |
 | 2.3 | Mover todos los componentes de `src/components/features/` a `components/features/` |
 | 2.4 | Actualizar todos los imports (buscar `@/src/components` → `@/components/features`) |
-| 2.5 | Eliminar `app/dashboard/` (duplicado de `app/(dashboard)/`) |
+| 2.5 | Eliminar `app/dashboard/` (duplicado de `app/(app)/`) |
 | 2.6 | Eliminar `app/demo/` (demo se controla por env variable, no por ruta) |
 | 2.7 | Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica |
 | 2.8 | Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts` |
@@ -490,7 +490,7 @@ apps/web/
 
 ### Escalabilidad
 
-- Agregar un nuevo módulo (ej: "Gestión de Riesgos") requerirá decidir: ¿creo componentes en `components/` o en `src/components/features/`? ¿Creo ruta en `(dashboard)/` o en `dashboard/`? Esta ambigüedad se multiplica con cada feature.
+- Agregar un nuevo módulo (ej: "Gestión de Riesgos") requerirá decidir: ¿creo componentes en `components/` o en `src/components/features/`? ¿Creo ruta en `(app)/` o en `dashboard/`? Esta ambigüedad se multiplica con cada feature.
 - El backend no puede crecer a microservicios si los bounded contexts importan modelos de dominio entre sí.
 
 ### Equipo

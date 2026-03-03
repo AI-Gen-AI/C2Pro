@@ -4,7 +4,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from .engine import CoherenceEngine
+from src.core.middleware.feature_flags import require_feature
+from .engine_v2 import CoherenceEngineV2, EngineConfig
 from .models import CoherenceResult, ProjectContext
 from .rules import load_rules
 
@@ -13,19 +14,21 @@ router = APIRouter(
     prefix="/v0/coherence",
     tags=["Coherence Engine"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_feature("feature_coherence_analysis"))],
 )
 
 # API dashboard router (no prefix for compatibility with test suite)
 dashboard_router = APIRouter(
     prefix="/api/coherence",
     tags=["Coherence Dashboard"],
+    dependencies=[Depends(require_feature("feature_coherence_analysis"))],
 )
 
 
 # ---- Dependency for the Coherence Engine ----
 def get_coherence_engine():
     """
-    Dependency to create and provide a CoherenceEngine instance.
+    Dependency to create and provide a CoherenceEngineV2 instance.
     This loads the rules from the YAML file. In a real application, this
     would be cached or loaded once at startup.
     """
@@ -33,12 +36,11 @@ def get_coherence_engine():
     rules_file_path = os.path.join(os.path.dirname(__file__), "initial_rules.yaml")
 
     if not os.path.exists(rules_file_path):
-        # In a real app, this should probably raise a 500 Internal Server Error
-        # or be handled more gracefully at startup.
         raise RuntimeError(f"Coherence rules file not found at {rules_file_path}")
 
     loaded_rules = load_rules(rules_file_path)
-    return CoherenceEngine(rules=loaded_rules)
+    config = EngineConfig(enable_llm_rules=False)
+    return CoherenceEngineV2(rules=loaded_rules, config=config)
 
 
 # ---- API Endpoint ----
@@ -52,7 +54,7 @@ def get_coherence_engine():
     """,
 )
 async def evaluate_project_coherence(
-    project_context: ProjectContext, engine: CoherenceEngine = Depends(get_coherence_engine)
+    project_context: ProjectContext, engine: CoherenceEngineV2 = Depends(get_coherence_engine)
 ) -> CoherenceResult:
     """
     Evaluates the coherence of a project based on its context.

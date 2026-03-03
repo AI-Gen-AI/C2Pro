@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { ShortcutScopeHarness } from "@/src/components/features/shortcuts/ShortcutScopeHarness";
+import { ShortcutScopeHarness } from "@/components/features/shortcuts/ShortcutScopeHarness";
 
 describe("S3-05 RED - focus-scoped shortcuts integration", () => {
   it("[S3-05-RED-INT-01] evidence j/k works only while evidence region owns focus", () => {

@@ -22,7 +22,11 @@ export const db = factory({
     id: primaryKey(String),
     projectId: String,
     name: String,
+    filename: String,
     status: String,
+    document_type: String,
+    uploaded_at: String,
+    file_size_bytes: Number,
   },
   clause: {
     id: primaryKey(String),

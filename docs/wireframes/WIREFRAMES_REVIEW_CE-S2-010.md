@@ -243,7 +243,7 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 
 ### 3. Alerts Center ✅ 90% Completado
 
-**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/alerts/page.tsx`
+**Estado**: IMPLEMENTADO - `apps/web/app/(app)/alerts/page.tsx`
 
 **Componentes Implementados**:
 - ✅ DataTable con filtros avanzados (search, severity, status)
@@ -277,7 +277,7 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 
 ### 5. RACI Matrix Viewer ✅ 90% Completado
 
-**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/raci/page.tsx`
+**Estado**: IMPLEMENTADO - `apps/web/app/(app)/raci/page.tsx`
 
 **Componentes Implementados**:
 - ✅ DataTable con actividades y roles
@@ -295,7 +295,7 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 
 ### 6. Project List ✅ 95% Completado
 
-**Estado**: IMPLEMENTADO - `apps/web/app/(dashboard)/projects/page.tsx`
+**Estado**: IMPLEMENTADO - `apps/web/app/(app)/projects/page.tsx`
 
 **Componentes Implementados**:
 - ✅ DataTable con filtros (search, status)

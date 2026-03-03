@@ -18,13 +18,13 @@ Alignment:
 
 ### 2.1 Confirmed Footprints
 - Evidence Viewer page exists:
-  - `apps/web/app/(dashboard)/projects/[id]/evidence/page.tsx`
+  - `apps/web/app/(app)/projects/[id]/evidence/page.tsx`
   - currently includes `PDFViewerPlaceholder` and entity validation actions
 - Alerts page exists:
-  - `apps/web/app/(dashboard)/alerts/page.tsx`
+  - `apps/web/app/(app)/alerts/page.tsx`
 - Stakeholders and RACI pages exist:
-  - `apps/web/app/(dashboard)/stakeholders/page.tsx`
-  - `apps/web/app/(dashboard)/raci/page.tsx`
+  - `apps/web/app/(app)/stakeholders/page.tsx`
+  - `apps/web/app/(app)/raci/page.tsx`
 - Entity approve/reject UI exists:
   - `apps/web/components/evidence/EntityValidationCard.tsx`
 - E2E workflow exists:

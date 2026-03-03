@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { render, screen, fireEvent } from "@/src/tests/test-utils";
-import { PdfEvidenceViewer } from "@/src/components/features/evidence/PdfEvidenceViewer";
+import { PdfEvidenceViewer } from "@/components/features/evidence/PdfEvidenceViewer";
 
 describe("S3-01 RED - evidence integration", () => {
   it("[S3-01-RED-INT-01] clicking an alert focuses matching clause highlight", async () => {

@@ -46,7 +46,7 @@ Módulo principal del sistema de Prompt Templates.
   2. `stakeholder_classification`: Clasifica stakeholders por poder-interés
   3. `coherence_check`: Detecta contradicciones en documentos
 
-### 2. `apps/api/src/core/ai/example_prompts.py` (315 líneas)
+### 2. `docs/api/example_prompts.py` (315 líneas)
 
 Ejemplos completos de uso del sistema integrado con AIService.
 
@@ -406,7 +406,7 @@ GROUP BY operation, prompt_version;
 
 - **Roadmap**: `docs/ROADMAP_v2.4.0.md` § 6.2 y § 17.2
 - **Documentación**: `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`
-- **Ejemplos**: `apps/api/src/core/ai/example_prompts.py`
+- **Ejemplos**: `docs/api/example_prompts.py`
 - **Tests**: `apps/api/src/core/ai/test_prompts_simple.py`
 - **Código fuente**: `apps/api/src/core/ai/prompts/__init__.py`
 - **Integración**: `apps/api/src/core/ai/service.py`

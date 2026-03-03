@@ -43,6 +43,17 @@ class ProjectListResponse(BaseModel):
     total: int
 
 
+# ===========================================
+# HEALTH CHECK ENDPOINT (must be before /{project_id})
+# ===========================================
+
+
+@router.get("/health", summary="Projects Service Health Check")
+async def health_check() -> dict:
+    """Health check endpoint (no authentication required)."""
+    return {"status": "ok", "service": "projects"}
+
+
 # In-memory storage for fake implementation
 _fake_projects: dict[UUID, dict] = {}
 _project_locks: dict[UUID, asyncio.Lock] = {}
@@ -687,3 +698,5 @@ async def get_project_budget(
             "actual": [350000, 750000, 1100000, 1550000, None, None],
         },
     }
+
+

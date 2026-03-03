@@ -67,16 +67,15 @@ export function createHighlightsFromAlerts(
 
 /**
  * Fetch entities extracted from a document
- * TODO: Implement actual API call
  */
 export async function getDocumentEntities(
   documentId: string,
-  pageHeight?: number
+  _pageHeight?: number
 ): Promise<ProcessedEntity[]> {
-  // Placeholder implementation
-  // In production, this would call the backend API
-  // GET /api/v1/documents/{documentId}/entities
-  return [];
+  const response = await apiClient.get<ProcessedEntity[]>(
+    `/documents/${documentId}/entities`
+  );
+  return response.data;
 }
 
 /**

@@ -16,11 +16,11 @@ describe("S2-01 MSW seed data", () => {
 
     expect(tenants).toHaveLength(1);
     expect(users).toHaveLength(1);
-    expect(projects).toHaveLength(2);
-    expect(documents).toHaveLength(2);
+    expect(projects).toHaveLength(6);
+    expect(documents).toHaveLength(8);
     expect(clauses).toHaveLength(3);
-    expect(alerts).toHaveLength(2);
-    expect(stakeholders).toHaveLength(2);
+    expect(alerts).toHaveLength(8);
+    expect(stakeholders).toHaveLength(7);
     expect(wbsItems).toHaveLength(2);
 
     const projectIds = new Set(projects.map((project) => project.id));
