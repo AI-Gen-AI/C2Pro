@@ -1,0 +1,327 @@
+# Test Inventory
+
+Generated: 2026-03-02
+
+Scope:
+- Repository-owned Python test modules matching `test_*.py` or `*_test.py`
+- Supporting pytest fixture files matching `conftest.py`
+- Excludes virtualenv and third-party package tests
+
+Counts:
+- Test modules: 230
+- Conftest files: 5
+
+## Test Modules
+
+- `apps/api/src/core/ai/test_prompts_simple.py`
+- `apps/api/src/core/test_error_handling.py`
+- `apps/api/test_anonymizer_standalone.py`
+- `apps/api/test_db_connection.py`
+- `apps/api/test_document_repository.py`
+- `apps/api/test_error_handling_standalone copy.py`
+- `apps/api/test_error_handling_standalone.py`
+- `apps/api/tests/adapters/http/test_router_delegation.py`
+- `apps/api/tests/adapters/persistence/test_audit_repository.py`
+- `apps/api/tests/adapters/persistence/test_base_repository.py`
+- `apps/api/tests/adapters/persistence/test_bom_repository.py`
+- `apps/api/tests/adapters/persistence/test_document_repository.py`
+- `apps/api/tests/adapters/persistence/test_documents_repository.py`
+- `apps/api/tests/adapters/persistence/test_wbs_repository.py`
+- `apps/api/tests/ai/test_extraction.py`
+- `apps/api/tests/ai/test_graph_flow.py`
+- `apps/api/tests/ai/test_model_router.py`
+- `apps/api/tests/ai/test_risk_extractor.py`
+- `apps/api/tests/auth/test_auth_router.py`
+- `apps/api/tests/auth/test_auth_service.py`
+- `apps/api/tests/auth/test_identity.py`
+- `apps/api/tests/coherence/test_engine.py`
+- `apps/api/tests/coherence/test_engine_v2.py`
+- `apps/api/tests/coherence/test_llm_evaluator.py`
+- `apps/api/tests/coherence/test_llm_integration.py`
+- `apps/api/tests/coherence/test_rules.py`
+- `apps/api/tests/coherence/test_scoring.py`
+- `apps/api/tests/core/auth/test_jwt_validator.py`
+- `apps/api/tests/core/security/test_anonymizer.py`
+- `apps/api/tests/core/security/test_mcp_gateway.py`
+- `apps/api/tests/core/security/test_tenant_context.py`
+- `apps/api/tests/core/services/test_rate_limiter.py`
+- `apps/api/tests/core/test_database.py`
+- `apps/api/tests/core/test_error_handlers.py`
+- `apps/api/tests/core/test_feature_flags.py`
+- `apps/api/tests/core/test_mcp_startup.py`
+- `apps/api/tests/core/test_middleware.py`
+- `apps/api/tests/core/test_openapi_docs.py`
+- `apps/api/tests/e2e/flows/test_alert_review_workflow.py`
+- `apps/api/tests/e2e/flows/test_bulk_operations.py`
+- `apps/api/tests/e2e/flows/test_document_upload_to_coherence.py`
+- `apps/api/tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py`
+- `apps/api/tests/e2e/flows/test_i13_decision_intelligence_route_contract.py`
+- `apps/api/tests/e2e/performance/test_large_document_processing.py`
+- `apps/api/tests/e2e/resilience/test_concurrency.py`
+- `apps/api/tests/e2e/security/test_mcp_gateway_e2e.py`
+- `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`
+- `apps/api/tests/infrastructure/events/test_event_publisher.py`
+- `apps/api/tests/infrastructure/events/test_redis_event_bus_red_phase.py`
+- `apps/api/tests/infrastructure/http/test_global_exception_handler.py`
+- `apps/api/tests/integration/boundaries/test_module_handover.py`
+- `apps/api/tests/integration/test_wbs_procurement_contract.py`
+- `apps/api/tests/manual/test_tools_implementation.py`
+- `apps/api/tests/modules/analysis/adapters/graph/test_neo4j_graph_adapter.py`
+- `apps/api/tests/modules/analysis/adapters/graph/test_nodes_extended.py`
+- `apps/api/tests/modules/anonymizer/application/test_anonymization_service.py`
+- `apps/api/tests/modules/anonymizer/application/test_tenant_anonymization_config_service.py`
+- `apps/api/tests/modules/anonymizer/domain/test_pii_detector_service.py`
+- `apps/api/tests/modules/coherence/application/services/test_budget_tracker.py`
+- `apps/api/tests/modules/coherence/application/test_calculate_coherence_use_case.py`
+- `apps/api/tests/modules/coherence/application/test_coherence_calculation_service.py`
+- `apps/api/tests/modules/coherence/application/test_i6_coherence_engine_service.py`
+- `apps/api/tests/modules/coherence/application/test_recalculate_on_alert_use_case.py`
+- `apps/api/tests/modules/coherence/domain/test_alert_mapping.py`
+- `apps/api/tests/modules/coherence/domain/test_anti_gaming.py`
+- `apps/api/tests/modules/coherence/domain/test_category_enum_weights.py`
+- `apps/api/tests/modules/coherence/domain/test_coherence_rule_engine.py`
+- `apps/api/tests/modules/coherence/domain/test_custom_weights.py`
+- `apps/api/tests/modules/coherence/domain/test_gamification_rules.py`
+- `apps/api/tests/modules/coherence/domain/test_global_score_calculator.py`
+- `apps/api/tests/modules/coherence/domain/test_i6_alert_payload_contract.py`
+- `apps/api/tests/modules/coherence/domain/test_i6_coherence_rules.py`
+- `apps/api/tests/modules/coherence/domain/test_legal_rules.py`
+- `apps/api/tests/modules/coherence/domain/test_quality_rules.py`
+- `apps/api/tests/modules/coherence/domain/test_rules_engine.py`
+- `apps/api/tests/modules/coherence/domain/test_subscore_calculator.py`
+- `apps/api/tests/modules/coherence/integration/test_coherence_repository.py`
+- `apps/api/tests/modules/core/adapters/persistence/test_redis_cache_adapter.py`
+- `apps/api/tests/modules/core/application/test_anonymize_document_use_case.py`
+- `apps/api/tests/modules/core/application/test_dto_all_validation.py`
+- `apps/api/tests/modules/core/application/test_dto_serialization.py`
+- `apps/api/tests/modules/core/domain/test_audit_trail_core.py`
+- `apps/api/tests/modules/core/domain/test_jwt_validator.py`
+- `apps/api/tests/modules/decision_intelligence/e2e/test_i13_full_decision_flow.py`
+- `apps/api/tests/modules/documents/adapters/http/test_document_upload.py`
+- `apps/api/tests/modules/documents/application/services/test_extraction_services.py`
+- `apps/api/tests/modules/documents/application/test_clause_extraction_service.py`
+- `apps/api/tests/modules/documents/application/test_extract_clauses_use_case.py`
+- `apps/api/tests/modules/documents/application/test_extract_entities_use_case.py`
+- `apps/api/tests/modules/documents/application/test_upload_document_use_case.py`
+- `apps/api/tests/modules/documents/domain/test_clause.py`
+- `apps/api/tests/modules/documents/domain/test_clause_entity.py`
+- `apps/api/tests/modules/documents/domain/test_clause_type_classification.py`
+- `apps/api/tests/modules/documents/domain/test_confidence_scoring.py`
+- `apps/api/tests/modules/documents/domain/test_date_entity_extractor.py`
+- `apps/api/tests/modules/documents/domain/test_document_entity.py`
+- `apps/api/tests/modules/documents/domain/test_entity_extraction_dates.py`
+- `apps/api/tests/modules/documents/domain/test_entity_extraction_durations.py`
+- `apps/api/tests/modules/documents/domain/test_entity_extraction_money.py`
+- `apps/api/tests/modules/documents/domain/test_entity_extraction_stakeholders.py`
+- `apps/api/tests/modules/documents/domain/test_money_entity_extractor.py`
+- `apps/api/tests/modules/documents/domain/test_subclause_hierarchy.py`
+- `apps/api/tests/modules/extraction/application/test_i3_clause_extraction_service.py`
+- `apps/api/tests/modules/extraction/domain/test_i3_clause_extraction_domain.py`
+- `apps/api/tests/modules/gamification/application/test_abuse_monitor_service.py`
+- `apps/api/tests/modules/governance/adapters/test_i14_output_guard_middleware.py`
+- `apps/api/tests/modules/governance/application/test_i14_output_guard_service.py`
+- `apps/api/tests/modules/governance/domain/test_i14_safety_policy_engine.py`
+- `apps/api/tests/modules/graph/application/test_i5_graph_builder_service.py`
+- `apps/api/tests/modules/graph/domain/test_i5_graph_schema.py`
+- `apps/api/tests/modules/hitl/adapters/test_hitl_adapters.py`
+- `apps/api/tests/modules/hitl/application/test_i11_review_queue_service.py`
+- `apps/api/tests/modules/hitl/domain/test_i11_confidence_gate_routing.py`
+- `apps/api/tests/modules/ingestion/adapters/test_i2_ocr_table_parsing.py`
+- `apps/api/tests/modules/ingestion/domain/test_i1_canonical_ingestion_contract.py`
+- `apps/api/tests/modules/integration/test_analysis_coherence_integration.py`
+- `apps/api/tests/modules/integration/test_celery_job_queue.py`
+- `apps/api/tests/modules/integration/test_dead_letter_queue.py`
+- `apps/api/tests/modules/integration/test_document_repository_db.py`
+- `apps/api/tests/modules/integration/test_documents_analysis_integration.py`
+- `apps/api/tests/modules/integration/test_event_bus_publish_subscribe.py`
+- `apps/api/tests/modules/integration/test_llm_client_integration.py`
+- `apps/api/tests/modules/integration/test_llm_fallback_integration.py`
+- `apps/api/tests/modules/integration/test_neo4j_graph_integration.py`
+- `apps/api/tests/modules/integration/test_stakeholders_raci_integration.py`
+- `apps/api/tests/modules/integration/test_wbs_procurement_contract.py`
+- `apps/api/tests/modules/mcp/adapters/test_mcp_audit.py`
+- `apps/api/tests/modules/mcp/adapters/test_mcp_gateway.py`
+- `apps/api/tests/modules/mcp/adapters/test_mcp_query_guard.py`
+- `apps/api/tests/modules/mcp/adapters/test_mcp_rate_limiter.py`
+- `apps/api/tests/modules/mcp/application/test_validate_mcp_operation_use_case.py`
+- `apps/api/tests/modules/observability/application/test_i12_eval_drift_detection.py`
+- `apps/api/tests/modules/observability/application/test_i12_langsmith_adapter.py`
+- `apps/api/tests/modules/observability/domain/test_i12_trace_envelope_completeness.py`
+- `apps/api/tests/modules/procurement/adapters/test_wbs_repository.py`
+- `apps/api/tests/modules/procurement/application/test_calculate_lead_time_use_case.py`
+- `apps/api/tests/modules/procurement/application/test_generate_bom_use_case.py`
+- `apps/api/tests/modules/procurement/application/test_i9_procurement_planning_service.py`
+- `apps/api/tests/modules/procurement/domain/test_bom_item_entity.py`
+- `apps/api/tests/modules/procurement/domain/test_bom_validation_rules.py`
+- `apps/api/tests/modules/procurement/domain/test_i9_procurement_intelligence.py`
+- `apps/api/tests/modules/procurement/domain/test_incoterm_adjuster.py`
+- `apps/api/tests/modules/procurement/domain/test_lead_time.py`
+- `apps/api/tests/modules/procurement/domain/test_lead_time_alerts.py`
+- `apps/api/tests/modules/procurement/domain/test_lead_time_calculator.py`
+- `apps/api/tests/modules/procurement/domain/test_lead_time_customs_calculator.py`
+- `apps/api/tests/modules/procurement/domain/test_procurement_plan_generator.py`
+- `apps/api/tests/modules/projects/application/test_generate_wbs_use_case.py`
+- `apps/api/tests/modules/projects/application/test_wbs_item_crud_use_case.py`
+- `apps/api/tests/modules/projects/domain/test_project_entity.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_crud_operations.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_hierarchy.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_item.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_item_dto_query_port.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_item_entity.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_validation_rules.py`
+- `apps/api/tests/modules/retrieval/application/test_i4_hybrid_retrieval_service.py`
+- `apps/api/tests/modules/retrieval/domain/test_i4_query_router.py`
+- `apps/api/tests/modules/scoring/application/test_i7_coherence_scoring_service.py`
+- `apps/api/tests/modules/scoring/domain/test_i7_score_aggregation.py`
+- `apps/api/tests/modules/scoring/domain/test_i7_tenant_project_profiles.py`
+- `apps/api/tests/modules/stakeholders/application/test_extract_stakeholders_use_case.py`
+- `apps/api/tests/modules/stakeholders/application/test_generate_raci_use_case.py`
+- `apps/api/tests/modules/stakeholders/application/test_i10_raci_inference_service.py`
+- `apps/api/tests/modules/stakeholders/domain/test_i10_stakeholder_resolution.py`
+- `apps/api/tests/modules/stakeholders/domain/test_power_interest_classification.py`
+- `apps/api/tests/modules/stakeholders/domain/test_quadrant_assignment.py`
+- `apps/api/tests/modules/stakeholders/domain/test_raci_from_clauses.py`
+- `apps/api/tests/modules/stakeholders/domain/test_raci_matrix.py`
+- `apps/api/tests/modules/stakeholders/domain/test_raci_matrix_generation.py`
+- `apps/api/tests/modules/stakeholders/domain/test_stakeholder_entity.py`
+- `apps/api/tests/modules/stakeholders/domain/test_stakeholder_map.py`
+- `apps/api/tests/modules/wbs_bom/application/test_i8_generation_service.py`
+- `apps/api/tests/modules/wbs_bom/domain/test_i8_generation_integrity.py`
+- `apps/api/tests/projects/test_projects_router.py`
+- `apps/api/tests/projects/test_projects_service.py`
+- `apps/api/tests/routers/test_projects.py`
+- `apps/api/tests/security/test_extraction_retrieval_security.py`
+- `apps/api/tests/security/test_graph_coherence_security.py`
+- `apps/api/tests/security/test_i13_i14_security_controls.py`
+- `apps/api/tests/security/test_ingestion_security.py`
+- `apps/api/tests/security/test_jwt_validation.py`
+- `apps/api/tests/security/test_mcp_security.py`
+- `apps/api/tests/security/test_redis_event_bus_security.py`
+- `apps/api/tests/security/test_rls_isolation.py`
+- `apps/api/tests/security/test_s4_scoring_wbs_procurement_security.py`
+- `apps/api/tests/security/test_s5_stakeholders_hitl_observability_security.py`
+- `apps/api/tests/security/test_sql_injection.py`
+- `apps/api/tests/services/test_source_locator.py`
+- `apps/api/tests/test_db_connection.py`
+- `apps/api/tests/unit/adapters/http/test_error_handlers.py`
+- `apps/api/tests/unit/adapters/http/test_middleware.py`
+- `apps/api/tests/unit/adapters/http/test_routers.py`
+- `apps/api/tests/unit/adapters/persistence/test_tenant_isolation_repositories.py`
+- `apps/api/tests/unit/application/test_dtos_validation.py`
+- `apps/api/tests/unit/application/test_serialization_advanced.py`
+- `apps/api/tests/unit/core/ai/orchestration/test_state.py`
+- `apps/api/tests/unit/core/ai/tools/test_registry.py`
+- `apps/api/tests/unit/modules/documents/test_document_use_cases.py`
+- `apps/api/tests/verification/test_gate1_rls.py`
+- `apps/api/tests/verification/test_gate2_identity.py`
+- `apps/api/tests/verification/test_gate3_mcp_security.py`
+- `apps/api/tests/verification/test_gate4_traceability.py`
+- `infrastructure/supabase/test_connection.py`
+- `tests/accuracy/test_accuracy_regression.py`
+- `tests/accuracy/test_regression.py`
+- `tests/coherence/test_rules_impl.py`
+- `tests/integration/coherence/test_alert_generator.py`
+- `tests/integration/coherence/test_engine_logic.py`
+- `tests/integration/flows/test_full_scoring_loop.py`
+- `tests/integration/parsers/test_parsers_integration.py`
+- `tests/integration/test_e2e_tenant_project_flow.py`
+- `tests/integration/test_stakeholder_flow.py`
+- `tests/test_canonical_ingestion.py`
+- `tests/test_i10_raci_inference.py`
+- `tests/test_i11_hitl_enforcement.py`
+- `tests/test_i12_observability_and_evaluation.py`
+- `tests/test_i13_decision_intelligence_flow.py`
+- `tests/test_i14_safety_hardening.py`
+- `tests/test_i2_ocr_and_table_parsing.py`
+- `tests/test_i3_clause_extraction_and_normalization.py`
+- `tests/test_i4_hybrid_rag_retrieval.py`
+- `tests/test_i5_graph_schema_and_integrity.py`
+- `tests/test_i6_coherence_rule_engine.py`
+- `tests/test_i7_risk_scoring_aggregation.py`
+- `tests/test_i8_wbs_bom_generation.py`
+- `tests/test_i9_procurement_planning.py`
+- `tests/unit/test_ai_graph_mock.py`
+- `tests/unit/test_ai_service_orchestrator.py`
+- `tests/unit/test_stakeholders_extractor.py`
+
+## Conftest Files
+
+- `apps/api/tests/coherence/conftest.py`
+- `apps/api/tests/conftest.py`
+- `tests/conftest.py`
+- `tests/integration/conftest.py`
+- `tests/unit/conftest.py`
+
+## Audit Checklist
+
+- [x] Baseline inventory created from repository-owned Python test modules only
+- [x] Global wildcard collection attempted
+- [x] Global wildcard collection failed before test discovery completed
+- [x] Explicit collection attempted for the 230 inventoried test modules
+- [x] Explicit collection failed
+- [x] Confirmed the suite is not fully passing
+- [ ] Full clean end-to-end execution summary for every runnable test completed in this session
+
+## Audit Result
+
+- Overall status: `NOT ALL TESTS PASSED`
+- Decisive reason: the suite fails during collection, so a full green run is impossible in the current state
+- Inventory baseline used for audit: `230` test modules, `5` conftest files
+
+### Collection Audit Summary
+
+- Global wildcard `pytest --collect-only` failed before collection completed
+- Blocking issue: filesystem entry `C:/Users/esus_/Documents/AI/ZTWQ/c2pro/nul` causes pytest path assertion failure during broad collection
+- Explicit collection against the inventoried 230 modules completed far enough to enumerate `1719` collectible test items
+- Explicit collection exit status: failed
+- Explicit collection errors: `34`
+
+### Collection Blockers Observed
+
+- `apps/api/test_anonymizer_standalone.py`
+  - `ModuleNotFoundError: No module named 'services'`
+- `apps/api/tests/adapters/persistence/test_document_repository.py`
+  - Import file mismatch with `apps/api/test_document_repository.py`
+- `apps/api/tests/integration/test_wbs_procurement_contract.py`
+  - `ImportError: cannot import name 'WBSItemDTO' from 'src.projects.application.dtos'`
+- `apps/api/tests/modules/core/domain/test_jwt_validator.py`
+  - Import file mismatch with `apps/api/tests/core/auth/test_jwt_validator.py`
+- `apps/api/tests/modules/documents/domain/test_clause.py`
+  - `ModuleNotFoundError: No module named 'src.documents.domain.entities.clause'`
+- `apps/api/tests/modules/mcp/adapters/test_mcp_gateway.py`
+  - Import file mismatch with `apps/api/tests/core/security/test_mcp_gateway.py`
+- `apps/api/tests/modules/procurement/adapters/test_wbs_repository.py`
+  - Import file mismatch with `apps/api/tests/adapters/persistence/test_wbs_repository.py`
+- `apps/api/tests/modules/projects/domain/test_wbs_item.py`
+  - `ModuleNotFoundError: No module named 'src.projects.domain.wbs'`
+- `apps/api/tests/security/test_graph_coherence_security.py`
+  - `ModuleNotFoundError: No module named 'src.coherence.application.ports'`
+- `tests/accuracy/test_accuracy_regression.py`
+  - `SyntaxError: unterminated string literal (detected at line 1)`
+- `tests/accuracy/test_regression.py`
+  - `ModuleNotFoundError: No module named 'tests.utils'`
+- `tests/coherence/test_rules_impl.py`
+  - `ModuleNotFoundError: No module named 'apps.api.src.modules.coherence.rules'`
+- `tests/integration/coherence/test_alert_generator.py`
+  - `ModuleNotFoundError: No module named 'src.modules.analysis.models'`
+- `tests/integration/coherence/test_engine_logic.py`
+  - `ModuleNotFoundError: No module named 'src.modules.coherence.rules'`
+- `tests/integration/flows/test_full_scoring_loop.py`
+  - `ModuleNotFoundError: No module named 'jose'`
+- `tests/integration/parsers/test_parsers_integration.py`
+  - `ModuleNotFoundError: No module named 'src.modules.projects.schemas'`
+- `tests/integration/test_e2e_tenant_project_flow.py`
+  - `ModuleNotFoundError: No module named 'src.modules.auth.models'`
+- `tests/integration/test_stakeholder_flow.py`
+  - `ModuleNotFoundError: No module named 'src.agents.stakeholder_extractor'`
+- Multiple test modules
+  - `Failed: 'tdd' not found in markers configuration option`
+- `tests/unit/test_ai_service_orchestrator.py`
+  - `ModuleNotFoundError: No module named 'src.modules.ai.service'`
+- `tests/unit/test_stakeholders_extractor.py`
+  - `ModuleNotFoundError: No module named 'agents.stakeholders_extractor'`
+
+### Execution Note
+
+- A broader execution attempt was started after collection analysis, but the run was too expensive to finish within a practical time budget in this session
+- That incomplete execution is not needed to determine suite health, because the collection failures above already prove the full suite is not currently green
