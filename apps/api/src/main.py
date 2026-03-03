@@ -2,6 +2,8 @@
 C2Pro - FastAPI Application
 
 Aplicación principal de la API de C2Pro.
+
+Refers to Suite ID: TS-CORE-MCP-STARTUP-001.
 """
 
 from collections.abc import AsyncGenerator
@@ -21,7 +23,7 @@ from src.core.middleware import (
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
 )
-from src.core.mcp.router import router as mcp_router
+from src.core.mcp.servers.database_server import get_mcp_server
 
 # Import core routers (always enabled)
 from src.core.auth.router import router as auth_router
@@ -37,6 +39,13 @@ from src.core.routers.health import router as health_router
 from src.modules.hitl.adapters.http.router import router as hitl_router
 
 logger = structlog.get_logger()
+
+
+def _load_mcp_router():
+    """Load the MCP router lazily so MCP is not a hard import-time dependency."""
+    from src.core.mcp.router import router as mcp_router
+
+    return mcp_router
 
 
 # ===========================================
@@ -70,6 +79,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         environment=settings.environment,
     )
     logger.info("event_bus_initialized", adapter=type(app.state.event_bus).__name__)
+
+    app.state.mcp_server = get_mcp_server()
+    logger.info("mcp_server_initialized")
 
     # TODO: Inicializar Sentry cuando esté configurado
 
@@ -208,10 +220,15 @@ def create_application() -> FastAPI:
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(bulk_operations_router, prefix=api_v1_prefix)
-    app.include_router(mcp_router, prefix=api_v1_prefix)
     app.include_router(observability_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
+
+    try:
+        app.include_router(_load_mcp_router(), prefix=api_v1_prefix)
+        logger.info("router_registered", feature="mcp")
+    except ImportError:
+        logger.warning("router_unavailable", feature="mcp", reason="module_not_ready")
 
     # --- Feature-gated routers ---
     _feature_flags = {
