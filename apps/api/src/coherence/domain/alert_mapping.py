@@ -10,6 +10,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from src.shared_kernel.enums import AlertSeverity  # noqa: F401 — canonical enum
+
 
 class AlertCategory(str, Enum):
     SCOPE = "SCOPE"
@@ -19,13 +21,6 @@ class AlertCategory(str, Enum):
     LEGAL = "LEGAL"
     QUALITY = "QUALITY"
     UNKNOWN = "UNKNOWN"
-
-
-class AlertSeverity(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
 
 
 class CoherenceAlert(BaseModel):

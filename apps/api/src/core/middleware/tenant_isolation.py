@@ -47,6 +47,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/register",
         "/api/v1/auth/refresh",
         "/api/v1/auth/health",
+        "/api/v1/projects/health",
     ]
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

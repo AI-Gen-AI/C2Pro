@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -28,15 +27,6 @@ def _average_confidence(items: list[dict[str, Any]]) -> float:
     if not confidences:
         return 0.0 if not items else 0.9
     return float(sum(confidences)) / float(len(confidences))
-
-
-def _parse_decimal(value: Any) -> Decimal | None:
-    if value is None:
-        return None
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return None
 
 
 def _fallback_doc_type(text: str) -> str:
@@ -72,37 +62,6 @@ async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
     except Exception:
         pass
     return _fallback_doc_type(text)
-
-
-def _to_wbs_items(project_id: UUID, items: list[dict[str, Any]]) -> list:
-    from src.shared_kernel.enums import WBSItemType
-    from src.procurement.domain.models import WBSItem
-
-    wbs_items: list[WBSItem] = []
-    for item in items:
-        code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
-        level = code.count(".") + 1 if code else 1
-        item_type_raw = str(item.get("item_type") or "").lower()
-        item_type = None
-        for candidate in WBSItemType:
-            if candidate.value == item_type_raw:
-                item_type = candidate
-                break
-
-        wbs_items.append(
-            WBSItem(
-                project_id=project_id,
-                code=code,
-                name=item.get("name") or "WBS Item",
-                description=item.get("description"),
-                level=level,
-                parent_code=None,
-                item_type=item_type,
-                budget_allocated=_parse_decimal(item.get("budget_allocated")),
-                wbs_metadata={"confidence": item.get("confidence"), "raw": item},
-            )
-        )
-    return wbs_items
 
 
 async def _critique_extraction(
@@ -322,8 +281,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
             await repo.add_alerts(alerts)
 
         if state["extracted_wbs"]:
-            wbs_items = _to_wbs_items(project_id, state["extracted_wbs"])
-            await wbs_repo.bulk_create(wbs_items)
+            await wbs_repo.bulk_create_from_dicts(project_id, state["extracted_wbs"])
 
         state["analysis_id"] = str(analysis.id)
         state["messages"].append(
