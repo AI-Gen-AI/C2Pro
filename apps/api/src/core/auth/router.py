@@ -86,7 +86,10 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_sess
         return response
 
     except ConflictError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        detail = str(e)
+        if detail == "Email already registered already exists":
+            detail = "Email already exists"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     except Exception as e:
         logger.error("registration_error", error=str(e))
         raise HTTPException(

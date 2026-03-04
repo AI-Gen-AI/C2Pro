@@ -10,6 +10,7 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from uuid import uuid4
 
 from src.main import app
@@ -37,13 +38,19 @@ def simple_client():
 
 @pytest_asyncio.fixture
 async def client(db):
-    """Create FastAPI test client with database dependency override."""
+    """Create async HTTP client with database dependency override."""
     async def override_get_session():
         """Override database session for testing."""
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
-    yield TestClient(app, raise_server_exceptions=False)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=30.0,
+    ) as test_client:
+        yield test_client
     app.dependency_overrides.clear()
 
 
@@ -81,7 +88,7 @@ class TestRegisterEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/register", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/register", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
@@ -123,7 +130,7 @@ class TestRegisterEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/register", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/register", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_409_CONFLICT
@@ -142,7 +149,7 @@ class TestRegisterEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/register", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/register", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -160,7 +167,7 @@ class TestRegisterEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/register", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/register", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -179,7 +186,7 @@ class TestRegisterEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/register", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/register", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -198,7 +205,7 @@ class TestLoginEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/login", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/login", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -227,7 +234,7 @@ class TestLoginEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/login", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/login", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -243,7 +250,7 @@ class TestLoginEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/login", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/login", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -272,7 +279,7 @@ class TestLoginEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/login", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/login", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -300,7 +307,7 @@ class TestRefreshTokenEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -320,7 +327,7 @@ class TestRefreshTokenEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -343,7 +350,7 @@ class TestRefreshTokenEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/refresh", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -360,7 +367,7 @@ class TestGetMeEndpoint:
     async def test_get_me_success(self, client, test_user, auth_headers):
         """Should return current user info with valid token."""
         # Act
-        response = client.get(f"{API_PREFIX}/auth/me", headers=auth_headers)
+        response = await client.get(f"{API_PREFIX}/auth/me", headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -380,7 +387,7 @@ class TestGetMeEndpoint:
     async def test_get_me_missing_token(self, client):
         """Should return 401 when no token provided."""
         # Act
-        response = client.get(f"{API_PREFIX}/auth/me")
+        response = await client.get(f"{API_PREFIX}/auth/me")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -392,7 +399,7 @@ class TestGetMeEndpoint:
         headers = {"Authorization": "Bearer invalid.jwt.token"}
 
         # Act
-        response = client.get(f"{API_PREFIX}/auth/me", headers=headers)
+        response = await client.get(f"{API_PREFIX}/auth/me", headers=headers)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -412,7 +419,7 @@ class TestUpdateMeEndpoint:
         }
 
         # Act
-        response = client.put(f"{API_PREFIX}/auth/me", json=update_data, headers=auth_headers)
+        response = await client.put(f"{API_PREFIX}/auth/me", json=update_data, headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -431,7 +438,7 @@ class TestUpdateMeEndpoint:
         }
 
         # Act
-        response = client.put(f"{API_PREFIX}/auth/me", json=update_data, headers=auth_headers)
+        response = await client.put(f"{API_PREFIX}/auth/me", json=update_data, headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -448,7 +455,7 @@ class TestUpdateMeEndpoint:
         update_data = {"first_name": "Updated"}
 
         # Act
-        response = client.put(f"{API_PREFIX}/auth/me", json=update_data)
+        response = await client.put(f"{API_PREFIX}/auth/me", json=update_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -461,7 +468,7 @@ class TestLogoutEndpoint:
     async def test_logout_success(self, client, auth_headers):
         """Should successfully logout with valid token."""
         # Act
-        response = client.post(f"{API_PREFIX}/auth/logout", headers=auth_headers)
+        response = await client.post(f"{API_PREFIX}/auth/logout", headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -470,7 +477,7 @@ class TestLogoutEndpoint:
     async def test_logout_missing_token(self, client):
         """Should return 401 when no token provided."""
         # Act
-        response = client.post(f"{API_PREFIX}/auth/logout")
+        response = await client.post(f"{API_PREFIX}/auth/logout")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -490,7 +497,7 @@ class TestChangePasswordEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
+        response = await client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -506,7 +513,7 @@ class TestChangePasswordEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
+        response = await client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -523,7 +530,7 @@ class TestChangePasswordEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
+        response = await client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -562,7 +569,7 @@ class TestChangePasswordEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=headers)
+        response = await client.post(f"{API_PREFIX}/auth/change-password", json=request_data, headers=headers)
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -579,7 +586,7 @@ class TestChangePasswordEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/auth/change-password", json=request_data)
+        response = await client.post(f"{API_PREFIX}/auth/change-password", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

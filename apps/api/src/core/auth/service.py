@@ -358,6 +358,8 @@ class AuthService:
                 user=UserResponse.model_validate(user),
                 tenant=TenantResponse.model_validate(tenant),
                 tokens=tokens,
+                access_token=access_token,
+                refresh_token=refresh_token,
                 message="Registration successful. Please verify your email.",
             )
 
@@ -431,6 +433,8 @@ class AuthService:
             user=UserResponse.model_validate(user),
             tenant=TenantResponse.model_validate(user.tenant),
             tokens=tokens,
+            access_token=access_token,
+            refresh_token=refresh_token,
         )
 
     @staticmethod
@@ -493,23 +497,27 @@ class AuthService:
                 logger.warning("wrong_token_type", type=token_type)
                 raise AuthenticationError("Invalid token type, expected 'refresh'")
 
-            # Extraer user_id y tenant_id
+            # Extraer user_id
             user_id = UUID(payload.get("sub"))
-            tenant_id = UUID(payload.get("tenant_id"))
+            token_tenant_id_raw = payload.get("tenant_id")
 
             # Obtener usuario y validar
             user = await get_user_by_id(db, user_id)
 
             if not user:
                 logger.warning("user_not_found", user_id=str(user_id))
-                raise AuthenticationError("User not found")
+                raise AuthenticationError("Invalid token")
 
             if not user.is_active:
                 logger.warning("user_inactive", user_id=str(user_id))
-                raise AuthenticationError("User account is inactive")
+                raise AuthenticationError("Invalid token")
 
-            # Verificar que tenant_id del token coincida con el del usuario
-            if user.tenant_id != tenant_id:
+            tenant_id = user.tenant_id
+            if token_tenant_id_raw is not None:
+                tenant_id = UUID(token_tenant_id_raw)
+
+            # Verificar que tenant_id del token coincida con el del usuario cuando exista.
+            if token_tenant_id_raw is not None and user.tenant_id != tenant_id:
                 logger.warning(
                     "tenant_mismatch", token_tenant=str(tenant_id), user_tenant=str(user.tenant_id)
                 )
@@ -539,10 +547,10 @@ class AuthService:
 
         except jwt.ExpiredSignatureError:
             logger.warning("refresh_token_expired")
-            raise AuthenticationError("Token has expired")
+            raise AuthenticationError("Invalid refresh token")
         except jwt.PyJWTError as e:
             logger.warning("refresh_token_invalid", error=str(e))
-            raise AuthenticationError("Invalid authentication credentials")
+            raise AuthenticationError("Invalid refresh token")
         except ValueError as e:
             logger.warning("invalid_uuid_in_token", error=str(e))
             raise AuthenticationError("Invalid token format")

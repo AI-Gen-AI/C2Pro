@@ -60,7 +60,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
         if tenant_id is None:
             # Use specific error message if provided, otherwise generic one
-            message = error_message or "Invalid authentication credentials"
+            message = error_message or "Not authenticated"
             logger.warning(
                 "authentication_failed",
                 path=request.url.path,

@@ -172,6 +172,7 @@ async def c2pro_exception_handler(request: Request, exc: C2ProException) -> JSON
 
     # Convertir a diccionario con path
     error_dict = exc.to_dict(path=str(request.url.path))
+    error_dict["detail"] = exc.message
 
     return JSONResponse(
         status_code=exc.status_code,
@@ -313,6 +314,7 @@ async def request_validation_error_handler(
             **({"raw_errors": jsonable_encoder(pydantic_errors)} if settings.is_development else {}),
         },
     )
+    error_response["detail"] = jsonable_encoder(pydantic_errors)
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
