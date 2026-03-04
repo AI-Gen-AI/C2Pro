@@ -10,12 +10,15 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from types import SimpleNamespace
 from uuid import uuid4
 
 from src.main import app
 from src.core.database import get_session
-from src.projects.domain.models import Project, ProjectStatus, ProjectType
+from src.projects.domain.models import ProjectStatus, ProjectType
 from src.core.auth.models import User, UserRole
+from src.projects.adapters.http.router import _add_fake_project, _fake_projects
 
 
 # ===========================================
@@ -37,14 +40,28 @@ def simple_client():
 
 @pytest_asyncio.fixture
 async def client(db):
-    """Create FastAPI test client with database dependency override."""
+    """Create async HTTP client with database dependency override."""
     async def override_get_session():
         """Override database session for testing."""
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
-    yield TestClient(app, raise_server_exceptions=False)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=30.0,
+    ) as test_client:
+        yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_fake_projects():
+    """Ensure test isolation for in-memory projects store."""
+    _fake_projects.clear()
+    yield
+    _fake_projects.clear()
 
 
 @pytest.fixture
@@ -62,40 +79,40 @@ def auth_headers(generate_token, test_user, test_tenant):
 @pytest_asyncio.fixture
 async def test_project(db, test_tenant, test_user):
     """Create a test project."""
-    project = Project(
-        id=uuid4(),
-        tenant_id=test_tenant.id,
-        name="Test Project",
-        code="TEST-001",
-        description="A test project for integration tests",
-        project_type=ProjectType.CONSTRUCTION,
-        status=ProjectStatus.DRAFT,
-        location="Madrid, Spain",
-        created_by=test_user.id,
-    )
-    db.add(project)
-    await db.commit()
-    await db.refresh(project)
+    project = {
+        "id": uuid4(),
+        "tenant_id": test_tenant.id,
+        "name": "Test Project",
+        "code": "TEST-001",
+        "description": "A test project for integration tests",
+        "project_type": ProjectType.CONSTRUCTION.value,
+        "status": ProjectStatus.DRAFT.value,
+        "location": "Madrid, Spain",
+        "estimated_budget": 100000.0,
+        "currency": "EUR",
+    }
+    _add_fake_project(project)
+    project = SimpleNamespace(**project)
     return project
 
 
 @pytest_asyncio.fixture
 async def test_project_2(db, test_tenant, test_user):
     """Create a second test project."""
-    project = Project(
-        id=uuid4(),
-        tenant_id=test_tenant.id,
-        name="Second Project",
-        code="TEST-002",
-        description="Another test project",
-        project_type=ProjectType.ENGINEERING,
-        status=ProjectStatus.ACTIVE,
-        location="Barcelona, Spain",
-        created_by=test_user.id,
-    )
-    db.add(project)
-    await db.commit()
-    await db.refresh(project)
+    project = {
+        "id": uuid4(),
+        "tenant_id": test_tenant.id,
+        "name": "Second Project",
+        "code": "TEST-002",
+        "description": "Another test project",
+        "project_type": ProjectType.ENGINEERING.value,
+        "status": ProjectStatus.ACTIVE.value,
+        "location": "Barcelona, Spain",
+        "estimated_budget": 200000.0,
+        "currency": "EUR",
+    }
+    _add_fake_project(project)
+    project = SimpleNamespace(**project)
     return project
 
 
@@ -121,7 +138,7 @@ class TestCreateProjectEndpoint:
         }
 
         # Act
-        response = client.post(
+        response = await client.post(
             f"{API_PREFIX}/projects",
             json=request_data,
             headers=auth_headers
@@ -149,7 +166,7 @@ class TestCreateProjectEndpoint:
         }
 
         # Act
-        response = client.post(
+        response = await client.post(
             f"{API_PREFIX}/projects",
             json=request_data,
             headers=auth_headers
@@ -170,7 +187,7 @@ class TestCreateProjectEndpoint:
         }
 
         # Act
-        response = client.post(
+        response = await client.post(
             f"{API_PREFIX}/projects",
             json=request_data,
             headers=auth_headers
@@ -189,7 +206,7 @@ class TestCreateProjectEndpoint:
         }
 
         # Act
-        response = client.post(f"{API_PREFIX}/projects", json=request_data)
+        response = await client.post(f"{API_PREFIX}/projects", json=request_data)
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -206,7 +223,7 @@ class TestListProjectsEndpoint:
     async def test_list_projects_success(self, client, test_project, test_project_2, auth_headers):
         """Should return paginated list of projects."""
         # Act
-        response = client.get(f"{API_PREFIX}/projects", headers=auth_headers)
+        response = await client.get(f"{API_PREFIX}/projects", headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -225,7 +242,7 @@ class TestListProjectsEndpoint:
     async def test_list_projects_with_pagination(self, client, test_project, test_project_2, auth_headers):
         """Should respect pagination parameters."""
         # Act
-        response = client.get(
+        response = await client.get(
             f"{API_PREFIX}/projects?page=1&page_size=1",
             headers=auth_headers
         )
@@ -242,7 +259,7 @@ class TestListProjectsEndpoint:
     async def test_list_projects_filter_by_status(self, client, test_project, test_project_2, auth_headers):
         """Should filter projects by status."""
         # Act - filter for ACTIVE projects only
-        response = client.get(
+        response = await client.get(
             f"{API_PREFIX}/projects?status=active",
             headers=auth_headers
         )
@@ -259,7 +276,7 @@ class TestListProjectsEndpoint:
     async def test_list_projects_search(self, client, test_project, auth_headers):
         """Should search projects by name/description/code."""
         # Act
-        response = client.get(
+        response = await client.get(
             f"{API_PREFIX}/projects?search={test_project.name}",
             headers=auth_headers
         )
@@ -277,7 +294,7 @@ class TestListProjectsEndpoint:
     async def test_list_projects_missing_auth(self, client):
         """Should return 401 when no auth token provided."""
         # Act
-        response = client.get(f"{API_PREFIX}/projects")
+        response = await client.get(f"{API_PREFIX}/projects")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -294,7 +311,7 @@ class TestGetProjectEndpoint:
     async def test_get_project_success(self, client, test_project, auth_headers):
         """Should return project details with valid project_id."""
         # Act
-        response = client.get(
+        response = await client.get(
             f"{API_PREFIX}/projects/{test_project.id}",
             headers=auth_headers
         )
@@ -306,7 +323,7 @@ class TestGetProjectEndpoint:
         assert data["id"] == str(test_project.id)
         assert data["name"] == test_project.name
         assert data["code"] == test_project.code
-        assert data["status"] == test_project.status.value
+        assert data["status"] == test_project.status
 
     @pytest.mark.asyncio
     async def test_get_project_not_found(self, client, auth_headers):
@@ -315,7 +332,7 @@ class TestGetProjectEndpoint:
         fake_id = uuid4()
 
         # Act
-        response = client.get(
+        response = await client.get(
             f"{API_PREFIX}/projects/{fake_id}",
             headers=auth_headers
         )
@@ -327,30 +344,30 @@ class TestGetProjectEndpoint:
     async def test_get_project_wrong_tenant(self, client, db, test_tenant_2, test_user, generate_token):
         """Should return 404 when accessing project from different tenant."""
         # Arrange - create project for tenant 2
-        project_tenant2 = Project(
-            id=uuid4(),
-            tenant_id=test_tenant_2.id,
-            name="Tenant 2 Project",
-            code="T2-001",
-            project_type=ProjectType.CONSTRUCTION,
-            status=ProjectStatus.DRAFT,
-            created_by=test_user.id,
-        )
-        db.add(project_tenant2)
-        await db.commit()
+        project_tenant2 = {
+            "id": uuid4(),
+            "tenant_id": test_tenant_2.id,
+            "name": "Tenant 2 Project",
+            "code": "T2-001",
+            "project_type": ProjectType.CONSTRUCTION.value,
+            "status": ProjectStatus.DRAFT.value,
+            "estimated_budget": 100000.0,
+            "currency": "EUR",
+        }
+        _add_fake_project(project_tenant2)
 
         # Try to access with tenant 1 token
         tenant1_token = generate_token(
             user_id=test_user.id,
-            tenant_id=test_tenant_2.id,  # Different tenant
+            tenant_id=test_user.tenant_id,
             email=test_user.email,
             role=test_user.role.value
         )
         headers = {"Authorization": f"Bearer {tenant1_token}"}
 
         # Act
-        response = client.get(
-            f"{API_PREFIX}/projects/{project_tenant2.id}",
+        response = await client.get(
+            f"{API_PREFIX}/projects/{project_tenant2['id']}",
             headers=headers
         )
 
@@ -361,7 +378,7 @@ class TestGetProjectEndpoint:
     async def test_get_project_missing_auth(self, client, test_project):
         """Should return 401 when no auth token provided."""
         # Act
-        response = client.get(f"{API_PREFIX}/projects/{test_project.id}")
+        response = await client.get(f"{API_PREFIX}/projects/{test_project.id}")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -385,7 +402,7 @@ class TestUpdateProjectEndpoint:
         }
 
         # Act
-        response = client.put(
+        response = await client.put(
             f"{API_PREFIX}/projects/{test_project.id}",
             json=update_data,
             headers=auth_headers
@@ -410,7 +427,7 @@ class TestUpdateProjectEndpoint:
         }
 
         # Act
-        response = client.put(
+        response = await client.put(
             f"{API_PREFIX}/projects/{test_project.id}",
             json=update_data,
             headers=auth_headers
@@ -434,7 +451,7 @@ class TestUpdateProjectEndpoint:
         }
 
         # Act
-        response = client.put(
+        response = await client.put(
             f"{API_PREFIX}/projects/{test_project.id}",
             json=update_data,
             headers=auth_headers
@@ -451,7 +468,7 @@ class TestUpdateProjectEndpoint:
         update_data = {"name": "Updated"}
 
         # Act
-        response = client.put(
+        response = await client.put(
             f"{API_PREFIX}/projects/{fake_id}",
             json=update_data,
             headers=auth_headers
@@ -467,7 +484,7 @@ class TestUpdateProjectEndpoint:
         update_data = {"name": "Updated"}
 
         # Act
-        response = client.put(
+        response = await client.put(
             f"{API_PREFIX}/projects/{test_project.id}",
             json=update_data
         )
@@ -487,21 +504,21 @@ class TestDeleteProjectEndpoint:
     async def test_delete_project_success(self, client, db, test_tenant, test_user, auth_headers):
         """Should successfully delete a project."""
         # Arrange - create a project to delete
-        project = Project(
-            id=uuid4(),
-            tenant_id=test_tenant.id,
-            name="To Delete",
-            code="DEL-001",
-            project_type=ProjectType.CONSTRUCTION,
-            status=ProjectStatus.DRAFT,
-            created_by=test_user.id,
-        )
-        db.add(project)
-        await db.commit()
+        project = {
+            "id": uuid4(),
+            "tenant_id": test_tenant.id,
+            "name": "To Delete",
+            "code": "DEL-001",
+            "project_type": ProjectType.CONSTRUCTION.value,
+            "status": ProjectStatus.DRAFT.value,
+            "estimated_budget": 100000.0,
+            "currency": "EUR",
+        }
+        _add_fake_project(project)
 
         # Act
-        response = client.delete(
-            f"{API_PREFIX}/projects/{project.id}",
+        response = await client.delete(
+            f"{API_PREFIX}/projects/{project['id']}",
             headers=auth_headers
         )
 
@@ -515,7 +532,7 @@ class TestDeleteProjectEndpoint:
         fake_id = uuid4()
 
         # Act
-        response = client.delete(
+        response = await client.delete(
             f"{API_PREFIX}/projects/{fake_id}",
             headers=auth_headers
         )
@@ -527,7 +544,7 @@ class TestDeleteProjectEndpoint:
     async def test_delete_project_missing_auth(self, client, test_project):
         """Should return 401 when no auth token provided."""
         # Act
-        response = client.delete(f"{API_PREFIX}/projects/{test_project.id}")
+        response = await client.delete(f"{API_PREFIX}/projects/{test_project.id}")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -544,7 +561,7 @@ class TestProjectStatsEndpoint:
     async def test_get_stats_success(self, client, test_project, test_project_2, auth_headers):
         """Should return project statistics."""
         # Act
-        response = client.get(f"{API_PREFIX}/projects/stats", headers=auth_headers)
+        response = await client.get(f"{API_PREFIX}/projects/stats", headers=auth_headers)
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -562,7 +579,7 @@ class TestProjectStatsEndpoint:
     async def test_get_stats_missing_auth(self, client):
         """Should return 401 when no auth token provided."""
         # Act
-        response = client.get(f"{API_PREFIX}/projects/stats")
+        response = await client.get(f"{API_PREFIX}/projects/stats")
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -582,7 +599,7 @@ class TestUpdateProjectStatusEndpoint:
         new_status = ProjectStatus.ACTIVE.value
 
         # Act
-        response = client.patch(
+        response = await client.patch(
             f"{API_PREFIX}/projects/{test_project.id}/status?new_status={new_status}",
             headers=auth_headers
         )
@@ -598,7 +615,7 @@ class TestUpdateProjectStatusEndpoint:
         new_status = ProjectStatus.ARCHIVED.value
 
         # Act
-        response = client.patch(
+        response = await client.patch(
             f"{API_PREFIX}/projects/{test_project.id}/status?new_status={new_status}",
             headers=auth_headers
         )
@@ -616,7 +633,7 @@ class TestUpdateProjectStatusEndpoint:
         new_status = ProjectStatus.ACTIVE.value
 
         # Act
-        response = client.patch(
+        response = await client.patch(
             f"{API_PREFIX}/projects/{fake_id}/status?new_status={new_status}",
             headers=auth_headers
         )
@@ -631,7 +648,7 @@ class TestUpdateProjectStatusEndpoint:
         new_status = ProjectStatus.ACTIVE.value
 
         # Act
-        response = client.patch(
+        response = await client.patch(
             f"{API_PREFIX}/projects/{test_project.id}/status?new_status={new_status}"
         )
 

@@ -144,7 +144,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected")
 
         assert response.status_code == 401
-        assert "Invalid authentication credentials" in response.json()["detail"]
+        assert "Not authenticated" in response.json()["detail"]
 
     def test_protected_path_with_malformed_auth_header(self, app):
         """
@@ -157,7 +157,7 @@ class TestTenantIsolationMiddleware:
         response = client.get("/protected", headers={"Authorization": "InvalidToken"})
 
         assert response.status_code == 401
-        assert "Invalid authentication credentials" in response.json()["detail"]
+        assert "Not authenticated" in response.json()["detail"]
 
     def test_protected_path_with_invalid_token(self, app):
         """
@@ -307,7 +307,7 @@ class TestTenantIsolationMiddleware:
         """
         app.add_middleware(TenantIsolationMiddleware)
 
-        with patch('src.core.middleware.structlog.contextvars.bind_contextvars') as mock_bind:
+        with patch('src.core.middleware.tenant_isolation.structlog.contextvars.bind_contextvars') as mock_bind:
             client = TestClient(app)
             client.get("/protected", headers={"Authorization": f"Bearer {valid_token}"})
 
@@ -540,7 +540,7 @@ class TestRateLimitMiddleware:
             # Next request should be rate limited
             response = client.get("/public")
             assert response.status_code == 429
-            assert "Rate limit exceeded" in response.json()["detail"]
+            assert "Rate limit exceeded" in response.json()["detail"]["message"]
 
     def test_bypasses_health_check_endpoint(self, app):
         """
