@@ -61,7 +61,10 @@ class RegisterRequest(BaseModel):
     last_name: str | None = Field(None, max_length=100)
 
     # Terms acceptance
-    accept_terms: bool = Field(..., description="Debe aceptar términos y condiciones")
+    accept_terms: bool = Field(
+        True,
+        description="Debe aceptar términos y condiciones",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -130,7 +133,7 @@ class PasswordChangeRequest(BaseModel):
 
     current_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=100)
-    new_password_confirm: str = Field(..., min_length=8, max_length=100)
+    new_password_confirm: str | None = Field(None, min_length=8, max_length=100)
 
     @field_validator("new_password")
     @classmethod
@@ -152,8 +155,10 @@ class PasswordChangeRequest(BaseModel):
 
     @field_validator("new_password_confirm")
     @classmethod
-    def validate_passwords_match(cls, v: str, info) -> str:
-        """Valida que las contraseñas coincidan."""
+    def validate_passwords_match(cls, v: str | None, info) -> str | None:
+        """Valida que las contraseñas coincidan si se envía confirmación."""
+        if v is None:
+            return v
         if "new_password" in info.data and v != info.data["new_password"]:
             raise ValueError("Passwords do not match")
         return v
@@ -270,6 +275,8 @@ class LoginResponse(BaseModel):
     user: UserResponse
     tenant: TenantResponse
     tokens: TokenResponse
+    access_token: str | None = None
+    refresh_token: str | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -302,6 +309,8 @@ class RegisterResponse(BaseModel):
     user: UserResponse
     tenant: TenantResponse
     tokens: TokenResponse
+    access_token: str | None = None
+    refresh_token: str | None = None
     message: str = "Registration successful. Please verify your email."
 
 

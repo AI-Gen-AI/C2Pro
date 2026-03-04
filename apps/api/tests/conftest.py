@@ -19,8 +19,9 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 import jwt
-from sqlalchemy import Column, text
+from sqlalchemy import Column, Enum as SAEnum, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import event, select
@@ -117,6 +118,18 @@ def _ensure_test_fk_stub_tables() -> None:
             Column("id", PGUUID(as_uuid=True), primary_key=True),
             extend_existing=True,
         )
+
+
+def _postgres_enum_types() -> list[SAEnum]:
+    """Collect SQLAlchemy enum type objects registered in the shared metadata."""
+    enum_types: list[SAEnum] = []
+    seen_ids: set[int] = set()
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            if isinstance(column.type, SAEnum) and column.type.name and id(column.type) not in seen_ids:
+                seen_ids.add(id(column.type))
+                enum_types.append(column.type)
+    return enum_types
 
 
 def _auth_schema_available(session: Session) -> bool:
@@ -268,6 +281,17 @@ async def test_engine():
         _ensure_test_fk_stub_tables()
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
+            for enum_type in _postgres_enum_types():
+                try:
+                    await conn.run_sync(
+                        lambda sync_conn, t=enum_type: t.create(sync_conn, checkfirst=True)
+                    )
+                except IntegrityError as exc:
+                    # Parallel test workers/suites can race creating the same enum type.
+                    # Ignore duplicate-type creation and continue with metadata setup.
+                    if "pg_type_typname_nsp_index" not in str(exc):
+                        raise
+                enum_type.create_type = False
             await conn.run_sync(Base.metadata.create_all)
 
         yield engine
@@ -388,6 +412,7 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
+        last_login=datetime.utcnow(),
     )
 
     db.add(user)
@@ -680,18 +705,26 @@ async def get_auth_headers(test_user: User, test_tenant: Tenant, generate_token:
     """
     Factory fixture to generate authentication headers for API requests.
     """
-    async def _get_headers(
+    def _get_headers(
         user: User | None = None,
         tenant: Tenant | None = None,
+        user_id: UUID | None = None,
+        tenant_id: UUID | None = None,
+        email: str | None = None,
+        role: str | None = None,
     ) -> dict[str, str]:
         u = user or test_user
         t = tenant or test_tenant
+        resolved_user_id = user_id or u.id
+        resolved_tenant_id = tenant_id or t.id
+        resolved_email = email or u.email
+        resolved_role = role or (u.role.value if hasattr(u.role, "value") else u.role)
 
         token = generate_token(
-            user_id=u.id,
-            tenant_id=t.id,
-            email=u.email,
-            role=u.role.value if hasattr(u.role, 'value') else u.role,
+            user_id=resolved_user_id,
+            tenant_id=resolved_tenant_id,
+            email=resolved_email,
+            role=resolved_role,
         )
 
         return {"Authorization": f"Bearer {token}"}
