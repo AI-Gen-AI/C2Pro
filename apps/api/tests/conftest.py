@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import json
 from types import SimpleNamespace
 from typing import Callable
+from unittest import mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -362,6 +363,12 @@ async def db_session(db) -> AsyncGenerator[AsyncSession, None]:
     yield db
 
 
+@pytest_asyncio.fixture
+async def db_engine(test_engine):
+    """Alias for engine fixture used by DB probe tests."""
+    return test_engine
+
+
 # ===========================================
 # TEST DATA FIXTURES
 # ===========================================
@@ -399,13 +406,13 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
     Creates a test user associated with test_tenant.
 
     Default credentials:
-        - Email: test@example.com
+        - Email: test-<uuid>@example.com
         - Password: TestPassword123!
     """
     user = User(
         id=uuid4(),
         tenant_id=test_tenant.id,
-        email="test@example.com",
+        email=f"test-{uuid4().hex[:8]}@example.com",
         hashed_password=hash_password("TestPassword123!"),
         first_name="Test",
         last_name="User",
@@ -456,7 +463,7 @@ async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
     user = User(
         id=uuid4(),
         tenant_id=test_tenant_2.id,
-        email="test2@example.com",
+        email=f"test2-{uuid4().hex[:8]}@example.com",
         hashed_password=hash_password("TestPassword123!"),
         first_name="Test",
         last_name="User 2",
@@ -753,6 +760,32 @@ def get_auth_headers_simple(generate_token, test_user_id, test_tenant_id):
         return {"Authorization": f"Bearer {token}"}
 
     return _get_headers
+
+
+@pytest.fixture
+def mocker():
+    """
+    Minimal compatibility fixture for suites expecting pytest-mock's `mocker`.
+    """
+    patchers: list[mock._patch] = []
+
+    class _Mocker:
+        Mock = mock.Mock
+        AsyncMock = mock.AsyncMock
+        MagicMock = mock.MagicMock
+        call = mock.call
+        ANY = mock.ANY
+
+        @staticmethod
+        def patch(target, *args, **kwargs):
+            patcher = mock.patch(target, *args, **kwargs)
+            patchers.append(patcher)
+            return patcher.start()
+
+    yield _Mocker()
+
+    for patcher in reversed(patchers):
+        patcher.stop()
 
 
 # ===========================================

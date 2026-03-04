@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from src.projects.domain.models import Project, ProjectStatus, ProjectType
+from src.projects.adapters.persistence.models import ProjectORM as Project
+from src.projects.domain.models import ProjectStatus, ProjectType
 from src.projects.application.dtos import (
     ProjectCreateRequest,
     ProjectUpdateRequest,

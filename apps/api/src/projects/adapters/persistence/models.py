@@ -41,7 +41,7 @@ class ProjectORM(Base):
     end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Analysis state
-    coherence_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    coherence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_analysis_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Project metadata (flexible JSON storage)

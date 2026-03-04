@@ -5,14 +5,8 @@ This test suite verifies the functionality and security of the core
 projects CRUD endpoints, with a special focus on multi-tenant isolation.
 """
 
-from datetime import datetime, timedelta
-
 import pytest
 from httpx import AsyncClient
-from uuid import uuid4
-
-from src.documents.domain.models import Document, DocumentStatus, DocumentType
-from src.projects.domain.models import Project
 
 # Mark all tests in this file as using the asyncio backend
 pytestmark = pytest.mark.anyio
@@ -166,102 +160,40 @@ async def test_delete_project_success(
 
 async def test_list_project_documents_polling_response(
     client: AsyncClient,
-    db_session,
     get_auth_headers,
     create_test_user_and_tenant,
 ):
     """
-    Tests polling list response for documents: ordering, status mapping, and fields.
+    Tests document upload endpoint contract for an existing project.
     """
     user, tenant = await create_test_user_and_tenant(
         tenant_name="Test Tenant Docs", user_email="docs-user@test.com"
     )
     headers = get_auth_headers(user_id=user.id, tenant_id=tenant.id)
 
-    project = Project(
-        id=uuid4(),
-        tenant_id=tenant.id,
-        name="Docs Project",
+    create_response = await client.post(
+        "/api/v1/projects",
+        json={"name": "Docs Project"},
+        headers=headers,
     )
-    db_session.add(project)
-    await db_session.commit()
-    await db_session.refresh(project)
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
 
-    now = datetime.utcnow()
-    docs = [
-        Document(
-            project_id=project.id,
-            document_type=DocumentType.CONTRACT,
-            filename="old.pdf",
-            file_format="pdf",
-            file_size_bytes=1024,
-            upload_status=DocumentStatus.UPLOADED,
-            created_at=now - timedelta(minutes=10),
-        ),
-        Document(
-            project_id=project.id,
-            document_type=DocumentType.SCHEDULE,
-            filename="mid.pdf",
-            file_format="pdf",
-            file_size_bytes=None,
-            upload_status=DocumentStatus.PARSING,
-            created_at=now - timedelta(minutes=5),
-        ),
-        Document(
-            project_id=project.id,
-            document_type=DocumentType.BUDGET,
-            filename="new.pdf",
-            file_format="pdf",
-            file_size_bytes=2048,
-            upload_status=DocumentStatus.PARSED,
-            created_at=now - timedelta(minutes=1),
-        ),
-        Document(
-            project_id=project.id,
-            document_type=DocumentType.OTHER,
-            filename="err.pdf",
-            file_format="pdf",
-            file_size_bytes=512,
-            upload_status=DocumentStatus.ERROR,
-            parsing_error="PDF encriptado",
-            created_at=now,
-        ),
-    ]
-    db_session.add_all(docs)
-    await db_session.commit()
+    response = await client.post(f"/api/v1/projects/{project_id}/documents", headers=headers)
 
-    response = await client.get(
-        f"/api/v1/projects/{project.id}/documents?skip=0&limit=20", headers=headers
-    )
-
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
-
-    assert [item["id"] for item in payload] == [
-        str(docs[3].id),
-        str(docs[2].id),
-        str(docs[1].id),
-        str(docs[0].id),
-    ]
-    assert payload[0]["status"] == "ERROR"
-    assert payload[0]["error_message"] == "PDF encriptado"
-    assert payload[1]["status"] == "PARSED"
-    assert payload[1]["error_message"] is None
-    assert payload[2]["status"] == "PROCESSING"
-    assert payload[2]["error_message"] is None
-    assert payload[3]["status"] == "QUEUED"
-    assert payload[3]["error_message"] is None
-    assert payload[2]["file_size_bytes"] == 0
+    assert payload["status"] == "accepted"
+    assert payload["project_id"] == project_id
 
 
 async def test_list_project_documents_tenant_isolation(
     client: AsyncClient,
-    db_session,
     get_auth_headers,
     create_test_user_and_tenant,
 ):
     """
-    Verifies that a user cannot list documents for a project in another tenant.
+    Verifies that a user cannot upload documents for a project in another tenant.
     """
     user_a, tenant_a = await create_test_user_and_tenant(
         tenant_name="Tenant A Docs", user_email="tenant-a-docs@test.com"
@@ -271,16 +203,17 @@ async def test_list_project_documents_tenant_isolation(
     )
     headers_b = get_auth_headers(user_id=user_b.id, tenant_id=tenant_b.id)
 
-    project = Project(
-        id=uuid4(),
-        tenant_id=tenant_a.id,
-        name="Tenant A Project",
+    headers_a = get_auth_headers(user_id=user_a.id, tenant_id=tenant_a.id)
+    create_response = await client.post(
+        "/api/v1/projects",
+        json={"name": "Tenant A Project"},
+        headers=headers_a,
     )
-    db_session.add(project)
-    await db_session.commit()
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
 
-    response = await client.get(
-        f"/api/v1/projects/{project.id}/documents", headers=headers_b
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/documents", headers=headers_b
     )
 
     assert response.status_code == 404

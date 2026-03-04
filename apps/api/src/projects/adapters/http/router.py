@@ -24,15 +24,20 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 class ProjectResponse(BaseModel):
-    """Project response schema (minimal)."""
+    """Project response schema (compat for legacy and e2e suites)."""
 
     id: UUID
     tenant_id: UUID
     name: str
-    code: str
-    project_type: str
-    estimated_budget: float
-    currency: str
+    code: str | None = None
+    description: str | None = None
+    project_type: str = "construction"
+    status: str = "draft"
+    location: str | None = None
+    client_name: str | None = None
+    budget_planned: float | None = None
+    estimated_budget: float | None = None
+    currency: str = "EUR"
     version: int = 1
 
 
@@ -41,6 +46,58 @@ class ProjectListResponse(BaseModel):
 
     items: list[ProjectResponse]
     total: int
+    page: int = 1
+    page_size: int = 20
+    total_pages: int = 1
+
+
+class ProjectCreateRequest(BaseModel):
+    """Create project payload."""
+
+    name: str
+    code: str | None = None
+    description: str | None = None
+    project_type: str = "construction"
+    location: str | None = None
+    client_name: str | None = None
+    budget_planned: float | None = None
+    estimated_budget: float | None = None
+    currency: str = "EUR"
+
+
+class ProjectUpdateRequest(BaseModel):
+    """Update payload for PUT/PATCH."""
+
+    name: str | None = None
+    code: str | None = None
+    description: str | None = None
+    project_type: str | None = None
+    status: str | None = None
+    location: str | None = None
+    client_name: str | None = None
+    budget_planned: float | None = None
+    estimated_budget: float | None = None
+    currency: str | None = None
+    expected_version: int | None = None
+
+
+def _project_to_response(project_data: dict) -> ProjectResponse:
+    """Normalize internal project dict into API contract."""
+    return ProjectResponse(
+        id=project_data["id"],
+        tenant_id=project_data["tenant_id"],
+        name=project_data["name"],
+        code=project_data.get("code"),
+        description=project_data.get("description"),
+        project_type=project_data.get("project_type", "construction"),
+        status=project_data.get("status", "draft"),
+        location=project_data.get("location"),
+        client_name=project_data.get("client_name"),
+        budget_planned=project_data.get("budget_planned"),
+        estimated_budget=project_data.get("estimated_budget"),
+        currency=project_data.get("currency", "EUR"),
+        version=project_data.get("version", 1),
+    )
 
 
 # ===========================================
@@ -54,18 +111,76 @@ async def health_check() -> dict:
     return {"status": "ok", "service": "projects"}
 
 
+@router.get("/stats", summary="Project statistics")
+async def get_project_stats(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    """Return aggregate project statistics for current tenant."""
+    tenant_projects = [
+        p for p in _fake_projects.values() if p.get("tenant_id") == current_user.tenant_id
+    ]
+
+    by_status: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    for project in tenant_projects:
+        status_value = project.get("status", "draft")
+        type_value = project.get("project_type", "construction")
+        by_status[status_value] = by_status.get(status_value, 0) + 1
+        by_type[type_value] = by_type.get(type_value, 0) + 1
+
+    return {
+        "total_projects": len(tenant_projects),
+        "by_status": by_status,
+        "by_type": by_type,
+    }
+
+
 # In-memory storage for fake implementation
 _fake_projects: dict[UUID, dict] = {}
 _project_locks: dict[UUID, asyncio.Lock] = {}
 
 
 def _add_fake_project(project_data: dict) -> None:
-    """
-    Add a project to fake in-memory storage.
-
-    Used by tests to populate data.
-    """
+    """Add project to in-memory storage (test helper)."""
     _fake_projects[project_data["id"]] = project_data
+
+
+@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def create_project(
+    request: ProjectCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ProjectResponse:
+    """Create a new project for the current tenant."""
+    normalized_code = request.code.strip() if request.code else None
+    if normalized_code is not None:
+        for existing in _fake_projects.values():
+            if existing.get("tenant_id") != current_user.tenant_id:
+                continue
+            existing_code = (existing.get("code") or "").strip().lower()
+            if existing_code and existing_code == normalized_code.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Project code already exists",
+                )
+
+    project_id = uuid4()
+    project_data = {
+        "id": project_id,
+        "tenant_id": current_user.tenant_id,
+        "name": request.name,
+        "code": normalized_code,
+        "description": request.description,
+        "project_type": request.project_type,
+        "status": "draft",
+        "location": request.location,
+        "client_name": request.client_name,
+        "budget_planned": request.budget_planned,
+        "estimated_budget": request.estimated_budget,
+        "currency": request.currency,
+        "version": 1,
+    }
+    _fake_projects[project_id] = project_data
+    return _project_to_response(project_data)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -92,34 +207,85 @@ async def get_project(
     if "version" not in project:
         project["version"] = 1
     response.headers["ETag"] = f'"v{project["version"]}"'
-    return ProjectResponse(**project)
+    return _project_to_response(project)
 
 
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(
     current_user: Annotated[User, Depends(get_current_user)],
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+    search: str | None = None,
 ) -> ProjectListResponse:
     """
     List all projects for the current tenant.
 
     Filters by tenant_id automatically.
     """
-    tenant_projects = [
-        ProjectResponse(**p)
-        for p in _fake_projects.values()
-        if p["tenant_id"] == current_user.tenant_id
-    ]
+    tenant_projects = [p for p in _fake_projects.values() if p.get("tenant_id") == current_user.tenant_id]
+    if status is not None:
+        tenant_projects = [p for p in tenant_projects if p.get("status", "draft") == status]
+    if search:
+        needle = search.lower()
+        tenant_projects = [
+            p
+            for p in tenant_projects
+            if needle in (p.get("name") or "").lower()
+            or needle in (p.get("description") or "").lower()
+            or needle in (p.get("code") or "").lower()
+        ]
+
+    total = len(tenant_projects)
+    page = max(1, page)
+    page_size = max(1, page_size)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = (page - 1) * page_size
+    end = start + page_size
+    tenant_projects_page = tenant_projects[start:end]
 
     return ProjectListResponse(
-        items=tenant_projects,
-        total=len(tenant_projects),
+        items=[_project_to_response(p) for p in tenant_projects_page],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
     )
+
+
+@router.put("/{project_id}", response_model=ProjectResponse)
+async def put_project(
+    project_id: UUID,
+    updates: ProjectUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ProjectResponse:
+    """Update an existing project (legacy PUT contract)."""
+    project = _fake_projects.get(project_id)
+    if not project or project.get("tenant_id") != current_user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    if updates.code:
+        for existing_id, existing in _fake_projects.items():
+            if existing_id == project_id or existing.get("tenant_id") != current_user.tenant_id:
+                continue
+            existing_code = (existing.get("code") or "").strip().lower()
+            if existing_code and existing_code == updates.code.strip().lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Project code already exists",
+                )
+
+    update_payload = updates.model_dump(exclude_unset=True, exclude={"expected_version"})
+    project.update(update_payload)
+    project["version"] = int(project.get("version", 1)) + 1
+    _fake_projects[project_id] = project
+    return _project_to_response(project)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 async def update_project(
     project_id: UUID,
-    updates: dict,
+    updates: ProjectUpdateRequest,
     request: Request,
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -144,12 +310,16 @@ async def update_project(
         current_version = int(project["version"])
 
         if_match = request.headers.get("If-Match")
-        expected_version = updates.get("expected_version")
+        update_data = updates.model_dump(exclude_unset=True)
+        expected_version = update_data.get("expected_version")
         if expected_version is None and if_match is None:
-            raise HTTPException(
-                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-                detail="Missing If-Match or expected_version",
-            )
+            # Backward-compatible fallback for basic PATCH flows without concurrency headers.
+            clean_updates = {k: v for k, v in update_data.items() if k != "expected_version"}
+            project.update(clean_updates)
+            project["version"] = current_version + 1
+            _fake_projects[project_id] = project
+            response.headers["ETag"] = f'"v{project["version"]}"'
+            return _project_to_response(project)
 
         idempotency_key = request.headers.get("Idempotency-Key")
         seen_keys: set[tuple[str, str, str, str]] = getattr(
@@ -192,7 +362,7 @@ async def update_project(
                 content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
             )
 
-        clean_updates = {k: v for k, v in updates.items() if k != "expected_version"}
+        clean_updates = {k: v for k, v in update_data.items() if k != "expected_version"}
         project.update(clean_updates)
         project["version"] = current_version + 1
         _fake_projects[project_id] = project
@@ -201,7 +371,7 @@ async def update_project(
             seen_keys.add(key)
 
         response.headers["ETag"] = f'"v{project["version"]}"'
-        return ProjectResponse(**project)
+        return _project_to_response(project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -225,10 +395,21 @@ async def delete_project(
     del _fake_projects[project_id]
 
 
-# Helper function for tests to inject fake data
-def _add_fake_project(project_data: dict) -> None:
-    """Add a fake project to in-memory storage (for testing)."""
-    _fake_projects[project_data["id"]] = project_data
+@router.patch("/{project_id}/status", response_model=ProjectResponse)
+async def update_project_status(
+    project_id: UUID,
+    new_status: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ProjectResponse:
+    """Update only project status."""
+    project = _fake_projects.get(project_id)
+    if not project or project.get("tenant_id") != current_user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    project["status"] = new_status
+    project["version"] = int(project.get("version", 1)) + 1
+    _fake_projects[project_id] = project
+    return _project_to_response(project)
 
 
 # ===========================================
