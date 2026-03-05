@@ -57,7 +57,7 @@ async def mcp_tenant(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.flush()
+    await db.commit()
     await db.refresh(tenant)
     return tenant
 
@@ -77,7 +77,7 @@ async def mcp_user(db, mcp_tenant: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -417,7 +417,8 @@ async def test_007_mcp_rate_limit_tenant_isolation(
         is_active=True,
     )
     db.add(tenant_b)
-    await db.flush()
+    await db.commit()
+    await db.refresh(tenant_b)
 
     user_b = User(
         id=uuid4(),
@@ -431,7 +432,8 @@ async def test_007_mcp_rate_limit_tenant_isolation(
         is_verified=True,
     )
     db.add(user_b)
-    await db.flush()
+    await db.commit()
+    await db.refresh(user_b)
 
     token_b = generate_token(
         user_id=user_b.id,

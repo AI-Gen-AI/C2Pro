@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Analysis
 from src.core.auth.models import Tenant, User
-from src.projects.domain.models import Project
+from src.projects.adapters.persistence.models import ProjectORM as Project
 
 
 @pytest.mark.gate_verification

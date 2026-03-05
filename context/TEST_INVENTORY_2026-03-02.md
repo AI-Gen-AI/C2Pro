@@ -543,6 +543,79 @@ FIX-013 | TI-019, TI-021, TI-177 | P1 | infra | Postgres enum DDL collision in t
 - Special-case status:
   - `TI-176` remains skipped by design (`ProjectService not yet implemented`)
 
+`2026-03-05 AGENT-B execution closure`:
+
+- Scope executed:
+  - `apps/api/tests/modules/documents`
+  - `apps/api/tests/modules/coherence`
+  - `apps/api/tests/modules/scoring`
+  - `apps/api/tests/modules/extraction`
+  - `apps/api/tests/modules/retrieval`
+  - `apps/api/tests/modules/ingestion`
+  - `apps/api/tests/modules/anonymizer`
+- Stabilization work applied before final reruns:
+  - Added legacy compatibility domain modules for document clause tests:
+    - [clause.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/src/documents/domain/entities/clause.py)
+    - [events.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/src/documents/domain/events.py)
+    - [exceptions.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/src/documents/domain/exceptions.py)
+  - Added minimal `mocker` compatibility fixture and hardened DB test-engine setup in [conftest.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/conftest.py)
+  - Aligned document upload adapter tests to current API behavior in [test_document_upload.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/modules/documents/adapters/http/test_document_upload.py)
+- Final AGENT-B verification commands and outcomes:
+  - `python -m pytest apps/api/tests/modules/documents -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/modules/coherence apps/api/tests/modules/scoring -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/modules/extraction apps/api/tests/modules/retrieval apps/api/tests/modules/ingestion apps/api/tests/modules/anonymizer -q --basetemp .pytest-tmp` -> passed
+- Effective status update:
+  - AGENT-B scope is currently green in local execution with workspace-local pytest temp directory.
+
+`2026-03-05 AGENT-C triage + stabilization`:
+
+- Parallel triage groups executed:
+  - Group 1: `apps/api/tests/modules/projects` + `apps/api/tests/modules/wbs_bom`
+  - Group 2: `apps/api/tests/modules/procurement` + `apps/api/tests/modules/stakeholders` + `apps/api/tests/modules/hitl`
+  - Group 3: `apps/api/tests/modules/governance` + `apps/api/tests/modules/graph` + `apps/api/tests/modules/analysis` + `apps/api/tests/modules/gamification` + `apps/api/tests/modules/decision_intelligence`
+- Fixes applied from triage findings:
+  - Added missing legacy compatibility module for WBS import path:
+    - [wbs.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/src/projects/domain/wbs.py)
+    - Resolves `ModuleNotFoundError: src.projects.domain.wbs` in `modules/projects` collection.
+  - Removed hardcoded Linux migration path from HITL adapter tests:
+    - [test_hitl_adapters.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/modules/hitl/adapters/test_hitl_adapters.py)
+    - Uses repo-root-relative path resolution for migration file checks.
+- Final AGENT-C verification commands and outcomes:
+  - `python -m pytest apps/api/tests/modules/projects apps/api/tests/modules/wbs_bom -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/modules/procurement apps/api/tests/modules/stakeholders apps/api/tests/modules/hitl -q --basetemp .pytest-tmp` -> passed with `1` expected skip
+  - `python -m pytest apps/api/tests/modules/governance apps/api/tests/modules/graph apps/api/tests/modules/analysis apps/api/tests/modules/gamification apps/api/tests/modules/decision_intelligence -q --basetemp .pytest-tmp` -> passed
+- AGENT-C closure update:
+  - Procurement adapter skip removed by adding non-Docker local DB fallback in:
+    - [test_wbs_repository.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/modules/procurement/adapters/test_wbs_repository.py)
+  - Validation:
+    - `python -m pytest apps/api/tests/modules/procurement/adapters/test_wbs_repository.py -q --basetemp .pytest-tmp` -> passed
+  - AGENT-C status: `complete` (no remaining blocker in current environment)
+
+`2026-03-05 AGENT-E stabilization + closure`:
+
+- Environment and harness stabilization applied:
+  - Added package markers to avoid duplicate test-module basename collisions:
+    - `apps/api/tests/core/security/__init__.py`
+    - `apps/api/tests/modules/mcp/__init__.py`
+    - `apps/api/tests/modules/mcp/adapters/__init__.py`
+  - Hardened shared test DB setup in [conftest.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/conftest.py):
+    - Pre-clean `Base.metadata.drop_all` before `create_all`
+    - Reset metadata enum types before schema create to avoid duplicate enum setup races
+    - Keep `src.core.database._session_factory` aligned with test session factory during tests
+  - Fixed MCP e2e security fixtures to commit tenant/user records before request-time auth checks:
+    - [test_mcp_gateway_e2e.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/e2e/security/test_mcp_gateway_e2e.py)
+- Verification commands and outcomes:
+  - `python -m pytest apps/api/tests/core/security apps/api/tests/modules/mcp -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/e2e/security/test_mcp_gateway_e2e.py -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/e2e/security -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/security apps/api/tests/verification -q --basetemp .pytest-tmp` -> passed
+  - `python -m pytest apps/api/tests/security apps/api/tests/verification apps/api/tests/core/security apps/api/tests/modules/mcp apps/api/tests/e2e/security -q --basetemp .pytest-tmp` -> passed
+- AGENT-E resolution summary:
+  - Updated security and verification suites to current project router contract (`/api/v1/projects`, paginated `total` field, API-seeded project creation).
+  - Replaced legacy DB-seeded domain `Project` usage in tests with API-based setup for tenant-isolation assertions.
+  - Relaxed brittle auth-detail string expectations to accepted current variants without weakening status-code checks.
+  - Added local test DB RLS/audit compatibility bootstrap in [conftest.py](C:/Users/esus_/Documents/AI/ZTWQ/c2pro/apps/api/tests/conftest.py) to stabilize gate checks.
+
 ### Known Historical Signals (Not Fresh Confirmation)
 
 These are useful for prioritization, but they must remain `HISTORICAL_ONLY` until re-run:

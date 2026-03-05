@@ -4,7 +4,6 @@ import pytest
 from httpx import AsyncClient
 
 from src.core.auth.models import Tenant, User
-from src.projects.domain.models import Project
 
 
 @pytest.mark.asyncio
@@ -31,9 +30,7 @@ async def test_sql_injection_in_project_search(
 
     tenant_id = uuid4()
     user_id = uuid4()
-    project_id = uuid4()
-
-    # Create tenant, user, and project in actual database
+    # Create tenant and user in actual database
     async with _session_factory() as session:
         tenant = Tenant(id=tenant_id, name="Test Tenant Search")
         session.add(tenant)
@@ -48,17 +45,21 @@ async def test_sql_injection_in_project_search(
         session.add(user)
         await session.flush()
 
-        project = Project(id=project_id, name="Safe Project", tenant_id=tenant_id)
-        session.add(project)
         await session.commit()
 
     try:
         headers = get_auth_headers(user_id=user_id, tenant_id=tenant_id)
+        create_response = await client.post(
+            "/api/v1/projects",
+            headers=headers,
+            json={"name": "Safe Project", "code": "SAFE-001"},
+        )
+        assert create_response.status_code == 201
 
         # === Act ===
         # Make a request to the search endpoint with the SQL injection payload.
         response = await client.get(
-            "/api/v1/projects/", params={"search": payload}, headers=headers
+            "/api/v1/projects", params={"search": payload}, headers=headers
         )
 
         # === Assert ===
@@ -74,11 +75,11 @@ async def test_sql_injection_in_project_search(
 
         # 3. Ensure no data was unexpectedly returned. The list should be empty if the payload is truly malicious.
         assert response.json()["items"] == []
-        assert response.json()["total_count"] == 0
+        assert response.json()["total"] == 0
 
     finally:
         # Clean up: delete the test data using superuser connection
-        await cleanup_database(projects=[project_id], users=[user_id], tenants=[tenant_id])
+        await cleanup_database(users=[user_id], tenants=[tenant_id])
 
 
 @pytest.mark.asyncio
