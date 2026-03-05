@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from docker.errors import DockerException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
@@ -26,8 +27,11 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
-    container = PostgresContainer("postgres:15-alpine")
-    container.start()
+    try:
+        container = PostgresContainer("postgres:15-alpine")
+        container.start()
+    except DockerException as exc:
+        pytest.skip(f"Docker unavailable for testcontainers: {exc}")
     engine = None
     try:
         url = container.get_connection_url()

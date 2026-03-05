@@ -33,6 +33,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 @pytest_asyncio.fixture(scope="module")
 async def sqlite_engine():
     """Create test SQLite in-memory engine."""
+    pytest.importorskip("aiosqlite")
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
