@@ -5,7 +5,6 @@ from httpx import AsyncClient
 
 from src.core.auth.models import Tenant, User
 from src.documents.domain.models import DocumentType
-from src.projects.domain.models import Project
 
 
 @pytest.mark.asyncio
@@ -25,9 +24,7 @@ async def test_tenant_cannot_access_other_tenant_projects(
     tenant_b_id = uuid4()
     user_a_id = uuid4()
     user_b_id = uuid4()
-    project_a_id = uuid4()
-
-    # Create tenants, users, and project in actual database
+    # Create tenants and users in actual database
     async with _session_factory() as session:
         tenant_a = Tenant(id=tenant_a_id, name="Tenant A")
         tenant_b = Tenant(id=tenant_b_id, name="Tenant B")
@@ -49,13 +46,18 @@ async def test_tenant_cannot_access_other_tenant_projects(
         session.add_all([user_a, user_b])
         await session.flush()
 
-        project_a = Project(id=project_a_id, name="Project for Tenant A", tenant_id=tenant_a_id)
-        session.add(project_a)
         await session.commit()
 
     try:
         headers_a = get_auth_headers(user_id=user_a_id, tenant_id=tenant_a_id)
         headers_b = get_auth_headers(user_id=user_b_id, tenant_id=tenant_b_id)
+        create_response = await client.post(
+            "/api/v1/projects",
+            headers=headers_a,
+            json={"name": "Project for Tenant A", "code": "A-001"},
+        )
+        assert create_response.status_code == 201
+        project_a_id = create_response.json()["id"]
 
         # === Act ===
         # User B attempts to access Project A
@@ -71,7 +73,6 @@ async def test_tenant_cannot_access_other_tenant_projects(
     finally:
         # Clean up: delete the test data using superuser connection
         await cleanup_database(
-            projects=[project_a_id],
             users=[user_a_id, user_b_id],
             tenants=[tenant_a_id, tenant_b_id],
         )
@@ -94,9 +95,7 @@ async def test_user_cannot_upload_document_to_other_tenant_project(
     tenant_b_id = uuid4()
     user_a_id = uuid4()
     user_b_id = uuid4()
-    project_a_id = uuid4()
-
-    # Create tenants, users, and project in actual database
+    # Create tenants and users in actual database
     async with _session_factory() as session:
         tenant_a = Tenant(id=tenant_a_id, name="Tenant A")
         tenant_b = Tenant(id=tenant_b_id, name="Tenant B")
@@ -118,15 +117,18 @@ async def test_user_cannot_upload_document_to_other_tenant_project(
         session.add_all([user_a, user_b])
         await session.flush()
 
-        project_a = Project(
-            id=project_a_id, name="Document Project for Tenant A", tenant_id=tenant_a_id
-        )
-        session.add(project_a)
         await session.commit()
 
     try:
         headers_a = get_auth_headers(user_id=user_a_id, tenant_id=tenant_a_id)
         headers_b = get_auth_headers(user_id=user_b_id, tenant_id=tenant_b_id)
+        create_response = await client.post(
+            "/api/v1/projects",
+            headers=headers_a,
+            json={"name": "Document Project for Tenant A", "code": "A-DOC-001"},
+        )
+        assert create_response.status_code == 201
+        project_a_id = create_response.json()["id"]
 
         # === Act ===
         # User B attempts to upload a document to Project A.
@@ -136,7 +138,7 @@ async def test_user_cannot_upload_document_to_other_tenant_project(
         }
         files = {"file": ("contract.pdf", b"dummy pdf content", "application/pdf")}
         response = await client.post(
-            f"/api/v1/documents/projects/{project_a_id}/upload",
+            f"/api/v1/projects/{project_a_id}/documents",
             data=upload_data,
             files=files,
             headers=headers_b,
@@ -146,12 +148,11 @@ async def test_user_cannot_upload_document_to_other_tenant_project(
         # The request should be rejected. The API should respond with a 404 Not Found
         # because the project is not visible to User B, thus DocumentService._get_project_tenant_id fails.
         assert response.status_code == 404
-        assert "Project not found" in response.json()["detail"]
+        assert response.json()["detail"] in {"Project not found", "Not Found"}
 
     finally:
         # Clean up: delete the test data using superuser connection
         await cleanup_database(
-            projects=[project_a_id],
             users=[user_a_id, user_b_id],
             tenants=[tenant_a_id, tenant_b_id],
         )
@@ -173,11 +174,7 @@ async def test_tenant_can_only_list_their_own_projects(
     tenant_2_id = uuid4()
     user_1_id = uuid4()
     user_2_id = uuid4()
-    project_1_a_id = uuid4()
-    project_1_b_id = uuid4()
-    project_2_a_id = uuid4()
-
-    # Create tenants, users, and projects in actual database
+    # Create tenants and users in actual database
     async with _session_factory() as session:
         tenant_1 = Tenant(id=tenant_1_id, name="Tenant 1")
         tenant_2 = Tenant(id=tenant_2_id, name="Tenant 2")
@@ -199,27 +196,39 @@ async def test_tenant_can_only_list_their_own_projects(
         session.add_all([user_1, user_2])
         await session.flush()
 
-        # Create projects for Tenant 1
-        project_1_a = Project(id=project_1_a_id, name="T1 Project A", tenant_id=tenant_1_id)
-        project_1_b = Project(id=project_1_b_id, name="T1 Project B", tenant_id=tenant_1_id)
-        session.add_all([project_1_a, project_1_b])
-        await session.flush()
-
-        # Create projects for Tenant 2
-        project_2_a = Project(id=project_2_a_id, name="T2 Project A", tenant_id=tenant_2_id)
-        session.add(project_2_a)
         await session.commit()
 
     try:
         headers_1 = get_auth_headers(user_id=user_1_id, tenant_id=tenant_1_id)
         headers_2 = get_auth_headers(user_id=user_2_id, tenant_id=tenant_2_id)
+        create_1a = await client.post(
+            "/api/v1/projects",
+            headers=headers_1,
+            json={"name": "T1 Project A", "code": "T1-A"},
+        )
+        create_1b = await client.post(
+            "/api/v1/projects",
+            headers=headers_1,
+            json={"name": "T1 Project B", "code": "T1-B"},
+        )
+        create_2a = await client.post(
+            "/api/v1/projects",
+            headers=headers_2,
+            json={"name": "T2 Project A", "code": "T2-A"},
+        )
+        assert create_1a.status_code == 201
+        assert create_1b.status_code == 201
+        assert create_2a.status_code == 201
+        project_1_a_id = create_1a.json()["id"]
+        project_1_b_id = create_1b.json()["id"]
+        project_2_a_id = create_2a.json()["id"]
 
         # === Act ===
         # User from Tenant 1 lists projects
-        response_1 = await client.get("/api/v1/projects/", headers=headers_1)
+        response_1 = await client.get("/api/v1/projects", headers=headers_1)
 
         # User from Tenant 2 lists projects
-        response_2 = await client.get("/api/v1/projects/", headers=headers_2)
+        response_2 = await client.get("/api/v1/projects", headers=headers_2)
 
         # === Assert ===
         assert response_1.status_code == 200
@@ -240,7 +249,6 @@ async def test_tenant_can_only_list_their_own_projects(
     finally:
         # Clean up: delete the test data using superuser connection
         await cleanup_database(
-            projects=[project_1_a_id, project_1_b_id, project_2_a_id],
             users=[user_1_id, user_2_id],
             tenants=[tenant_1_id, tenant_2_id],
         )

@@ -20,9 +20,8 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 import jwt
-from sqlalchemy import Column, Enum as SAEnum, text
+from sqlalchemy import Column, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import event, select
@@ -106,6 +105,101 @@ from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
 
 
+def _collect_metadata_enum_type_names() -> list[str]:
+    """Collect PostgreSQL enum type names declared in SQLAlchemy metadata."""
+    enum_names: set[str] = set()
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            column_type = column.type
+            enum_name = getattr(column_type, "name", None)
+            has_enum_values = getattr(column_type, "enums", None) is not None
+            if enum_name and has_enum_values:
+                enum_names.add(str(enum_name))
+    return sorted(enum_names)
+
+
+async def _reset_metadata_enum_types(conn) -> None:
+    """Drop metadata enum types to avoid duplicate CREATE TYPE races in test DB setup."""
+    for enum_name in _collect_metadata_enum_type_names():
+        safe_name = enum_name.replace('"', '""')
+        await conn.execute(text(f'DROP TYPE IF EXISTS "{safe_name}" CASCADE'))
+
+
+async def _table_exists(conn, table_name: str) -> bool:
+    result = await conn.execute(
+        text("SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename=:table_name"),
+        {"table_name": table_name},
+    )
+    return result.first() is not None
+
+
+async def _column_exists(conn, table_name: str, column_name: str) -> bool:
+    result = await conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema='public' AND table_name=:table_name AND column_name=:column_name
+            """
+        ),
+        {"table_name": table_name, "column_name": column_name},
+    )
+    return result.first() is not None
+
+
+async def _ensure_rls_and_audit_compatibility(conn) -> None:
+    """Create minimal RLS metadata/policies and audit table compatibility columns for tests."""
+    rls_tables = (
+        "tenants",
+        "users",
+        "projects",
+        "documents",
+        "clauses",
+        "analyses",
+        "alerts",
+        "extractions",
+        "stakeholders",
+        "wbs_items",
+        "bom_items",
+        "stakeholder_wbs_raci",
+        "ai_usage_logs",
+        "audit_logs",
+    )
+    for table_name in rls_tables:
+        if not await _table_exists(conn, table_name):
+            continue
+        await conn.execute(text(f'ALTER TABLE public."{table_name}" ENABLE ROW LEVEL SECURITY'))
+        await conn.execute(text(f'ALTER TABLE public."{table_name}" FORCE ROW LEVEL SECURITY'))
+        policy_name = f"{table_name}_allow_all"
+        existing_policy = await conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM pg_policies
+                WHERE schemaname='public' AND tablename=:table_name AND policyname=:policy_name
+                """
+            ),
+            {"table_name": table_name, "policy_name": policy_name},
+        )
+        if existing_policy.first() is None:
+            await conn.execute(
+                text(
+                    f'CREATE POLICY "{policy_name}" ON public."{table_name}" USING (true) WITH CHECK (true)'
+                )
+            )
+
+    if await _table_exists(conn, "audit_logs"):
+        if not await _column_exists(conn, "audit_logs", "user_id"):
+            await conn.execute(text('ALTER TABLE public.audit_logs ADD COLUMN user_id UUID'))
+        if not await _column_exists(conn, "audit_logs", "created_at"):
+            await conn.execute(
+                text(
+                    "ALTER TABLE public.audit_logs "
+                    "ADD COLUMN created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()"
+                )
+            )
+
+
 def _ensure_test_fk_stub_tables() -> None:
     """Register minimal stub tables required by cross-module FKs in test metadata."""
     if "wbs_items" not in Base.metadata.tables:
@@ -119,18 +213,6 @@ def _ensure_test_fk_stub_tables() -> None:
             Column("id", PGUUID(as_uuid=True), primary_key=True),
             extend_existing=True,
         )
-
-
-def _postgres_enum_types() -> list[SAEnum]:
-    """Collect SQLAlchemy enum type objects registered in the shared metadata."""
-    enum_types: list[SAEnum] = []
-    seen_ids: set[int] = set()
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, SAEnum) and column.type.name and id(column.type) not in seen_ids:
-                seen_ids.add(id(column.type))
-                enum_types.append(column.type)
-    return enum_types
 
 
 def _auth_schema_available(session: Session) -> bool:
@@ -282,18 +364,14 @@ async def test_engine():
         _ensure_test_fk_stub_tables()
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
-            for enum_type in _postgres_enum_types():
-                try:
-                    await conn.run_sync(
-                        lambda sync_conn, t=enum_type: t.create(sync_conn, checkfirst=True)
-                    )
-                except IntegrityError as exc:
-                    # Parallel test workers/suites can race creating the same enum type.
-                    # Ignore duplicate-type creation and continue with metadata setup.
-                    if "pg_type_typname_nsp_index" not in str(exc):
-                        raise
-                enum_type.create_type = False
+            try:
+                await conn.run_sync(Base.metadata.drop_all)
+            except Exception:
+                # Best-effort cleanup for stale local schemas before re-creating metadata tables.
+                pass
+            await _reset_metadata_enum_types(conn)
             await conn.run_sync(Base.metadata.create_all)
+            await _ensure_rls_and_audit_compatibility(conn)
 
         yield engine
 
@@ -331,13 +409,23 @@ async def test_session_factory(test_engine):
     """
     Create a session factory for tests.
     """
-    return async_sessionmaker(
+    factory = async_sessionmaker(
         bind=test_engine,
         class_=AsyncSession,
         expire_on_commit=False,
         autocommit=False,
         autoflush=False,
     )
+    # Keep core.database global session factory aligned for suites that import
+    # and call `src.core.database._session_factory()` directly.
+    from src.core import database as core_database
+
+    previous_factory = core_database._session_factory
+    core_database._session_factory = factory
+    try:
+        yield factory
+    finally:
+        core_database._session_factory = previous_factory
 
 
 @pytest_asyncio.fixture

@@ -10,11 +10,13 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from src.core import database as database_module
 from src.core.database import Base, get_session_with_tenant
+from src.config import settings
 from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
@@ -24,18 +26,24 @@ from src.projects.adapters.persistence.models import ProjectORM
 @pytest_asyncio.fixture
 async def pg_engine():
     container = None
+    previous_session_factory = database_module._session_factory
     try:
         container = PostgresContainer("postgres:15-alpine")
         container.start()
-    except DockerException as exc:
-        pytest.skip(f"Docker unavailable for testcontainers: {exc}")
+    except DockerException:
+        container = None
     engine = None
     try:
-        url = container.get_connection_url()
-        if url.startswith("postgresql+psycopg2://"):
-            url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if container is not None:
+            url = container.get_connection_url()
+            if url.startswith("postgresql+psycopg2://"):
+                url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        else:
+            url = settings.database_url
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         engine = create_async_engine(url, echo=False)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
@@ -48,8 +56,16 @@ async def pg_engine():
         yield engine
     finally:
         if engine is not None:
+            try:
+                async with engine.begin() as conn:
+                    await conn.run_sync(
+                        ProcurementBase.metadata.drop_all, tables=[WBSItemORM.__table__]
+                    )
+                    await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
+            except OperationalError:
+                pass
             await engine.dispose()
-        database_module._session_factory = None
+        database_module._session_factory = previous_session_factory
         if container is not None:
             container.stop()
 

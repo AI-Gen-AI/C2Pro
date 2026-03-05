@@ -1,0 +1,2 @@
+"""MCP adapters tests package."""
+

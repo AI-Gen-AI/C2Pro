@@ -291,21 +291,21 @@ class TestHITLServiceIntegration:
 
 
 class TestMigration:
-    def test_migration_file_exists(self):
+    @staticmethod
+    def _migration_path():
         from pathlib import Path
 
-        migration = Path(
-            "/home/user/C2Pro/apps/api/alembic/versions/20260225_0001_create_review_items.py"
-        )
+        repo_root = Path(__file__).resolve().parents[6]
+        return repo_root / "apps" / "api" / "alembic" / "versions" / "20260225_0001_create_review_items.py"
+
+    def test_migration_file_exists(self):
+        migration = self._migration_path()
         assert migration.exists()
 
     def test_migration_revision_chain(self):
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location(
-            "migration",
-            "/home/user/C2Pro/apps/api/alembic/versions/20260225_0001_create_review_items.py",
-        )
+        spec = importlib.util.spec_from_file_location("migration", self._migration_path())
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         assert mod.revision == "20260225_0001"
