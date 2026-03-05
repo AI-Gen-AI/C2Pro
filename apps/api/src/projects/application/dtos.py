@@ -7,7 +7,7 @@ the presentation layer (API routers) and the application services (use cases).
 
 Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -102,3 +102,22 @@ class ProjectFilters(BaseModel):
     has_alerts: bool | None = None
     created_after: datetime | None = None
     created_before: datetime | None = None
+
+
+class WBSItemDTO(BaseModel):
+    """Cross-module DTO contract for WBS item queries."""
+
+    id: UUID
+    code: str
+    name: str
+    level: int
+    start_date: date | None = None
+    end_date: date | None = None
+    parent_id: UUID | None = None
+
+    model_config = ConfigDict()
+
+    def __setattr__(self, name: str, value) -> None:
+        if name in self.__dict__:
+            raise TypeError("WBSItemDTO is immutable")
+        super().__setattr__(name, value)
