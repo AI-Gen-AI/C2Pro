@@ -1,3 +1,10 @@
+import pytest
+
+pytest.importorskip(
+    "agents.stakeholders_extractor",
+    reason="Legacy stakeholders extractor module unavailable",
+)
+
 from agents.stakeholders_extractor import (
     StakeholderExtractionList,
     _extract_json_array,

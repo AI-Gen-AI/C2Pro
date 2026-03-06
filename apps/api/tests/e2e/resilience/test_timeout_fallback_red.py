@@ -7,6 +7,7 @@ All assertions define contracts that are expected to fail before GREEN implement
 
 from __future__ import annotations
 
+import os
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,6 +16,13 @@ from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 from src.core.auth.models import Tenant, User
+
+
+if os.getenv("C2PRO_TEST_LIGHT") == "1":
+    pytest.skip(
+        "Resilience RED timeout suite is skipped in light test mode; run in dedicated resilience environment.",
+        allow_module_level=True,
+    )
 
 
 @pytest_asyncio.fixture

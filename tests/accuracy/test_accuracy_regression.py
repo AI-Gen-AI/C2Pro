@@ -1,8 +1,8 @@
-"Accuracy Regression Tests (CE-S2-016)
+"""Accuracy Regression Tests (CE-S2-016)
 
 This module contains tests to verify the AI's extraction and analysis
 accuracy against the golden dataset. It ensures that accuracy does not
-regress below a predefined threshold."
+regress below a predefined threshold."""
 
 import json
 from pathlib import Path

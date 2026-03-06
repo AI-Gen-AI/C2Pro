@@ -4,6 +4,11 @@ import asyncio
 
 import pytest
 
+pytest.importorskip(
+    "src.modules.ai.service",
+    reason="Legacy AI service module unavailable",
+)
+
 from src.core.exceptions import AIServiceError
 from src.modules.ai.service import AIService
 

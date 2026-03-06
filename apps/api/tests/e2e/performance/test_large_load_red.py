@@ -7,6 +7,7 @@ E2E RED tests for large-load and performance contracts.
 from __future__ import annotations
 
 import asyncio
+import os
 import statistics
 import time
 from uuid import uuid4
@@ -14,6 +15,13 @@ from uuid import uuid4
 import pytest
 
 from src.core.auth.models import Tenant, User
+
+
+if os.getenv("C2PRO_TEST_LIGHT") == "1":
+    pytest.skip(
+        "Performance RED suite is skipped in light test mode; run in dedicated perf environment.",
+        allow_module_level=True,
+    )
 
 
 def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:

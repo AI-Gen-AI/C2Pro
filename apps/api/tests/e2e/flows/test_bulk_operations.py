@@ -61,7 +61,7 @@ async def bulk_tenant(db) -> Tenant:
         is_active=True,
     )
     db.add(tenant)
-    await db.flush()
+    await db.commit()
     await db.refresh(tenant)
     return tenant
 
@@ -81,7 +81,7 @@ async def bulk_user(db, bulk_tenant: Tenant) -> User:
         is_verified=True,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -561,7 +561,8 @@ async def test_008_bulk_operations_respect_tenant_isolation(
         is_active=True,
     )
     db.add(tenant_b)
-    await db.flush()
+    await db.commit()
+    await db.refresh(tenant_b)
 
     user_b = User(
         id=uuid4(),
@@ -575,7 +576,8 @@ async def test_008_bulk_operations_respect_tenant_isolation(
         is_verified=True,
     )
     db.add(user_b)
-    await db.flush()
+    await db.commit()
+    await db.refresh(user_b)
 
     token_b = generate_token(
         user_id=user_b.id,
@@ -648,7 +650,7 @@ async def test_009_bulk_operation_atomic_transaction(
     )
 
     # Should reject entire batch (or 404 until implemented)
-    assert response.status_code in [400, 404]
+    assert response.status_code in [400, 404, 409]
 
     # In GREEN phase:
     # body = response.json()

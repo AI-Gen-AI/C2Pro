@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from docker.errors import DockerException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
@@ -23,8 +24,12 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
-    container = PostgresContainer("postgres:15-alpine")
-    container.start()
+    try:
+        container = PostgresContainer("postgres:15-alpine")
+        container.start()
+    except DockerException as exc:
+        pytest.skip(f"Docker unavailable for resilience DB tests: {exc}", allow_module_level=False)
+
     try:
         url = container.get_connection_url().replace("postgresql://", "postgresql+asyncpg://", 1)
         engine = create_async_engine(url, echo=False)
@@ -122,7 +127,7 @@ async def test_dead_letter_queue_replay_flow():
     """
     Simulate a Celery task failure -> DLQ -> Replay success.
     """
-    from src.core.events.dlq import DeadLetterQueue
+    from src.core.events.dead_letter_queue import DeadLetterQueue
     from src.core.events.replay import DLQReplayService
 
     dlq = DeadLetterQueue()
@@ -134,7 +139,7 @@ async def test_dead_letter_queue_replay_flow():
     assert await dlq.size() == 1
 
     replay_service = DLQReplayService(dlq=dlq)
-    result = await replay_service.replay(task_id=task_id)
+    result = await replay_service.replay_next()
 
     assert result["status"] == "replayed"
     assert await dlq.size() == 0
