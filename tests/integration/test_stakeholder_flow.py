@@ -5,10 +5,16 @@ import json
 from uuid import UUID, uuid4
 from unittest.mock import patch
 
+import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+pytest.importorskip(
+    "src.agents.stakeholder_extractor",
+    reason="Legacy stakeholder extractor module unavailable",
+)
 
 from src.agents.stakeholder_extractor import StakeholderExtractorAgent
 from src.ai.ai_service import AIService

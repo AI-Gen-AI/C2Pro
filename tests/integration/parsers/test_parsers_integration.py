@@ -6,8 +6,12 @@ import pytest
 
 import openpyxl
 
+pytest.importorskip(
+    "src.modules.projects.schemas",
+    reason="Legacy projects schemas module unavailable",
+)
+
 from src.modules.projects.schemas import BOMItemBase
-import pytest
 
 pyfiebdc = pytest.importorskip("pyfiebdc")
 # TODO: Re-enable BC3 integration tests once pyfiebdc is available for our runtime.

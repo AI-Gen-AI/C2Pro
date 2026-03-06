@@ -298,6 +298,7 @@ def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
 def pytest_configure(config):
     """Registrar custom markers."""
     config.addinivalue_line("markers", "security: marca tests de seguridad críticos")
+    config.addinivalue_line("markers", "tdd: mark tests that enforce TDD workflow")
     # CTO Gates verification markers
     config.addinivalue_line("markers", "gate_verification: CTO security gates verification tests")
     config.addinivalue_line("markers", "gate1_rls: Gate 1 - Row Level Security verification")

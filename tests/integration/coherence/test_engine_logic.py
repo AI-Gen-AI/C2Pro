@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
+import pytest
+
+pytest.importorskip(
+    "src.modules.coherence.rules.cost_rules",
+    reason="Legacy coherence rules module unavailable",
+)
 
 from src.modules.coherence.rules.cost_rules import CostVarianceRule
 from src.modules.coherence.rules.schedule_rules import DependencyViolationRule

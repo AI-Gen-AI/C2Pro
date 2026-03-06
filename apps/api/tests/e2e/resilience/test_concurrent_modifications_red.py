@@ -8,12 +8,20 @@ These tests define strict optimistic-locking and conflict contracts.
 from __future__ import annotations
 
 import asyncio
+import os
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 
 from src.core.auth.models import Tenant, User
+
+
+if os.getenv("C2PRO_TEST_LIGHT") == "1":
+    pytest.skip(
+        "Resilience RED concurrency suite is skipped in light test mode; run in dedicated resilience environment.",
+        allow_module_level=True,
+    )
 
 
 @pytest_asyncio.fixture
