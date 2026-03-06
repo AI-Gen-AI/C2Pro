@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core import database as database_module
@@ -28,6 +30,12 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
 )
 from src.documents.domain.models import Clause, ClauseType, Document, DocumentStatus, DocumentType
 from src.projects.adapters.persistence.models import ProjectORM
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(_type, _compiler, **_kw) -> str:
+    """SQLite fallback for PostgreSQL JSONB columns used by shared auth models."""
+    return "JSON"
 
 
 @pytest_asyncio.fixture(scope="module")

@@ -3,12 +3,17 @@ from __future__ import annotations
 import sys
 import types
 
+import langchain
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 
 @pytest.mark.asyncio
 async def test_graph_flow_retries_on_negative_critique(monkeypatch) -> None:
+    # Compatibility shim for langchain_core globals on newer langchain packages
+    # where `langchain.debug` may be absent.
+    monkeypatch.setattr(langchain, "debug", False, raising=False)
+
     stub_ai_service = types.ModuleType("src.ai.ai_service")
 
     class StubAIService:

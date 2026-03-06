@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import re
 from uuid import uuid4
 
 import pytest
@@ -24,6 +25,8 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
+    engine = None
+    container = None
     try:
         container = PostgresContainer("postgres:15-alpine")
         container.start()
@@ -31,12 +34,15 @@ async def pg_engine():
         pytest.skip(f"Docker unavailable for resilience DB tests: {exc}", allow_module_level=False)
 
     try:
-        url = container.get_connection_url().replace("postgresql://", "postgresql+asyncpg://", 1)
+        raw_url = container.get_connection_url()
+        url = re.sub(r"^postgresql(\+\w+)?://", "postgresql+asyncpg://", raw_url, count=1)
         engine = create_async_engine(url, echo=False)
         yield engine
     finally:
-        await engine.dispose()
-        container.stop()
+        if engine is not None:
+            await engine.dispose()
+        if container is not None:
+            container.stop()
 
 
 @pytest_asyncio.fixture

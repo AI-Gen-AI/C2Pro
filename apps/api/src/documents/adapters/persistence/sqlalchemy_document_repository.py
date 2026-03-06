@@ -10,8 +10,6 @@ from uuid import UUID
 
 from sqlalchemy import select, func, text, table, column, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload # For eager loading relationships
-
 from src.documents.domain.models import Document, DocumentStatus, Clause
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.adapters.persistence.models import DocumentORM, ClauseORM
@@ -57,16 +55,13 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     def _to_domain_document(self, orm_document: DocumentORM) -> Document:
         if orm_document is None:
             return None
-        # Convert list of ClauseORM to list of Clause domain entities
+        # `DocumentORM.clauses` relationship is optional in this codebase.
+        # Keep mapper robust when the relationship is not declared.
+        clauses: list[Clause] = []
         state = inspect(orm_document)
-        if "clauses" in state.unloaded:
-            clauses = []
-        else:
-            clauses = (
-                [self._to_domain_clause(orm_clause) for orm_clause in orm_document.clauses]
-                if orm_document.clauses
-                else []
-            )
+        if hasattr(orm_document, "clauses") and "clauses" not in state.unloaded:
+            raw_clauses = getattr(orm_document, "clauses", None) or []
+            clauses = [self._to_domain_clause(orm_clause) for orm_clause in raw_clauses]
         
         domain_document = Document(
             id=orm_document.id,
@@ -165,15 +160,15 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         return self._to_domain_document(orm_document)
 
     async def get_document_with_clauses(self, document_id: UUID) -> Document | None:
-        stmt = (
-            select(DocumentORM)
-            .options(selectinload(DocumentORM.clauses))
-            .where(DocumentORM.id == document_id)
-        )
+        stmt = select(DocumentORM).where(DocumentORM.id == document_id)
         stmt = await self._apply_document_tenant_filter(stmt)
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
-        return self._to_domain_document(orm_document)
+        if orm_document is None:
+            return None
+        domain_document = self._to_domain_document(orm_document)
+        domain_document.clauses = await self.list_clauses_for_document(document_id)
+        return domain_document
 
     async def update_status(self, document_id: UUID, status: DocumentStatus, parsing_error: str | None = None) -> None:
         orm_document = await self.session.get(DocumentORM, document_id)
@@ -194,13 +189,7 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     async def list_for_project(
         self, project_id: UUID, skip: int, limit: int
     ) -> Tuple[List[Document], int]:
-        stmt = (
-            select(DocumentORM)
-            .options(selectinload(DocumentORM.clauses))
-            .where(DocumentORM.project_id == project_id)
-            .offset(skip)
-            .limit(limit)
-        )
+        stmt = select(DocumentORM).where(DocumentORM.project_id == project_id).offset(skip).limit(limit)
         stmt = await self._apply_document_tenant_filter(stmt)
         count_stmt = (
             select(func.count())

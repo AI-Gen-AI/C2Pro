@@ -26,6 +26,7 @@ class DocumentType(str, Enum):
     BUDGET = "budget"
     DRAWING = "drawing"
     SPECIFICATION = "specification"
+    TECHNICAL_SPEC = "specification"
     OTHER = "other"
 
 class ClauseType(str, Enum):
@@ -41,6 +42,7 @@ class ClauseType(str, Enum):
     TERMINATION = "termination"
     DISPUTE = "dispute"
     OTHER = "other"
+    GENERAL = "other"
 
 
 @dataclass
