@@ -64,7 +64,7 @@ curl http://localhost:8000/health/ready
 |---|------|-------------|--------|------|-------|
 | 2.1 | Fix Redis port conflict | Change test Redis to 6380 | :white_check_mark: DONE | 2026-03-07 | Port 6380:6379 |
 | 2.2 | Add startup script | Create `scripts/start-dev.sh` | :white_check_mark: DONE | 2026-03-07 | .sh + .ps1 versions |
-| 2.3 | Configure Alembic | Add alembic.ini for project | :red_circle: PENDING | - | Migration management |
+| 2.3 | Configure Alembic | Add alembic.ini for project | :white_check_mark: DONE | 2026-03-07 | Already configured, 5 migrations |
 | 2.4 | Container restart policies | `restart: unless-stopped` | :white_check_mark: DONE | 2026-03-07 | Already configured |
 
 ### P2 Implementation Notes
@@ -177,15 +177,15 @@ P1.4 (Migrations) ------------------------------+
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P1 - Critical | 5 | 5 | 0 | 0 |
-| P2 - Stability | 4 | 3 | 1 | 0 |
+| P2 - Stability | 4 | 4 | 0 | 0 |
 | P3 - Performance | 4 | 0 | 4 | 0 |
 | P4 - Security | 4 | 0 | 4 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **8** | **24** | **0** |
+| **TOTAL** | **32** | **9** | **23** | **0** |
 
-**Progress:** 25.0% complete
+**Progress:** 28.1% complete
 
 ---
 
