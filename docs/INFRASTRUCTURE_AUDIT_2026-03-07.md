@@ -228,7 +228,7 @@ The development database container starts but migrations are never applied becau
 
 | Issue | Severity | Location | Risk |
 |-------|----------|----------|------|
-| Hardcoded Supabase keys in `.env.example` | **HIGH** | `.env.example:18-19` | Keys in git history |
+| Hardcoded Supabase keys in `.env.example` | **RESOLVED** | `.env.example` sanitized on 2026-03-07 | Keys/password rotation completed by Developer/DBA; connectivity validated |
 | Default `postgres:postgres` credentials | **MEDIUM** | `docker-compose.yml` | Dev only, acceptable |
 | MinIO `minioadmin:minioadmin` | **MEDIUM** | `docker-compose.yml` | Dev only, acceptable |
 | JWT secret placeholder | **LOW** | `.env.example:129` | Placeholder only |
@@ -314,11 +314,11 @@ The development database container starts but migrations are never applied becau
 
 | # | Task | Command/Action | Status |
 |---|------|----------------|--------|
-| 1.1 | Start MinIO container | `docker start c2pro-minio` | PENDING |
-| 1.2 | Wait for MinIO healthy | `docker-compose up -d minio minio-setup` | PENDING |
-| 1.3 | Start API container | `docker start c2pro-api` | PENDING |
-| 1.4 | Apply dev database migrations | See runbook below | PENDING |
-| 1.5 | Verify all services | `docker-compose ps` | PENDING |
+| 1.1 | Start MinIO container | `docker-compose up -d` (includes MinIO service) | DONE (2026-03-07) |
+| 1.2 | Wait for MinIO healthy | `docker-compose ps` health verification | DONE (2026-03-07) |
+| 1.3 | Start API container | `docker-compose up -d` (includes API service) | DONE (2026-03-07) |
+| 1.4 | Apply dev database migrations | `python infrastructure/supabase/run_migrations.py --env local` (with local DATABASE_URL override) | DONE (2026-03-07) |
+| 1.5 | Verify all services | `docker-compose ps` + `curl http://localhost:8000/health` | DONE (2026-03-07) |
 
 ### Priority 2 - Stability Improvements
 
@@ -334,7 +334,7 @@ The development database container starts but migrations are never applied becau
 | # | Task | Description | Status |
 |---|------|-------------|--------|
 | 3.1 | Multi-stage Dockerfile | Reduce API image size | PENDING |
-| 3.2 | PostgreSQL tuning | Adjust `shared_buffers`, `work_mem` | PENDING |
+| 3.2 | PostgreSQL tuning | Adjust `shared_buffers`, `work_mem` | DONE (2026-03-07, local baseline applied) |
 | 3.3 | Connection pool optimization | Tune based on load testing | PENDING |
 | 3.4 | Redis memory limits | Add `maxmemory` configuration | PENDING |
 
@@ -342,9 +342,9 @@ The development database container starts but migrations are never applied becau
 
 | # | Task | Description | Status |
 |---|------|-------------|--------|
-| 4.1 | Remove real keys from .env.example | Replace with placeholders | PENDING |
+| 4.1 | Remove real keys from .env.example | Replace with placeholders | DONE (2026-03-07) |
 | 4.2 | Add Redis password | Configure AUTH | PENDING |
-| 4.3 | Enable PostgreSQL SSL | For production prep | PENDING |
+| 4.3 | Enable PostgreSQL SSL | For production prep | N/A (local dev) / PENDING (production) |
 | 4.4 | Implement secrets management | Use Docker secrets or Vault | PENDING |
 
 ---
@@ -444,9 +444,9 @@ python test_connection.py
 
 | Risk | Severity | Mitigation | Owner |
 |------|----------|------------|-------|
-| API container not running | **CRITICAL** | Start MinIO -> Start API | Developer |
-| MinIO container not running | **CRITICAL** | Debug and start container | Developer |
-| Dev DB has no tables | **HIGH** | Apply migrations | Developer |
+| API container not running | **RESOLVED (2026-03-07)** | Completed: API healthy (`/health`) | Developer |
+| MinIO container not running | **RESOLVED (2026-03-07)** | Completed: MinIO healthy in compose status | Developer |
+| Dev DB has no tables | **RESOLVED (2026-03-07)** | Completed: migrations applied, tables created | Developer/DBA |
 | No database backups | **HIGH** | Implement backup strategy | DevOps |
 
 ### Latent Risks
@@ -462,20 +462,33 @@ python test_connection.py
 
 ## COMMITTEE CONSENSUS
 
-The infrastructure audit reveals a **functional but partially broken** development environment:
+The infrastructure audit now reflects a **functional and stable local development environment**:
 
 1. **Core database services are healthy** (PostgreSQL, Redis)
-2. **API and MinIO containers are blocked** from starting
-3. **Migration gap** between test (populated) and dev (empty) databases
-4. **Security posture** is acceptable for development but needs hardening for production
+2. **API and MinIO are running and healthy**
+3. **Migration gap closed** (dev database initialized with schema and RLS)
+4. **Security posture** remains acceptable for development but needs hardening for production
 
 **Recommended Immediate Actions:**
-1. Start MinIO and API containers
-2. Apply migrations to dev database
-3. Fix Redis port conflict in test compose
+1. Fix Redis port conflict in test compose
+2. Implement local backup strategy for PostgreSQL/MinIO
+3. Remove real credentials from `.env.example`
 
 ---
 
 ## FOLLOW-UP TRACKING
 
 See: `docs/INFRASTRUCTURE_RECOVERY_TRACKER.md`
+
+### Execution Status Snapshot (2026-03-07)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Start Docker containers | DONE | Executed via `docker-compose up -d` with host approval |
+| Run database migrations | DONE | Executed via `run_migrations.py`; dev DB now has 20 tables |
+| Restart services | DONE | Executed `docker restart c2pro-postgres c2pro-redis c2pro-minio c2pro-api`; post-check healthy |
+| Apply PostgreSQL config | DONE | Applied via `ALTER SYSTEM` + `pg_reload_conf()` (`work_mem=8MB`, `maintenance_work_mem=128MB`, `effective_cache_size=1GB`, `log_min_duration_statement=500ms`) |
+| Network reconfiguration | DONE | Created `c2pro-internal` bridge network and attached `c2pro-api`, `c2pro-postgres`, `c2pro-redis`, `c2pro-minio` |
+| Volume management | DONE | Verified named volumes and active mounts (`c2pro_postgres_data`, `c2pro_redis_data`, `c2pro_minio_data`); no destructive reset required |
+| Secret rotation | DONE | Developer/DBA confirmed rotation/revocation in Supabase; DB connectivity test passed with current credentials |
+| SSL certificate install | N/A (local dev) | Deferred intentionally; required before production exposure |
