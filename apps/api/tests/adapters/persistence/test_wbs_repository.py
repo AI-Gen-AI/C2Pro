@@ -5,13 +5,14 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 """
 
 from __future__ import annotations
-
 from datetime import datetime
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy import Column, Table
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
@@ -23,6 +24,16 @@ from src.projects.adapters.persistence.models import ProjectORM
 from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
+
+
+def _ensure_test_fk_stub_tables() -> None:
+    if "wbs_items" not in Base.metadata.tables:
+        Table(
+            "wbs_items",
+            Base.metadata,
+            Column("id", PGUUID(as_uuid=True), primary_key=True),
+            extend_existing=True,
+        )
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -52,6 +63,7 @@ async def pg_engine():
             autoflush=False,
         )
         async with engine.begin() as conn:
+            _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(ProcurementBase.metadata.create_all)
         yield engine
@@ -60,7 +72,8 @@ async def pg_engine():
         core_database._session_factory = None
         if engine is not None:
             await engine.dispose()
-        container.stop()
+        if container is not None:
+            container.stop()
 
 
 @pytest_asyncio.fixture
@@ -99,20 +112,22 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
     await session.commit()
 
     # Seed ORM hierarchy directly to test repository tree building
+    root_code = f"1-{uuid4().hex[:6]}"
+    child_code = f"{root_code}.1"
     parent = WBSItemORM(
         id=uuid4(),
         project_id=project_a.id,
-        code="1",
+        code=root_code,
         name="Root",
         level=1,
     )
     child = WBSItemORM(
         id=uuid4(),
         project_id=project_a.id,
-        code="1.1",
+        code=child_code,
         name="Child",
         level=2,
-        parent_code="1",
+        parent_code=root_code,
     )
     session.add_all([parent, child])
     await session.commit()
@@ -120,9 +135,9 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
     repo = SQLAlchemyWBSRepository(session)
     tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
     assert len(tree) == 1
-    assert tree[0].code == "1"
+    assert tree[0].code == root_code
     assert len(tree[0].children) == 1
-    assert tree[0].children[0].code == "1.1"
+    assert tree[0].children[0].code == child_code
 
     # Critical security test: tenant isolation via RLS/session context
     async with get_session_with_tenant(tenant_b) as tenant_b_session:

@@ -5,7 +5,6 @@ Refers to Suite ID: TS-INT-DB-CLS-001.
 """
 
 from __future__ import annotations
-
 from datetime import datetime
 from uuid import uuid4
 
@@ -63,7 +62,8 @@ async def pg_engine():
         if engine is not None:
             await engine.dispose()
         database_module._session_factory = None
-        container.stop()
+        if container is not None:
+            container.stop()
 
 
 @pytest_asyncio.fixture
