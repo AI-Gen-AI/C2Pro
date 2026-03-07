@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
@@ -58,9 +59,8 @@ async def pg_engine():
         if engine is not None:
             try:
                 async with engine.begin() as conn:
-                    await conn.run_sync(
-                        ProcurementBase.metadata.drop_all, tables=[WBSItemORM.__table__]
-                    )
+                    await conn.execute(text("DROP TABLE IF EXISTS procurement_bom_items CASCADE"))
+                    await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
                     await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             except OperationalError:
                 pass
@@ -108,18 +108,20 @@ class TestWBSRepositoryIntegration:
         session.add(project_a)
         await session.commit()
 
+        root_code = f"1-{uuid4().hex[:6]}"
+        child_code = f"{root_code}.1"
         parent = WBSItem(
             project_id=project_a.id,
-            code="1",
+            code=root_code,
             name="Root",
             level=1,
         )
         child = WBSItem(
             project_id=project_a.id,
-            code="1.1",
+            code=child_code,
             name="Child",
             level=2,
-            parent_code="1",
+            parent_code=root_code,
         )
 
         async with get_session_with_tenant(tenant_a) as tenant_a_session:
@@ -129,13 +131,17 @@ class TestWBSRepositoryIntegration:
 
             tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
             assert len(tree) == 1
-            assert tree[0].code == "1"
+            assert tree[0].code == root_code
             assert len(tree[0].children) == 1
-            assert tree[0].children[0].code == "1.1"
+            assert tree[0].children[0].code == child_code
 
-            by_code = await repo.get_by_code(project_id=project_a.id, wbs_code="1.1", tenant_id=tenant_a)
+            by_code = await repo.get_by_code(
+                project_id=project_a.id,
+                wbs_code=child_code,
+                tenant_id=tenant_a,
+            )
             assert by_code is not None
-            assert by_code.code == "1.1"
+            assert by_code.code == child_code
 
         async with get_session_with_tenant(tenant_b) as tenant_b_session:
             tenant_b_repo = SQLAlchemyWBSRepository(tenant_b_session)
