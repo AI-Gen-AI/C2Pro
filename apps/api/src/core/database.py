@@ -5,6 +5,7 @@ SQLAlchemy async setup con Supabase PostgreSQL.
 Incluye Row Level Security (RLS) para multi-tenancy.
 """
 
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -22,6 +23,34 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 logger = structlog.get_logger()
+
+# Slow query threshold in seconds (100ms)
+SLOW_QUERY_THRESHOLD_MS = 100
+
+
+@event.listens_for(Engine, "before_cursor_execute")
+def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    """Record query start time for slow query detection."""
+    conn.info.setdefault("query_start_time", []).append(time.perf_counter())
+
+
+@event.listens_for(Engine, "after_cursor_execute")
+def _receive_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    """Log slow queries (> 100ms) for performance monitoring."""
+    start_times = conn.info.get("query_start_time", [])
+    if start_times:
+        start_time = start_times.pop()
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        if duration_ms > SLOW_QUERY_THRESHOLD_MS:
+            # Truncate long statements for logging
+            stmt_preview = statement[:200] + "..." if len(statement) > 200 else statement
+            logger.warning(
+                "slow_query_detected",
+                duration_ms=round(duration_ms, 2),
+                threshold_ms=SLOW_QUERY_THRESHOLD_MS,
+                statement_preview=stmt_preview,
+            )
 
 
 class Base(DeclarativeBase):

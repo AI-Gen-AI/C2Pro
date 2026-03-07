@@ -242,14 +242,28 @@ async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
 
     Returns:
         Dictionary containing the final state after workflow execution
+
+    Note:
+        Traces are automatically sent to LangSmith when LANGCHAIN_TRACING_V2=true
     """
     app = get_graph_app()
 
-    # Configure the thread for checkpointing
+    # Build run name from state for better LangSmith trace identification
+    project_id = initial_state.get("project_id", "unknown")
+    doc_type = initial_state.get("doc_type", "document")
+    run_name = f"C2Pro_Orchestration_{doc_type}_{project_id[:8] if project_id != 'unknown' else 'new'}"
+
+    # Configure the thread for checkpointing + LangSmith tracing
     config = {
         "configurable": {
             "thread_id": thread_id
-        }
+        },
+        "run_name": run_name,
+        "tags": ["c2pro", "orchestration", doc_type],
+        "metadata": {
+            "project_id": project_id,
+            "thread_id": thread_id,
+        },
     }
 
     # Invoke the graph with the initial state

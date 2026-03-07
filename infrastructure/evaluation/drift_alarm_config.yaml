@@ -1,0 +1,46 @@
+# C2Pro Coherence Scoring - Drift Alarm Configuration
+# Used by EvaluationHarness to detect model/scoring degradation
+
+dataset_name: c2pro_coherence_baseline
+version: "1.0.0"
+created_at: "2026-03-07"
+
+# Alert thresholds for drift detection
+alarms:
+  - metric_name: coherence_score_accuracy
+    description: "Accuracy of coherence scores vs human baseline"
+    threshold_percentage_drop: 0.10  # Alert if accuracy drops >10%
+    min_absolute_value: 0.75         # Alert if accuracy falls below 75%
+    severity: critical
+
+  - metric_name: alert_precision
+    description: "Precision of generated alerts (true positives / all positives)"
+    threshold_percentage_drop: 0.10  # Alert if precision drops >10%
+    min_absolute_value: 0.80         # Alert if precision falls below 80%
+    severity: high
+
+  - metric_name: alert_recall
+    description: "Recall of generated alerts (true positives / actual positives)"
+    threshold_percentage_drop: 0.15  # Alert if recall drops >15%
+    min_absolute_value: 0.75         # Alert if recall falls below 75%
+    severity: high
+
+  - metric_name: category_distribution_variance
+    description: "Variance in category score distribution"
+    threshold_percentage_drop: null  # Not applicable (lower is better)
+    min_absolute_value: null
+    max_absolute_value: 0.15         # Alert if variance exceeds 15%
+    severity: medium
+
+# Notification settings
+notifications:
+  escalation_enabled: true
+  channels:
+    - type: slack
+      webhook_url: "${BUDGET_ALERT_WEBHOOK_URL}"
+    - type: email
+      recipients: "${BUDGET_ALERT_ADMIN_EMAILS}"
+
+  deduplication:
+    enabled: true
+    window_hours: 24
