@@ -3,17 +3,19 @@ C2Pro - Health Check Router
 
 Provides endpoints for monitoring application health, essential for container
 orchestrators like Kubernetes and uptime monitoring services.
+
+Note: Health endpoints use get_raw_session (no tenant context) since they
+are typically called by load balancers without authentication.
 """
 
 import asyncio
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 from redis.exceptions import RedisError
 
-from src.core.database import get_session
-from src.core.cache import get_cache_service, CacheService
+from src.core.database import get_raw_session
+from src.core.cache import get_cache_service
 
 logger = structlog.get_logger()
 
@@ -58,10 +60,7 @@ async def liveness_check():
     summary="Readiness Probe",
     description="Checks if the application is ready to accept traffic by verifying connections to dependencies."
 )
-async def readiness_check(
-    db: AsyncSession = Depends(get_session),
-    cache: CacheService = Depends(get_cache_service)
-):
+async def readiness_check():
     """
     Checks if the application is ready to handle requests.
 
@@ -73,20 +72,21 @@ async def readiness_check(
     db_status = "down"
     redis_status = "down"
 
-    # Check Database
+    # Check Database (using raw session - no tenant context needed for health)
     try:
-        # Execute a simple query with a timeout
-        await asyncio.wait_for(
-            db.execute(text("SELECT 1")),
-            timeout=HEALTH_CHECK_TIMEOUT
-        )
-        db_status = "up"
+        async with get_raw_session() as db:
+            await asyncio.wait_for(
+                db.execute(text("SELECT 1")),
+                timeout=HEALTH_CHECK_TIMEOUT
+            )
+            db_status = "up"
     except asyncio.TimeoutError:
         logger.error("health_check_db_timeout")
     except Exception as e:
         logger.error("health_check_db_failed", error=str(e))
 
     # Check Redis Cache
+    cache = get_cache_service()
     if cache and cache.enabled:
         try:
             # The service's ping method has its own internal timeout
@@ -109,11 +109,11 @@ async def readiness_check(
 
     # Evaluate results
     if db_status == "up" and redis_status in ["up", "in_memory_fallback", "not_configured"]:
-        return {"database": db_status, "redis": redis_status}
+        return {"status": "healthy", "database": db_status, "redis": redis_status}
     else:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"database": db_status, "redis": redis_status},
+            detail={"status": "unhealthy", "database": db_status, "redis": redis_status},
         )
 
 
@@ -122,15 +122,12 @@ async def readiness_check(
 # ===========================================
 
 @router.get(
-    "/",
+    "",
     summary="Generic Health Check",
     description="Alias for the readiness probe. Useful for simple uptime monitors."
 )
-async def generic_health_check(
-    db: AsyncSession = Depends(get_session),
-    cache: CacheService = Depends(get_cache_service)
-):
+async def generic_health_check():
     """
     A simple alias for the /ready endpoint.
     """
-    return await readiness_check(db, cache)
+    return await readiness_check()

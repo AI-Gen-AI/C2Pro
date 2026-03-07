@@ -10,7 +10,7 @@
 
 ## FOLLOW-UP STATUS TRACKER
 
-> **Last Updated:** 2026-03-07 (P1 + P2 + P3.1-P3.4 COMPLETE - Token counting + A/B + Analytics)
+> **Last Updated:** 2026-03-07 (P1 + P2 + P3 ALL COMPLETE)
 > **Next Review:** TBD
 
 ### Priority 1 - Immediate Execution (Critical)
@@ -18,8 +18,8 @@
 | # | Task | Owner | Status | Due | Notes |
 |---|------|-------|--------|-----|-------|
 | 1.1 | Add `LANGSMITH_API_KEY` to `.env` | DevOps | :white_check_mark: DONE | Day 1 | Configured in .env |
-| 1.2 | Install `langchain` package | DevOps | :red_circle: PENDING | Day 1 | Optional dependency |
-| 1.3 | Fix API `/health` endpoint path | Backend | :red_circle: PENDING | Day 1 | Returns 404 currently |
+| 1.2 | Install `langchain` package | DevOps | :white_check_mark: DONE | Day 1 | v1.2.10 + langsmith |
+| 1.3 | Fix API `/health` endpoint path | Backend | :white_check_mark: DONE | Day 1 | Uses get_raw_session |
 | 1.4 | Run full E2E test validation | QA | :white_check_mark: DONE | Day 1 | 5/5 passed (1.79s) |
 | 1.5 | Verify all 17 graph nodes execute | QA | :white_check_mark: DONE | Day 1 | 29/29 orchestration tests passed |
 
@@ -42,7 +42,7 @@
 | 3.2 | Build A/B comparison dashboard | Prompt Eng | :white_check_mark: DONE | Week 2 | `ab_experiment.py` - 33 tests |
 | 3.3 | Pre-execution cost estimation | Cost Opt | :white_check_mark: DONE | Week 2 | Merged with P3.1 |
 | 3.4 | Usage analytics dashboard | Cost Opt | :white_check_mark: DONE | Week 2 | `usage_analytics.py` - 27 tests |
-| 3.5 | Expand chain-of-thought prompts | Prompt Eng | :red_circle: PENDING | Week 3 | Better consistency |
+| 3.5 | Expand chain-of-thought prompts | Prompt Eng | :white_check_mark: DONE | Week 3 | v1.1 CoT templates |
 
 ### Priority 4 - Production Hardening (Low)
 
