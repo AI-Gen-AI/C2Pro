@@ -5,13 +5,14 @@ Refers to Suite ID: TS-INT-DB-AUD-001.
 """
 
 from __future__ import annotations
-
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy import Column, Table
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
@@ -21,6 +22,16 @@ from src.core.database import Base, get_session_with_tenant
 from src.core.security.audit_trail import AuditTrail
 from src.core.security.adapters.persistence.audit_repository import SQLAlchemyAuditRepository
 from src.core.security.adapters.persistence.models import AuditLogORM
+
+
+def _ensure_test_fk_stub_tables() -> None:
+    if "wbs_items" not in Base.metadata.tables:
+        Table(
+            "wbs_items",
+            Base.metadata,
+            Column("id", PGUUID(as_uuid=True), primary_key=True),
+            extend_existing=True,
+        )
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -50,6 +61,7 @@ async def pg_engine():
             autoflush=False,
         )
         async with engine.begin() as conn:
+            _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all)
         yield engine
     finally:
@@ -57,7 +69,8 @@ async def pg_engine():
         core_database._session_factory = None
         if engine is not None:
             await engine.dispose()
-        container.stop()
+        if container is not None:
+            container.stop()
 
 
 @pytest_asyncio.fixture

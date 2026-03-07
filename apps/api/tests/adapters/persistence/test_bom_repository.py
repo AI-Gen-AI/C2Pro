@@ -5,7 +5,6 @@ Refers to Suite ID: TS-INT-DB-BOM-001.
 """
 
 from __future__ import annotations
-
 from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -13,6 +12,8 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy import Column, Table
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
@@ -23,6 +24,16 @@ from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRep
 from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.projects.adapters.persistence.models import ProjectORM
+
+
+def _ensure_test_fk_stub_tables() -> None:
+    if "wbs_items" not in Base.metadata.tables:
+        Table(
+            "wbs_items",
+            Base.metadata,
+            Column("id", PGUUID(as_uuid=True), primary_key=True),
+            extend_existing=True,
+        )
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -52,6 +63,7 @@ async def pg_engine():
             autoflush=False,
         )
         async with engine.begin() as conn:
+            _ensure_test_fk_stub_tables()
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(ProcurementBase.metadata.create_all)
         yield engine
@@ -60,7 +72,8 @@ async def pg_engine():
         core_database._session_factory = None
         if engine is not None:
             await engine.dispose()
-        container.stop()
+        if container is not None:
+            container.stop()
 
 
 @pytest_asyncio.fixture
@@ -99,10 +112,11 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
     session.add(project_a)
     await session.commit()
 
+    wbs_code = f"1-{uuid4().hex[:6]}"
     wbs_item = WBSItemORM(
         id=uuid4(),
         project_id=project_a.id,
-        code="1",
+        code=wbs_code,
         name="Root",
         level=1,
     )
