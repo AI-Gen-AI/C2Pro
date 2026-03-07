@@ -26,15 +26,27 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- vector: Para futuros embeddings de IA (búsqueda semántica)
--- Nota: Esta extensión puede no estar disponible en todos los
--- planes de Supabase. Si falla, comentar esta línea.
-CREATE EXTENSION IF NOT EXISTS "vector";
+-- Nota: Esta extensión puede no estar disponible en todos los entornos
+-- locales (por ejemplo, postgres:alpine sin pgvector).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+        EXECUTE 'CREATE EXTENSION IF NOT EXISTS "vector"';
+    ELSE
+        RAISE NOTICE 'Extensión vector no disponible en este entorno; se omite su creación';
+    END IF;
+END $$;
 
 -- uuid-ossp: Para generación de UUIDs (alternativa a gen_random_uuid)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 COMMENT ON EXTENSION pgcrypto IS 'C2Pro: Generación de UUIDs y funciones criptográficas';
-COMMENT ON EXTENSION vector IS 'C2Pro: Soporte para embeddings de IA (búsqueda semántica)';
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        EXECUTE 'COMMENT ON EXTENSION vector IS ''C2Pro: Soporte para embeddings de IA (búsqueda semántica)''';
+    END IF;
+END $$;
 
 -- =====================================================
 -- SECCIÓN 2: ENUMS
@@ -694,7 +706,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE 'Migración 001_init_schema.sql completada exitosamente';
-    RAISE NOTICE 'Extensiones creadas: pgcrypto, vector, uuid-ossp';
+    RAISE NOTICE 'Extensiones creadas: pgcrypto, uuid-ossp (vector si está disponible)';
     RAISE NOTICE 'Tablas creadas: tenants, users, projects, documents';
     RAISE NOTICE 'RLS habilitado en TODAS las tablas';
     RAISE NOTICE 'Políticas RLS creadas para aislamiento por tenant';
