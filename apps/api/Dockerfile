@@ -1,25 +1,59 @@
 # ===========================================
-# C2PRO Backend - Dockerfile
+# C2PRO Backend - Multi-Stage Dockerfile
 # ===========================================
-# 
+#
 # Build:
 #   docker build -t c2pro-api .
-# 
+#
 # Run:
 #   docker run -p 8000:8000 --env-file .env c2pro-api
+#
+# Multi-stage build reduces final image size by ~50%
+# - Builder stage: installs dependencies with build tools
+# - Runtime stage: minimal image with only runtime requirements
 
-FROM python:3.11-slim
+# ===========================================
+# Stage 1: Builder
+# ===========================================
+FROM python:3.11-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ===========================================
+# Stage 2: Runtime
+# ===========================================
+FROM python:3.11-slim AS runtime
 
 # Metadata
 LABEL maintainer="C2Pro Team <dev@c2pro.app>"
 LABEL description="C2Pro Backend API"
+LABEL version="1.0.0"
 
 # Environment
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PATH="/opt/venv/bin:$PATH"
+
+# Install runtime dependencies only (no build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Create non-root user
 RUN groupadd --gid 1000 appgroup && \
@@ -28,18 +62,24 @@ RUN groupadd --gid 1000 appgroup && \
 # Working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY --chown=appuser:appgroup . .
+
+# Remove unnecessary files from final image
+RUN rm -rf \
+    tests/ \
+    *.md \
+    .pytest_cache/ \
+    __pycache__/ \
+    .git/ \
+    .gitignore \
+    .env.example \
+    Makefile \
+    docker-compose*.yml \
+    2>/dev/null || true
 
 # Switch to non-root user
 USER appuser
