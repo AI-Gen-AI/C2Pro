@@ -17,13 +17,6 @@ import pytest
 from src.core.auth.models import Tenant, User
 
 
-if os.getenv("C2PRO_TEST_LIGHT") == "1":
-    pytest.skip(
-        "Performance RED suite is skipped in light test mode; run in dedicated perf environment.",
-        allow_module_level=True,
-    )
-
-
 def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:
     token = generate_token(
         user_id=user.id,
@@ -104,7 +97,11 @@ async def test_002_list_projects_p95_under_1500ms_for_10_concurrent_requests(
 
     assert all(s == 200 for s in statuses)
     p95 = latencies[int(len(latencies) * 0.95) - 1]
-    assert p95 < 1500
+    if os.getenv("C2PRO_TEST_LIGHT") == "1" and p95 >= 1500:
+        pytest.xfail(f"RED perf contract pending in light mode: measured p95={p95:.2f}ms")
+
+    max_p95_ms = 1500
+    assert p95 < max_p95_ms
 
 
 @pytest.mark.asyncio

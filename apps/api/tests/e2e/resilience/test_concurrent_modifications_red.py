@@ -17,13 +17,6 @@ import pytest_asyncio
 from src.core.auth.models import Tenant, User
 
 
-if os.getenv("C2PRO_TEST_LIGHT") == "1":
-    pytest.skip(
-        "Resilience RED concurrency suite is skipped in light test mode; run in dedicated resilience environment.",
-        allow_module_level=True,
-    )
-
-
 @pytest_asyncio.fixture
 async def concurrency_project(test_tenant: Tenant) -> dict:
     """Create fake project for concurrent-modification tests."""
@@ -147,6 +140,9 @@ async def test_004_patch_without_if_match_is_rejected(
         json={"name": "No If-Match"},
         headers=headers,
     )
+
+    if os.getenv("C2PRO_TEST_LIGHT") == "1" and response.status_code == 200:
+        pytest.xfail("RED contract pending in light mode: PATCH without If-Match is not yet rejected.")
 
     assert response.status_code == 428
 

@@ -7,7 +7,6 @@ All assertions define contracts that are expected to fail before GREEN implement
 
 from __future__ import annotations
 
-import os
 from uuid import UUID, uuid4
 
 import pytest
@@ -16,13 +15,6 @@ from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 from src.core.auth.models import Tenant, User
-
-
-if os.getenv("C2PRO_TEST_LIGHT") == "1":
-    pytest.skip(
-        "Resilience RED timeout suite is skipped in light test mode; run in dedicated resilience environment.",
-        allow_module_level=True,
-    )
 
 
 @pytest_asyncio.fixture
@@ -44,6 +36,16 @@ async def seeded_auth_headers_tenant_b(
         tenant_id=UUID(str(test_tenant_2.id)),
         email=test_user_2.email,
         role=test_user_2.role.value if hasattr(test_user_2.role, "value") else str(test_user_2.role),
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:
+    token = generate_token(
+        user_id=UUID(str(user.id)),
+        tenant_id=UUID(str(tenant.id)),
+        email=user.email,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -157,22 +159,26 @@ async def test_005_circuit_half_open_probe_recovers_to_closed_state(live_app, se
 @pytest.mark.e2e
 async def test_006_timeout_saturation_is_isolated_per_tenant(
     live_app,
-    seeded_auth_headers,
+    test_user: User,
+    test_tenant: Tenant,
     seeded_auth_headers_tenant_b,
+    generate_token,
 ) -> None:
     """TS-E2E-ERR-TIM-001: Timeout pressure in tenant A must not degrade tenant B."""
+    tenant_a_headers = _headers(generate_token, test_user, test_tenant)
+
     async with AsyncClient(transport=ASGITransport(app=live_app), base_url="http://testserver") as client:
         for _ in range(3):
             await client.post(
                 "/api/v1/decision-intelligence/execute",
                 json=_payload("timeout_primary"),
-                headers=seeded_auth_headers,
+                headers=tenant_a_headers,
             )
 
         tenant_a = await client.post(
             "/api/v1/decision-intelligence/execute",
             json=_payload("timeout_primary"),
-            headers=seeded_auth_headers,
+            headers=tenant_a_headers,
         )
         tenant_b = await client.post(
             "/api/v1/decision-intelligence/execute",
