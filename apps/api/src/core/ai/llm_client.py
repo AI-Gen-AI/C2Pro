@@ -5,11 +5,12 @@ Wrapper robusto para Claude API (Anthropic) con:
 - Retry con exponential backoff
 - Logging estructurado completo
 - Cost tracking automático
+- Pre-execution token counting and cost estimation
 - Rate limit handling
 - Circuit breaker pattern
 - Error recovery
 
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from anthropic import Anthropic
 from anthropic.types import Message
 
 from src.config import settings
+from src.core.ai.token_counter import get_token_counter
 
 logger = structlog.get_logger()
 
@@ -344,6 +346,15 @@ class LLMClient:
         # Track request
         self.total_requests += 1
 
+        # Pre-execution token counting and cost estimation
+        token_counter = get_token_counter()
+        pre_estimate = token_counter.estimate_request(
+            model=request.model,
+            messages=request.messages,
+            system=request.system,
+            max_tokens=request.max_tokens,
+        )
+
         logger.info(
             "llm_request_started",
             request_id=request.request_id,
@@ -351,7 +362,20 @@ class LLMClient:
             model=request.model,
             task_type=request.task_type,
             max_retries=self.max_retries,
+            # Pre-execution estimates
+            estimated_input_tokens=pre_estimate.input_tokens,
+            estimated_output_tokens=pre_estimate.estimated_output_tokens,
+            estimated_cost_usd=pre_estimate.total_cost_usd,
+            context_usage_percent=pre_estimate.context_usage_percent,
         )
+
+        # Log warnings if context usage is high
+        if pre_estimate.warnings:
+            logger.warning(
+                "llm_request_warnings",
+                request_id=request.request_id,
+                warnings=pre_estimate.warnings,
+            )
 
         retry_attempts: list[RetryAttempt] = []
         last_error: Exception | None = None
@@ -393,6 +417,13 @@ class LLMClient:
                 if self.circuit_breaker:
                     self.circuit_breaker.record_success()
 
+                # Calculate estimation accuracy
+                input_accuracy = (
+                    (1 - abs(raw_response.usage.input_tokens - pre_estimate.input_tokens) /
+                     max(raw_response.usage.input_tokens, 1)) * 100
+                    if pre_estimate.input_tokens > 0 else 0
+                )
+
                 logger.info(
                     "llm_request_success",
                     request_id=request.request_id,
@@ -406,6 +437,10 @@ class LLMClient:
                     circuit_breaker_state=self.circuit_breaker.get_state()
                     if self.circuit_breaker
                     else None,
+                    # Pre-execution estimation vs actual
+                    estimated_input_tokens=pre_estimate.input_tokens,
+                    estimated_cost_usd=pre_estimate.total_cost_usd,
+                    input_estimation_accuracy_pct=round(input_accuracy, 1),
                 )
 
                 return LLMResponse(

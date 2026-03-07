@@ -1,0 +1,125 @@
+{
+  "dataset_name": "c2pro_coherence_baseline",
+  "version": "1.0.0",
+  "created_at": "2026-03-07",
+  "description": "Baseline evaluation dataset for coherence scoring drift detection",
+  "metrics": {
+    "baseline_metrics": {
+      "coherence_score_accuracy": 0.85,
+      "alert_precision": 0.90,
+      "alert_recall": 0.88,
+      "category_distribution_variance": 0.05
+    },
+    "thresholds": {
+      "coherence_score_accuracy": {
+        "min_absolute_value": 0.75,
+        "threshold_percentage_drop": 0.10
+      },
+      "alert_precision": {
+        "min_absolute_value": 0.80,
+        "threshold_percentage_drop": 0.10
+      },
+      "alert_recall": {
+        "min_absolute_value": 0.75,
+        "threshold_percentage_drop": 0.15
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "id": "baseline-excellent-001",
+      "name": "Excellent Project - No Issues",
+      "expected_score_range": [90, 100],
+      "expected_alert_count": 0,
+      "project": {
+        "contract": {
+          "total_amount": 100000,
+          "currency": "EUR",
+          "duration_months": 6
+        },
+        "budget_items": [
+          {"id": "b1", "name": "Materials", "amount": 50000},
+          {"id": "b2", "name": "Labor", "amount": 45000},
+          {"id": "b3", "name": "Contingency", "amount": 5000}
+        ],
+        "schedule_status": "on_track",
+        "contract_review_date": "2026-03-01",
+        "clauses": [
+          {"id": "c1", "text": "El contratista entregará el proyecto en 6 meses.", "category": "SCOPE"},
+          {"id": "c2", "text": "El presupuesto total es de 100,000 EUR.", "category": "BUDGET"}
+        ]
+      }
+    },
+    {
+      "id": "baseline-minor-001",
+      "name": "Minor Issues - Budget Variance",
+      "expected_score_range": [75, 89],
+      "expected_alert_count": 1,
+      "expected_alert_severities": ["medium"],
+      "project": {
+        "contract": {
+          "total_amount": 100000,
+          "currency": "EUR",
+          "duration_months": 6
+        },
+        "budget_items": [
+          {"id": "b1", "name": "Materials", "amount": 55000},
+          {"id": "b2", "name": "Labor", "amount": 50000},
+          {"id": "b3", "name": "Contingency", "amount": 5000}
+        ],
+        "schedule_status": "on_track",
+        "contract_review_date": "2026-03-01",
+        "clauses": [
+          {"id": "c1", "text": "El presupuesto máximo es de 100,000 EUR.", "category": "BUDGET"}
+        ]
+      }
+    },
+    {
+      "id": "baseline-major-001",
+      "name": "Major Issues - Budget Overrun + Delayed",
+      "expected_score_range": [50, 74],
+      "expected_alert_count": 2,
+      "expected_alert_severities": ["high", "high"],
+      "project": {
+        "contract": {
+          "total_amount": 100000,
+          "currency": "EUR",
+          "duration_months": 6
+        },
+        "budget_items": [
+          {"id": "b1", "name": "Materials", "amount": 70000},
+          {"id": "b2", "name": "Labor", "amount": 60000}
+        ],
+        "schedule_status": "delayed",
+        "contract_review_date": "2025-06-01",
+        "clauses": [
+          {"id": "c1", "text": "El plazo máximo de ejecución es de 6 meses.", "category": "TIME"}
+        ]
+      }
+    },
+    {
+      "id": "baseline-critical-001",
+      "name": "Critical Issues - Multiple Violations",
+      "expected_score_range": [0, 49],
+      "expected_alert_count": 4,
+      "expected_alert_severities": ["critical", "critical", "high", "high"],
+      "project": {
+        "contract": {
+          "total_amount": 100000,
+          "currency": "EUR",
+          "duration_months": 6
+        },
+        "budget_items": [
+          {"id": "b1", "name": "Materials", "amount": 100000},
+          {"id": "b2", "name": "Labor", "amount": 80000}
+        ],
+        "schedule_status": "delayed",
+        "contract_review_date": "2025-01-01",
+        "clauses": [
+          {"id": "c1", "text": "Términos vagos sin especificación clara.", "category": "SCOPE"},
+          {"id": "c2", "text": "Responsabilidades no asignadas explícitamente.", "category": "LEGAL"}
+        ]
+      }
+    }
+  ]
+}
