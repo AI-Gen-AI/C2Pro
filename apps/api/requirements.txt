@@ -27,6 +27,8 @@ anthropic==0.18.1
 jinja2>=3.1.5  # Prompt templating
 langgraph==0.2.35
 langchain-core>=0.2.40
+langchain>=0.2.0  # Full LangChain for LangSmith integration
+langsmith>=0.1.0  # LangSmith observability
 
 # Document Parsing
 pymupdf==1.26.7  # PDF
