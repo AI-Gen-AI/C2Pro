@@ -27,7 +27,7 @@
 | 1.2 | Wait for MinIO healthy | `docker-compose up -d minio minio-setup` | :white_check_mark: DONE | 2026-03-07 | Healthy |
 | 1.3 | Start API container | `docker start c2pro-api` | :white_check_mark: DONE | 2026-03-07 | Container started |
 | 1.4 | Apply dev database migrations | See runbook | :white_check_mark: DONE | 2026-03-07 | All migrations applied |
-| 1.5 | Verify all services healthy | `docker-compose ps` | :white_check_mark: DONE | 2026-03-07 | All services healthy |
+| | :white_check_mark: DONE | 2026-03-07 | All services healthy |
 
 ### P1 Execution Commands
 
@@ -62,7 +62,7 @@ curl http://localhost:8000/health/ready
 
 | # | Task | Description | Status | Date | Notes |
 |---|------|-------------|--------|------|-------|
-| 2.1 | Fix Redis port conflict | Change test Redis to 6380 | :red_circle: PENDING | - | Edit docker-compose.test.yml |
+| 2.1 | Fix Redis port conflict | Change test Redis to 6380 | :white_check_mark: DONE | 2026-03-07 | Port 6380:6379 |
 | 2.2 | Add startup script | Create `scripts/start-dev.sh` | :red_circle: PENDING | - | Automate P1 steps |
 | 2.3 | Configure Alembic | Add alembic.ini for project | :red_circle: PENDING | - | Migration management |
 | 2.4 | Container restart policies | `restart: unless-stopped` | :white_check_mark: DONE | 2026-03-07 | Already configured |
@@ -177,15 +177,15 @@ P1.4 (Migrations) ------------------------------+
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P1 - Critical | 5 | 5 | 0 | 0 |
-| P2 - Stability | 4 | 1 | 3 | 0 |
+| P2 - Stability | 4 | 2 | 2 | 0 |
 | P3 - Performance | 4 | 0 | 4 | 0 |
 | P4 - Security | 4 | 0 | 4 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **6** | **26** | **0** |
+| **TOTAL** | **32** | **7** | **25** | **0** |
 
-**Progress:** 18.8% complete
+**Progress:** 21.9% complete
 
 ---
 
