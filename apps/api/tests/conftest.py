@@ -122,7 +122,7 @@ async def _reset_metadata_enum_types(conn) -> None:
     """Drop metadata enum types to avoid duplicate CREATE TYPE races in test DB setup."""
     for enum_name in _collect_metadata_enum_type_names():
         safe_name = enum_name.replace('"', '""')
-        await conn.execute(text(f'DROP TYPE IF EXISTS "{safe_name}" CASCADE'))
+        await conn.execute(text(f'DROP TYPE IF EXISTS public."{safe_name}" CASCADE'))
 
 
 async def _table_exists(conn, table_name: str) -> bool:
@@ -364,6 +364,7 @@ async def test_engine():
         # Test connection and create tables
         _ensure_test_fk_stub_tables()
         async with engine.begin() as conn:
+            await conn.execute(text("SET LOCAL search_path TO public"))
             await conn.execute(text("SELECT 1"))
             try:
                 await conn.run_sync(Base.metadata.drop_all)
@@ -592,6 +593,7 @@ async def seeded_auth_context() -> dict[str, str]:
 
     _ensure_test_fk_stub_tables()
     async with engine.begin() as conn:
+        await conn.execute(text("SET LOCAL search_path TO public"))
         await conn.run_sync(Base.metadata.create_all)
 
     async with session_factory() as session:

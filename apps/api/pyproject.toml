@@ -62,7 +62,7 @@ addopts = [
     "-ra",
     "-q",
     "--strict-markers",
-    "--basetemp=.pytest-tmp",
+    "--basetemp=.pytest-tmp-local",
 ]
 pythonpath = ["src"]
 markers = [
