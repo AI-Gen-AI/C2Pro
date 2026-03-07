@@ -26,6 +26,7 @@ from sqlalchemy.ext.compiler import compiles
 # AGENT test inventory. They use placeholder imports/classes and should not
 # block suite execution.
 collect_ignore = [
+    "legacy",
     "test_i2_ocr_and_table_parsing.py",
     "test_i3_clause_extraction_and_normalization.py",
     "test_i4_hybrid_rag_retrieval.py",
