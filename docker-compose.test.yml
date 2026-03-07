@@ -29,12 +29,27 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    # PostgreSQL tuning for test performance
     command:
       - "postgres"
       - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "effective_cache_size=256MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
       - "max_connections=100"
       - "-c"
-      - "shared_buffers=128MB"
+      - "fsync=off"
+      - "-c"
+      - "synchronous_commit=off"
+      - "-c"
+      - "full_page_writes=off"
 
   # ===========================================
   # Redis Test Service (Event Bus / Cache)
