@@ -1,0 +1,62 @@
+# ===========================================
+# C2Pro API - Docker Build Ignore
+# ===========================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.venv*/
+ENV/
+
+# Testing
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+coverage.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# Development
+.env
+.env.*
+!.env.example
+Makefile
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Alembic (keep migrations, exclude cache)
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# Misc
+*.bak
+*.tmp
+.DS_Store

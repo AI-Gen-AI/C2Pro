@@ -76,8 +76,7 @@ redis-test:
   ports:
     - "6380:6379"  # Changed from 6379:6379
 ```
-
-**2.2 - Startup Script Template:**
+*2.2 - Startup Script Template:**
 ```bash
 #!/bin/bash
 # scripts/start-dev.sh
@@ -106,7 +105,7 @@ echo "Done! API available at http://localhost:8000"
 
 | # | Task | Description | Status | Date | Notes |
 |---|------|-------------|--------|------|-------|
-| 3.1 | Multi-stage Dockerfile | Reduce API image size | :red_circle: PENDING | - | ~50% size reduction |
+| 3.1 | Multi-stage Dockerfile | Reduce API image size | :white_check_mark: DONE | 2026-03-07 | Builder + runtime stages |
 | 3.2 | PostgreSQL tuning | Adjust shared_buffers, work_mem | :red_circle: PENDING | - | For local dev |
 | 3.3 | Connection pool optimization | Tune based on load testing | :red_circle: PENDING | - | After baseline |
 | 3.4 | Redis memory limits | Add maxmemory configuration | :red_circle: PENDING | - | Prevent OOM |
@@ -178,14 +177,14 @@ P1.4 (Migrations) ------------------------------+
 |----------|-------|------|---------|---------|
 | P1 - Critical | 5 | 5 | 0 | 0 |
 | P2 - Stability | 4 | 4 | 0 | 0 |
-| P3 - Performance | 4 | 0 | 4 | 0 |
+| P3 - Performance | 4 | 1 | 3 | 0 |
 | P4 - Security | 4 | 0 | 4 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **9** | **23** | **0** |
+| **TOTAL** | **32** | **10** | **22** | **0** |
 
-**Progress:** 28.1% complete
+**Progress:** 31.3% complete
 
 ---
 
