@@ -145,6 +145,9 @@ class UpdateWBSItemUseCase:
             if parent:
                 existing.parent_code = parent.code
 
+        if wbs_update.expected_version is not None:
+            existing.version = wbs_update.expected_version
+
         return await self.wbs_repository.update(wbs_id, existing, tenant_id)
 
 

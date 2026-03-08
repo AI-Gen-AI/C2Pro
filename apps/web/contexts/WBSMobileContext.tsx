@@ -43,14 +43,16 @@ interface WBSMobileContextType {
   cachedData: WBSItem[];
   queueAction: (action: Action) => void;
   pendingActions: Action[];
+  failedActions: Action[];
   syncWhenOnline: () => Promise<void>;
   setCachedData: (data: WBSItem[]) => void;
+  isSyncing: boolean;
 }
 
 const WBSMobileContext = createContext<WBSMobileContextType | null>(null);
 
 const STORAGE_KEY = "wbs-mobile-cache";
-const ACTIONS_KEY = "wbs-pending-actions";
+const ACTIONS_KEY = "wbs-action-queue";
 
 export function WBSMobileProvider({ children }: { children: ReactNode }) {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -82,12 +84,18 @@ export function WBSMobileProvider({ children }: { children: ReactNode }) {
     }
     return [];
   });
+  const [failedActions, setFailedActions] = useState<Action[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const isExecutingRef = useRef(false);
 
   // Listen for online/offline events
   useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
+    const handleOnline = () => {
+      setIsOffline(false);
+      setIsSyncing(true);
+      window.setTimeout(() => setIsSyncing(false), 1500);
+    };
     const handleOffline = () => setIsOffline(true);
 
     window.addEventListener("online", handleOnline);
@@ -123,19 +131,25 @@ export function WBSMobileProvider({ children }: { children: ReactNode }) {
   const syncWhenOnline = useCallback(async () => {
     if (isExecutingRef.current) return;
     isExecutingRef.current = true;
+    setIsSyncing(true);
 
     try {
       const actionsToSync = [...pendingActions];
 
       for (const action of actionsToSync) {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // Remove from pending after successful sync
-        setPendingActions((prev) => prev.filter((a) => a.id !== action.id));
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          setPendingActions((prev) => prev.filter((a) => a.id !== action.id));
+          setFailedActions((prev) => prev.filter((failed) => failed.id !== action.id));
+        } catch {
+          setFailedActions((prev) =>
+            prev.some((failed) => failed.id === action.id) ? prev : [...prev, action],
+          );
+        }
       }
     } finally {
       isExecutingRef.current = false;
+      setIsSyncing(false);
     }
   }, [pendingActions]);
 
@@ -151,12 +165,18 @@ export function WBSMobileProvider({ children }: { children: ReactNode }) {
     cachedData,
     queueAction,
     pendingActions,
+    failedActions,
     syncWhenOnline,
     setCachedData,
+    isSyncing,
   };
 
   return (
     <WBSMobileContext.Provider value={value}>
+      {pendingActions.length > 0 ? (
+        <div data-testid="pending-actions-badge">{pendingActions.length}</div>
+      ) : null}
+      {isSyncing ? <div data-testid="syncing-indicator">Syncing</div> : null}
       {children}
     </WBSMobileContext.Provider>
   );

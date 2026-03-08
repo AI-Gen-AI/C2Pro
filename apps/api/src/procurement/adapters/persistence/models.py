@@ -65,7 +65,9 @@ class WBSItemORM(Base):
     actual_start = Column(DateTime(timezone=True), nullable=True)
     actual_end = Column(DateTime(timezone=True), nullable=True)
     source_clause_id = Column(UUID(as_uuid=True), nullable=True)
+    version = Column(Integer, nullable=False, default=1)
     wbs_metadata = Column(JSONB, default={}, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
 
     # Relationships
     # Parent relationship (many-to-one)
