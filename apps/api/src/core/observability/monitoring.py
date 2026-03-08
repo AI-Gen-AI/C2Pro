@@ -141,7 +141,7 @@ def get_version() -> str:
 # ===========================================
 
 try:
-    from prometheus_client import Counter, Histogram, Info
+    from prometheus_client import Counter, Gauge, Histogram, Info
 
     # App info
     APP_INFO = Info("c2pro_app", "Application information")
@@ -190,6 +190,31 @@ try:
     CACHE_HIT = Counter("c2pro_cache_hits_total", "Cache hits", ["cache_type"])
 
     CACHE_MISS = Counter("c2pro_cache_misses_total", "Cache misses", ["cache_type"])
+
+    # Circuit breaker metrics
+    CIRCUIT_BREAKER_STATE = Gauge(
+        "c2pro_circuit_breaker_state",
+        "Current state of circuit breaker (0=closed, 1=open, 2=half_open)",
+        ["service"],
+    )
+
+    CIRCUIT_BREAKER_FAILURES = Counter(
+        "c2pro_circuit_breaker_failures_total",
+        "Total failures recorded by circuit breaker",
+        ["service"],
+    )
+
+    CIRCUIT_BREAKER_REJECTIONS = Counter(
+        "c2pro_circuit_breaker_rejections_total",
+        "Requests rejected due to open circuit",
+        ["service"],
+    )
+
+    CIRCUIT_BREAKER_STATE_CHANGES = Counter(
+        "c2pro_circuit_breaker_state_changes_total",
+        "Circuit breaker state transitions",
+        ["service", "from_state", "to_state"],
+    )
 
     METRICS_AVAILABLE = True
 
@@ -241,3 +266,39 @@ def record_cache_miss(cache_type: str) -> None:
     """Registra un cache miss."""
     if METRICS_AVAILABLE:
         CACHE_MISS.labels(cache_type=cache_type).inc()
+
+
+def record_circuit_breaker_state(service: str, state: str) -> None:
+    """
+    Record circuit breaker state change.
+
+    Args:
+        service: Service name (e.g., "anthropic_llm", "redis_cache")
+        state: Current state ("closed", "open", "half_open")
+    """
+    if METRICS_AVAILABLE:
+        # Map state to numeric value for gauge
+        state_value = {"closed": 0, "open": 1, "half_open": 2}.get(state, 0)
+        CIRCUIT_BREAKER_STATE.labels(service=service).set(state_value)
+
+
+def record_circuit_breaker_failure(service: str) -> None:
+    """Record a failure in circuit breaker."""
+    if METRICS_AVAILABLE:
+        CIRCUIT_BREAKER_FAILURES.labels(service=service).inc()
+
+
+def record_circuit_breaker_rejection(service: str) -> None:
+    """Record a rejected request due to open circuit."""
+    if METRICS_AVAILABLE:
+        CIRCUIT_BREAKER_REJECTIONS.labels(service=service).inc()
+
+
+def record_circuit_breaker_state_change(service: str, from_state: str, to_state: str) -> None:
+    """Record circuit breaker state transition."""
+    if METRICS_AVAILABLE:
+        CIRCUIT_BREAKER_STATE_CHANGES.labels(
+            service=service, from_state=from_state, to_state=to_state
+        ).inc()
+        # Also update the current state gauge
+        record_circuit_breaker_state(service, to_state)

@@ -33,6 +33,8 @@ from redis.exceptions import RedisError
 
 from src.config import settings
 from src.core.observability import record_cache_hit, record_cache_miss
+from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
+from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
 
@@ -110,6 +112,7 @@ class CacheService:
     Features:
     - Async Redis client with SSL/TLS support
     - Automatic fallback to in-memory cache on Redis failures
+    - Circuit breaker to prevent hammering failing Redis
     - JSON serialization/deserialization
     - Namespace support with key prefixes
     - TTL (Time To Live) for automatic expiration
@@ -132,6 +135,7 @@ class CacheService:
         self._memory = InMemoryCache()
         self._enabled = bool(redis_url)
         self._namespace = namespace_prefix
+        self._circuit_breaker = self._init_circuit_breaker()
 
         if redis_url:
             try:
@@ -154,12 +158,27 @@ class CacheService:
                     "cache_initialized",
                     backend="redis",
                     ssl_enabled=ssl_enabled,
-                    namespace=self._namespace
+                    namespace=self._namespace,
+                    circuit_breaker_enabled=True,
                 )
             except Exception as exc:
                 logger.error("cache_init_failed", error=str(exc))
                 self._redis = None
                 self._enabled = False
+
+    def _init_circuit_breaker(self):
+        """Initialize circuit breaker for Redis operations."""
+        cb_settings = get_circuit_breaker_settings()
+        if not cb_settings.enable_circuit_breakers:
+            return None
+
+        return CircuitBreakerRegistry.register(
+            CircuitBreakerConfig(
+                service_name="redis_cache",
+                failure_threshold=cb_settings.redis_failure_threshold,
+                recovery_timeout=cb_settings.redis_recovery_timeout,
+            )
+        )
 
     @property
     def enabled(self) -> bool:
@@ -293,11 +312,15 @@ class CacheService:
         """
         full_key = self._build_key(key, namespace)
 
-        if self._redis:
+        if await self._can_use_redis():
             try:
                 result = await self._redis.delete(full_key)
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
                 return result > 0
             except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
                 logger.warning("cache_delete_failed", key=full_key, error=str(exc))
 
         return await self._memory.delete(full_key)
@@ -319,11 +342,15 @@ class CacheService:
         """
         full_key = self._build_key(key, namespace)
 
-        if self._redis:
+        if await self._can_use_redis():
             try:
                 result = await self._redis.exists(full_key)
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
                 return result > 0
             except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
                 logger.warning("cache_exists_failed", key=full_key, error=str(exc))
 
         return await self._memory.exists(full_key)
@@ -332,27 +359,43 @@ class CacheService:
     # Internal Methods (Bytes Level)
     # =============================================
 
+    async def _can_use_redis(self) -> bool:
+        """Check if Redis is available and circuit breaker allows execution."""
+        if not self._redis:
+            return False
+        if self._circuit_breaker is None:
+            return True
+        return await self._circuit_breaker.can_execute()
+
     async def _get_bytes(self, key: str) -> Optional[bytes]:
-        """Internal method to get raw bytes from cache."""
-        if self._redis:
+        """Internal method to get raw bytes from cache with circuit breaker protection."""
+        if await self._can_use_redis():
             try:
                 value = await self._redis.get(key)
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
                 if value is None:
                     return None
                 if isinstance(value, bytes):
                     return value
                 return str(value).encode("utf-8")
             except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
                 logger.warning("cache_read_failed", key=key, error=str(exc))
         return await self._memory.get(key)
 
     async def _set_bytes(self, key: str, value: bytes, ttl_seconds: Optional[int]) -> None:
-        """Internal method to set raw bytes in cache."""
-        if self._redis:
+        """Internal method to set raw bytes in cache with circuit breaker protection."""
+        if await self._can_use_redis():
             try:
                 await self._redis.set(key, value, ex=ttl_seconds)
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
                 return
             except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
                 logger.warning("cache_write_failed", key=key, error=str(exc))
         await self._memory.set(key, value, ttl_seconds)
 

@@ -7,10 +7,10 @@ Wrapper robusto para Claude API (Anthropic) con:
 - Cost tracking automático
 - Pre-execution token counting and cost estimation
 - Rate limit handling
-- Circuit breaker pattern
+- Circuit breaker pattern (using centralized resilience infrastructure)
 - Error recovery
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ from anthropic.types import Message
 
 from src.config import settings
 from src.core.ai.token_counter import get_token_counter
+from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry, CircuitBreakerState
+from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
 
@@ -136,106 +138,6 @@ class RetryAttempt:
 
 
 # ===========================================
-# CIRCUIT BREAKER
-# ===========================================
-
-
-class CircuitBreakerState(str, Enum):
-    """Estados del circuit breaker."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject requests
-    HALF_OPEN = "half_open"  # Testing recovery
-
-
-class CircuitBreaker:
-    """
-    Circuit breaker pattern para proteger contra cascading failures.
-
-    Después de N fallos consecutivos, "abre" el circuito y rechaza requests
-    por un período de recovery. Luego intenta "half-open" para probar recovery.
-    """
-
-    def __init__(
-        self,
-        failure_threshold: int = CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-        recovery_timeout: float = CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
-    ):
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-
-        self.state = CircuitBreakerState.CLOSED
-        self.failure_count = 0
-        self.last_failure_time: float | None = None
-        self.success_count_in_half_open = 0
-
-    def record_success(self):
-        """Registra un éxito."""
-        if self.state == CircuitBreakerState.HALF_OPEN:
-            self.success_count_in_half_open += 1
-            if self.success_count_in_half_open >= 2:
-                # Recovery exitoso
-                self._close()
-        elif self.state == CircuitBreakerState.CLOSED:
-            # Reset failure count en éxito
-            self.failure_count = max(0, self.failure_count - 1)
-
-    def record_failure(self):
-        """Registra un fallo."""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
-
-        if self.failure_count >= self.failure_threshold:
-            self._open()
-
-    def can_execute(self) -> bool:
-        """Verifica si se puede ejecutar una request."""
-        if self.state == CircuitBreakerState.CLOSED:
-            return True
-
-        if self.state == CircuitBreakerState.OPEN:
-            # Check if recovery timeout elapsed
-            if (
-                self.last_failure_time
-                and time.time() - self.last_failure_time >= self.recovery_timeout
-            ):
-                self._half_open()
-                return True
-            return False
-
-        if self.state == CircuitBreakerState.HALF_OPEN:
-            return True
-
-        return False
-
-    def _open(self):
-        """Abre el circuito (reject requests)."""
-        self.state = CircuitBreakerState.OPEN
-        logger.warning(
-            "circuit_breaker_opened",
-            failure_count=self.failure_count,
-            threshold=self.failure_threshold,
-        )
-
-    def _half_open(self):
-        """Semi-abre el circuito (test recovery)."""
-        self.state = CircuitBreakerState.HALF_OPEN
-        self.success_count_in_half_open = 0
-        logger.info("circuit_breaker_half_open", testing_recovery=True)
-
-    def _close(self):
-        """Cierra el circuito (normal operation)."""
-        self.state = CircuitBreakerState.CLOSED
-        self.failure_count = 0
-        self.success_count_in_half_open = 0
-        logger.info("circuit_breaker_closed", recovered=True)
-
-    def get_state(self) -> str:
-        """Retorna el estado actual."""
-        return self.state.value
-
-
-# ===========================================
 # LLM CLIENT WRAPPER
 # ===========================================
 
@@ -302,8 +204,8 @@ class LLMClient:
         # Initialize Anthropic client
         self.client = Anthropic(api_key=self.api_key, timeout=timeout_seconds)
 
-        # Circuit breaker
-        self.circuit_breaker = CircuitBreaker() if enable_circuit_breaker else None
+        # Circuit breaker (using centralized resilience infrastructure)
+        self.circuit_breaker = self._init_circuit_breaker() if enable_circuit_breaker else None
 
         # Statistics
         self.total_requests = 0
@@ -315,6 +217,27 @@ class LLMClient:
             max_retries=max_retries,
             timeout_seconds=timeout_seconds,
             circuit_breaker_enabled=enable_circuit_breaker,
+        )
+
+    def _init_circuit_breaker(self):
+        """Initialize circuit breaker using centralized resilience infrastructure."""
+        cb_settings = get_circuit_breaker_settings()
+        if not cb_settings.enable_circuit_breakers:
+            return None
+
+        # Use the centralized registry with Anthropic-specific excluded exceptions
+        return CircuitBreakerRegistry.register(
+            CircuitBreakerConfig(
+                service_name="anthropic_llm",
+                failure_threshold=cb_settings.anthropic_failure_threshold,
+                recovery_timeout=cb_settings.anthropic_recovery_timeout,
+                # Don't trip circuit on client errors (auth, validation)
+                excluded_exceptions=(
+                    anthropic.AuthenticationError,
+                    anthropic.BadRequestError,
+                    anthropic.NotFoundError,
+                ),
+            )
         )
 
     # ===========================================
@@ -338,9 +261,9 @@ class LLMClient:
         start_time = time.perf_counter()
 
         # Check circuit breaker
-        if self.circuit_breaker and not self.circuit_breaker.can_execute():
+        if self.circuit_breaker and not self.circuit_breaker.can_execute_sync():
             raise RuntimeError(
-                f"Circuit breaker is {self.circuit_breaker.get_state()}, rejecting request"
+                f"Circuit breaker is {self.circuit_breaker.state.value}, rejecting request"
             )
 
         # Track request
@@ -415,7 +338,7 @@ class LLMClient:
 
                 # Record success in circuit breaker
                 if self.circuit_breaker:
-                    self.circuit_breaker.record_success()
+                    self.circuit_breaker.record_success_sync()
 
                 # Calculate estimation accuracy
                 input_accuracy = (
@@ -434,7 +357,7 @@ class LLMClient:
                     cost_usd=cost_usd,
                     execution_time_ms=round(execution_time_ms, 2),
                     retries=attempt,
-                    circuit_breaker_state=self.circuit_breaker.get_state()
+                    circuit_breaker_state=self.circuit_breaker.state.value
                     if self.circuit_breaker
                     else None,
                     # Pre-execution estimation vs actual
@@ -470,12 +393,10 @@ class LLMClient:
                 )
 
                 # Record failure in circuit breaker
-                if self.circuit_breaker and error_type in [
-                    LLMErrorType.SERVER_ERROR,
-                    LLMErrorType.TIMEOUT,
-                    LLMErrorType.CONNECTION,
-                ]:
-                    self.circuit_breaker.record_failure()
+                # The circuit breaker's excluded_exceptions config handles which
+                # exceptions trip the circuit (AuthenticationError, BadRequestError, etc.)
+                if self.circuit_breaker:
+                    self.circuit_breaker.record_failure_sync(e)
 
                 # Check if we should retry
                 if attempt >= self.max_retries:
@@ -525,7 +446,7 @@ class LLMClient:
             total_attempts=len(retry_attempts) + 1,
             execution_time_ms=round(execution_time_ms, 2),
             final_error=str(last_error),
-            circuit_breaker_state=self.circuit_breaker.get_state()
+            circuit_breaker_state=self.circuit_breaker.state.value
             if self.circuit_breaker
             else None,
         )

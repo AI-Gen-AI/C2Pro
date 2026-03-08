@@ -9,15 +9,21 @@ are typically called by load balancers without authentication.
 """
 
 import asyncio
+from typing import Any
+
 import structlog
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import text
 from redis.exceptions import RedisError
+from sqlalchemy import text
 
-from src.core.database import get_raw_session
 from src.core.cache import get_cache_service
+from src.core.database import get_raw_session
+from src.core.resilience import CircuitBreakerRegistry, CircuitBreakerState
 
 logger = structlog.get_logger()
+
+# Critical services that affect readiness
+CRITICAL_CIRCUIT_BREAKER_SERVICES = ["anthropic_llm", "openai_embeddings", "r2_storage"]
 
 # ===========================================
 # ROUTER SETUP
@@ -68,6 +74,8 @@ async def readiness_check():
     and cache (Redis). A 503 Service Unavailable error will be returned if any
     dependency is not reachable, signaling to the load balancer to stop
     sending traffic to this instance.
+
+    Also reports circuit breaker status for critical services.
     """
     db_status = "down"
     redis_status = "down"
@@ -107,14 +115,86 @@ async def readiness_check():
         # Cache is not configured for this environment
         redis_status = "not_configured"
 
+    # Check circuit breakers
+    circuit_breakers = _get_circuit_breaker_summary()
+    critical_circuits_ok = not any(
+        cb.get("state") == "open"
+        for name, cb in circuit_breakers.items()
+        if name in CRITICAL_CIRCUIT_BREAKER_SERVICES
+    )
+
     # Evaluate results
-    if db_status == "up" and redis_status in ["up", "in_memory_fallback", "not_configured"]:
-        return {"status": "healthy", "database": db_status, "redis": redis_status}
+    is_healthy = (
+        db_status == "up"
+        and redis_status in ["up", "in_memory_fallback", "not_configured"]
+    )
+
+    # Determine overall status
+    if is_healthy and critical_circuits_ok:
+        overall_status = "healthy"
+    elif is_healthy and not critical_circuits_ok:
+        overall_status = "degraded"  # Core services up but external circuits tripped
     else:
+        overall_status = "unhealthy"
+
+    result = {
+        "status": overall_status,
+        "database": db_status,
+        "redis": redis_status,
+        "circuit_breakers": circuit_breakers,
+    }
+
+    if overall_status == "unhealthy":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "unhealthy", "database": db_status, "redis": redis_status},
+            detail=result,
         )
+
+    return result
+
+
+def _get_circuit_breaker_summary() -> dict[str, dict[str, Any]]:
+    """Get summary of all circuit breakers for health check."""
+    all_status = CircuitBreakerRegistry.get_all_health_status()
+
+    # Return simplified view for readiness
+    return {
+        name: {
+            "state": status["state"],
+            "failure_count": status["failure_count"],
+            "failure_threshold": status["failure_threshold"],
+        }
+        for name, status in all_status.items()
+    }
+
+
+# ===========================================
+# CIRCUIT BREAKER STATUS
+# ===========================================
+
+@router.get(
+    "/circuit-breakers",
+    summary="Circuit Breaker Status",
+    description="Detailed status of all circuit breakers for external services."
+)
+async def circuit_breaker_status():
+    """
+    Get detailed status of all circuit breakers.
+
+    Returns full statistics for each registered circuit breaker including:
+    - Current state (closed/open/half_open)
+    - Failure counts and thresholds
+    - Recovery timeout information
+    - Request statistics (total, successful, failed, rejected)
+    """
+    all_status = CircuitBreakerRegistry.get_all_health_status()
+    open_circuits = CircuitBreakerRegistry.get_open_circuits()
+
+    return {
+        "total_breakers": len(all_status),
+        "open_circuits": open_circuits,
+        "breakers": all_status,
+    }
 
 
 # ===========================================
