@@ -1,4 +1,5 @@
 # MULTI-AGENT SYSTEM DEVELOPMENT REVIEW
+
 ## Technical Steering Committee Report - C2Pro (10-Agent Committee)
 
 **Date:** 2026-03-07
@@ -10,13 +11,13 @@
 
 ## FOLLOW-UP STATUS TRACKER
 
-> **Last Updated:** 2026-03-07 (P1 + P2 + P3 ALL COMPLETE)
+> **Last Updated:** 2026-03-08 (P1 + P2 + P3 ALL COMPLETE, LangSmith traces verified)
 > **Next Review:** TBD
 
 ### Priority 1 - Immediate Execution (Critical)
 
-| # | Task | Owner | Status | Due | Notes |
-|---|------|-------|--------|-----|-------|
+| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
+
 | 1.1 | Add `LANGSMITH_API_KEY` to `.env` | DevOps | :white_check_mark: DONE | Day 1 | Configured in .env |
 | 1.2 | Install `langchain` package | DevOps | :white_check_mark: DONE | Day 1 | v1.2.10 + langsmith |
 | 1.3 | Fix API `/health` endpoint path | Backend | :white_check_mark: DONE | Day 1 | Uses get_raw_session |
@@ -25,8 +26,8 @@
 
 ### Priority 2 - Observability Foundation (High)
 
-| # | Task | Owner | Status | Due | Notes |
-|---|------|-------|--------|-----|-------|
+| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
+
 | 2.1 | Configure LangSmith project | DevOps | :white_check_mark: DONE | Day 1 | Project "C2Pro" active, traces working |
 | 2.2 | Enable trace logging in workflow | Backend | :white_check_mark: DONE | Day 1 | run_name, tags, metadata added |
 | 2.3 | Create baseline evaluation dataset | AI/QA | :white_check_mark: DONE | Day 1 | baseline_dataset.json + drift_alarm_config.yaml |
@@ -36,8 +37,8 @@
 
 ### Priority 3 - Optimization (Medium)
 
-| # | Task | Owner | Status | Due | Notes |
-|---|------|-------|--------|-----|-------|
+| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
+
 | 3.1 | Implement tiktoken counting | Prompt Eng | :white_check_mark: DONE | Week 2 | `token_counter.py` - 25 tests |
 | 3.2 | Build A/B comparison dashboard | Prompt Eng | :white_check_mark: DONE | Week 2 | `ab_experiment.py` - 33 tests |
 | 3.3 | Pre-execution cost estimation | Cost Opt | :white_check_mark: DONE | Week 2 | Merged with P3.1 |
@@ -46,8 +47,8 @@
 
 ### Priority 4 - Production Hardening (Low)
 
-| # | Task | Owner | Status | Due | Notes |
-|---|------|-------|--------|-----|-------|
+| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
+
 | 4.1 | Circuit breakers for external calls | Performance | :red_circle: PENDING | Month 2 | Resilience |
 | 4.2 | Horizontal scaling readiness | Architect | :red_circle: PENDING | Month 2 | Scale-out |
 | 4.3 | Security penetration testing | Safety | :red_circle: PENDING | Month 2 | External audit |
@@ -56,8 +57,8 @@
 
 ### Already Completed (Validated in Review)
 
-| # | Component | Status | Evidence |
-|---|-----------|--------|----------|
+| # | Component | Status | Evidence ||---|-----------|--------|----------|
+
 | :white_check_mark: | 17-node LangGraph orchestration | DONE | Tests passing |
 | :white_check_mark: | 6 extraction agents implemented | DONE | Full implementation |
 | :white_check_mark: | Coherence scoring v2 engine | DONE | 78 tests passing |
@@ -79,13 +80,14 @@
 | :white_check_mark: | PostgreSQL checkpointing | DONE | AsyncSaver |
 | :white_check_mark: | Redis caching | DONE | LLM result cache |
 | :white_check_mark: | LangSmith API configured | DONE | .env configured (2026-03-07) |
+| :white_check_mark: | LangSmith traces verified | DONE | 5 runs in C2Pro project (2026-03-08) |
 
 ---
 
 ## COMMITTEE COMPOSITION
 
-| # | Agent | Responsibility | Status |
-|---|-------|---------------|--------|
+| # | Agent | Responsibility | Status ||---|-------|---------------|--------|
+
 | 1 | **System Architect** | Architecture, orchestration, agent topology | :white_check_mark: Complete |
 | 2 | **LangGraph Workflow Engineer** | Execution graphs, routing, pipelines | :white_check_mark: Complete |
 | 3 | **LangSmith Observability** | Traces, telemetry, evaluation metrics | :white_check_mark: Complete |
@@ -103,8 +105,8 @@
 
 ### 1.1 Agent Topology (System Architect Agent)
 
-| Agent | Status | Responsibility |
-|-------|--------|----------------|
+| Agent | Status | Responsibility ||-------|--------|----------------|
+
 | **Risk Extractor** | :white_check_mark: IMPLEMENTED | Extracts contractual/project risks from narrative sections |
 | **Stakeholder Extractor** | :white_check_mark: IMPLEMENTED | Identifies parties, representatives, organizations |
 | **RACI Generator** | :white_check_mark: IMPLEMENTED | Generates responsibility matrices |
@@ -114,7 +116,6 @@
 
 ### 1.2 Orchestration Graph (17-Node LangGraph Pipeline)
 
-```
 N1 (Document Ingestion) → N2 (PII Anonymizer) → N3 (Router)
          ↓
 [N4 Risk | N5 WBS | N9 Budget] ← Parallel Extraction
@@ -126,9 +127,11 @@ N6 (Stakeholder) → N7 (RACI) → N8 (Coherence Scorer)
 N15 (Citation Validator) → N10 (KG Builder) → N17 (Save DB)
          ↓
 N11 (Decision Intelligence) → N16 (Final Assembler) → END
+
 ```
 
 **Key Technologies:**
+
 - `langgraph==0.2.35` - Core orchestration
 - `langchain-core>=0.2.40` - Message handling
 - `AsyncPostgresSaver` - Checkpoint persistence
@@ -152,15 +155,16 @@ N11 (Decision Intelligence) → N16 (Final Assembler) → END
 
 ### 2.2 Blockers Identified
 
-| Blocker | Severity | Mitigation |
-|---------|----------|------------|
-| **LangSmith ENV not configured** | :yellow_circle: MEDIUM | Add `LANGSMITH_API_KEY` to `.env` |
-| **Optional `langchain` dep** | :green_circle: LOW | Install for full test coverage |
-| **API Health Check** | :green_circle: LOW | Container shows "unhealthy" but responds |
+| Blocker | Severity | Mitigation ||---------|----------|------------|
+
+| ~~**LangSmith ENV not configured**~~ | :white_check_mark: RESOLVED | API key configured, traces verified (2026-03-08) |
+| ~~**Optional `langchain` dep**~~ | :white_check_mark: RESOLVED | v1.2.10 + langchain-core 1.2.17 installed |
+| ~~**API Health Check**~~ | :white_check_mark: RESOLVED | Uses get_raw_session(), fixed in P1.3 |
 
 ### 2.3 Test Execution Evidence
 
 ```
+
 Latest Run (2026-03-06):
 ├── Total: 1910 passed, 44 skipped, 0 failed
 ├── Orchestration: 29/29 passed
@@ -184,17 +188,20 @@ Latest Run (2026-03-06):
 **Validation Framework:**
 
 | Rule Type | Count | Status |
+
 |-----------|-------|--------|
 | Deterministic | 3 | :white_check_mark: Implemented |
 | LLM-Based | 6 | :white_check_mark: Implemented |
 | Total Rules | 9 | :white_check_mark: Production Ready |
 
 **Deterministic Rules:**
+
 - `project-budget-overrun-10` - Detects >10% budget overrun
 - `project-schedule-delayed` - Identifies schedule delays
 - `project-contract-review-overdue` - Contract review > 180 days
 
 **LLM Qualitative Rules:**
+
 - `R-SCOPE-CLARITY-01` - Ambiguous scope detection
 - `R-PAYMENT-CLARITY-01` - Payment terms validation
 - `R-RESPONSIBILITY-01` - Party assignment clarity
@@ -216,6 +223,7 @@ Latest Run (2026-03-06):
 ### 4.1 Graph Topology Analysis (Workflow Engineer Agent)
 
 **Stable Nodes (Production Ready):**
+
 - N1 Document Ingestion :white_check_mark:
 - N2 PII Anonymizer :white_check_mark:
 - N3 Router :white_check_mark:
@@ -226,11 +234,13 @@ Latest Run (2026-03-06):
 - N17 Save to DB :white_check_mark:
 
 **Functional but Requires Monitoring:**
+
 - N9 Budget Parser (complex parsing)
 - N10 Knowledge Graph Builder (NetworkX)
 - N13/14 Human Interrupt (HITL integration)
 
 **Routing Logic:**
+
 ```python
 route_by_intent() → Routes by document type with confidence threshold
 route_by_evidence_gate() → Routes based on evidence validation
@@ -248,8 +258,8 @@ route_by_evidence_gate() → Routes based on evidence validation
 
 ### 5.1 Maturity Level (Observability Agent)
 
-| Capability | Status | Implementation |
-|------------|--------|----------------|
+| Capability | Status | Implementation ||------------|--------|----------------|
+
 | **Adapter Layer** | :white_check_mark: IMPLEMENTED | `LangSmithAdapter` class |
 | **Run Lifecycle** | :white_check_mark: IMPLEMENTED | `start_run()`, `end_run()` |
 | **Payload Sanitization** | :white_check_mark: IMPLEMENTED | Credentials redaction |
@@ -265,11 +275,15 @@ route_by_evidence_gate() → Routes based on evidence validation
 - Alert escalation with deduplication
 - Floating-point tolerance for metric stability
 
-### 5.3 LangSmith Status: CONFIGURED
+### 5.3 LangSmith Status: OPERATIONAL
 
-**Current State:** :white_check_mark: API key configured in `.env`
+**Current State:** :white_check_mark: Traces verified in LangSmith dashboard
 **Project:** "C2Pro"
-**Next Step:** Verify traces appear in LangSmith dashboard
+**Traces Generated:** 2026-03-08
+
+- `C2Pro_Workflow_Test` (chain) - 6 child nodes (N1-N16 simulation)
+- `C2Pro_Simple_Test` (chain) - LangGraph workflow execution
+**Script:** `apps/api/scripts/generate_langsmith_traces.py`
 
 ---
 
@@ -277,8 +291,8 @@ route_by_evidence_gate() → Routes based on evidence validation
 
 ### 6.1 Prompt Template Architecture
 
-| Component | Status | Implementation |
-|-----------|--------|----------------|
+| Component | Status | Implementation ||-----------|--------|----------------|
+
 | **Template Engine** | :white_check_mark: Complete | Jinja2 with whitespace optimization |
 | **Versioning** | :white_check_mark: Complete | Semantic (MAJOR.MINOR) with registry |
 | **System/User Separation** | :white_check_mark: Complete | PromptTemplate dataclass |
@@ -305,6 +319,7 @@ PROMPT_REGISTRY
 ```
 
 ### 6.3 Key Files
+
 - `apps/api/src/core/ai/prompts/__init__.py` - PromptManager, 3 main templates
 - `apps/api/src/core/ai/prompts/v1/coherence_analysis.py` - 6 coherence templates
 - `apps/api/src/core/ai/prompt_cache.py` - SHA-256 caching system
@@ -312,8 +327,8 @@ PROMPT_REGISTRY
 
 ### 6.4 Current Optimizations
 
-| Optimization | Implementation | Benefit |
-|--------------|----------------|---------|
+| Optimization | Implementation | Benefit ||--------------|----------------|---------|
+
 | **Token-aware caching** | SHA-256 + Redis | 300x speedup on cache hit |
 | **Whitespace stripping** | Jinja2 trim_blocks | ~5-10% token reduction |
 | **Conditional sections** | `{% if %}` blocks | Dynamic content reduction |
@@ -322,8 +337,8 @@ PROMPT_REGISTRY
 
 ### 6.5 Optimization Opportunities
 
-| Opportunity | Priority | Estimated Impact |
-|-------------|----------|------------------|
+| Opportunity | Priority | Estimated Impact ||-------------|----------|------------------|
+
 | **Token counting (tiktoken)** | HIGH | Pre-execution cost prediction |
 | **Automated A/B framework** | MEDIUM | Data-driven versioning |
 | **Chain-of-thought expansion** | MEDIUM | Better consistency |
@@ -352,8 +367,8 @@ Performance Impact:
 
 ### 7.1 Security Posture Matrix
 
-| Control Area | Implementation | Testing | Status |
-|--------------|----------------|---------|--------|
+| Control Area | Implementation | Testing | Status ||--------------|----------------|---------|--------|
+
 | **PII Detection** | 4 types (DNI, EMAIL, PHONE, IBAN) | Checksum validation | :white_check_mark: GDPR-Ready |
 | **PII Anonymization** | 4 strategies (REDACT, HASH, PSEUDO, NONE) | Full coverage | :white_check_mark: Complete |
 | **RLS Policies** | 18 tables protected | 3 isolation tests | :white_check_mark: Complete |
@@ -381,6 +396,7 @@ NONE         → Pass through unchanged
 ```
 
 ### 7.3 Key Security Files
+
 - `apps/api/src/anonymizer/domain/pii_detector_service.py`
 - `apps/api/src/anonymizer/application/anonymization_service.py`
 - `apps/api/src/core/privacy/ANONYMIZER_USAGE_GUIDE.md` (600+ lines)
@@ -406,8 +422,8 @@ CREATE POLICY tenant_isolation_documents ON documents
 
 ### 7.5 Security Test Coverage
 
-| Test Suite | Tests | Status | Coverage |
-|------------|-------|--------|----------|
+| Test Suite | Tests | Status | Coverage ||------------|-------|--------|----------|
+
 | `test_mcp_security.py` | 23 | :white_check_mark: PASSING | MCP allowlist, rate limiting |
 | `test_jwt_validation.py` | 10 | :white_check_mark: READY | Signature, expiration, tenant |
 | `test_rls_isolation.py` | 3 | :white_check_mark: READY | Cross-tenant access |
@@ -416,8 +432,8 @@ CREATE POLICY tenant_isolation_documents ON documents
 
 ### 7.6 Compliance Readiness
 
-| Compliance | Status | Evidence |
-|------------|--------|----------|
+| Compliance | Status | Evidence ||------------|--------|----------|
+
 | **GDPR** | :white_check_mark: Ready | PII anonymization, audit trails |
 | **Data Retention** | :white_check_mark: Ready | `retention_until` column |
 | **Right to Erasure** | :white_check_mark: Ready | Cascade delete policies |
@@ -430,8 +446,8 @@ CREATE POLICY tenant_isolation_documents ON documents
 
 ### 8.1 Latency Tracking Infrastructure
 
-| Component | Measurement | Location |
-|-----------|-------------|----------|
+| Component | Measurement | Location ||-----------|-------------|----------|
+
 | **Request Duration** | `time.perf_counter()` | `request_logging.py` |
 | **Server-Timing Header** | Millisecond precision | HTTP middleware |
 | **AI Response Time** | Prometheus histogram | `monitoring.py` |
@@ -464,8 +480,8 @@ CREATE POLICY tenant_isolation_documents ON documents
 
 ### 8.3 Connection Pool Configuration
 
-| Resource | Pool Size | Max Overflow | Timeout |
-|----------|-----------|--------------|---------|
+| Resource | Pool Size | Max Overflow | Timeout ||----------|-----------|--------------|---------|
+
 | **PostgreSQL** | 5 | 10 | 5s |
 | **Redis** | Auto | N/A | 3-5s |
 | **HTTP Client** | Async | N/A | 120s (LLM) |
@@ -488,8 +504,8 @@ Exempt Paths:
 
 ### 8.5 Performance Bottleneck Analysis
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
+| Risk | Severity | Mitigation ||------|----------|------------|
+
 | **N+1 Query Problem** | HIGH | Audit for `selectinload`/`joinedload` |
 | **Large PDF Processing** | HIGH | Async chunking, parallel processing |
 | **Connection Pool Saturation** | MEDIUM | Monitor pool utilization |
@@ -498,8 +514,8 @@ Exempt Paths:
 
 ### 8.6 Benchmark Tools Available
 
-| Tool | Purpose | File |
-|------|---------|------|
+| Tool | Purpose | File ||------|---------|------|
+
 | **Locust** | Load simulation (100+ users) | `tests/performance/locustfile.py` |
 | **Stress Test** | AI pipeline stress (500-page PDFs) | `tests/performance/stress_test_ai.py` |
 | **E2E Performance** | SLA validation (100 docs < 3s) | `tests/e2e/performance/test_large_load_red.py` |
@@ -575,6 +591,7 @@ class Tenant:
 | summarization_short | FLASH | FLASH | N/A |
 
 **Protected Tasks (Never Downgraded):**
+
 - CONTRACT_EXTRACTION
 - RACI_GENERATION
 - LEGAL_INTERPRETATION
@@ -584,8 +601,8 @@ class Tenant:
 
 ### 9.4 Cost Comparison Table
 
-| Operation (10K in + 1K out) | Haiku | Sonnet | Opus |
-|-----------------------------|-------|--------|------|
+| Operation (10K in + 1K out) | Haiku | Sonnet | Opus ||-----------------------------|-------|--------|------|
+
 | **Cost** | $0.0035 | $0.045 | $0.225 |
 | **Ratio to Sonnet** | 12x cheaper | 1x | 5x more |
 | **Speed** | 3x faster | Baseline | 0.5x slower |
@@ -617,8 +634,8 @@ CostControllerService.track_usage(tenant_id, 0.0035)
 
 ### 9.6 Cost Optimization Test Coverage
 
-| Test | Status | Coverage |
-|------|--------|----------|
+| Test | Status | Coverage ||------|--------|----------|
+
 | Model selection by task type | :white_check_mark: PASSING | 21 task types |
 | Budget-based downgrade | :white_check_mark: PASSING | <$1 triggers FLASH |
 | Size-based fallback | :white_check_mark: PASSING | >100K tokens → FLASH |
@@ -631,8 +648,8 @@ CostControllerService.track_usage(tenant_id, 0.0035)
 
 ### 10.1 Fully Implemented
 
-| Component | Agent | Evidence |
-|-----------|-------|----------|
+| Component | Agent | Evidence ||-----------|-------|----------|
+
 | 17-node LangGraph orchestration | Workflow Engineer | Tests passing |
 | 6 extraction agents | System Architect | Full implementation |
 | Coherence scoring (v2 engine) | AI Quality | 78 tests |
@@ -650,18 +667,18 @@ CostControllerService.track_usage(tenant_id, 0.0035)
 
 ### 10.2 Partially Implemented
 
-| Component | Gap | Owner |
-|-----------|-----|-------|
-| **LangSmith Observability** | API key not configured | DevOps |
-| **A/B Testing Framework** | Infrastructure ready, not automated | Prompt Engineer |
-| **Token Counting** | Implicit only (via API response) | Prompt Engineer |
-| **Performance Baseline** | Template exists, metrics not populated | Performance Engineer |
-| **Production Monitoring** | Logs only, no dashboard | Performance Engineer |
+| Component | Gap | Owner ||-----------|-----|-------|
+
+| ~~**LangSmith Observability**~~ | ~~API key not configured~~ | :white_check_mark: DONE (2026-03-08) |
+| ~~**A/B Testing Framework**~~ | ~~Infrastructure ready, not automated~~ | :white_check_mark: DONE (33 tests) |
+| ~~**Token Counting**~~ | ~~Implicit only (via API response)~~ | :white_check_mark: DONE (tiktoken - 25 tests) |
+| ~~**Performance Baseline**~~ | ~~Template exists, metrics not populated~~ | :white_check_mark: DONE (baseline.md populated) |
+| ~~**Production Monitoring**~~ | ~~Logs only, no dashboard~~ | :white_check_mark: DONE (Structlog + Sentry + Prometheus) |
 
 ### 10.3 Missing Components
 
-| Component | Priority | Impact | Owner |
-|-----------|----------|--------|-------|
+| Component | Priority | Impact | Owner ||-----------|----------|--------|-------|
+
 | ~~`LANGSMITH_API_KEY`~~ | ~~P1~~ | ~~No production observability~~ | :white_check_mark: DONE |
 | Trace dashboard | P2 | Cannot visualize agent runs | Performance Engineer |
 | Evaluation datasets | P2 | Cannot measure baseline drift | AI Quality |

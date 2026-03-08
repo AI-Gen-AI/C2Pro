@@ -116,7 +116,7 @@ echo "Done! API available at http://localhost:8000"
 
 | # | Task | Description | Status | Date | Notes |
 |---|------|-------------|--------|------|-------|
-| 4.1 | Remove real keys from .env.example | Replace with placeholders | :red_circle: PENDING | - | HIGH priority |
+| 4.1 | Remove real keys from .env.example | Replace with placeholders | :white_check_mark: DONE | 2026-03-08 | @example.com domains |
 | 4.2 | Add Redis password | Configure AUTH | :red_circle: PENDING | - | For prod |
 | 4.3 | Enable PostgreSQL SSL | For production prep | :red_circle: PENDING | - | For prod |
 | 4.4 | Implement secrets management | Docker secrets or Vault | :red_circle: PENDING | - | For prod |
@@ -178,13 +178,13 @@ P1.4 (Migrations) ------------------------------+
 | P1 - Critical | 5 | 5 | 0 | 0 |
 | P2 - Stability | 4 | 4 | 0 | 0 |
 | P3 - Performance | 4 | 4 | 0 | 0 |
-| P4 - Security | 4 | 0 | 4 | 0 |
+| P4 - Security | 4 | 1 | 3 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **13** | **19** | **0** |
+| **TOTAL** | **32** | **14** | **18** | **0** |
 
-**Progress:** 40.6% complete
+**Progress:** 43.8% complete
 
 ---
 

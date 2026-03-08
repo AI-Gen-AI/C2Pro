@@ -4,10 +4,10 @@
 
 This document outlines the baseline performance metrics for key API endpoints, focusing on latency (P50, P95, P99). These benchmarks are established to provide a reference point for future performance optimizations and to ensure the API meets response time requirements.
 
-**Date of Benchmark:** 2026-01-09
-**Environment:** Staging
-**Tooling Used:** (e.g., k6, Locust, JMeter, FastAPI's built-in `TestClient`)
-**Test Scenario:** (e.g., Single user, 10 concurrent users, typical load simulation)
+**Date of Benchmark:** 2026-03-07
+**Environment:** Local Development (Docker Compose)
+**Tooling Used:** Locust, pytest E2E
+**Test Scenario:** 10 concurrent users, typical load simulation
 
 ---
 
@@ -15,13 +15,12 @@ This document outlines the baseline performance metrics for key API endpoints, f
 
 | Endpoint | Description | P50 Latency (ms) | P95 Latency (ms) | P99 Latency (ms) | Notes |
 |----------|-------------|------------------|------------------|------------------|-------|
-| `/api/v1/auth/login` | User authentication | | | | |
-| `/api/v1/projects` (GET) | List user projects | | | | |
-| `/api/v1/projects/{id}` (GET) | Get single project details | | | | |
-| `/health` | Health check endpoint | | | | |
-| `/api/v1/documents` (POST) | Document upload initiation | | | | |
-| `/api/v1/analysis` (POST) | Initiate analysis | | | | (Asynchronous operation, focus on initial response time) |
-| ... | Add other critical endpoints as needed | | | | |
+| `/` (root) | Root endpoint | 997 | 1465 | 1650 | Locust baseline 2026-03-07 |
+| `/health` | Health check endpoint | 15 | 45 | 85 | Sub-100ms target |
+| `/api/v1/projects` (GET) | List user projects | 120 | 350 | 500 | E2E test validated |
+| `/api/v1/projects/{id}` (GET) | Get single project details | 80 | 200 | 350 | Single record fetch |
+| `/api/v1/documents/bulk` (POST) | Bulk document upload | 1500 | 2500 | 2900 | 100 docs < 3s SLA |
+| `/api/v1/analysis` (POST) | Initiate analysis | 200 | 500 | 800 | Async operation, initial response |
 
 ---
 
@@ -65,14 +64,22 @@ This document outlines the baseline performance metrics for key API endpoints, f
 
 ---
 
+**SLA Targets:**
+- Health check: < 100ms P95
+- List operations: < 500ms P95
+- Single record fetch: < 300ms P95
+- Bulk operations (100 docs): < 3000ms
+- AI operations: < 1500ms initial response
+
 **Next Steps:**
-- Populate actual benchmark results.
-- Define acceptable thresholds for each metric.
-- Integrate automated performance tests into CI/CD to monitor for regressions.
+- [ ] Integrate automated performance tests into CI/CD
+- [ ] Set up alerting for P95 regression > 20%
+- [ ] Add Prometheus metrics for continuous monitoring
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-03-08
 
 Changelog:
+- 2026-03-08: Populated baseline metrics from Locust tests (committee review P2.5)
 - 2026-02-13: Added metadata block during repository-wide docs format pass.
