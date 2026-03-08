@@ -57,15 +57,19 @@ async def app():
 
 
 @pytest_asyncio.fixture
-async def client(app, db):
+async def client(app, test_session_factory):
     """
     Override shared client fixture to run app lifespan.
 
-    This ensures startup initializes infra (including DB manager) while tests
-    still use the isolated test session via dependency override.
+    This ensures startup initializes infra (including DB manager) while requests
+    still use isolated test sessions from the per-test factory.
     """
     async def override_get_session():
-        yield db
+        async with test_session_factory() as session:
+            try:
+                yield session
+            finally:
+                await session.rollback()
 
     app.dependency_overrides[get_session] = override_get_session
 
@@ -636,7 +640,8 @@ async def test_009_inactive_tenant_access_denied(
     # Mark tenant as inactive
     tenant_a.is_active = False
     db.add(tenant_a)
-    await db.flush()
+    await db.commit()
+    await db.refresh(tenant_a)
 
     token_a = generate_token(
         user_id=user_a.id,
