@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     # DATABASE (Supabase PostgreSQL)
     # ===========================================
 
-    database_url: str = Field(..., description="PostgreSQL connection URL (asyncpg)")
+    database_url: str = Field(
+        ...,
+        validation_alias=AliasChoices("TEST_DATABASE_URL", "DATABASE_URL"),
+        description="PostgreSQL connection URL (asyncpg)",
+    )
 
     # Connection pool
     db_pool_size: int = Field(default=5, ge=1, le=20)
