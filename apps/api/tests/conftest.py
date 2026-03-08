@@ -67,8 +67,9 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
 
 # Database
-# Align default local test URL with docker-compose.test.yml credentials.
-os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test")
+# FORCE local test URL - override any .env values to ensure tests use the test container.
+# This must happen BEFORE importing src.config to prevent pydantic-settings from loading .env.
+os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5433/c2pro_test"
 
 # Supabase
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
@@ -105,17 +106,23 @@ from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
 
 
-def _collect_metadata_enum_type_names() -> list[str]:
-    """Collect PostgreSQL enum type names declared in SQLAlchemy metadata."""
-    enum_names: set[str] = set()
+def _iter_metadata_enum_types():
+    """Yield unique PostgreSQL enum types declared in SQLAlchemy metadata."""
+    seen: set[str] = set()
     for table in Base.metadata.tables.values():
         for column in table.columns:
             column_type = column.type
             enum_name = getattr(column_type, "name", None)
             has_enum_values = getattr(column_type, "enums", None) is not None
-            if enum_name and has_enum_values:
-                enum_names.add(str(enum_name))
-    return sorted(enum_names)
+            if not enum_name or not has_enum_values or enum_name in seen:
+                continue
+            seen.add(str(enum_name))
+            yield column_type
+
+
+def _collect_metadata_enum_type_names() -> list[str]:
+    """Collect PostgreSQL enum type names declared in SQLAlchemy metadata."""
+    return sorted(str(enum_type.name) for enum_type in _iter_metadata_enum_types())
 
 
 async def _reset_metadata_enum_types(conn) -> None:
@@ -123,6 +130,22 @@ async def _reset_metadata_enum_types(conn) -> None:
     for enum_name in _collect_metadata_enum_type_names():
         safe_name = enum_name.replace('"', '""')
         await conn.execute(text(f'DROP TYPE IF EXISTS public."{safe_name}" CASCADE'))
+
+
+async def _create_metadata_enum_types(conn) -> None:
+    """Create metadata enum types once before table DDL runs."""
+
+    def _create(sync_conn) -> None:
+        for enum_type in _iter_metadata_enum_types():
+            enum_type.create(sync_conn, checkfirst=True)
+
+    await conn.run_sync(_create)
+
+
+def _set_metadata_enum_create_type(enabled: bool) -> None:
+    """Toggle automatic enum DDL during metadata.create_all/drop_all."""
+    for enum_type in _iter_metadata_enum_types():
+        enum_type.create_type = enabled
 
 
 async def _table_exists(conn, table_name: str) -> bool:
@@ -372,7 +395,12 @@ async def test_engine():
                 # Best-effort cleanup for stale local schemas before re-creating metadata tables.
                 pass
             await _reset_metadata_enum_types(conn)
-            await conn.run_sync(Base.metadata.create_all)
+            await _create_metadata_enum_types(conn)
+            _set_metadata_enum_create_type(False)
+            try:
+                await conn.run_sync(Base.metadata.create_all)
+            finally:
+                _set_metadata_enum_create_type(True)
             await _ensure_rls_and_audit_compatibility(conn)
 
         yield engine
@@ -387,23 +415,14 @@ async def test_engine():
 
         await engine.dispose()
 
-    except (OperationalError, OSError):
-        # Fallback to SQLite in memory
-        print("\n[WARNING] PostgreSQL no disponible, usando SQLite en memoria")
-        print("   Para ejecutar TODOS los tests, inicia PostgreSQL con:")
-        print("   docker-compose -f docker-compose.test.yml up -d\n")
-
-        engine = create_async_engine(
-            "sqlite+aiosqlite:///:memory:",
-            echo=False,
+    except (OperationalError, OSError) as exc:
+        pytest.fail(
+            "\nPostgreSQL test database unavailable at "
+            f"{settings.database_url}. "
+            "Start the test container with "
+            "`docker-compose -f docker-compose.test.yml up -d`.\n"
+            f"Original error: {exc}"
         )
-
-        _ensure_test_fk_stub_tables()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        yield engine
-        await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
