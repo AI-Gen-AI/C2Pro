@@ -32,7 +32,7 @@ def test_imports():
             register_tool,
         )
 
-        print("✓ Core tool imports successful")
+        print("[OK] Core tool imports successful")
 
         from src.analysis.adapters.ai.tools import (
             RiskExtractionInput,
@@ -42,10 +42,10 @@ def test_imports():
             WBSItemOutput,
         )
 
-        print("✓ Analysis tool imports successful")
+        print("[OK] Analysis tool imports successful")
         return True
     except Exception as e:
-        print(f"✗ Import failed: {e}")
+        print(f"[FAIL] Import failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -68,10 +68,10 @@ def test_registry():
         )
 
         registry = get_tool_registry()
-        print(f"✓ Registry initialized: {registry}")
+        print(f"[OK] Registry initialized: {registry}")
 
         tools = list_tools()
-        print(f"\n✓ Registered tools: {len(tools)} total")
+        print(f"\n[OK] Registered tools: {len(tools)} total")
         for tool_name, versions in tools:
             print(f"  - {tool_name}: versions {versions}")
 
@@ -79,11 +79,11 @@ def test_registry():
         tool_names = [name for name, _ in tools]
         assert "risk_extraction" in tool_names, "risk_extraction not registered"
         assert "wbs_extraction" in tool_names, "wbs_extraction not registered"
-        print("\n✓ All expected tools are registered")
+        print("\n[OK] All expected tools are registered")
 
         return True
     except Exception as e:
-        print(f"✗ Registry test failed: {e}")
+        print(f"[FAIL] Registry test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -101,24 +101,24 @@ def test_tool_retrieval():
 
         # Test risk extraction tool
         risk_tool = get_tool("risk_extraction", version="1.0")
-        print(f"✓ Retrieved risk_extraction tool: {risk_tool.name}")
+        print(f"[OK] Retrieved risk_extraction tool: {risk_tool.name}")
         print(f"  - Version: {risk_tool.version}")
         print(f"  - Task type: {risk_tool.task_type.value}")
 
         # Test WBS extraction tool
         wbs_tool = get_tool("wbs_extraction", version="1.0")
-        print(f"\n✓ Retrieved wbs_extraction tool: {wbs_tool.name}")
+        print(f"\n[OK] Retrieved wbs_extraction tool: {wbs_tool.name}")
         print(f"  - Version: {wbs_tool.version}")
         print(f"  - Task type: {wbs_tool.task_type.value}")
 
         # Test latest version retrieval
         risk_tool_latest = get_tool("risk_extraction", version="latest")
         assert risk_tool_latest.version == "1.0"
-        print(f"\n✓ Latest version resolution works")
+        print(f"\n[OK] Latest version resolution works")
 
         return True
     except Exception as e:
-        print(f"✗ Tool retrieval failed: {e}")
+        print(f"[FAIL] Tool retrieval failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -158,10 +158,10 @@ def test_metadata():
         print(f"  - Task type: {metadata.task_type.value}")
         print(f"  - Model tier: {metadata.default_model_tier.value}")
 
-        print("\n✓ Metadata retrieval successful")
+        print("\n[OK] Metadata retrieval successful")
         return True
     except Exception as e:
-        print(f"✗ Metadata test failed: {e}")
+        print(f"[FAIL] Metadata test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -186,7 +186,7 @@ def test_input_models():
             max_risks=10,
             filter_relevant=True,
         )
-        print(f"✓ RiskExtractionInput created:")
+        print(f"[OK] RiskExtractionInput created:")
         print(f"  - document_text length: {len(risk_input.document_text)}")
         print(f"  - max_risks: {risk_input.max_risks}")
         print(f"  - filter_relevant: {risk_input.filter_relevant}")
@@ -195,7 +195,7 @@ def test_input_models():
         wbs_input = WBSExtractionInput(
             document_text="Sample technical spec...", max_items=50
         )
-        print(f"\n✓ WBSExtractionInput created:")
+        print(f"\n[OK] WBSExtractionInput created:")
         print(f"  - document_text length: {len(wbs_input.document_text)}")
         print(f"  - max_items: {wbs_input.max_items}")
 
@@ -204,15 +204,15 @@ def test_input_models():
             invalid_input = RiskExtractionInput(
                 document_text="test", max_risks=100  # Should fail (max is 50)
             )
-            print("\n✗ Validation failed - should have rejected max_risks=100")
+            print("\n[FAIL] Validation failed - should have rejected max_risks=100")
             return False
         except Exception:
-            print(f"\n✓ Validation correctly rejected invalid max_risks")
+            print(f"\n[OK] Validation correctly rejected invalid max_risks")
 
-        print("\n✓ All input model tests passed")
+        print("\n[OK] All input model tests passed")
         return True
     except Exception as e:
-        print(f"✗ Input model test failed: {e}")
+        print(f"[FAIL] Input model test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -242,7 +242,7 @@ def test_output_models():
             probability=RiskProbability.HIGH,
             impact=RiskImpact.CRITICAL,
         )
-        print(f"✓ RiskItem created:")
+        print(f"[OK] RiskItem created:")
         print(f"  - title: {risk_item.title}")
         print(f"  - category: {risk_item.category.value}")
         print(f"  - probability: {risk_item.probability.value}")
@@ -257,7 +257,7 @@ def test_output_models():
             confidence=0.95,
             budget_allocated=50000.0,
         )
-        print(f"\n✓ WBSItemOutput created:")
+        print(f"\n[OK] WBSItemOutput created:")
         print(f"  - code: {wbs_item.code}")
         print(f"  - name: {wbs_item.name}")
         print(f"  - item_type: {wbs_item.item_type}")
@@ -272,15 +272,15 @@ def test_output_models():
                 item_type="invalid_type",  # Should fail
                 confidence=0.9,
             )
-            print("\n✗ Validation failed - should have rejected invalid item_type")
+            print("\n[FAIL] Validation failed - should have rejected invalid item_type")
             return False
         except Exception:
-            print(f"\n✓ Validation correctly rejected invalid item_type")
+            print(f"\n[OK] Validation correctly rejected invalid item_type")
 
-        print("\n✓ All output model tests passed")
+        print("\n[OK] All output model tests passed")
         return True
     except Exception as e:
-        print(f"✗ Output model test failed: {e}")
+        print(f"[FAIL] Output model test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -297,25 +297,25 @@ def test_node_integration():
         # Import nodes to verify they compile
         from src.analysis.adapters.graph import nodes
 
-        print(f"✓ nodes.py imported successfully")
+        print(f"[OK] nodes.py imported successfully")
 
         # Verify the updated functions exist
         assert hasattr(nodes, "risk_extractor_node")
         assert hasattr(nodes, "wbs_extractor_node")
-        print(f"✓ risk_extractor_node exists")
-        print(f"✓ wbs_extractor_node exists")
+        print(f"[OK] risk_extractor_node exists")
+        print(f"[OK] wbs_extractor_node exists")
 
         # Check if they're async functions
         import inspect
 
         assert inspect.iscoroutinefunction(nodes.risk_extractor_node)
         assert inspect.iscoroutinefunction(nodes.wbs_extractor_node)
-        print(f"✓ Node functions are async")
+        print(f"[OK] Node functions are async")
 
-        print("\n✓ Node integration test passed")
+        print("\n[OK] Node integration test passed")
         return True
     except Exception as e:
-        print(f"✗ Node integration test failed: {e}")
+        print(f"[FAIL] Node integration test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -336,8 +336,8 @@ def test_tool_protocol():
 
         # Check if tools implement the protocol
         # Note: isinstance with Protocol requires runtime_checkable
-        print(f"✓ Risk tool is instance of Tool: {isinstance(risk_tool, Tool)}")
-        print(f"✓ WBS tool is instance of Tool: {isinstance(wbs_tool, Tool)}")
+        print(f"[OK] Risk tool is instance of Tool: {isinstance(risk_tool, Tool)}")
+        print(f"[OK] WBS tool is instance of Tool: {isinstance(wbs_tool, Tool)}")
 
         # Check required methods exist
         assert hasattr(risk_tool, "execute")
@@ -345,19 +345,19 @@ def test_tool_protocol():
         assert hasattr(risk_tool, "extract_input_from_state")
         assert hasattr(risk_tool, "inject_output_into_state")
         assert hasattr(risk_tool, "metadata")
-        print(f"\n✓ Risk tool has all required methods")
+        print(f"\n[OK] Risk tool has all required methods")
 
         assert hasattr(wbs_tool, "execute")
         assert hasattr(wbs_tool, "__call__")
         assert hasattr(wbs_tool, "extract_input_from_state")
         assert hasattr(wbs_tool, "inject_output_into_state")
         assert hasattr(wbs_tool, "metadata")
-        print(f"✓ WBS tool has all required methods")
+        print(f"[OK] WBS tool has all required methods")
 
-        print("\n✓ Protocol implementation test passed")
+        print("\n[OK] Protocol implementation test passed")
         return True
     except Exception as e:
-        print(f"✗ Protocol test failed: {e}")
+        print(f"[FAIL] Protocol test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -390,7 +390,7 @@ def run_all_tests():
     total = len(results)
 
     for test_name, result in results.items():
-        status = "✓ PASS" if result else "✗ FAIL"
+        status = "[OK] PASS" if result else "[FAIL] FAIL"
         print(f"{status}: {test_name}")
 
     print(f"\n{passed}/{total} tests passed")

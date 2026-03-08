@@ -985,6 +985,50 @@ Classification:
   - Executed in light mode
   - Result: green with `XFAIL` on missing `If-Match` strict contract
   - XFAIL reason recorded: `RED contract pending in light mode`
+
+## 2026-03-08 Backend Re-Audit Update
+
+This section supersedes older stale failure notes only where a fresh local rerun
+was completed on 2026-03-08. Historical rows above are preserved for traceability.
+
+- `TI-019` (`apps/api/tests/auth/test_auth_router.py`): `PASS_CONFIRMED`
+  - Fresh rerun result: `26 passed`
+  - Earlier setup failures were caused by test DB routing drift and SQLite fallback.
+- `TI-020` (`apps/api/tests/auth/test_auth_service.py`): `PASS_CONFIRMED`
+  - Fresh rerun result: `46 passed`
+- `TI-021` (`apps/api/tests/auth/test_identity.py`): `PASS_CONFIRMED`
+  - Fresh rerun result: `15 passed`
+- `TI-047` (`apps/api/tests/e2e/security/test_multi_tenant_isolation.py`): `PASS_CONFIRMED`
+  - Fresh rerun result: `12 passed`
+  - Suite-local client fixture was repaired to use isolated request sessions from `test_session_factory`.
+  - Inactive-tenant scenario now commits tenant state before the request, matching real session visibility.
+- `TI-190` (`apps/api/tests/test_db_connection.py`): `PASS_CONFIRMED`
+  - Fresh rerun result: `5 passed`
+  - Tests are now pinned to local PostgreSQL `localhost:5433/c2pro_test`.
+  - SQLite fallback was removed for PostgreSQL-specific fixtures.
+- `apps/api/tests/e2e/resilience/test_concurrent_modifications_red.py`: `PASS_CONFIRMED`
+  - Fresh targeted rerun result: `test_001`, `test_004`, and `test_005` passed.
+  - `PATCH /api/v1/projects/{id}` now enforces `428 Precondition Required` when both `If-Match` and `expected_version` are missing.
+- `apps/api/tests/e2e/security/test_mcp_gateway_e2e.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `12 passed`
+- `apps/api/tests/infrastructure/events/test_event_publisher.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `14 passed`
+- `apps/api/tests/infrastructure/events/test_redis_event_bus_red_phase.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `5 passed`
+- `apps/api/tests/infrastructure/http/test_global_exception_handler.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `3 passed`
+- `apps/api/tests/integration/boundaries/test_module_handover.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `3 passed`
+- `apps/api/tests/integration/test_wbs_procurement_contract.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `2 passed`
+- `apps/api/tests/manual/test_tools_implementation.py`: `PASS_CONFIRMED`
+  - Fresh rerun result: `8 passed`
+  - Windows CP1252-incompatible Unicode output markers were replaced with ASCII.
+  - Underlying tool import issue was also fixed by correcting an `IndentationError` in `apps/api/src/analysis/adapters/ai/tools/risk_extraction_tool.py`.
+
+Current known backend note after this re-audit:
+
+- The next unverified backend area starts after the manual/integration blocks in the `tests/modules/...` collection range.
 - `apps/api/tests/e2e/resilience/test_timeout_fallback_red.py`
   - Executed in light mode
   - Result: all pass
