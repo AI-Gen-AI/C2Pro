@@ -73,6 +73,7 @@ class WBSItemCreate(WBSItemBase):
 class WBSItemUpdate(BaseModel):
     """Schema for updating a WBS item. All fields are optional."""
 
+    expected_version: Optional[int] = Field(None, ge=1)
     parent_id: Optional[UUID] = None
     name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None

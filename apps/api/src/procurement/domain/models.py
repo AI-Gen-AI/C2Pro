@@ -82,6 +82,7 @@ class WBSItem:
     actual_start: Optional[datetime] = None
     actual_end: Optional[datetime] = None
     source_clause_id: Optional[UUID] = None
+    version: int = 1
     wbs_metadata: dict = field(default_factory=dict)
     children: List["WBSItem"] = field(default_factory=list)
 

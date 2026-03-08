@@ -26,6 +26,7 @@ export function BottomSheet({
   const [translateY, setTranslateY] = useState(100);
   const [isVisible, setIsVisible] = useState(false);
   const touchStartY = useRef<number | null>(null);
+  const dragDistance = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -44,6 +45,7 @@ export function BottomSheet({
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
+    dragDistance.current = 0;
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -54,19 +56,21 @@ export function BottomSheet({
 
     // Only allow dragging down
     if (diff > 0) {
+      dragDistance.current = diff;
       setTranslateY(diff);
     }
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (translateY > 100) {
-      // Close if dragged down enough
+    if (dragDistance.current > 44 || translateY > 44) {
+      dragDistance.current = 0;
+      touchStartY.current = null;
       setTranslateY(100);
-      setTimeout(onClose, 300);
-    } else {
-      // Snap back
-      setTranslateY(0);
+      onClose();
+      return;
     }
+    dragDistance.current = 0;
+    setTranslateY(0);
     touchStartY.current = null;
   }, [translateY, onClose]);
 
@@ -95,13 +99,17 @@ export function BottomSheet({
       <div
         ref={sheetRef}
         data-testid="bottom-sheet"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           position: "fixed",
           left: 0,
           right: 0,
           bottom: 0,
           backgroundColor: "#fff",
-          borderRadius: "16px 16px 0 0",
+          borderTopLeftRadius: "16px",
+          borderTopRightRadius: "16px",
           padding: "24px",
           transform: `translateY(${translateY}%)`,
           transition:
@@ -113,9 +121,6 @@ export function BottomSheet({
       >
         {/* Drag Handle */}
         <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
           style={{
             width: "40px",
             height: "4px",

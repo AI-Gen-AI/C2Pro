@@ -10,6 +10,7 @@ from sqlalchemy import select, and_, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.core.exceptions import ConflictError
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.procurement.adapters.persistence.models import WBSItemORM
@@ -42,6 +43,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_start=orm.actual_start,
             actual_end=orm.actual_end,
             source_clause_id=orm.source_clause_id,
+            version=orm.version,
             wbs_metadata=orm.wbs_metadata or {},
             children=[]
         )
@@ -74,6 +76,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_start=wbs_item.actual_start,
             actual_end=wbs_item.actual_end,
             source_clause_id=wbs_item.source_clause_id,
+            version=wbs_item.version,
             wbs_metadata=wbs_item.wbs_metadata or {}
         )
 
@@ -188,6 +191,9 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         if not orm:
             return None
+
+        if wbs_item.version != orm.version:
+            raise ConflictError("WBSItem", field="version", value=str(wbs_id))
 
         # Update fields
         orm.name = wbs_item.name

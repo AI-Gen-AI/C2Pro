@@ -14,7 +14,9 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from docker.errors import DockerException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 
@@ -25,6 +27,10 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
+    from src.core.database import Base
+    from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
+    from src.projects.adapters.persistence.models import ProjectORM
+
     engine = None
     container = None
     try:
@@ -36,10 +42,16 @@ async def pg_engine():
     try:
         raw_url = container.get_connection_url()
         url = re.sub(r"^postgresql(\+\w+)?://", "postgresql+asyncpg://", raw_url, count=1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
         yield engine
     finally:
         if engine is not None:
+            async with engine.begin() as conn:
+                await conn.execute(text("DROP TABLE IF EXISTS procurement_wbs_items CASCADE"))
+                await conn.run_sync(Base.metadata.drop_all, tables=[ProjectORM.__table__])
             await engine.dispose()
         if container is not None:
             container.stop()
@@ -91,29 +103,63 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     from src.procurement.application.use_cases.wbs_use_cases import UpdateWBSItemUseCase
     from src.procurement.application.dtos import WBSItemUpdate
     from src.core.exceptions import ConflictError
+    from src.procurement.domain.models import WBSItem
     from src.procurement.adapters.persistence.models import WBSItemORM
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-
-    if not hasattr(WBSItemORM, "version"):
-        pytest.skip("Optimistic locking requires WBSItemORM.version; not implemented yet.")
+    from src.projects.adapters.persistence.models import ProjectORM
 
     repo = SQLAlchemyWBSRepository(session)
 
-    # Seed WBS item (v1)
     wbs_id = uuid4()
     tenant_id = uuid4()
     project_id = uuid4()
+    root_code = f"1-{uuid4().hex[:6]}"
+
+    project = ProjectORM(
+        id=project_id,
+        tenant_id=tenant_id,
+        name="Concurrency Project",
+        description=None,
+        code=f"P-{uuid4().hex[:6]}",
+        project_type="construction",
+        status="draft",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(project)
+    await session.commit()
+
+    seeded = await repo.create(
+        WBSItem(
+            id=wbs_id,
+            project_id=project_id,
+            code=root_code,
+            name="Original WBS",
+            level=1,
+        )
+    )
 
     # User A fetches v1
     item_v1_a = await repo.get_by_id(wbs_id, tenant_id)
     # User B fetches v1
     item_v1_b = await repo.get_by_id(wbs_id, tenant_id)
 
+    assert item_v1_a is not None
+    assert item_v1_b is not None
+    assert seeded.id == wbs_id
+
     # User A updates -> v2
     use_case = UpdateWBSItemUseCase(repo)
     await use_case.execute(
         wbs_id=wbs_id,
-        wbs_update=WBSItemUpdate(name="Updated by A"),
+        wbs_update=WBSItemUpdate(name="Updated by A", expected_version=item_v1_a.version),
         tenant_id=tenant_id,
     )
 
@@ -121,7 +167,7 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     with pytest.raises(ConflictError):
         await use_case.execute(
             wbs_id=wbs_id,
-            wbs_update=WBSItemUpdate(name="Updated by B"),
+            wbs_update=WBSItemUpdate(name="Updated by B", expected_version=item_v1_b.version),
             tenant_id=tenant_id,
         )
 
