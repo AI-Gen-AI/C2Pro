@@ -118,16 +118,25 @@ async def init_db() -> None:
     if database_url.startswith("sqlite"):
         _engine = create_async_engine(
             database_url,
-            echo=settings.debug,
+            echo=settings.db_echo,
         )
     else:
         _engine = create_async_engine(
             database_url,
-            echo=settings.debug,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
+            echo=settings.db_echo,
+            pool_pre_ping=settings.db_pool_pre_ping,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_timeout=settings.db_pool_timeout,
+            pool_recycle=settings.db_pool_recycle,
             connect_args={"statement_cache_size": 0},
+        )
+        logger.info(
+            "connection_pool_configured",
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_timeout=settings.db_pool_timeout,
+            pool_recycle=settings.db_pool_recycle,
         )
 
     _session_factory = async_sessionmaker(

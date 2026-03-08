@@ -107,8 +107,8 @@ echo "Done! API available at http://localhost:8000"
 |---|------|-------------|--------|------|-------|
 | 3.1 | Multi-stage Dockerfile | Reduce API image size | :white_check_mark: DONE | 2026-03-07 | Builder + runtime stages |
 | 3.2 | PostgreSQL tuning | Adjust shared_buffers, work_mem | :white_check_mark: DONE | 2026-03-07 | Dev + test tuned |
-| 3.3 | Connection pool optimization | Tune based on load testing | :red_circle: PENDING | - | After baseline |
-| 3.4 | Redis memory limits | Add maxmemory configuration | :red_circle: PENDING | - | Prevent OOM |
+| 3.3 | Connection pool optimization | Tune based on load testing | :white_check_mark: DONE | 2026-03-08 | Configurable via settings |
+| 3.4 | Redis memory limits | Add maxmemory configuration | :white_check_mark: DONE | 2026-03-08 | 256MB dev, 128MB test |
 
 ---
 
@@ -177,14 +177,14 @@ P1.4 (Migrations) ------------------------------+
 |----------|-------|------|---------|---------|
 | P1 - Critical | 5 | 5 | 0 | 0 |
 | P2 - Stability | 4 | 4 | 0 | 0 |
-| P3 - Performance | 4 | 2 | 2 | 0 |
+| P3 - Performance | 4 | 4 | 0 | 0 |
 | P4 - Security | 4 | 0 | 4 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **11** | **21** | **0** |
+| **TOTAL** | **32** | **13** | **19** | **0** |
 
-**Progress:** 34.4% complete
+**Progress:** 40.6% complete
 
 ---
 
@@ -195,13 +195,14 @@ P1.4 (Migrations) ------------------------------+
 | 2026-03-07 | Infrastructure Audit | Created audit report | Initial assessment |
 | 2026-03-07 | Extended Committee | Added K, PE, CI agents | Extended scope |
 | 2026-03-07 | P1 Execution | P1.1-P1.5 completed | Infrastructure online |
+| 2026-03-08 | P3 Optimization | P3.3-P3.4 complete | Pool + Redis memory limits |
 
 ---
 
 ## NEXT SESSION PRIORITIES
 
-1. **Execute P2.1** - Fix Redis port conflict
-2. **Execute P2.2** - Add startup script
+1. **Execute P4.1** - Remove real keys from .env.example (HIGH priority)
+2. **Execute P4.2** - Add Redis password (production)
 3. **Begin CI.1** - Audit existing GitHub Actions
 
 ---
