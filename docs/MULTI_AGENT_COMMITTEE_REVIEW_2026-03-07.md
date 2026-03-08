@@ -45,15 +45,7 @@
 | 3.4 | Usage analytics dashboard | Cost Opt | :white_check_mark: DONE | Week 2 | `usage_analytics.py` - 27 tests |
 | 3.5 | Expand chain-of-thought prompts | Prompt Eng | :white_check_mark: DONE | Week 3 | v1.1 CoT templates |
 
-### Priority 4 - Production Hardening (Low)
-
-| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
-
-| 4.1 | Circuit breakers for external calls | Performance | :red_circle: PENDING | Month 2 | Resilience |
-| 4.2 | Horizontal scaling readiness | Architect | :red_circle: PENDING | Month 2 | Scale-out |
-| 4.3 | Security penetration testing | Safety | :red_circle: PENDING | Month 2 | External audit |
-| 4.4 | GDPR compliance audit | Safety | :red_circle: PENDING | Month 2 | Legal review |
-| 4.5 | Cost forecasting alerts | Cost Opt | :red_circle: PENDING | Month 2 | Predict overruns |
+git
 
 ### Already Completed (Validated in Review)
 

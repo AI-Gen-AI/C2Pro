@@ -492,3 +492,12 @@ See: `docs/INFRASTRUCTURE_RECOVERY_TRACKER.md`
 | Volume management | DONE | Verified named volumes and active mounts (`c2pro_postgres_data`, `c2pro_redis_data`, `c2pro_minio_data`); no destructive reset required |
 | Secret rotation | DONE | Developer/DBA confirmed rotation/revocation in Supabase; DB connectivity test passed with current credentials |
 | SSL certificate install | N/A (local dev) | Deferred intentionally; required before production exposure |
+| Docker testcontainers suites | DONE | Executed with elevated Docker access on 2026-03-08: 8 passed, 1 skipped (known feature-gap test) |
+
+### Test Verification Checklist (2026-03-08)
+
+| Scope | Command | Result | Status |
+|------|---------|--------|--------|
+| Backend Testcontainers suites | `pytest apps/api/tests/adapters/persistence/... apps/api/tests/e2e/resilience/test_concurrency.py apps/api/tests/modules/procurement/adapters/test_wbs_repository.py -vv` | 8 passed, 1 skipped (`test_optimistic_locking_on_wbs_item`: requires `WBSItemORM.version`) | PARTIAL PASS |
+| Backend full suite | `pytest apps/api/tests -q` | Fails during setup in `apps/api/tests/conftest.py` (`InFailedSQLTransactionError` while dropping enum types, e.g. `alertseverity`) | FAIL |
+| Frontend full suite | `npm run test:all` (in `apps/web`) | Failing suites include `tests/integration/navigation.contract.test.tsx` (6 fails) and `tests/mobile/wbs-mobile.contract.test.tsx` (multiple contract failures) | FAIL |
