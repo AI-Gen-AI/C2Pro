@@ -262,6 +262,7 @@ Counts:
 ## 2026-03-04 Replan
 
 Status of this document on 2026-03-04:
+
 - The inventory remains a usable baseline, but it is slightly stale.
 - The listed `Test modules: 230` count reflects the 2026-03-02 snapshot only.
 - Current execution planning must treat all listed modules as `UNVERIFIED` until re-run.
@@ -407,6 +408,7 @@ TI-000 | STATUS | path/to/test_file.py | command used | short result | fix owner
 ```
 
 Required field rules:
+
 - `STATUS` must use one status from the legend above
 - `command used` must be the exact command or the batch command plus the narrowed path
 - `short result` must be one sentence only
@@ -430,6 +432,7 @@ FIX-000 | source test IDs | severity | owner | failing area | first action | dep
 ```
 
 Severity guidance:
+
 - `P0`: Security gate, tenant isolation, or collection failures blocking broad coverage
 - `P1`: Core domain logic broken, or multiple test files failing on the same module
 - `P2`: Isolated feature regression
@@ -940,3 +943,57 @@ python apps/api/src/core/test_error_handling.py
 
 - A broader execution attempt was started after collection analysis, but the run was too expensive to finish within a practical time budget in this session
 - That incomplete execution is not needed to determine suite health, because the collection failures above already prove the full suite is not currently green
+
+## 2026-03-08 Reconciliation Update
+
+Source of truth used for this update:
+
+- `apps/api/.pytest-full-junit.xml` (last modified: 2026-03-08)
+- Targeted RED-light-mode reruns executed in this session:
+  - `apps/api/tests/e2e/performance/test_large_load_red.py`
+  - `apps/api/tests/e2e/resilience/test_concurrent_modifications_red.py`
+  - `apps/api/tests/e2e/resilience/test_timeout_fallback_red.py`
+
+### Current Non-Pass Ledger (from latest JUnit artifact)
+
+- Total tests in artifact: `327`
+- `FAILED_ASSERTION`: `1`
+- `ERROR`: `95`
+- `SKIPPED`: `5`
+
+Classification:
+
+- `BLOCKED_ENV_SQLITE_ARRAY_UNSUPPORTED`: `94`
+  - Pattern: setup fails with `SQLiteTypeCompiler ... can't render element of type ARRAY`
+  - Impacted clusters include auth router/service/identity suites and DB probe tests in this artifact run
+  - Meaning: environment selected SQLite fallback while metadata includes PostgreSQL-specific ARRAY columns
+- `BLOCKED_ENV_DOCKER_UNAVAILABLE`: `5`
+  - Testcontainers persistence suites skipped because Docker API is unavailable
+- `FAIL_CONFIRMED`: `1`
+  - `tests.coherence.test_engine_v2.TestLLMResultCache::test_cache_key_uniqueness`
+  - Assertion: `assert None is not None`
+- `BLOCKED_INFRA_INTERNAL`: `1`
+  - JUnit contains `pytest internal` / `internal error` entry
+
+### RED-Only Light-Mode Status (latest direct reruns)
+
+- `apps/api/tests/e2e/performance/test_large_load_red.py`
+  - Executed in light mode
+  - Result: green with `XFAIL` on strict p95 contract in light runtime
+  - XFAIL reason recorded: `RED perf contract pending in light mode`
+- `apps/api/tests/e2e/resilience/test_concurrent_modifications_red.py`
+  - Executed in light mode
+  - Result: green with `XFAIL` on missing `If-Match` strict contract
+  - XFAIL reason recorded: `RED contract pending in light mode`
+- `apps/api/tests/e2e/resilience/test_timeout_fallback_red.py`
+  - Executed in light mode
+  - Result: all pass
+
+Combined targeted command outcome for these 3 files:
+
+- `20 passed, 2 xfailed, 0 skipped, 0 failed`
+
+### Interpretation
+
+- For the RED-only performance/resilience light-mode scope, there are no remaining skips and no hard failures.
+- For the broader suite, current non-pass is dominated by environment mismatch (SQLite fallback vs PostgreSQL-specific schema) plus Docker unavailability.
