@@ -83,6 +83,8 @@ pytest-asyncio==0.23.4
 pytest-cov==4.1.0
 factory-boy==3.3.0
 Faker==40.1.0  # For factory-boy
+docker>=7.0.0  # Required by testcontainers-backed persistence tests
+testcontainers>=4.14.0  # PostgreSQL integration tests
 
 # Linting & Formatting
 ruff==0.2.1

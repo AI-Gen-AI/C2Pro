@@ -2,7 +2,7 @@
 ## C2Pro - PostgreSQL + Docker Infrastructure
 
 **Created:** 2026-03-07
-**Last Updated:** 2026-03-07 (P1 Complete)
+**Last Updated:** 2026-03-08 (test re-audit applied)
 **Related Audit:** `docs/INFRASTRUCTURE_AUDIT_2026-03-07.md`
 
 ---
@@ -66,6 +66,9 @@ curl http://localhost:8000/health/ready
 | 2.2 | Add startup script | Create `scripts/start-dev.sh` | :white_check_mark: DONE | 2026-03-07 | .sh + .ps1 versions |
 | 2.3 | Configure Alembic | Add alembic.ini for project | :white_check_mark: DONE | 2026-03-07 | Already configured, 5 migrations |
 | 2.4 | Container restart policies | `restart: unless-stopped` | :white_check_mark: DONE | 2026-03-07 | Already configured |
+| 2.5 | Pin backend tests to local PostgreSQL | Force `localhost:5433/c2pro_test` before settings import | :white_check_mark: DONE | 2026-03-08 | `apps/api/tests/conftest.py` now overrides `.env` DB routing |
+| 2.6 | Remove SQLite fallback from PostgreSQL fixture | Fail fast when local PostgreSQL is unavailable | :white_check_mark: DONE | 2026-03-08 | Prevents masked `ARRAY` compile errors on SQLite |
+| 2.7 | Audit bootstrap dependencies for backend tests | Classify import-time package gaps separately from DB health | :white_check_mark: DONE | 2026-03-08 | `tiktoken` missing in venv was confirmed and installed locally |
 
 ### P2 Implementation Notes
 
@@ -169,6 +172,18 @@ P1.1 (MinIO) -----> P1.2 (MinIO healthy) -----> P1.3 (API)
 P1.4 (Migrations) ------------------------------+
 ```
 
+## TEST INFRASTRUCTURE STATE
+
+| Capability | Status | Date | Notes |
+|-----------|--------|------|-------|
+| Infrastructure online | :white_check_mark: DONE | 2026-03-07 | Core dev services healthy |
+| Test fixture pinned to local DB | :white_check_mark: DONE | 2026-03-08 | Uses `localhost:5433/c2pro_test` regardless of `.env` Supabase URL |
+| SQLite fallback removed | :white_check_mark: DONE | 2026-03-08 | PostgreSQL fixture now fails explicitly when backend DB is unavailable |
+| Bootstrap dependency installed | :white_check_mark: DONE | 2026-03-08 | `tiktoken` installed in `apps/api/.venv` for local pytest bootstrap |
+| Targeted DB probe runnable | :white_check_mark: DONE | 2026-03-08 | `test_postgresql_connection_available` passes sequentially |
+| Targeted auth smoke runnable | :white_check_mark: DONE | 2026-03-08 | `test_register_success` passes sequentially |
+| Full backend suite runnable | :hourglass_flowing_sand: IN PROGRESS | 2026-03-08 | Full suite not yet re-run after re-audit changes |
+
 ---
 
 ## COMPLETION SUMMARY
@@ -176,15 +191,15 @@ P1.4 (Migrations) ------------------------------+
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P1 - Critical | 5 | 5 | 0 | 0 |
-| P2 - Stability | 4 | 4 | 0 | 0 |
+| P2 - Stability | 7 | 7 | 0 | 0 |
 | P3 - Performance | 4 | 4 | 0 | 0 |
 | P4 - Security | 4 | 1 | 3 | 0 |
 | K - Kubernetes | 5 | 0 | 5 | 0 |
 | PE - Performance | 5 | 0 | 5 | 0 |
 | CI - CI/CD | 5 | 0 | 5 | 0 |
-| **TOTAL** | **32** | **14** | **18** | **0** |
+| **TOTAL** | **35** | **17** | **18** | **0** |
 
-**Progress:** 43.8% complete
+**Progress:** 48.6% complete
 
 ---
 
@@ -196,14 +211,15 @@ P1.4 (Migrations) ------------------------------+
 | 2026-03-07 | Extended Committee | Added K, PE, CI agents | Extended scope |
 | 2026-03-07 | P1 Execution | P1.1-P1.5 completed | Infrastructure online |
 | 2026-03-08 | P3 Optimization | P3.3-P3.4 complete | Pool + Redis memory limits |
+| 2026-03-08 | Test Re-Audit | P2.5-P2.7 completed | Forced local DB, removed SQLite fallback, resolved local `tiktoken` bootstrap gap |
 
 ---
 
 ## NEXT SESSION PRIORITIES
 
-1. **Execute P4.1** - Remove real keys from .env.example (HIGH priority)
-2. **Execute P4.2** - Add Redis password (production)
-3. **Begin CI.1** - Audit existing GitHub Actions
+1. **Re-run full backend suite** - Confirm next failing tests after fixture hardening
+2. **Decouple DB-only tests from heavy app imports** - Reduce bootstrap dependency surface in `tests/conftest.py`
+3. **Execute P4.2** - Add Redis password (production)
 
 ---
 

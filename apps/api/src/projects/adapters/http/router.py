@@ -313,13 +313,10 @@ async def update_project(
         update_data = updates.model_dump(exclude_unset=True)
         expected_version = update_data.get("expected_version")
         if expected_version is None and if_match is None:
-            # Backward-compatible fallback for basic PATCH flows without concurrency headers.
-            clean_updates = {k: v for k, v in update_data.items() if k != "expected_version"}
-            project.update(clean_updates)
-            project["version"] = current_version + 1
-            _fake_projects[project_id] = project
-            response.headers["ETag"] = f'"v{project["version"]}"'
-            return _project_to_response(project)
+            raise HTTPException(
+                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+                detail="Missing If-Match or expected_version precondition",
+            )
 
         idempotency_key = request.headers.get("Idempotency-Key")
         seen_keys: set[tuple[str, str, str, str]] = getattr(

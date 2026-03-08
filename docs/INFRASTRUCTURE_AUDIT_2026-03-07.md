@@ -150,7 +150,25 @@ The development database container starts but migrations are never applied becau
 | Docker Compose | `postgresql://postgres:postgres@postgres:5432/c2pro` | Valid |
 | .env.example (Supabase) | `postgresql://postgres.xxx:xxx@aws-x-eu-north-1.pooler.supabase.com:6543/postgres` | Valid |
 | Local Docker | `postgresql://postgres:postgres@localhost:5432/c2pro` | Valid |
-| Test | `postgresql://nonsuperuser:test@localhost:5433/c2pro_test` | Valid |
+| Test | `postgresql://postgres:postgres@localhost:5433/c2pro_test` | Valid for current pytest fixture bootstrap |
+
+### 4.1.a Test Configuration Precedence and Fixture Isolation
+
+Current backend test failures showed that test configuration precedence was a larger risk than container health alone.
+
+- `apps/api/src/config.py` still loads `.env` globally via pydantic-settings.
+- The repo `.env` points `DATABASE_URL` at Supabase, which is valid for app/dev flows but invalid for local PostgreSQL-backed test fixtures.
+- `apps/api/tests/conftest.py` now force-sets `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/c2pro_test` **before** importing `src.config`, preventing `.env` from redirecting backend tests away from the local test database.
+- PostgreSQL-specific fixtures no longer fall back to SQLite. When PostgreSQL is unavailable, the fixture now fails fast with a clear infrastructure message instead of masking the root cause behind SQLite compilation errors on PostgreSQL-only column types such as `ARRAY`.
+
+### 4.1.b Test Bootstrap Dependency Audit
+
+The backend suite also depends on import-time application bootstrap paths that are not directly related to PostgreSQL:
+
+- `apps/api/tests/conftest.py` imports `src.main`, which in turn imports document/RAG/AI modules.
+- A missing `tiktoken` package blocked pytest collection before any database fixture executed.
+- This failure mode is an environment/package dependency gap, not a PostgreSQL connectivity failure.
+- Current local verification required installing `tiktoken` into the API virtualenv before backend DB/auth tests could reach fixture setup.
 
 ### 4.2 Database Session Management
 
@@ -219,6 +237,33 @@ The development database container starts but migrations are never applied becau
 | MinIO won't start | Unknown (no logs) | Storage unavailable | Check Docker daemon |
 | Empty dev database | Migrations not applied | App initialization fails | Run migrations manually |
 | Test port conflict | Same Redis port | Test failures | Use different port in test compose |
+
+### 6.3 Masked Failures Caused by Fallback Execution Paths
+
+Recent backend test runs revealed two masked-failure patterns:
+
+1. Test DB routing drift:
+   - `.env` could redirect `DATABASE_URL` to Supabase unless tests overrode it before importing settings.
+   - Result: pytest was not guaranteed to use `localhost:5433/c2pro_test`.
+
+2. SQLite fallback masking PostgreSQL fixture failures:
+   - When PostgreSQL was unavailable, the shared test fixture previously fell back to SQLite in-memory.
+   - That fallback then failed on PostgreSQL-only metadata (`coherence_results.gaming_violations` uses `ARRAY(String)`), producing a misleading SQLAlchemy compile error instead of the real infrastructure problem.
+
+Current status:
+- test fixture is pinned to `localhost:5433/c2pro_test`
+- PostgreSQL unavailability now raises an explicit fixture failure
+- missing bootstrap dependencies (for example `tiktoken`) are classified separately from DB health
+
+### 6.4 Enum DDL Concurrency and Metadata Bootstrap
+
+Sequential local verification showed the targeted DB probe and auth registration test can pass once the test DB is pinned correctly and bootstrap dependencies are installed.
+
+Residual caveat:
+
+- Parallel pytest processes bootstrapping the same shared PostgreSQL test database can still race on enum DDL such as `CREATE TYPE subscriptionplan`.
+- This is a shared-database concurrency limitation of the current fixture strategy, not a connectivity issue.
+- Recommended follow-up: if parallel backend execution is required, isolate each worker to its own database/schema or serialize metadata bootstrap.
 
 ---
 
@@ -493,11 +538,16 @@ See: `docs/INFRASTRUCTURE_RECOVERY_TRACKER.md`
 | Secret rotation | DONE | Developer/DBA confirmed rotation/revocation in Supabase; DB connectivity test passed with current credentials |
 | SSL certificate install | N/A (local dev) | Deferred intentionally; required before production exposure |
 | Docker testcontainers suites | DONE | Executed with elevated Docker access on 2026-03-08: 8 passed, 1 skipped (known feature-gap test) |
+| Test fixture pinned to local DB | DONE | `apps/api/tests/conftest.py` now forces `localhost:5433/c2pro_test` before settings import |
+| SQLite fallback removed for PostgreSQL fixture | DONE | Fixture now fails fast on missing PostgreSQL instead of falling back to SQLite |
+| Test bootstrap dependency audit | DONE | Missing `tiktoken` classified as environment/package gap, not PostgreSQL issue |
 
 ### Test Verification Checklist (2026-03-08)
 
 | Scope | Command | Result | Status |
 |------|---------|--------|--------|
 | Backend Testcontainers suites | `pytest apps/api/tests/adapters/persistence/... apps/api/tests/e2e/resilience/test_concurrency.py apps/api/tests/modules/procurement/adapters/test_wbs_repository.py -vv` | 8 passed, 1 skipped (`test_optimistic_locking_on_wbs_item`: requires `WBSItemORM.version`) | PARTIAL PASS |
-| Backend full suite | `pytest apps/api/tests -q` | Fails during setup in `apps/api/tests/conftest.py` (`InFailedSQLTransactionError` while dropping enum types, e.g. `alertseverity`) | FAIL |
+| Backend DB probe | `pytest apps/api/tests/test_db_connection.py -k test_postgresql_connection_available -vv -s` | Passes sequentially against `c2pro_test`; confirms settings resolve to local PostgreSQL test DB | PASS |
+| Backend auth smoke | `pytest apps/api/tests/auth/test_auth_router.py -k test_register_success -vv -s` | Passes sequentially after installing missing `tiktoken` dependency | PASS |
+| Backend full suite | `pytest apps/api/tests -q` | Not yet re-run end-to-end after fixture hardening; previous failure mode in shared setup has been reclassified into DB routing, bootstrap dependency, and enum-DDL concurrency buckets | PARTIAL / RE-AUDIT REQUIRED |
 | Frontend full suite | `npm run test:all` (in `apps/web`) | Failing suites include `tests/integration/navigation.contract.test.tsx` (6 fails) and `tests/mobile/wbs-mobile.contract.test.tsx` (multiple contract failures) | FAIL |
