@@ -1,0 +1,11 @@
+
+- id: test-rule-3
+  description: Missing inputs field
+  detection_logic: "some_logic"
+  severity: medium
+  evidence_fields: ["some_field"]
+- id: test-rule-4
+  description: Another rule
+  inputs: ["field_x"]
+  severity: critical
+  evidence_fields: ["field_x"]

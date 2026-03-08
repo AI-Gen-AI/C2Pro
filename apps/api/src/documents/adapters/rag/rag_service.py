@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+from src.core.resilience import with_circuit_breaker
+from src.core.resilience.config import get_circuit_breaker_settings
 from src.documents.application.dtos import RagAnswer, RetrievedChunk
 
 logger = structlog.get_logger()
@@ -108,7 +110,24 @@ def _split_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     return chunks
 
 
+def _get_openai_cb_config() -> tuple[int, float]:
+    """Get circuit breaker config for OpenAI embeddings."""
+    settings = get_circuit_breaker_settings()
+    return settings.openai_failure_threshold, settings.openai_recovery_timeout
+
+
+@with_circuit_breaker(
+    "openai_embeddings",
+    failure_threshold=5,
+    recovery_timeout=60.0,
+)
 async def _embed_texts(texts: list[str]) -> list[list[float]]:
+    """
+    Generate embeddings for texts using OpenAI API.
+
+    Protected by circuit breaker to prevent cascading failures
+    when OpenAI API is unavailable.
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
@@ -125,6 +144,12 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
 
     if len(embeddings) != len(texts):
         raise RuntimeError("Embedding response size mismatch.")
+
+    logger.debug(
+        "openai_embeddings_success",
+        text_count=len(texts),
+        embedding_count=len(embeddings),
+    )
     return embeddings
 
 

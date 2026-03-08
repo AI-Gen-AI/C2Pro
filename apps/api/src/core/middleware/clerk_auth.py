@@ -8,6 +8,7 @@ CRITICAL FOR SECURITY:
 - Verifies JWT signature using Clerk's JWKS
 - Extracts and validates organization context
 - Maps clerk org_id -> Supabase tenant_id
+- Circuit breaker protection for JWKS fetch
 """
 
 from collections.abc import Callable
@@ -25,8 +26,29 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
 from src.core.database import get_raw_session
+from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
+from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
+
+# Initialize circuit breaker for Clerk JWKS fetch
+_clerk_circuit_breaker = None
+
+
+def _get_clerk_circuit_breaker():
+    """Get or initialize the Clerk JWKS circuit breaker."""
+    global _clerk_circuit_breaker
+    if _clerk_circuit_breaker is None:
+        cb_settings = get_circuit_breaker_settings()
+        if cb_settings.enable_circuit_breakers:
+            _clerk_circuit_breaker = CircuitBreakerRegistry.register(
+                CircuitBreakerConfig(
+                    service_name="clerk_jwks",
+                    failure_threshold=cb_settings.clerk_failure_threshold,
+                    recovery_timeout=cb_settings.clerk_recovery_timeout,
+                )
+            )
+    return _clerk_circuit_breaker
 
 
 class ClerkTokenVerificationError(HTTPException):
@@ -43,7 +65,18 @@ def get_clerk_jwks() -> dict[str, Any] | None:
 
     The JWKS is cached for performance to avoid repeated API calls.
     Cache invalidates on application restart.
+
+    Protected by circuit breaker to prevent cascading failures
+    when Clerk API is unavailable.
     """
+    cb = _get_clerk_circuit_breaker()
+
+    # Check circuit breaker before making request
+    if cb and not cb.can_execute_sync():
+        logger.warning("clerk_jwks_circuit_open", action="returning_cached_or_none")
+        # Circuit is open - return None and rely on cached keys in verify_clerk_token
+        return None
+
     try:
         jwks_url = settings.clerk_jwks_url
         if not jwks_url:
@@ -57,9 +90,16 @@ def get_clerk_jwks() -> dict[str, Any] | None:
 
         response = httpx.get(jwks_url, timeout=10)
         response.raise_for_status()
+
+        if cb:
+            cb.record_success_sync()
+
+        logger.debug("clerk_jwks_fetched", url=jwks_url)
         return response.json()
 
     except Exception as e:
+        if cb:
+            cb.record_failure_sync(e)
         logger.error("clerk_jwks_fetch_failed", error=str(e))
         return None
 
