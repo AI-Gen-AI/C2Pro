@@ -67,9 +67,11 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
 
 # Database
-# FORCE local test URL - override any .env values to ensure tests use the test container.
-# This must happen BEFORE importing src.config to prevent pydantic-settings from loading .env.
-os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5433/c2pro_test"
+# Prefer a dedicated test DB variable so pytest does not mutate the normal app DATABASE_URL.
+# src.config gives TEST_DATABASE_URL precedence over DATABASE_URL when present.
+os.environ.setdefault(
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test"
+)
 
 # Supabase
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
