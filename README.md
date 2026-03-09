@@ -30,6 +30,7 @@
 ## 🎯 Problema que Resolvemos
 
 El 15-30% de sobrecostes en proyectos de construcción e ingeniería se deben a desconexión entre:
+
 - Lo que dice el **contrato**
 - Lo que planifica el **cronograma**
 - Lo que presupuesta el **plan económico**
@@ -39,6 +40,7 @@ C2Pro cruza automáticamente estos documentos y detecta incoherencias antes de q
 ## 🏗️ Arquitectura
 
 ```
+
 ┌─────────────────────────────────────────────────────────┐
 │                    C2PRO MVP                            │
 ├─────────────────────────────────────────────────────────┤
@@ -54,6 +56,7 @@ C2Pro cruza automáticamente estos documentos y detecta incoherencias antes de q
 ## 📁 Estructura del Proyecto
 
 ```
+
 c2pro/
 ├── apps/
 │   ├── web/                  # Frontend Next.js
@@ -61,20 +64,30 @@ c2pro/
 ├── packages/                 # Shared packages (futuro)
 ├── infrastructure/           # Infraestructura (DB, scripts operativos)
 ├── docs/
-│   ├── DEVELOPMENT_STATUS.md # Estado principal del desarrollo
-│   ├── ROADMAP_v2.4.0.md     # Roadmap actual
-│   ├── archive/              # Documentos completados
-│   │   ├── tasks/            # Tareas CE-xxx finalizadas
-│   │   ├── sprints/          # Sprints cerrados
-│   │   ├── migrations/       # Reportes de migraciones
-│   │   └── roadmaps/         # Versiones anteriores
-│   ├── planning/             # Planes futuros
-│   ├── specifications/       # Especificaciones técnicas
-│   ├── runbooks/             # Guías operativas
-│   ├── architecture/         # Decisiones arquitectónicas
-│   └── wireframes/           # Diseños UI
+│   ├── README.md             # Índice principal de documentación
+│   ├── architecture/         # ADRs, diagramas y diseño técnico
+│   ├── api/                  # OpenAPI y ejemplos de API
+│   ├── specifications/       # Especificaciones técnicas y funcionales
+│   ├── runbooks/             # Guías operativas y de entorno
+│   ├── planning/             # Roadmap y planificación activa
+│   ├── testing/              # Inventarios y estrategia de tests
+│   ├── audits/               # Auditorías vigentes como referencia
+│   ├── assets/               # Cronogramas y material de apoyo
+│   └── archive/              # Históricos, duplicados y reportes cerrados
+├── context/                  # Working memory no canónica
+├── sandbox/                  # Experimentos aislados y prototipos
 └── docker-compose.yml        # Desarrollo local
 ```
+
+## 📚 Navegación de Documentación
+
+- Índice principal: [docs/README.md](./docs/README.md)
+- Política de working context: [context/README.md](./context/README.md)
+- Arquitectura: [docs/architecture/](./docs/architecture/)
+- Runbooks: [docs/runbooks/](./docs/runbooks/)
+- Testing: [docs/testing/](./docs/testing/)
+- Planning activo: [docs/planning/](./docs/planning/)
+- Histórico archivado: [docs/archive/](./docs/archive/)
 
 ## 🚀 Quick Start
 
@@ -100,6 +113,7 @@ python dev.py
 ```
 
 **Accede a:**
+
 - API: http://localhost:8000
 - Documentación: http://localhost:8000/docs
 - Guía completa: [QUICK_START.md](./QUICK_START.md)
@@ -191,6 +205,7 @@ Ver `.env.example` para la lista completa. Las críticas son:
 
 | Variable | Descripción |
 |----------|-------------|
+
 | `DATABASE_URL` | Connection string de PostgreSQL (Supabase o local) |
 | `SUPABASE_URL` | URL de tu proyecto Supabase |
 | `SUPABASE_ANON_KEY` | Key pública de Supabase |
@@ -210,19 +225,23 @@ Ver `.env.example` para la lista completa. Las críticas son:
 
 ## 📚 Documentación
 
-- [Estado del Desarrollo](docs/DEVELOPMENT_STATUS.md) - Estado actual y progreso
-- [Roadmap v2.4.0](docs/ROADMAP_v2.4.0.md) - Plan completo del proyecto
-- [Arquitectura](docs/architecture/) - Decisiones arquitectónicas (ADRs)
-- [Runbooks](docs/runbooks/) - Guías operativas y configuración
-- [Especificaciones](docs/specifications/) - Documentación técnica
-- [Wireframes](docs/wireframes/) - Diseños de interfaz
+- [Índice de Documentación](./docs/README.md) - Punto de entrada oficial a la documentación
+- [Roadmap activo](./docs/planning/ROADMAP_v2.4.0.md) - Plan vigente del proyecto
+- [Arquitectura](./docs/architecture/) - ADRs, diagramas y diseño técnico
+- [Runbooks](./docs/runbooks/) - Operación, setup y procedimientos
+- [Especificaciones](./docs/specifications/) - Documentación técnica y funcional
+- [Testing](./docs/testing/) - Inventarios, backlog y estrategia de tests
+- [Auditorías](./docs/audits/) - Revisiones estructurales y técnicas aún útiles
+- [Histórico archivado](./docs/archive/) - Reportes cerrados, duplicados y material legacy
 
 ## 🧭 Significado de carpetas clave
 
 - `apps/`: productos ejecutables (backend/frontend).
 - `infrastructure/`: base de datos, migraciones y scripts operativos (todo lo infra).
 - `supabase/`: workspace del Supabase CLI (config local + migrations para CLI).
-- `docs/`: documentación viva del proyecto (estado, roadmap, ADRs).
+- `docs/`: documentación canónica organizada por función y ciclo de vida.
+- `context/`: working memory, notas operativas cortas y material no canónico.
+- `sandbox/`: experimentos aislados que no deben tratarse como fuente oficial.
 - `tests/`: suites globales y utilidades de testing.
 - `evidence/`: evidencia generada (CTO gates, reportes, artefactos).
 - `backups/`: backups locales/manuales (si se usan).
@@ -230,6 +249,7 @@ Ver `.env.example` para la lista completa. Las críticas son:
 ## 🛣️ Roadmap
 
 ### CTO Gates (Seguridad)
+
 - [x] **Gate 1**: Multi-tenant Isolation (RLS) ✅
 - [x] **Gate 2**: Identity Model (UNIQUE constraint) ✅
 - [x] **Gate 3**: MCP Security (23/23 tests) ✅
@@ -240,6 +260,7 @@ Ver `.env.example` para la lista completa. Las críticas son:
 - [ ] **Gate 8**: Document Security
 
 ### Fases del Producto
+
 - [x] **Fase 1**: Platform Foundation (Sprint 1) ✅
 - [x] **Fase 1.5**: Security Foundation (Sprints P0) ✅
 - [ ] **Fase 2**: Coherence Engine MVP (Sprint S2 - 65%)
