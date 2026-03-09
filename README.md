@@ -1,255 +1,117 @@
-# C2Pro - Contract Intelligence Platform
+# C2Pro — Contract Intelligence Platform
 
-[![Tests](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/tests.yml)
-[![E2E Security](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml/badge.svg)](https://github.com/AI-Gen-AI/c2pro/actions/workflows/e2e-security-tests.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+C2Pro is an AI-assisted platform for **contractual coherence analysis** in construction and engineering projects. It cross-checks contract clauses, project schedules, and budget structures to detect inconsistencies early and reduce cost overruns.
 
-> Sistema de auditoría tridimensional (Contrato + Cronograma + Presupuesto) con IA para detectar incoherencias antes de que generen sobrecostes.
+This README is the **main documentation hub** for the repository.
 
-## 🎉 Estado Actual: Sprint S2 en Progreso (65%)
+## Project Purpose
 
-**CTO Gates 1-4 Validados** ✅ | **Security Foundation Production Ready**
+Construction and infrastructure projects often fail due to misalignment between:
 
-- ✅ 19 tablas con RLS desplegadas en staging
-- ✅ 42 tests de seguridad implementados
-- ✅ Frontend type safety 95%
-- 🟡 Sprint S2: Wireframes + Coherence Engine
+- **Contract commitments**
+- **Execution schedule**
+- **Budget and procurement assumptions**
 
-### 🚀 Comenzar Ahora
+C2Pro helps teams identify these mismatches before they become legal, financial, or operational risks.
 
-**¿Primera vez aquí?** Lee la [Guía de Inicio Rápido](./QUICK_START.md) para poner en marcha el backend en 5 minutos.
+## Repository Overview
 
-**¿Desarrollas en Windows?** Revisa nuestra [Guía de Configuración para Windows](./docs/development/windows-setup.md) para evitar problemas comunes.
-
-**Desarrollador?** Ve a [apps/api/README.md](./apps/api/README.md) para documentación técnica completa.
-
----
-
-## 🎯 Problema que Resolvemos
-
-El 15-30% de sobrecostes en proyectos de construcción e ingeniería se deben a desconexión entre:
-- Lo que dice el **contrato**
-- Lo que planifica el **cronograma**
-- Lo que presupuesta el **plan económico**
-
-C2Pro cruza automáticamente estos documentos y detecta incoherencias antes de que cuesten dinero.
-
-## 🏗️ Arquitectura
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    C2PRO MVP                            │
-├─────────────────────────────────────────────────────────┤
-│  Frontend: Next.js 14 + Tailwind + shadcn/ui (Vercel)  │
-│  Backend: FastAPI + Pydantic v2 (Railway)              │
-│  Database: Supabase PostgreSQL (RLS enabled)           │
-│  Cache: Upstash Redis                                   │
-│  Storage: Cloudflare R2                                 │
-│  AI: Claude API (Sonnet)                                │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 📁 Estructura del Proyecto
-
-```
+```text
 c2pro/
 ├── apps/
-│   ├── web/                  # Frontend Next.js
-│   └── api/                  # Backend FastAPI
-├── packages/                 # Shared packages (futuro)
-├── infrastructure/           # Infraestructura (DB, scripts operativos)
-├── docs/
-│   ├── DEVELOPMENT_STATUS.md # Estado principal del desarrollo
-│   ├── ROADMAP_v2.4.0.md     # Roadmap actual
-│   ├── archive/              # Documentos completados
-│   │   ├── tasks/            # Tareas CE-xxx finalizadas
-│   │   ├── sprints/          # Sprints cerrados
-│   │   ├── migrations/       # Reportes de migraciones
-│   │   └── roadmaps/         # Versiones anteriores
-│   ├── planning/             # Planes futuros
-│   ├── specifications/       # Especificaciones técnicas
-│   ├── runbooks/             # Guías operativas
-│   ├── architecture/         # Decisiones arquitectónicas
-│   └── wireframes/           # Diseños UI
-└── docker-compose.yml        # Desarrollo local
+│   ├── api/                  # FastAPI backend (domain logic, AI integrations, tests)
+│   └── web/                  # Frontend application
+├── docs/                     # Primary project documentation
+│   ├── architecture/         # ADRs and architecture diagrams
+│   ├── runbooks/             # Operations and incident procedures
+│   ├── specifications/       # Functional and technical specs
+│   ├── plans/                # Delivery and implementation plans
+│   ├── audits/               # Quality, UX, and readiness audits
+│   └── archive/              # Historical reports, roadmaps, and closed work
+├── infrastructure/           # Supabase config, scripts, infra setup/testing
+└── tests/                    # Cross-cutting test suites and fixtures
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### Sprint 1 - Backend Foundation (✅ Completado)
+- Platform bootstrapping: [QUICK_START.md](./QUICK_START.md)
+- Windows setup: [windows-setup.md](./windows-setup.md)
+- Backend setup and API details: [apps/api/README.md](./apps/api/README.md)
+- Test execution guidance: [TESTING.md](./TESTING.md)
 
-```bash
-# 1. Configurar .env con tus credenciales de Supabase
-cp .env.example .env
-# Edita .env y añade tu DATABASE_URL
+## Documentation Index (Current)
 
-# 2. Opción A: Script automático (Windows)
-.\infrastructure\scripts\init-backend.bat
+### Architecture
 
-# 2. Opción B: Script automático (Linux/Mac)
-chmod +x infrastructure/scripts/init-backend.sh
-./infrastructure/scripts/init-backend.sh
+- [docs/PLAN_ARQUITECTURA.md](./docs/PLAN_ARQUITECTURA.md) — high-level architecture plan and target structure.
+- [docs/architecture/FLOW_DIAGRAMS.md](./docs/architecture/FLOW_DIAGRAMS.md) — system-level flow diagrams.
+- [docs/architecture/decisions/](./docs/architecture/decisions/) — Architecture Decision Records (ADRs) that explain key technical choices.
 
-# 2. Opción C: Manual
-cd apps/api
-pip install -r requirements.txt
-python setup.py
-python dev.py
-```
+### Design and Product Definition
 
-**Accede a:**
-- API: http://localhost:8000
-- Documentación: http://localhost:8000/docs
-- Guía completa: [QUICK_START.md](./QUICK_START.md)
+- [context/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md](./context/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md) — comprehensive technical design baseline.
+- [docs/wireframes/README.md](./docs/wireframes/README.md) — UI/UX wireframe documentation index.
+- [docs/wireframes/](./docs/wireframes/) — feature-level interface and interaction design notes.
 
-### Prerrequisitos
+### Implementation and Engineering Status
 
-- Python 3.11+
-- Cuenta en Supabase (free tier)
-- Node.js 20+ (para frontend, próximo sprint)
-- Docker & Docker Compose (opcional, para desarrollo local)
+- [docs/DEVELOPMENT_STATUS.md](./docs/DEVELOPMENT_STATUS.md) — active development progress and status.
+- [docs/SPRINT_S2_PROGRESS_SUMMARY.md](./docs/SPRINT_S2_PROGRESS_SUMMARY.md) — sprint-level delivery summary.
+- [docs/LESSONS_LEARNED.md](./docs/LESSONS_LEARNED.md) — implementation retrospectives and engineering learnings.
 
-### 1. Clonar y configurar
+### Configuration and Infrastructure
 
-```bash
-git clone https://github.com/tu-usuario/c2pro.git
-cd c2pro
+- [infrastructure/supabase/README.md](./infrastructure/supabase/README.md) — Supabase workspace structure and usage.
+- [infrastructure/supabase/SETUP_INSTRUCTIONS.md](./infrastructure/supabase/SETUP_INSTRUCTIONS.md) — setup steps for local/staging infrastructure.
+- [docs/runbooks/ci-cd-setup.md](./docs/runbooks/ci-cd-setup.md) — CI/CD operational setup.
+- [docs/runbooks/backup-restore.md](./docs/runbooks/backup-restore.md) — backup and restore procedures.
 
-# Copiar variables de entorno
-cp .env.example .env
-# Editar .env con tus credenciales
-```
+### Usage and Operations
 
-### 2. Iniciar servicios locales
+- [apps/api/README.md](./apps/api/README.md) — backend usage, endpoints, and operational guidance.
+- [apps/web/README_SETUP.md](./apps/web/README_SETUP.md) — frontend environment/setup usage notes.
+- [docs/runbooks/incident-response.md](./docs/runbooks/incident-response.md) — incident handling workflow.
 
-```bash
-# Iniciar PostgreSQL y Redis locales
-docker-compose up -d
+### Testing and Quality
 
-# O usar Supabase local
-npx supabase start
-```
+- [TESTING.md](./TESTING.md) — repository-wide test strategy and commands.
+- [tests/README.md](./tests/README.md) — tests directory index and organization.
+- [docs/TEST_COVERAGE_ANALYSIS.md](./docs/TEST_COVERAGE_ANALYSIS.md) — test coverage assessment.
+- [docs/TEST_STATUS_CHECKLIST_2026-03-08.md](./docs/TEST_STATUS_CHECKLIST_2026-03-08.md) — current test readiness checklist.
 
-### 3. Backend
+### Planning and Roadmap
 
-```bash
-cd apps/api
+- [docs/ROADMAP_v2.4.0.md](./docs/ROADMAP_v2.4.0.md) — current roadmap and milestones.
+- [docs/planning/](./docs/planning/) — implementation planning documents.
+- [docs/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md](./docs/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md) — phased TDD execution roadmap.
 
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# .\venv\Scripts\activate  # Windows
+### Security and Audits
 
-# Instalar dependencias
-pip install -r requirements.txt
+- [docs/audits/PRODUCTION_READINESS_AUDIT_2026-02-14.md](./docs/audits/PRODUCTION_READINESS_AUDIT_2026-02-14.md) — production readiness findings.
+- [docs/INFRASTRUCTURE_AUDIT_2026-03-07.md](./docs/INFRASTRUCTURE_AUDIT_2026-03-07.md) — infrastructure audit summary.
+- [docs/INFRASTRUCTURE_AUDIT_EXTENDED_COMMITTEE_2026-03-07.md](./docs/INFRASTRUCTURE_AUDIT_EXTENDED_COMMITTEE_2026-03-07.md) — extended committee audit review.
 
-# Aplicar migraciones
-alembic upgrade head
+## Recommended Core Documentation Backbone (to standardize)
 
-# Iniciar servidor
-uvicorn src.main:app --reload
-```
+To keep this documentation architecture stable as the project grows, maintain these canonical files at repository root (or `docs/` where noted):
 
-### 4. Frontend
+- `README.md` — central project overview and documentation map.
+- `CONTRIBUTING.md` — contribution workflow, coding standards, and review process.
+- `ARCHITECTURE.md` (or `docs/ARCHITECTURE.md`) — system context, boundaries, and component interactions.
+- `DESIGN.md` — product and technical design principles.
+- `INSTALLATION.md` — clean installation and local environment setup.
+- `USAGE.md` — user/developer workflows and operational usage.
+- `API.md` (or `docs/API.md`) — API contracts, conventions, auth, and error models.
+- `CHANGELOG.md` — versioned change history.
+- `ROADMAP.md` — forward-looking plan and milestones.
+- `LICENSE.md` (or `LICENSE`) — legal usage terms.
 
-```bash
-cd apps/web
+> These files can start minimal and expand over time without changing the top-level documentation structure.
 
-# Instalar dependencias
-npm install
+## Contributing
 
-# Iniciar servidor de desarrollo
-npm run dev
-```
+Formal contributing guidelines are not yet centralized in a dedicated `CONTRIBUTING.md`. Until then, use the implementation and testing references above when submitting changes.
 
-### 5. Verificar
+## License
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-## 🧪 Tests
-
-```bash
-# Backend
-cd apps/api
-pytest
-
-# Con coverage
-pytest --cov=src --cov-report=html
-
-# Frontend
-cd apps/web
-npm test
-```
-
-## 📊 Variables de Entorno
-
-Ver `.env.example` para la lista completa. Las críticas son:
-
-| Variable | Descripción |
-|----------|-------------|
-| `DATABASE_URL` | Connection string de PostgreSQL (Supabase o local) |
-| `SUPABASE_URL` | URL de tu proyecto Supabase |
-| `SUPABASE_ANON_KEY` | Key pública de Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Key de servicio (solo backend) |
-| `ANTHROPIC_API_KEY` | API key de Claude |
-| `UPSTASH_REDIS_URL` | URL de Redis |
-| `R2_ACCOUNT_ID` | Account ID de Cloudflare |
-| `R2_ACCESS_KEY_ID` | Access key de R2 |
-| `R2_SECRET_ACCESS_KEY` | Secret key de R2 |
-
-## 🔒 Seguridad
-
-- **Multi-tenancy**: Row Level Security (RLS) en PostgreSQL
-- **PII**: Anonymization antes de enviar a AI
-- **Auth**: Supabase Auth con JWT
-- **Secrets**: Variables de entorno, nunca en código
-
-## 📚 Documentación
-
-- [Estado del Desarrollo](docs/DEVELOPMENT_STATUS.md) - Estado actual y progreso
-- [Roadmap v2.4.0](docs/ROADMAP_v2.4.0.md) - Plan completo del proyecto
-- [Arquitectura](docs/architecture/) - Decisiones arquitectónicas (ADRs)
-- [Runbooks](docs/runbooks/) - Guías operativas y configuración
-- [Especificaciones](docs/specifications/) - Documentación técnica
-- [Wireframes](docs/wireframes/) - Diseños de interfaz
-
-## 🧭 Significado de carpetas clave
-
-- `apps/`: productos ejecutables (backend/frontend).
-- `infrastructure/`: base de datos, migraciones y scripts operativos (todo lo infra).
-- `supabase/`: workspace del Supabase CLI (config local + migrations para CLI).
-- `docs/`: documentación viva del proyecto (estado, roadmap, ADRs).
-- `tests/`: suites globales y utilidades de testing.
-- `evidence/`: evidencia generada (CTO gates, reportes, artefactos).
-- `backups/`: backups locales/manuales (si se usan).
-
-## 🛣️ Roadmap
-
-### CTO Gates (Seguridad)
-- [x] **Gate 1**: Multi-tenant Isolation (RLS) ✅
-- [x] **Gate 2**: Identity Model (UNIQUE constraint) ✅
-- [x] **Gate 3**: MCP Security (23/23 tests) ✅
-- [x] **Gate 4**: Legal Traceability (clauses + FKs) ✅
-- [ ] **Gate 5**: Coherence Score Formal (en progreso)
-- [ ] **Gate 6**: Human-in-the-loop
-- [ ] **Gate 7**: Observability
-- [ ] **Gate 8**: Document Security
-
-### Fases del Producto
-- [x] **Fase 1**: Platform Foundation (Sprint 1) ✅
-- [x] **Fase 1.5**: Security Foundation (Sprints P0) ✅
-- [ ] **Fase 2**: Coherence Engine MVP (Sprint S2 - 65%)
-- [ ] **Fase 3**: Copiloto de Compras
-- [ ] **Fase 4**: Control de Ejecución
-
-## 📄 Licencia
-
-Propietario - © 2025-2026 C2Pro
-
-## 🤝 Contribuir
-
-Este es un proyecto privado. Contacta al equipo para colaborar.
+This repository is currently maintained as a private/internal project. Add a canonical `LICENSE` or `LICENSE.md` file when distribution terms are finalized.
