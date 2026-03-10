@@ -1,0 +1,890 @@
+{
+  "dataset_name": "c2pro_extraction_eval_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-09",
+  "service": "document_extraction_i3",
+  "metadata": {
+    "model_version": "claude-haiku-4-20250514",
+    "extraction_config": "v1.0"
+  },
+  "baseline_metrics": {
+    "entity_f1": 0.85,
+    "boundary_iou": 0.82,
+    "actor_accuracy": 0.90,
+    "date_extraction_accuracy": 0.88,
+    "amount_extraction_accuracy": 0.87
+  },
+  "examples": [
+    {
+      "id": "EX-EVAL-0001",
+      "category": "clause_boundary",
+      "input": {
+        "document_text": "CLÁUSULA PRIMERA - OBJETO DEL CONTRATO\n\nEl presente contrato tiene por objeto la construcción de una planta fotovoltaica de 50 MW de capacidad instalada, ubicada en el municipio de Villanueva, Zacatecas.\n\nCLÁUSULA SEGUNDA - PLAZO DE EJECUCIÓN\n\nEl plazo para la ejecución total de los trabajos será de 18 meses contados a partir de la fecha de firma del presente contrato.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El presente contrato tiene por objeto la construcción de una planta fotovoltaica de 50 MW de capacidad instalada, ubicada en el municipio de Villanueva, Zacatecas.",
+            "type": "scope",
+            "modality": "none",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "El plazo para la ejecución total de los trabajos será de 18 meses contados a partir de la fecha de firma del presente contrato.",
+            "type": "timeline",
+            "modality": "will",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 2,
+        "high_impact_clauses": ["CL-002"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Clear clause headers with numbered structure. Standard format."
+    },
+    {
+      "id": "EX-EVAL-0002",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "El Contratista, CONSTRUCTORA ALFA S.A. DE C.V., con domicilio en Av. Reforma 123, Ciudad de México, se obliga a entregar al Cliente, ENERGÍAS RENOVABLES DEL NORTE S.A.P.I. DE C.V., representado por el Ing. Carlos Rodríguez Méndez en su carácter de Director General, la cantidad de 5,000 paneles solares marca SunPower modelo SPR-X22-360.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El Contratista, CONSTRUCTORA ALFA S.A. DE C.V., con domicilio en Av. Reforma 123, Ciudad de México, se obliga a entregar al Cliente, ENERGÍAS RENOVABLES DEL NORTE S.A.P.I. DE C.V., representado por el Ing. Carlos Rodríguez Méndez en su carácter de Director General, la cantidad de 5,000 paneles solares marca SunPower modelo SPR-X22-360.",
+            "type": "delivery",
+            "modality": "shall",
+            "actors": ["CONSTRUCTORA ALFA S.A. DE C.V.", "ENERGÍAS RENOVABLES DEL NORTE S.A.P.I. DE C.V.", "Ing. Carlos Rodríguez Méndez"],
+            "confidence_range": [0.80, 0.90]
+          }
+        ],
+        "total_clause_count": 1,
+        "entities": {
+          "actors": ["CONSTRUCTORA ALFA S.A. DE C.V.", "ENERGÍAS RENOVABLES DEL NORTE S.A.P.I. DE C.V.", "Ing. Carlos Rodríguez Méndez"],
+          "dates": [],
+          "amounts": [{"value": 5000, "unit": "units", "type": "quantity"}]
+        }
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Multiple named entities with legal suffixes and role designations."
+    },
+    {
+      "id": "EX-EVAL-0003",
+      "category": "obligation_parsing",
+      "input": {
+        "document_text": "El Supervisor de Obra deberá aprobar los materiales dentro de los 5 días hábiles siguientes a su recepción. En caso de no emitir respuesta, se entenderán aprobados automáticamente. El Contratista no podrá proceder con la instalación sin la aprobación previa.",
+        "document_type": "specification",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El Supervisor de Obra deberá aprobar los materiales dentro de los 5 días hábiles siguientes a su recepción.",
+            "type": "approval",
+            "modality": "shall",
+            "actors": ["Supervisor de Obra"],
+            "due_date": null,
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "En caso de no emitir respuesta, se entenderán aprobados automáticamente.",
+            "type": "default_action",
+            "modality": "will",
+            "actors": [],
+            "confidence_range": [0.80, 0.90]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "El Contratista no podrá proceder con la instalación sin la aprobación previa.",
+            "type": "restriction",
+            "modality": "must_not",
+            "actors": ["Contratista"],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 3,
+        "high_impact_clauses": ["CL-001", "CL-003"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Multiple obligation types (shall, will, must_not) in related sentences."
+    },
+    {
+      "id": "EX-EVAL-0004",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "PAGOS:\n\n1. Anticipo: $2,500,000.00 MXN (Dos millones quinientos mil pesos 00/100 M.N.) pagadero el 15 de marzo de 2026.\n\n2. Primer Pago Parcial: $3,750,000.00 MXN al alcanzar el 25% de avance, estimado para el 1 de junio de 2026.\n\n3. Segundo Pago Parcial: $3,750,000.00 MXN al alcanzar el 50% de avance, estimado para el 15 de agosto de 2026.\n\n4. Pago Final: $2,500,000.00 MXN contra entrega y aceptación final.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Anticipo: $2,500,000.00 MXN (Dos millones quinientos mil pesos 00/100 M.N.) pagadero el 15 de marzo de 2026.",
+            "type": "payment",
+            "modality": "will",
+            "actors": [],
+            "due_date": "2026-03-15",
+            "amounts": [{"value": 2500000, "currency": "MXN", "type": "advance"}],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Primer Pago Parcial: $3,750,000.00 MXN al alcanzar el 25% de avance, estimado para el 1 de junio de 2026.",
+            "type": "payment",
+            "modality": "will",
+            "actors": [],
+            "due_date": "2026-06-01",
+            "amounts": [{"value": 3750000, "currency": "MXN", "type": "milestone_payment"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Segundo Pago Parcial: $3,750,000.00 MXN al alcanzar el 50% de avance, estimado para el 15 de agosto de 2026.",
+            "type": "payment",
+            "modality": "will",
+            "actors": [],
+            "due_date": "2026-08-15",
+            "amounts": [{"value": 3750000, "currency": "MXN", "type": "milestone_payment"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-004",
+            "text": "Pago Final: $2,500,000.00 MXN contra entrega y aceptación final.",
+            "type": "payment",
+            "modality": "will",
+            "actors": [],
+            "due_date": null,
+            "amounts": [{"value": 2500000, "currency": "MXN", "type": "final_payment"}],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 4,
+        "entities": {
+          "dates": ["2026-03-15", "2026-06-01", "2026-08-15"],
+          "amounts": [
+            {"value": 2500000, "currency": "MXN", "type": "advance"},
+            {"value": 3750000, "currency": "MXN", "type": "milestone_payment"},
+            {"value": 3750000, "currency": "MXN", "type": "milestone_payment"},
+            {"value": 2500000, "currency": "MXN", "type": "final_payment"}
+          ]
+        },
+        "high_impact_clauses": ["CL-001", "CL-002", "CL-003", "CL-004"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Multiple payment items with amounts, dates, and conditions."
+    },
+    {
+      "id": "EX-EVAL-0005",
+      "category": "clause_boundary",
+      "input": {
+        "document_text": "El contratista será responsable de la seguridad en obra. Esto incluye proporcionar equipo de protección personal a todo el personal, mantener señalización adecuada, realizar pláticas de seguridad semanales y reportar cualquier incidente dentro de las 24 horas siguientes a su ocurrencia.",
+        "document_type": "specification",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El contratista será responsable de la seguridad en obra. Esto incluye proporcionar equipo de protección personal a todo el personal, mantener señalización adecuada, realizar pláticas de seguridad semanales y reportar cualquier incidente dentro de las 24 horas siguientes a su ocurrencia.",
+            "type": "safety",
+            "modality": "shall",
+            "actors": ["contratista"],
+            "confidence_range": [0.80, 0.90]
+          }
+        ],
+        "total_clause_count": 1,
+        "high_impact_clauses": ["CL-001"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Single clause spanning multiple sentences - should not be split."
+    },
+    {
+      "id": "EX-EVAL-0006",
+      "category": "obligation_parsing",
+      "input": {
+        "document_text": "The Owner may terminate this Agreement for convenience upon 30 days written notice. Upon such termination, the Contractor shall be entitled to payment for work performed up to the termination date. The Contractor shall not be entitled to any compensation for lost profits or anticipated revenues.",
+        "document_type": "contract",
+        "language": "en"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "The Owner may terminate this Agreement for convenience upon 30 days written notice.",
+            "type": "termination",
+            "modality": "may",
+            "actors": ["Owner"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Upon such termination, the Contractor shall be entitled to payment for work performed up to the termination date.",
+            "type": "compensation",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "The Contractor shall not be entitled to any compensation for lost profits or anticipated revenues.",
+            "type": "exclusion",
+            "modality": "must_not",
+            "actors": ["Contractor"],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 3,
+        "high_impact_clauses": ["CL-001", "CL-003"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "English contract with clear modality markers (may, shall, shall not)."
+    },
+    {
+      "id": "EX-EVAL-0007",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "GARANTÍAS:\n\nEl Contratista constituirá a favor del Cliente las siguientes garantías:\n\na) Fianza de Cumplimiento: 10% del valor del contrato ($1,250,000.00 USD)\nb) Fianza de Anticipo: Por el 100% del anticipo recibido ($3,125,000.00 USD)\nc) Fianza de Vicios Ocultos: 10% del valor del contrato, vigente por 24 meses después de la recepción",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Fianza de Cumplimiento: 10% del valor del contrato ($1,250,000.00 USD)",
+            "type": "guarantee",
+            "modality": "shall",
+            "actors": ["Contratista"],
+            "amounts": [{"value": 1250000, "currency": "USD", "type": "performance_bond"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Fianza de Anticipo: Por el 100% del anticipo recibido ($3,125,000.00 USD)",
+            "type": "guarantee",
+            "modality": "shall",
+            "actors": ["Contratista"],
+            "amounts": [{"value": 3125000, "currency": "USD", "type": "advance_bond"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Fianza de Vicios Ocultos: 10% del valor del contrato, vigente por 24 meses después de la recepción",
+            "type": "guarantee",
+            "modality": "shall",
+            "actors": ["Contratista"],
+            "confidence_range": [0.80, 0.90]
+          }
+        ],
+        "total_clause_count": 3,
+        "entities": {
+          "amounts": [
+            {"value": 1250000, "currency": "USD", "type": "performance_bond"},
+            {"value": 3125000, "currency": "USD", "type": "advance_bond"}
+          ]
+        },
+        "high_impact_clauses": ["CL-001", "CL-002", "CL-003"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "List format with multiple guarantee types and monetary values."
+    },
+    {
+      "id": "EX-EVAL-0008",
+      "category": "mixed",
+      "input": {
+        "document_text": "PENALIDADES: Por cada día de retraso imputable al Contratista en la entrega de cualquier hito, se aplicará una penalización equivalente al 0.5% del valor del hito correspondiente, hasta un máximo acumulado del 10% del valor total del contrato. Si las penalidades acumuladas exceden el 10%, el Cliente podrá dar por terminado el contrato sin responsabilidad adicional.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Por cada día de retraso imputable al Contratista en la entrega de cualquier hito, se aplicará una penalización equivalente al 0.5% del valor del hito correspondiente, hasta un máximo acumulado del 10% del valor total del contrato.",
+            "type": "penalty",
+            "modality": "will",
+            "actors": ["Contratista"],
+            "ambiguity_flag": false,
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Si las penalidades acumuladas exceden el 10%, el Cliente podrá dar por terminado el contrato sin responsabilidad adicional.",
+            "type": "termination_trigger",
+            "modality": "may",
+            "actors": ["Cliente"],
+            "ambiguity_flag": false,
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 2,
+        "high_impact_clauses": ["CL-001", "CL-002"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Penalty clause with cap and linked termination provision."
+    },
+    {
+      "id": "EX-EVAL-0009",
+      "category": "implicit",
+      "input": {
+        "document_text": "Los trabajos se ejecutarán conforme a las especificaciones técnicas del Anexo A y las normas aplicables. Se consideran incluidos todos los elementos necesarios para el correcto funcionamiento del sistema aunque no estén expresamente mencionados en los planos.",
+        "document_type": "specification",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Los trabajos se ejecutarán conforme a las especificaciones técnicas del Anexo A y las normas aplicables.",
+            "type": "technical_requirement",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": false,
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Se consideran incluidos todos los elementos necesarios para el correcto funcionamiento del sistema aunque no estén expresamente mencionados en los planos.",
+            "type": "scope_inclusion",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.75, 0.85]
+          }
+        ],
+        "total_clause_count": 2,
+        "high_impact_clauses": ["CL-002"]
+      },
+      "extraction_difficulty": "implicit",
+      "human_rationale": "Second clause implies unlimited scope - implicit obligation that's hard to detect."
+    },
+    {
+      "id": "EX-EVAL-0010",
+      "category": "malformed",
+      "input": {
+        "document_text": "el contratista entregara los materiales en el plazo establecido..... todos los materiales deberan cumplir con las especificaciones.... el incumplimiento generará penalidades segun lo establecido........",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "el contratista entregara los materiales en el plazo establecido",
+            "type": "delivery",
+            "modality": "will",
+            "actors": ["contratista"],
+            "ambiguity_flag": true,
+            "confidence_range": [0.60, 0.75]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "todos los materiales deberan cumplir con las especificaciones",
+            "type": "quality",
+            "modality": "shall",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.60, 0.75]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "el incumplimiento generará penalidades segun lo establecido",
+            "type": "penalty",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.55, 0.70]
+          }
+        ],
+        "total_clause_count": 3,
+        "high_impact_clauses": []
+      },
+      "extraction_difficulty": "malformed",
+      "human_rationale": "Missing punctuation, no capitalization, ellipses instead of periods. OCR-like errors."
+    },
+    {
+      "id": "EX-EVAL-0011",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "CRONOGRAMA DE HITOS:\n\n| Hito | Descripción | Fecha Límite | % del Contrato |\n|------|-------------|--------------|----------------|\n| H1 | Cimentaciones | 2026-04-15 | 15% |\n| H2 | Estructura Metálica | 2026-06-30 | 25% |\n| H3 | Instalación de Paneles | 2026-09-15 | 35% |\n| H4 | Pruebas y Puesta en Marcha | 2026-11-30 | 25% |",
+        "document_type": "schedule",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-H1",
+            "text": "H1 - Cimentaciones - 2026-04-15 - 15%",
+            "type": "milestone",
+            "modality": "none",
+            "actors": [],
+            "due_date": "2026-04-15",
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-H2",
+            "text": "H2 - Estructura Metálica - 2026-06-30 - 25%",
+            "type": "milestone",
+            "modality": "none",
+            "actors": [],
+            "due_date": "2026-06-30",
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-H3",
+            "text": "H3 - Instalación de Paneles - 2026-09-15 - 35%",
+            "type": "milestone",
+            "modality": "none",
+            "actors": [],
+            "due_date": "2026-09-15",
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-H4",
+            "text": "H4 - Pruebas y Puesta en Marcha - 2026-11-30 - 25%",
+            "type": "milestone",
+            "modality": "none",
+            "actors": [],
+            "due_date": "2026-11-30",
+            "confidence_range": [0.90, 0.98]
+          }
+        ],
+        "total_clause_count": 4,
+        "entities": {
+          "dates": ["2026-04-15", "2026-06-30", "2026-09-15", "2026-11-30"]
+        },
+        "high_impact_clauses": ["CL-H1", "CL-H2", "CL-H3", "CL-H4"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Table format with structured milestone data - common in construction contracts."
+    },
+    {
+      "id": "EX-EVAL-0012",
+      "category": "obligation_parsing",
+      "input": {
+        "document_text": "Insurance Requirements: (a) The Contractor shall maintain Commercial General Liability insurance with limits not less than $5,000,000 per occurrence; (b) Workers' Compensation as required by law; (c) Automobile Liability with limits not less than $1,000,000; (d) Professional Liability of not less than $2,000,000 per claim. All policies shall name the Owner as additional insured.",
+        "document_type": "contract",
+        "language": "en"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "The Contractor shall maintain Commercial General Liability insurance with limits not less than $5,000,000 per occurrence",
+            "type": "insurance",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "amounts": [{"value": 5000000, "currency": "USD", "type": "insurance_limit"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Workers' Compensation as required by law",
+            "type": "insurance",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Automobile Liability with limits not less than $1,000,000",
+            "type": "insurance",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "amounts": [{"value": 1000000, "currency": "USD", "type": "insurance_limit"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-004",
+            "text": "Professional Liability of not less than $2,000,000 per claim",
+            "type": "insurance",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "amounts": [{"value": 2000000, "currency": "USD", "type": "insurance_limit"}],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-005",
+            "text": "All policies shall name the Owner as additional insured",
+            "type": "insurance_requirement",
+            "modality": "shall",
+            "actors": ["Owner"],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 5,
+        "entities": {
+          "amounts": [
+            {"value": 5000000, "currency": "USD", "type": "insurance_limit"},
+            {"value": 1000000, "currency": "USD", "type": "insurance_limit"},
+            {"value": 2000000, "currency": "USD", "type": "insurance_limit"}
+          ]
+        },
+        "high_impact_clauses": ["CL-001", "CL-004", "CL-005"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Enumerated list with multiple insurance types and monetary limits."
+    },
+    {
+      "id": "EX-EVAL-0013",
+      "category": "clause_boundary",
+      "input": {
+        "document_text": "FUERZA MAYOR - Ninguna de las partes será responsable por el incumplimiento o retraso en el cumplimiento de sus obligaciones cuando dicho incumplimiento o retraso sea resultado de causas fuera de su control razonable, incluyendo pero no limitado a: actos de Dios, guerra, terrorismo, huelgas, epidemias, acciones gubernamentales, desastres naturales o fallas en servicios públicos. La parte afectada deberá notificar a la otra parte dentro de las 48 horas siguientes al evento de fuerza mayor y proporcionar evidencia documental dentro de los 10 días hábiles.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Ninguna de las partes será responsable por el incumplimiento o retraso en el cumplimiento de sus obligaciones cuando dicho incumplimiento o retraso sea resultado de causas fuera de su control razonable, incluyendo pero no limitado a: actos de Dios, guerra, terrorismo, huelgas, epidemias, acciones gubernamentales, desastres naturales o fallas en servicios públicos.",
+            "type": "force_majeure",
+            "modality": "will",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "La parte afectada deberá notificar a la otra parte dentro de las 48 horas siguientes al evento de fuerza mayor y proporcionar evidencia documental dentro de los 10 días hábiles.",
+            "type": "notification",
+            "modality": "shall",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 2,
+        "high_impact_clauses": ["CL-001", "CL-002"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Long force majeure definition with enumerated examples, followed by notification requirement."
+    },
+    {
+      "id": "EX-EVAL-0014",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "DATOS DE CONTACTO PARA NOTIFICACIONES:\n\nPara el Cliente:\nATTN: Lic. María García López, Directora Jurídica\nDirección: Paseo de la Reforma 505, Piso 32, Col. Cuauhtémoc, CDMX 06500\nTeléfono: +52 55 1234 5678\nCorreo: maria.garcia@cliente.com.mx\n\nPara el Contratista:\nATTN: Ing. Roberto Sánchez Pérez, Gerente de Proyecto\nDirección: Av. Insurgentes Sur 1602, Col. Crédito Constructor, CDMX 03940\nTeléfono: +52 55 9876 5432\nCorreo: roberto.sanchez@contratista.com",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Para el Cliente: Lic. María García López, Directora Jurídica - Paseo de la Reforma 505, Piso 32, Col. Cuauhtémoc, CDMX 06500",
+            "type": "contact",
+            "modality": "none",
+            "actors": ["Lic. María García López"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Para el Contratista: Ing. Roberto Sánchez Pérez, Gerente de Proyecto - Av. Insurgentes Sur 1602, Col. Crédito Constructor, CDMX 03940",
+            "type": "contact",
+            "modality": "none",
+            "actors": ["Ing. Roberto Sánchez Pérez"],
+            "confidence_range": [0.90, 0.98]
+          }
+        ],
+        "total_clause_count": 2,
+        "entities": {
+          "actors": ["Lic. María García López", "Ing. Roberto Sánchez Pérez"]
+        },
+        "high_impact_clauses": []
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Contact information block with names, titles, addresses."
+    },
+    {
+      "id": "EX-EVAL-0015",
+      "category": "mixed",
+      "input": {
+        "document_text": "ADDENDUM No. 1\n\nPor medio del presente se modifica la Cláusula Quinta del Contrato Original de fecha 15 de enero de 2026, quedando de la siguiente manera:\n\n\"El plazo de ejecución se extiende de 12 meses a 15 meses, estableciendo como nueva fecha de terminación el 15 de julio de 2027. Como consecuencia de esta extensión, el monto del contrato se incrementa en $500,000.00 USD, para un nuevo total de $13,000,000.00 USD.\"",
+        "document_type": "addendum",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El plazo de ejecución se extiende de 12 meses a 15 meses, estableciendo como nueva fecha de terminación el 15 de julio de 2027.",
+            "type": "amendment_timeline",
+            "modality": "will",
+            "actors": [],
+            "due_date": "2027-07-15",
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Como consecuencia de esta extensión, el monto del contrato se incrementa en $500,000.00 USD, para un nuevo total de $13,000,000.00 USD.",
+            "type": "amendment_budget",
+            "modality": "will",
+            "actors": [],
+            "amounts": [
+              {"value": 500000, "currency": "USD", "type": "increase"},
+              {"value": 13000000, "currency": "USD", "type": "new_total"}
+            ],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 2,
+        "entities": {
+          "dates": ["2027-07-15", "2026-01-15"],
+          "amounts": [
+            {"value": 500000, "currency": "USD", "type": "increase"},
+            {"value": 13000000, "currency": "USD", "type": "new_total"}
+          ]
+        },
+        "high_impact_clauses": ["CL-001", "CL-002"]
+      },
+      "extraction_difficulty": "nested",
+      "human_rationale": "Contract amendment with timeline extension and budget increase."
+    },
+    {
+      "id": "EX-EVAL-0016",
+      "category": "obligation_parsing",
+      "input": {
+        "document_text": "Quality Control: The Contractor shall implement a Quality Management System in accordance with ISO 9001:2015. Quality control tests shall be performed by an independent laboratory approved by the Engineer. Test results shall be submitted within 72 hours. The Contractor may not cover or conceal any work until the Engineer has inspected and approved it in writing.",
+        "document_type": "specification",
+        "language": "en"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "The Contractor shall implement a Quality Management System in accordance with ISO 9001:2015.",
+            "type": "quality_system",
+            "modality": "shall",
+            "actors": ["Contractor"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Quality control tests shall be performed by an independent laboratory approved by the Engineer.",
+            "type": "testing",
+            "modality": "shall",
+            "actors": ["Engineer"],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Test results shall be submitted within 72 hours.",
+            "type": "reporting",
+            "modality": "shall",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-004",
+            "text": "The Contractor may not cover or conceal any work until the Engineer has inspected and approved it in writing.",
+            "type": "approval",
+            "modality": "must_not",
+            "actors": ["Contractor", "Engineer"],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 4,
+        "high_impact_clauses": ["CL-001", "CL-004"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Quality control requirements with ISO reference and multiple obligations."
+    },
+    {
+      "id": "EX-EVAL-0017",
+      "category": "implicit",
+      "input": {
+        "document_text": "El Contratista asume la responsabilidad total del diseño, suministro, construcción, pruebas y puesta en marcha del sistema. Se entiende que el precio incluye absolutamente todo lo necesario para entregar un sistema completamente funcional, independientemente de si está o no explícitamente indicado en los documentos contractuales.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "El Contratista asume la responsabilidad total del diseño, suministro, construcción, pruebas y puesta en marcha del sistema.",
+            "type": "scope",
+            "modality": "shall",
+            "actors": ["Contratista"],
+            "ambiguity_flag": false,
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Se entiende que el precio incluye absolutamente todo lo necesario para entregar un sistema completamente funcional, independientemente de si está o no explícitamente indicado en los documentos contractuales.",
+            "type": "scope_inclusion",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.70, 0.85]
+          }
+        ],
+        "total_clause_count": 2,
+        "high_impact_clauses": ["CL-002"]
+      },
+      "extraction_difficulty": "implicit",
+      "human_rationale": "Turnkey clause with implicit unlimited scope - high risk for contractor."
+    },
+    {
+      "id": "EX-EVAL-0018",
+      "category": "clause_boundary",
+      "input": {
+        "document_text": "RESOLUCIÓN DE CONTROVERSIAS\n\n17.1 Las partes intentarán resolver cualquier controversia mediante negociación directa durante un período de 30 días.\n\n17.2 Si la controversia no se resuelve mediante negociación, las partes someterán el asunto a mediación ante el Centro de Mediación de la Cámara de Comercio.\n\n17.3 Si la mediación no tiene éxito dentro de los 60 días, cualquiera de las partes podrá iniciar procedimiento arbitral conforme al Reglamento de la CCI. El tribunal arbitral estará compuesto por tres árbitros, el lugar del arbitraje será Ciudad de México y el idioma será español.",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-17.1",
+            "text": "Las partes intentarán resolver cualquier controversia mediante negociación directa durante un período de 30 días.",
+            "type": "dispute_resolution",
+            "modality": "will",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-17.2",
+            "text": "Si la controversia no se resuelve mediante negociación, las partes someterán el asunto a mediación ante el Centro de Mediación de la Cámara de Comercio.",
+            "type": "dispute_resolution",
+            "modality": "will",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          },
+          {
+            "clause_id": "CL-17.3",
+            "text": "Si la mediación no tiene éxito dentro de los 60 días, cualquiera de las partes podrá iniciar procedimiento arbitral conforme al Reglamento de la CCI. El tribunal arbitral estará compuesto por tres árbitros, el lugar del arbitraje será Ciudad de México y el idioma será español.",
+            "type": "arbitration",
+            "modality": "may",
+            "actors": [],
+            "confidence_range": [0.85, 0.95]
+          }
+        ],
+        "total_clause_count": 3,
+        "high_impact_clauses": ["CL-17.3"]
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "Tiered dispute resolution with clear numbering and escalation path."
+    },
+    {
+      "id": "EX-EVAL-0019",
+      "category": "malformed",
+      "input": {
+        "document_text": "CLAUSULA DIECIOCHO CONFIDENCIALIDAD Las partes acuerdan mantener toda informacion relacionada con este contrato en estricta confidencialidad La obligacion de confidencialidad permanecera vigente por cinco anos despues de la terminacion del contrato Cualquier incumplimiento sera sancionado conforme a la legislacion aplicable",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Las partes acuerdan mantener toda informacion relacionada con este contrato en estricta confidencialidad",
+            "type": "confidentiality",
+            "modality": "shall",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.65, 0.80]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "La obligacion de confidencialidad permanecera vigente por cinco anos despues de la terminacion del contrato",
+            "type": "confidentiality_duration",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.65, 0.80]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Cualquier incumplimiento sera sancionado conforme a la legislacion aplicable",
+            "type": "penalty",
+            "modality": "will",
+            "actors": [],
+            "ambiguity_flag": true,
+            "confidence_range": [0.60, 0.75]
+          }
+        ],
+        "total_clause_count": 3,
+        "high_impact_clauses": ["CL-001"]
+      },
+      "extraction_difficulty": "malformed",
+      "human_rationale": "No punctuation between sentences, missing accents - common OCR issues."
+    },
+    {
+      "id": "EX-EVAL-0020",
+      "category": "entity_extraction",
+      "input": {
+        "document_text": "EQUIPO DE PROYECTO:\n\n- Director de Proyecto: Arq. Fernando Jiménez Ruiz (Cliente)\n- Gerente de Construcción: Ing. Patricia Morales Vega (Contratista)\n- Supervisor de Calidad: Ing. José Luis Hernández (Cliente)\n- Coordinador de Seguridad: Ing. Ana María Torres (Contratista)\n- Residente de Obra: Ing. Miguel Ángel Castillo (Contratista)",
+        "document_type": "contract",
+        "language": "es"
+      },
+      "expected_output": {
+        "clauses": [
+          {
+            "clause_id": "CL-001",
+            "text": "Director de Proyecto: Arq. Fernando Jiménez Ruiz (Cliente)",
+            "type": "team_assignment",
+            "modality": "none",
+            "actors": ["Arq. Fernando Jiménez Ruiz"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-002",
+            "text": "Gerente de Construcción: Ing. Patricia Morales Vega (Contratista)",
+            "type": "team_assignment",
+            "modality": "none",
+            "actors": ["Ing. Patricia Morales Vega"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-003",
+            "text": "Supervisor de Calidad: Ing. José Luis Hernández (Cliente)",
+            "type": "team_assignment",
+            "modality": "none",
+            "actors": ["Ing. José Luis Hernández"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-004",
+            "text": "Coordinador de Seguridad: Ing. Ana María Torres (Contratista)",
+            "type": "team_assignment",
+            "modality": "none",
+            "actors": ["Ing. Ana María Torres"],
+            "confidence_range": [0.90, 0.98]
+          },
+          {
+            "clause_id": "CL-005",
+            "text": "Residente de Obra: Ing. Miguel Ángel Castillo (Contratista)",
+            "type": "team_assignment",
+            "modality": "none",
+            "actors": ["Ing. Miguel Ángel Castillo"],
+            "confidence_range": [0.90, 0.98]
+          }
+        ],
+        "total_clause_count": 5,
+        "entities": {
+          "actors": [
+            "Arq. Fernando Jiménez Ruiz",
+            "Ing. Patricia Morales Vega",
+            "Ing. José Luis Hernández",
+            "Ing. Ana María Torres",
+            "Ing. Miguel Ángel Castillo"
+          ]
+        },
+        "high_impact_clauses": []
+      },
+      "extraction_difficulty": "standard",
+      "human_rationale": "List of team members with professional titles and party affiliation."
+    }
+  ]
+}

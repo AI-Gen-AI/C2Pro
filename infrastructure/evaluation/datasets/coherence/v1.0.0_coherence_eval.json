@@ -1,0 +1,594 @@
+{
+  "dataset_name": "c2pro_coherence_eval_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-09",
+  "service": "coherence_engine_v2",
+  "metadata": {
+    "prompt_version": "v1.1_cot",
+    "model_baseline": "claude-haiku-4-20250514",
+    "language": "mixed"
+  },
+  "baseline_metrics": {
+    "coherence_score_accuracy": 0.85,
+    "alert_precision": 0.90,
+    "alert_recall": 0.88,
+    "severity_accuracy": 0.82
+  },
+  "examples": [
+    {
+      "id": "CE-EVAL-0001",
+      "category": "ambiguity",
+      "tags": ["scope", "vague_term", "spanish"],
+      "input": {
+        "clause_id": "CL-AMB-001",
+        "clause_text": "El contratista realizará trabajos adicionales según sea necesario para completar el proyecto a satisfacción del Cliente.",
+        "clause_type": "scope"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "high",
+        "issue_types": ["vague_term", "subjective_criteria"],
+        "trigger_terms": ["según sea necesario", "a satisfacción del Cliente"],
+        "coherence_score_range": [40, 60],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-SCOPE-CLARITY-01"]
+      },
+      "human_rationale": "Both 'según sea necesario' and 'a satisfacción del Cliente' are subjective terms that lack measurable criteria.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0002",
+      "category": "clear_clause",
+      "tags": ["scope", "specific", "spanish"],
+      "input": {
+        "clause_id": "CL-CLR-001",
+        "clause_text": "El contratista instalará exactamente 500 metros lineales de tubería de acero de 6 pulgadas de diámetro, según especificaciones técnicas del Anexo B.",
+        "clause_type": "scope"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [85, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear quantifiable scope with specific measurements and reference to technical specifications.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0003",
+      "category": "payment",
+      "tags": ["payment", "vague_term", "spanish"],
+      "input": {
+        "clause_id": "CL-PAY-001",
+        "clause_text": "El pago se realizará en un plazo razonable después de la entrega de cada hito, conforme al avance de los trabajos.",
+        "clause_type": "payment"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "high",
+        "issue_types": ["vague_term"],
+        "trigger_terms": ["plazo razonable", "conforme al avance"],
+        "coherence_score_range": [35, 55],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-PAYMENT-CLARITY-01"]
+      },
+      "human_rationale": "'Plazo razonable' does not specify number of days, creating ambiguity in payment expectations.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0004",
+      "category": "payment",
+      "tags": ["payment", "specific", "spanish"],
+      "input": {
+        "clause_id": "CL-PAY-002",
+        "clause_text": "El Cliente pagará al Contratista $150,000.00 USD dentro de los 30 días naturales posteriores a la certificación del hito por el Supervisor de Obra.",
+        "clause_type": "payment"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [90, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear payment amount, specific timeline (30 days), and defined trigger event (certification).",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0005",
+      "category": "responsibility",
+      "tags": ["responsibility", "unclear_assignment", "spanish"],
+      "input": {
+        "clause_id": "CL-RESP-001",
+        "clause_text": "Las partes colaborarán conjuntamente en la obtención de los permisos necesarios. Los materiales serán adquiridos de común acuerdo.",
+        "clause_type": "responsibility"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "medium",
+        "issue_types": ["unclear_responsibility"],
+        "trigger_terms": ["las partes", "conjuntamente", "de común acuerdo"],
+        "coherence_score_range": [50, 70],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-RESP-CLARITY-01"]
+      },
+      "human_rationale": "No specific party is assigned responsibility for permits or material procurement.",
+      "difficulty": "medium",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0006",
+      "category": "responsibility",
+      "tags": ["responsibility", "clear_assignment", "spanish"],
+      "input": {
+        "clause_id": "CL-RESP-002",
+        "clause_text": "El Contratista será el único responsable de obtener todos los permisos municipales antes del inicio de obra. El Cliente proporcionará acceso al sitio.",
+        "clause_type": "responsibility"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [85, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear assignment: Contractor handles permits, Client provides site access.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0007",
+      "category": "risk",
+      "tags": ["penalty", "excessive", "spanish"],
+      "input": {
+        "clause_id": "CL-RISK-001",
+        "clause_text": "Cualquier retraso en la entrega, independientemente de la causa, resultará en una penalización del 25% del valor total del contrato por cada día de atraso.",
+        "clause_type": "penalty"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "critical",
+        "issue_types": ["excessive_penalty", "no_force_majeure"],
+        "trigger_terms": ["independientemente de la causa", "25% del valor total", "por cada día"],
+        "coherence_score_range": [10, 30],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-PENALTY-PROPORTIONALITY-01"]
+      },
+      "human_rationale": "25% daily penalty is disproportionate and excludes force majeure, creating extreme risk.",
+      "difficulty": "medium",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0008",
+      "category": "risk",
+      "tags": ["penalty", "reasonable", "spanish"],
+      "input": {
+        "clause_id": "CL-RISK-002",
+        "clause_text": "En caso de retraso imputable al Contratista, se aplicará una penalización de 0.1% del valor del hito afectado por cada día de retraso, hasta un máximo del 10%.",
+        "clause_type": "penalty"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [80, 95],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Reasonable penalty rate (0.1%), applies only to affected milestone, has cap (10%), and requires contractor fault.",
+      "difficulty": "medium",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0009",
+      "category": "contradiction",
+      "tags": ["deadline", "inconsistent", "spanish"],
+      "input": {
+        "clause_id": "CL-CONTR-001",
+        "clause_text": "El proyecto deberá completarse en un plazo máximo de 6 meses a partir de la firma del contrato.",
+        "clause_type": "deadline",
+        "additional_clauses": [
+          {
+            "clause_id": "CL-CONTR-002",
+            "clause_text": "El cronograma detallado contempla una duración total de 8 meses para la ejecución de todas las actividades.",
+            "clause_type": "schedule"
+          }
+        ]
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "critical",
+        "issue_types": ["contradiction", "timeline_mismatch"],
+        "trigger_terms": ["6 meses", "8 meses"],
+        "coherence_score_range": [15, 35],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-TIMELINE-CONSISTENCY-01"]
+      },
+      "human_rationale": "Contract deadline (6 months) conflicts with schedule duration (8 months) - impossible to fulfill.",
+      "difficulty": "medium",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0010",
+      "category": "cross_clause",
+      "tags": ["budget", "inconsistent", "spanish"],
+      "input": {
+        "clause_id": "CL-BUDGET-001",
+        "clause_text": "El presupuesto total del proyecto es de EUR 1,000,000.00 (un millón de euros).",
+        "clause_type": "budget",
+        "additional_clauses": [
+          {
+            "clause_id": "CL-BUDGET-002",
+            "clause_text": "Desglose: Materiales EUR 600,000, Mano de obra EUR 350,000, Equipos EUR 200,000.",
+            "clause_type": "budget_breakdown"
+          }
+        ],
+        "project_context": {
+          "contract_value": 1000000,
+          "currency": "EUR"
+        }
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "critical",
+        "issue_types": ["budget_mismatch"],
+        "trigger_terms": ["EUR 1,000,000", "EUR 1,150,000"],
+        "coherence_score_range": [10, 30],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-BUDGET-CONSISTENCY-01"]
+      },
+      "human_rationale": "Budget breakdown sums to EUR 1,150,000 but contract states EUR 1,000,000 - EUR 150,000 discrepancy.",
+      "difficulty": "hard",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0011",
+      "category": "ambiguity",
+      "tags": ["quality", "subjective", "spanish"],
+      "input": {
+        "clause_id": "CL-QUAL-001",
+        "clause_text": "Los trabajos deberán ejecutarse con la calidad apropiada, utilizando materiales de buena calidad y siguiendo las buenas prácticas de la industria.",
+        "clause_type": "quality"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "medium",
+        "issue_types": ["vague_term", "subjective_criteria"],
+        "trigger_terms": ["calidad apropiada", "buena calidad", "buenas prácticas"],
+        "coherence_score_range": [45, 65],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-QUALITY-CLARITY-01"]
+      },
+      "human_rationale": "Multiple subjective terms without reference to specific standards or specifications.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0012",
+      "category": "clear_clause",
+      "tags": ["quality", "specific_standards", "spanish"],
+      "input": {
+        "clause_id": "CL-QUAL-002",
+        "clause_text": "Los trabajos de soldadura deberán cumplir con la norma AWS D1.1:2020. El acero estructural será grado A572-50 certificado por laboratorio acreditado.",
+        "clause_type": "quality"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [90, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "References specific standards (AWS D1.1:2020) and material grades with certification requirements.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0013",
+      "category": "scope",
+      "tags": ["scope_creep", "open_ended", "spanish"],
+      "input": {
+        "clause_id": "CL-SCOPE-001",
+        "clause_text": "El Contratista ejecutará todos los trabajos necesarios para la correcta operación de la planta, incluyendo pero no limitado a los elementos descritos en el proyecto ejecutivo.",
+        "clause_type": "scope"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "high",
+        "issue_types": ["open_ended_scope", "scope_creep_risk"],
+        "trigger_terms": ["incluyendo pero no limitado a", "todos los trabajos necesarios"],
+        "coherence_score_range": [30, 50],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-SCOPE-BOUNDARY-01"]
+      },
+      "human_rationale": "'Including but not limited to' creates unlimited scope exposure for contractor.",
+      "difficulty": "medium",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0014",
+      "category": "vague_term",
+      "tags": ["timeline", "imprecise", "spanish"],
+      "input": {
+        "clause_id": "CL-TIME-001",
+        "clause_text": "El Contratista iniciará los trabajos a la brevedad posible después de recibir la orden de proceder.",
+        "clause_type": "timeline"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "medium",
+        "issue_types": ["vague_term"],
+        "trigger_terms": ["a la brevedad posible"],
+        "coherence_score_range": [50, 70],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-TIMELINE-CLARITY-01"]
+      },
+      "human_rationale": "'A la brevedad posible' does not specify days, creating ambiguity for mobilization timing.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0015",
+      "category": "clear_clause",
+      "tags": ["timeline", "specific", "spanish"],
+      "input": {
+        "clause_id": "CL-TIME-002",
+        "clause_text": "El Contratista iniciará la movilización dentro de los 10 días hábiles siguientes a la recepción de la orden de proceder firmada.",
+        "clause_type": "timeline"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [85, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Specific timeline (10 business days) with clear trigger event (signed proceed order).",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0016",
+      "category": "ambiguity",
+      "tags": ["warranty", "undefined", "english"],
+      "input": {
+        "clause_id": "CL-WARR-001",
+        "clause_text": "The Contractor warrants that all work will be free from defects for a reasonable period after completion.",
+        "clause_type": "warranty"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "high",
+        "issue_types": ["vague_term", "undefined_duration"],
+        "trigger_terms": ["reasonable period"],
+        "coherence_score_range": [35, 55],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-WARRANTY-CLARITY-01"]
+      },
+      "human_rationale": "'Reasonable period' is undefined - could mean 30 days or 10 years depending on interpretation.",
+      "difficulty": "easy",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0017",
+      "category": "clear_clause",
+      "tags": ["warranty", "specific", "english"],
+      "input": {
+        "clause_id": "CL-WARR-002",
+        "clause_text": "The Contractor provides a 24-month warranty on all structural work and 12-month warranty on MEP systems, commencing from the date of substantial completion certificate.",
+        "clause_type": "warranty"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [90, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear durations (24/12 months), differentiated by system type, with defined start date.",
+      "difficulty": "easy",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0018",
+      "category": "risk",
+      "tags": ["liability", "unlimited", "english"],
+      "input": {
+        "clause_id": "CL-LIAB-001",
+        "clause_text": "The Contractor shall be liable for all direct, indirect, consequential, and incidental damages arising from any breach, without limitation.",
+        "clause_type": "liability"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "critical",
+        "issue_types": ["unlimited_liability", "excessive_risk"],
+        "trigger_terms": ["without limitation", "consequential", "incidental"],
+        "coherence_score_range": [10, 30],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-LIABILITY-CAP-01"]
+      },
+      "human_rationale": "Unlimited liability for all damage types including consequential damages creates extreme risk.",
+      "difficulty": "medium",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0019",
+      "category": "clear_clause",
+      "tags": ["liability", "capped", "english"],
+      "input": {
+        "clause_id": "CL-LIAB-002",
+        "clause_text": "The Contractor's total liability under this contract shall not exceed the contract value. Neither party shall be liable for consequential damages except in cases of gross negligence or willful misconduct.",
+        "clause_type": "liability"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [85, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear liability cap (contract value), consequential damages excluded with reasonable exceptions.",
+      "difficulty": "medium",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0020",
+      "category": "cross_clause",
+      "tags": ["termination", "conflicting", "spanish"],
+      "input": {
+        "clause_id": "CL-TERM-001",
+        "clause_text": "El Cliente podrá terminar el contrato en cualquier momento sin causa y sin indemnización al Contratista.",
+        "clause_type": "termination",
+        "additional_clauses": [
+          {
+            "clause_id": "CL-TERM-002",
+            "clause_text": "En caso de terminación anticipada, el Contratista recibirá el pago proporcional al avance ejecutado más un 15% de lucro cesante sobre el monto no ejecutado.",
+            "clause_type": "termination_compensation"
+          }
+        ]
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "high",
+        "issue_types": ["contradiction"],
+        "trigger_terms": ["sin indemnización", "15% de lucro cesante"],
+        "coherence_score_range": [25, 45],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-CLAUSE-CONSISTENCY-01"]
+      },
+      "human_rationale": "Clause 1 says no compensation, Clause 2 says 15% lost profit compensation - direct contradiction.",
+      "difficulty": "hard",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0021",
+      "category": "vague_term",
+      "tags": ["reporting", "frequency_unclear", "spanish"],
+      "input": {
+        "clause_id": "CL-RPT-001",
+        "clause_text": "El Contratista presentará informes de avance periódicamente según lo requiera el Supervisor.",
+        "clause_type": "reporting"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "medium",
+        "issue_types": ["vague_term", "undefined_frequency"],
+        "trigger_terms": ["periódicamente", "según lo requiera"],
+        "coherence_score_range": [50, 70],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-REPORTING-CLARITY-01"]
+      },
+      "human_rationale": "Report frequency and content are at supervisor's discretion, creating unpredictability.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0022",
+      "category": "clear_clause",
+      "tags": ["reporting", "specific", "spanish"],
+      "input": {
+        "clause_id": "CL-RPT-002",
+        "clause_text": "El Contratista presentará informes semanales cada lunes antes de las 12:00 hrs, conteniendo: (1) porcentaje de avance físico, (2) avance financiero, (3) fotografías del sitio, (4) resumen de personal activo.",
+        "clause_type": "reporting"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [90, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear frequency (weekly), specific day/time (Monday noon), and enumerated content requirements.",
+      "difficulty": "easy",
+      "language": "es"
+    },
+    {
+      "id": "CE-EVAL-0023",
+      "category": "ambiguity",
+      "tags": ["variation", "undefined_approval", "english"],
+      "input": {
+        "clause_id": "CL-VAR-001",
+        "clause_text": "Any variations to the scope shall be subject to appropriate approval and adjusted pricing as agreed between the parties.",
+        "clause_type": "variation"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "medium",
+        "issue_types": ["vague_term", "undefined_process"],
+        "trigger_terms": ["appropriate approval", "as agreed"],
+        "coherence_score_range": [45, 65],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-VARIATION-CLARITY-01"]
+      },
+      "human_rationale": "'Appropriate approval' and 'as agreed' don't specify who approves or how pricing is calculated.",
+      "difficulty": "medium",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0024",
+      "category": "clear_clause",
+      "tags": ["variation", "defined_process", "english"],
+      "input": {
+        "clause_id": "CL-VAR-002",
+        "clause_text": "Variations require written approval from Client's Project Director. Pricing adjustments use contract rates from Schedule B; new items at cost plus 15% markup. All variations over $10,000 require Change Order signed by both parties.",
+        "clause_type": "variation"
+      },
+      "expected_output": {
+        "has_issues": false,
+        "severity": null,
+        "issue_types": [],
+        "trigger_terms": [],
+        "coherence_score_range": [85, 100],
+        "expected_alert_count": 0,
+        "expected_rule_ids": []
+      },
+      "human_rationale": "Clear approver (Project Director), defined pricing mechanism, threshold for formal change orders.",
+      "difficulty": "medium",
+      "language": "en"
+    },
+    {
+      "id": "CE-EVAL-0025",
+      "category": "adversarial",
+      "tags": ["trap_clause", "hidden_risk", "spanish"],
+      "input": {
+        "clause_id": "CL-ADV-001",
+        "clause_text": "El Contratista acepta todas las condiciones del sitio tal como se encuentran. No se aceptarán reclamaciones por condiciones imprevistas del subsuelo, incluyendo presencia de agua, roca, contaminación u otros elementos que requieran trabajos adicionales.",
+        "clause_type": "site_conditions"
+      },
+      "expected_output": {
+        "has_issues": true,
+        "severity": "critical",
+        "issue_types": ["excessive_risk", "unfair_terms"],
+        "trigger_terms": ["acepta todas las condiciones", "no se aceptarán reclamaciones", "condiciones imprevistas"],
+        "coherence_score_range": [10, 25],
+        "expected_alert_count": 1,
+        "expected_rule_ids": ["R-RISK-ALLOCATION-01"]
+      },
+      "human_rationale": "Contractor assumes unlimited subsurface risk including contamination - standard practice is to share unforeseen conditions risk.",
+      "difficulty": "hard",
+      "language": "es"
+    }
+  ]
+}

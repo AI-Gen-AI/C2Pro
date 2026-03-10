@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CoherenceEvalDataset",
+  "description": "Schema for Coherence Engine v2 evaluation datasets",
+  "type": "object",
+  "required": ["dataset_name", "version", "service", "examples"],
+  "properties": {
+    "dataset_name": {
+      "type": "string",
+      "pattern": "^c2pro_coherence_eval.*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "service": {
+      "const": "coherence_engine_v2"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "prompt_version": {"type": "string"},
+        "model_baseline": {"type": "string"},
+        "language": {"enum": ["es", "en", "mixed"]}
+      }
+    },
+    "baseline_metrics": {
+      "type": "object",
+      "properties": {
+        "coherence_score_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "alert_precision": {"type": "number", "minimum": 0, "maximum": 1},
+        "alert_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "severity_accuracy": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "input", "expected_output", "category"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CE-EVAL-\\d{4}$"
+          },
+          "category": {
+            "enum": ["ambiguity", "vague_term", "risk", "contradiction", "clear_clause", "cross_clause", "payment", "scope", "responsibility"]
+          },
+          "tags": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "input": {
+            "type": "object",
+            "required": ["clause_text"],
+            "properties": {
+              "clause_id": {"type": "string"},
+              "clause_text": {"type": "string", "minLength": 20},
+              "clause_type": {"type": "string"},
+              "additional_clauses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "clause_id": {"type": "string"},
+                    "clause_text": {"type": "string"},
+                    "clause_type": {"type": "string"}
+                  }
+                }
+              },
+              "project_context": {
+                "type": "object",
+                "properties": {
+                  "contract_value": {"type": "number"},
+                  "currency": {"type": "string"},
+                  "duration_months": {"type": "integer"},
+                  "project_type": {"type": "string"}
+                }
+              }
+            }
+          },
+          "expected_output": {
+            "type": "object",
+            "required": ["has_issues"],
+            "properties": {
+              "has_issues": {"type": "boolean"},
+              "severity": {
+                "type": ["string", "null"],
+                "enum": ["low", "medium", "high", "critical", null]
+              },
+              "issue_types": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "trigger_terms": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "coherence_score_range": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "expected_alert_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "expected_rule_ids": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            }
+          },
+          "human_rationale": {"type": "string"},
+          "difficulty": {
+            "enum": ["easy", "medium", "hard", "adversarial"]
+          },
+          "language": {
+            "enum": ["es", "en"]
+          }
+        }
+      }
+    }
+  }
+}

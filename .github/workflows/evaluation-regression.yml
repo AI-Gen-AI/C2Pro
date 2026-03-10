@@ -1,0 +1,289 @@
+name: Evaluation Regression Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/coherence/**'
+      - 'apps/api/src/modules/extraction/**'
+      - 'apps/api/src/modules/retrieval/**'
+      - 'apps/api/src/modules/observability/**'
+      - 'infrastructure/evaluation/**'
+      - 'apps/api/tests/evaluation/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/coherence/**'
+      - 'apps/api/src/modules/extraction/**'
+      - 'apps/api/src/modules/retrieval/**'
+  schedule:
+    # Daily at 4 AM UTC
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to evaluate'
+        required: true
+        type: choice
+        options:
+          - all
+          - coherence
+          - extraction
+          - retrieval
+      smoke_test_only:
+        description: 'Run smoke tests only (subset of examples)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  LANGSMITH_PROJECT: "C2Pro-Eval"
+
+jobs:
+  coherence-eval:
+    name: Coherence Engine Evaluation
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'coherence') ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run Coherence Evaluation Tests
+        working-directory: apps/api
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGCHAIN_TRACING_V2: "true"
+          LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ inputs.smoke_test_only }}" == "true" ]; then
+            pytest tests/evaluation/test_coherence_regression.py::TestCoherenceRegression::test_coherence_smoke_test_subset \
+              -v --tb=short \
+              --junit-xml=coherence-eval-results.xml
+          else
+            pytest tests/evaluation/test_coherence_regression.py \
+              -v --tb=short \
+              --junit-xml=coherence-eval-results.xml
+          fi
+
+      - name: Upload Coherence Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coherence-eval-results
+          path: apps/api/coherence-eval-results.xml
+
+  extraction-eval:
+    name: Document Extraction Evaluation
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'extraction') ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run Extraction Evaluation Tests
+        working-directory: apps/api
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGCHAIN_TRACING_V2: "true"
+          LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ inputs.smoke_test_only }}" == "true" ]; then
+            pytest tests/evaluation/test_extraction_regression.py::TestExtractionRegression::test_extraction_smoke_test_subset \
+              -v --tb=short \
+              --junit-xml=extraction-eval-results.xml
+          else
+            pytest tests/evaluation/test_extraction_regression.py \
+              -v --tb=short \
+              --junit-xml=extraction-eval-results.xml
+          fi
+
+      - name: Upload Extraction Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extraction-eval-results
+          path: apps/api/extraction-eval-results.xml
+
+  retrieval-eval:
+    name: Hybrid Retrieval Evaluation
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'retrieval') ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run Retrieval Evaluation Tests
+        working-directory: apps/api
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGCHAIN_TRACING_V2: "true"
+          LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
+        run: |
+          if [ "${{ inputs.smoke_test_only }}" == "true" ]; then
+            pytest tests/evaluation/test_retrieval_regression.py::TestRetrievalRegression::test_retrieval_smoke_test_subset \
+              -v --tb=short \
+              --junit-xml=retrieval-eval-results.xml
+          else
+            pytest tests/evaluation/test_retrieval_regression.py \
+              -v --tb=short \
+              --junit-xml=retrieval-eval-results.xml
+          fi
+
+      - name: Upload Retrieval Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retrieval-eval-results
+          path: apps/api/retrieval-eval-results.xml
+
+  drift-check:
+    name: Drift Detection
+    runs-on: ubuntu-latest
+    needs: [coherence-eval, extraction-eval, retrieval-eval]
+    if: always() && github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyyaml
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: eval-results
+
+      - name: Check for drift
+        working-directory: apps/api
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python ../../infrastructure/scripts/check_eval_drift.py \
+            --config ../../infrastructure/evaluation/config/eval_thresholds.yaml \
+            --results-dir ../../eval-results \
+            --notify-on-drift
+
+  eval-summary:
+    name: Evaluation Summary
+    needs: [coherence-eval, extraction-eval, retrieval-eval]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: eval-results
+
+      - name: Generate Summary
+        run: |
+          echo "## Evaluation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Check each service result
+          if [ -f eval-results/coherence-eval-results/coherence-eval-results.xml ]; then
+            if grep -q 'failures="0"' eval-results/coherence-eval-results/coherence-eval-results.xml; then
+              echo "| Coherence Engine | :white_check_mark: Passed |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Coherence Engine | :x: Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Coherence Engine | :warning: No results |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f eval-results/extraction-eval-results/extraction-eval-results.xml ]; then
+            if grep -q 'failures="0"' eval-results/extraction-eval-results/extraction-eval-results.xml; then
+              echo "| Document Extraction | :white_check_mark: Passed |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Document Extraction | :x: Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Document Extraction | :warning: No results |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f eval-results/retrieval-eval-results/retrieval-eval-results.xml ]; then
+            if grep -q 'failures="0"' eval-results/retrieval-eval-results/retrieval-eval-results.xml; then
+              echo "| Hybrid Retrieval | :white_check_mark: Passed |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Hybrid Retrieval | :x: Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Hybrid Retrieval | :warning: No results |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Triggered by: ${{ github.event_name }}_" >> $GITHUB_STEP_SUMMARY

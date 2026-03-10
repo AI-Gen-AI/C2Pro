@@ -1,0 +1,503 @@
+{
+  "dataset_name": "c2pro_retrieval_eval_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-09",
+  "service": "hybrid_retrieval_i4",
+  "metadata": {
+    "embedding_model": "text-embedding-3-small",
+    "reranker_model": "cohere-rerank-v3",
+    "vector_store": "pgvector"
+  },
+  "baseline_metrics": {
+    "mrr_at_10": 0.78,
+    "recall_at_5": 0.85,
+    "recall_at_10": 0.92,
+    "intent_accuracy": 0.88,
+    "reranker_improvement": 0.12
+  },
+  "corpus": [
+    {
+      "doc_id": "DOC-001",
+      "clause_id": "CL-PAY-001",
+      "text": "El Cliente pagará al Contratista la cantidad de $500,000.00 USD dentro de los 30 días naturales posteriores a la certificación del hito.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "payment",
+        "language": "es",
+        "keywords": ["pago", "USD", "30 días", "certificación", "hito"]
+      }
+    },
+    {
+      "doc_id": "DOC-002",
+      "clause_id": "CL-PAY-002",
+      "text": "Los pagos se realizarán mediante transferencia bancaria a la cuenta especificada en el Anexo B, dentro de los 15 días hábiles.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "payment",
+        "language": "es",
+        "keywords": ["pago", "transferencia", "15 días", "cuenta bancaria"]
+      }
+    },
+    {
+      "doc_id": "DOC-003",
+      "clause_id": "CL-PEN-001",
+      "text": "Por cada día de retraso imputable al Contratista, se aplicará una penalización del 0.5% del valor del hito afectado, hasta un máximo del 10%.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "penalty",
+        "language": "es",
+        "keywords": ["penalización", "retraso", "0.5%", "10%", "hito"]
+      }
+    },
+    {
+      "doc_id": "DOC-004",
+      "clause_id": "CL-WAR-001",
+      "text": "El Contratista garantiza que todos los trabajos estarán libres de defectos por un período de 24 meses a partir de la recepción final.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "warranty",
+        "language": "es",
+        "keywords": ["garantía", "defectos", "24 meses", "recepción"]
+      }
+    },
+    {
+      "doc_id": "DOC-005",
+      "clause_id": "CL-INS-001",
+      "text": "The Contractor shall maintain Commercial General Liability insurance with limits not less than $5,000,000 per occurrence.",
+      "metadata": {
+        "project_id": "PRJ-WIND-001",
+        "clause_type": "insurance",
+        "language": "en",
+        "keywords": ["insurance", "liability", "5000000", "occurrence"]
+      }
+    },
+    {
+      "doc_id": "DOC-006",
+      "clause_id": "CL-TER-001",
+      "text": "El Cliente podrá terminar el contrato por causa justificada con 15 días de notificación escrita al Contratista.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "termination",
+        "language": "es",
+        "keywords": ["terminar", "causa justificada", "15 días", "notificación"]
+      }
+    },
+    {
+      "doc_id": "DOC-007",
+      "clause_id": "CL-FM-001",
+      "text": "Ninguna de las partes será responsable por incumplimientos causados por fuerza mayor, incluyendo actos de Dios, guerra, huelgas o desastres naturales.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "force_majeure",
+        "language": "es",
+        "keywords": ["fuerza mayor", "actos de Dios", "guerra", "huelgas", "desastres"]
+      }
+    },
+    {
+      "doc_id": "DOC-008",
+      "clause_id": "CL-QUAL-001",
+      "text": "Los trabajos de soldadura deberán cumplir con la norma AWS D1.1:2020. El acero estructural será grado A572-50.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "quality",
+        "language": "es",
+        "keywords": ["soldadura", "AWS D1.1", "acero", "A572-50", "norma"]
+      }
+    },
+    {
+      "doc_id": "DOC-009",
+      "clause_id": "CL-CONF-001",
+      "text": "Las partes mantendrán en estricta confidencialidad toda información técnica, comercial y financiera intercambiada durante la ejecución del contrato.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "confidentiality",
+        "language": "es",
+        "keywords": ["confidencialidad", "información", "técnica", "comercial"]
+      }
+    },
+    {
+      "doc_id": "DOC-010",
+      "clause_id": "CL-ARB-001",
+      "text": "Cualquier controversia será resuelta mediante arbitraje conforme al Reglamento de la CCI, con sede en Ciudad de México.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "arbitration",
+        "language": "es",
+        "keywords": ["arbitraje", "CCI", "controversia", "Ciudad de México"]
+      }
+    },
+    {
+      "doc_id": "DOC-011",
+      "clause_id": "CL-SCOPE-001",
+      "text": "El alcance del trabajo incluye diseño, suministro, construcción y puesta en marcha de una planta fotovoltaica de 50 MW.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "scope",
+        "language": "es",
+        "keywords": ["alcance", "diseño", "suministro", "construcción", "50 MW"]
+      }
+    },
+    {
+      "doc_id": "DOC-012",
+      "clause_id": "CL-VAR-001",
+      "text": "Any variation to the scope requires written approval from the Project Director. Pricing uses contract rates from Schedule B.",
+      "metadata": {
+        "project_id": "PRJ-WIND-001",
+        "clause_type": "variation",
+        "language": "en",
+        "keywords": ["variation", "approval", "Project Director", "pricing"]
+      }
+    },
+    {
+      "doc_id": "DOC-013",
+      "clause_id": "CL-REP-001",
+      "text": "El Contratista presentará informes semanales cada lunes, conteniendo porcentaje de avance, fotografías del sitio y resumen de personal.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "reporting",
+        "language": "es",
+        "keywords": ["informes", "semanales", "lunes", "avance", "fotografías"]
+      }
+    },
+    {
+      "doc_id": "DOC-014",
+      "clause_id": "CL-SAF-001",
+      "text": "El contratista implementará un programa de seguridad conforme a la norma ISO 45001 y realizará pláticas de seguridad diarias.",
+      "metadata": {
+        "project_id": "PRJ-SOLAR-001",
+        "clause_type": "safety",
+        "language": "es",
+        "keywords": ["seguridad", "ISO 45001", "pláticas", "programa"]
+      }
+    },
+    {
+      "doc_id": "DOC-015",
+      "clause_id": "CL-LIQ-001",
+      "text": "Liquidated damages for delay shall be $50,000 per calendar day, capped at 15% of contract value.",
+      "metadata": {
+        "project_id": "PRJ-WIND-001",
+        "clause_type": "liquidated_damages",
+        "language": "en",
+        "keywords": ["liquidated damages", "delay", "50000", "15%", "cap"]
+      }
+    }
+  ],
+  "examples": [
+    {
+      "id": "RT-EVAL-0001",
+      "category": "keyword_exact",
+      "query": {
+        "text": "penalización por retraso",
+        "expected_intent": "keyword",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-003"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-003": 1},
+        "minimum_score": 0.8
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false,
+        "expected_top_1_after_rerank": "DOC-003"
+      },
+      "human_rationale": "Exact keyword match - 'penalización' and 'retraso' both appear in DOC-003.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "RT-EVAL-0002",
+      "category": "semantic_similar",
+      "query": {
+        "text": "qué pasa si hay un terremoto y no puedo cumplir",
+        "expected_intent": "vector",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-007"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-007": 3},
+        "minimum_score": 0.6
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-007",
+        "minimum_improvement": 0.1
+      },
+      "human_rationale": "Semantic query about force majeure - 'terremoto' relates to 'desastres naturales' in DOC-007.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0003",
+      "category": "keyword_exact",
+      "query": {
+        "text": "AWS D1.1",
+        "expected_intent": "keyword",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-008"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-008": 1},
+        "minimum_score": 0.9
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false,
+        "expected_top_1_after_rerank": "DOC-008"
+      },
+      "human_rationale": "Technical standard exact match - only DOC-008 contains AWS D1.1.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "RT-EVAL-0004",
+      "category": "semantic_similar",
+      "query": {
+        "text": "how long is the defect liability period",
+        "expected_intent": "vector",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-004"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-004": 3},
+        "minimum_score": 0.5
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-004",
+        "minimum_improvement": 0.15
+      },
+      "human_rationale": "Cross-language semantic search - English query should match Spanish warranty clause.",
+      "difficulty": "hard"
+    },
+    {
+      "id": "RT-EVAL-0005",
+      "category": "hybrid_required",
+      "query": {
+        "text": "insurance requirements 5 million",
+        "expected_intent": "hybrid",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-005"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-005": 2},
+        "minimum_score": 0.7
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-005"
+      },
+      "human_rationale": "Hybrid query - 'insurance' is semantic, '5 million' requires numeric matching.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0006",
+      "category": "negative",
+      "query": {
+        "text": "environmental impact assessment requirements",
+        "expected_intent": "vector",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": [],
+        "must_exclude_doc_ids": ["DOC-001", "DOC-002", "DOC-003"],
+        "top_k_positions": {},
+        "minimum_score": 0.3
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false
+      },
+      "human_rationale": "Negative test - corpus contains no environmental clauses. Top results should have low scores.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0007",
+      "category": "keyword_exact",
+      "query": {
+        "text": "CCI arbitraje",
+        "expected_intent": "keyword",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-010"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-010": 1},
+        "minimum_score": 0.85
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false,
+        "expected_top_1_after_rerank": "DOC-010"
+      },
+      "human_rationale": "Exact keyword match for arbitration institution.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "RT-EVAL-0008",
+      "category": "semantic_similar",
+      "query": {
+        "text": "cuánto tiempo tengo para pagar las facturas",
+        "expected_intent": "vector",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-001", "DOC-002"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-001": 3, "DOC-002": 3},
+        "minimum_score": 0.55
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "minimum_improvement": 0.08
+      },
+      "human_rationale": "Colloquial payment timing query should match both payment clauses.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0009",
+      "category": "hybrid_required",
+      "query": {
+        "text": "liquidated damages daily rate cap percentage",
+        "expected_intent": "hybrid",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-015", "DOC-003"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-015": 2, "DOC-003": 5},
+        "minimum_score": 0.6
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-015"
+      },
+      "human_rationale": "Hybrid query combining semantic concept and numeric attributes.",
+      "difficulty": "hard"
+    },
+    {
+      "id": "RT-EVAL-0010",
+      "category": "cross_project",
+      "query": {
+        "text": "scope of work solar plant",
+        "expected_intent": "hybrid",
+        "language": "en",
+        "project_filter": "PRJ-SOLAR-001"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-011"],
+        "must_exclude_doc_ids": ["DOC-005", "DOC-012", "DOC-015"],
+        "top_k_positions": {"DOC-011": 1},
+        "minimum_score": 0.7
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false,
+        "expected_top_1_after_rerank": "DOC-011"
+      },
+      "human_rationale": "Project-filtered query should only return PRJ-SOLAR-001 documents.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0011",
+      "category": "semantic_similar",
+      "query": {
+        "text": "protección de información sensible del proyecto",
+        "expected_intent": "vector",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-009"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-009": 2},
+        "minimum_score": 0.6
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-009"
+      },
+      "human_rationale": "Paraphrased confidentiality query - 'protección de información sensible' maps to 'confidencialidad'.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0012",
+      "category": "keyword_exact",
+      "query": {
+        "text": "informes semanales lunes",
+        "expected_intent": "keyword",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-013"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-013": 1},
+        "minimum_score": 0.85
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false,
+        "expected_top_1_after_rerank": "DOC-013"
+      },
+      "human_rationale": "Multiple exact keyword matches in single clause.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "RT-EVAL-0013",
+      "category": "hybrid_required",
+      "query": {
+        "text": "safety program ISO certification requirements",
+        "expected_intent": "hybrid",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-014"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-014": 3},
+        "minimum_score": 0.55
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-014"
+      },
+      "human_rationale": "Cross-language hybrid - English query should match Spanish ISO 45001 safety clause.",
+      "difficulty": "hard"
+    },
+    {
+      "id": "RT-EVAL-0014",
+      "category": "semantic_similar",
+      "query": {
+        "text": "si quiero cancelar el proyecto antes de terminarlo",
+        "expected_intent": "vector",
+        "language": "es"
+      },
+      "expected_results": {
+        "must_include_doc_ids": ["DOC-006"],
+        "must_exclude_doc_ids": [],
+        "top_k_positions": {"DOC-006": 2},
+        "minimum_score": 0.6
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": true,
+        "expected_top_1_after_rerank": "DOC-006"
+      },
+      "human_rationale": "Colloquial termination query - 'cancelar' maps to 'terminar el contrato'.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "RT-EVAL-0015",
+      "category": "negative",
+      "query": {
+        "text": "subcontractor approval process prequalification",
+        "expected_intent": "vector",
+        "language": "en"
+      },
+      "expected_results": {
+        "must_include_doc_ids": [],
+        "must_exclude_doc_ids": ["DOC-001", "DOC-002", "DOC-003", "DOC-004", "DOC-005"],
+        "top_k_positions": {},
+        "minimum_score": 0.25
+      },
+      "reranker_expectations": {
+        "should_improve_ranking": false
+      },
+      "human_rationale": "Negative test - no subcontractor-related clauses exist in corpus.",
+      "difficulty": "medium"
+    }
+  ]
+}

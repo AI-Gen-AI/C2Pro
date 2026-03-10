@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetrievalEvalDataset",
+  "description": "Schema for Hybrid Retrieval (I4) evaluation datasets",
+  "type": "object",
+  "required": ["dataset_name", "version", "service", "corpus", "examples"],
+  "properties": {
+    "dataset_name": {
+      "type": "string",
+      "pattern": "^c2pro_retrieval_eval.*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "service": {
+      "const": "hybrid_retrieval_i4"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "embedding_model": {"type": "string"},
+        "reranker_model": {"type": "string"},
+        "vector_store": {"type": "string"}
+      }
+    },
+    "baseline_metrics": {
+      "type": "object",
+      "properties": {
+        "mrr_at_10": {"type": "number", "minimum": 0, "maximum": 1},
+        "recall_at_5": {"type": "number", "minimum": 0, "maximum": 1},
+        "recall_at_10": {"type": "number", "minimum": 0, "maximum": 1},
+        "intent_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "reranker_improvement": {"type": "number"}
+      }
+    },
+    "corpus": {
+      "type": "array",
+      "description": "Reference corpus for retrieval evaluation",
+      "items": {
+        "type": "object",
+        "required": ["doc_id", "text"],
+        "properties": {
+          "doc_id": {"type": "string"},
+          "clause_id": {"type": "string"},
+          "text": {"type": "string", "minLength": 20},
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "project_id": {"type": "string"},
+              "clause_type": {"type": "string"},
+              "language": {"type": "string"},
+              "keywords": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "query", "expected_results"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^RT-EVAL-\\d{4}$"
+          },
+          "category": {
+            "enum": ["keyword_exact", "semantic_similar", "hybrid_required", "negative", "cross_project"]
+          },
+          "query": {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+              "text": {"type": "string", "minLength": 5},
+              "expected_intent": {
+                "enum": ["keyword", "vector", "hybrid"]
+              },
+              "language": {"enum": ["es", "en"]},
+              "project_filter": {"type": "string"}
+            }
+          },
+          "expected_results": {
+            "type": "object",
+            "required": ["must_include_doc_ids"],
+            "properties": {
+              "must_include_doc_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Documents that MUST appear in results"
+              },
+              "must_exclude_doc_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Documents that MUST NOT appear in results"
+              },
+              "top_k_positions": {
+                "type": "object",
+                "description": "Map of doc_id -> maximum acceptable position",
+                "additionalProperties": {"type": "integer"}
+              },
+              "minimum_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          "reranker_expectations": {
+            "type": "object",
+            "properties": {
+              "should_improve_ranking": {"type": "boolean"},
+              "expected_top_1_after_rerank": {"type": "string"},
+              "minimum_improvement": {"type": "number"}
+            }
+          },
+          "human_rationale": {"type": "string"},
+          "difficulty": {
+            "enum": ["easy", "medium", "hard", "adversarial"]
+          }
+        }
+      }
+    }
+  }
+}
