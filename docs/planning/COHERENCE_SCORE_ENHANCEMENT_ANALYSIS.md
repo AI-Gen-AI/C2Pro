@@ -10,12 +10,14 @@
 ### 1.1 Estado Actual
 
 **Backend:**
+
 - El sistema tiene un motor de coherencia que evalúa reglas y genera alertas
 - Las alertas tienen `severity` (critical, high, medium, low) pero NO tienen categorías
 - El scoring se calcula con base en severity y deducción de puntos
 - Modelo actual: `CoherenceResult` con `alerts[]` y `score`
 
 **Frontend:**
+
 - GaugeChart muestra el score global (0-100)
 - No hay desglose por categorías
 - No hay vista detallada al hacer clic en el score
@@ -23,6 +25,7 @@
 ### 1.2 Objetivo Deseado
 
 Implementar un sistema de **categorización de alertas** similar al de la página Alerts:
+
 - **Legal**: Cláusulas contractuales, penalidades, términos legales
 - **Financial**: Presupuesto, sobrecostos, variaciones económicas
 - **Technical**: Especificaciones técnicas, compatibilidad de equipos
@@ -46,6 +49,7 @@ Implementar un sistema de **categorización de alertas** similar al de la págin
 ### 2.1 Cambios en el Backend
 
 #### 2.1.1 Modelo de Datos
+
 - **Agregar campo `category`** al modelo `Alert`
 - **Crear nuevo modelo `CategoryBreakdown`** con:
   - `category`: string (legal, financial, technical, schedule, scope)
@@ -60,10 +64,12 @@ Implementar un sistema de **categorización de alertas** similar al de la págin
   - `alerts`: list[Alert] (con categoría incluida)
 
 #### 2.1.2 Reglas y Configuración
+
 - Actualizar `initial_rules.yaml` para incluir categoría en cada regla
 - Actualizar el motor de coherencia para asignar categoría a cada alerta generada
 
 #### 2.1.3 Scoring Service
+
 - Modificar `ScoringService.compute_score()` para:
   - Calcular score general
   - Calcular score por categoría
@@ -76,6 +82,7 @@ Implementar un sistema de **categorización de alertas** similar al de la págin
 ### 2.2 Cambios en el Frontend
 
 #### 2.2.1 Componentes Nuevos
+
 - **`CoherenceScoreModal`**: Modal/Dialog que se abre al hacer clic en el gauge
 - **`CategoryBreakdownCard`**: Card individual para cada categoría
 - **`CategoryScoreGauge`**: Gauge pequeño para score por categoría
@@ -156,6 +163,7 @@ interface CoherenceScoreDetail {
 ## 4. PLAN DE IMPLEMENTACIÓN
 
 ### Fase 1: Backend - Modelo de Datos
+
 1. Agregar campo `category` a modelo `Alert`
 2. Crear modelo `CategoryBreakdown`
 3. Extender modelo `CoherenceResult`
@@ -167,6 +175,7 @@ interface CoherenceScoreDetail {
 3. Actualizar tests de integración
 
 ### Fase 3: Backend - Scoring Service
+
 1. Implementar cálculo de score por categoría
 2. Implementar cálculo de impacto proporcional
 3. Agregar tests de scoring avanzado
@@ -180,6 +189,7 @@ interface CoherenceScoreDetail {
 1. Crear `CategoryBreakdownCard`
 2. Crear `CoherenceScoreModal`
 3. Modificar `GaugeChart` para ser clickeable
+
 
 ### Fase 6: Integración y Testing
 1. Integrar modal en Dashboard

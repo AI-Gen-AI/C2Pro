@@ -3,7 +3,7 @@
 # ===========================================
 
 # Framework
-fastapi==0.109.2
+fastapi==0.121.3
 uvicorn[standard]==0.27.1
 pydantic>=2.7.4,<3.0.0  # Updated for langchain-core compatibility
 pydantic-settings==2.1.0
