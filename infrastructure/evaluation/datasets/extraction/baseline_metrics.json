@@ -1,0 +1,51 @@
+{
+  "dataset_name": "c2pro_extraction_eval_v1",
+  "last_updated": "2026-03-09",
+  "model_version": "claude-haiku-4-20250514",
+  "extraction_config": "v1.0",
+  "metrics": {
+    "entity_f1": 0.85,
+    "boundary_iou": 0.82,
+    "actor_accuracy": 0.90,
+    "date_extraction_accuracy": 0.88,
+    "amount_extraction_accuracy": 0.87,
+    "modality_accuracy": 0.84,
+    "clause_type_accuracy": 0.81
+  },
+  "thresholds": {
+    "entity_f1": {
+      "min_absolute_value": 0.75,
+      "threshold_percentage_drop": 0.10
+    },
+    "boundary_iou": {
+      "min_absolute_value": 0.70,
+      "threshold_percentage_drop": 0.15
+    },
+    "actor_accuracy": {
+      "min_absolute_value": 0.80,
+      "threshold_percentage_drop": 0.10
+    },
+    "date_extraction_accuracy": {
+      "min_absolute_value": 0.80,
+      "threshold_percentage_drop": 0.10
+    },
+    "amount_extraction_accuracy": {
+      "min_absolute_value": 0.80,
+      "threshold_percentage_drop": 0.10
+    }
+  },
+  "evaluation_history": [
+    {
+      "date": "2026-03-09",
+      "model": "claude-haiku-4-20250514",
+      "results": {
+        "entity_f1": 0.85,
+        "boundary_iou": 0.82,
+        "actor_accuracy": 0.90,
+        "date_extraction_accuracy": 0.88,
+        "amount_extraction_accuracy": 0.87
+      },
+      "notes": "Initial baseline establishment"
+    }
+  ]
+}

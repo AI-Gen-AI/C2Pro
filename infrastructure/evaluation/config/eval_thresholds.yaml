@@ -1,0 +1,114 @@
+# C2PRO Evaluation Thresholds Configuration
+# This file defines drift detection thresholds for all AI services
+
+version: "1.0.0"
+updated_at: "2026-03-09"
+
+# Global settings
+global:
+  escalation_enabled: true
+  webhook_url: "${SLACK_WEBHOOK_URL}"
+  alert_channels:
+    - slack
+    - email
+
+# Coherence Engine v2 (CE-26)
+coherence_engine:
+  dataset_name: c2pro_coherence_eval_v1
+  enabled: true
+  metrics:
+    - name: coherence_score_accuracy
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.75
+      severity: critical
+
+    - name: alert_precision
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+    - name: alert_recall
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.75
+      severity: high
+
+    - name: severity_accuracy
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.70
+      severity: medium
+
+# Document Extraction (I3)
+document_extraction:
+  dataset_name: c2pro_extraction_eval_v1
+  enabled: true
+  metrics:
+    - name: entity_f1
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.75
+      severity: critical
+
+    - name: boundary_iou
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.70
+      severity: high
+
+    - name: actor_accuracy
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+    - name: date_extraction_accuracy
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: medium
+
+    - name: amount_extraction_accuracy
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+# Hybrid Retrieval (I4)
+hybrid_retrieval:
+  dataset_name: c2pro_retrieval_eval_v1
+  enabled: true
+  metrics:
+    - name: mrr_at_10
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.65
+      severity: critical
+
+    - name: recall_at_5
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.75
+      severity: high
+
+    - name: recall_at_10
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: medium
+
+    - name: intent_accuracy
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+# Scheduled evaluation runs
+schedule:
+  daily_regression:
+    cron: "0 4 * * *"  # 4 AM UTC daily
+    services:
+      - coherence_engine
+      - document_extraction
+      - hybrid_retrieval
+
+  hourly_smoke_test:
+    cron: "0 * * * *"  # Every hour
+    services:
+      - coherence_engine
+    subset_size: 5  # Only run on subset
+
+# Alert deduplication
+deduplication:
+  enabled: true
+  fingerprint_ttl_hours: 24
+  max_alerts_per_metric_per_day: 3

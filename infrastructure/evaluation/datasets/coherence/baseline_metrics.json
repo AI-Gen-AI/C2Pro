@@ -1,0 +1,45 @@
+{
+  "dataset_name": "c2pro_coherence_eval_v1",
+  "last_updated": "2026-03-09",
+  "model_version": "claude-haiku-4-20250514",
+  "prompt_version": "v1.1_cot",
+  "metrics": {
+    "coherence_score_accuracy": 0.85,
+    "alert_precision": 0.90,
+    "alert_recall": 0.88,
+    "severity_accuracy": 0.82,
+    "issue_type_accuracy": 0.84,
+    "trigger_term_recall": 0.78
+  },
+  "thresholds": {
+    "coherence_score_accuracy": {
+      "min_absolute_value": 0.75,
+      "threshold_percentage_drop": 0.10
+    },
+    "alert_precision": {
+      "min_absolute_value": 0.80,
+      "threshold_percentage_drop": 0.10
+    },
+    "alert_recall": {
+      "min_absolute_value": 0.75,
+      "threshold_percentage_drop": 0.15
+    },
+    "severity_accuracy": {
+      "min_absolute_value": 0.70,
+      "threshold_percentage_drop": 0.15
+    }
+  },
+  "evaluation_history": [
+    {
+      "date": "2026-03-09",
+      "model": "claude-haiku-4-20250514",
+      "results": {
+        "coherence_score_accuracy": 0.85,
+        "alert_precision": 0.90,
+        "alert_recall": 0.88,
+        "severity_accuracy": 0.82
+      },
+      "notes": "Initial baseline establishment"
+    }
+  ]
+}

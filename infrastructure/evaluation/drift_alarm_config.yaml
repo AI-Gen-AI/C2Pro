@@ -1,46 +1,203 @@
-# C2Pro Coherence Scoring - Drift Alarm Configuration
+# C2Pro AI Services - Drift Alarm Configuration
 # Used by EvaluationHarness to detect model/scoring degradation
+# Covers: Coherence Engine v2, Document Extraction (I3), Hybrid Retrieval (I4)
 
-dataset_name: c2pro_coherence_baseline
-version: "1.0.0"
-created_at: "2026-03-07"
+version: "2.0.0"
+created_at: "2026-03-09"
+updated_at: "2026-03-09"
 
-# Alert thresholds for drift detection
-alarms:
-  - metric_name: coherence_score_accuracy
-    description: "Accuracy of coherence scores vs human baseline"
-    threshold_percentage_drop: 0.10  # Alert if accuracy drops >10%
-    min_absolute_value: 0.75         # Alert if accuracy falls below 75%
-    severity: critical
+# ============================================
+# COHERENCE ENGINE V2 (CE-26)
+# ============================================
+coherence_engine:
+  dataset_name: c2pro_coherence_eval_v1
+  enabled: true
+  alarms:
+    - metric_name: coherence_score_accuracy
+      description: "Accuracy of coherence scores vs human baseline"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.75
+      severity: critical
 
-  - metric_name: alert_precision
-    description: "Precision of generated alerts (true positives / all positives)"
-    threshold_percentage_drop: 0.10  # Alert if precision drops >10%
-    min_absolute_value: 0.80         # Alert if precision falls below 80%
-    severity: high
+    - metric_name: alert_precision
+      description: "Precision of generated alerts (TP / (TP + FP))"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
 
-  - metric_name: alert_recall
-    description: "Recall of generated alerts (true positives / actual positives)"
-    threshold_percentage_drop: 0.15  # Alert if recall drops >15%
-    min_absolute_value: 0.75         # Alert if recall falls below 75%
-    severity: high
+    - metric_name: alert_recall
+      description: "Recall of generated alerts (TP / (TP + FN))"
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.75
+      severity: high
 
-  - metric_name: category_distribution_variance
-    description: "Variance in category score distribution"
-    threshold_percentage_drop: null  # Not applicable (lower is better)
-    min_absolute_value: null
-    max_absolute_value: 0.15         # Alert if variance exceeds 15%
-    severity: medium
+    - metric_name: severity_accuracy
+      description: "Accuracy of severity level classification"
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.70
+      severity: medium
 
-# Notification settings
+    - metric_name: trigger_term_recall
+      description: "Recall of trigger term detection"
+      threshold_percentage_drop: 0.20
+      min_absolute_value: 0.65
+      severity: medium
+
+# ============================================
+# DOCUMENT EXTRACTION (I3)
+# ============================================
+document_extraction:
+  dataset_name: c2pro_extraction_eval_v1
+  enabled: true
+  alarms:
+    - metric_name: entity_f1
+      description: "F1 score for entity extraction"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.75
+      severity: critical
+
+    - metric_name: boundary_iou
+      description: "Intersection over Union for clause boundary detection"
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.70
+      severity: high
+
+    - metric_name: actor_accuracy
+      description: "Accuracy of actor/party extraction"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+    - metric_name: date_extraction_accuracy
+      description: "Accuracy of date extraction"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: medium
+
+    - metric_name: amount_extraction_accuracy
+      description: "Accuracy of monetary amount extraction"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+    - metric_name: modality_accuracy
+      description: "Accuracy of obligation modality classification (shall/may/must_not)"
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.75
+      severity: medium
+
+# ============================================
+# HYBRID RETRIEVAL (I4)
+# ============================================
+hybrid_retrieval:
+  dataset_name: c2pro_retrieval_eval_v1
+  enabled: true
+  alarms:
+    - metric_name: mrr_at_10
+      description: "Mean Reciprocal Rank at 10"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.65
+      severity: critical
+
+    - metric_name: recall_at_5
+      description: "Recall at 5 results"
+      threshold_percentage_drop: 0.15
+      min_absolute_value: 0.75
+      severity: high
+
+    - metric_name: recall_at_10
+      description: "Recall at 10 results"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: medium
+
+    - metric_name: ndcg_at_10
+      description: "Normalized Discounted Cumulative Gain at 10"
+      threshold_percentage_drop: 0.12
+      min_absolute_value: 0.70
+      severity: high
+
+    - metric_name: intent_accuracy
+      description: "Query intent classification accuracy (keyword/vector/hybrid)"
+      threshold_percentage_drop: 0.10
+      min_absolute_value: 0.80
+      severity: high
+
+    - metric_name: reranker_improvement
+      description: "Ranking improvement from reranker"
+      threshold_percentage_drop: 0.25
+      min_absolute_value: 0.05
+      severity: medium
+
+    - metric_name: cross_language_recall
+      description: "Recall for cross-language queries (en->es)"
+      threshold_percentage_drop: 0.20
+      min_absolute_value: 0.60
+      severity: medium
+
+# ============================================
+# NOTIFICATION SETTINGS
+# ============================================
 notifications:
   escalation_enabled: true
   channels:
     - type: slack
-      webhook_url: "${BUDGET_ALERT_WEBHOOK_URL}"
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channel: "#c2pro-alerts"
     - type: email
-      recipients: "${BUDGET_ALERT_ADMIN_EMAILS}"
+      recipients: "${EVAL_ALERT_ADMIN_EMAILS}"
 
   deduplication:
     enabled: true
     window_hours: 24
+    max_alerts_per_metric_per_day: 3
+
+# ============================================
+# SCHEDULED EVALUATION RUNS
+# ============================================
+schedule:
+  daily_regression:
+    cron: "0 4 * * *"  # 4 AM UTC
+    services:
+      - coherence_engine
+      - document_extraction
+      - hybrid_retrieval
+    full_dataset: true
+
+  hourly_smoke_test:
+    cron: "0 * * * *"  # Every hour
+    services:
+      - coherence_engine
+    subset_size: 5
+    notify_on_failure_only: true
+
+# ============================================
+# LEGACY COMPATIBILITY (for existing harness)
+# ============================================
+# These alarms are kept for backwards compatibility
+dataset_name: c2pro_coherence_baseline
+alarms:
+  - metric_name: coherence_score_accuracy
+    description: "Accuracy of coherence scores vs human baseline"
+    threshold_percentage_drop: 0.10
+    min_absolute_value: 0.75
+    severity: critical
+
+  - metric_name: alert_precision
+    description: "Precision of generated alerts"
+    threshold_percentage_drop: 0.10
+    min_absolute_value: 0.80
+    severity: high
+
+  - metric_name: alert_recall
+    description: "Recall of generated alerts"
+    threshold_percentage_drop: 0.15
+    min_absolute_value: 0.75
+    severity: high
+
+  - metric_name: category_distribution_variance
+    description: "Variance in category score distribution"
+    threshold_percentage_drop: null
+    min_absolute_value: null
+    max_absolute_value: 0.15
+    severity: medium
