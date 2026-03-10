@@ -12,7 +12,7 @@ from pathlib import Path
 
 import psycopg
 
-from verify_migration_health import parse_migration_graph, validate_linear_chain
+from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
 
 def is_port_open(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
@@ -91,6 +91,11 @@ def main() -> int:
     parser.add_argument("--start-services", action="store_true")
     parser.add_argument("--wait-seconds", type=int, default=45)
     parser.add_argument("--require-redis", action="store_true")
+    parser.add_argument(
+        "--recreate-db",
+        action="store_true",
+        help="Drop and recreate the target test database before running migrations.",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[3]
@@ -114,8 +119,12 @@ def main() -> int:
     print(f"OK DB port reachable: {args.db_host}:{args.db_port}")
 
     print("== Preflight: Ensure DB exists ==")
-    ensure_database_exists(args.admin_url, args.database_name)
-    print(f"OK DB exists: {args.database_name}")
+    if args.recreate_db:
+        recreate_database(args.admin_url, args.database_name)
+        print(f"OK DB recreated: {args.database_name}")
+    else:
+        ensure_database_exists(args.admin_url, args.database_name)
+        print(f"OK DB exists: {args.database_name}")
 
     print("== Apply migrations ==")
     run_alembic_upgrade(api_dir, args.database_url)

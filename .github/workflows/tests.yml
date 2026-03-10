@@ -147,7 +147,7 @@ jobs:
 
       - name: Bootstrap test infrastructure
         run: |
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       - name: Run integration tests
         working-directory: apps/api
@@ -216,7 +216,7 @@ jobs:
 
       - name: Bootstrap test infrastructure
         run: |
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       - name: Run E2E Security Tests
         working-directory: apps/api
@@ -318,7 +318,7 @@ jobs:
       - name: Infra preflight
         run: |
           mkdir -p apps/api/ci-artifacts
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis | tee apps/api/ci-artifacts/i13-infra-preflight.log
+          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db | tee apps/api/ci-artifacts/i13-infra-preflight.log
 
       - name: Run I13 real E2E suite
         working-directory: apps/api
