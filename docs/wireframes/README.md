@@ -250,7 +250,10 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 - [C2Pro Product Roadmap](../archive/roadmaps/ROADMAP_v2.3.0.md)
 - [Sprint 1 Plan](../archive/sprints/SPRINT_1_PLAN.md)
 - [Sprint 1 Completed](../archive/sprints/SPRINT_1_COMPLETED.md)
-- [Chronogram Master](../C2PRO_CRONOGRAMA_MAESTRO_v1.0.csv)
+- [Chronogram Master](../assets/schedules/C2PRO_CRONOGRAMA_MAESTRO_v1.0.csv)
+- [Documentation index](../README.md)
+- [Specifications](../specifications/README.md)
+- [Planning](../planning/README.md)
 
 ---
 

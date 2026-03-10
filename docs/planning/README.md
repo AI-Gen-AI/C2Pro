@@ -12,6 +12,7 @@ This folder is reserved for active, current planning documents that still drive 
 
 Older bundled implementation plans, dated checklists, and one-off initiative packs were moved to:
 
-- `../archive/plans/`
+- [Archived plan bundles](../archive/plans/README.md)
+- [Archived dated planning](../archive/planning/README.md)
 
 Use `archive/plans/` for historical reference only. Do not place new active plans there unless they are already completed or superseded.
