@@ -2,6 +2,16 @@
 
 Backend de la plataforma C2Pro, construido con FastAPI, PostgreSQL (Supabase) y Python 3.11+.
 
+## Document Navigation
+
+- [Repository README](../../README.md)
+- [Documentation index](../../docs/README.md)
+- [Architecture index](../../docs/architecture/README.md)
+- [API docs index](../../docs/api/README.md)
+- [Runbooks index](../../docs/runbooks/README.md)
+- [Testing docs index](../../docs/testing/README.md)
+- [API tests README](./tests/README.md)
+
 ## ðŸš€ Quick Start
 
 ### 1. Configurar Variables de Entorno
@@ -27,15 +37,15 @@ python setup.py
 ```
 
 Este script:
-- âœ
+- ï¿½
  Verifica la versiÃ³n de Python
-- âœ
+- ï¿½
  Valida el archivo .env
-- âœ
+- ï¿½
  Instala dependencias
-- âœ
+- ï¿½
  Ejecuta migraciones de base de datos
-- âœ
+- ï¿½
  Crea directorios necesarios
 
 ### 3. Iniciar Servidor de Desarrollo
@@ -271,6 +281,9 @@ lsof -ti:8000 | xargs kill -9
 - [Alembic Docs](https://alembic.sqlalchemy.org/)
 - [Pydantic Docs](https://docs.pydantic.dev/)
 - [Supabase Docs](https://supabase.com/docs)
+- [C2Pro architecture docs](../../docs/architecture/README.md)
+- [C2Pro runbooks](../../docs/runbooks/README.md)
+- [C2Pro testing docs](../../docs/testing/README.md)
 
 ## ðŸŽ¯ PrÃ³ximos Pasos (Roadmap)
 

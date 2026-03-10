@@ -1,5 +1,13 @@
 # Tests
 
+## Documentation Navigation
+
+- [Repository README](../README.md)
+- [Documentation index](../docs/README.md)
+- [Testing docs index](../docs/testing/README.md)
+- [Runbooks index](../docs/runbooks/README.md)
+- [API README](../apps/api/README.md)
+
 ## Coherence Integration Tests
 
 These tests validate coherence rule logic directly and should run without the full API app.

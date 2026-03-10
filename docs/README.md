@@ -27,6 +27,19 @@ This repository now separates documentation by lifecycle and function.
 - `internal/`
   - Internal lessons learned and non-product-facing reference notes.
 
+## Navigation Links
+
+- [Architecture index](./architecture/README.md)
+- [API index](./api/README.md)
+- [Runbooks index](./runbooks/README.md)
+- [Testing index](./testing/README.md)
+- [Specifications index](./specifications/README.md)
+- [Audits index](./audits/README.md)
+- [Coherence engine index](./coherence_engine/README.md)
+- [Performance index](./performance/README.md)
+- [Assets index](./assets/README.md)
+- [Archive index](./archive/README.md)
+
 ## Historical Material
 
 - `archive/`

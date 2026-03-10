@@ -4,6 +4,16 @@
 **Date:** January 21, 2026
 **Task:** CE-S2-011 - Setup Next.js 14 + Tailwind + shadcn/ui
 
+## Documentation Navigation
+
+- [Repository README](../../README.md)
+- [Documentation index](../../docs/README.md)
+- [Architecture index](../../docs/architecture/README.md)
+- [Wireframes](../../docs/wireframes/README.md)
+- [Specifications](../../docs/specifications/README.md)
+- [Testing docs index](../../docs/testing/README.md)
+- [Quick start](../../QUICK_START.md)
+
 ---
 
 ## Overview
@@ -424,6 +434,7 @@ export default function StakeholdersPage() {
 - Follow shadcn/ui patterns for new components
 - Keep components small and focused
 - Use TypeScript strict mode - no `any` types
+- Canonical project documentation starts at `docs/README.md`
 
 ---
 

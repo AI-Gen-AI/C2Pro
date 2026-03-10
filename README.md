@@ -83,6 +83,7 @@ c2pro/
 
 - Índice principal: [docs/README.md](./docs/README.md)
 - Política de working context: [context/README.md](./context/README.md)
+- Quick start operativo: [QUICK_START.md](./QUICK_START.md)
 - Arquitectura: [docs/architecture/](./docs/architecture/)
 - Runbooks: [docs/runbooks/](./docs/runbooks/)
 - Testing: [docs/testing/](./docs/testing/)
@@ -226,6 +227,7 @@ Ver `.env.example` para la lista completa. Las críticas son:
 ## 📚 Documentación
 
 - [Índice de Documentación](./docs/README.md) - Punto de entrada oficial a la documentación
+- [Quick Start](./QUICK_START.md) - Arranque local y modos de ejecución
 - [Roadmap activo](./docs/planning/ROADMAP_v2.4.0.md) - Plan vigente del proyecto
 - [Arquitectura](./docs/architecture/) - ADRs, diagramas y diseño técnico
 - [Runbooks](./docs/runbooks/) - Operación, setup y procedimientos
