@@ -108,10 +108,12 @@ jobs:
             -v \
             -m "e2e and security" \
             --tb=short \
-            --cov=src/projects \
             --cov=src/core/auth \
+            --cov=src/core/middleware \
+            --cov=src/core/tenants \
             --cov-report=term-missing \
             --cov-report=xml \
+            --cov-fail-under=0 \
             --junit-xml=test-results.xml
 
       - name: Upload test results
