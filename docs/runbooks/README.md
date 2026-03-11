@@ -4,6 +4,7 @@ This section groups operational procedures, environment setup notes, migrations,
 
 ## Contents
 
+- [Clerk auth (dev vs production)](./CLERK_AUTH_DEV_PROD_GUIDE.md)
 - [Migration health check](./RUNBOOK_MIGRATION_HEALTH_CHECK_2026-02-15.md)
 - [Test infra bootstrap](./RUNBOOK_TEST_INFRA_BOOTSTRAP_2026-02-15.md)
 - [PostgreSQL tests config report](./POSTGRESQL_TESTS_CONFIG_REPORT.md)
