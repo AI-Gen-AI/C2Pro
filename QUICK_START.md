@@ -9,6 +9,7 @@ Get the full-stack application running locally in **execution mode** (real backe
 - [Runbooks index](./docs/runbooks/README.md)
 - [API README](./apps/api/README.md)
 - [Web setup README](./apps/web/README_SETUP.md)
+- [Clerk auth dev vs production guide](./docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md)
 
 ---
 
