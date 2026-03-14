@@ -264,7 +264,11 @@ describe("TS-INT-NAV-001: Cross-Module Navigation", () => {
 // Mark tests as integration tests in RED phase
 // @ts-ignore - vitest type extension
 if (typeof test !== "undefined") {
-  test.meta = {
+  const testWithMeta = test as typeof test & {
+    meta?: Record<string, string>;
+  };
+
+  testWithMeta.meta = {
     phase: "red",
     suite: "TS-INT-NAV-001",
     type: "integration",
