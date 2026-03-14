@@ -23,7 +23,7 @@ logger = structlog.get_logger()
 def _get_cost_controller():
     if os.getenv("C2PRO_TEST_LIGHT") == "1":
         return None, None
-    from src.analysis.adapters.ai.cost_controller import (
+    from src.core.ai.cost_controller import (
         BudgetExceededException,
         CostControllerService,
     )
@@ -248,4 +248,3 @@ class AIService:
                 "confidence": 0.84,
             }
         ]
-
