@@ -167,9 +167,9 @@ const mockTouchEvent = (
   return new TouchEvent(type, {
     bubbles: true,
     cancelable: true,
-    touches: touchList as unknown as TouchList,
-    targetTouches: touchList as unknown as TouchList,
-    changedTouches: touchList as unknown as TouchList,
+    touches: touchList as unknown as Touch[],
+    targetTouches: touchList as unknown as Touch[],
+    changedTouches: touchList as unknown as Touch[],
   });
 };
 
@@ -352,7 +352,7 @@ describe("TS-MOB-WBS-001: WBS Mobile Contract Tests", () => {
       expect(incompleteItem).toBeInTheDocument();
 
       // Simulate swipe right gesture (minimum 44px threshold)
-      simulateSwipeRight(incompleteItem!, 100);
+      simulateSwipeRight(incompleteItem as HTMLElement, 100);
 
       // Should show swipe indicator/feedback
       await waitFor(() => {
@@ -395,7 +395,7 @@ describe("TS-MOB-WBS-001: WBS Mobile Contract Tests", () => {
 
       const item = screen
         .getByText("Concrete Pouring")
-        .closest("[role='listitem']")!;
+        .closest("[role='listitem']") as HTMLElement;
       simulateSwipeRight(item, 100);
 
       // Should trigger haptic feedback
@@ -1018,7 +1018,11 @@ describe("TS-MOB-WBS-001: WBS Mobile Contract Tests", () => {
 // Mark tests as mobile contract tests in RED phase
 // @ts-ignore - vitest type extension
 if (typeof test !== "undefined") {
-  test.meta = {
+  const testWithMeta = test as typeof test & {
+    meta?: Record<string, string>;
+  };
+
+  testWithMeta.meta = {
     phase: "red",
     suite: "TS-MOB-WBS-001",
     type: "mobile-contract",

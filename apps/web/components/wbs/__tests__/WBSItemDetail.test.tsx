@@ -348,7 +348,11 @@ describe("WBSItemDetail Component Contract", () => {
 // All tests passing - Implementation complete
 // @ts-ignore - vitest type extension
 if (typeof test !== "undefined") {
-  test.meta = {
+  const testWithMeta = test as typeof test & {
+    meta?: Record<string, string>;
+  };
+
+  testWithMeta.meta = {
     phase: "green",
     suite: "TS-UAD-WBS-DETAIL-001",
     type: "contract",
