@@ -102,7 +102,7 @@ export function WBSAlertBadge({
   severity,
   count,
   showIcon = false,
-}: WBSAlertBadgeProps): JSX.Element {
+}: WBSAlertBadgeProps): React.JSX.Element {
   const config = SEVERITY_CONFIG[severity];
 
   // Calculate contrast ratio for accessibility

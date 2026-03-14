@@ -228,7 +228,11 @@ describe("WBSAlertBadge Component", () => {
 // Mark tests as in RED phase - Component does not exist
 // @ts-ignore - vitest type extension
 if (typeof test !== "undefined") {
-  test.meta = {
+  const testWithMeta = test as typeof test & {
+    meta?: Record<string, string>;
+  };
+
+  testWithMeta.meta = {
     phase: "red",
     suite: "TS-UAD-WBS-COLOR-001",
     type: "component",

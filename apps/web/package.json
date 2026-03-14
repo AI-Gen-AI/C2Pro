@@ -10,7 +10,7 @@
     "generate:api": "orval",
     "generate:api:check": "orval && git diff --exit-code -- lib/api/generated mocks",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "node ./scripts/vitest-no-warn.mjs run src/tests/integration",
     "test:nowarn": "node ./scripts/vitest-no-warn.mjs",
     "test:all": "node ./scripts/vitest-no-warn.mjs run",
