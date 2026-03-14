@@ -112,6 +112,9 @@ jobs:
       - name: Unit and integration tests
         run: pnpm test
 
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+
       - name: E2E smoke tests
         run: pnpm test:e2e
 
