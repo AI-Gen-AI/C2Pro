@@ -131,7 +131,7 @@ class TestMockGoogleVisionOCRAdapter:
     """Unit tests for MockGoogleVisionOCRAdapter (no external dependencies)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_confidence_is_always_0_92(self):
         """process_pdf_page always returns confidence == 0.92."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -139,7 +139,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert result["confidence"] == pytest.approx(0.92)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_provider_is_always_google_vision_ocr(self):
         """process_pdf_page always returns provider == 'GoogleVisionOCR'."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -147,7 +147,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert result["provider"] == "GoogleVisionOCR"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_bboxes_always_has_4_items(self):
         """process_pdf_page always returns exactly 4 bounding boxes."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -155,7 +155,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert len(result["bboxes"]) == 4
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_same_input_produces_same_text(self):
         """Same page_content always yields identical text (deterministic MD5 hash)."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -165,7 +165,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert result_a["text"] == result_b["text"]
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_different_inputs_produce_different_text(self):
         """Different page_content values produce different hash substrings in text."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -174,7 +174,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert result_a["text"] != result_b["text"]
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_text_contains_md5_hash_substring(self):
         """Result text contains an 8-char hex hash derived from the content MD5."""
         import hashlib
@@ -187,7 +187,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert expected_hash in result["text"]
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_result_has_all_required_keys(self):
         """OCRResult contains all required keys: text, bboxes, confidence, provider."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -195,7 +195,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert set(result.keys()) >= {"text", "bboxes", "confidence", "provider"}
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_bytes_still_returns_valid_result(self):
         """Empty bytes input still produces a valid OCRResult (no exception)."""
         adapter = MockGoogleVisionOCRAdapter()
@@ -204,7 +204,7 @@ class TestMockGoogleVisionOCRAdapter:
         assert len(result["bboxes"]) == 4
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_same_input_different_adapter_instances_same_output(self):
         """Two separate MockGoogleVisionOCRAdapter instances produce identical output."""
         content = b"shared input content"
@@ -225,7 +225,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
     """Unit tests for GoogleVisionOCRAdapter.process_pdf_page (mocked Vision client)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_api_error_message_raises_ingestion_error(self):
         """Non-empty response.error.message causes IngestionError to be raised."""
         adapter = _make_adapter()
@@ -238,7 +238,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
             await adapter.process_pdf_page(b"page content")
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_api_error_message_contains_original_error_text(self):
         """IngestionError message includes the Google Vision error text."""
         adapter = _make_adapter()
@@ -252,7 +252,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
             await adapter.process_pdf_page(b"page content")
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_full_text_annotation_returns_empty_text(self):
         """None full_text_annotation yields text == '' in result."""
         adapter = _make_adapter()
@@ -264,7 +264,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["text"] == ""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_full_text_annotation_returns_empty_bboxes(self):
         """None full_text_annotation yields bboxes == [] in result."""
         adapter = _make_adapter()
@@ -276,7 +276,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["bboxes"] == []
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_full_text_annotation_returns_confidence_zero(self):
         """None full_text_annotation yields confidence == 0.0 in result."""
         adapter = _make_adapter()
@@ -288,7 +288,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["confidence"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_provider_field_is_google_vision_ocr(self):
         """Result 'provider' field is always 'GoogleVisionOCR'."""
         adapter = _make_adapter()
@@ -302,7 +302,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["provider"] == "GoogleVisionOCR"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_word_above_min_confidence_is_included_in_bboxes(self):
         """Word with confidence >= min_confidence appears in result bboxes."""
         adapter = _make_adapter(min_confidence=0.5)
@@ -316,7 +316,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert len(result["bboxes"]) == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_word_at_exact_min_confidence_is_included_in_bboxes(self):
         """Word with confidence == min_confidence (boundary) is included in bboxes."""
         adapter = _make_adapter(min_confidence=0.5)
@@ -330,7 +330,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert len(result["bboxes"]) == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_word_below_min_confidence_is_excluded_from_bboxes(self):
         """Word with confidence < min_confidence is not included in result bboxes."""
         adapter = _make_adapter(min_confidence=0.5)
@@ -344,7 +344,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert len(result["bboxes"]) == 0
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_mixed_confidence_words_filters_correctly(self):
         """Words above threshold are included; words below are excluded."""
         adapter = _make_adapter(min_confidence=0.7)
@@ -359,7 +359,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert len(result["bboxes"]) == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_bboxes_normalised_by_page_dimensions(self):
         """Bounding box coordinates are divided by page width and height."""
         adapter = _make_adapter()
@@ -378,7 +378,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert bbox[3] == pytest.approx(80 / 800)    # y2 normalised
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_bbox_fifth_element_is_word_confidence(self):
         """The fifth element of each bbox is the word's raw confidence value."""
         adapter = _make_adapter()
@@ -392,7 +392,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["bboxes"][0][4] == pytest.approx(0.87)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_overall_confidence_is_mean_of_included_word_confidences(self):
         """Overall confidence is the arithmetic mean of included word confidences."""
         adapter = _make_adapter()
@@ -408,7 +408,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["confidence"] == pytest.approx(expected)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_confidence_is_zero_when_all_words_excluded_by_threshold(self):
         """When all words are filtered out by min_confidence, confidence is 0.0."""
         adapter = _make_adapter(min_confidence=0.99)
@@ -422,7 +422,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["confidence"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_extracted_text_comes_from_full_text_annotation(self):
         """The 'text' field in result mirrors response.full_text_annotation.text."""
         adapter = _make_adapter()
@@ -437,7 +437,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["text"] == expected_text
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_multiple_words_in_nested_structure_all_included(self):
         """All words nested in pages→blocks→paragraphs→words are extracted."""
         adapter = _make_adapter()
@@ -455,7 +455,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert len(result["bboxes"]) == 3
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_vision_image_called_with_page_content(self):
         """adapter.vision.Image is called with content=page_content."""
         adapter = _make_adapter()
@@ -471,7 +471,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         adapter.vision.Image.assert_called_once_with(content=page_bytes)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_client_document_text_detection_called_with_image(self):
         """adapter.client.document_text_detection is called with the created image."""
         adapter = _make_adapter()
@@ -486,7 +486,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         adapter.client.document_text_detection.assert_called_once_with(image=mock_image_instance)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_single_word_confidence_equals_that_words_confidence(self):
         """With exactly one valid word, overall confidence equals that word's confidence."""
         adapter = _make_adapter()
@@ -500,7 +500,7 @@ class TestGoogleVisionOCRAdapterProcessPdfPage:
         assert result["confidence"] == pytest.approx(0.77)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_words_with_no_pages_returns_empty_bboxes(self):
         """Response with empty pages list produces empty bboxes."""
         adapter = _make_adapter()

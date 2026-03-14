@@ -96,7 +96,7 @@ class TestCheckBudgetAvailability:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_not_found_raises_budget_exceeded(self):
         """When get_tenant_by_id returns None, BudgetExceededException is raised."""
         service = _make_service()
@@ -107,7 +107,7 @@ class TestCheckBudgetAvailability:
                 await service.check_budget_availability(tenant_id, estimated_cost=0.01)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_not_found_exception_message_contains_tenant_id(self):
         """BudgetExceededException message includes the tenant_id when tenant is missing."""
         service = _make_service()
@@ -122,7 +122,7 @@ class TestCheckBudgetAvailability:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_spend_reset_when_last_reset_is_none(self):
         """ai_spend_last_reset is None → ai_spend_current is zeroed before budget check."""
         tenant = _make_tenant(spend=50.0, last_reset=None)
@@ -134,7 +134,7 @@ class TestCheckBudgetAvailability:
         assert tenant.ai_spend_current == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_spend_reset_when_year_has_advanced(self):
         """Year > last_reset.year → ai_spend_current is zeroed."""
         last_reset = datetime(2024, 12, 1)
@@ -151,7 +151,7 @@ class TestCheckBudgetAvailability:
         assert tenant.ai_spend_current == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_spend_reset_when_month_has_advanced(self):
         """Same year but month > last_reset.month → ai_spend_current is zeroed."""
         last_reset = datetime(2025, 3, 1)
@@ -167,7 +167,7 @@ class TestCheckBudgetAvailability:
         assert tenant.ai_spend_current == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_spend_not_reset_within_same_month(self):
         """Same year and same month → ai_spend_current is NOT zeroed."""
         now = datetime.utcnow()
@@ -185,7 +185,7 @@ class TestCheckBudgetAvailability:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_raises_when_estimated_cost_exceeds_remaining_budget(self):
         """spend + estimated_cost > budget → BudgetExceededException raised."""
         now = datetime.utcnow()
@@ -201,7 +201,7 @@ class TestCheckBudgetAvailability:
                 await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.02)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_raises_when_estimated_cost_exactly_equals_remaining_budget_plus_epsilon(self):
         """spend + cost strictly > budget triggers the exception (not equal)."""
         now = datetime.utcnow()
@@ -217,7 +217,7 @@ class TestCheckBudgetAvailability:
                 await service.check_budget_availability(uuid.uuid4(), estimated_cost=1.01)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_does_not_raise_when_estimated_cost_within_budget(self):
         """spend + estimated_cost <= budget → no exception raised."""
         now = datetime.utcnow()
@@ -237,7 +237,7 @@ class TestCheckBudgetAvailability:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_exception_when_usage_below_50_percent(self):
         """usage_percent < 50 → no exception, call completes normally."""
         now = datetime.utcnow()
@@ -252,7 +252,7 @@ class TestCheckBudgetAvailability:
             await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_50_percent(self):
         """usage_percent == 50 → warning threshold triggered but no exception."""
         now = datetime.utcnow()
@@ -267,7 +267,7 @@ class TestCheckBudgetAvailability:
             await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_75_percent(self):
         """usage_percent == 75 → warning threshold triggered but no exception."""
         now = datetime.utcnow()
@@ -282,7 +282,7 @@ class TestCheckBudgetAvailability:
             await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_90_percent(self):
         """usage_percent == 90 → critical threshold triggered but no exception."""
         now = datetime.utcnow()
@@ -306,7 +306,7 @@ class TestTrackUsage:
     """Unit tests for CostControllerService.track_usage."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_not_found_returns_without_raising(self):
         """When get_tenant_by_id returns None, no exception is raised."""
         service = _make_service()
@@ -316,7 +316,7 @@ class TestTrackUsage:
             await service.track_usage(uuid.uuid4(), actual_cost=0.05)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_not_found_does_not_commit(self):
         """When tenant is not found, db.commit() is NOT called."""
         db = _make_db()
@@ -328,7 +328,7 @@ class TestTrackUsage:
         db.commit.assert_not_called()
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_found_increments_spend(self):
         """When tenant exists, ai_spend_current increases by actual_cost."""
         tenant = _make_tenant(spend=10.0)
@@ -340,7 +340,7 @@ class TestTrackUsage:
         assert tenant.ai_spend_current == pytest.approx(12.5)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_tenant_found_calls_db_commit(self):
         """When tenant exists, db.commit() is awaited."""
         db = _make_db()
@@ -353,7 +353,7 @@ class TestTrackUsage:
         db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_zero_cost_does_not_change_spend(self):
         """Tracking zero actual_cost leaves ai_spend_current unchanged."""
         tenant = _make_tenant(spend=5.0)
@@ -365,7 +365,7 @@ class TestTrackUsage:
         assert tenant.ai_spend_current == pytest.approx(5.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_multiple_track_calls_accumulate_spend(self):
         """Successive track_usage calls keep incrementing the same tenant's spend."""
         tenant = _make_tenant(spend=0.0)
@@ -391,21 +391,21 @@ class TestCalculateCost:
     # Sonnet pricing
     # ------------------------------------------------------------------
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_sonnet_model_uses_sonnet_input_price(self):
         """Model name containing 'sonnet' applies SONNET input pricing."""
         service = _make_service()
         cost = service.calculate_cost("claude-3-5-sonnet-20241022", input_tokens=1_000_000, output_tokens=0)
         assert cost == pytest.approx(CLAUDE_3_5_SONNET_INPUT)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_sonnet_model_uses_sonnet_output_price(self):
         """Model name containing 'sonnet' applies SONNET output pricing."""
         service = _make_service()
         cost = service.calculate_cost("claude-3-5-sonnet-20241022", input_tokens=0, output_tokens=1_000_000)
         assert cost == pytest.approx(CLAUDE_3_5_SONNET_OUTPUT)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_sonnet_model_combined_cost(self):
         """Sonnet pricing: total = (input/1M)*INPUT_PRICE + (output/1M)*OUTPUT_PRICE."""
         service = _make_service()
@@ -417,7 +417,7 @@ class TestCalculateCost:
         ) * CLAUDE_3_5_SONNET_OUTPUT
         assert cost == pytest.approx(expected)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_sonnet_matching_is_case_insensitive(self):
         """'SONNET' (uppercase) in model name triggers SONNET pricing."""
         service = _make_service()
@@ -429,21 +429,21 @@ class TestCalculateCost:
     # Haiku pricing
     # ------------------------------------------------------------------
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_haiku_model_uses_haiku_input_price(self):
         """Model name containing 'haiku' applies HAIKU input pricing."""
         service = _make_service()
         cost = service.calculate_cost("claude-3-haiku-20240307", input_tokens=1_000_000, output_tokens=0)
         assert cost == pytest.approx(CLAUDE_3_HAIKU_INPUT)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_haiku_model_uses_haiku_output_price(self):
         """Model name containing 'haiku' applies HAIKU output pricing."""
         service = _make_service()
         cost = service.calculate_cost("claude-3-haiku-20240307", input_tokens=0, output_tokens=1_000_000)
         assert cost == pytest.approx(CLAUDE_3_HAIKU_OUTPUT)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_haiku_model_combined_cost(self):
         """Haiku pricing: total = (input/1M)*HAIKU_INPUT + (output/1M)*HAIKU_OUTPUT."""
         service = _make_service()
@@ -455,7 +455,7 @@ class TestCalculateCost:
         ) * CLAUDE_3_HAIKU_OUTPUT
         assert cost == pytest.approx(expected)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_haiku_cheaper_than_sonnet_for_same_tokens(self):
         """Haiku cost is always less than Sonnet cost for identical token counts."""
         service = _make_service()
@@ -468,7 +468,7 @@ class TestCalculateCost:
     # Unknown model falls back to Sonnet
     # ------------------------------------------------------------------
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_unknown_model_falls_back_to_sonnet_pricing(self):
         """A model name containing neither 'sonnet' nor 'haiku' uses SONNET pricing."""
         service = _make_service()
@@ -477,7 +477,7 @@ class TestCalculateCost:
         )
         assert cost_unknown == pytest.approx(CLAUDE_3_5_SONNET_INPUT)
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_unknown_model_output_falls_back_to_sonnet_output_pricing(self):
         """Unknown model output tokens are priced at SONNET output rate."""
         service = _make_service()
@@ -490,7 +490,7 @@ class TestCalculateCost:
     # Zero tokens
     # ------------------------------------------------------------------
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_zero_tokens_returns_zero_cost(self):
         """Zero input and output tokens → cost is 0.0 regardless of model."""
         service = _make_service()
@@ -501,24 +501,24 @@ class TestCalculateCost:
     # Pricing constant sanity checks
     # ------------------------------------------------------------------
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_sonnet_pricing_constants_are_positive(self):
         """SONNET input and output prices are strictly positive."""
         assert CLAUDE_3_5_SONNET_INPUT > 0
         assert CLAUDE_3_5_SONNET_OUTPUT > 0
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_haiku_pricing_constants_are_positive(self):
         """HAIKU input and output prices are strictly positive."""
         assert CLAUDE_3_HAIKU_INPUT > 0
         assert CLAUDE_3_HAIKU_OUTPUT > 0
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_output_more_expensive_than_input_for_sonnet(self):
         """SONNET output price per million is higher than input price per million."""
         assert CLAUDE_3_5_SONNET_OUTPUT > CLAUDE_3_5_SONNET_INPUT
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_output_more_expensive_than_input_for_haiku(self):
         """HAIKU output price per million is higher than input price per million."""
         assert CLAUDE_3_HAIKU_OUTPUT > CLAUDE_3_HAIKU_INPUT

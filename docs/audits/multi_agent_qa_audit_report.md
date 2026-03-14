@@ -333,8 +333,8 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Pending
 | # | Recommendation | Status |
 |---|----------------|--------|
 | 1 | **Upload coverage.xml in CI**: Modify `tests.yml` to upload `coverage.xml` as an artifact after unit tests run. This unblocks the QA swarm's coverage-driven prioritisation. | ✅ Done — `qa-swarm.yml` Job 1 runs `pytest --cov` and uploads `coverage.xml` as artifact |
-| 2 | **Enforce coverage gate in PR checks**: Add `--cov-fail-under=70` to the unit tests CI step. Currently this threshold is configured in `pyproject.toml` but the CI step uses `continue-on-error: true`, which means coverage failures do not block merges. | ⬜ Pending — `tests.yml` still uses `continue-on-error: true` |
-| 3 | **Add red_phase markers for P0 gaps**: New tests for P0 gaps should be marked `@pytest.mark.red_phase` initially (TDD discipline), then promoted to `@pytest.mark.unit` once passing. | ⬜ Pending — swarm-generated tests currently use `@pytest.mark.unit` directly |
+| 2 | **Enforce coverage gate in PR checks**: Add `--cov-fail-under=70` to the unit tests CI step. Currently this threshold is configured in `pyproject.toml` but the CI step uses `continue-on-error: true`, which means coverage failures do not block merges. | ✅ Done — unit test CI runs with `--cov-fail-under=70` and no `continue-on-error` override in unit step |
+| 3 | **Add red_phase markers for P0 gaps**: New tests for P0 gaps should be marked `@pytest.mark.red_phase` initially (TDD discipline), then promoted to `@pytest.mark.unit` once passing. | ✅ Done — swarm P0-gap suites now use `@pytest.mark.red_phase` |
 | 4 | **Resolve the `analysis/adapters/ai/cost_controller.py` shim**: The `*` re-export makes it impossible to mock the cost controller in tests targeting the `analysis` module. Migrate to explicit import in callers. | ⬜ Pending — shim still present (TD-02) |
 
 ### P0 Coverage Gap Remediation Checklist
@@ -370,8 +370,8 @@ Each item tracks whether the gap has been closed and the test verified.
 - [ ] Fix **TD-02**: Migrate callers of `analysis/adapters/ai/cost_controller.py` (shim) to import directly from `core/ai/cost_controller.py`
 - [ ] Write tests for **P1-03**: `llm_fallback_client.py` retry exhaustion and circuit-breaker state
 - [ ] Write tests for **P1-04**: `modules/retrieval/domain/services.py` hybrid search scoring and threshold boundaries
-- [ ] Enforce `--cov-fail-under=70` in `tests.yml` CI (remove `continue-on-error: true` from coverage step)
-- [ ] Add `@pytest.mark.red_phase` discipline to future gap-closing test files before promoting to `@pytest.mark.unit`
+- [x] Enforce `--cov-fail-under=70` in `tests.yml` CI (unit-tests step is blocking and includes the coverage threshold)
+- [x] Add `@pytest.mark.red_phase` discipline to future gap-closing test files before promoting to `@pytest.mark.unit`
 
 ---
 
