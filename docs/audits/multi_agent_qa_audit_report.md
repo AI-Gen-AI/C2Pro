@@ -300,7 +300,7 @@ Exposure: All bulk_operations endpoints
 | P1-01 | `analysis/adapters/graph/nodes.py` | `pii_anonymizer_node` state mutation; `router_node` doc_type assignment boundary |
 | P1-02 | `analysis/adapters/graph/nodes_extended.py` | `coherence_scorer_node` empty-clause edge case; `citation_validator_node` no-citations path |
 | P1-03 | `analysis/adapters/ai/llm_fallback_client.py` | Retry exhaustion; exponential backoff timing; circuit breaker state |
-| P1-04 | `modules/retrieval/domain/services.py` | Hybrid search scoring; empty results; threshold boundary values |
+| P1-04 | `modules/retrieval/domain/services.py` | ✅ Done — covered by `apps/api/tests/modules/retrieval/domain/test_p1_04_hybrid_scoring_thresholds.py` (hybrid scoring, empty results, threshold boundaries) |
 
 ### 3.3 P2 Gaps (Quality / Tech Debt)
 
@@ -369,7 +369,7 @@ Each item tracks whether the gap has been closed and the test verified.
 - [x] Fix **TD-01**: `_is_cached_none` in `LLMResultCache` always returns `False` — cache miss logic for negative LLM results is broken
 - [x] Fix **TD-02**: Migrate callers of `analysis/adapters/ai/cost_controller.py` (shim) to import directly from `core/ai/cost_controller.py`
 - [x] Write tests for **P1-03**: `llm_fallback_client.py` retry exhaustion and circuit-breaker state
-- [ ] Write tests for **P1-04**: `modules/retrieval/domain/services.py` hybrid search scoring and threshold boundaries
+- [x] Write tests for **P1-04**: `modules/retrieval/domain/services.py` hybrid search scoring and threshold boundaries
 - [x] Enforce `--cov-fail-under=70` in `tests.yml` CI (unit-tests step is blocking and includes the coverage threshold)
 - [x] Add `@pytest.mark.red_phase` discipline to future gap-closing test files before promoting to `@pytest.mark.unit`
 
