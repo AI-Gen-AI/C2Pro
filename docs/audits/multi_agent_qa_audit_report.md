@@ -324,9 +324,9 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Pending
 | P0 | Write unit tests for `_next_after_critique_v2` (5 branch cases) | Backend team | Before Gate 5 | ✅ Done — `tests/analysis/adapters/graph/test_workflow_routing_swarm.py` |
 | P0 | Write unit tests for `core/ai/cost_controller.py` budget enforcement | Backend team | Before Gate 5 | ✅ Done — `tests/core/ai/test_cost_controller_swarm.py` |
 | P0 | Wire `qa-swarm.yml` into CI to auto-generate tests for P0 gaps | DevOps | Sprint S3 | ✅ Done — `.github/workflows/qa-swarm.yml` created and wired |
-| P0 | Fix TD-01: implement `_is_cached_none` in `LLMResultCache` | Backend team | Sprint S3 | ⬜ Pending |
+| P0 | Fix TD-01: implement `_is_cached_none` in `LLMResultCache` | Backend team | Sprint S3 | ✅ Done — `coherence/engine_v2.py` `LLMResultCache.is_cached_none` fully implemented |
 | P1 | Write OCR adapter unit tests with mocked responses | Backend team | Sprint S3 | ✅ Done — `test_tesseract_adapter_swarm.py` + `test_google_vision_adapter_swarm.py` |
-| P1 | Write `llm_fallback_client.py` retry/circuit-breaker tests | Backend team | Sprint S3 | ⬜ Pending |
+| P1 | Write `llm_fallback_client.py` retry/circuit-breaker tests | Backend team | Sprint S3 | ✅ Done — `tests/analysis/adapters/ai/test_llm_fallback_client_swarm.py` (22 tests) |
 
 ### Strategic Recommendations
 
@@ -366,9 +366,9 @@ Each item tracks whether the gap has been closed and the test verified.
 
 ### Remaining Open Items
 
-- [ ] Fix **TD-01**: `_is_cached_none` in `LLMResultCache` always returns `False` — cache miss logic for negative LLM results is broken
+- [x] Fix **TD-01**: `_is_cached_none` in `LLMResultCache` always returns `False` — cache miss logic for negative LLM results is broken
 - [x] Fix **TD-02**: Migrate callers of `analysis/adapters/ai/cost_controller.py` (shim) to import directly from `core/ai/cost_controller.py`
-- [ ] Write tests for **P1-03**: `llm_fallback_client.py` retry exhaustion and circuit-breaker state
+- [x] Write tests for **P1-03**: `llm_fallback_client.py` retry exhaustion and circuit-breaker state
 - [ ] Write tests for **P1-04**: `modules/retrieval/domain/services.py` hybrid search scoring and threshold boundaries
 - [x] Enforce `--cov-fail-under=70` in `tests.yml` CI (unit-tests step is blocking and includes the coverage threshold)
 - [x] Add `@pytest.mark.red_phase` discipline to future gap-closing test files before promoting to `@pytest.mark.unit`
