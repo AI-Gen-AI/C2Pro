@@ -17,8 +17,8 @@ on:
       - 'apps/api/src/modules/extraction/**'
       - 'apps/api/src/modules/retrieval/**'
   schedule:
-    # Daily at 4 AM UTC
-    - cron: "0 4 * * *"
+    # Daily at 5 AM UTC (staggered from i13-real-e2e-scheduled at 4 AM to avoid runner contention)
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       service:
@@ -36,6 +36,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.11"
   LANGSMITH_PROJECT: "C2Pro-Eval"
@@ -44,6 +47,7 @@ jobs:
   coherence-eval:
     name: Coherence Engine Evaluation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'coherence') ||
@@ -59,13 +63,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
 
       - name: Install dependencies
         working-directory: apps/api
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
 
       - name: Run Coherence Evaluation Tests
         working-directory: apps/api
@@ -95,6 +99,7 @@ jobs:
   extraction-eval:
     name: Document Extraction Evaluation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'extraction') ||
@@ -110,13 +115,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
 
       - name: Install dependencies
         working-directory: apps/api
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
 
       - name: Run Extraction Evaluation Tests
         working-directory: apps/api
@@ -146,6 +151,7 @@ jobs:
   retrieval-eval:
     name: Hybrid Retrieval Evaluation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'retrieval') ||
@@ -161,13 +167,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
 
       - name: Install dependencies
         working-directory: apps/api
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
 
       - name: Run Retrieval Evaluation Tests
         working-directory: apps/api
@@ -196,6 +202,7 @@ jobs:
   drift-check:
     name: Drift Detection
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [coherence-eval, extraction-eval, retrieval-eval]
     if: always() && github.event_name == 'schedule'
 
@@ -208,6 +215,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
 
       - name: Install dependencies
         working-directory: apps/api
@@ -237,6 +245,7 @@ jobs:
     needs: [coherence-eval, extraction-eval, retrieval-eval]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout code
@@ -254,7 +263,6 @@ jobs:
           echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          # Check each service result
           if [ -f eval-results/coherence-eval-results/coherence-eval-results.xml ]; then
             if grep -q 'failures="0"' eval-results/coherence-eval-results/coherence-eval-results.xml; then
               echo "| Coherence Engine | :white_check_mark: Passed |" >> $GITHUB_STEP_SUMMARY
