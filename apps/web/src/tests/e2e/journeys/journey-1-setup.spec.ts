@@ -356,7 +356,11 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
 // ===========================================
 
 // Test metadata for CI/CD integration
-test.meta = {
+const testWithMeta = test as typeof test & {
+  meta?: Record<string, string>;
+};
+
+testWithMeta.meta = {
   phase: "green",
   suite: "TS-E2E-J1-001",
   type: "e2e",

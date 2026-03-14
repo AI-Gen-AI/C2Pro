@@ -19,7 +19,7 @@ import {
   ChevronDown,
   Edit2,
   Plus,
-  ExpandAll,
+  Expand,
 } from "lucide-react";
 
 interface WBSItem {
@@ -235,7 +235,7 @@ export default function WBSPage() {
             onClick={expandAll}
             data-testid="wbs-expand-all-button"
           >
-            <ExpandAll className="mr-2 h-4 w-4" />
+            <Expand className="mr-2 h-4 w-4" />
             Expand All
           </Button>
           <Button>
