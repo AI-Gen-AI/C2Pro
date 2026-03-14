@@ -193,6 +193,34 @@ class LLMResultCache:
             raw_data=data.get("raw_data", {}),
         )
 
+    async def is_cached_none(self, rule_id: str, clause_id: str, clause_text: str) -> bool:
+        """Return True if the key exists in the cache and was stored as a 'no finding' (None) result."""
+        key = self._generate_key(rule_id, clause_id, clause_text)
+
+        # Try Redis first
+        if self._redis_client:
+            try:
+                cached = self._redis_client.get(key)
+                if cached:
+                    data = json.loads(cached)
+                    return bool(data.get("is_none", False))
+            except Exception as e:
+                logger.warning("llm_cache_is_none_redis_error", error=str(e))
+
+        # Fall back to memory cache
+        try:
+            import time
+            if key in self._memory_cache:
+                timestamp, data = self._memory_cache[key]
+                if time.time() - timestamp < self.ttl:
+                    return bool(data.get("is_none", False))
+                else:
+                    del self._memory_cache[key]
+        except Exception as e:
+            logger.warning("llm_cache_is_none_memory_error", error=str(e))
+
+        return False
+
     def clear(self):
         """Clear all cached results."""
         self._memory_cache.clear()
@@ -460,8 +488,7 @@ class CoherenceEngineV2:
 
     async def _is_cached_none(self, rule_id: str, clause_id: str, clause_text: str) -> bool:
         """Check if we have a cached 'no finding' result."""
-        # This is handled by the cache returning a special marker
-        return False  # Will be handled by cache implementation
+        return await self._llm_cache.is_cached_none(rule_id, clause_id, clause_text)
 
     def _finding_to_alert(self, rule: Rule, finding: Finding) -> Alert:
         """Convert a Finding to an Alert."""
