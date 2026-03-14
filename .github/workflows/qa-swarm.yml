@@ -1,0 +1,214 @@
+name: QA Swarm — Autonomous Test Generation
+
+# Runs the multi-agent QA swarm to autonomously generate, review, and
+# propose missing tests for the C2Pro codebase.
+#
+# Agent pipeline: ContextAnalyzerAgent → TestGenerationAgent → QAReviewerAgent
+#
+# Modes:
+#   1. Schedule (weekly):  Scans the full unit test suite's coverage report and
+#      generates test files for all P0/P1 coverage gaps.
+#   2. Pull Request:       Reads the PR diff and generates tests only for Python
+#      source files that were added or modified in the PR.
+#   3. Manual (dispatch):  Target a specific source file via workflow_dispatch.
+
+on:
+  schedule:
+    # Every Monday at 02:00 UTC
+    - cron: '0 2 * * 1'
+
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize]
+    paths:
+      # Only run when Python backend source files change
+      - 'apps/api/src/**/*.py'
+
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: 'Source file to generate tests for (repo-relative path)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run: print generated tests to log without writing files'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write        # Create branches and commit generated test files
+  pull-requests: write   # Open draft PRs with generated tests
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Job 1: Generate coverage report
+  # Runs the backend unit test suite and exports coverage.xml for downstream
+  # consumption by the QA swarm.  The swarm consumes — never recalculates — coverage.
+  # ───────────────────────────────────────────────────────────────────────────
+  generate-coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history needed for PR diff computation
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libmagic1
+
+      - name: Install Python dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install python-magic
+
+      - name: Run unit tests with coverage
+        working-directory: apps/api
+        env:
+          ENVIRONMENT: test
+          DEBUG: "true"
+          JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+          ANTHROPIC_API_KEY: sk-ant-test-mock-key
+          REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+        run: |
+          python -m pytest tests/unit/ tests/modules/ \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing:skip-covered \
+            -q --tb=no \
+            --ignore=tests/modules/ingestion/adapters/test_i2_ocr_table_parsing.py \
+            || true   # Do not fail this job on test failures — coverage is what matters
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: apps/api/coverage.xml
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Job 2: QA Swarm execution
+  # ───────────────────────────────────────────────────────────────────────────
+  qa-swarm:
+    name: QA Swarm — Generate Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: generate-coverage
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install agent dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/agents/requirements.txt
+          pip install -r scripts/agents/qa_swarm/requirements.txt
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-artifacts
+
+      # ── PR mode: process files changed in the PR ────────────────────
+      - name: Run QA Swarm (PR mode)
+        if: github.event_name == 'pull_request'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m scripts.agents.qa_swarm.qa_swarm_orchestrator \
+            --repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --base-sha "${{ github.event.pull_request.base.sha }}" \
+            --head-sha "${{ github.event.pull_request.head.sha }}" \
+            --coverage-xml coverage-artifacts/coverage.xml
+
+      # ── Scheduled / dispatch with explicit target ───────────────────
+      - name: Run QA Swarm (target file)
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          inputs.target_file != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          python -m scripts.agents.qa_swarm.qa_swarm_orchestrator \
+            --target-file "${{ inputs.target_file }}" \
+            --coverage-xml coverage-artifacts/coverage.xml \
+            --repo "${{ github.repository }}" \
+            $DRY_RUN_FLAG
+
+      # ── Scheduled run: P0 gap files ────────────────────────────────
+      - name: Run QA Swarm (scheduled — P0 gap files)
+        if: github.event_name == 'schedule'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Process the five P0 coverage gap files identified in the audit report.
+          # The --dry-run flag is intentionally NOT set here so that test files
+          # are committed and draft PRs are opened automatically.
+          P0_FILES=(
+            "apps/api/src/analysis/adapters/graph/workflow.py"
+            "apps/api/src/coherence/llm_integration.py"
+            "apps/api/src/bulk_operations/store.py"
+            "apps/api/src/modules/ingestion/adapters/ocr/tesseract_adapter.py"
+            "apps/api/src/modules/ingestion/adapters/ocr/google_vision_adapter.py"
+          )
+          HEAD_SHA=$(git rev-parse HEAD)
+          for FILE in "${P0_FILES[@]}"; do
+            echo "─── Processing: $FILE ───"
+            python -m scripts.agents.qa_swarm.qa_swarm_orchestrator \
+              --target-file "$FILE" \
+              --coverage-xml coverage-artifacts/coverage.xml \
+              --repo "${{ github.repository }}" \
+              --base-sha "$HEAD_SHA" \
+              || echo "WARNING: swarm failed for $FILE (continuing)"
+          done
+
+      - name: Upload QA Swarm logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-swarm-logs-${{ github.run_id }}
+          path: |
+            apps/api/tests/**/*_swarm.py
+          retention-days: 14
+          if-no-files-found: ignore
