@@ -1,0 +1,176 @@
+name: AI Agent Swarm
+
+# Orchestration workflow that triggers the multi-agent swarm based on CI events.
+#
+# Agent routing:
+#   pull_request (opened/synchronize/reopened) → Code Auditor Agent
+#   workflow_run (Tests, failure)               → Auto-Fixer Agent
+#   workflow_run (Tests, success on main)       → Deployment Orchestrator Agent
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent to run manually'
+        required: true
+        type: choice
+        options:
+          - code-auditor
+          - auto-fixer
+          - deployment-orchestrator
+
+permissions:
+  contents: write        # Auto-Fixer needs to create branches and commits
+  pull-requests: write   # Code Auditor needs to post PR reviews
+  statuses: write        # Deployment Orchestrator needs to set commit statuses
+  issues: write          # For posting issue comments
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Code Auditor Agent
+  # Runs on every PR to audit architecture boundaries and security patterns
+  # that static linters cannot detect (cross-module ORM, missing tenant_id, etc.)
+  # ─────────────────────────────────────────────────────────────────────────
+  code-auditor:
+    name: Code Auditor Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.agent == 'code-auditor')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for diff computation
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install agent dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/agents/requirements.txt
+
+      - name: Run Code Auditor Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/agents/code_auditor_agent.py \
+            --repo "$REPO" \
+            --pr-number "$PR_NUMBER" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Auto-Fixer Agent
+  # Runs when the Tests workflow fails. Fetches logs, classifies the error,
+  # generates a targeted patch, and opens a draft PR with the fix.
+  # ─────────────────────────────────────────────────────────────────────────
+  auto-fixer:
+    name: Auto-Fixer Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') ||
+      (github.event_name == 'workflow_dispatch' && inputs.agent == 'auto-fixer')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install agent dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/agents/requirements.txt
+
+      - name: Run Auto-Fixer Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FAILED_RUN_ID: ${{ github.event.workflow_run.id }}
+          FAILED_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/agents/auto_fixer_agent.py \
+            --repo "$REPO" \
+            --run-id "${FAILED_RUN_ID:-}" \
+            --head-sha "${FAILED_RUN_SHA:-$GITHUB_SHA}"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3: Deployment Orchestrator Agent
+  # Runs when Tests succeed on main. Collects test + drift + eval signals,
+  # computes a risk score, and sets a deployment status on the commit.
+  # ─────────────────────────────────────────────────────────────────────────
+  deployment-orchestrator:
+    name: Deployment Orchestrator Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      ) ||
+      (github.event_name == 'workflow_dispatch' && inputs.agent == 'deployment-orchestrator')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install agent dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/agents/requirements.txt
+
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true  # Artifacts may not exist for all trigger paths
+        with:
+          path: ci-artifacts
+
+      - name: Run Deployment Orchestrator Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ARTIFACTS_DIR: ci-artifacts
+        run: |
+          python scripts/agents/deployment_orchestrator_agent.py \
+            --repo "$REPO" \
+            --commit-sha "$COMMIT_SHA" \
+            --artifacts-dir "$ARTIFACTS_DIR"

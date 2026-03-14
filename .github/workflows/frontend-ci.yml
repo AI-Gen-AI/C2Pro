@@ -13,10 +13,15 @@ on:
       - ".github/workflows/frontend-ci.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  quality-gates:
-    name: Frontend Quality Gates
+  # Typecheck and lint run in parallel — they are independent static checks
+  typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/web
@@ -44,8 +49,65 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
       - name: Lint
         run: pnpm lint
+
+  tests:
+    name: Tests + Drift Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [typecheck, lint]
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
 
       - name: Unit and integration tests
         run: pnpm test
