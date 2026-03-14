@@ -13,10 +13,14 @@ on:
       - ".github/workflows/frontend-e2e.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   playwright-e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/web
