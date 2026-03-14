@@ -14,7 +14,7 @@ jobs:
   s5-core-ai-gates:
     name: S5 Core AI Gates (I10-I12 + Security)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -58,6 +58,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       matrix:
@@ -84,7 +85,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install python-magic  # File MIME type detection (Linux)
+          pip install python-magic
 
       - name: Run unit tests
         working-directory: apps/api
@@ -103,6 +104,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
@@ -143,7 +145,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install python-magic  # File MIME type detection (Linux)
+          pip install python-magic
 
       - name: Bootstrap test infrastructure
         run: |
@@ -167,206 +169,14 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
 
-  e2e-security-tests:
-    name: E2E Security Tests (TS-E2E-SEC-TNT-001)
-    runs-on: ubuntu-latest
-
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
-      ENVIRONMENT: test
-      DEBUG: "true"
-      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
-      JWT_ALGORITHM: HS256
-      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-      SUPABASE_URL: https://test.supabase.co
-      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
-      SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
-      ANTHROPIC_API_KEY: sk-ant-test-mock-key
-      REDIS_URL: redis://localhost:6379/0
-
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: apps/api/requirements.txt
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
-
-      - name: Install dependencies
-        working-directory: apps/api
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
-          pip install python-magic  # File MIME type detection (Linux)
-
-      - name: Bootstrap test infrastructure
-        run: |
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
-
-      - name: Run E2E Security Tests
-        working-directory: apps/api
-        run: |
-          python -m pytest tests/e2e/security/test_multi_tenant_isolation.py \
-            -v \
-            -m "e2e and security" \
-            --tb=short \
-            --cov=src/core/auth \
-            --cov=src/core/middleware \
-            --cov=src/core/tenants \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=0 \
-            --junit-xml=e2e-security-test-results.xml
-
-      - name: Upload E2E test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-security-test-results
-          path: apps/api/e2e-security-test-results.xml
-          retention-days: 14
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-security-coverage
-          path: apps/api/coverage.xml
-          retention-days: 14
-
-      - name: Database logs on failure
-        if: failure()
-        run: |
-          echo "=== Docker Compose Services ==="
-          docker compose -f docker-compose.test.yml ps || true
-          echo "=== All Containers ==="
-          docker ps -a || true
-          echo "=== PostgreSQL Logs ==="
-          docker compose -f docker-compose.test.yml logs postgres-test || true
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f docker-compose.test.yml down -v
-
-  i13-real-e2e:
-    name: S6 I13 Real E2E (Blocking)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
-      ENVIRONMENT: test
-      DEBUG: "true"
-      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
-      JWT_ALGORITHM: HS256
-      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-      SUPABASE_URL: https://test.supabase.co
-      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
-      SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service
-      ANTHROPIC_API_KEY: sk-ant-test-mock-key
-      REDIS_URL: redis://localhost:6379/0
-
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: apps/api/requirements.txt
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
-
-      - name: Install dependencies
-        working-directory: apps/api
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install python-magic
-
-      - name: Infra preflight
-        run: |
-          mkdir -p apps/api/ci-artifacts
-          python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db | tee apps/api/ci-artifacts/i13-infra-preflight.log
-
-      - name: Run I13 real E2E suite
-        working-directory: apps/api
-        run: |
-          python -m pytest \
-            tests/e2e/flows/test_i13_decision_intelligence_route_contract.py \
-            tests/e2e/flows/test_i13_decision_intelligence_real_e2e.py \
-            -v \
-            --tb=short \
-            --junit-xml=i13-real-e2e-results.xml
-
-      - name: Collect infra diagnostics on failure
-        if: failure()
-        run: |
-          mkdir -p apps/api/ci-artifacts
-          echo "=== Docker Compose Services ===" > apps/api/ci-artifacts/i13-infra-diagnostics.log
-          docker compose -f docker-compose.test.yml ps >> apps/api/ci-artifacts/i13-infra-diagnostics.log || true
-          echo "=== All Containers ===" >> apps/api/ci-artifacts/i13-infra-diagnostics.log
-          docker ps -a >> apps/api/ci-artifacts/i13-infra-diagnostics.log || true
-          echo "=== PostgreSQL Logs ===" >> apps/api/ci-artifacts/i13-infra-diagnostics.log
-          docker compose -f docker-compose.test.yml logs postgres-test >> apps/api/ci-artifacts/i13-infra-diagnostics.log || true
-          echo "=== Redis Logs ===" >> apps/api/ci-artifacts/i13-infra-diagnostics.log
-          docker compose -f docker-compose.test.yml logs redis-test >> apps/api/ci-artifacts/i13-infra-diagnostics.log || true
-
-      - name: Upload I13 junit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: i13-real-e2e-junit
-          path: apps/api/i13-real-e2e-results.xml
-          retention-days: 14
-
-      - name: Upload I13 infra diagnostics
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: i13-real-e2e-infra-diagnostics
-          path: apps/api/ci-artifacts/
-          retention-days: 7
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f docker-compose.test.yml down -v
+  # E2E security and I13 real E2E are owned by their dedicated workflows.
+  # tests.yml references their results via the test-summary job.
+  # This avoids running the same heavy infra setup twice per push/PR.
 
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [s5-core-ai-gates, unit-tests, integration-tests, e2e-security-tests, i13-real-e2e]
+    needs: [s5-core-ai-gates, unit-tests, integration-tests]
     if: always()
 
     steps:
