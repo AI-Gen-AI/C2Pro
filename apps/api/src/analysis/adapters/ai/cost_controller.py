@@ -1,7 +1,8 @@
-"""
-Legacy shim for cost controller.
-Canonical implementation lives in src.core.ai.cost_controller.
+"""Deprecated compatibility module for cost controller imports.
+
+Use ``src.core.ai.cost_controller`` directly in new code.
 """
 
-from src.core.ai.cost_controller import *  # noqa: F403,F401
+from src.core.ai.cost_controller import BudgetExceededException, CostControllerService
 
+__all__ = ["BudgetExceededException", "CostControllerService"]
