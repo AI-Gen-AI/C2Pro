@@ -98,7 +98,7 @@ def _make_ocr_data(
 class TestTesseractAdapterInit:
     """Unit tests for TesseractOCRAdapter.__init__ attribute assignment."""
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_default_confidence_threshold_is_zero(self):
         """When no confidence_threshold is given, it defaults to 0."""
         mock_pt = MagicMock()
@@ -125,7 +125,7 @@ class TestTesseractAdapterInit:
             adapter.confidence_threshold = 0  # mirrors __init__ default
             assert adapter.confidence_threshold == 0
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_custom_confidence_threshold_stored(self):
         """Adapter stores a custom confidence_threshold supplied at construction."""
         from src.modules.ingestion.adapters.ocr.tesseract_adapter import TesseractOCRAdapter
@@ -134,7 +134,7 @@ class TestTesseractAdapterInit:
         adapter.confidence_threshold = 60
         assert adapter.confidence_threshold == 60
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_custom_language_stored(self):
         """Adapter stores the language code passed to __init__."""
         from src.modules.ingestion.adapters.ocr.tesseract_adapter import TesseractOCRAdapter
@@ -143,7 +143,7 @@ class TestTesseractAdapterInit:
         adapter.language = "fra"
         assert adapter.language == "fra"
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_default_language_is_eng(self):
         """When no language is given, the default is 'eng'."""
         from src.modules.ingestion.adapters.ocr.tesseract_adapter import TesseractOCRAdapter
@@ -152,7 +152,7 @@ class TestTesseractAdapterInit:
         adapter.language = "eng"
         assert adapter.language == "eng"
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_dpi_stored_correctly(self):
         """Adapter stores the dpi value passed to __init__."""
         from src.modules.ingestion.adapters.ocr.tesseract_adapter import TesseractOCRAdapter
@@ -161,7 +161,7 @@ class TestTesseractAdapterInit:
         adapter.dpi = 150
         assert adapter.dpi == 150
 
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     def test_import_error_raises_ingestion_error(self):
         """If pytesseract import fails in __init__, IngestionError is raised."""
         import sys
@@ -187,7 +187,7 @@ class TestProcessPdfPage:
     """Unit tests for TesseractOCRAdapter.process_pdf_page."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_returns_extracted_text_from_ocr_data(self, tesseract_adapter, mock_convert):
         """process_pdf_page joins non-empty words into the result 'text' field."""
         image = _make_mock_image()
@@ -206,7 +206,7 @@ class TestProcessPdfPage:
         assert result["text"] == "Hello World"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_word_entries_are_skipped(self, tesseract_adapter, mock_convert):
         """Words that are empty strings (after strip) are excluded from output."""
         image = _make_mock_image()
@@ -225,7 +225,7 @@ class TestProcessPdfPage:
         assert result["text"] == "Hello World"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_whitespace_only_words_are_skipped(self, tesseract_adapter, mock_convert):
         """Words consisting only of whitespace are stripped then excluded."""
         image = _make_mock_image()
@@ -244,7 +244,7 @@ class TestProcessPdfPage:
         assert result["text"] == "Real"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_words_below_confidence_threshold_are_skipped(self, tesseract_adapter, mock_convert):
         """Words whose conf < confidence_threshold are excluded from the result."""
         tesseract_adapter.confidence_threshold = 70
@@ -265,7 +265,7 @@ class TestProcessPdfPage:
         assert len(result["bboxes"]) == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_bboxes_normalised_to_zero_one_range(self, tesseract_adapter, mock_convert):
         """Bounding boxes are normalised by dividing pixel coords by image dimensions."""
         image = _make_mock_image(width=1000, height=800)
@@ -288,7 +288,7 @@ class TestProcessPdfPage:
         assert bbox[3] == pytest.approx(240 / 800)    # y2 = (160+80)/800
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_bbox_fifth_element_is_confidence_normalised(self, tesseract_adapter, mock_convert):
         """The fifth element of each bbox is conf / 100.0."""
         image = _make_mock_image()
@@ -307,7 +307,7 @@ class TestProcessPdfPage:
         assert result["bboxes"][0][4] == pytest.approx(0.75)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_overall_confidence_is_mean_of_word_confidences(
         self, tesseract_adapter, mock_convert
     ):
@@ -329,7 +329,7 @@ class TestProcessPdfPage:
         assert result["confidence"] == pytest.approx(expected_mean)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_overall_confidence_is_zero_when_no_valid_words(
         self, tesseract_adapter, mock_convert
     ):
@@ -350,7 +350,7 @@ class TestProcessPdfPage:
         assert result["confidence"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_empty_ocr_data_yields_empty_text(self, tesseract_adapter, mock_convert):
         """An OCR data dict with zero entries produces an empty text string."""
         image = _make_mock_image()
@@ -370,7 +370,7 @@ class TestProcessPdfPage:
         assert result["bboxes"] == []
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_provider_field_is_tesseractocr(self, tesseract_adapter, mock_convert):
         """The 'provider' field in OCRResult is always 'TesseractOCR'."""
         image = _make_mock_image()
@@ -389,7 +389,7 @@ class TestProcessPdfPage:
         assert result["provider"] == "TesseractOCR"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_no_images_from_converter_raises_ingestion_error(
         self, tesseract_adapter, mock_convert
     ):
@@ -400,7 +400,7 @@ class TestProcessPdfPage:
             await tesseract_adapter.process_pdf_page(b"fake-pdf-bytes")
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_converter_called_with_correct_dpi_and_format(
         self, tesseract_adapter, mock_convert
     ):
@@ -416,7 +416,7 @@ class TestProcessPdfPage:
         mock_convert.assert_called_once_with(b"pdf-data", dpi=300, fmt="png")
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_image_to_data_called_with_correct_language(
         self, tesseract_adapter, mock_convert
     ):
@@ -434,7 +434,7 @@ class TestProcessPdfPage:
         assert call_kwargs.kwargs.get("lang") == "spa"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_unexpected_exception_is_wrapped_as_ingestion_error(
         self, tesseract_adapter, mock_convert
     ):
@@ -445,7 +445,7 @@ class TestProcessPdfPage:
             await tesseract_adapter.process_pdf_page(b"fake-pdf-bytes")
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_first_image_is_used_when_multiple_returned(
         self, tesseract_adapter, mock_convert
     ):
@@ -470,7 +470,7 @@ class TestProcessPdfPage:
         assert bbox[1] == pytest.approx(60 / 600)
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
+    @pytest.mark.red_phase
     async def test_single_word_confidence_equals_that_words_confidence(
         self, tesseract_adapter, mock_convert
     ):
