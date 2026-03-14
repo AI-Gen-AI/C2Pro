@@ -1,0 +1,23 @@
+# QA Swarm — additional runtime dependencies
+#
+# Note: anthropic and PyGithub are already present in apps/api/requirements.txt
+# and scripts/agents/requirements.txt respectively.  This file specifies the
+# additional packages needed specifically by the QA swarm runner environment.
+#
+# Install with:
+#   pip install -r scripts/agents/qa_swarm/requirements.txt
+
+# LangGraph orchestration (pinned to match apps/api/requirements.txt)
+langgraph>=1.0.10
+
+# LangChain Core (message types used in state)
+langchain-core>=0.2.0
+
+# Anthropic Python SDK
+anthropic>=0.18.1
+
+# PyGitHub (GitHub API integration)
+PyGithub>=2.1.1
+
+# HTTP client (used by base.py)
+requests>=2.31.0
