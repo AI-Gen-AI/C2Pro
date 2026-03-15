@@ -11,23 +11,38 @@ from pathlib import Path
 from uuid import UUID
 
 from src.core.tasks.celery_app import celery_app
-from src.services.ingestion.pdf_parser import PdfParserService
 
 logger = logging.getLogger(__name__)
 
 
 async def _process(document_id: UUID) -> dict:
-    """Fetch, parse, and update a document using real repositories."""
-    from src.core.database import get_raw_session
+    """Fetch, parse, and update a document using real repositories and services."""
+    from src.core.database import init_db, get_raw_session
+
+    # Initialize database connection for Celery worker context
+    await init_db()
     from src.documents.adapters.persistence.sqlalchemy_document_repository import (
         SqlAlchemyDocumentRepository,
     )
     from src.documents.adapters.storage.local_file_storage_service import (
         LocalFileStorageService,
     )
+    from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+    from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+    from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
+    from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
+    from src.documents.adapters.rag.legacy_rag_ingestion_service import LegacyRagIngestionService
+    from src.documents.adapters.extraction.legacy_entity_extraction_service import LegacyEntityExtractionService
     from src.documents.domain.models import DocumentStatus
 
     storage = LocalFileStorageService()
+    file_parser = CompositeFileParser(
+        bc3_parser=BC3FileParser(),
+        excel_parser=ExcelFileParser(),
+        pdf_parser=PDFFileParser(),
+    )
+    entity_extraction = LegacyEntityExtractionService()
+    rag_ingestion = LegacyRagIngestionService()
 
     async with get_raw_session() as session:
         repo = SqlAlchemyDocumentRepository(session=session)
@@ -38,35 +53,46 @@ async def _process(document_id: UUID) -> dict:
             logger.error("Document with ID '%s' not found. Cannot process.", document_id)
             return {"status": "error", "message": "Document not found"}
 
-        # 2. Mark as PARSING
+        # 2. Get tenant_id for context
+        tenant_id = await repo.get_project_tenant_id(document.project_id)
+        if not tenant_id:
+            logger.error("tenant_id_not_found_for_project: project_id=%s", document.project_id)
+            return {"status": "error", "message": "Project not found"}
+
+        # 3. Mark as PARSING
         await repo.update_status(document_id, DocumentStatus.PARSING)
         await session.commit()
 
         try:
-            # 3. Download the file from storage
+            # 4. Download the file from storage
             file_name = f"{document.id}{Path(document.filename).suffix}"
             file_path = await storage.download_file(file_name)
-            file_content = file_path.read_bytes()
 
-            # 4. Parse based on file type
-            suffix = Path(document.filename).suffix.lower()
-            if suffix == ".pdf":
-                parser = PdfParserService()
-                parsed_data = parser.extract_text(file_content, filename=document.filename)
-                processing_details = {
-                    "pages_processed": parsed_data["page_count"],
-                    "tables_found": len(parsed_data.get("tables_data", [])),
-                    "chars_extracted": len(parsed_data["full_text"]),
-                }
-                logger.info("PDF parsing successful for document %s.", document_id)
-            else:
-                logger.warning("No parser available for file type '%s'.", suffix)
-                processing_details = {"error": "Unsupported file type"}
+            # 5. Parse the document file using the composite parser
+            parsed_payload = await file_parser.parse_document_file(document, file_path)
+            logger.info("Document parsing successful for document %s.", document_id)
 
-            # 5. Update status to PARSED
+            # 6. Extract entities (Stakeholders, WBS, BOM)
+            extraction_summary = await entity_extraction.extract_entities_from_document(
+                document=document,
+                parsed_payload=parsed_payload,
+                tenant_id=tenant_id,
+            )
+
+            # 7. Ingest for RAG
+            await rag_ingestion.ingest_document_chunks(
+                document=document,
+                parsed_payload=parsed_payload,
+                tenant_id=tenant_id,
+            )
+
+            # 8. Update status to PARSED
             await repo.update_status(document_id, DocumentStatus.PARSED)
             await session.commit()
 
+            processing_details = {
+                "extraction_summary": extraction_summary,
+            }
             return {"status": "success", "document_id": str(document_id), "details": processing_details}
 
         except Exception as e:

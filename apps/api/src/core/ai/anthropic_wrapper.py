@@ -284,11 +284,11 @@ class AnthropicWrapper:
         if not request.bypass_anonymization:
             try:
                 full_prompt = f"{request.system_prompt or ''}{PROMPT_SEPARATOR}{request.prompt}"
-                anonymized_payload = self.anonymizer_service.anonymize(full_prompt)
-                
-                deanonymization_map = anonymized_payload.deanonymization_map
-                safe_full_prompt = anonymized_payload.text
-                
+                anonymized_result = self.anonymizer_service.anonymize_document(full_prompt)
+
+                deanonymization_map = anonymized_result.mapping
+                safe_full_prompt = anonymized_result.anonymized_text
+
                 safe_system_prompt, safe_prompt = safe_full_prompt.split(PROMPT_SEPARATOR, 1)
 
                 if deanonymization_map:

@@ -37,6 +37,8 @@ pymupdf==1.26.7  # PDF
 openpyxl==3.1.2   # Excel
 python-docx==1.1.0  # Word
 # pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
+pytesseract==0.3.10  # OCR for scanned PDFs
+Pillow>=10.0.0  # Image processing for OCR
 
 # Security
 PyJWT[crypto]>=2.8.0
