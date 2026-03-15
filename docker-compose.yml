@@ -14,10 +14,10 @@
 
 services:
   # ===========================================
-  # PostgreSQL (Local - simula Supabase)
+  # PostgreSQL (Local - simula Supabase) with pgvector
   # ===========================================
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: c2pro-postgres
     restart: unless-stopped
     ports:
@@ -144,6 +144,7 @@ services:
       - .env
     volumes:
       - ./apps/api/src:/app/src:ro
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,6 +157,40 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # ===========================================
+  # Celery Worker (Background Tasks)
+  # ===========================================
+  celery-worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: c2pro-celery-worker
+    restart: unless-stopped
+    command: celery -A src.core.tasks.celery_app.celery_app worker --loglevel=info
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/c2pro
+      - REDIS_URL=redis://redis:6379
+      - R2_ENDPOINT_URL=http://minio:9000
+      - R2_ACCESS_KEY_ID=minioadmin
+      - R2_SECRET_ACCESS_KEY=minioadmin
+      - R2_BUCKET_NAME=c2pro-documents
+    env_file:
+      - .env
+    volumes:
+      - ./apps/api/src:/app/src:ro
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
   # ===========================================
   # Frontend Web (Next.js) - Solo para preview
@@ -182,6 +217,8 @@ volumes:
   redis_data:
     driver: local
   minio_data:
+    driver: local
+  uploads_data:
     driver: local
 
 networks:

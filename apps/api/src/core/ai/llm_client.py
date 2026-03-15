@@ -307,16 +307,21 @@ class LLMClient:
         for attempt in range(self.max_retries + 1):
             try:
                 # Execute API call
-                raw_response = self.client.messages.create(
-                    model=request.model,
-                    max_tokens=request.max_tokens,
-                    temperature=request.temperature,
-                    top_p=request.top_p,
-                    top_k=request.top_k,
-                    stop_sequences=request.stop_sequences or [],
-                    system=request.system or "",
-                    messages=request.messages,
-                )
+                # Build API call kwargs, excluding None values for top_p and top_k
+                api_kwargs: dict[str, Any] = {
+                    "model": request.model,
+                    "max_tokens": request.max_tokens,
+                    "temperature": request.temperature,
+                    "stop_sequences": request.stop_sequences or [],
+                    "system": request.system or "",
+                    "messages": request.messages,
+                }
+                if request.top_p is not None:
+                    api_kwargs["top_p"] = request.top_p
+                if request.top_k is not None:
+                    api_kwargs["top_k"] = request.top_k
+
+                raw_response = self.client.messages.create(**api_kwargs)
 
                 # Success!
                 execution_time_ms = (time.perf_counter() - start_time) * 1000

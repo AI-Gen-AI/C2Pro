@@ -157,13 +157,22 @@ async def _insert_chunks(db_session: AsyncSession, rows: list[dict[str, Any]]) -
     if not rows:
         return
 
-    stmt = text(
-        """
-        INSERT INTO document_chunks (id, document_id, project_id, content, embedding, metadata)
-        VALUES (:id, :document_id, :project_id, :content, :embedding::vector, :metadata::jsonb)
-        """
-    )
-    await db_session.execute(stmt, rows)
+    # Use raw SQL with CAST syntax instead of :: to avoid asyncpg parser issues
+    for row in rows:
+        stmt = text(
+            """
+            INSERT INTO document_chunks (id, document_id, project_id, content, embedding, metadata)
+            VALUES (
+                CAST(:id AS uuid),
+                CAST(:document_id AS uuid),
+                CAST(:project_id AS uuid),
+                :content,
+                CAST(:embedding AS vector),
+                CAST(:metadata AS jsonb)
+            )
+            """
+        )
+        await db_session.execute(stmt, row)
     await db_session.commit()
     logger.info("rag_chunks_inserted", count=len(rows))
 
@@ -175,10 +184,12 @@ async def _retrieve_chunks(
     embedding: list[float],
     top_k: int,
 ) -> list[RetrievedChunk]:
+    # The match_documents function already returns content, metadata, and distance
+    # Use CAST syntax to avoid asyncpg parser issues with ::
     stmt = text(
         """
-        SELECT content, metadata, (embedding <=> :embedding::vector) AS distance
-        FROM match_documents(:project_id, :embedding::vector, :match_count)
+        SELECT content, metadata, distance
+        FROM match_documents(CAST(:project_id AS uuid), CAST(:embedding AS vector), :match_count)
         """
     )
     result = await db_session.execute(

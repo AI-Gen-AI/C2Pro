@@ -49,9 +49,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Install runtime dependencies only (no build tools)
+# Includes Tesseract OCR for scanned PDF text extraction
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
+    tesseract-ocr \
+    tesseract-ocr-spa \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -67,6 +70,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY --chown=appuser:appgroup . .
+
+# Create uploads directory with proper ownership for non-root user
+RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
 
 # Remove unnecessary files from final image
 RUN rm -rf \
