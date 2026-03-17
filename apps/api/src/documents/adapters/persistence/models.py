@@ -59,7 +59,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
 
     # Classification
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentType, name="document_type", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         index=True,
     )
@@ -76,7 +76,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
 
     # Processing
     upload_status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentStatus, name="document_status", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         default=DocumentStatus.UPLOADED,
         index=True,
     )

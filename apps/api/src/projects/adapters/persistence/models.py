@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Enum, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,9 +28,26 @@ class ProjectORM(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     code: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
 
-    # Project classification
-    project_type: Mapped[str] = mapped_column(String(50), nullable=False, default="construction")
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft", index=True)
+    # Project classification - using PostgreSQL enum types (native values)
+    project_type: Mapped[str] = mapped_column(
+        Enum(
+            "construction", "engineering", "industrial", "infrastructure", "other",
+            name="projecttype",
+            create_type=False,
+        ),
+        nullable=False,
+        default="construction",
+    )
+    status: Mapped[str] = mapped_column(
+        Enum(
+            "draft", "active", "completed", "archived",
+            name="projectstatus",
+            create_type=False,
+        ),
+        nullable=False,
+        default="draft",
+        index=True,
+    )
 
     # Financial
     estimated_budget: Mapped[float | None] = mapped_column(Float, nullable=True)

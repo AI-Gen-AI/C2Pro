@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.documents.domain.models import DocumentStatus, DocumentType
 
@@ -56,6 +56,8 @@ class DocumentPollingStatus(str, Enum):
 
 class DocumentResponse(BaseModel):
     """Base response DTO for documents."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     project_id: UUID
     document_type: DocumentType

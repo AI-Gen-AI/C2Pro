@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from src.analysis.adapters.graph.orchestrator_adapter import WorkflowOrchestrator
 from src.analysis.application.analyze_document_use_case import AnalyzeDocumentUseCase
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User
 
 router = APIRouter(
     prefix="",
@@ -46,9 +48,10 @@ class AnalyzeResponse(BaseModel):
 async def analyze_document(
     payload: AnalyzeRequest,
     request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
     use_case: AnalyzeDocumentUseCase = Depends(get_analyze_use_case),
 ) -> AnalyzeResponse:
-    tenant_id = str(getattr(request.state, "tenant_id", "")) or None
+    tenant_id = str(current_user.tenant_id) if current_user.tenant_id else None
     result = await use_case.execute(
         document_text=payload.document_text,
         project_id=payload.project_id,

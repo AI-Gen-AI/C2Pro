@@ -18,6 +18,8 @@ from pydantic import BaseModel, Field
 from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.core.database import get_session_with_tenant
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -150,37 +152,62 @@ async def create_project(
     request: ProjectCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ProjectResponse:
-    """Create a new project for the current tenant."""
+    """Create a new project for the current tenant (persisted to database)."""
+    from sqlalchemy import select
+
     normalized_code = request.code.strip() if request.code else None
-    if normalized_code is not None:
-        for existing in _fake_projects.values():
-            if existing.get("tenant_id") != current_user.tenant_id:
-                continue
-            existing_code = (existing.get("code") or "").strip().lower()
-            if existing_code and existing_code == normalized_code.lower():
+
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        # Check for duplicate code in database
+        if normalized_code is not None:
+            existing_query = select(ProjectORM).where(
+                ProjectORM.tenant_id == current_user.tenant_id,
+                ProjectORM.code == normalized_code,
+            )
+            result = await session.execute(existing_query)
+            if result.scalar_one_or_none():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Project code already exists",
                 )
 
-    project_id = uuid4()
-    project_data = {
-        "id": project_id,
-        "tenant_id": current_user.tenant_id,
-        "name": request.name,
-        "code": normalized_code,
-        "description": request.description,
-        "project_type": request.project_type,
-        "status": "draft",
-        "location": request.location,
-        "client_name": request.client_name,
-        "budget_planned": request.budget_planned,
-        "estimated_budget": request.estimated_budget,
-        "currency": request.currency,
-        "version": 1,
-    }
-    _fake_projects[project_id] = project_data
-    return _project_to_response(project_data)
+        # Create project in database
+        project_id = uuid4()
+
+        project_orm = ProjectORM(
+            id=project_id,
+            tenant_id=current_user.tenant_id,
+            name=request.name,
+            code=normalized_code,
+            description=request.description,
+            project_type=request.project_type,  # Pass as string, ORM handles conversion
+            status="draft",
+            estimated_budget=request.estimated_budget,
+            currency=request.currency,
+        )
+        session.add(project_orm)
+        await session.commit()
+        await session.refresh(project_orm)
+
+        # Also store in memory for backwards compatibility with other endpoints
+        project_data = {
+            "id": project_id,
+            "tenant_id": current_user.tenant_id,
+            "name": request.name,
+            "code": normalized_code,
+            "description": request.description,
+            "project_type": request.project_type,
+            "status": "draft",
+            "location": request.location,
+            "client_name": request.client_name,
+            "budget_planned": request.budget_planned,
+            "estimated_budget": request.estimated_budget,
+            "currency": request.currency,
+            "version": 1,
+        }
+        _fake_projects[project_id] = project_data
+
+        return _project_to_response(project_data)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -194,11 +221,41 @@ async def get_project(
 
     Returns 404 if project doesn't exist or belongs to another tenant.
     """
+    from sqlalchemy import select
+
+    # First check in-memory storage
     project = _fake_projects.get(project_id)
 
-    # Return 404 if not found OR if it belongs to another tenant
-    # (important: don't leak information about existence)
+    # If not in memory, check database
     if not project or project["tenant_id"] != current_user.tenant_id:
+        async with get_session_with_tenant(current_user.tenant_id) as session:
+            query = select(ProjectORM).where(
+                ProjectORM.id == project_id,
+                ProjectORM.tenant_id == current_user.tenant_id,
+            )
+            result = await session.execute(query)
+            project_orm = result.scalar_one_or_none()
+
+            if project_orm:
+                project = {
+                    "id": project_orm.id,
+                    "tenant_id": project_orm.tenant_id,
+                    "name": project_orm.name,
+                    "code": project_orm.code,
+                    "description": project_orm.description,
+                    "project_type": project_orm.project_type,
+                    "status": project_orm.status,
+                    "location": None,
+                    "client_name": None,
+                    "budget_planned": None,
+                    "estimated_budget": project_orm.estimated_budget,
+                    "currency": project_orm.currency,
+                    "version": 1,
+                }
+                # Cache in memory
+                _fake_projects[project_id] = project
+
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
@@ -409,71 +466,9 @@ async def update_project_status(
     return _project_to_response(project)
 
 
-# ===========================================
-# DOCUMENT UPLOAD ENDPOINT (for TS-E2E-FLW-DOC-001)
-# GREEN PHASE: Minimal "Fake It" implementation
-# ===========================================
-
-
-@router.post(
-    "/{project_id}/documents",
-    status_code=202,
-    summary="Upload Document",
-    description="""
-    Upload a document for processing.
-
-    **For TS-E2E-FLW-DOC-001 E2E tests.**
-
-    Workflow:
-    1. Document is stored
-    2. Parsing begins (async)
-    3. Clause extraction triggered
-    4. Entity extraction triggered
-    5. Analysis runs
-    6. Coherence score calculated
-
-    Returns 202 Accepted for async processing.
-    """,
-)
-async def upload_document(
-    project_id: UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
-    """
-    Upload document for processing.
-
-    GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        current_user: Authenticated user
-
-    Returns:
-        Acceptance message for async processing
-
-    Raises:
-        404: Project not found or belongs to another tenant
-    """
-    # Check if project exists and belongs to tenant
-    project = _fake_projects.get(project_id)
-
-    if not project or project["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
-
-    # GREEN PHASE: Just accept the upload
-    # In real implementation, this would:
-    # - Store file in R2
-    # - Create document record in DB
-    # - Queue processing job
-
-    return {
-        "status": "accepted",
-        "message": "Document queued for processing",
-        "project_id": str(project_id),
-    }
+# NOTE: Document upload endpoint moved to src/documents/adapters/http/router.py
+# The real implementation handles file storage, database record creation,
+# and queues processing jobs via Celery.
 
 
 # ===========================================

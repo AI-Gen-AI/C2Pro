@@ -152,8 +152,13 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["retry_count"] += 1
     else:
         state["critique_notes"] = ""
+    # In mock mode, skip HITL to allow full pipeline testing
+    import os
+    skip_hitl_in_mock = os.getenv("C2PRO_AI_MOCK", "0") == "1"
+
     state["human_approval_required"] = (
-        state["confidence_score"] < 0.8 or (status == "RETRY" and state["retry_count"] >= 2)
+        not skip_hitl_in_mock and
+        (state["confidence_score"] < 0.8 or (status == "RETRY" and state["retry_count"] >= 2))
     )
     state["messages"].append(
         AIMessage(
