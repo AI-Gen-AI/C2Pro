@@ -15,7 +15,7 @@ class DocumentStatus(str, Enum):
     """Represents the status of a document during its lifecycle."""
     UPLOADED = "uploaded"
     QUEUED = "queued"
-    PARSING = "parsing"
+    PARSING = "processing"  # Database uses "processing"
     PARSED = "parsed"
     ERROR = "error"
 

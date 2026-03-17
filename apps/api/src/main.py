@@ -39,6 +39,10 @@ from src.bulk_operations.router import router as bulk_operations_router
 from src.core.routers.health import router as health_router
 from src.modules.hitl.adapters.http.router import router as hitl_router
 from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
+from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+
+# Import AI tools to trigger registration via @register_tool decorators
+import src.analysis.adapters.ai.tools  # noqa: F401
 
 logger = structlog.get_logger()
 
@@ -227,6 +231,7 @@ def create_application() -> FastAPI:
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
     app.include_router(wbs_router, prefix=api_v1_prefix)
+    app.include_router(analysis_router, prefix=api_v1_prefix)  # LangGraph orchestration
 
     try:
         app.include_router(_load_mcp_router(), prefix=api_v1_prefix)

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
-from src.core.security import CurrentTenantId, CurrentUserId
+from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
@@ -61,6 +61,7 @@ logger = structlog.get_logger()
 router = APIRouter(
     prefix="",
     tags=["Documents"],
+    dependencies=[Depends(security_scheme)],  # Required for Swagger UI authentication
     responses={
         401: {"description": "Unauthorized"},
         403: {"description": "Forbidden"},
@@ -218,7 +219,7 @@ async def upload_document_for_processing(
 
     from src.core.tasks.ingestion_tasks import process_document_async
 
-    task = process_document_async.delay(document_id=document.id)
+    task = process_document_async.delay(document_id=str(document.id))
     response_data = DocumentResponse.model_validate(document).model_dump()
     response_data["task_id"] = task.id
     return DocumentQueuedResponse(**response_data)

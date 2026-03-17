@@ -186,17 +186,27 @@ def _build_checkpointer():
     from src.config import settings
 
     if settings.database_url_async.startswith("sqlite"):
-        raise RuntimeError("Postgres checkpointer requires a PostgreSQL database URL.")
+        logger.warning("checkpointer_fallback", reason="SQLite not supported for postgres checkpointer")
+        from langgraph.checkpoint.memory import MemorySaver
+        return MemorySaver()
 
     try:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-    except ImportError:
-        from langgraph.checkpoint.postgres import AsyncPostgresSaver
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        except ImportError:
+            from langgraph.checkpoint.postgres import AsyncPostgresSaver
 
-    return AsyncPostgresSaver.from_conn_string(
-        settings.database_url_async,
-        table_name="ai_checkpoints",
-    )
+        return AsyncPostgresSaver.from_conn_string(
+            settings.database_url_async,
+            table_name="ai_checkpoints",
+        )
+    except ImportError:
+        logger.warning(
+            "checkpointer_fallback",
+            reason="langgraph-checkpoint-postgres not installed, using MemorySaver"
+        )
+        from langgraph.checkpoint.memory import MemorySaver
+        return MemorySaver()
 
 
 def _persist_graph_diagram(app) -> None:

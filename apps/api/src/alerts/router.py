@@ -1,12 +1,9 @@
 """
 C2Pro - Alerts HTTP Router
 
-Minimal implementation for TS-E2E-FLW-ALR-001 E2E tests.
-GREEN PHASE: "Fake It" pattern implementation.
-
 Endpoints:
 - POST /api/v1/alerts - Create alert
-- GET /api/v1/projects/{project_id}/alerts - List alerts
+- GET /api/v1/projects/{project_id}/alerts - List alerts (connected to real DB)
 - POST /api/v1/alerts/{alert_id}/review - Approve/Reject alert
 - POST /api/v1/alerts/bulk-review - Bulk approve/reject
 - POST /api/v1/alerts/{alert_id}/evidence - Attach evidence
@@ -23,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.core.database import get_session_with_tenant
 
 router = APIRouter(tags=["alerts"])
 
@@ -156,29 +154,49 @@ async def list_project_alerts(
     """
     List alerts for a project.
 
-    GREEN PHASE: Returns filtered alerts from fake storage.
+    Returns alerts from the database.
     """
-    # Filter alerts by project and tenant
-    alerts = [
-        alert for alert in _fake_alerts.values()
-        if alert["project_id"] == project_id
-        and alert["tenant_id"] == current_user.tenant_id
-    ]
+    from sqlalchemy import select
+    from src.analysis.adapters.persistence.models import Alert
 
-    # Apply filters
-    if status:
-        alerts = [a for a in alerts if a["status"] == status]
-    if category:
-        alerts = [a for a in alerts if a["category"] == category]
-    if severity:
-        alerts = [a for a in alerts if a["severity"] == severity]
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        # Build query
+        query = select(Alert).where(Alert.project_id == project_id)
 
-    # Sort by severity (critical > high > medium > low)
-    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    alerts.sort(key=lambda a: severity_order.get(a["severity"], 999))
+        # Apply filters
+        if status:
+            query = query.where(Alert.status == status)
+        if category:
+            query = query.where(Alert.category == category)
+        if severity:
+            query = query.where(Alert.severity == severity)
+
+        # Sort by severity (critical first) then by created_at
+        query = query.order_by(Alert.created_at.desc())
+
+        result = await session.execute(query)
+        db_alerts = result.scalars().all()
+
+    # Convert to response format
+    alerts = []
+    for alert in db_alerts:
+        alerts.append(AlertResponse(
+            id=alert.id,
+            project_id=alert.project_id,
+            tenant_id=current_user.tenant_id,  # Use current user's tenant
+            rule_code=alert.rule_id or "AI_EXTRACTED",
+            category=alert.category or "risk",
+            severity=alert.severity.value if hasattr(alert.severity, 'value') else str(alert.severity),
+            message=alert.title,
+            status=alert.status.value if hasattr(alert.status, 'value') else str(alert.status),
+            affected_entities=alert.affected_entities or {},
+            reviewed_by=alert.reviewed_by,
+            reviewed_at=alert.reviewed_at,
+            created_at=alert.created_at,
+        ))
 
     return AlertListResponse(
-        items=[AlertResponse(**a) for a in alerts],
+        items=alerts,
         total=len(alerts),
     )
 
