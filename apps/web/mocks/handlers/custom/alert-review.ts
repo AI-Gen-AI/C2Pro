@@ -16,37 +16,46 @@ function ensureState(alertId: string): ReviewState {
 }
 
 export const alertReviewHandlers = [
-  http.post("/api/v1/projects/:projectId/alerts/:alertId/approve", async ({ params, request }) => {
-    const alertId = String(params.alertId);
-    const current = ensureState(alertId);
-    if (current.status === "rejected") {
-      return HttpResponse.json(
-        { code: "ALERT_CONFLICT", detail: "Rejected alerts cannot be approved" },
-        { status: 409 },
-      );
-    }
+  http.post(
+    "/api/v1/projects/:projectId/alerts/:alertId/approve",
+    async ({ params, request }) => {
+      const alertId = String(params.alertId);
+      const current = ensureState(alertId);
+      if (current.status === "rejected") {
+        return HttpResponse.json(
+          {
+            code: "ALERT_CONFLICT",
+            detail: "Rejected alerts cannot be approved",
+          },
+          { status: 409 },
+        );
+      }
 
-    const payload = (await request.json()) as { approverId?: string };
-    reviewState.set(alertId, { status: "approved" });
-    return HttpResponse.json({
-      id: alertId,
-      status: "approved",
-      reviewedBy: payload.approverId ?? "unknown-reviewer",
-    });
-  }),
+      const payload = (await request.json()) as { approverId?: string };
+      reviewState.set(alertId, { status: "approved" });
+      return HttpResponse.json({
+        id: alertId,
+        status: "approved",
+        reviewedBy: payload.approverId ?? "unknown-reviewer",
+      });
+    },
+  ),
 
-  http.post("/api/v1/projects/:projectId/alerts/:alertId/reject", async ({ params, request }) => {
-    const alertId = String(params.alertId);
-    const payload = (await request.json()) as { reason?: string };
-    const reason = payload.reason ?? "Rejected";
-    reviewState.set(alertId, { status: "rejected", rejectionReason: reason });
+  http.post(
+    "/api/v1/projects/:projectId/alerts/:alertId/reject",
+    async ({ params, request }) => {
+      const alertId = String(params.alertId);
+      const payload = (await request.json()) as { reason?: string };
+      const reason = payload.reason ?? "Rejected";
+      reviewState.set(alertId, { status: "rejected", rejectionReason: reason });
 
-    return HttpResponse.json({
-      id: alertId,
-      status: "rejected",
-      rejectionReason: reason,
-    });
-  }),
+      return HttpResponse.json({
+        id: alertId,
+        status: "rejected",
+        rejectionReason: reason,
+      });
+    },
+  ),
 
   http.post("/api/v1/projects/:projectId/alerts", async ({ request }) => {
     const payload = (await request.json()) as {
@@ -104,33 +113,30 @@ export const alertReviewHandlers = [
     });
   }),
 
-  http.get("/api/v1/projects/:projectId/coherence/summary", () => {
-    return HttpResponse.json({
-      freshness: "fresh",
-      alertsConsistent: true,
-      coherenceConsistent: true,
-    });
-  }),
+  http.post(
+    "/api/v1/projects/:projectId/alerts/:alertId/undo",
+    async ({ params, request }) => {
+      const alertId = String(params.alertId);
+      if (alertId === "a-stale") {
+        return HttpResponse.json(
+          { code: "UNDO_CONFLICT", detail: "Undo could not be applied" },
+          { status: 409 },
+        );
+      }
 
-  http.post("/api/v1/projects/:projectId/alerts/:alertId/undo", async ({ params, request }) => {
-    const alertId = String(params.alertId);
-    if (alertId === "a-stale") {
-      return HttpResponse.json(
-        { code: "UNDO_CONFLICT", detail: "Undo could not be applied" },
-        { status: 409 },
-      );
-    }
+      const payload = (await request.json()) as {
+        targetStatus?: "pending" | "approved" | "rejected";
+      };
+      const targetStatus = payload.targetStatus ?? "pending";
+      reviewState.set(alertId, { status: targetStatus });
 
-    const payload = (await request.json()) as { targetStatus?: "pending" | "approved" | "rejected" };
-    const targetStatus = payload.targetStatus ?? "pending";
-    reviewState.set(alertId, { status: targetStatus });
-
-    return HttpResponse.json({
-      id: alertId,
-      status: targetStatus,
-      coherenceDelta: -1,
-    });
-  }),
+      return HttpResponse.json({
+        id: alertId,
+        status: targetStatus,
+        coherenceDelta: -1,
+      });
+    },
+  ),
 
   http.post("/api/v1/projects/:projectId/alerts/coherence-sync", async () => {
     return HttpResponse.json({

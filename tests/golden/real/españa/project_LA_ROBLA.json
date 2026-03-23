@@ -1,0 +1,87 @@
+{
+  "project_metadata": {
+    "id": "P-009192",
+    "name": "LAV La Roda-Pobla de Lena (La Robla)",
+    "type": "Rail Systems",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "CONTRATO TIPO DE OBRAS N° 4.13/20505.0062. El objeto del presente contrato es la ejecución de las obras del proyecto de construcción establecido en el encabezamiento: 'Proyecto constructivo de las instalaciones de enclavamientos, sistemas de protección del tren, telecomunicaciones fijas, control de tráfico centralizado, sistemas auxiliares y de protección de seguridad para el tramo La Robla-Pola de Lena'.\n\nEl adjudicatario se compromete a realizar por su cuenta y riesgo el objeto del contrato al que se refiere la cláusula anterior con estricta sujeción al Pliego de Condiciones Administrativas Particulares y al Proyecto Constructivo. El plazo de Ejecución de las obras es de veintiocho (28) Meses, contados a partir del Acta de Comprobación de replanteo e inicio, y el de mantenimiento de doce (12) meses.\n\nPara responder del cumplimiento de este contrato, ha sido constituida a favor del ADIF-AV, una garantía definitiva por importe de 4.713.657,54 €, según se acredita mediante resguardo de la Caja General de Depósitos. El importe total de adjudicación asciende a la cantidad de 57.035.256,21 €, IVA incluido (47.136.575,38 € sin IVA). El presente contrato se rige, en cuanto a su preparación y adjudicación, por la Ley 31/2007, y está exento de toda Revisión de precios durante su vigencia.",
+    "schedule_summary": {
+      "execution_period_months": 28,
+      "maintenance_period_months": 12,
+      "total_period_months": 40
+    },
+    "budget_summary": {
+      "total_value_eur": 47136575.38,
+      "vat_included_eur": 57035256.21,
+      "guarantee_eur": 4713657.54,
+      "line_items": [
+        { "name": "Obra Civil (Zanjas, Canalizaciones)", "cost": null },
+        { "name": "Sistemas de Energía (SAI, Cables)", "cost": null },
+        { "name": "Telecomunicaciones Fijas (SDH, Telefonía)", "cost": null },
+        { "name": "Videovigilancia y Control (Cámaras, Detectores)", "cost": null }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "La ejecución de las obras del proyecto de construcción establecido en el encabezamiento: 'Proyecto constructivo de las instalaciones de enclavamientos, sistemas de protección del tren, telecomunicaciones fijas, control de tráfico centralizado, sistemas auxiliares y de protección de seguridad para el tramo La Robla-Pola de Lena'",
+        "metadata": { "location": "La Robla-Pola de Lena" }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "El plazo de Ejecución de las obras es de veintiocho (28) Meses, contados a partir del Acta de Comprobación de replanteo e inicio",
+        "metadata": { "duration_months": 28 }
+      },
+      {
+        "clause_code": "CL-RISK-01",
+        "type": "quality",
+        "text": "El adjudicatario se compromete a realizar por su cuenta y riesgo el objeto del contrato al que se refiere la cláusula anterior",
+        "metadata": { "responsibility": "full_risk" }
+      },
+      {
+        "clause_code": "CL-PRICE-01",
+        "type": "penalty",
+        "text": "está exento de toda Revisión de precios durante su vigencia",
+        "metadata": { "price_revision": false }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "ADIF-Alta Velocidad",
+        "mention": "ADIF-AV",
+        "role": "Client",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "UTE ANSALDO STS - INABENSA",
+        "mention": "Ansaldo STS España, S.A.U. e Instalaciones Inabensa, S.A.",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Huawei",
+        "mention": "Huawei",
+        "role": "Supplier (Transmission Systems)",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "LOC-MISMATCH-01",
+        "severity": "critical",
+        "description": "Location Name Discrepancy: Project directory uses 'La Roda-Pobla de Lena'. Contract uses 'La Robla-Pola de Lena'. The correct geographical location is 'La Robla' (León).",
+        "conflicting_elements": [
+          { "source": "directory_name", "identifier": "La Roda" },
+          { "source": "contract_text", "identifier": "La Robla" }
+        ]
+      }
+    ]
+  }
+}

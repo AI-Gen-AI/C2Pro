@@ -23,12 +23,48 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # Create ENUM types
     op.execute(
-        "CREATE TYPE subscriptionplan AS ENUM ('free', 'starter', 'professional', 'enterprise')"
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscriptionplan') THEN
+                CREATE TYPE subscriptionplan AS ENUM ('free', 'starter', 'professional', 'enterprise');
+            END IF;
+        END
+        $$;
+        """
     )
-    op.execute("CREATE TYPE userrole AS ENUM ('admin', 'user', 'viewer', 'api')")
-    op.execute("CREATE TYPE projectstatus AS ENUM ('draft', 'active', 'completed', 'archived')")
     op.execute(
-        "CREATE TYPE projecttype AS ENUM ('construction', 'engineering', 'industrial', 'infrastructure', 'other')"
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
+                CREATE TYPE userrole AS ENUM ('admin', 'user', 'viewer', 'api');
+            END IF;
+        END
+        $$;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'projectstatus') THEN
+                CREATE TYPE projectstatus AS ENUM ('draft', 'active', 'completed', 'archived');
+            END IF;
+        END
+        $$;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'projecttype') THEN
+                CREATE TYPE projecttype AS ENUM ('construction', 'engineering', 'industrial', 'infrastructure', 'other');
+            END IF;
+        END
+        $$;
+        """
     )
 
     # Create tenants table

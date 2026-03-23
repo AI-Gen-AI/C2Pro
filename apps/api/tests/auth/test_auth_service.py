@@ -1,5 +1,6 @@
 """
 C2Pro - Authentication Service Unit Tests
+TS-E2E-SEC-TNT-001
 
 Comprehensive tests for auth service including:
 - Password hashing and verification
@@ -9,9 +10,15 @@ Comprehensive tests for auth service including:
 """
 
 import pytest
+import subprocess
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4, UUID
 
+from src.core.auth.bootstrap_lookup import BootstrapUserRecord
 from src.core.auth.service import (
     hash_password,
     verify_password,
@@ -35,6 +42,29 @@ from src.config import settings
 
 class TestPasswordHashing:
     """Tests for password hashing and verification."""
+
+    def test_hash_password_does_not_emit_bcrypt_backend_warning(self):
+        """
+        Password hashing should not emit Passlib/bcrypt backend warnings.
+        """
+        project_root = Path(__file__).resolve().parents[2]
+        script = (
+            "from passlib.context import CryptContext; "
+            "ctx = CryptContext(schemes=['bcrypt']); "
+            "print(ctx.hash('SecurePass123!')[:20])"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            cwd=project_root,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert "error reading bcrypt version" not in result.stderr
+        assert "AttributeError: module 'bcrypt' has no attribute '__about__'" not in result.stderr
 
     def test_hash_password_returns_different_hash_each_time(self):
         """
@@ -368,6 +398,66 @@ class TestHelperFunctions:
         # But this should be tested to confirm behavior
         if user:
             assert user.email.lower() == test_user.email.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_user_by_email_uses_bootstrap_lookup_to_seed_tenant_context(
+        self, monkeypatch
+    ):
+        """
+        Should resolve identity through bootstrap lookup before ORM hydration.
+        """
+        bootstrap_record = BootstrapUserRecord(
+            user_id=uuid4(),
+            tenant_id=uuid4(),
+            email="bootstrap@example.com",
+            is_active=True,
+            hashed_password="hashed",
+        )
+        hydrated_user = SimpleNamespace(id=bootstrap_record.user_id, email=bootstrap_record.email)
+
+        async def _lookup_user(_db, _email):
+            return bootstrap_record
+
+        execute = AsyncMock()
+        execute.side_effect = [
+            None,
+            SimpleNamespace(scalar_one_or_none=lambda: hydrated_user),
+        ]
+        fake_db = SimpleNamespace(execute=execute)
+
+        monkeypatch.setattr(
+            "src.core.auth.service.bootstrap_lookup_user_by_email",
+            _lookup_user,
+        )
+        monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://test-db")
+
+        user = await get_user_by_email(fake_db, bootstrap_record.email)
+
+        assert user is hydrated_user
+        assert execute.await_count == 2
+        assert "SET LOCAL app.current_tenant" in str(execute.await_args_list[0].args[0])
+
+    @pytest.mark.asyncio
+    async def test_get_user_by_email_returns_none_when_bootstrap_lookup_misses(self, monkeypatch):
+        """
+        Should short-circuit when bootstrap lookup does not find a user.
+        """
+
+        async def _lookup_user(_db, _email):
+            return None
+
+        execute = AsyncMock()
+        fake_db = SimpleNamespace(execute=execute)
+
+        monkeypatch.setattr(
+            "src.core.auth.service.bootstrap_lookup_user_by_email",
+            _lookup_user,
+        )
+
+        user = await get_user_by_email(fake_db, "missing@example.com")
+
+        assert user is None
+        execute.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_user_by_id_existing_user(self, db, test_user):

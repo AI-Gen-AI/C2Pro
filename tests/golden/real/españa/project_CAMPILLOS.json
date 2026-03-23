@@ -1,0 +1,91 @@
+{
+  "project_metadata": {
+    "id": "P-009245",
+    "name": "Planta Bioenergía de Campillos Málaga",
+    "type": "Industrial",
+    "complexity": "Medium",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Anexo Segundo al Contrato Marco de Colaboración entre Instalaciones Inabensa, S.A. y Giesa Agroenergia S.L. firmado el 14 de Abril de 2014. El objeto es la construcción, operación y mantenimiento de una planta de suministro de biogás y biometano con una potencia térmica estimada de 1769 kW térmicos y una producción anual de biogás estimada de 15.496.097 kWh/año térmicos.\n\nInabensa adquirirá el Proyecto bajo las condiciones pactadas, asumiendo la inversión necesaria y recuperando ésta mediante los pagos por los servicios de venta de utilities prestados al Cliente. Se estima un importe de inversión de 3.717.117 euros. La adquisición de la totalidad de las acciones de Agroenergía de Campillos, S.L. se realizará por un importe de 180.000 euros vinculada a hitos de pre-factibilidad, pilotaje, legalización y financiación.\n\nLa ejecución del proyecto está sujeta al cumplimiento de una TIR (tasa interna de retorno) del proyecto mínima del 9% a 15 años y una TIR de accionista mínima del 22% a 15 años. Es condición indispensable la firma de los contratos de suministro de utilities con el Cliente bajo la modalidad PPA. Inabensa adquirirá el 75% de la sociedad una vez cumplidas las condiciones de financiación preferente.",
+    "budget_summary": {
+      "total_investment_eur": 3717117,
+      "acquisition_cost_eur": 180000,
+      "target_irr_project_pct": 9.0,
+      "target_irr_shareholder_pct": 22.0
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "Construcción, operación y mantenimiento de una planta de suministro de biogás y biometano con una potencia térmica estimada de 1769 kW térmicos",
+        "metadata": { "power_kw": 1769 }
+      },
+      {
+        "clause_code": "CL-INVEST-01",
+        "type": "scope",
+        "text": "Se estima un importe de inversión de 3.717.117 euros",
+        "metadata": { "amount": 3717117 }
+      },
+      {
+        "clause_code": "CL-TIR-01",
+        "type": "quality",
+        "text": "Cumplimiento de una TIR del proyecto mínima del 9% a 15 años",
+        "metadata": { "min_tir": 9.0, "period_years": 15 }
+      },
+      {
+        "clause_code": "CL-PPA-01",
+        "type": "scope",
+        "text": "La firma de los contratos de suministro de utilities con el Cliente bajo la modalidad PPA",
+        "metadata": { "condition": "PPA_signed" }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Instalaciones Inabensa, S.A.",
+        "mention": "INABENSA",
+        "role": "Investor / Buyer",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Giesa Agroenergia S.L.",
+        "mention": "GIESA",
+        "role": "Developer / Partner",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Agroenergía de Campillos, S.L.",
+        "mention": "Agroenergía de Campillos, S.L.",
+        "role": "Project Company (SPV)",
+        "quadrant": "Informed"
+      },
+      {
+        "name": "Ganadería y Piensos el Arquillo SA",
+        "mention": "GYPASA",
+        "role": "Potential Client",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "RISK-FIN-01",
+        "severity": "critical",
+        "description": "Project viability is strictly dependent on achieving a 9% Project IRR and 22% Shareholder IRR, which may conflict with actual market conditions or technical performance.",
+        "conflicting_elements": [
+          { "source": "contract_text", "identifier": "CL-TIR-01" },
+          { "source": "economic_model", "identifier": "TIR_Project" }
+        ]
+      },
+      {
+        "rule_id": "RISK-OP-01",
+        "severity": "warning",
+        "description": "Requirement of PPA signing before construction creates a critical path dependency.",
+        "conflicting_elements": [
+          { "source": "contract_text", "identifier": "CL-PPA-01" }
+        ]
+      }
+    ]
+  }
+}

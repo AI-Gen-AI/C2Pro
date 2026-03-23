@@ -2,13 +2,31 @@
  * Test Suite ID: S2-10
  * Roadmap Reference: S2-10 SSE processing stepper + withCredentials (FLAG-3)
  */
+import { act } from "react";
 import { render, screen } from "@/src/tests/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ProcessingStepper,
   createProcessingEventSource,
   isProcessingSseEvent,
+  resetProcessingEventSourcesForTests,
 } from "@/components/features/processing/ProcessingStepper";
+
+const authState = vi.hoisted(() => ({
+  token: "test-token" as string | null,
+}));
+
+const handleAuthErrorStatus = vi.hoisted(() => vi.fn());
+
+vi.mock("@/stores/auth", () => ({
+  useAuthStore: {
+    getState: () => authState,
+  },
+}));
+
+vi.mock("@/lib/api/client", () => ({
+  handleAuthErrorStatus,
+}));
 
 type Listener = (event: MessageEvent<string>) => void;
 
@@ -60,36 +78,91 @@ class MockEventSource {
 }
 
 describe("S2-10 RED - ProcessingStepper", () => {
+  beforeEach(() => {
+    authState.token = "test-token";
+    handleAuthErrorStatus.mockReset();
+    MockEventSource.instances = [];
+    resetProcessingEventSourcesForTests();
+  });
+
   it("[S2-10-RED-01] enforces credentialed SSE transport with withCredentials=true", () => {
-    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
 
     createProcessingEventSource("proj_demo_001");
 
     expect(MockEventSource.instances).toHaveLength(1);
     expect(MockEventSource.instances[0]?.withCredentials).toBe(true);
+    expect(MockEventSource.instances[0]?.url).toContain(
+      "/api/v1/analysis/projects/proj_demo_001/process/stream?access_token=test-token",
+    );
   });
 
   it("[S2-10-RED-01b] rejects non-credentialed stream config", () => {
-    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
 
     expect(() =>
       createProcessingEventSource("proj_demo_001", { withCredentials: false }),
     ).toThrow(/withCredentials must be true/i);
   });
 
+  it("redirects auth failures instead of opening an unauthenticated processing stream", () => {
+    authState.token = null;
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
+
+    expect(() => createProcessingEventSource("proj_auth_missing_001")).toThrow(
+      /authenticated sse session required/i,
+    );
+    expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    expect(MockEventSource.instances).toHaveLength(0);
+  });
+
   it("[S2-10-RED-02] progresses exact step order and progress from staged SSE events", () => {
-    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
 
     render(<ProcessingStepper projectId="proj_demo_001" />);
 
     const source = MockEventSource.instances[0];
     expect(source).toBeDefined();
 
-    source?.emit("stage", { stage: 1, name: "Extracting text", progress: 16 });
-    source?.emit("stage", { stage: 2, name: "Identifying clauses", progress: 33 });
-    source?.emit("stage", { stage: 3, name: "Cross-referencing", progress: 50 });
-    source?.emit("stage", { stage: 4, name: "Detecting anomalies", progress: 66 });
-    source?.emit("stage", { stage: 5, name: "Calculating weights", progress: 83 });
+    act(() => {
+      source?.emit("stage", {
+        stage: 1,
+        name: "Extracting text",
+        progress: 16,
+      });
+      source?.emit("stage", {
+        stage: 2,
+        name: "Identifying clauses",
+        progress: 33,
+      });
+      source?.emit("stage", {
+        stage: 3,
+        name: "Cross-referencing",
+        progress: 50,
+      });
+      source?.emit("stage", {
+        stage: 4,
+        name: "Detecting anomalies",
+        progress: 66,
+      });
+      source?.emit("stage", {
+        stage: 5,
+        name: "Calculating weights",
+        progress: 83,
+      });
+    });
 
     expect(screen.getByTestId("processing-step-1")).toHaveTextContent(
       /extracting text/i,
@@ -112,18 +185,25 @@ describe("S2-10 RED - ProcessingStepper", () => {
   });
 
   it("[S2-10-RED-03] transitions to terminal success on complete event", () => {
-    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
 
     render(<ProcessingStepper projectId="proj_demo_001" />);
 
     const source = MockEventSource.instances[0];
-    source?.emit("complete", {
-      global_score: 78,
-      documents_analyzed: 8,
-      completed_at: "2026-02-14T12:00:00Z",
+    act(() => {
+      source?.emit("complete", {
+        global_score: 78,
+        documents_analyzed: 8,
+        completed_at: "2026-02-14T12:00:00Z",
+      });
     });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/processing complete/i);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /processing complete/i,
+    );
     expect(
       screen.getByRole("progressbar", { name: /processing progress/i }),
     ).toHaveAttribute("aria-valuenow", "100");
@@ -132,20 +212,44 @@ describe("S2-10 RED - ProcessingStepper", () => {
   });
 
   it("[S2-10-RED-07] publishes accessible live updates for each transition", () => {
-    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
 
     render(<ProcessingStepper projectId="proj_demo_001" />);
 
     const liveRegion = screen.getByRole("status");
     expect(liveRegion).toHaveAttribute("aria-live", "polite");
 
-    MockEventSource.instances[0]?.emit("stage", {
-      stage: 1,
-      name: "Extracting text",
-      progress: 16,
+    act(() => {
+      MockEventSource.instances[0]?.emit("stage", {
+        stage: 1,
+        name: "Extracting text",
+        progress: 16,
+      });
     });
 
     expect(liveRegion).toHaveTextContent(/extracting text/i);
+  });
+
+  it("reports session expiry instead of a generic stream interruption once auth is gone", () => {
+    vi.stubGlobal(
+      "EventSource",
+      MockEventSource as unknown as typeof EventSource,
+    );
+
+    render(<ProcessingStepper projectId="proj_demo_001" />);
+
+    authState.token = null;
+    act(() => {
+      MockEventSource.instances[0]?.listeners.get("error")?.[0]?.(
+        new MessageEvent("error"),
+      );
+    });
+
+    expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    expect(screen.getByRole("status")).toHaveTextContent(/session expired/i);
   });
 
   it("[S2-10-RED-08] accepts only expected SSE event schema", () => {

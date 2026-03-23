@@ -4,29 +4,36 @@
 **Status:** 🟡 Environment Setup Incomplete
 **Priority:** 🔴 P0 CRITICAL
 
+Status update (2026-03-20): This document is a dated environment-setup guide for an earlier testing phase. Later repo work has since landed across migration authority, MCP persistence, Sentry lifecycle, Supabase bootstrap verification, ORM cleanup, alert authz, and pricing centralization, so this file should be read as historical test-enablement context only.
+
 ---
 
 ## ✅ What's Been Completed (GREEN Phase Implementation)
 
 ### 1. Test Suite Created ✅
+
 - **File:** `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`
 - **Tests:** 11 comprehensive test cases (10 core + 1 edge case)
 - **Coverage:** READ/WRITE/DELETE isolation, JWT validation, concurrent requests, RLS context
 
 ### 2. Implementation Already Exists ✅
+
 Discovered that most of the GREEN phase was already implemented:
+
 - ✅ **Project Model:** `apps/api/src/projects/adapters/persistence/models.py`
 - ✅ **HTTP Router:** `apps/api/src/projects/adapters/http/router.py`
 - ✅ **Use Cases:** Full CRUD operations with hexagonal architecture
 - ✅ **Router Registration:** Included in `src/main.py`
 
 ### 3. RLS Policies Migration Created ✅
+
 - **File:** `apps/api/alembic/versions/20260205_0001_enable_rls_policies.py`
 - **Policies:** 12 RLS policies (4 per table: SELECT, INSERT, UPDATE, DELETE)
 - **Tables:** `tenants`, `users`, `projects`
 - **Security:** Defense-in-depth with app.current_tenant session variable
 
 ### 4. Documentation Created ✅
+
 - **Implementation Summary:** `docs/TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`
 - **GREEN Phase Status:** `docs/TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md`
 - **This Guide:** `NEXT_STEPS_TO_RUN_TESTS.md`
@@ -36,20 +43,24 @@ Discovered that most of the GREEN phase was already implemented:
 ## 🚧 What's Blocking Test Execution
 
 ### Issue: Virtual Environment Not Fully Set Up
+
 The Python virtual environment at `apps/.venv` is missing many dependencies from `requirements.txt`.
 
 **Root Cause:**
+
 - `pyfiebdc==0.8.1` is not available on PyPI (BC3/FIEBDC parser for Spanish construction files)
 - This blocks `pip install -r requirements.txt` from completing
 - Many transitive dependencies are missing
 
 **Installed So Far:**
+
 - ✅ `email-validator`, `PyJWT[crypto]`, `cryptography`
 - ✅ `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx`
 - ✅ `sentry-sdk`, `aiosqlite`, `fastapi`, `sqlalchemy`, `asyncpg`
 - ✅ `structlog`, `networkx`, `pyyaml`, `orjson`, `tenacity`, `redis`
 
 **Still Missing (estimated 40+ packages):**
+
 - LangChain ecosystem (`langgraph`, `langchain-core`)
 - Anthropic SDK (`anthropic`)
 - Document parsers (`pymupdf`, `openpyxl`, `python-docx`)
@@ -71,16 +82,19 @@ cd apps/api
 ```
 
 Edit `requirements.txt` and comment out:
+
 ```
 # pyfiebdc==0.8.1    # Not available on PyPI - BC3/FIEBDC parser
 ```
 
 **Step 2:** Install all dependencies:
+
 ```bash
 python -m pip install -r requirements.txt
 ```
 
 **Step 3:** Apply RLS migration:
+
 ```bash
 # Option A: With PostgreSQL test database running
 docker-compose -f docker-compose.test.yml up -d
@@ -91,6 +105,7 @@ alembic upgrade head
 ```
 
 **Step 4:** Run the tests:
+
 ```bash
 pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 
@@ -104,6 +119,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py \
 ```
 
 **Expected Result:**
+
 - ✅ **With PostgreSQL:** 11/11 tests PASS
 - ⚠️ **With SQLite:** 10/11 tests PASS, 1 test SKIP (`test_010_rls_context_set_and_reset`)
 
@@ -130,6 +146,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 **Limitations:**
+
 - Some imports may fail if code depends on missing packages
 - SQLite fallback only (no RLS testing)
 - Coverage report will be incomplete
@@ -141,6 +158,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ### Problem: "ModuleNotFoundError: No module named 'X'"
 
 **Solution:** Install the missing module:
+
 ```bash
 python -m pip install <module_name>
 ```
@@ -154,6 +172,7 @@ Then rerun the tests.
 **Cause:** Test database not running
 
 **Solution:** Start the test database:
+
 ```bash
 # From project root
 docker-compose -f docker-compose.test.yml up -d
@@ -171,6 +190,7 @@ Or let tests fall back to SQLite (1 test will be skipped).
 **Cause:** Database migrations not applied
 
 **Solution:**
+
 ```bash
 cd apps/api
 
@@ -187,11 +207,13 @@ DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test" \
 ### Problem: Tests fail with "404 Not Found" for projects endpoint
 
 **Possible Causes:**
+
 1. Router not registered in `main.py` (✅ Already fixed - line 200-203)
 2. Use cases raising exceptions
 3. RLS policies blocking queries (check if `app.current_tenant` is set)
 
 **Debug:**
+
 ```python
 # Add this to test to see what's happening:
 import logging
@@ -203,6 +225,7 @@ logging.basicConfig(level=logging.DEBUG)
 ## 📊 Expected Test Results
 
 ### Successful Run (PostgreSQL with RLS)
+
 ```
 ====================== test session starts ======================
 collected 11 items
@@ -223,6 +246,7 @@ tests/e2e/security/test_multi_tenant_isolation.py::test_edge_001_cross_tenant_us
 ```
 
 ### SQLite Fallback (No RLS)
+
 ```
 ====================== test session starts ======================
 collected 11 items
@@ -241,10 +265,12 @@ tests/e2e/security/test_multi_tenant_isolation.py ... [90% passed, 1 skipped]
 ## 📁 Key Files Reference
 
 ### Test Files
+
 - **Test Suite:** `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`
 - **Fixtures:** `apps/api/tests/conftest.py`
 
 ### Implementation
+
 - **Project Model:** `apps/api/src/projects/adapters/persistence/models.py`
 - **HTTP Router:** `apps/api/src/projects/adapters/http/router.py`
 - **Middleware:** `apps/api/src/core/middleware/tenant_isolation.py`
@@ -252,10 +278,12 @@ tests/e2e/security/test_multi_tenant_isolation.py ... [90% passed, 1 skipped]
 - **Tenant Context:** `apps/api/src/core/security/tenant_context.py`
 
 ### Migrations
+
 - **Initial:** `apps/api/alembic/versions/20260104_0000_initial_migration.py`
 - **RLS Policies:** `apps/api/alembic/versions/20260205_0001_enable_rls_policies.py`
 
 ### Configuration
+
 - **Requirements:** `apps/api/requirements.txt` (⚠️ needs pyfiebdc fix)
 - **Alembic:** `apps/api/alembic.ini`
 - **Test Env:** `apps/api/tests/conftest.py` (lines 59-88)
@@ -304,6 +332,7 @@ Before running tests, ensure:
 - [ ] Working directory: `apps/api`
 
 Then run:
+
 ```bash
 pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```

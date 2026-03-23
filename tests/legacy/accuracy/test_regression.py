@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-import glob
+from pathlib import Path
 import os
 from typing import List, Literal, Optional, Dict, Any
 
@@ -24,7 +24,7 @@ except ModuleNotFoundError as exc:
 # --- Configuration ---
 AI_ACCURACY_THRESHOLD = 0.85
 # This assumes the test is run from the root of the project
-GOLDEN_DATASET_PATH = "tests/golden/*.json"
+GOLDEN_DATASET_ROOT = Path("tests/golden")
 
 # --- Pydantic Schemas for Validation (Copied from generation script) ---
 # In a real project, these would be in a shared 'schemas' module.
@@ -123,8 +123,8 @@ def score_alert_item(expected: Dict, actual: Dict) -> float:
 # --- Test Suite ---
 
 def load_golden_files():
-    """Loads all golden dataset file paths."""
-    return glob.glob(GOLDEN_DATASET_PATH)
+    """Loads all golden dataset file paths, including curated real samples."""
+    return sorted(str(path) for path in GOLDEN_DATASET_ROOT.rglob("project_*.json"))
 
 # A class to hold results across parametrized tests
 class TestResults:

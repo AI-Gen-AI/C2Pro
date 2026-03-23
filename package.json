@@ -20,7 +20,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "verify:openspec": "python scripts/verify_openspec_change.py"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

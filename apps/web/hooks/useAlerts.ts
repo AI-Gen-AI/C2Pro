@@ -3,8 +3,8 @@
  * Fetches all alerts across projects from the backend
  */
 
-import { useState, useEffect } from 'react';
-import { apiClient } from '@/lib/api/client';
+import { useState, useEffect } from "react";
+import { apiClient } from "@/lib/api/client";
 
 export interface AlertListItem {
   id: string;
@@ -18,11 +18,16 @@ export interface AlertListItem {
 
 interface AlertResponse {
   id: string;
-  projectId: string;
+  project_id: string;
   category: string;
   severity: string;
   status: string;
   message: string;
+}
+
+interface AlertListResponse {
+  items: AlertResponse[];
+  total: number;
 }
 
 interface ProjectResponse {
@@ -35,9 +40,9 @@ interface ProjectsListResponse {
 }
 
 const STATUS_MAP: Record<string, string> = {
-  open: 'Open',
-  resolved: 'Resolved',
-  rejected: 'Rejected',
+  open: "Open",
+  resolved: "Resolved",
+  rejected: "Rejected",
 };
 
 function capitalize(s: string): string {
@@ -64,37 +69,41 @@ export function useAlerts(): UseAlertsResult {
 
       try {
         const [alertsRes, projectsRes] = await Promise.all([
-          apiClient.get<AlertResponse[]>('/alerts'),
-          apiClient.get<ProjectsListResponse>('/projects'),
+          apiClient.get<AlertListResponse>("/alerts"),
+          apiClient.get<ProjectsListResponse>("/projects"),
         ]);
 
         if (!active) return;
 
         const projectMap = new Map(
-          projectsRes.data.items.map((p) => [p.id, p.name])
+          projectsRes.data.items.map((p) => [p.id, p.name]),
         );
 
-        const mapped = alertsRes.data.map((a, idx) => ({
-          id: `AL-${String(idx + 1).padStart(3, '0')}`,
+        const mapped = alertsRes.data.items.map((a) => ({
+          id: a.id,
           severity: capitalize(a.severity),
           type: capitalize(a.category),
-          title: a.message.split(' — ')[0],
-          description: a.message.split(' — ')[1] ?? a.message,
-          project: projectMap.get(a.projectId) ?? a.projectId,
+          title: a.message.split(" — ")[0],
+          description: a.message.split(" — ")[1] ?? a.message,
+          project: projectMap.get(a.project_id) ?? a.project_id,
           status: STATUS_MAP[a.status] ?? capitalize(a.status),
         }));
 
         setAlerts(mapped);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err : new Error('Failed to fetch alerts'));
+        setError(
+          err instanceof Error ? err : new Error("Failed to fetch alerts"),
+        );
       } finally {
         if (active) setLoading(false);
       }
     }
 
     fetchAlerts();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   return { alerts, loading, error };

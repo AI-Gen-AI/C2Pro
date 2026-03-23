@@ -356,6 +356,7 @@ class RaciMatrixAssignment(BaseModel):
     """Assignment cell for the matrix view (task x stakeholder)."""
 
     stakeholder_id: UUID = Field(..., description="Stakeholder ID")
+    stakeholder_name: str | None = Field(None, description="Stakeholder name")
     role: str = Field(..., description="RACI role label (RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED)")
     is_verified: bool = Field(False, description="Whether this assignment is manually verified")
 
@@ -374,6 +375,24 @@ class RaciMatrixViewResponse(BaseModel):
     """Response schema for the nested matrix view."""
 
     matrix: list[RaciMatrixTaskRow] = Field(default_factory=list, description="Matrix rows")
+
+
+class RaciFlatRow(BaseModel):
+    """Flat RACI row for global view."""
+
+    task_id: UUID
+    task_name: str
+    project_id: UUID
+    project_name: str
+    assignments: list[RaciMatrixAssignment] = Field(default_factory=list)
+
+
+class RaciGlobalViewResponse(BaseModel):
+    """Response schema for global RACI view across all projects."""
+
+    rows: list[RaciFlatRow] = Field(default_factory=list, description="All RACI rows across projects")
+    total_tasks: int = 0
+    total_assignments: int = 0
 
 
 class RaciAssignmentUpsertRequest(BaseModel):

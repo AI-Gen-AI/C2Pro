@@ -1,28 +1,107 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { DashboardClient } from "@/components/coherence/DashboardClient";
-import { ProjectsService } from "@/lib/api/generated/services/ProjectsService";
-import { DashboardService } from "@/lib/api/generated/services/DashboardService";
-import type { DashboardSummary } from "@/lib/api/generated/models";
+import { env } from "@/config/env";
+import type { DashboardSummary } from "@/lib/api/contracts";
+import {
+  getDashboardSummary,
+  listProjects,
+} from "@/lib/api/services/dashboard";
+import { useAuthStore } from "@/stores/auth";
 
-export default async function DashboardPage() {
-  let data: DashboardSummary | null = null;
-  let projectName = "";
-  let loadError: string | null = null;
+export default function DashboardPage() {
+  const token = useAuthStore((state) => state.token);
+  const [data, setData] = useState<DashboardSummary | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  try {
-    const projects = await ProjectsService.getProjects();
-    const first = projects.items?.[0];
-
-    if (first) {
-      projectName = first.name;
-      data = await DashboardService.getSummary(first.id);
-    } else {
-      loadError = "No projects found. Create a project to see coherence data.";
+  useEffect(() => {
+    if (!token) {
+      setData(null);
+      setProjectName("");
+      setLoadError(null);
+      setIsLoading(false);
+      return;
     }
-  } catch (error) {
-    loadError =
-      error instanceof Error
-        ? error.message
-        : "Could not load dashboard data right now.";
+
+    let active = true;
+
+    const loadDashboard = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const projects = await listProjects();
+        const first = projects[0];
+
+        if (!first) {
+          if (active) {
+            setData(null);
+            setProjectName("");
+            setLoadError(
+              "No projects found. Create a project to see coherence data.",
+            );
+          }
+          return;
+        }
+
+        const summary = await getDashboardSummary(first.id);
+
+        if (!active) {
+          return;
+        }
+
+        setProjectName(first.name);
+        setData(summary);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setData(null);
+        setProjectName("");
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "Could not load dashboard data right now.",
+        );
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  if (!token) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">
+          Authenticating...
+        </span>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">
+          Loading dashboard...
+        </span>
+      </div>
+    );
   }
 
   if (loadError || !data) {
@@ -34,7 +113,7 @@ export default async function DashboardPage() {
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {loadError ?? "No data available."} Verify backend API is running at{" "}
           <code className="rounded bg-destructive/10 px-1">
-            {process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}
+            {env.API_BASE_URL}
           </code>
           .
         </div>

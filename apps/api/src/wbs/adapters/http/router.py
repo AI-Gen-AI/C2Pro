@@ -17,6 +17,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User
 from src.wbs.adapters.persistence import get_wbs_repository
 from src.wbs.application.dtos import (
     CreateWBSItemRequest,
@@ -111,18 +113,7 @@ class WBSOutput(BaseModel):
     alerts: list[dict]
 
 
-# ===========================================
-# DEPENDENCIES
-# ===========================================
 
-def get_tenant_id() -> str:
-    """
-    Get tenant ID from request context.
-
-    In production, this would come from JWT token.
-    For tests, we use a default.
-    """
-    return "test-tenant-001"
 
 
 # ===========================================
@@ -288,14 +279,13 @@ def _build_move_request(
 @router.get("/{project_id}/wbs", response_model=WBSOutput)
 async def get_wbs(
     project_id: str,
-    tenant_id: Annotated[str, Depends(get_tenant_id)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> WBSOutput:
     """
     Get WBS items for a project.
 
     Returns all WBS items with their hierarchy and coverage information.
     """
-    # Check for non-existent project (test requirement)
     if project_id == "non-existent":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -305,7 +295,7 @@ async def get_wbs(
     repository = get_wbs_repository()
     use_case = GetWBSUseCase(repository)
 
-    result = await use_case.execute(project_id, tenant_id)
+    result = await use_case.execute(project_id, str(current_user.tenant_id))
 
     return WBSOutput(
         items=[_map_wbs_item_dto_to_output(item) for item in result.items],
@@ -322,7 +312,7 @@ async def get_wbs(
 async def create_wbs_item(
     project_id: str,
     input_data: CreateWBSItemInput,
-    tenant_id: Annotated[str, Depends(get_tenant_id)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> WBSItemOutput:
     """
     Create a new WBS item.
@@ -334,7 +324,7 @@ async def create_wbs_item(
 
     try:
         request = _build_create_request(input_data)
-        result = await use_case.execute(project_id, tenant_id, request)
+        result = await use_case.execute(project_id, str(current_user.tenant_id), request)
         return _map_wbs_item_dto_to_output(result)
     except ValueError as e:
         raise _handle_use_case_error(e)
@@ -345,7 +335,7 @@ async def update_wbs_item(
     project_id: str,
     item_id: str,
     input_data: UpdateWBSItemInput,
-    tenant_id: Annotated[str, Depends(get_tenant_id)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> WBSItemOutput:
     """
     Update a WBS item.
@@ -353,10 +343,10 @@ async def update_wbs_item(
     Partial update - only provided fields are updated.
     """
     item_uuid = _parse_uuid(item_id)
+    tenant_id = str(current_user.tenant_id)
 
     repository = get_wbs_repository()
 
-    # Verify item exists and belongs to project
     item = await repository.get_by_id(item_uuid, tenant_id)
     if item is None or item.project_id != project_id:
         raise HTTPException(
@@ -379,7 +369,7 @@ async def move_wbs_item(
     project_id: str,
     item_id: str,
     input_data: MoveWBSItemInput,
-    tenant_id: Annotated[str, Depends(get_tenant_id)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> WBSItemOutput:
     """
     Move a WBS item to a new parent.
@@ -393,7 +383,7 @@ async def move_wbs_item(
 
     try:
         request = _build_move_request(item_id, input_data)
-        result = await use_case.execute(item_uuid, project_id, tenant_id, request)
+        result = await use_case.execute(item_uuid, project_id, str(current_user.tenant_id), request)
         return _map_wbs_item_dto_to_output(result)
     except ValueError as e:
         raise _handle_use_case_error(e)
@@ -406,8 +396,8 @@ async def move_wbs_item(
 async def delete_wbs_item(
     project_id: str,
     item_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
     cascade: bool = Query(False, description="Delete item and all descendants"),
-    tenant_id: Annotated[str, Depends(get_tenant_id)] = "",
 ) -> None:
     """
     Delete a WBS item.
@@ -415,10 +405,10 @@ async def delete_wbs_item(
     Requires cascade=True if the item has children.
     """
     item_uuid = _parse_uuid(item_id)
+    tenant_id = str(current_user.tenant_id)
 
     repository = get_wbs_repository()
 
-    # Verify item exists and belongs to project
     item = await repository.get_by_id(item_uuid, tenant_id)
     if item is None or item.project_id != project_id:
         raise HTTPException(
@@ -438,13 +428,13 @@ async def delete_wbs_item(
 async def get_wbs_item(
     project_id: str,
     item_id: str,
-    tenant_id: Annotated[str, Depends(get_tenant_id)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> WBSItemOutput:
     """Get a single WBS item by ID."""
     item_uuid = _parse_uuid(item_id)
 
     repository = get_wbs_repository()
-    item = await repository.get_by_id(item_uuid, tenant_id)
+    item = await repository.get_by_id(item_uuid, str(current_user.tenant_id))
 
     if item is None or item.project_id != project_id:
         raise HTTPException(

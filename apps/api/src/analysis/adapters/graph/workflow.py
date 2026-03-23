@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Literal
 
@@ -182,7 +183,20 @@ def build_workflow() -> StateGraph:
 
 # ── Infrastructure helpers (unchanged) ───────────────────────────────────────
 
+_checkpointer_pool = None
+_checkpointer_ready = False
+_checkpointer_setup_lock = asyncio.Lock()
+
 def _build_checkpointer():
+    """
+    Build a checkpointer for persistent state management.
+
+    For PostgreSQL, uses AsyncPostgresSaver with connection pool.
+    Falls back to MemorySaver for SQLite or if postgres package not installed.
+
+    Note: The pool is created with min_size=0, max_size=10 to avoid blocking on sync initialization.
+    The pool will automatically open connections as needed.
+    """
     from src.config import settings
 
     if settings.database_url_async.startswith("sqlite"):
@@ -196,17 +210,75 @@ def _build_checkpointer():
         except ImportError:
             from langgraph.checkpoint.postgres import AsyncPostgresSaver
 
-        return AsyncPostgresSaver.from_conn_string(
-            settings.database_url_async,
-            table_name="ai_checkpoints",
-        )
-    except ImportError:
+        from psycopg.rows import dict_row
+        from psycopg_pool import AsyncConnectionPool
+
+        global _checkpointer_pool
+        if _checkpointer_pool is None:
+            conn_string = settings.database_url_async.replace("postgresql+asyncpg://", "postgresql://")
+
+            _checkpointer_pool = AsyncConnectionPool(
+                conninfo=conn_string,
+                min_size=0,
+                max_size=10,
+                open=False,
+                kwargs={
+                    "autocommit": True,
+                    "prepare_threshold": 0,
+                    "row_factory": dict_row,
+                },
+            )
+
+        return AsyncPostgresSaver(conn=_checkpointer_pool)
+    except ImportError as e:
         logger.warning(
             "checkpointer_fallback",
-            reason="langgraph-checkpoint-postgres not installed, using MemorySaver"
+            reason=f"langgraph-checkpoint-postgres dependencies not installed: {e}, using MemorySaver",
         )
         from langgraph.checkpoint.memory import MemorySaver
+
         return MemorySaver()
+
+
+async def ensure_checkpointer_ready() -> None:
+    """Ensure PostgreSQL checkpointer tables/migrations are initialized exactly once."""
+    global _checkpointer_ready
+
+    if _checkpointer_ready:
+        return
+
+    app = get_graph_app()
+    checkpointer = getattr(app, "checkpointer", None)
+    if checkpointer is None:
+        return
+
+    setup = getattr(checkpointer, "setup", None)
+    if not callable(setup):
+        _checkpointer_ready = True
+        return
+
+    async with _checkpointer_setup_lock:
+        if _checkpointer_ready:
+            return
+        if _checkpointer_pool is not None and getattr(_checkpointer_pool, "closed", False):
+            await _checkpointer_pool.open()
+        setup_result = setup()
+        if asyncio.iscoroutine(setup_result):
+            await setup_result
+        _checkpointer_ready = True
+        logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
+
+
+async def close_checkpointer_resources() -> None:
+    """Close pooled DB resources used by the checkpointer on app shutdown."""
+    global _checkpointer_pool, _checkpointer_ready
+
+    if _checkpointer_pool is None:
+        return
+
+    await _checkpointer_pool.close()
+    _checkpointer_pool = None
+    _checkpointer_ready = False
 
 
 def _persist_graph_diagram(app) -> None:
@@ -238,7 +310,8 @@ def get_graph_app():
     if _graph_app is not None:
         return _graph_app
 
-    _graph_app = compile_workflow(checkpointer=_build_checkpointer())
+    # Disable diagram persistence to avoid pygraphviz dependency
+    _graph_app = compile_workflow(checkpointer=_build_checkpointer(), persist_diagram=False)
     return _graph_app
 
 
@@ -256,6 +329,7 @@ async def run_orchestration(initial_state: dict, thread_id: str) -> dict:
     Note:
         Traces are automatically sent to LangSmith when LANGCHAIN_TRACING_V2=true
     """
+    await ensure_checkpointer_ready()
     app = get_graph_app()
 
     # Build run name from state for better LangSmith trace identification

@@ -4,6 +4,8 @@
 **Date:** 2026-02-15  
 **Focus:** End-user functionality only (not technical/backend)
 
+Status update (2026-03-20): This UX audit is preserved as a dated frontend-visibility snapshot. Backend/runtime hardening and data-path completion have advanced since it was written, so any implementation-gap language below should be interpreted in the context of the 2026-02-15 product surface rather than the latest repository status.
+
 ---
 
 ## Executive Summary

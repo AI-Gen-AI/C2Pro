@@ -18,7 +18,8 @@ from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
 
-_DEFAULT_UPLOAD_DIR = Path("uploads")
+# Use /app/uploads for Docker compatibility with shared volumes
+_DEFAULT_UPLOAD_DIR = Path("/app/uploads")
 
 
 class LocalFileStorageService(IStorageService):

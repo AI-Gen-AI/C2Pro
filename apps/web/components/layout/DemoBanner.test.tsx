@@ -28,7 +28,13 @@ describe("DemoBanner", () => {
       screen.getByRole("status", { name: /demo mode banner/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/sample data for atlas plaza project/i),
+      screen.getByText(/demo workspace/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/atlas plaza demo project, not a live customer workspace/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no live uploads/i),
     ).toBeInTheDocument();
   });
 

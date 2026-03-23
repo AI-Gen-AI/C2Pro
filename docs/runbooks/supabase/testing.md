@@ -23,6 +23,7 @@ These tests are **critical** for production deployment. They simulate hostile sc
 ### Prerequisites
 
 1. **PostgreSQL client (psql)** installed
+
    ```bash
    # macOS
    brew install postgresql
@@ -34,9 +35,10 @@ These tests are **critical** for production deployment. They simulate hostile sc
    # Download from https://www.postgresql.org/download/windows/
    ```
 
-2. **Migration 001_init_schema.sql** applied
+2. **Archived migration 001_init_schema.sql** applied only for compatibility checks
+
    ```bash
-   psql $DATABASE_URL -f infrastructure/supabase/migrations/001_init_schema.sql
+   psql $DATABASE_URL -f infrastructure/supabase/archive/migrations/001_init_schema.sql
    ```
 
 3. **DATABASE_URL** environment variable set
@@ -47,17 +49,20 @@ These tests are **critical** for production deployment. They simulate hostile sc
 ### Run Tests
 
 **On Linux/macOS:**
+
 ```bash
 chmod +x infrastructure/supabase/tests/run_tests.sh
 ./infrastructure/supabase/tests/run_tests.sh
 ```
 
 **On Windows:**
+
 ```cmd
 infrastructure\supabase\tests\run_tests.bat
 ```
 
 **Or run directly with psql:**
+
 ```bash
 psql $DATABASE_URL -f infrastructure/supabase/tests/01_tenant_isolation.sql
 ```
@@ -68,22 +73,22 @@ psql $DATABASE_URL -f infrastructure/supabase/tests/01_tenant_isolation.sql
 
 ### Tests Overview (15 Total)
 
-| # | Test | CTO Gate | Description |
-|---|------|----------|-------------|
-| 1.1 | Baseline | - | Verify 2 test tenants created |
-| 1.2 | Baseline | - | Verify 2 test users created |
-| 1.3 | Baseline | - | Verify 2 test projects created |
-| 2.1 | Read Isolation | Gate 1 | Alice sees her own project |
-| 2.2 | Read Isolation | Gate 1 | Alice CANNOT see Bob's project |
-| 2.3 | Read Isolation | Gate 1 | Alice sees exactly 1 project (strict isolation) |
-| 2.4 | Read Isolation | Gate 1 | Bob sees his own project |
-| 2.5 | Read Isolation | Gate 1 | Bob CANNOT see Alice's project |
-| 3.1 | Write Isolation | Gate 1 | Bob CANNOT update Alice's project |
-| 3.2 | Write Isolation | Gate 1 | Bob CANNOT delete Alice's project |
-| 4.1 | Anonymous Block | Gate 1 | Anonymous user sees 0 tenants |
-| 4.2 | Anonymous Block | Gate 1 | Anonymous user sees 0 projects |
-| 5.1 | Identity Model | Gate 2 | Same email in different tenants allowed |
-| 5.2 | Identity Model | Gate 2 | Duplicate email in same tenant blocked |
+| #   | Test            | CTO Gate | Description                                     |
+| --- | --------------- | -------- | ----------------------------------------------- |
+| 1.1 | Baseline        | -        | Verify 2 test tenants created                   |
+| 1.2 | Baseline        | -        | Verify 2 test users created                     |
+| 1.3 | Baseline        | -        | Verify 2 test projects created                  |
+| 2.1 | Read Isolation  | Gate 1   | Alice sees her own project                      |
+| 2.2 | Read Isolation  | Gate 1   | Alice CANNOT see Bob's project                  |
+| 2.3 | Read Isolation  | Gate 1   | Alice sees exactly 1 project (strict isolation) |
+| 2.4 | Read Isolation  | Gate 1   | Bob sees his own project                        |
+| 2.5 | Read Isolation  | Gate 1   | Bob CANNOT see Alice's project                  |
+| 3.1 | Write Isolation | Gate 1   | Bob CANNOT update Alice's project               |
+| 3.2 | Write Isolation | Gate 1   | Bob CANNOT delete Alice's project               |
+| 4.1 | Anonymous Block | Gate 1   | Anonymous user sees 0 tenants                   |
+| 4.2 | Anonymous Block | Gate 1   | Anonymous user sees 0 projects                  |
+| 5.1 | Identity Model  | Gate 2   | Same email in different tenants allowed         |
+| 5.2 | Identity Model  | Gate 2   | Duplicate email in same tenant blocked          |
 
 ### Test Scenarios
 
@@ -227,7 +232,9 @@ Review the output above to identify which tests failed.
 **Cause**: pgTAP extension not available in database.
 
 **Solution**:
+
 - **Supabase Pro/Enterprise**: pgTAP is included by default. Enable it in SQL Editor:
+
   ```sql
   CREATE EXTENSION pgtap;
   ```
@@ -244,12 +251,15 @@ Review the output above to identify which tests failed.
 **Cause**: RLS policies not working correctly.
 
 **Solution**:
+
 1. Verify RLS is enabled:
+
    ```sql
    SELECT tablename, rowsecurity
    FROM pg_tables
    WHERE schemaname = 'public';
    ```
+
    All tables must have `rowsecurity = true`.
 
 2. Verify JWT hook is configured (see SETUP_INSTRUCTIONS.md).
@@ -264,6 +274,7 @@ Review the output above to identify which tests failed.
 **Cause**: UNIQUE(tenant_id, email) constraint missing.
 
 **Solution**:
+
 ```sql
 -- Check if constraint exists
 SELECT conname, contype
@@ -281,7 +292,7 @@ UNIQUE (tenant_id, email);
 
 **Cause**: Not using Supabase, or auth schema not configured.
 
-**Solution**: The tests use `set_config()` to simulate JWT claims, which should work on any PostgreSQL. If you see this error, the RLS policies themselves are incorrect. Review `001_init_schema.sql`.
+**Solution**: The tests use `set_config()` to simulate JWT claims, which should work on any PostgreSQL. If you see this error, the archived SQL bootstrap policies may be incorrect. Review `infrastructure/supabase/archive/migrations/001_init_schema.sql`.
 
 ---
 
@@ -299,6 +310,7 @@ SELECT set_config('role', 'authenticated', true);
 ```
 
 RLS policies read these settings:
+
 ```sql
 -- Example RLS policy
 CREATE POLICY "tenant_isolation"
@@ -352,7 +364,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          psql $DATABASE_URL -f infrastructure/supabase/migrations/001_init_schema.sql
+          psql $DATABASE_URL -f infrastructure/supabase/archive/migrations/001_init_schema.sql
 
       - name: Run security tests
         env:
@@ -373,12 +385,14 @@ jobs:
 
 Before deploying to production, ensure:
 
-- [ ] ✅ All 15 security tests pass
-- [ ] ✅ CTO Gate 1 (Isolation) verified
-- [ ] ✅ CTO Gate 2 (Identity) verified
-- [ ] ✅ Tests run automatically in CI/CD
-- [ ] ✅ RLS validation script passes
-- [ ] ✅ JWT hook configured in Supabase
+- [x] Active repository security coverage exists for RLS and bootstrap validation
+- [x] Gate 1 isolation verification is covered by `apps/api/tests/verification/test_gate1_rls.py`
+- [x] Real enforcement coverage exists in `apps/api/tests/security/test_rls_real_enforcement.py`
+- [x] Auth bootstrap fail-closed coverage exists in `apps/api/tests/security/test_fail_closed_auth_bootstrap_smoke.py`
+- [x] Security migration ownership/reconciliation is covered by current Alembic revisions
+- [x] Legacy pgTAP checklist has been superseded by the active backend verification suite for `RUNBOOK-SUPABASE-CHECKLIST`
+
+Verification snapshot: 2026-03-20
 
 **DO NOT DEPLOY TO PRODUCTION IF ANY TEST FAILS.**
 

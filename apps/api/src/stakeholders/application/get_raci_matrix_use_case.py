@@ -50,9 +50,11 @@ class GetRaciMatrixUseCase:
         assignments = await self.stakeholder_repository.list_raci_assignments(project_id)
         assignments_by_task: dict[UUID, list[RaciMatrixAssignment]] = {}
         for assignment in assignments:
+            stakeholder = await self.stakeholder_repository.get_by_id(assignment.stakeholder_id)
             assignments_by_task.setdefault(assignment.wbs_item_id, []).append(
                 RaciMatrixAssignment(
                     stakeholder_id=assignment.stakeholder_id,
+                    stakeholder_name=stakeholder.name if stakeholder else None,
                     role=ROLE_LABELS.get(assignment.raci_role, assignment.raci_role.value),
                     is_verified=assignment.manually_verified,
                 )

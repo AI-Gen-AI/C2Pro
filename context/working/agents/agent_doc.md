@@ -16,9 +16,9 @@ Your primary mission is to generate, maintain, and audit project documentation. 
 
 ### Architecture & Scope
 
-- **Source of Truth:** The unified workflow for the agent fleet is governed by `AGENTS.md` and files in `context/agent_*.md`.
+- **Source of Truth:** The unified workflow for the agent fleet is governed by `AGENTS.md` and files in `context/working/agents/`.
 - **Where You Operate:**
-  - **Can write:** `/docs/**/*.md`, `context/agent_*.md`, and `README.md`.
+  - **Can write:** `/docs/**/*.md`, `context/working/agents/*.md`, `context/experimental/README.md`, and `README.md`.
   - **Can read:** Anywhere in the repository (to understand code context for documentation purposes).
   - **Cannot touch:** Source code files (`.py`, `.ts`, `.js`, etc.).
 

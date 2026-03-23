@@ -10,14 +10,14 @@
 
 ### ✅ Configuración Validada
 
-| Componente | Estado | Configuración |
-|------------|--------|---------------|
-| **Docker Compose** | ✅ OK | postgres:15-alpine en puerto 5433 |
-| **Credenciales** | ✅ OK | test/test |
-| **Base de Datos** | ✅ OK | c2pro_test |
-| **Conexión desde tests** | ✅ OK | 5/5 tests de validación pasando |
-| **Tablas** | ✅ OK | 22 tablas disponibles |
-| **RLS** | ✅ OK | 22 tablas con RLS habilitado |
+| Componente               | Estado | Configuración                     |
+| ------------------------ | ------ | --------------------------------- |
+| **Docker Compose**       | ✅ OK  | postgres:15-alpine en puerto 5433 |
+| **Credenciales**         | ✅ OK  | test/test                         |
+| **Base de Datos**        | ✅ OK  | c2pro_test                        |
+| **Conexión desde tests** | ✅ OK  | 5/5 tests de validación pasando   |
+| **Tablas**               | ✅ OK  | 22 tablas disponibles             |
+| **RLS**                  | ✅ OK  | 22 tablas con RLS habilitado      |
 
 **Conclusión:** La configuración de PostgreSQL para tests locales está **100% funcional** y lista para ejecutar todos los tests.
 
@@ -30,7 +30,7 @@
 **Archivo:** `docker-compose.test.yml`
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   postgres-test:
@@ -42,7 +42,7 @@ services:
       POSTGRES_PASSWORD: test
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5433:5432"  # Expuesto en 5433 para evitar conflicto con PostgreSQL local
+      - "5433:5432" # Expuesto en 5433 para evitar conflicto con PostgreSQL local
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
@@ -62,6 +62,7 @@ volumes:
 ```
 
 **Estado actual:**
+
 ```
 CONTAINER ID: c2pro-test-db
 STATUS: Up About 1 hour (healthy)
@@ -97,6 +98,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5433/c2p
 ```
 
 **Fixture db_engine:**
+
 ```python
 @pytest.fixture(scope="function")
 async def db_engine():
@@ -157,6 +159,7 @@ async def db_engine():
 ```
 
 **Características:**
+
 - ✅ Intenta PostgreSQL primero
 - ✅ Fallback automático a SQLite si PostgreSQL no disponible
 - ✅ Pool de conexiones configurado (5 + 10 overflow)
@@ -177,6 +180,7 @@ python -m pytest tests/test_db_connection.py -v -s
 ```
 
 **Resultado:**
+
 ```
 tests/test_db_connection.py::test_postgresql_connection_available PASSED
 tests/test_db_connection.py::test_postgresql_tables_exist PASSED
@@ -190,11 +194,13 @@ tests/test_db_connection.py::test_postgresql_schema_migrations_table PASSED
 ### Detalles de Validación
 
 #### ✅ 1. Conexión Disponible
+
 ```
 Conectado a: c2pro_test
 ```
 
 #### ✅ 2. Tablas Existentes (22)
+
 ```
 Tablas disponibles:
   - ai_usage_logs
@@ -211,12 +217,14 @@ Tablas disponibles:
 ```
 
 **Tablas críticas validadas:**
+
 - ✅ tenants
 - ✅ users
 - ✅ projects
 - ✅ clauses
 
 #### ✅ 3. RLS Habilitado
+
 ```
 Tablas con RLS habilitado: 22
 ```
@@ -224,20 +232,22 @@ Tablas con RLS habilitado: 22
 Todas las tablas tienen Row Level Security activo.
 
 #### ⚠️ 4. Vistas MCP (Pendientes)
+
 ```
 Vistas MCP disponibles: 0
 
 ADVERTENCIA: No hay vistas MCP. Aplica migraciones con:
-  docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_*.sql
+  docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_*.sql
 ```
 
 **Nota:** Las vistas MCP requieren aplicar la migración 002 completa.
 
 #### ⚠️ 5. Schema Migrations (Pendiente)
+
 ```
 ADVERTENCIA: schema_migrations no existe (BD sin migraciones del runner)
 Las migraciones se aplican con:
-  python infrastructure/supabase/run_migrations.py --env local
+  python infrastructure/supabase/archive/run_migrations.py --env local
 ```
 
 **Nota:** La tabla `schema_migrations` solo existe si se usa el migration runner.
@@ -274,6 +284,7 @@ asyncio.run(test())
 ```
 
 **Salida:**
+
 ```
 ✓ Conectado a: c2pro_test
 ✓ Tablas: 22
@@ -304,8 +315,8 @@ cd infrastructure/supabase
 python run_migrations.py --env local
 
 # Opción 2: Directamente con psql
-docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/migrations/001_initial_schema.sql
-docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/001_init_schema.sql
+docker exec -i c2pro-test-db psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ### 3. Conectar a PostgreSQL
@@ -356,11 +367,13 @@ python -m pytest tests/security/ --cov=src --cov-report=html
 ### Problema 1: "Cannot connect to PostgreSQL"
 
 **Síntoma:**
+
 ```
 OperationalError: could not connect to server
 ```
 
 **Soluciones:**
+
 1. Verificar Docker Desktop está corriendo
 2. Verificar contenedor está up: `docker ps | grep c2pro-test-db`
 3. Reiniciar contenedor: `docker-compose -f docker-compose.test.yml restart`
@@ -371,11 +384,13 @@ OperationalError: could not connect to server
 ### Problema 2: "Database does not exist"
 
 **Síntoma:**
+
 ```
 FATAL: database "c2pro_test" does not exist
 ```
 
 **Solución:**
+
 ```bash
 # Entrar al contenedor y crear manualmente
 docker exec -it c2pro-test-db psql -U test
@@ -389,11 +404,13 @@ CREATE DATABASE c2pro_test;
 ### Problema 3: Tests usan SQLite en lugar de PostgreSQL
 
 **Síntoma:**
+
 ```
 ⚠️  PostgreSQL no disponible, usando SQLite en memoria
 ```
 
 **Verificar:**
+
 1. DATABASE_URL en conftest.py: `postgresql://test:test@localhost:5433/c2pro_test`
 2. Contenedor corriendo y healthy
 3. No hay firewall bloqueando puerto 5433
@@ -403,11 +420,13 @@ CREATE DATABASE c2pro_test;
 ### Problema 4: "Too many connections"
 
 **Síntoma:**
+
 ```
 FATAL: sorry, too many clients already
 ```
 
 **Solución:**
+
 ```bash
 # Aumentar max_connections en PostgreSQL
 docker exec -it c2pro-test-db psql -U test -d c2pro_test
@@ -417,6 +436,7 @@ SELECT pg_reload_conf();
 ```
 
 O modificar `docker-compose.test.yml`:
+
 ```yaml
 environment:
   POSTGRES_MAX_CONNECTIONS: 100
@@ -427,6 +447,7 @@ environment:
 ### Problema 5: Event Loop Errors
 
 **Síntoma:**
+
 ```
 RuntimeError: Task got Future attached to a different loop
 ```
@@ -434,6 +455,7 @@ RuntimeError: Task got Future attached to a different loop
 **Solución:** Ya está resuelto con `scope="function"` en fixtures.
 
 Si persiste:
+
 ```toml
 # pyproject.toml
 [tool.pytest.ini_options]
@@ -524,6 +546,7 @@ async def db_engine():
 ## Estadísticas
 
 ### Configuración
+
 - **PostgreSQL:** 15-alpine
 - **Puerto:** 5433 (externo) → 5432 (interno)
 - **Conexiones max:** Default (100)
@@ -531,11 +554,13 @@ async def db_engine():
 - **Healthcheck:** Cada 5s
 
 ### Tests
+
 - **Tests de validación:** 5/5 pasando
 - **Tiempo de conexión:** ~0.15s
 - **Tiempo total validación:** 0.65s
 
 ### Base de Datos
+
 - **Tablas:** 22
 - **RLS:** 22 tablas (100%)
 - **Vistas MCP:** 0 (requiere migración 002)
@@ -562,15 +587,18 @@ La configuración de PostgreSQL para tests locales está:
 ## Archivos Clave
 
 ### Configuración
+
 - `docker-compose.test.yml` - Definición del contenedor
 - `apps/api/.env.test` - Variables de entorno
 - `apps/api/tests/conftest.py` - Fixtures de conexión
 
 ### Tests
+
 - `apps/api/tests/test_db_connection.py` - Validación de conexión (NUEVO)
 - `apps/api/tests/security/` - Tests de seguridad
 
 ### Documentación
+
 - `POSTGRESQL_TESTS_CONFIG_REPORT.md` - Este documento
 - `FIXTURES_STABILIZATION_REPORT.md` - Estabilización de fixtures
 - `TEST_RESULTS_2026-01-06.md` - Resultados anteriores
@@ -586,4 +614,5 @@ La configuración de PostgreSQL para tests locales está:
 Last Updated: 2026-02-13
 
 Changelog:
+
 - 2026-02-13: Added metadata block during repository-wide docs format pass.

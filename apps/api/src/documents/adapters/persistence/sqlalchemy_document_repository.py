@@ -55,12 +55,12 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     def _to_domain_document(self, orm_document: DocumentORM) -> Document:
         if orm_document is None:
             return None
-        # `DocumentORM.clauses` relationship is optional in this codebase.
-        # Keep mapper robust when the relationship is not declared.
+        # Avoid triggering lazy-loads in async context (MissingGreenlet).
+        # Only map clauses when they are already loaded in instance state.
         clauses: list[Clause] = []
         state = inspect(orm_document)
-        if hasattr(orm_document, "clauses") and "clauses" not in state.unloaded:
-            raw_clauses = getattr(orm_document, "clauses", None) or []
+        if "clauses" in state.mapper.attrs and "clauses" not in state.unloaded:
+            raw_clauses = state.dict.get("clauses") or []
             clauses = [self._to_domain_clause(orm_clause) for orm_clause in raw_clauses]
         
         domain_document = Document(

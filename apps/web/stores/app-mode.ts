@@ -5,17 +5,30 @@ type AppMode = "demo" | "prod";
 
 interface AppModeState {
   mode: AppMode;
+  demoEnvironmentEnabled: boolean;
   setMode: (mode: AppMode) => void;
+  syncWithPathname: (pathname: string | null) => void;
 }
 
-const defaultMode: AppMode =
-  process.env.NEXT_PUBLIC_APP_MODE === "demo" ? "demo" : "prod";
+const demoEnvironmentEnabled = process.env.NEXT_PUBLIC_APP_MODE === "demo";
+
+export function isExplicitDemoRoute(pathname: string | null | undefined): boolean {
+  return pathname === "/demo" || pathname?.startsWith("/demo/") === true;
+}
 
 export const useAppModeStore = create<AppModeState>()(
   devtools(
     (set) => ({
-      mode: defaultMode,
+      mode: "prod",
+      demoEnvironmentEnabled,
       setMode: (mode) => set({ mode }),
+      syncWithPathname: (pathname) =>
+        set({
+          mode:
+            demoEnvironmentEnabled && isExplicitDemoRoute(pathname)
+              ? "demo"
+              : "prod",
+        }),
     }),
     { name: "c2pro-app-mode" },
   ),

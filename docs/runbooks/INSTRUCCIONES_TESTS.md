@@ -13,6 +13,7 @@
 ```
 
 **Tests pasando ahora:**
+
 - ✅ MCP Security: 23/23 (100%)
 - ⏳ JWT Validation: 0/10 (requiere PostgreSQL)
 - ⏳ RLS Isolation: 0/3 (requiere PostgreSQL)
@@ -25,12 +26,14 @@
 ### Paso 1: Iniciar Docker Desktop
 
 **Windows:**
+
 1. Abre el menú de Windows (tecla Windows)
 2. Busca "Docker Desktop"
 3. Haz clic en el icono de Docker Desktop
 4. Espera a que el ícono en la bandeja del sistema esté **verde** (~30 segundos)
 
 **Verificar que Docker está corriendo:**
+
 ```bash
 docker ps
 # Si ves una tabla, Docker está listo ✅
@@ -54,6 +57,7 @@ docker-compose -f docker-compose.test.yml ps
 ```
 
 **Esperar a que PostgreSQL esté listo (10 segundos):**
+
 ```bash
 # Opción 1: Esperar manualmente
 timeout /t 10
@@ -70,7 +74,7 @@ docker-compose -f docker-compose.test.yml logs -f postgres-test
 
 ```bash
 # Aplicar la migración de security foundation
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 
 # Verificar que se aplicó correctamente
 docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test -c "\dt"
@@ -78,12 +82,13 @@ docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d 
 ```
 
 **Si hay error "database does not exist":**
+
 ```bash
 # Crear la base de datos manualmente
 docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -c "CREATE DATABASE c2pro_test;"
 
 # Reintentar la migración
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---
@@ -100,11 +105,13 @@ python -m pytest tests/security/ -v
 ```
 
 **Ver solo resumen:**
+
 ```bash
 python -m pytest tests/security/ --tb=no
 ```
 
 **Con cobertura:**
+
 ```bash
 python -m pytest tests/security/ -v --cov=src --cov-report=html --cov-report=term
 ```
@@ -161,6 +168,7 @@ python -m pytest tests/security/test_sql_injection.py -v
 **Problema:** Docker Desktop no está corriendo
 
 **Solución:**
+
 1. Abre Docker Desktop manualmente desde el menú de Windows
 2. Espera a que el ícono esté verde
 3. Ejecuta `docker ps` para verificar
@@ -174,6 +182,7 @@ python -m pytest tests/security/test_sql_injection.py -v
 **Solución:** Inicia PostgreSQL con Docker (pasos arriba)
 
 **Alternativa (sin Docker):**
+
 ```bash
 # Solo ejecutar tests que NO requieren BD
 cd apps/api
@@ -188,12 +197,13 @@ python -m pytest tests/security/test_mcp_security.py -v
 **Problema:** La base de datos c2pro_test no se creó automáticamente
 
 **Solución:**
+
 ```bash
 # Crear manualmente
 docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -c "CREATE DATABASE c2pro_test;"
 
 # Aplicar migraciones
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---
@@ -203,12 +213,13 @@ docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d 
 **Problema:** Las migraciones no se aplicaron correctamente
 
 **Solución:**
+
 ```bash
 # Verificar qué tablas existen
 docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test -c "\dt"
 
 # Si está vacío, aplicar migraciones nuevamente
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---
@@ -236,7 +247,7 @@ docker-compose -f docker-compose.test.yml up -d
 timeout /t 10
 
 # Aplicar migraciones
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ### Detener PostgreSQL (cuando termines)
@@ -300,6 +311,7 @@ python -m pytest tests/security/test_mcp_security.py -v
 ```
 
 **Qué se validó:**
+
 - ✅ Allowlist de vistas y funciones
 - ✅ SQL injection bloqueado
 - ✅ Rate limiting por tenant
@@ -376,4 +388,5 @@ docker-compose -f docker-compose.test.yml exec postgres-test psql -U test -d c2p
 Last Updated: 2026-02-13
 
 Changelog:
+
 - 2026-02-13: Added metadata block during repository-wide docs format pass.

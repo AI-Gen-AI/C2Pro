@@ -2,40 +2,26 @@
  * Test Suite ID: S2-09
  * Roadmap Reference: S2-09 Document upload (drag-drop, PDF/XLSX/BC3, chunked)
  */
-import { fireEvent, render, screen } from "@/src/tests/test-utils";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DocumentUploadDropzone } from "@/components/features/documents/DocumentUploadDropzone";
+
+const uploadDocumentMock = vi.fn();
+
+vi.mock("@/lib/api", () => ({
+  uploadDocument: (...args: unknown[]) => uploadDocumentMock(...args),
+}));
 
 function createFile(name: string, type: string, size = 1024): File {
   return new File([new Uint8Array(size)], name, { type });
 }
 
-describe("S2-09 RED - DocumentUploadDropzone", () => {
-  it("[S2-09-RED-01] accepts only PDF/XLSX/BC3 files", async () => {
-    /** Roadmap: S2-09 */
-    render(<DocumentUploadDropzone projectId="proj_demo_001" />);
-
-    const dropzone = screen.getByRole("button", { name: /upload documents/i });
-    fireEvent.drop(dropzone, {
-      dataTransfer: {
-        files: [
-          createFile("contract.pdf", "application/pdf"),
-          createFile(
-            "schedule.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          ),
-          createFile("budget.bc3", "application/octet-stream"),
-        ],
-      },
-    });
-
-    expect(
-      await screen.findByText(/3 files ready for upload/i),
-    ).toBeInTheDocument();
+describe("S2-09 - DocumentUploadDropzone", () => {
+  afterEach(() => {
+    uploadDocumentMock.mockReset();
   });
 
-  it("[S2-09-RED-01b] rejects non-allowlisted extensions with explicit error", async () => {
-    /** Roadmap: S2-09 */
+  it("rejects non-allowlisted extensions with explicit error", async () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
     const dropzone = screen.getByRole("button", { name: /upload documents/i });
@@ -50,10 +36,10 @@ describe("S2-09 RED - DocumentUploadDropzone", () => {
         /unsupported file type: \.exe\. allowed: pdf, xlsx, bc3/i,
       ),
     ).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
   });
 
-  it("[S2-09-RED-02] updates drag state and aria labels during DnD lifecycle", () => {
-    /** Roadmap: S2-09 */
+  it("updates drag state and aria labels during DnD lifecycle", () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
     const dropzone = screen.getByRole("button", { name: /upload documents/i });
@@ -67,21 +53,17 @@ describe("S2-09 RED - DocumentUploadDropzone", () => {
     expect(dropzone).toHaveAttribute("aria-label", "Upload documents");
   });
 
-  it("[S2-09-RED-11] supports keyboard file selection and announces status in live region", async () => {
-    /** Roadmap: S2-09 */
+  it("supports keyboard file selection and announces status in the live region", () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
     const browseButton = screen.getByRole("button", { name: /browse files/i });
     browseButton.focus();
     fireEvent.keyDown(browseButton, { key: "Enter" });
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      /file picker opened/i,
-    );
+    expect(screen.getByRole("status")).toHaveTextContent(/file picker opened/i);
   });
 
-  it("[S2-09-RED-12] blocks oversize files with exact feedback", async () => {
-    /** Roadmap: S2-09 */
+  it("blocks oversize files with exact feedback", async () => {
     render(
       <DocumentUploadDropzone
         projectId="proj_demo_001"
@@ -99,6 +81,44 @@ describe("S2-09 RED - DocumentUploadDropzone", () => {
     expect(
       await screen.findByText(/file exceeds 10mb limit: large\.pdf/i),
     ).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("reports upload acceptance without implying backend processing is finished", async () => {
+    uploadDocumentMock.mockResolvedValue({ id: "doc-1", task_id: "task-1" });
+    const onUploadComplete = vi.fn();
+
+    render(
+      <DocumentUploadDropzone
+        projectId="proj_live_001"
+        onUploadComplete={onUploadComplete}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile("contract.pdf", "application/pdf")],
+      },
+    });
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_live_001",
+        expect.objectContaining({ name: "contract.pdf" }),
+        "CONTRACT",
+      );
+    });
+
+    expect(
+      await screen.findByText(
+        /upload accepted for 1 file\(s\)\. backend processing is still required\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /upload request accepted/i,
+    );
+    expect(screen.queryByText(/upload complete!/i)).not.toBeInTheDocument();
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
   });
 });
-

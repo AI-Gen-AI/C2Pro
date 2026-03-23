@@ -11,17 +11,21 @@ import { documentViewerHandlers } from "./custom/document-viewer";
 import { observabilityHandlers } from "./custom/observability";
 import { raciHandlers } from "./custom/raci";
 
-export const handlers = [
+export const browserHandlers = [
   healthHandler,
   processingStreamHandler,
   ...demoDataHandlers,
-  ...uploadHandlers,
   ...alertReviewHandlers,
   ...legalDisclaimerHandlers,
   ...cookieConsentHandlers,
-  ...onboardingSampleProjectHandlers,
   ...s312A11yResponsiveHandlers,
-  ...documentViewerHandlers,
   ...observabilityHandlers,
   ...raciHandlers,
+];
+
+export const testHandlers = [
+  ...browserHandlers,
+  ...uploadHandlers,
+  ...onboardingSampleProjectHandlers,
+  ...documentViewerHandlers,
 ];

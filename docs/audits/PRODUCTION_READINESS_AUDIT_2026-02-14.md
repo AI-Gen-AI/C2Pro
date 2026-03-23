@@ -6,6 +6,8 @@
 > **Classification:** Internal - Engineering Leadership  
 > **Scope:** Full-stack assessment of development status, configuration, and production readiness
 
+> **Status Update (2026-03-20):** This document is a dated readiness audit baseline. Multiple items that were open in February have since been completed in the repo, including Sentry lifecycle wiring, MCP rate/audit persistence, Supabase bootstrap checklist completion, ORM reintegration work, alert mutation admin authz, model-router-backed pricing, and persisted coherence dashboard derivation.
+
 ---
 
 ## Executive Summary

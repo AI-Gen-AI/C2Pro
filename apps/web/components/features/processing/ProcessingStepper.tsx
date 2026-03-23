@@ -4,6 +4,9 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
+import { handleAuthErrorStatus } from "@/lib/api/client";
+import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
+import { useAuthStore } from "@/stores/auth";
 
 type StageData = {
   stage: number;
@@ -40,7 +43,9 @@ function isString(value: unknown): value is string {
   return typeof value === "string";
 }
 
-export function isProcessingSseEvent(value: unknown): value is ProcessingSseEvent {
+export function isProcessingSseEvent(
+  value: unknown,
+): value is ProcessingSseEvent {
   if (!isRecord(value) || !isString(value.event) || !isRecord(value.data)) {
     return false;
   }
@@ -57,7 +62,8 @@ export function isProcessingSseEvent(value: unknown): value is ProcessingSseEven
     return (
       isNumber(value.data.global_score) &&
       isNumber(value.data.documents_analyzed) &&
-      (value.data.completed_at === undefined || isString(value.data.completed_at))
+      (value.data.completed_at === undefined ||
+        isString(value.data.completed_at))
     );
   }
 
@@ -77,15 +83,31 @@ export function createProcessingEventSource(
     return existing;
   }
 
-  const source = new EventSource(`/api/v1/projects/${projectId}/process/stream`, {
-    ...init,
-    withCredentials: true,
-  });
+  const { token } = useAuthStore.getState();
+  if (!token) {
+    handleAuthErrorStatus(401);
+    throw new Error("Authenticated SSE session required");
+  }
+
+  const source = new EventSource(
+    getStreamProjectProcessingUrl(projectId, { access_token: token }),
+    {
+      ...init,
+      withCredentials: true,
+    },
+  );
   eventSourcesByProject.set(projectId, source);
   return source;
 }
 
 const eventSourcesByProject = new Map<string, EventSource>();
+
+export function resetProcessingEventSourcesForTests() {
+  for (const source of eventSourcesByProject.values()) {
+    source.close();
+  }
+  eventSourcesByProject.clear();
+}
 
 export function ProcessingStepper({ projectId }: { projectId: string }) {
   const [state, setState] = useState<StepperState>({
@@ -133,12 +155,19 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
     };
 
     const onError = () => {
+      const hasToken = !!useAuthStore.getState().token;
       flushSync(() => {
         setState((current) => ({
           ...current,
-          statusText: "Processing stream interrupted",
+          statusText: hasToken
+            ? "Processing stream interrupted"
+            : "Session expired",
         }));
       });
+
+      if (!hasToken) {
+        handleAuthErrorStatus(401);
+      }
     };
 
     source.addEventListener("stage", onStage as EventListener);

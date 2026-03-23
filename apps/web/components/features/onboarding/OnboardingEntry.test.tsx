@@ -10,8 +10,13 @@ describe("S3-11 RED - OnboardingEntry", () => {
   it("[S3-11-RED-UNIT-01] renders sample project CTA and checklist", () => {
     render(<OnboardingEntry onStartSampleProject={() => {}} />);
 
-    expect(screen.getByRole("button", { name: /start with sample project/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open demo sample project/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("list", { name: /onboarding checklist/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/non-production sample workspace for evaluation only/i),
+    ).toBeInTheDocument();
   });
 
   it("[S3-11-RED-UNIT-03] shows actionable timeout error with retry", () => {
@@ -24,7 +29,9 @@ describe("S3-11 RED - OnboardingEntry", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(/provisioning timed out/i);
-    expect(screen.getByRole("button", { name: /retry setup/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /retry demo setup/i }),
+    ).toBeInTheDocument();
   });
 
   it("[S3-11-RED-UNIT-05] exposes accessible headings/list/live status and keyboard activation", () => {
@@ -34,7 +41,7 @@ describe("S3-11 RED - OnboardingEntry", () => {
     expect(screen.getByRole("heading", { name: /get started fast/i })).toBeInTheDocument();
     expect(screen.getByRole("status")).toBeInTheDocument();
 
-    const cta = screen.getByRole("button", { name: /start with sample project/i });
+    const cta = screen.getByRole("button", { name: /open demo sample project/i });
     cta.focus();
     fireEvent.keyDown(cta, { key: "Enter" });
     expect(onStart).toHaveBeenCalled();

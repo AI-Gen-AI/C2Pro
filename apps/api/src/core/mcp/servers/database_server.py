@@ -1,5 +1,5 @@
 """
-C2Pro - MCP Database Server
+TS-UC-SEC-MCP-002, TS-UC-SEC-MCP-004: C2Pro MCP Database Server.
 
 Servidor MCP para acceso seguro a la base de datos.
 
@@ -14,17 +14,22 @@ SEGURIDAD CRÍTICA:
 CTO GATE 3: MCP Security
 """
 
+import asyncio
+import json
 import time
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
+from uuid import uuid4
 from uuid import UUID
 
+import redis.asyncio as redis
 import structlog
+from redis.exceptions import RedisError
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import get_session
+from src.core.database import get_raw_session
 
 logger = structlog.get_logger()
 
@@ -136,6 +141,89 @@ class QueryAuditLog(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
+class RateLimitBackend(Protocol):
+    """Refers to Suite ID: TS-UC-SEC-MCP-002."""
+
+    async def increment_and_get_count(
+        self, tenant_id: str, now_epoch: float, window_seconds: int
+    ) -> int: ...
+
+    async def get_count(self, tenant_id: str, now_epoch: float, window_seconds: int) -> int: ...
+
+
+class InMemoryRateLimitBackend:
+    """Refers to Suite ID: TS-UC-SEC-MCP-002."""
+
+    def __init__(self) -> None:
+        self._requests: dict[str, list[float]] = {}
+
+    async def increment_and_get_count(
+        self, tenant_id: str, now_epoch: float, window_seconds: int
+    ) -> int:
+        requests = self._requests.setdefault(tenant_id, [])
+        window_start = now_epoch - window_seconds
+        self._requests[tenant_id] = [timestamp for timestamp in requests if timestamp > window_start]
+        self._requests[tenant_id].append(now_epoch)
+        return len(self._requests[tenant_id])
+
+    async def get_count(self, tenant_id: str, now_epoch: float, window_seconds: int) -> int:
+        requests = self._requests.get(tenant_id, [])
+        window_start = now_epoch - window_seconds
+        active_requests = [timestamp for timestamp in requests if timestamp > window_start]
+        self._requests[tenant_id] = active_requests
+        return len(active_requests)
+
+
+class RedisRateLimitBackend:
+    """Refers to Suite ID: TS-UC-SEC-MCP-002."""
+
+    def __init__(
+        self,
+        redis_client: redis.Redis | None = None,
+        redis_url: str | None = None,
+    ) -> None:
+        self._redis = redis_client
+        self._redis_url = redis_url
+        self._loop_id: int | None = None
+
+    async def _get_redis(self) -> redis.Redis:
+        if self._redis is not None and self._redis_url is None:
+            return self._redis
+
+        if not self._redis_url:
+            raise RuntimeError("Redis URL is required when no client is provided")
+
+        current_loop_id = id(asyncio.get_running_loop())
+        if self._redis is None or self._loop_id != current_loop_id:
+            self._redis = redis.from_url(self._redis_url)
+            self._loop_id = current_loop_id
+
+        return self._redis
+
+    def _key(self, tenant_id: str) -> str:
+        return f"mcp:rate-limit:{tenant_id}"
+
+    async def increment_and_get_count(
+        self, tenant_id: str, now_epoch: float, window_seconds: int
+    ) -> int:
+        redis_client = await self._get_redis()
+        key = self._key(tenant_id)
+        member = f"{now_epoch}:{uuid4()}"
+        window_start = now_epoch - window_seconds
+        await redis_client.zremrangebyscore(key, "-inf", window_start)
+        current_count = await redis_client.zcard(key)
+        await redis_client.zadd(key, {member: now_epoch})
+        await redis_client.expire(key, window_seconds * 5)
+        return int(current_count) + 1
+
+    async def get_count(self, tenant_id: str, now_epoch: float, window_seconds: int) -> int:
+        redis_client = await self._get_redis()
+        key = self._key(tenant_id)
+        window_start = now_epoch - window_seconds
+        await redis_client.zremrangebyscore(key, "-inf", window_start)
+        return int(await redis_client.zcard(key))
+
+
 # ===========================================
 # MCP DATABASE SERVER
 # ===========================================
@@ -163,14 +251,17 @@ class DatabaseMCPServer:
     """
 
     def __init__(
-        self, query_limits: QueryLimits | None = None, rate_limits: RateLimits | None = None
+        self,
+        query_limits: QueryLimits | None = None,
+        rate_limits: RateLimits | None = None,
+        rate_limit_backend: RateLimitBackend | None = None,
+        time_provider: Any | None = None,
     ):
         self.query_limits = query_limits or QueryLimits()
         self.rate_limits = rate_limits or RateLimits()
-
-        # Simple in-memory rate limiting
-        # TODO: Mover a Redis para producción
-        self._rate_limit_store: dict[str, list[float]] = {}
+        self._rate_limit_backend = rate_limit_backend or InMemoryRateLimitBackend()
+        self._fallback_rate_limit_backend = InMemoryRateLimitBackend()
+        self._time_provider = time_provider or time.time
 
         logger.info(
             "mcp_database_server_initialized",
@@ -215,25 +306,44 @@ class DatabaseMCPServer:
             - Loguea para auditoría
         """
         # Rate limiting
-        self._check_rate_limit(tenant_id)
+        await self._check_rate_limit(tenant_id)
 
         start_time = time.perf_counter()
 
         # Si no se pasa db, crear una sesión
         if db is None:
-            async with get_session() as db:
-                result = await self._execute_view_query(request, tenant_id, user_id, db)
-        else:
-            result = await self._execute_view_query(request, tenant_id, user_id, db)
+            async with get_raw_session() as session:
+                result = await self._execute_view_query(request, tenant_id, user_id, session)
+                execution_time_ms = (time.perf_counter() - start_time) * 1000
+                await self._log_query(
+                    db=session,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    query_type="view",
+                    view_name=request.view_name,
+                    function_name=None,
+                    project_id=request.project_id,
+                    row_count=result.row_count,
+                    execution_time_ms=execution_time_ms,
+                )
+                result.execution_time_ms = round(execution_time_ms, 2)
+                return result
+        active_db = db
+        if active_db is None:
+            raise RuntimeError("Database session is required for MCP query execution")
+
+        result = await self._execute_view_query(request, tenant_id, user_id, active_db)
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
         # Auditoría
         await self._log_query(
+            db=active_db,
             tenant_id=tenant_id,
             user_id=user_id,
             query_type="view",
             view_name=request.view_name,
+            function_name=None,
             project_id=request.project_id,
             row_count=result.row_count,
             execution_time_ms=execution_time_ms,
@@ -269,24 +379,43 @@ class DatabaseMCPServer:
             - Loguea para auditoría
         """
         # Rate limiting
-        self._check_rate_limit(tenant_id)
+        await self._check_rate_limit(tenant_id)
 
         start_time = time.perf_counter()
 
         # Si no se pasa db, crear una sesión
         if db is None:
-            async with get_session() as db:
-                result = await self._execute_function_call(request, tenant_id, user_id, db)
-        else:
-            result = await self._execute_function_call(request, tenant_id, user_id, db)
+            async with get_raw_session() as session:
+                result = await self._execute_function_call(request, tenant_id, user_id, session)
+                execution_time_ms = (time.perf_counter() - start_time) * 1000
+                await self._log_query(
+                    db=session,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    query_type="function",
+                    view_name=None,
+                    function_name=request.function_name,
+                    project_id=request.params.get("project_id"),
+                    row_count=result.row_count,
+                    execution_time_ms=execution_time_ms,
+                )
+                result.execution_time_ms = round(execution_time_ms, 2)
+                return result
+        active_db = db
+        if active_db is None:
+            raise RuntimeError("Database session is required for MCP function execution")
+
+        result = await self._execute_function_call(request, tenant_id, user_id, active_db)
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
         # Auditoría
         await self._log_query(
+            db=active_db,
             tenant_id=tenant_id,
             user_id=user_id,
             query_type="function",
+            view_name=None,
             function_name=request.function_name,
             project_id=request.params.get("project_id"),
             row_count=result.row_count,
@@ -416,47 +545,30 @@ class DatabaseMCPServer:
             function_name=request.function_name,
         )
 
-    def _check_rate_limit(self, tenant_id: UUID) -> None:
+    async def _check_rate_limit(self, tenant_id: UUID) -> None:
         """
         Verifica rate limit para el tenant.
 
         Raises:
             PermissionError: Si se excede el rate limit
         """
-        now = time.time()
-        key = f"tenant:{tenant_id}"
+        now = self._time_provider()
+        request_count = await self._increment_rate_limit_count(str(tenant_id), now)
 
-        # Inicializar si no existe
-        if key not in self._rate_limit_store:
-            self._rate_limit_store[key] = []
-
-        # Filtrar requests recientes (últimos 60 segundos)
-        minute_ago = now - 60
-        recent_requests = [ts for ts in self._rate_limit_store[key] if ts > minute_ago]
-
-        # Verificar límite por minuto
-        if len(recent_requests) >= self.rate_limits.per_tenant_per_minute:
+        if request_count > self.rate_limits.per_tenant_per_minute:
             logger.warning(
                 "mcp_rate_limit_exceeded",
                 tenant_id=str(tenant_id),
-                requests_in_window=len(recent_requests),
+                requests_in_window=request_count,
                 limit=self.rate_limits.per_tenant_per_minute,
             )
             raise PermissionError(
                 f"Rate limit exceeded: {self.rate_limits.per_tenant_per_minute} requests/minute"
             )
 
-        # Registrar request actual
-        self._rate_limit_store[key].append(now)
-
-        # Cleanup (mantener solo últimas 5 minutos)
-        five_minutes_ago = now - 300
-        self._rate_limit_store[key] = [
-            ts for ts in self._rate_limit_store[key] if ts > five_minutes_ago
-        ]
-
     async def _log_query(
         self,
+        db: AsyncSession,
         tenant_id: UUID,
         user_id: UUID | None,
         query_type: Literal["view", "function"],
@@ -468,8 +580,6 @@ class DatabaseMCPServer:
     ) -> None:
         """
         Registra query en logs de auditoría.
-
-        TODO: En producción, guardar en tabla audit_logs de BD
         """
         audit_log = QueryAuditLog(
             tenant_id=tenant_id,
@@ -487,23 +597,85 @@ class DatabaseMCPServer:
             **audit_log.model_dump(exclude_none=True),
         )
 
-        # TODO: Guardar en tabla audit_logs
-        # async with get_session() as db:
-        #     await db.execute(
-        #         text("""
-        #             INSERT INTO audit_logs
-        #             (tenant_id, user_id, action, resource_type, resource_id, metadata)
-        #             VALUES (:tenant_id, :user_id, :action, :resource_type, :resource_id, :metadata)
-        #         """),
-        #         {
-        #             "tenant_id": str(tenant_id),
-        #             "user_id": str(user_id) if user_id else None,
-        #             "action": "mcp_query",
-        #             "resource_type": query_type,
-        #             "resource_id": str(project_id) if project_id else None,
-        #             "metadata": audit_log.model_dump_json(),
-        #         }
-        #     )
+        changes = {
+            "query_type": query_type,
+            "view_name": view_name,
+            "function_name": function_name,
+            "row_count": row_count,
+            "execution_time_ms": round(execution_time_ms, 2),
+            "project_id": str(project_id) if project_id else None,
+        }
+
+        await db.execute(
+            text(
+                """
+                INSERT INTO audit_logs (
+                    tenant_id,
+                    user_id,
+                    action,
+                    resource_type,
+                    resource_id,
+                    changes,
+                    ip_address,
+                    user_agent,
+                    created_at
+                ) VALUES (
+                    :tenant_id,
+                    :user_id,
+                    :action,
+                    :resource_type,
+                    :resource_id,
+                    CAST(:changes AS JSONB),
+                    :ip_address,
+                    :user_agent,
+                    :created_at
+                )
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "action": f"mcp.query.{query_type}",
+                "resource_type": f"mcp_{query_type}",
+                "resource_id": project_id,
+                "changes": json.dumps(changes),
+                "ip_address": None,
+                "user_agent": None,
+                "created_at": audit_log.timestamp,
+            },
+        )
+
+    async def _increment_rate_limit_count(self, tenant_id: str, now_epoch: float) -> int:
+        try:
+            return await self._rate_limit_backend.increment_and_get_count(
+                tenant_id=tenant_id,
+                now_epoch=now_epoch,
+                window_seconds=60,
+            )
+        except (RedisError, RuntimeError, OSError) as exc:
+            logger.warning("mcp_rate_limit_backend_fallback", error=str(exc), tenant_id=tenant_id)
+            self._rate_limit_backend = self._fallback_rate_limit_backend
+            return await self._rate_limit_backend.increment_and_get_count(
+                tenant_id=tenant_id,
+                now_epoch=now_epoch,
+                window_seconds=60,
+            )
+
+    async def _get_rate_limit_count(self, tenant_id: str, now_epoch: float) -> int:
+        try:
+            return await self._rate_limit_backend.get_count(
+                tenant_id=tenant_id,
+                now_epoch=now_epoch,
+                window_seconds=60,
+            )
+        except (RedisError, RuntimeError, OSError) as exc:
+            logger.warning("mcp_rate_limit_backend_fallback", error=str(exc), tenant_id=tenant_id)
+            self._rate_limit_backend = self._fallback_rate_limit_backend
+            return await self._rate_limit_backend.get_count(
+                tenant_id=tenant_id,
+                now_epoch=now_epoch,
+                window_seconds=60,
+            )
 
     # ===========================================
     # UTILITY METHODS
@@ -519,31 +691,20 @@ class DatabaseMCPServer:
         """Retorna lista de funciones permitidas."""
         return sorted(ALLOWED_FUNCTIONS)
 
-    def get_rate_limit_status(self, tenant_id: UUID) -> dict[str, Any]:
+    async def get_rate_limit_status(self, tenant_id: UUID) -> dict[str, Any]:
         """
         Retorna estado actual del rate limit para un tenant.
 
         Returns:
             dict con requests_in_window, limit, remaining
         """
-        now = time.time()
-        key = f"tenant:{tenant_id}"
-
-        if key not in self._rate_limit_store:
-            return {
-                "requests_in_window": 0,
-                "limit": self.rate_limits.per_tenant_per_minute,
-                "remaining": self.rate_limits.per_tenant_per_minute,
-                "window_seconds": 60,
-            }
-
-        minute_ago = now - 60
-        recent_requests = [ts for ts in self._rate_limit_store[key] if ts > minute_ago]
+        now = self._time_provider()
+        request_count = await self._get_rate_limit_count(str(tenant_id), now)
 
         return {
-            "requests_in_window": len(recent_requests),
+            "requests_in_window": request_count,
             "limit": self.rate_limits.per_tenant_per_minute,
-            "remaining": max(0, self.rate_limits.per_tenant_per_minute - len(recent_requests)),
+            "remaining": max(0, self.rate_limits.per_tenant_per_minute - request_count),
             "window_seconds": 60,
         }
 
@@ -567,6 +728,16 @@ def get_mcp_server() -> DatabaseMCPServer:
     global _mcp_server
 
     if _mcp_server is None:
-        _mcp_server = DatabaseMCPServer()
+        try:
+            from src.config import settings
+
+            rate_limit_backend: RateLimitBackend | None = None
+            if settings.redis_url:
+                rate_limit_backend = RedisRateLimitBackend(redis_url=settings.redis_url)
+
+            _mcp_server = DatabaseMCPServer(rate_limit_backend=rate_limit_backend)
+        except RedisError as exc:
+            logger.warning("mcp_rate_limit_redis_unavailable", error=str(exc))
+            _mcp_server = DatabaseMCPServer()
 
     return _mcp_server

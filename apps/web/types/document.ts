@@ -5,6 +5,9 @@
 
 export type DocumentType = 'contract' | 'schedule' | 'bom' | 'specification' | 'drawing';
 
+/** Processing status for documents */
+export type DocumentProcessingStatus = 'queued' | 'processing' | 'parsed' | 'error';
+
 export interface DocumentInfo {
   /** Unique identifier for the document */
   id: string;
@@ -22,6 +25,8 @@ export interface DocumentInfo {
   fileSize?: number;
   /** Upload/creation date */
   uploadedAt?: Date;
+  /** Processing status */
+  status?: DocumentProcessingStatus;
 }
 
 export interface DocumentViewState {

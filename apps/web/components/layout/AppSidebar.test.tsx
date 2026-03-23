@@ -4,12 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { AppSidebar } from "./AppSidebar";
 
+const pathnameState = { value: "/projects" };
+
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/projects",
+  usePathname: () => pathnameState.value,
   useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({
     push: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock("@/lib/api/generated", () => ({}));
 
 describe("AppSidebar", () => {
   it("renders primary navigation with active link state", () => {
+    pathnameState.value = "/projects";
     renderWithProviders(<AppSidebar />);
 
     const nav = screen.getByRole("navigation", { name: /primary/i });
@@ -32,6 +35,7 @@ describe("AppSidebar", () => {
   });
 
   it("toggles collapsed state via the control button", async () => {
+    pathnameState.value = "/projects";
     const user = userEvent.setup();
     renderWithProviders(<AppSidebar />);
 
@@ -43,5 +47,31 @@ describe("AppSidebar", () => {
     expect(
       screen.getByRole("button", { name: /expand sidebar/i }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps real workspace navigation out of the /demo route space", () => {
+    pathnameState.value = "/projects";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /projects/i })).toHaveAttribute(
+      "href",
+      "/projects",
+    );
+    expect(screen.getByRole("link", { name: /settings/i })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+  });
+
+  it("marks demo route context as sample data only", () => {
+    pathnameState.value = "/demo/projects";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByText(/demo workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/sample data only/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /projects/i })).toHaveAttribute(
+      "href",
+      "/demo/projects",
+    );
   });
 });

@@ -1,0 +1,134 @@
+{
+  "project_metadata": {
+    "id": "P-010211",
+    "name": "Smart Solar Plant Sanlucar",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Proyecto de planta piloto Smart Solar Plant en Sanlucar la Mayor con una planta fotovoltaica de 1 MW y un sistema de almacenamiento de 1 MW/20 min. La documentacion incluye contrato con Jema para suministro DDP de inversor, generador de armonicos y convertidor del sistema de almacenamiento, asi como adjudicacion a Atersa para fabricar, suministrar y entregar 3.990 modulos FV de 300 Wp con precio fijo y entregas en enero de 2015.",
+    "schedule_summary": {
+      "key_deliveries": {
+        "inverter_ce1": "2015-01-14",
+        "bess_ce2_ce3": "2015-01-28",
+        "modules_lot_1": "2015-W02",
+        "modules_lot_2": "2015-W03"
+      }
+    },
+    "budget_summary": {
+      "modules_total_eur": 593712.0,
+      "jema_package_eur": 456685.0,
+      "initial_module_request_eur": 596106.0,
+      "line_items": [
+        {
+          "name": "Modulos FV Atersa",
+          "cost": 593712.0
+        },
+        {
+          "name": "Paquete inversor y almacenamiento Jema",
+          "cost": 456685.0
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "Jema debe suministrar el inversor SI-1000, el sistema SIB-1000 y el harmonic generator, incluyendo ingenieria, fabricacion, transporte, supervision, formacion, ensayos y documentacion.",
+        "metadata": {
+          "delivery_term": "DDP"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "Las entregas principales quedan fijadas en enero de 2015, con CE1 el 14/01/2015 y CE2-CE3 el 28/01/2015; los modulos FV se entregan en las semanas 2 y 3 de 2015.",
+        "metadata": {
+          "ce1": "2015-01-14",
+          "ce2_ce3": "2015-01-28"
+        }
+      },
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "Si Jema incumple los hitos CE1, CE2 o CE3 por causa imputable, se aplican danos liquidados del 3,5% del precio del contrato por la primera semana de retraso y del 7% por la segunda, con un maximo del 10,5%.",
+        "metadata": {
+          "penalty_first_week_pct": 3.5,
+          "penalty_second_week_pct": 7.0,
+          "penalty_cap_pct": 10.5
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "Los modulos FV deben cumplir requisitos minimos de eficiencia, uniformidad de fabricante/modelo y garantias de potencia a 10 y 25 anos.",
+        "metadata": {
+          "efficiency_min_pct": 13.5,
+          "power_warranty_10y_pct": 90.0,
+          "power_warranty_25y_pct": 80.0
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Instalaciones Inabensa, S.A.",
+        "mention": "Inabensa",
+        "role": "Comprador y EPC",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Jema",
+        "mention": "Jema",
+        "role": "Proveedor de inversor y BESS",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Atersa",
+        "mention": "Atersa",
+        "role": "Proveedor de modulos FV",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Abengoa Solar, S.A.",
+        "mention": "Abengoa Solar",
+        "role": "Owner/cliente interno",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "CAN-SSP-01",
+        "severity": "critical",
+        "description": "La cancelacion del proyecto se comunica despues de haberse firmado el contrato con Jema y emitido la adjudicacion a Atersa, generando riesgo de costes hundidos y reclamaciones de cancelacion.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "jema_contract"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "project_cancellation_notice"
+          }
+        ]
+      },
+      {
+        "rule_id": "SCH-SSP-01",
+        "severity": "warning",
+        "description": "Las entregas de modulos, inversor, almacenamiento y harmonic generator convergen en una ventana muy comprimida de enero de 2015, con poco margen ante retrasos.",
+        "conflicting_elements": [
+          {
+            "source": "schedule_summary",
+            "identifier": "key_deliveries"
+          },
+          {
+            "source": "budget_summary",
+            "identifier": "modules_total_eur"
+          }
+        ]
+      }
+    ]
+  }
+}

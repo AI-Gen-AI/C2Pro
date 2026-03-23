@@ -1,8 +1,13 @@
 "use client";
 
 import { createContext, useContext, type ReactNode, useMemo } from "react";
-import { useAuth as useClerkAuth, useOrganization, useUser } from "@clerk/nextjs";
+import {
+  useAuth as useClerkAuth,
+  useOrganization,
+  useUser,
+} from "@clerk/nextjs";
 import { useAuthStore } from "@/stores/auth";
+import { getTenantIdFromOrganizationMetadata } from "@/lib/clerk-tenant";
 
 // =============================================================================
 // Types
@@ -63,7 +68,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       | undefined;
 
     // tenant_id maps Clerk org -> Supabase RLS tenant
-    const tenantId = (orgMetadata?.tenant_id as string | undefined) ?? null;
+    const tenantId = getTenantIdFromOrganizationMetadata(organization);
 
     // Demo mode flag for read-only demo workspaces
     const isDemoMode = orgMetadata?.is_demo === true;
@@ -75,8 +80,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ? (rawTier as ServiceTier)
         : "free";
 
+    const hasAccessToken =
+      typeof accessToken === "string" && accessToken.length > 0;
+    const isWaitingForToken = isLoaded && !!isSignedIn && !hasAccessToken;
+
     // User is authorized if they have a valid tenant_id
-    const isAuthorized = !!tenantId;
+    const isAuthorized = !!tenantId && hasAccessToken;
 
     return {
       user: user
@@ -99,8 +108,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       serviceTier,
       isAuthorized,
       accessToken,
-      isAuthenticated: !!isSignedIn,
-      isLoading: !isLoaded,
+      isAuthenticated: !!isSignedIn && hasAccessToken,
+      isLoading: !isLoaded || isWaitingForToken,
       userRole: role,
       logout: () => signOut(),
       login: async () => {

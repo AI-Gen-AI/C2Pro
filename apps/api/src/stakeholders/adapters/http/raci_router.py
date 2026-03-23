@@ -38,6 +38,15 @@ router = APIRouter(
     responses={404: {"description": "Not Found"}},
 )
 
+# Global RACI router — mounted before project-scoped router to avoid route conflicts
+raci_global_router = APIRouter(
+    prefix="",
+    tags=["RACI"],
+    responses={404: {"description": "Not Found"}},
+)
+
+router.include_router(raci_global_router)
+
 def get_stakeholder_repository(
     db: AsyncSession = Depends(get_session),
 ) -> SqlAlchemyStakeholderRepository:
@@ -72,6 +81,31 @@ def get_upsert_use_case(
         stakeholder_repository=stakeholder_repo,
         wbs_repository=wbs_repo,
     )
+
+
+@raci_global_router.get(
+    "/raci",
+    response_model=RaciMatrixViewResponse,
+    summary="Get global RACI matrix across all projects",
+)
+async def get_global_raci_matrix(
+    tenant_id: CurrentTenantId,
+    _user_id: CurrentUserId,
+    use_case: GetRaciMatrixUseCase = Depends(get_matrix_use_case),
+    project_repo: ProjectRepository = Depends(get_project_repository),
+) -> RaciMatrixViewResponse:
+    from src.stakeholders.application.dtos import RaciMatrixTaskRow
+    all_projects = await project_repo.list(tenant_id=tenant_id)
+    all_rows: list[RaciMatrixTaskRow] = []
+    for project in all_projects:
+        try:
+            matrix = await use_case.execute(project_id=project.id, tenant_id=tenant_id)
+            for row in matrix.matrix:
+                all_rows.append(row)
+        except ValueError:
+            continue
+    return RaciMatrixViewResponse(matrix=all_rows)
+
 
 @router.get(
     "/projects/{project_id}/raci",

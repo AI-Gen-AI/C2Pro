@@ -1,0 +1,482 @@
+{
+  "captured_at_utc": "2026-03-19T13:33:50.417472+00:00",
+  "alembic_version": "20260225_0001",
+  "schema_migrations_columns": [
+    "version",
+    "applied_at"
+  ],
+  "schema_migrations": [
+    "001_initial_schema",
+    "002_security_foundation_v2.4.0",
+    "003_add_tenant_columns",
+    "004_complete_schema_sync",
+    "005_rls_policies_for_tests"
+  ],
+  "tables": [
+    "ai_usage_logs",
+    "alembic_version",
+    "alerts",
+    "analyses",
+    "audit_logs",
+    "bom_items",
+    "bom_revisions",
+    "clauses",
+    "document_chunks",
+    "documents",
+    "extractions",
+    "knowledge_graph_edges",
+    "knowledge_graph_nodes",
+    "organization_members",
+    "organizations",
+    "procurement_bom_items",
+    "procurement_budget_items",
+    "procurement_plan_snapshots",
+    "procurement_wbs_items",
+    "projects",
+    "review_items",
+    "schema_migrations",
+    "stakeholder_alerts",
+    "stakeholder_wbs_raci",
+    "stakeholders",
+    "tenants",
+    "users",
+    "wbs_items"
+  ],
+  "views": [
+    "v_coherence_breakdown",
+    "v_project_alerts",
+    "v_project_bom",
+    "v_project_clauses",
+    "v_project_stakeholders",
+    "v_project_summary",
+    "v_project_wbs",
+    "v_raci_matrix"
+  ],
+  "public_functions": [
+    "array_to_halfvec",
+    "array_to_halfvec",
+    "array_to_halfvec",
+    "array_to_halfvec",
+    "array_to_sparsevec",
+    "array_to_sparsevec",
+    "array_to_sparsevec",
+    "array_to_sparsevec",
+    "array_to_vector",
+    "array_to_vector",
+    "array_to_vector",
+    "array_to_vector",
+    "avg",
+    "avg",
+    "binary_quantize",
+    "binary_quantize",
+    "cosine_distance",
+    "cosine_distance",
+    "cosine_distance",
+    "fn_find_path",
+    "fn_get_clause_by_id",
+    "fn_get_neighbors",
+    "fn_get_stakeholder_by_id",
+    "fn_get_subgraph",
+    "get_tenant_id_from_clerk_org",
+    "gin_extract_query_trgm",
+    "gin_extract_value_trgm",
+    "gin_trgm_consistent",
+    "gin_trgm_triconsistent",
+    "gtrgm_compress",
+    "gtrgm_consistent",
+    "gtrgm_decompress",
+    "gtrgm_distance",
+    "gtrgm_in",
+    "gtrgm_options",
+    "gtrgm_out",
+    "gtrgm_penalty",
+    "gtrgm_picksplit",
+    "gtrgm_same",
+    "gtrgm_union",
+    "halfvec",
+    "halfvec_accum",
+    "halfvec_add",
+    "halfvec_avg",
+    "halfvec_cmp",
+    "halfvec_combine",
+    "halfvec_concat",
+    "halfvec_eq",
+    "halfvec_ge",
+    "halfvec_gt",
+    "halfvec_in",
+    "halfvec_l2_squared_distance",
+    "halfvec_le",
+    "halfvec_lt",
+    "halfvec_mul",
+    "halfvec_ne",
+    "halfvec_negative_inner_product",
+    "halfvec_out",
+    "halfvec_recv",
+    "halfvec_send",
+    "halfvec_spherical_distance",
+    "halfvec_sub",
+    "halfvec_to_float4",
+    "halfvec_to_sparsevec",
+    "halfvec_to_vector",
+    "halfvec_typmod_in",
+    "hamming_distance",
+    "hnsw_bit_support",
+    "hnsw_halfvec_support",
+    "hnsw_sparsevec_support",
+    "hnswhandler",
+    "inner_product",
+    "inner_product",
+    "inner_product",
+    "is_project_member",
+    "ivfflat_bit_support",
+    "ivfflat_halfvec_support",
+    "ivfflathandler",
+    "jaccard_distance",
+    "l1_distance",
+    "l1_distance",
+    "l1_distance",
+    "l2_distance",
+    "l2_distance",
+    "l2_distance",
+    "l2_norm",
+    "l2_norm",
+    "l2_normalize",
+    "l2_normalize",
+    "l2_normalize",
+    "match_documents",
+    "pgaudit_ddl_command_end",
+    "pgaudit_sql_drop",
+    "set_limit",
+    "set_tenant_context",
+    "show_limit",
+    "show_trgm",
+    "similarity",
+    "similarity_dist",
+    "similarity_op",
+    "sparsevec",
+    "sparsevec_cmp",
+    "sparsevec_eq",
+    "sparsevec_ge",
+    "sparsevec_gt",
+    "sparsevec_in",
+    "sparsevec_l2_squared_distance",
+    "sparsevec_le",
+    "sparsevec_lt",
+    "sparsevec_ne",
+    "sparsevec_negative_inner_product",
+    "sparsevec_out",
+    "sparsevec_recv",
+    "sparsevec_send",
+    "sparsevec_to_halfvec",
+    "sparsevec_to_vector",
+    "sparsevec_typmod_in",
+    "strict_word_similarity",
+    "strict_word_similarity_commutator_op",
+    "strict_word_similarity_dist_commutator_op",
+    "strict_word_similarity_dist_op",
+    "strict_word_similarity_op",
+    "subvector",
+    "subvector",
+    "sum",
+    "sum",
+    "update_updated_at_column",
+    "user_has_role_in_org",
+    "vector",
+    "vector_accum",
+    "vector_add",
+    "vector_avg",
+    "vector_cmp",
+    "vector_combine",
+    "vector_concat",
+    "vector_dims",
+    "vector_dims",
+    "vector_eq",
+    "vector_ge",
+    "vector_gt",
+    "vector_in",
+    "vector_l2_squared_distance",
+    "vector_le",
+    "vector_lt",
+    "vector_mul",
+    "vector_ne",
+    "vector_negative_inner_product",
+    "vector_norm",
+    "vector_out",
+    "vector_recv",
+    "vector_send",
+    "vector_spherical_distance",
+    "vector_sub",
+    "vector_to_float4",
+    "vector_to_halfvec",
+    "vector_to_sparsevec",
+    "vector_typmod_in",
+    "word_similarity",
+    "word_similarity_commutator_op",
+    "word_similarity_dist_commutator_op",
+    "word_similarity_dist_op",
+    "word_similarity_op"
+  ],
+  "auth_bootstrap_functions": [
+    "create_tenant",
+    "create_user",
+    "lookup_personal_tenant_by_name",
+    "lookup_tenant_by_clerk_org_id",
+    "lookup_tenant_by_id",
+    "lookup_user_by_clerk_user_id",
+    "lookup_user_by_email"
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "ai_usage_logs",
+      "policyname": "tenant_isolation_ai_logs",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ai_usage_logs",
+      "policyname": "tenant_isolation_ai_usage_logs",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "alerts",
+      "policyname": "tenant_isolation_alerts",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "analyses",
+      "policyname": "tenant_isolation_analyses",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "audit_logs",
+      "policyname": "tenant_isolation_audit_logs",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bom_items",
+      "policyname": "tenant_isolation_bom_items",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bom_revisions",
+      "policyname": "tenant_isolation_bom_revisions",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "clauses",
+      "policyname": "tenant_isolation_clauses",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "documents",
+      "policyname": "tenant_isolation_documents",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "extractions",
+      "policyname": "tenant_isolation_extractions",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "knowledge_graph_edges",
+      "policyname": "tenant_isolation_kg_edges",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "knowledge_graph_nodes",
+      "policyname": "tenant_isolation_kg_nodes",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organization_members",
+      "policyname": "org_members_isolation",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organizations",
+      "policyname": "org_isolation",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "procurement_bom_items",
+      "policyname": "tenant_isolation_procurement_bom_items",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "procurement_budget_items",
+      "policyname": "tenant_isolation_procurement_budget_items",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "procurement_plan_snapshots",
+      "policyname": "tenant_isolation_procurement_snapshots",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "procurement_wbs_items",
+      "policyname": "tenant_isolation_procurement_wbs_items",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "Allow members to access their projects",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "project_tenant_isolation_delete",
+      "cmd": "DELETE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "project_tenant_isolation_insert",
+      "cmd": "INSERT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "project_tenant_isolation_select",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "project_tenant_isolation_update",
+      "cmd": "UPDATE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "review_items",
+      "policyname": "tenant_isolation_insert",
+      "cmd": "INSERT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "review_items",
+      "policyname": "tenant_isolation_select",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "review_items",
+      "policyname": "tenant_isolation_update",
+      "cmd": "UPDATE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stakeholder_alerts",
+      "policyname": "tenant_isolation_stakeholder_alerts",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stakeholder_wbs_raci",
+      "policyname": "tenant_isolation_raci",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stakeholder_wbs_raci",
+      "policyname": "tenant_isolation_stakeholder_wbs_raci",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stakeholders",
+      "policyname": "tenant_isolation_stakeholders",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "Allow individual tenant access",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "tenant_isolation_delete",
+      "cmd": "DELETE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "tenant_isolation_insert",
+      "cmd": "INSERT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "tenant_isolation_select",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "tenant_isolation_update",
+      "cmd": "UPDATE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenants",
+      "policyname": "tenant_self_only",
+      "cmd": "ALL"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Allow users to see themselves",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "user_tenant_isolation_delete",
+      "cmd": "DELETE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "user_tenant_isolation_insert",
+      "cmd": "INSERT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "user_tenant_isolation_select",
+      "cmd": "SELECT"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "user_tenant_isolation_update",
+      "cmd": "UPDATE"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wbs_items",
+      "policyname": "tenant_isolation_wbs_items",
+      "cmd": "ALL"
+    }
+  ]
+}

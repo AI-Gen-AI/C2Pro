@@ -6,14 +6,14 @@ Refers to Suite ID: TS-E2E-PER-LRG-001.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
-import time
+from collections.abc import Sequence
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
 from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
@@ -23,6 +23,12 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+PROJECT_METADATA_VERSION_KEY = "version"
+PROJECT_METADATA_LOCATION_KEY = "location"
+PROJECT_METADATA_CLIENT_NAME_KEY = "client_name"
+PROJECT_METADATA_BUDGET_PLANNED_KEY = "budget_planned"
 
 
 class ProjectResponse(BaseModel):
@@ -35,6 +41,7 @@ class ProjectResponse(BaseModel):
     description: str | None = None
     project_type: str = "construction"
     status: str = "draft"
+    coherence_score: float | None = None
     location: str | None = None
     client_name: str | None = None
     budget_planned: float | None = None
@@ -93,6 +100,7 @@ def _project_to_response(project_data: dict) -> ProjectResponse:
         description=project_data.get("description"),
         project_type=project_data.get("project_type", "construction"),
         status=project_data.get("status", "draft"),
+        coherence_score=project_data.get("coherence_score"),
         location=project_data.get("location"),
         client_name=project_data.get("client_name"),
         budget_planned=project_data.get("budget_planned"),
@@ -100,6 +108,97 @@ def _project_to_response(project_data: dict) -> ProjectResponse:
         currency=project_data.get("currency", "EUR"),
         version=project_data.get("version", 1),
     )
+
+
+def _extract_project_metadata(project: ProjectORM) -> dict:
+    metadata = project.metadata_json or {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _project_orm_to_dict(project: ProjectORM) -> dict:
+    metadata = _extract_project_metadata(project)
+    version = metadata.get(PROJECT_METADATA_VERSION_KEY, 1)
+    return {
+        "id": project.id,
+        "tenant_id": project.tenant_id,
+        "name": project.name,
+        "code": project.code,
+        "description": project.description,
+        "project_type": project.project_type,
+        "status": project.status,
+        "coherence_score": project.coherence_score,
+        "location": metadata.get(PROJECT_METADATA_LOCATION_KEY),
+        "client_name": metadata.get(PROJECT_METADATA_CLIENT_NAME_KEY),
+        "budget_planned": metadata.get(PROJECT_METADATA_BUDGET_PLANNED_KEY),
+        "estimated_budget": project.estimated_budget,
+        "currency": project.currency or "EUR",
+        "version": int(version),
+    }
+
+
+def _apply_project_update(project: ProjectORM, updates: dict) -> None:
+    metadata = dict(_extract_project_metadata(project))
+    for field in ("name", "code", "description", "project_type", "status", "estimated_budget", "currency"):
+        if field in updates:
+            setattr(project, field, updates[field])
+
+    if PROJECT_METADATA_LOCATION_KEY in updates:
+        metadata[PROJECT_METADATA_LOCATION_KEY] = updates[PROJECT_METADATA_LOCATION_KEY]
+    if PROJECT_METADATA_CLIENT_NAME_KEY in updates:
+        metadata[PROJECT_METADATA_CLIENT_NAME_KEY] = updates[PROJECT_METADATA_CLIENT_NAME_KEY]
+    if PROJECT_METADATA_BUDGET_PLANNED_KEY in updates:
+        metadata[PROJECT_METADATA_BUDGET_PLANNED_KEY] = updates[PROJECT_METADATA_BUDGET_PLANNED_KEY]
+
+    metadata[PROJECT_METADATA_VERSION_KEY] = int(metadata.get(PROJECT_METADATA_VERSION_KEY, 1)) + 1
+    project.metadata_json = metadata
+
+
+async def _get_project_for_tenant(session, project_id: UUID, tenant_id: UUID) -> ProjectORM | None:
+    result = await session.execute(
+        select(ProjectORM).where(
+            ProjectORM.id == project_id,
+            ProjectORM.tenant_id == tenant_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _not_implemented_subresource(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail=detail,
+    )
+
+
+def _build_bulk_job_payload(*, total_items: int, status_value: str = "processing") -> dict:
+    return {
+        "status": status_value,
+        "percentage": 0 if total_items else 100,
+        "processed_items": 0,
+        "total_items": total_items,
+        "eta_seconds": max(total_items, 1),
+    }
+
+
+def _validate_wbs_items(items: Sequence[object]) -> tuple[list[object], list[dict[str, object]]]:
+    valid_items: list[object] = []
+    errors: list[dict[str, object]] = []
+
+    for index, item in enumerate(items):
+        missing_fields = [field for field in ("code", "name", "level") if getattr(item, field) in (None, "")]
+        if missing_fields:
+            errors.append(
+                {
+                    "index": index,
+                    "code": "validation_error",
+                    "message": f"Missing required fields: {', '.join(missing_fields)}",
+                    "fields": missing_fields,
+                }
+            )
+            continue
+        valid_items.append(item)
+
+    return valid_items, errors
 
 
 # ===========================================
@@ -118,15 +217,17 @@ async def get_project_stats(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """Return aggregate project statistics for current tenant."""
-    tenant_projects = [
-        p for p in _fake_projects.values() if p.get("tenant_id") == current_user.tenant_id
-    ]
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        result = await session.execute(
+            select(ProjectORM).where(ProjectORM.tenant_id == current_user.tenant_id)
+        )
+        tenant_projects = result.scalars().all()
 
     by_status: dict[str, int] = {}
     by_type: dict[str, int] = {}
     for project in tenant_projects:
-        status_value = project.get("status", "draft")
-        type_value = project.get("project_type", "construction")
+        status_value = project.status or "draft"
+        type_value = project.project_type or "construction"
         by_status[status_value] = by_status.get(status_value, 0) + 1
         by_type[type_value] = by_type.get(type_value, 0) + 1
 
@@ -137,14 +238,7 @@ async def get_project_stats(
     }
 
 
-# In-memory storage for fake implementation
-_fake_projects: dict[UUID, dict] = {}
 _project_locks: dict[UUID, asyncio.Lock] = {}
-
-
-def _add_fake_project(project_data: dict) -> None:
-    """Add project to in-memory storage (test helper)."""
-    _fake_projects[project_data["id"]] = project_data
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -184,30 +278,17 @@ async def create_project(
             status="draft",
             estimated_budget=request.estimated_budget,
             currency=request.currency,
+            metadata_json={
+                PROJECT_METADATA_VERSION_KEY: 1,
+                PROJECT_METADATA_LOCATION_KEY: request.location,
+                PROJECT_METADATA_CLIENT_NAME_KEY: request.client_name,
+                PROJECT_METADATA_BUDGET_PLANNED_KEY: request.budget_planned,
+            },
         )
         session.add(project_orm)
         await session.commit()
         await session.refresh(project_orm)
-
-        # Also store in memory for backwards compatibility with other endpoints
-        project_data = {
-            "id": project_id,
-            "tenant_id": current_user.tenant_id,
-            "name": request.name,
-            "code": normalized_code,
-            "description": request.description,
-            "project_type": request.project_type,
-            "status": "draft",
-            "location": request.location,
-            "client_name": request.client_name,
-            "budget_planned": request.budget_planned,
-            "estimated_budget": request.estimated_budget,
-            "currency": request.currency,
-            "version": 1,
-        }
-        _fake_projects[project_id] = project_data
-
-        return _project_to_response(project_data)
+        return _project_to_response(_project_orm_to_dict(project_orm))
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -223,48 +304,17 @@ async def get_project(
     """
     from sqlalchemy import select
 
-    # First check in-memory storage
-    project = _fake_projects.get(project_id)
-
-    # If not in memory, check database
-    if not project or project["tenant_id"] != current_user.tenant_id:
-        async with get_session_with_tenant(current_user.tenant_id) as session:
-            query = select(ProjectORM).where(
-                ProjectORM.id == project_id,
-                ProjectORM.tenant_id == current_user.tenant_id,
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
             )
-            result = await session.execute(query)
-            project_orm = result.scalar_one_or_none()
+        project_data = _project_orm_to_dict(project)
 
-            if project_orm:
-                project = {
-                    "id": project_orm.id,
-                    "tenant_id": project_orm.tenant_id,
-                    "name": project_orm.name,
-                    "code": project_orm.code,
-                    "description": project_orm.description,
-                    "project_type": project_orm.project_type,
-                    "status": project_orm.status,
-                    "location": None,
-                    "client_name": None,
-                    "budget_planned": None,
-                    "estimated_budget": project_orm.estimated_budget,
-                    "currency": project_orm.currency,
-                    "version": 1,
-                }
-                # Cache in memory
-                _fake_projects[project_id] = project
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
-
-    if "version" not in project:
-        project["version"] = 1
-    response.headers["ETag"] = f'"v{project["version"]}"'
-    return _project_to_response(project)
+    response.headers["ETag"] = f'"v{project_data["version"]}"'
+    return _project_to_response(project_data)
 
 
 @router.get("", response_model=ProjectListResponse)
@@ -278,36 +328,56 @@ async def list_projects(
     """
     List all projects for the current tenant.
 
-    Filters by tenant_id automatically.
+    Filters by tenant_id automatically. Reads from database.
     """
-    tenant_projects = [p for p in _fake_projects.values() if p.get("tenant_id") == current_user.tenant_id]
-    if status is not None:
-        tenant_projects = [p for p in tenant_projects if p.get("status", "draft") == status]
-    if search:
-        needle = search.lower()
-        tenant_projects = [
-            p
-            for p in tenant_projects
-            if needle in (p.get("name") or "").lower()
-            or needle in (p.get("description") or "").lower()
-            or needle in (p.get("code") or "").lower()
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        # Build base query filtered by tenant
+        query = select(ProjectORM).where(ProjectORM.tenant_id == current_user.tenant_id)
+
+        # Apply status filter
+        if status is not None:
+            query = query.where(ProjectORM.status == status)
+
+        # Apply search filter
+        if search:
+            needle = f"%{search.lower()}%"
+            query = query.where(
+                (func.lower(ProjectORM.name).like(needle))
+                | (func.lower(ProjectORM.description).like(needle))
+                | (func.lower(ProjectORM.code).like(needle))
+            )
+
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total = total_result.scalar() or 0
+
+        # Pagination
+        page = max(1, page)
+        page_size = max(1, page_size)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        offset = (page - 1) * page_size
+
+        # Apply pagination and fetch
+        query = query.order_by(ProjectORM.created_at.desc()).offset(offset).limit(page_size)
+        result = await session.execute(query)
+        projects = result.scalars().all()
+
+        # Convert to response
+        items = [
+            ProjectResponse(
+                **_project_orm_to_dict(p),
+            )
+            for p in projects
         ]
 
-    total = len(tenant_projects)
-    page = max(1, page)
-    page_size = max(1, page_size)
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    start = (page - 1) * page_size
-    end = start + page_size
-    tenant_projects_page = tenant_projects[start:end]
-
-    return ProjectListResponse(
-        items=[_project_to_response(p) for p in tenant_projects_page],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ProjectListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
@@ -315,28 +385,34 @@ async def put_project(
     project_id: UUID,
     updates: ProjectUpdateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> ProjectResponse:
+) -> ProjectResponse | JSONResponse:
     """Update an existing project (legacy PUT contract)."""
-    project = _fake_projects.get(project_id)
-    if not project or project.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    if updates.code:
-        for existing_id, existing in _fake_projects.items():
-            if existing_id == project_id or existing.get("tenant_id") != current_user.tenant_id:
-                continue
-            existing_code = (existing.get("code") or "").strip().lower()
-            if existing_code and existing_code == updates.code.strip().lower():
+        if updates.code:
+            result = await session.execute(
+                select(ProjectORM).where(
+                    ProjectORM.tenant_id == current_user.tenant_id,
+                    ProjectORM.id != project_id,
+                    func.lower(ProjectORM.code) == updates.code.strip().lower(),
+                )
+            )
+            if result.scalar_one_or_none():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Project code already exists",
                 )
 
-    update_payload = updates.model_dump(exclude_unset=True, exclude={"expected_version"})
-    project.update(update_payload)
-    project["version"] = int(project.get("version", 1)) + 1
-    _fake_projects[project_id] = project
-    return _project_to_response(project)
+        _apply_project_update(
+            project,
+            updates.model_dump(exclude_unset=True, exclude={"expected_version"}),
+        )
+        await session.commit()
+        await session.refresh(project)
+        return _project_to_response(_project_orm_to_dict(project))
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -346,7 +422,7 @@ async def update_project(
     request: Request,
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> ProjectResponse:
+) -> ProjectResponse | JSONResponse:
     """
     Update project.
 
@@ -354,78 +430,92 @@ async def update_project(
     """
     project_lock = _project_locks.setdefault(project_id, asyncio.Lock())
     async with project_lock:
-        project = _fake_projects.get(project_id)
+        async with get_session_with_tenant(current_user.tenant_id) as session:
+            project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-        if not project or project["tenant_id"] != current_user.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found",
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found",
+                )
+
+            current_version = int(_extract_project_metadata(project).get(PROJECT_METADATA_VERSION_KEY, 1))
+
+            if_match = request.headers.get("If-Match")
+            update_data = updates.model_dump(exclude_unset=True)
+            expected_version = update_data.get("expected_version")
+            if expected_version is None and if_match is None:
+                raise HTTPException(
+                    status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+                    detail="Missing If-Match or expected_version precondition",
+                )
+
+            idempotency_key = request.headers.get("Idempotency-Key")
+            seen_keys: set[tuple[str, str, str, str]] = getattr(
+                request.app.state,
+                "project_idempotency_seen",
+                set(),
             )
+            if not hasattr(request.app.state, "project_idempotency_seen"):
+                request.app.state.project_idempotency_seen = seen_keys
+            key: tuple[str, str, str, str] | None = None
+            if idempotency_key:
+                key = (
+                    str(current_user.tenant_id),
+                    str(project_id),
+                    "PATCH",
+                    idempotency_key,
+                )
+                if key in seen_keys:
+                    return JSONResponse(
+                        status_code=status.HTTP_409_CONFLICT,
+                        content={"detail": {"code": "DUPLICATE_REQUEST"}},
+                    )
 
-        if "version" not in project:
-            project["version"] = 1
-        current_version = int(project["version"])
-
-        if_match = request.headers.get("If-Match")
-        update_data = updates.model_dump(exclude_unset=True)
-        expected_version = update_data.get("expected_version")
-        if expected_version is None and if_match is None:
-            raise HTTPException(
-                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-                detail="Missing If-Match or expected_version precondition",
-            )
-
-        idempotency_key = request.headers.get("Idempotency-Key")
-        seen_keys: set[tuple[str, str, str, str]] = getattr(
-            request.app.state,
-            "project_idempotency_seen",
-            set(),
-        )
-        if not hasattr(request.app.state, "project_idempotency_seen"):
-            request.app.state.project_idempotency_seen = seen_keys
-        if idempotency_key:
-            key = (
-                str(current_user.tenant_id),
-                str(project_id),
-                "PATCH",
-                idempotency_key,
-            )
-            if key in seen_keys:
+            if expected_version is not None and int(expected_version) > current_version:
                 return JSONResponse(
                     status_code=status.HTTP_409_CONFLICT,
-                    content={"detail": {"code": "DUPLICATE_REQUEST"}},
+                    content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
                 )
 
-        if expected_version is not None and int(expected_version) > current_version:
-            return JSONResponse(
-                status_code=status.HTTP_409_CONFLICT,
-                content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
-            )
+            if if_match is not None:
+                current_tag = f'"v{current_version}"'
+                if if_match != current_tag:
+                    raise HTTPException(
+                        status_code=status.HTTP_412_PRECONDITION_FAILED,
+                        detail="Precondition failed",
+                    )
 
-        if if_match is not None:
-            current_tag = f'"v{current_version}"'
-            if if_match != current_tag:
-                raise HTTPException(
-                    status_code=status.HTTP_412_PRECONDITION_FAILED,
-                    detail="Precondition failed",
+            if expected_version is not None and int(expected_version) != current_version:
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
                 )
 
-        if expected_version is not None and int(expected_version) != current_version:
-            return JSONResponse(
-                status_code=status.HTTP_409_CONFLICT,
-                content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
-            )
+            if "code" in update_data and update_data["code"]:
+                result = await session.execute(
+                    select(ProjectORM).where(
+                        ProjectORM.tenant_id == current_user.tenant_id,
+                        ProjectORM.id != project_id,
+                        func.lower(ProjectORM.code) == str(update_data["code"]).strip().lower(),
+                    )
+                )
+                if result.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Project code already exists",
+                    )
 
-        clean_updates = {k: v for k, v in update_data.items() if k != "expected_version"}
-        project.update(clean_updates)
-        project["version"] = current_version + 1
-        _fake_projects[project_id] = project
+            _apply_project_update(project, {k: v for k, v in update_data.items() if k != "expected_version"})
+            await session.commit()
+            await session.refresh(project)
 
-        if idempotency_key:
-            seen_keys.add(key)
+            if idempotency_key and key is not None:
+                seen_keys.add(key)
 
-        response.headers["ETag"] = f'"v{project["version"]}"'
-        return _project_to_response(project)
+            project_data = _project_orm_to_dict(project)
+            response.headers["ETag"] = f'"v{project_data["version"]}"'
+            return _project_to_response(project_data)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -438,15 +528,17 @@ async def delete_project(
 
     Returns 404 if project doesn't exist or belongs to another tenant.
     """
-    project = _fake_projects.get(project_id)
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-    if not project or project["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
 
-    del _fake_projects[project_id]
+        await session.delete(project)
+        await session.commit()
 
 
 @router.patch("/{project_id}/status", response_model=ProjectResponse)
@@ -456,14 +548,18 @@ async def update_project_status(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ProjectResponse:
     """Update only project status."""
-    project = _fake_projects.get(project_id)
-    if not project or project.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    project["status"] = new_status
-    project["version"] = int(project.get("version", 1)) + 1
-    _fake_projects[project_id] = project
-    return _project_to_response(project)
+        project.status = new_status
+        metadata = dict(_extract_project_metadata(project))
+        metadata[PROJECT_METADATA_VERSION_KEY] = int(metadata.get(PROJECT_METADATA_VERSION_KEY, 1)) + 1
+        project.metadata_json = metadata
+        await session.commit()
+        await session.refresh(project)
+        return _project_to_response(_project_orm_to_dict(project))
 
 
 # NOTE: Document upload endpoint moved to src/documents/adapters/http/router.py
@@ -515,11 +611,6 @@ class BulkExportRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
 
 
-# In-memory storage for fake WBS items and request throttling
-_fake_wbs_items: dict[UUID, list[dict]] = {}
-_bulk_wbs_rate_window: dict[str, list[datetime]] = {}
-
-
 @router.post(
     "/{project_id}/documents/bulk",
     status_code=202,
@@ -537,7 +628,7 @@ async def bulk_upload_documents(
     project_id: UUID,
     request: BulkDocumentRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
+) -> dict[str, object]:
     """
     Bulk upload documents.
 
@@ -554,47 +645,30 @@ async def bulk_upload_documents(
     Raises:
         404: Project not found or belongs to another tenant
     """
-    # Check if project exists and belongs to tenant
-    project = _fake_projects.get(project_id)
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-    if not project or project["tenant_id"] != current_user.tenant_id:
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found",
         )
 
-    if len(request.documents) > 100:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": {
-                    "code": "BULK_LIMIT_EXCEEDED",
-                    "message": "Maximum 100 documents per bulk request",
-                }
-            },
-        )
-
-    # TS-E2E-PER-LRG-001: include basic performance metadata contract.
-    started_at = time.perf_counter()
     document_ids = [str(uuid4()) for _ in request.documents]
-    processing_ms = max(1.0, (time.perf_counter() - started_at) * 1000)
-    throughput_docs_per_sec = (
-        len(request.documents) / (processing_ms / 1000) if request.documents else 0.0
-    )
 
     return {
+        "project_id": str(project_id),
         "accepted_count": len(request.documents),
         "failed_count": 0,
         "document_ids": document_ids,
         "status": "accepted",
-        "processing_ms": round(processing_ms, 2),
-        "throughput_docs_per_sec": round(throughput_docs_per_sec, 2),
     }
 
 
 @router.post(
     "/{project_id}/wbs/bulk",
     status_code=201,
+    response_model=None,
     summary="Bulk Create WBS Items",
     description="""
     Create multiple WBS items in bulk.
@@ -612,7 +686,7 @@ async def bulk_create_wbs(
     request: BulkWBSRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     response: Response,
-) -> dict:
+) -> dict[str, object] | JSONResponse:
     """
     Bulk create WBS items.
 
@@ -630,108 +704,56 @@ async def bulk_create_wbs(
         404: Project not found or belongs to another tenant
         400: Atomic transaction failed (all or nothing)
     """
-    # Check if project exists and belongs to tenant
-    project = _fake_projects.get(project_id)
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-    if not project or project["tenant_id"] != current_user.tenant_id:
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found",
         )
 
-    # Basic in-memory throttling: allow 5 bulk WBS requests per minute per user.
-    now = datetime.now(UTC)
-    window_start = now - timedelta(minutes=1)
-    rate_key = f"{current_user.id}:{project_id}"
-    recent_calls = _bulk_wbs_rate_window.get(rate_key, [])
-    recent_calls = [ts for ts in recent_calls if ts >= window_start]
-    if len(recent_calls) >= 5:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={"code": "RATE_LIMITED", "message": "Rate limit exceeded"},
-            headers={"Retry-After": "60"},
-        )
-    recent_calls.append(now)
-    _bulk_wbs_rate_window[rate_key] = recent_calls
+    valid_items, errors = _validate_wbs_items(request.items)
 
-    # Large batches are queued for async processing.
-    if len(request.items) >= 100:
-        job_id = str(uuid4())
-        register_job(
-            job_id,
-            {
-                "status": "queued",
-                "percentage": 0,
-                "processed_items": 0,
-                "total_items": len(request.items),
-                "eta_seconds": 30,
-            },
-        )
-        response.status_code = status.HTTP_202_ACCEPTED
-        return {"job_id": job_id, "status": "queued"}
-
-    # Validate items
-    valid_items = []
-    invalid_items = []
-    errors = []
-
-    for idx, item in enumerate(request.items):
-        # Check required fields
-        if not item.code or not item.name or item.level is None:
-            invalid_items.append(idx)
-            missing_field = "name"
-            if not item.code:
-                missing_field = "code"
-            elif item.level is None:
-                missing_field = "level"
-            errors.append(
-                {
-                    "index": idx,
-                    "field": missing_field,
-                    "message": "Missing required field",
-                }
-            )
-        else:
-            valid_items.append(item)
-
-    # Handle atomic transactions
-    if request.atomic and invalid_items:
-        # All or nothing - reject entire batch
+    if request.atomic and errors:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "detail": {
-                    "code": "BULK_ATOMIC_ROLLBACK",
-                    "created_count": 0,
-                    "failed_count": len(request.items),
-                    "errors": errors,
-                }
+                "project_id": str(project_id),
+                "created_count": 0,
+                "failed_count": len(errors),
+                "errors": errors,
+                "status": "rolled_back",
             },
         )
 
-    # GREEN PHASE: Fake creation of valid items
-    if project_id not in _fake_wbs_items:
-        _fake_wbs_items[project_id] = []
+    if len(request.items) >= 100 and not errors:
+        job_id = str(uuid4())
+        register_job(job_id, _build_bulk_job_payload(total_items=len(request.items)))
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "job_id": job_id,
+                "status": "processing",
+                "total_items": len(request.items),
+            },
+        )
 
-    for item in valid_items:
-        _fake_wbs_items[project_id].append({
-            "code": item.code,
-            "name": item.name,
-            "level": item.level,
-            "parent_code": item.parent_code,
-        })
-
-    response.status_code = status.HTTP_207_MULTI_STATUS if invalid_items else status.HTTP_201_CREATED
-
-    response = {
+    response_payload = {
+        "project_id": str(project_id),
         "created_count": len(valid_items),
-        "failed_count": len(invalid_items),
+        "failed_count": len(errors),
+        "errors": errors,
+        "status": "completed" if not errors else "partial_success",
     }
 
     if errors:
-        response["errors"] = errors
+        return JSONResponse(
+            status_code=status.HTTP_207_MULTI_STATUS,
+            content=response_payload,
+        )
 
-    return response
+    return response_payload
 
 
 @router.post(
@@ -751,7 +773,7 @@ async def export_project_data(
     project_id: UUID,
     request: BulkExportRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
+) -> dict[str, object]:
     """
     Export project data.
 
@@ -768,38 +790,27 @@ async def export_project_data(
     Raises:
         404: Project not found or belongs to another tenant
     """
-    # Check if project exists and belongs to tenant
-    project = _fake_projects.get(project_id)
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-    if not project or project["tenant_id"] != current_user.tenant_id:
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found",
         )
 
-    # GREEN PHASE: Create fake export job
     export_id = str(uuid4())
-    now_iso = datetime.now(UTC).isoformat()
     register_job(
         export_id,
-        {
-            "project_id": str(project_id),
-            "status": "processing",
-            "format": request.format,
-            "include": request.include,
-            "percentage": 5,
-            "processed_items": 1,
-            "total_items": 20,
-            "eta_seconds": 15,
-            "started_at": now_iso,
-            "updated_at": now_iso,
-        },
+        _build_bulk_job_payload(total_items=max(len(request.include), 1)),
     )
 
     return {
         "export_id": export_id,
+        "job_id": export_id,
         "status": "processing",
-        "message": "Export job queued",
+        "format": request.format,
+        "include": request.include,
     }
 
 
@@ -827,7 +838,7 @@ async def export_project_data(
 async def get_project_budget(
     project_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict:
+) -> dict[str, object]:
     """
     Get budget data for project.
 
@@ -843,33 +854,28 @@ async def get_project_budget(
     Raises:
         404: Project not found or belongs to another tenant
     """
-    # Check if project exists and belongs to tenant
-    project = _fake_projects.get(project_id)
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-    if not project or project["tenant_id"] != current_user.tenant_id:
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
 
-    # GREEN PHASE: Return fake budget data
-    # In real implementation, this would aggregate from WBS items
-    total_budget = project.get("estimated_budget", 2500000.0)
-    spent_amount = 1550000.0  # Fake spent amount
-    utilization = round((spent_amount / total_budget) * 100, 0)
+    project_data = _project_orm_to_dict(project)
+    total_budget = project_data.get("budget_planned") or project_data.get("estimated_budget") or 0.0
+    spent_amount = 0.0
+    utilization_percentage = 0.0 if total_budget == 0 else round((spent_amount / total_budget) * 100, 2)
 
     return {
         "project_id": str(project_id),
-        "total_budget": total_budget,
+        "currency": project_data.get("currency", "EUR"),
+        "total_budget": float(total_budget),
         "spent_amount": spent_amount,
-        "utilization_percentage": utilization,
-        "variance_status": "On Track",
-        "currency": project.get("currency", "EUR"),
-        "chart_data": {
-            "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-            "planned": [400000, 800000, 1200000, 1600000, 2000000, 2500000],
-            "actual": [350000, 750000, 1100000, 1550000, None, None],
-        },
+        "remaining_budget": float(total_budget - spent_amount),
+        "utilization_percentage": utilization_percentage,
+        "variance_status": "on_track",
     }
 
 

@@ -32,7 +32,11 @@ type StakeholderUpdatePayload = {
 
 const quadrantMap: Record<
   StakeholderQuadrant,
-  { quadrant: StakeholderApiQuadrant; power_level: "low" | "high"; interest_level: "low" | "high" }
+  {
+    quadrant: StakeholderApiQuadrant;
+    power_level: "low" | "high";
+    interest_level: "low" | "high";
+  }
 > = {
   manage_closely: {
     quadrant: "key_player",
@@ -57,7 +61,7 @@ const quadrantMap: Record<
 };
 
 const getStakeholderQuadrant = (
-  quadrant?: StakeholderApiQuadrant | null
+  quadrant?: StakeholderApiQuadrant | null,
 ): StakeholderQuadrant => {
   switch (quadrant) {
     case "key_player":
@@ -73,14 +77,15 @@ const getStakeholderQuadrant = (
 };
 
 const fetchStakeholders = async (projectId?: string) => {
-  const response = await apiClient.get<Stakeholder[] | { items: Stakeholder[] }>(
-    "/stakeholders",
-    {
-      params: projectId ? { project_id: projectId } : undefined,
-    }
+  if (!projectId) {
+    return [] as Stakeholder[];
+  }
+
+  const response = await apiClient.get<Stakeholder[]>(
+    `/stakeholders/projects/${projectId}`,
   );
 
-  return Array.isArray(response.data) ? response.data : response.data.items ?? [];
+  return response.data;
 };
 
 export const useStakeholders = (projectId?: string) =>
@@ -104,7 +109,7 @@ export const useUpdateStakeholder = (projectId?: string) => {
       const payload: StakeholderUpdatePayload = quadrantMap[quadrant];
       const response = await apiClient.patch<Stakeholder>(
         `/stakeholders/${stakeholderId}`,
-        payload
+        payload,
       );
       return response.data;
     },
@@ -113,17 +118,19 @@ export const useUpdateStakeholder = (projectId?: string) => {
       const previous = queryClient.getQueryData<Stakeholder[]>(queryKey);
       const update = quadrantMap[quadrant];
 
-      queryClient.setQueryData<Stakeholder[]>(queryKey, (current) =>
-        current?.map((stakeholder) =>
-          stakeholder.id === stakeholderId
-            ? {
-                ...stakeholder,
-                quadrant: update.quadrant,
-                power_level: update.power_level,
-                interest_level: update.interest_level,
-              }
-            : stakeholder
-        ) ?? []
+      queryClient.setQueryData<Stakeholder[]>(
+        queryKey,
+        (current) =>
+          current?.map((stakeholder) =>
+            stakeholder.id === stakeholderId
+              ? {
+                  ...stakeholder,
+                  quadrant: update.quadrant,
+                  power_level: update.power_level,
+                  interest_level: update.interest_level,
+                }
+              : stakeholder,
+          ) ?? [],
       );
 
       return { previous };

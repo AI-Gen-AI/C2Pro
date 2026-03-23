@@ -38,3 +38,27 @@ def test_settings_use_database_url_when_test_database_url_missing(
     settings = Settings(_env_file=None)
 
     assert settings.database_url == "postgresql://prod-user:prod-pass@supabase.example.com/app"
+
+
+def test_production_settings_reject_localhost_cors_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
+
+    with pytest.raises(ValueError, match="localhost origins are not allowed"):
+        Settings(_env_file=None)
+
+
+def test_production_settings_reject_wildcard_cors_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["*"]')
+
+    with pytest.raises(ValueError, match="wildcard CORS"):
+        Settings(_env_file=None)

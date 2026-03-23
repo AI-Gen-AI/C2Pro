@@ -5,6 +5,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { env } from "@/config/env";
 import { resolveHighlightStyle } from "@/components/features/evidence/highlight-style";
 import { createWatermarkToken } from "@/components/features/evidence/watermark-token";
 import { sanitizeWatermarkPayload } from "@/components/features/evidence/watermark-sanitize";
@@ -27,6 +28,37 @@ interface PdfEvidenceViewerProps {
 
 const WATERMARK_STORAGE_KEY = "s3-03-watermark-state";
 
+function readStoredDemoWatermark() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = window.sessionStorage.getItem(WATERMARK_STORAGE_KEY);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as Record<string, unknown>;
+    const safeStored = sanitizeWatermarkPayload(parsed);
+    return safeStored.pseudonymId ? safeStored : null;
+  } catch {
+    return null;
+  }
+}
+
+function createDemoWatermark() {
+  return sanitizeWatermarkPayload({
+    pseudonymId: createWatermarkToken({
+      tenantId: "tenant-demo",
+      userSeed: "anonymous-user",
+      sessionNonce: "evidence-viewer",
+    }),
+    environment: "local",
+    timestampIso: new Date("2026-02-14T00:00:00.000Z").toISOString(),
+  });
+}
+
 export function PdfEvidenceViewer({
   fileUrl,
   highlights,
@@ -37,34 +69,17 @@ export function PdfEvidenceViewer({
   const [activeId, setActiveId] = useState<string | null>(activeHighlightId);
   const [statePage, setStatePage] = useState(1);
   const [currentFileUrl, setCurrentFileUrl] = useState(fileUrl);
-  const [currentHighlights, setCurrentHighlights] = useState<PdfHighlight[]>(
-    highlights,
-  );
+  const [currentHighlights, setCurrentHighlights] =
+    useState<PdfHighlight[]>(highlights);
+
+  const isDemo = env.APP_MODE === "demo";
+
   const [watermark] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = window.sessionStorage.getItem(WATERMARK_STORAGE_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as Record<string, unknown>;
-          const safeStored = sanitizeWatermarkPayload(parsed);
-          if (safeStored.pseudonymId) {
-            return safeStored;
-          }
-        } catch {
-          // Ignore invalid session payload and fall through to safe fallback.
-        }
-      }
+    if (isDemo) {
+      return readStoredDemoWatermark() ?? createDemoWatermark();
     }
 
-    return sanitizeWatermarkPayload({
-      pseudonymId: createWatermarkToken({
-        tenantId: "tenant-demo",
-        userSeed: "anonymous-user",
-        sessionNonce: "evidence-viewer",
-      }),
-      environment: "local",
-      timestampIso: new Date("2026-02-14T00:00:00.000Z").toISOString(),
-    });
+    return sanitizeWatermarkPayload({});
   });
 
   useEffect(() => {
@@ -89,7 +104,14 @@ export function PdfEvidenceViewer({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(WATERMARK_STORAGE_KEY, JSON.stringify(watermark));
+      if (watermark.pseudonymId) {
+        window.sessionStorage.setItem(
+          WATERMARK_STORAGE_KEY,
+          JSON.stringify(watermark),
+        );
+      } else {
+        window.sessionStorage.removeItem(WATERMARK_STORAGE_KEY);
+      }
     }
   }, [watermark]);
 
@@ -97,7 +119,8 @@ export function PdfEvidenceViewer({
     if (currentHighlights.length > 0) {
       return currentHighlights;
     }
-    if (currentFileUrl.includes("doc-b")) {
+    // Only allow demo fallback in demo mode
+    if (isDemo && currentFileUrl.includes("doc-b")) {
       return [
         {
           id: "hb",
@@ -109,7 +132,7 @@ export function PdfEvidenceViewer({
       ];
     }
     return [];
-  }, [currentFileUrl, currentHighlights]);
+  }, [currentFileUrl, currentHighlights, isDemo]);
 
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
@@ -134,11 +157,36 @@ export function PdfEvidenceViewer({
     ]);
   };
 
+  // Fail-closed validation for production mode
+  const isMissingFile = !fileUrl || fileUrl === "";
+
+  if (isMissingFile && !isDemo) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center rounded-lg border-2 border-dashed border-destructive/20 bg-destructive/5 p-8 text-center">
+        <div className="mb-2 text-lg font-semibold text-destructive">
+          Evidence Not Found
+        </div>
+        <p className="text-sm text-muted-foreground">
+          The requested document evidence could not be retrieved from secure
+          storage. Please verify the document exists and you have the necessary
+          permissions.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <section aria-label="PDF Evidence Viewer" className="text-primary-text">
       <EvidenceWatermarkOverlay watermark={watermark} />
       {!isPdfReady ? <p>Loading PDF viewer...</p> : null}
-      {isPdfReady ? <div data-testid="pdf-page-canvas">pdf canvas</div> : null}
+      {isPdfReady ? (
+        <iframe
+          data-testid="pdf-page-canvas"
+          title="PDF document viewer"
+          src={currentFileUrl}
+          className="h-[70vh] w-full border-0"
+        />
+      ) : null}
 
       <button type="button" onClick={() => handleEvidenceClick("c-101")}>
         View Evidence c-101
@@ -155,11 +203,13 @@ export function PdfEvidenceViewer({
               type="button"
               data-testid={`highlight-${highlight.id}`}
               data-active={String(activeId === highlight.id)}
-              className={resolveHighlightStyle({
-                severity: highlight.severity,
-                validationStatus: "pending",
-                isActive: activeId === highlight.id,
-              }).className}
+              className={
+                resolveHighlightStyle({
+                  severity: highlight.severity,
+                  validationStatus: "pending",
+                  isActive: activeId === highlight.id,
+                }).className
+              }
               onClick={() => {
                 setActiveId(highlight.id);
                 setStatePage(highlight.page);

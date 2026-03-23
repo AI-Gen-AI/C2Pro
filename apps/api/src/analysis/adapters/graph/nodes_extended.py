@@ -239,7 +239,12 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def coherence_scorer_node(state: ProjectState) -> ProjectState:
-    """N8 — Calculate project coherence score.
+    """N8 — Calculate project coherence score from analysis results.
+
+    Derives coherence flags from extracted risks:
+    - Any HIGH/CRITICAL risk in a category → sets that category's compliance flag to False
+    - No WBS items → scope_defined=False
+    - Budget/Financial HIGH risks → marks BOM items as unassigned
 
     Wraps: ``coherence.application.services.coherence_calculation_service.CoherenceCalculationService``
     """
@@ -254,6 +259,89 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
+        # Extract analysis data from state
+        extracted_risks = state.get("extracted_risks", [])
+        extracted_wbs = state.get("extracted_wbs", [])
+        bom_items_raw = state.get("bom_items", [])
+        confidence_score = state.get("confidence_score", 0.0)
+        document_text = state.get("document_text", "")
+
+        # === QUALITY GATE: Check for meaningful content ===
+        # If confidence is too low or document is too short, the extraction is unreliable
+        MIN_CONFIDENCE_THRESHOLD = 0.5
+        MIN_DOCUMENT_LENGTH = 100  # chars
+
+        low_confidence = confidence_score < MIN_CONFIDENCE_THRESHOLD
+        short_document = len(document_text.strip()) < MIN_DOCUMENT_LENGTH
+
+        # Calculate average confidence of extracted items
+        def avg_item_confidence(items: list) -> float:
+            confidences = [
+                item.get("confidence", 0.0)
+                for item in items
+                if isinstance(item.get("confidence"), (int, float))
+            ]
+            return sum(confidences) / len(confidences) if confidences else 0.0
+
+        avg_wbs_confidence = avg_item_confidence(extracted_wbs)
+        avg_risk_confidence = avg_item_confidence(extracted_risks)
+
+        # If extraction quality is poor, we cannot trust the results
+        poor_extraction_quality = (
+            low_confidence
+            or short_document
+            or (len(extracted_wbs) > 0 and avg_wbs_confidence < 0.5)
+        )
+
+        # Helper to check if category has HIGH/CRITICAL risks
+        def has_high_risk_in_category(category_names: set[str]) -> bool:
+            for risk in extracted_risks:
+                cat = (risk.get("category") or "").upper()
+                impact = (risk.get("impact") or "").upper()
+                if cat in category_names and impact in ("HIGH", "CRITICAL"):
+                    return True
+            return False
+
+        # === ALL 6 CATEGORIES ===
+
+        # SCOPE: defined if we have quality WBS items AND no HIGH/CRITICAL scope risks
+        # Poor extraction quality means scope is NOT properly defined
+        has_scope_risks = has_high_risk_in_category({"SCOPE"})
+        has_meaningful_content = len(extracted_wbs) > 0 or len(extracted_risks) > 0
+        scope_defined = has_meaningful_content and not has_scope_risks and not poor_extraction_quality
+
+        # BUDGET: pass actual BOM items - the rules engine will check:
+        #   - BOM total deviation from contract_price (R6)
+        #   - Unassigned budget lines (R15)
+        # Also mark items as "unassigned" if we have BUDGET/FINANCIAL HIGH risks
+        has_budget_risks = has_high_risk_in_category({"BUDGET", "FINANCIAL"})
+        if has_budget_risks and bom_items_raw:
+            # Mark all items as unassigned to trigger R15 violation
+            bom_items = [
+                {**item, "budget_line_assigned": False}
+                for item in bom_items_raw
+            ]
+        else:
+            bom_items = list(bom_items_raw)
+
+        # TIME/SCHEDULE: within contract if no HIGH/CRITICAL schedule risks
+        schedule_within_contract = not has_high_risk_in_category({"SCHEDULE", "TIME"})
+
+        # TECHNICAL: consistent if no HIGH/CRITICAL technical risks
+        technical_consistent = not has_high_risk_in_category({"TECHNICAL"})
+
+        # LEGAL: compliant if no HIGH/CRITICAL legal risks
+        legal_compliant = not has_high_risk_in_category({"LEGAL"})
+
+        # QUALITY: met if no HIGH/CRITICAL quality risks
+        quality_standard_met = not has_high_risk_in_category({"QUALITY"})
+
+        # Calculate contract price from BOM if available
+        contract_price = sum(
+            float(item.get("amount", 0) or item.get("total", 0) or 0)
+            for item in bom_items
+        )
+
         from src.coherence.application.services.coherence_calculation_service import (
             CoherenceCalculationService,
         )
@@ -261,7 +349,13 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
         service = CoherenceCalculationService()
         result = service.calculate_coherence(
             project_id=UUID(project_id),
-            bom_items=[],
+            contract_price=contract_price,
+            bom_items=bom_items,
+            scope_defined=scope_defined,
+            schedule_within_contract=schedule_within_contract,
+            technical_consistent=technical_consistent,
+            legal_compliant=legal_compliant,
+            quality_standard_met=quality_standard_met,
             document_count=1,
         )
         score = result.global_score
@@ -269,15 +363,49 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
             cat.value: sub_score
             for cat, sub_score in result.category_scores.items()
         }
+
+        # Log the derivation for debugging
+        logger.info(
+            "coherence_scorer_derived_flags",
+            project_id=project_id,
+            scope_defined=scope_defined,
+            schedule_within_contract=schedule_within_contract,
+            technical_consistent=technical_consistent,
+            legal_compliant=legal_compliant,
+            quality_standard_met=quality_standard_met,
+            has_budget_risks=has_budget_risks,
+            risk_count=len(extracted_risks),
+            wbs_count=len(extracted_wbs),
+            bom_count=len(bom_items),
+            final_score=score,
+            # Quality gate info
+            confidence_score=confidence_score,
+            document_length=len(document_text),
+            poor_extraction_quality=poor_extraction_quality,
+            avg_wbs_confidence=avg_wbs_confidence,
+        )
     except Exception:
         logger.warning("node_coherence_scorer_failed", exc_info=True)
         score = 0
         breakdown = {}
+        poor_extraction_quality = True  # Assume poor quality on failure
+
+    # Build informative message
+    risk_count = len(state.get("extracted_risks", []))
+    wbs_count = len(state.get("extracted_wbs", []))
+    conf_score = state.get("confidence_score", 0.0)
+
+    quality_note = ""
+    if poor_extraction_quality:
+        quality_note = f", LOW QUALITY (conf={conf_score:.2f})"
 
     state["coherence_score"] = score
     state["coherence_breakdown"] = breakdown
     state["messages"].append(
-        AIMessage(content=f"N8 coherence_scorer: score={score}")
+        AIMessage(
+            content=f"N8 coherence_scorer: score={score} "
+            f"(derived from {risk_count} risks, {wbs_count} WBS items{quality_note})"
+        )
     )
     return state
 

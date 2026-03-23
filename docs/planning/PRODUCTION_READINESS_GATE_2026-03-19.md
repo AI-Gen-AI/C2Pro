@@ -248,6 +248,7 @@ Approval evidence:
 - manual certification records
 - capacity and restore evidence attached
 - repository-backed release bundle present under `evidence/releases/<release-id>/` (sample rehearsal available at `evidence/releases/2026-03-23-rc1/`)
+- TODO: keep `.github/workflows/deploy-production.yml` undispatched during rehearsals until the project is explicitly cleared for production-gated validation
 
 ---
 

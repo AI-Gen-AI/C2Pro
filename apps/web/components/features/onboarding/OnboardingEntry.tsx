@@ -20,11 +20,19 @@ export function OnboardingEntry({
   return (
     <section aria-label="Onboarding entry">
       <h2>Get started fast</h2>
-      <div role="status">{isFailed ? "Provisioning failed" : "Ready to bootstrap sample project"}</div>
+      <div role="status">
+        {isFailed
+          ? "Sample workspace setup failed"
+          : "Ready to open a demo sample project workspace"}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        This path opens a non-production sample workspace for evaluation only.
+        It does not provision a real customer project.
+      </p>
       <ul aria-label="Onboarding checklist">
-        <li>Bootstrap sample project</li>
-        <li>Review alerts</li>
-        <li>Inspect stakeholders</li>
+        <li>Open demo sample project workspace</li>
+        <li>Review sample alerts</li>
+        <li>Inspect sample stakeholders</li>
       </ul>
 
       <button
@@ -37,13 +45,15 @@ export function OnboardingEntry({
           }
         }}
       >
-        Start with sample project
+        Open demo sample project
       </button>
 
       {isFailed ? (
         <>
-          <div role="alert">{errorMessage ?? "Provisioning failed"}</div>
-          <button type="button">Retry setup</button>
+          <div role="alert">
+            {errorMessage ?? "Sample workspace setup failed"}
+          </div>
+          <button type="button">Retry demo setup</button>
         </>
       ) : null}
     </section>

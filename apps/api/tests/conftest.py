@@ -106,6 +106,7 @@ from src.core.database import Base, get_session
 from src.main import create_application
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
+from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
 
 
 def _iter_metadata_enum_types():
@@ -604,6 +605,8 @@ async def seeded_auth_context() -> dict[str, str]:
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    assert_seeded_identity_isolation_safe(database_url)
+
     engine = create_async_engine(
         database_url,
         echo=False,
@@ -665,14 +668,28 @@ async def seeded_auth_context() -> dict[str, str]:
         await session.refresh(tenant)
         await session.refresh(user)
 
-    await engine.dispose()
+        payload = {
+            "tenant_id": str(tenant.id),
+            "user_id": str(user.id),
+            "email": user.email,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        }
 
-    return {
-        "tenant_id": str(tenant.id),
-        "user_id": str(user.id),
-        "email": user.email,
-        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
-    }
+    try:
+        yield payload
+    finally:
+        async with session_factory() as cleanup_session:
+            seeded_user = await cleanup_session.get(User, user_id)
+            if seeded_user is not None:
+                await cleanup_session.delete(seeded_user)
+
+            seeded_tenant = await cleanup_session.get(Tenant, tenant_id)
+            if seeded_tenant is not None:
+                await cleanup_session.delete(seeded_tenant)
+
+            await cleanup_session.commit()
+
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture

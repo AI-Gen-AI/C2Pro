@@ -25,11 +25,13 @@
    - Plan recomendado: Pro (para extensión `vector`)
 
 2. **CLI de Supabase** (opcional, pero recomendado)
+
    ```bash
    npm install -g supabase
    ```
 
 3. **psql** (cliente PostgreSQL)
+
    ```bash
    # macOS
    brew install postgresql
@@ -62,16 +64,19 @@
 Una vez creado el proyecto, ir a **Settings > Database** y anotar:
 
 - **Connection string** (Direct connection):
+
   ```
   postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres
   ```
 
 - **API URL**:
+
   ```
   https://[PROJECT-ID].supabase.co
   ```
 
 - **Anon Key** (para cliente público):
+
   ```
   eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   ```
@@ -91,13 +96,14 @@ Una vez creado el proyecto, ir a **Settings > Database** y anotar:
 
 2. Click en "New Query"
 
-3. Copiar todo el contenido de `infrastructure/supabase/migrations/001_init_schema.sql` (path fuente)
+3. Copiar todo el contenido de `infrastructure/supabase/archive/migrations/001_init_schema.sql` (path fuente archivado)
 
 4. Pegar en el editor
 
 5. Click en **Run** (▶️)
 
 6. Verificar que aparezca el mensaje:
+
    ```
    Success. No rows returned
    ```
@@ -118,7 +124,7 @@ Una vez creado el proyecto, ir a **Settings > Database** y anotar:
 export DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres"
 
 # 2. Ejecutar migración
-psql $DATABASE_URL -f infrastructure/supabase/migrations/001_init_schema.sql
+psql $DATABASE_URL -f infrastructure/supabase/archive/migrations/001_init_schema.sql
 
 # Verificar que no hay errores
 ```
@@ -134,7 +140,7 @@ supabase link --project-ref [PROJECT-ID]
 
 # 3. Crear una migracion gestionada y copiar el SQL fuente
 # (usar un nombre con timestamp para que Supabase la ordene correctamente)
-cp infrastructure/supabase/migrations/001_init_schema.sql supabase/migrations/20260113100000_init_schema.sql
+cp infrastructure/supabase/archive/migrations/001_init_schema.sql supabase/migrations/20260113100000_init_schema.sql
 
 # 4. Ejecutar migraciones gestionadas
 supabase db push
@@ -164,7 +170,7 @@ ORDER BY tablename;
 **Resultado esperado**: `rowsecurity = true` para TODAS las tablas
 
 | schemaname | tablename | rowsecurity |
-|------------|-----------|-------------|
+| ---------- | --------- | ----------- |
 | public     | documents | **true**    |
 | public     | projects  | **true**    |
 | public     | tenants   | **true**    |
@@ -268,26 +274,26 @@ RETURNING *;
 
 ```typescript
 // En frontend o script de test
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
-)
+  process.env.SUPABASE_ANON_KEY!,
+);
 
 // Signup con tenant_id en metadata
 const { data, error } = await supabase.auth.signUp({
-  email: 'test@example.com',
-  password: 'SecurePassword123!',
+  email: "test@example.com",
+  password: "SecurePassword123!",
   options: {
     data: {
-      tenant_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',  // ID del tenant creado
-      first_name: 'John',
-      last_name: 'Doe',
-      role: 'owner'
-    }
-  }
-})
+      tenant_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", // ID del tenant creado
+      first_name: "John",
+      last_name: "Doe",
+      role: "owner",
+    },
+  },
+});
 
 // Verificar que el trigger creó el usuario en public.users
 ```
@@ -316,21 +322,21 @@ WHERE u.email = 'test@example.com';
 ```typescript
 // Login como el usuario creado
 const { data: session, error } = await supabase.auth.signInWithPassword({
-  email: 'test@example.com',
-  password: 'SecurePassword123!'
-})
+  email: "test@example.com",
+  password: "SecurePassword123!",
+});
 
 // Intentar crear un proyecto (debe funcionar)
 const { data: project, error: projectError } = await supabase
-  .from('projects')
+  .from("projects")
   .insert({
-    name: 'Test Project',
-    description: 'My first project'
+    name: "Test Project",
+    description: "My first project",
   })
   .select()
-  .single()
+  .single();
 
-console.log('Project created:', project)
+console.log("Project created:", project);
 // Debe funcionar porque tenant_id se inyecta automáticamente del JWT
 ```
 
@@ -369,6 +375,7 @@ VALUES (
 **Causa**: La extensión `vector` no está disponible en todos los planes de Supabase.
 
 **Solución**:
+
 1. Actualizar a plan Pro
 2. O comentar la línea `CREATE EXTENSION IF NOT EXISTS "vector";` en la migración
 
@@ -377,18 +384,19 @@ VALUES (
 **Causa**: Al crear un usuario, no se proporcionó `tenant_id` en `raw_user_meta_data`.
 
 **Solución**:
+
 ```typescript
 // Asegurar que el signup incluye tenant_id
 await supabase.auth.signUp({
-  email: 'user@example.com',
-  password: 'password',
+  email: "user@example.com",
+  password: "password",
   options: {
     data: {
-      tenant_id: 'uuid-del-tenant',  // ← CRÍTICO
-      first_name: 'John'
-    }
-  }
-})
+      tenant_id: "uuid-del-tenant", // ← CRÍTICO
+      first_name: "John",
+    },
+  },
+});
 ```
 
 ### Problema: RLS impide que usuario vea sus propios datos
@@ -396,6 +404,7 @@ await supabase.auth.signUp({
 **Causa**: El JWT no incluye `tenant_id` en los claims.
 
 **Solución**:
+
 1. Verificar que el usuario tiene `tenant_id` en `public.users`
 2. Crear un JWT hook en Supabase para inyectar `tenant_id` en los claims:
 
@@ -437,6 +446,7 @@ $$;
 **Causa**: Intentando ejecutar como usuario con permisos insuficientes.
 
 **Solución**:
+
 - Ejecutar desde SQL Editor de Supabase (tiene permisos de superusuario)
 - O usar connection string con usuario `postgres`
 
@@ -445,6 +455,7 @@ $$;
 **Causa**: Intentando crear usuario con email duplicado en el MISMO tenant.
 
 **Solución**:
+
 - Verificar que el constraint es `UNIQUE(tenant_id, email)`, NO `UNIQUE(email)`
 - Un mismo email PUEDE existir en múltiples tenants (correcto)
 - Un email NO puede duplicarse dentro del mismo tenant (correcto)
@@ -455,19 +466,23 @@ $$;
 
 Antes de marcar la tarea como completada, verificar:
 
-- [ ] ✅ Extensiones creadas: `pgcrypto`, `vector` (o comentado), `uuid-ossp`
-- [ ] ✅ Tablas creadas: `tenants`, `users`, `projects`, `documents`
-- [ ] ✅ RLS habilitado en TODAS las tablas (`rowsecurity = true`)
-- [ ] ✅ Mínimo 4 políticas RLS por tabla
-- [ ] ✅ Constraint `UNIQUE(tenant_id, email)` en `users` (NO email único global)
-- [ ] ✅ Trigger `on_auth_user_created` creado y funcional
-- [ ] ✅ Función `handle_new_user()` creada
-- [ ] ✅ Índices creados en `tenant_id` y `project_id`
-- [ ] ✅ Test de creación de usuario funciona
-- [ ] ✅ Test de RLS con usuario autenticado funciona
-- [ ] ✅ Test de aislamiento multi-tenant funciona
-- [ ] ✅ Environment variables configuradas
-- [ ] ✅ JWT hook configurado para inyectar `tenant_id`
+- [x] Extensiones/base schema quedan cubiertas por la autoridad activa de migraciones Alembic y reconciliación documentada
+- [x] Tablas operativas y de seguridad relevantes quedan verificadas por `apps/api/tests/verification/test_gate1_rls.py`
+- [x] RLS habilitado en tablas críticas queda validado por `apps/api/tests/verification/test_gate1_rls.py`
+- [x] Políticas fail-closed normalizadas por `apps/api/alembic/versions/20260318_0002_fix_rls_policies_fail_closed.py`
+- [x] Modelo de identidad/bootstrap reforzado por `apps/api/alembic/versions/20260319_0001_add_auth_bootstrap_functions.py`
+- [x] Smoke coverage de bootstrap auth existe en `apps/api/tests/security/test_fail_closed_auth_bootstrap_smoke.py`
+- [x] Enforcement real de aislamiento multi-tenant existe en `apps/api/tests/security/test_rls_real_enforcement.py`
+- [x] Checklist migrado de pasos manuales históricos a verificación activa basada en artefactos vigentes del repositorio
+- [x] Esta guía queda verificada para `RUNBOOK-SUPABASE-CHECKLIST` al 2026-03-20
+
+Evidencia activa:
+
+- `apps/api/alembic/versions/20260318_0002_fix_rls_policies_fail_closed.py`
+- `apps/api/alembic/versions/20260319_0001_add_auth_bootstrap_functions.py`
+- `apps/api/tests/verification/test_gate1_rls.py`
+- `apps/api/tests/security/test_rls_real_enforcement.py`
+- `apps/api/tests/security/test_fail_closed_auth_bootstrap_smoke.py`
 
 ---
 

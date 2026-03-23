@@ -4,6 +4,8 @@
 **Source:** TDD_MASTER_PLAN.md, TDD_WEEK1_TESTS.md, TDD_WEEK2_TESTS.md, TDD_QUICK_REFERENCE.md  
 **Status:** Ready for Execution
 
+Status update (2026-03-20): This registry captures an earlier execution-planning snapshot. Many suites and runtime hardening items have progressed since it was generated, so the status labels below should be read as historical TDD planning context rather than a current live completion report.
+
 ---
 
 ## 📋 Test Execution Summary

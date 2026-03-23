@@ -28,6 +28,8 @@ from src.analysis.application.alerts_use_cases import (
     ListAlertsUseCase,
     UpdateAlertStatusUseCase,
 )
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User, UserRole
 
 # ===========================================
 # PYDANTIC SCHEMAS
@@ -103,6 +105,14 @@ router = APIRouter(
     tags=["Alerts"],
     responses={404: {"description": "Not found"}},
 )
+
+
+def _require_admin(current_user: User) -> None:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required for alert mutations",
+        )
 
 # ===========================================
 # DEPENDENCY INJECTION
@@ -243,8 +253,8 @@ async def get_alert(
 async def update_alert(
     alert_id: UUID,
     alert_update: AlertUpdate,
+    current_user: User = Depends(get_current_user),
     use_case: UpdateAlertStatusUseCase = Depends(get_update_alert_use_case),
-    # TODO: Add current_user dependency when auth is integrated
 ):
     """
     Update an alert's status and add resolution notes.
@@ -261,6 +271,7 @@ async def update_alert(
         HTTPException: 404 if alert not found
         HTTPException: 400 if validation fails
     """
+    _require_admin(current_user)
     try:
         return await use_case.execute(
             alert_id=alert_id,
@@ -293,8 +304,8 @@ async def update_alert(
 )
 async def delete_alert(
     alert_id: UUID,
+    current_user: User = Depends(get_current_user),
     use_case: DeleteAlertUseCase = Depends(get_delete_alert_use_case),
-    # TODO: Add current_user dependency and check admin role
 ):
     """
     Delete an alert. This should only be used by administrators for cleanup.
@@ -306,6 +317,7 @@ async def delete_alert(
     Raises:
         HTTPException: 404 if alert not found
     """
+    _require_admin(current_user)
     try:
         await use_case.execute(alert_id)
     except ValueError:

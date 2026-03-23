@@ -117,11 +117,11 @@ Key fixtures are defined in `tests/conftest.py`:
 
 **Issue:** `ValueError: password cannot be longer than 72 bytes`
 
-**Fix:** The project uses `bcrypt==4.3.0` which is compatible with `passlib==1.7.4`. Do NOT upgrade to bcrypt 5.x.
+**Fix:** The project uses `bcrypt==4.0.1` with `passlib==1.7.4`. Newer bcrypt builds can trigger Passlib backend-detection tracebacks. Do NOT upgrade bcrypt without re-validating the auth hashing path.
 
 **Lock the version:**
 ```bash
-pip install 'bcrypt<5.0,>=4.0'
+pip install 'bcrypt==4.0.1'
 ```
 
 ### 3. Pgbouncer / Supabase Connection Pooler

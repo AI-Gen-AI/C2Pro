@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,26 +15,27 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   CheckCircle,
   XCircle,
   AlertTriangle,
   FileText,
   Link as LinkIcon,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Types for extracted entities
 export interface ExtractedEntity {
   id: string;
   type: string;
   text: string;
+  approvalResourceType?: string | null;
   originalText?: string;
   confidence: number;
   page: number;
   validated?: boolean;
-  validationStatus?: 'pending' | 'approved' | 'rejected';
+  validationStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   linkedWbs?: string[];
   linkedAlerts?: string[];
@@ -58,22 +59,23 @@ export function EntityValidationCard({
 }: EntityValidationCardProps) {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'border-l-green-500 bg-green-50/50';
-    if (confidence >= 60) return 'border-l-amber-500 bg-amber-50/50';
-    return 'border-l-red-500 bg-red-50/50';
+    if (confidence >= 80) return "border-l-green-500 bg-green-50/50";
+    if (confidence >= 60) return "border-l-amber-500 bg-amber-50/50";
+    return "border-l-red-500 bg-red-50/50";
   };
 
   const getConfidenceBadge = (confidence: number) => {
-    if (confidence >= 80) return { label: 'High', variant: 'default' as const };
-    if (confidence >= 60) return { label: 'Medium', variant: 'secondary' as const };
-    return { label: 'Low', variant: 'destructive' as const };
+    if (confidence >= 80) return { label: "High", variant: "default" as const };
+    if (confidence >= 60)
+      return { label: "Medium", variant: "secondary" as const };
+    return { label: "Low", variant: "destructive" as const };
   };
 
   const getStatusBadge = () => {
-    if (entity.validationStatus === 'approved') {
+    if (entity.validationStatus === "approved") {
       return (
         <Badge variant="default" className="bg-green-600">
           <CheckCircle className="mr-1 h-3 w-3" />
@@ -81,7 +83,7 @@ export function EntityValidationCard({
         </Badge>
       );
     }
-    if (entity.validationStatus === 'rejected') {
+    if (entity.validationStatus === "rejected") {
       return (
         <Badge variant="destructive">
           <XCircle className="mr-1 h-3 w-3" />
@@ -107,20 +109,21 @@ export function EntityValidationCard({
   const handleRejectConfirm = () => {
     onReject(entity.id, rejectionReason);
     setRejectDialogOpen(false);
-    setRejectionReason('');
+    setRejectionReason("");
   };
 
-  const isPending = entity.validationStatus === 'pending' || !entity.validationStatus;
+  const isPending =
+    entity.validationStatus === "pending" || !entity.validationStatus;
 
   return (
     <>
       <Card
         className={cn(
-          'border-l-4 transition-all cursor-pointer hover:shadow-md',
+          "border-l-4 transition-all cursor-pointer hover:shadow-md",
           getConfidenceColor(entity.confidence),
-          isActive && 'ring-2 ring-primary shadow-lg',
-          entity.validationStatus === 'approved' && 'opacity-75',
-          entity.validationStatus === 'rejected' && 'opacity-50'
+          isActive && "ring-2 ring-primary shadow-lg",
+          entity.validationStatus === "approved" && "opacity-75",
+          entity.validationStatus === "rejected" && "opacity-50",
         )}
         onClick={() => onEntityClick?.(entity)}
       >
@@ -167,7 +170,7 @@ export function EntityValidationCard({
           </div>
 
           {/* Rejection reason if rejected */}
-          {entity.validationStatus === 'rejected' && entity.rejectionReason && (
+          {entity.validationStatus === "rejected" && entity.rejectionReason && (
             <div className="p-2 bg-red-50 rounded text-xs text-red-700">
               <strong>Rejection reason:</strong> {entity.rejectionReason}
             </div>
@@ -214,18 +217,21 @@ export function EntityValidationCard({
               Confirm Approval
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>
-                Are you sure you want to approve this extraction?
-              </p>
+              <p>Are you sure you want to approve this extraction?</p>
               <div className="mt-3 p-3 bg-muted rounded-lg">
-                <p className="font-medium text-sm text-foreground">{entity.type}</p>
-                <p className="text-sm mt-1">{entity.text.substring(0, 150)}...</p>
+                <p className="font-medium text-sm text-foreground">
+                  {entity.type}
+                </p>
+                <p className="text-sm mt-1">
+                  {entity.text.substring(0, 150)}...
+                </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Confidence: {entity.confidence}% | Page {entity.page}
                 </p>
               </div>
               <p className="text-sm mt-3">
-                This will mark the extraction as <strong>validated</strong> and include it in the analysis results.
+                This will mark the extraction as <strong>validated</strong> and
+                include it in the analysis results.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -251,12 +257,14 @@ export function EntityValidationCard({
               Confirm Rejection
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>
-                Are you sure you want to reject this extraction?
-              </p>
+              <p>Are you sure you want to reject this extraction?</p>
               <div className="mt-3 p-3 bg-muted rounded-lg">
-                <p className="font-medium text-sm text-foreground">{entity.type}</p>
-                <p className="text-sm mt-1">{entity.text.substring(0, 150)}...</p>
+                <p className="font-medium text-sm text-foreground">
+                  {entity.type}
+                </p>
+                <p className="text-sm mt-1">
+                  {entity.text.substring(0, 150)}...
+                </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Confidence: {entity.confidence}% | Page {entity.page}
                 </p>
@@ -276,11 +284,12 @@ export function EntityValidationCard({
               rows={3}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              This feedback will be logged for audit purposes and used to improve future extractions.
+              This feedback will be logged for audit purposes and used to
+              improve future extractions.
             </p>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRejectionReason('')}>
+            <AlertDialogCancel onClick={() => setRejectionReason("")}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

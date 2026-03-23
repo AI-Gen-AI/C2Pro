@@ -147,3 +147,59 @@ class TestWBSRepositoryIntegration:
             tenant_b_repo = SQLAlchemyWBSRepository(tenant_b_session)
             tree_b = await tenant_b_repo.get_tree(project_id=project_a.id, tenant_id=tenant_b)
             assert tree_b == []
+
+    @pytest.mark.asyncio
+    async def test_same_wbs_code_allowed_across_projects(self, session: AsyncSession):
+        """Refers to Suite ID: TS-INT-DB-WBS-001."""
+        tenant_id = uuid4()
+        project_a = ProjectORM(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            name="Tenant Project A",
+            description=None,
+            code=f"PA-{uuid4().hex[:6]}",
+            project_type="construction",
+            status="draft",
+            estimated_budget=1000.0,
+            currency="EUR",
+            start_date=None,
+            end_date=None,
+            coherence_score=None,
+            last_analysis_at=None,
+            metadata_json={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        project_b = ProjectORM(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            name="Tenant Project B",
+            description=None,
+            code=f"PB-{uuid4().hex[:6]}",
+            project_type="construction",
+            status="draft",
+            estimated_budget=1000.0,
+            currency="EUR",
+            start_date=None,
+            end_date=None,
+            coherence_score=None,
+            last_analysis_at=None,
+            metadata_json={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add_all([project_a, project_b])
+        await session.commit()
+
+        code = "1"
+        item_a = WBSItem(project_id=project_a.id, code=code, name="A", level=1)
+        item_b = WBSItem(project_id=project_b.id, code=code, name="B", level=1)
+
+        async with get_session_with_tenant(tenant_id) as tenant_session:
+            repo = SQLAlchemyWBSRepository(tenant_session)
+            created_a = await repo.create(item_a)
+            created_b = await repo.create(item_b)
+
+            assert created_a.code == code
+            assert created_b.code == code
+            assert created_a.project_id != created_b.project_id

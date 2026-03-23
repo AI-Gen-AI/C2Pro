@@ -2,6 +2,8 @@
 
 ## Summary
 
+Status update (2026-03-20): This file documents an earlier GREEN-phase checkpoint. It predates later removal of fake-data production paths and subsequent runtime hardening work, so any references below to fake/in-memory implementation patterns should be treated as historical context rather than the current project state.
+
 **Status**: GREEN Phase Implementation Complete ✓
 **Test Execution**: Blocked by Fixture/Schema Issues (DB reachable) ⚠️
 **Code Quality**: Production-Ready ✓
@@ -17,6 +19,7 @@
 ## Implementation Complete
 
 ### Domain Layer
+
 - **File**: `apps/api/src/projects/domain/project.py`
 - **Status**: ✓ Complete
 - **Pattern**: Domain Entity with Pydantic BaseModel
@@ -27,6 +30,7 @@
   - Full type safety
 
 ### HTTP Adapter Layer
+
 - **File**: `apps/api/src/projects/adapters/http/router.py`
 - **Status**: ✓ Complete (Fake It Pattern)
 - **Pattern**: Minimal HTTP endpoints with in-memory storage
@@ -41,6 +45,7 @@
   - ✓ JWT authentication required via `get_current_user` dependency
 
 ### Authentication Layer
+
 - **File**: `apps/api/src/core/auth/dependencies.py`
 - **Status**: ✓ Complete
 - **Features**:
@@ -51,6 +56,7 @@
   - Structured logging for security events
 
 ### Test Fixtures
+
 - **File**: `apps/api/tests/e2e/security/test_multi_tenant_isolation.py`
 - **Status**: ✓ Updated
 - **Changes**:
@@ -112,6 +118,7 @@ Windows + Docker Desktop + Async PostgreSQL drivers have fundamental compatibili
 ## Workarounds & Solutions
 
 ### Option 1: WSL2 (Recommended)
+
 Run tests in WSL2 where asyncpg works correctly:
 
 ```bash
@@ -124,6 +131,7 @@ python -m pytest tests/e2e/security/test_multi_tenant_isolation.py -v -m "e2e an
 ```
 
 ### Option 2: Local PostgreSQL Installation
+
 Install PostgreSQL natively on Windows (not Docker):
 
 ```bash
@@ -137,6 +145,7 @@ python -m pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 ### Option 3: GitHub Actions CI/CD (Production)
+
 Tests will run successfully in GitHub Actions Linux runners:
 
 ```yaml
@@ -147,6 +156,7 @@ Tests will run successfully in GitHub Actions Linux runners:
 ```
 
 ### Option 4: Code Review Only
+
 Review the implementation code to verify correctness:
 
 1. Check `apps/api/src/projects/adapters/http/router.py`:253-263
@@ -164,11 +174,13 @@ Review the implementation code to verify correctness:
 ## TDD Cycle Status
 
 ### ✅ RED Phase (Complete)
+
 - All 11 tests written
 - Tests fail with appropriate errors
 - Clear test scenarios defined
 
 ### ✅ GREEN Phase (Complete)
+
 - Minimal implementation using "Fake It" pattern
 - In-memory storage (`_fake_projects`)
 - All security checks implemented
@@ -176,6 +188,7 @@ Review the implementation code to verify correctness:
 - **Code is production-ready** but uses fake storage
 
 ### ⏳ REFACTOR Phase (Pending)
+
 Next steps once tests can run:
 
 1. **Triangulation**: Add more test cases to force real implementation
@@ -187,6 +200,7 @@ Next steps once tests can run:
 ## Files Modified/Created
 
 ### Created
+
 - `apps/api/src/projects/domain/project.py` (35 lines)
 - `apps/api/src/projects/adapters/http/router.py` (138 lines)
 - `apps/api/src/core/auth/dependencies.py` (134 lines)
@@ -194,12 +208,14 @@ Next steps once tests can run:
 - `infrastructure/database/test-init/01-setup.sql` (database init script)
 
 ### Modified
+
 - `apps/api/tests/conftest.py` (psycopg support, Windows fixes)
 - `apps/api/tests/e2e/security/test_multi_tenant_isolation.py` (updated fixtures)
 
 ## Conclusion
 
 **The GREEN phase implementation is complete and correct.** The code follows:
+
 - ✓ Hexagonal Architecture principles
 - ✓ TDD "Fake It" pattern for minimal implementation
 - ✓ Security-first design with tenant isolation

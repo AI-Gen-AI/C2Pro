@@ -64,6 +64,9 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
 
+    # Clerk integration (for frontend auth)
+    clerk_org_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+
     # Subscription
     subscription_plan: Mapped[SubscriptionPlan] = mapped_column(
         SQLEnum(SubscriptionPlan, values_callable=lambda obj: [e.value for e in obj]),
@@ -169,6 +172,9 @@ class User(Base):
         nullable=True,  # google, github, etc.
     )
     oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Clerk integration (for frontend auth)
+    clerk_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
 
     # Profile
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

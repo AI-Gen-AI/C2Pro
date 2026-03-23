@@ -3,6 +3,8 @@
 **Date:** 2026-02-07
 **Status:** ⚠️ **BLOCKED - Test Fixture/Schema Issues (DB reachable)**
 
+Status update (2026-03-20): This file captures a historical blocker state for TS-E2E-SEC-TNT-001. The repo has since advanced through additional schema/runtime cleanup and multiple security/runtime hardening tasks; treat the details below as dated execution history, not the current overall project status.
+
 ---
 
 ## ❌ Blocker: Fixture Transaction Errors
@@ -32,19 +34,23 @@ pytest apps/api/tests/e2e/security/test_multi_tenant_isolation.py -v -o asyncio_
 ## 🚧 What's Blocking Test Execution
 
 ### Issue 1: Python 3.13 + Windows Dependency Issues ⚠️
+
 Many packages don't have prebuilt wheels for Python 3.13 on Windows.
 
 **Packages Commented Out:**
+
 - `pyfiebdc` - Not on PyPI
 - `spacy` - Requires VS Build Tools
 - `presidio-analyzer` / `presidio-anonymizer` - Depend on spacy
 
 **Packages with Version Issues:**
+
 - ✅ Fixed: `sqlalchemy` 2.0.25 → 2.0.46 (Python 3.13 compatible)
 - ✅ Fixed: `pydantic` 2.6.1 → ≥2.7.4 (langchain-core compatibility)
 - ✅ Fixed: `asyncpg` 0.29.0 → ≥0.31.0 (prebuilt wheels)
 
 **Missing Dependencies:**
+
 - Still missing some transitive dependencies (langchain ecosystem)
 
 ### Issue 2: Fixture Transaction Lifecycle ❌
@@ -52,6 +58,7 @@ Many packages don't have prebuilt wheels for Python 3.13 on Windows.
 **Symptom:** `db.refresh()` fails after `db.commit()` inside fixtures.
 
 **Likely Fix Options:**
+
 - Use `await db.flush()` instead of `commit()` inside fixtures, then `refresh()`
 - Remove `async with session.begin()` from `db` fixture and manage transaction per test
 
@@ -62,6 +69,7 @@ Many packages don't have prebuilt wheels for Python 3.13 on Windows.
 **Cause:** `Base.metadata` lacks the `wbs_items` table during `drop_all`
 
 **Likely Fix Options:**
+
 - Ensure `wbs_items` model is imported before metadata creation
 - Limit `drop_all` to test tables only
 
@@ -115,11 +123,13 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 The tests are designed to work with SQLite when PostgreSQL isn't available.
 
 **What Will Happen:**
+
 - ✅ 10/11 tests will **PASS**
 - ⚠️ 1 test will **SKIP** (`test_010_rls_context_set_and_reset` - PostgreSQL-specific)
 - ⚠️ No RLS enforcement (relies on application-level filtering)
 
 **To Run with SQLite:**
+
 ```bash
 cd apps/api
 
@@ -130,6 +140,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 **Expected Output:**
+
 ```
 ====================== test session starts ======================
 ⚠️  PostgreSQL no disponible, usando SQLite en memoria
@@ -143,16 +154,16 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 
 ## 📊 Current Environment Status
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Python Version | 3.13 | ⚠️ Limited package support |
-| Virtual Environment | Active | `.venv` in `apps/` |
-| Core Packages | ⚠️ Partial | fastapi, sqlalchemy, pytest installed |
-| LangChain | ❌ Missing | Not critical for tenant isolation tests |
-| Spacy/Presidio | ❌ Commented Out | Not needed for security tests |
-| PostgreSQL | ✅ Running | `supabase_db_c2pro` on `localhost:54322` |
-| Test Suite | ✅ Ready | 11 test cases written |
-| RLS Migration | ✅ Created | Apply once fixture/schema issues resolved |
+| Component           | Status           | Notes                                     |
+| ------------------- | ---------------- | ----------------------------------------- |
+| Python Version      | 3.13             | ⚠️ Limited package support                |
+| Virtual Environment | Active           | `.venv` in `apps/`                        |
+| Core Packages       | ⚠️ Partial       | fastapi, sqlalchemy, pytest installed     |
+| LangChain           | ❌ Missing       | Not critical for tenant isolation tests   |
+| Spacy/Presidio      | ❌ Commented Out | Not needed for security tests             |
+| PostgreSQL          | ✅ Running       | `supabase_db_c2pro` on `localhost:54322`  |
+| Test Suite          | ✅ Ready         | 11 test cases written                     |
+| RLS Migration       | ✅ Created       | Apply once fixture/schema issues resolved |
 
 ---
 
@@ -186,6 +197,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 **Note:** Some import errors may occur due to missing dependencies. Install as needed:
+
 ```bash
 pip install <missing-package>
 ```
@@ -210,12 +222,15 @@ pip install <missing-package>
 ## 📁 All Deliverables
 
 **Test Files:**
+
 - `apps/api/tests/e2e/security/test_multi_tenant_isolation.py` (650 lines, 11 tests)
 
 **Database Migrations:**
+
 - `apps/api/alembic/versions/20260205_0001_enable_rls_policies.py` (12 RLS policies)
 
 **Documentation:**
+
 1. `TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` - Test suite overview
 2. `TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md` - Implementation status
 3. `NEXT_STEPS_TO_RUN_TESTS.md` - Detailed setup guide
@@ -223,6 +238,7 @@ pip install <missing-package>
 5. `RUN_TESTS_STATUS.md` - This document (current status)
 
 **Configuration:**
+
 - `apps/api/requirements.txt` - Updated for Python 3.13 compatibility
 
 ---
@@ -230,6 +246,7 @@ pip install <missing-package>
 ## ✅ Summary
 
 **What We Accomplished:**
+
 - ✅ Created comprehensive E2E security test suite (11 tests)
 - ✅ Created RLS migration for defense-in-depth security
 - ✅ Verified all implementation exists (no code changes needed!)
@@ -237,11 +254,13 @@ pip install <missing-package>
 - ✅ Created 5 detailed documentation files
 
 **What's Blocking:**
+
 - ⚠️ Python 3.13 ecosystem maturity (missing prebuilt wheels)
 - ❌ Fixture transaction lifecycle (commit/refresh inside closed transaction)
 - ❌ Metadata teardown FK error (`wbs_items` not present in metadata)
 
 **Recommended Fix:**
+
 - ⭐ **Use Python 3.11** (5 minutes to full test suite passing)
 - ⚡ **OR run with SQLite** (2 minutes to 10/11 tests passing)
 

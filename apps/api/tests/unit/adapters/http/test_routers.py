@@ -157,11 +157,12 @@ class TestProjectsRouter:
         project_id = uuid4()
         response = client.get(f"/projects/{project_id}/wbs")
 
-        # Test that endpoint exists (may return 404 if not found or 500 if not implemented)
+        # Test that endpoint exists (may return 401 if auth required, 404 if not found, 500 if not implemented)
         assert response.status_code in [
             status.HTTP_200_OK,
+            status.HTTP_401_UNAUTHORIZED,
             status.HTTP_404_NOT_FOUND,
-            status.HTTP_500_INTERNAL_SERVER_ERROR
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
         ]
 
     @pytest.mark.unit
@@ -295,7 +296,7 @@ class TestCoherenceRouter:
         }
 
         response = client.post(
-            "/v0/coherence/evaluate",
+            "/coherence/evaluate",
             json=project_context
         )
 
@@ -320,7 +321,7 @@ class TestCoherenceRouter:
         project_id = uuid4()
 
         # This endpoint might not exist yet
-        response = client.get(f"/v0/coherence/dashboard/{project_id}")
+        response = client.get(f"/coherence/dashboard/{project_id}")
 
         # Expect 404 if endpoint doesn't exist
         assert response.status_code in [
@@ -341,7 +342,7 @@ class TestCoherenceRouter:
         """
         project_id = uuid4()
 
-        response = client.post(f"/v0/coherence/recalculate/{project_id}")
+        response = client.post(f"/coherence/recalculate/{project_id}")
 
         # Expect 404 if endpoint doesn't exist
         assert response.status_code in [

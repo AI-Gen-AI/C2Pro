@@ -3,11 +3,9 @@
  * Handles all authentication-related API calls
  */
 
-import type { AxiosError } from 'axios';
-import { apiClient } from '@/lib/api/client';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+import type { AxiosError } from "axios";
+import { env } from "@/config/env";
+import { apiClient } from "@/lib/api/client";
 
 export interface RegisterRequest {
   email: string;
@@ -75,7 +73,7 @@ export interface ApiError {
 class AuthApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = API_BASE_URL) {
+  constructor(baseUrl: string = env.API_BASE_URL) {
     this.baseUrl = baseUrl;
   }
 
@@ -91,11 +89,11 @@ class AuthApiClient {
     try {
       const response = await apiClient.post<RegisterResponse>(
         `${this.baseUrl}/auth/register`,
-        data
+        data,
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, 'Registration failed'));
+      throw new Error(this.getErrorMessage(error, "Registration failed"));
     }
   }
 
@@ -106,11 +104,11 @@ class AuthApiClient {
     try {
       const response = await apiClient.post<LoginResponse>(
         `${this.baseUrl}/auth/login`,
-        data
+        data,
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, 'Login failed'));
+      throw new Error(this.getErrorMessage(error, "Login failed"));
     }
   }
 
@@ -121,11 +119,11 @@ class AuthApiClient {
     try {
       const response = await apiClient.post<TokenResponse>(
         `${this.baseUrl}/auth/refresh`,
-        { refresh_token: refreshToken }
+        { refresh_token: refreshToken },
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, 'Token refresh failed'));
+      throw new Error(this.getErrorMessage(error, "Token refresh failed"));
     }
   }
 
@@ -134,14 +132,17 @@ class AuthApiClient {
    */
   async getMe(accessToken: string): Promise<MeResponse> {
     try {
-      const response = await apiClient.get<MeResponse>(`${this.baseUrl}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
+      const response = await apiClient.get<MeResponse>(
+        `${this.baseUrl}/auth/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      });
+      );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, 'Failed to get user info'));
+      throw new Error(this.getErrorMessage(error, "Failed to get user info"));
     }
   }
 
@@ -157,11 +158,11 @@ class AuthApiClient {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
     } catch (error) {
       // Logout endpoint is mainly for logging - don't fail if it errors
-      console.error('Logout API call failed:', error);
+      console.error("Logout API call failed:", error);
     }
   }
 }

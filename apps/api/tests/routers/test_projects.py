@@ -109,10 +109,12 @@ async def test_patch_project_success(
     assert response_create.status_code == 201
     project_id = response_create.json()["id"]
     original_name = response_create.json()["name"]
+    current_version = response_create.json()["version"]
 
     patch_data = {
         "description": "Updated description via PATCH.",
-        "status": "active"
+        "status": "active",
+        "expected_version": current_version,
     }
 
     # Act: Make the PATCH request
@@ -179,7 +181,12 @@ async def test_list_project_documents_polling_response(
     assert create_response.status_code == 201
     project_id = create_response.json()["id"]
 
-    response = await client.post(f"/api/v1/projects/{project_id}/documents", headers=headers)
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/documents",
+        headers=headers,
+        data={"document_type": "contract"},
+        files={"file": ("contract.pdf", b"test file", "application/pdf")},
+    )
 
     assert response.status_code == 202
     payload = response.json()
@@ -213,7 +220,10 @@ async def test_list_project_documents_tenant_isolation(
     project_id = create_response.json()["id"]
 
     response = await client.post(
-        f"/api/v1/projects/{project_id}/documents", headers=headers_b
+        f"/api/v1/projects/{project_id}/documents",
+        headers=headers_b,
+        data={"document_type": "contract"},
+        files={"file": ("contract.pdf", b"test file", "application/pdf")},
     )
 
     assert response.status_code == 404

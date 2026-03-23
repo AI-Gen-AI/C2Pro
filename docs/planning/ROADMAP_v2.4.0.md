@@ -1,11 +1,13 @@
 ﻿# C2Pro Product Roadmap
-**Contract Intelligence Platform - Master Development Plan**
 
+**Contract Intelligence Platform - Master Development Plan**
 
 **Versión:** 2.4.0
 **Última actualización:** 05 de Enero de 2026
 **Autor:** Jesús - Strategic Procurement Director
 **Clasificación:** CONFIDENCIAL
+
+Actualización de estado (2026-03-20): este roadmap se conserva como plan maestro estratégico histórico. El estado real de ejecución y readiness actual debe consultarse en los documentos de planning/gates vigentes; varias capacidades y tareas operativas descritas aquí ya fueron refinadas, reordenadas o cerradas posteriormente.
 
 ---
 
@@ -33,14 +35,14 @@
 
 ## Changelog
 
-| Versión | Fecha | Cambios |
-|---------|-------|---------|
-| 1.0.0 | 15/12/2024 | Documento inicial |
-| 2.0.0 | 29/12/2024 | Reescritura completa |
-| 2.1.0 | 29/12/2024 | WBS y BOM como prerequisitos |
-| 2.2.0 | 29/12/2024 | Sistema procurement con Incoterms |
-| 2.3.0 | 03/01/2026 | Stakeholder Intelligence, MCP, Graph RAG, Multi-Agent |
-| **2.4.0** | **05/01/2026** | **HARDENING & CTO-READY** (ver detalle abajo) |
+| Versión   | Fecha          | Cambios                                               |
+| --------- | -------------- | ----------------------------------------------------- |
+| 1.0.0     | 15/12/2024     | Documento inicial                                     |
+| 2.0.0     | 29/12/2024     | Reescritura completa                                  |
+| 2.1.0     | 29/12/2024     | WBS y BOM como prerequisitos                          |
+| 2.2.0     | 29/12/2024     | Sistema procurement con Incoterms                     |
+| 2.3.0     | 03/01/2026     | Stakeholder Intelligence, MCP, Graph RAG, Multi-Agent |
+| **2.4.0** | **05/01/2026** | **HARDENING & CTO-READY** (ver detalle abajo)         |
 
 ---
 
@@ -48,39 +50,39 @@
 
 ### Correcciones Críticas de Seguridad
 
-| Cambio | Impacto | Sección |
-|--------|---------|---------|
-| **RLS completo** en 14 tablas (antes 7) | Aislamiento multi-tenant real | §5, §6 |
-| **UNIQUE(tenant_id, email)** en users | Soporte B2B enterprise | §5.3 |
-| **Cast UUID en policies** | Evita fallos silenciosos | §5.4 |
-| **MCP Database allowlist** | Elimina SQL injection risk | §4.4 |
-| **Clauses como entidad** con FKs | Trazabilidad legal real | §5.3 |
-| **Knowledge graph nodes** | Integridad referencial | §5.3 |
+| Cambio                                  | Impacto                       | Sección |
+| --------------------------------------- | ----------------------------- | ------- |
+| **RLS completo** en 14 tablas (antes 7) | Aislamiento multi-tenant real | §5, §6  |
+| **UNIQUE(tenant_id, email)** en users   | Soporte B2B enterprise        | §5.3    |
+| **Cast UUID en policies**               | Evita fallos silenciosos      | §5.4    |
+| **MCP Database allowlist**              | Elimina SQL injection risk    | §4.4    |
+| **Clauses como entidad** con FKs        | Trazabilidad legal real       | §5.3    |
+| **Knowledge graph nodes**               | Integridad referencial        | §5.3    |
 
 ### Nuevas Secciones
 
-| Sección | Descripción |
-|---------|-------------|
-| **§6 Seguridad y Compliance** | Cifrado, retención, PII, GDPR, logging IA |
-| **§7 CTO Gates Checklist** | 8 gates go/no-go por fase |
-| **§12 Coherence Score Spec** | Fórmula formal, pesos, calibración, anti-gaming |
+| Sección                       | Descripción                                     |
+| ----------------------------- | ----------------------------------------------- |
+| **§6 Seguridad y Compliance** | Cifrado, retención, PII, GDPR, logging IA       |
+| **§7 CTO Gates Checklist**    | 8 gates go/no-go por fase                       |
+| **§12 Coherence Score Spec**  | Fórmula formal, pesos, calibración, anti-gaming |
 
 ### Reorganización del Backlog
 
-| Antes (v2.3.0) | Ahora (v2.4.0) | Razón |
-|----------------|----------------|-------|
-| Sem 1-2: Foundation | Sprint 0: Foundation + **Guardrails** | Security first |
-| Sem 3-4: Documents | Sprint 1-2: Ingesta + **Clauses entity** | Trazabilidad legal |
-| Sem 5-6: IA Core | Sprint 3: Coherencia v0 | Reordena prioridades |
-| Sem 7-8: Coherence | Sprint 4: UI mínima pilotos | Feedback temprano |
+| Antes (v2.3.0)      | Ahora (v2.4.0)                           | Razón                |
+| ------------------- | ---------------------------------------- | -------------------- |
+| Sem 1-2: Foundation | Sprint 0: Foundation + **Guardrails**    | Security first       |
+| Sem 3-4: Documents  | Sprint 1-2: Ingesta + **Clauses entity** | Trazabilidad legal   |
+| Sem 5-6: IA Core    | Sprint 3: Coherencia v0                  | Reordena prioridades |
+| Sem 7-8: Coherence  | Sprint 4: UI mínima pilotos              | Feedback temprano    |
 
 ### Decisiones de Producto
 
-| Decisión | Resultado |
-|----------|-----------|
-| **Implicit Needs Inference** | Movido a Fase 3 como experimental opt-in |
-| **Human-in-the-loop** | Obligatorio para outputs de riesgo/contrato |
-| **Maturity levels** | Añadido por feature (Prototype/Pilot/Production) |
+| Decisión                     | Resultado                                        |
+| ---------------------------- | ------------------------------------------------ |
+| **Implicit Needs Inference** | Movido a Fase 3 como experimental opt-in         |
+| **Human-in-the-loop**        | Obligatorio para outputs de riesgo/contrato      |
+| **Maturity levels**          | Añadido por feature (Prototype/Pilot/Production) |
 
 ---
 
@@ -107,32 +109,33 @@ El **15-30% de los sobrecostes** en proyectos EPC se deben a la desconexión sis
 ### 1.4 Disclaimer Legal (OBLIGATORIO en UI y docs)
 
 > ⚠️ **AVISO IMPORTANTE**
-> 
+>
 > C2Pro no constituye asesoramiento legal ni sustituye la interpretación profesional de contratos. El sistema identifica potenciales incoherencias y proporciona hipótesis trazables con referencias a cláusulas específicas. Todas las conclusiones deben ser validadas por profesionales cualificados antes de tomar decisiones.
 
 ### 1.5 Diferenciadores Clave
 
-| Diferenciador | Beneficio | Evidencia |
-|---------------|-----------|-----------|
+| Diferenciador            | Beneficio                        | Evidencia             |
+| ------------------------ | -------------------------------- | --------------------- |
 | Auditoría Tridimensional | Detecta incoherencias en minutos | Ahorro 8-16h/proyecto |
-| IA Especializada EPC | Entiende cláusulas, WBS, BOM | >85% accuracy |
-| Coherence Score 0-100 | Cuantifica riesgo | Fórmula documentada |
-| Stakeholder Intelligence | Mapea stakeholders auto | RACI generado |
-| Graph RAG Trazabilidad | Contract→WBS→BOM→Stakeholder | FK reales |
-| Human-in-the-loop | Validación obligatoria | Legal shield |
+| IA Especializada EPC     | Entiende cláusulas, WBS, BOM     | >85% accuracy         |
+| Coherence Score 0-100    | Cuantifica riesgo                | Fórmula documentada   |
+| Stakeholder Intelligence | Mapea stakeholders auto          | RACI generado         |
+| Graph RAG Trazabilidad   | Contract→WBS→BOM→Stakeholder     | FK reales             |
+| Human-in-the-loop        | Validación obligatoria           | Legal shield          |
 
 ### 1.6 Posicionamiento Competitivo
 
 **Análisis de 17 competidores:**
 
-| Categoría | Competidores | C2Pro Diferente |
-|-----------|--------------|-----------------|
-| Sourcing | Keelvar, GEP, Fairmarkit | + WBS/BOM desde contrato |
-| Contract Mgmt | Icertis, Ironclad, Agiloft | + Coherencia back-to-back |
-| PO Automation | Zip, Coupa, Procurify | + Trazabilidad legal con FKs |
-| Decision Intel | Aera, o9, Pactum | + Específico EPC, closed-loop |
+| Categoría      | Competidores               | C2Pro Diferente               |
+| -------------- | -------------------------- | ----------------------------- |
+| Sourcing       | Keelvar, GEP, Fairmarkit   | + WBS/BOM desde contrato      |
+| Contract Mgmt  | Icertis, Ironclad, Agiloft | + Coherencia back-to-back     |
+| PO Automation  | Zip, Coupa, Procurify      | + Trazabilidad legal con FKs  |
+| Decision Intel | Aera, o9, Pactum           | + Específico EPC, closed-loop |
 
 **Gaps que NINGÚN competidor cubre:**
+
 - ✅ Generación WBS/BOM desde texto contractual
 - ✅ Coherencia back-to-back con trazabilidad legal (FK a cláusulas)
 - ✅ MRP Cognitivo alineado a cronograma
@@ -172,25 +175,25 @@ El **15-30% de los sobrecostes** en proyectos EPC se deben a la desconexión sis
 
 ### 3.1 Stack Completo
 
-| Capa | Tecnología | Versión | Justificación |
-|------|------------|---------|---------------|
-| **Frontend** | Next.js | 14+ | SSR, Vercel deploy |
-| | React | 18+ | Ecosystem |
-| | Tailwind CSS | 3+ | Rapid prototyping |
-| | shadcn/ui | latest | Accesible, customizable |
-| **Backend** | FastAPI | 0.104+ | Async, Pydantic v2 |
-| | Python | 3.11+ | AI/ML ecosystem |
-| **Database** | PostgreSQL | 15+ | ACID, RLS nativo |
-| | Supabase | Managed | Auth, backups, PITR |
-| **Cache** | Redis/Upstash | 7+ | Rate limiting, cache |
-| **Storage** | Cloudflare R2 | - | Sin egress fees, cifrado |
-| **IA** | Claude Sonnet 4 | latest | 200K context |
-| | Claude Haiku 4 | latest | Fast, económico |
-| **MCP** | Protocol | 2025-11 | Estándar abierto |
-| **Graph** | NetworkX | latest | Graph RAG MVP |
-| **Orchestration** | LangGraph | latest | Multi-agent |
-| **Observability** | Sentry | Free | Error tracking |
-| | Structlog | latest | JSON logging |
+| Capa              | Tecnología      | Versión | Justificación            |
+| ----------------- | --------------- | ------- | ------------------------ |
+| **Frontend**      | Next.js         | 14+     | SSR, Vercel deploy       |
+|                   | React           | 18+     | Ecosystem                |
+|                   | Tailwind CSS    | 3+      | Rapid prototyping        |
+|                   | shadcn/ui       | latest  | Accesible, customizable  |
+| **Backend**       | FastAPI         | 0.104+  | Async, Pydantic v2       |
+|                   | Python          | 3.11+   | AI/ML ecosystem          |
+| **Database**      | PostgreSQL      | 15+     | ACID, RLS nativo         |
+|                   | Supabase        | Managed | Auth, backups, PITR      |
+| **Cache**         | Redis/Upstash   | 7+      | Rate limiting, cache     |
+| **Storage**       | Cloudflare R2   | -       | Sin egress fees, cifrado |
+| **IA**            | Claude Sonnet 4 | latest  | 200K context             |
+|                   | Claude Haiku 4  | latest  | Fast, económico          |
+| **MCP**           | Protocol        | 2025-11 | Estándar abierto         |
+| **Graph**         | NetworkX        | latest  | Graph RAG MVP            |
+| **Orchestration** | LangGraph       | latest  | Multi-agent              |
+| **Observability** | Sentry          | Free    | Error tracking           |
+|                   | Structlog       | latest  | JSON logging             |
 
 ### 3.2 Model Routing Rules
 
@@ -201,25 +204,25 @@ model_routing:
     reason: "Documentos largos, alta precisión"
     max_tokens: 4096
     temperature: 0.1
-    
+
   stakeholder_classification:
     model: "claude-haiku-4"
     reason: "Tarea simple, volumen alto"
     max_tokens: 256
     temperature: 0.0
-    
+
   coherence_check:
     model: "claude-haiku-4"
     reason: "Reglas determinísticas"
     max_tokens: 512
     temperature: 0.0
-    
+
   raci_generation:
     model: "claude-sonnet-4"
     reason: "Razonamiento complejo"
     max_tokens: 2048
     temperature: 0.2
-    
+
   multimodal_expediting:
     model: "claude-sonnet-4-vision"
     reason: "Análisis de imágenes"
@@ -354,16 +357,16 @@ model_routing:
 
 ### 4.3 Arquitectura Multi-Agente
 
-| Agente | Responsabilidad | Input | Output | Modelo | Human-in-loop |
-|--------|----------------|-------|--------|--------|---------------|
-| ContractParserAgent | Extrae estructura | PDF | JSON | Sonnet 4 | No |
-| **ClauseExtractorAgent** | Extrae cláusulas con IDs | PDF | Clauses[] | Sonnet 4 | **Sí (verificar)** |
-| StakeholderExtractorAgent | Identifica stakeholders | PDF + clauses | Stakeholders[] | Sonnet 4 | **Sí (verificar)** |
-| WBSGeneratorAgent | Genera WBS | Extractions | WBS[] | Sonnet 4 | **Sí (aprobar)** |
-| BOMBuilderAgent | Crea BOM | WBS + Budget | BOM[] | Sonnet 4 | **Sí (aprobar)** |
-| CoherenceCheckerAgent | Detecta incoherencias | Graph | Alerts[] | Haiku 4 | No |
-| RACIGeneratorAgent | Mapea RACI | Stakeholders + WBS | RACI[] | Haiku 4 | **Sí (revisar)** |
-| AlertRouterAgent | Rutea alertas | Alerts + RACI | Notifications | Haiku 4 | No |
+| Agente                    | Responsabilidad          | Input              | Output         | Modelo   | Human-in-loop      |
+| ------------------------- | ------------------------ | ------------------ | -------------- | -------- | ------------------ |
+| ContractParserAgent       | Extrae estructura        | PDF                | JSON           | Sonnet 4 | No                 |
+| **ClauseExtractorAgent**  | Extrae cláusulas con IDs | PDF                | Clauses[]      | Sonnet 4 | **Sí (verificar)** |
+| StakeholderExtractorAgent | Identifica stakeholders  | PDF + clauses      | Stakeholders[] | Sonnet 4 | **Sí (verificar)** |
+| WBSGeneratorAgent         | Genera WBS               | Extractions        | WBS[]          | Sonnet 4 | **Sí (aprobar)**   |
+| BOMBuilderAgent           | Crea BOM                 | WBS + Budget       | BOM[]          | Sonnet 4 | **Sí (aprobar)**   |
+| CoherenceCheckerAgent     | Detecta incoherencias    | Graph              | Alerts[]       | Haiku 4  | No                 |
+| RACIGeneratorAgent        | Mapea RACI               | Stakeholders + WBS | RACI[]         | Haiku 4  | **Sí (revisar)**   |
+| AlertRouterAgent          | Rutea alertas            | Alerts + RACI      | Notifications  | Haiku 4  | No                 |
 
 ### 4.4 MCP Server Configuration (SECURIZADO)
 
@@ -373,11 +376,11 @@ model_routing:
 class DatabaseMCPServer:
     """
     MCP Server para acceso a base de datos.
-    
+
     SEGURIDAD: NO permite SQL arbitrario.
     Solo vistas y funciones predefinidas.
     """
-    
+
     # ALLOWLIST de operaciones permitidas
     ALLOWED_VIEWS = [
         "v_project_summary",
@@ -389,7 +392,7 @@ class DatabaseMCPServer:
         "v_coherence_breakdown",
         "v_raci_matrix",
     ]
-    
+
     ALLOWED_FUNCTIONS = [
         "fn_get_clause_by_id",
         "fn_get_stakeholder_by_id",
@@ -397,20 +400,20 @@ class DatabaseMCPServer:
         "fn_find_path",
         "fn_get_subgraph",
     ]
-    
+
     # LÍMITES por query
     QUERY_LIMITS = {
         "statement_timeout": "5s",
         "row_limit": 1000,
         "max_cost": 10000,
     }
-    
+
     # Rate limiting por tenant
     RATE_LIMITS = {
         "requests_per_minute": 60,
         "requests_per_hour": 500,
     }
-    
+
     async def query_view(
         self,
         view_name: str,
@@ -419,7 +422,7 @@ class DatabaseMCPServer:
     ) -> QueryResult:
         """
         Ejecuta query sobre vista permitida.
-        
+
         - Valida view_name está en ALLOWLIST
         - Aplica filtro project_id obligatorio (RLS adicional)
         - Aplica límites
@@ -427,19 +430,19 @@ class DatabaseMCPServer:
         """
         if view_name not in self.ALLOWED_VIEWS:
             raise SecurityError(f"View {view_name} not allowed")
-        
+
         # Query con límites
         result = await self._execute_with_limits(
             f"SELECT * FROM {view_name} WHERE project_id = $1",
             [project_id],
             self.QUERY_LIMITS
         )
-        
+
         # Audit log
         await self._log_query(view_name, project_id, len(result))
-        
+
         return result
-    
+
     async def call_function(
         self,
         function_name: str,
@@ -450,7 +453,7 @@ class DatabaseMCPServer:
         """
         if function_name not in self.ALLOWED_FUNCTIONS:
             raise SecurityError(f"Function {function_name} not allowed")
-        
+
         # ... implementación con límites y logging
 ```
 
@@ -463,9 +466,9 @@ class DatabaseMCPServer:
 
 class StakeholderExtractor:
     """Extrae stakeholders de contratos usando NLP"""
-    
+
     async def extract_from_contract(
-        self, 
+        self,
         document_id: UUID,
         clauses: list[Clause]  # Ahora recibe cláusulas con IDs
     ) -> list[Stakeholder]:
@@ -475,7 +478,7 @@ class StakeholderExtractor:
 
 class StakeholderClassifier:
     """Clasifica por poder/interés"""
-    
+
     QUADRANTS = {
         ("high", "high"): "key_player",
         ("high", "low"): "keep_satisfied",
@@ -485,7 +488,7 @@ class StakeholderClassifier:
 
 class RACIGenerator:
     """Genera matriz RACI"""
-    
+
     async def generate_raci(
         self,
         project_id: UUID,
@@ -497,7 +500,7 @@ class RACIGenerator:
 
 class StakeholderAlertRouter:
     """Rutea alertas a stakeholders"""
-    
+
     ROUTING_RULES = {
         "date_mismatch": ["project_manager", "planner"],
         "budget_overrun": ["project_manager", "finance"],
@@ -517,20 +520,20 @@ class StakeholderAlertRouter:
 class ImplicitNeedsInferrer:
     """
     EXPERIMENTAL - Solo disponible en Fase 3+
-    
+
     Requisitos:
     - Opt-in explícito por tenant
     - Modo advisory-only (nunca auto-action)
     - Explainability obligatorio
     - Audit log completo
     """
-    
+
     def __init__(self):
         self.enabled_by_default = False  # OPT-IN
         self.mode = "advisory"  # Nunca auto-action
         self.explainability_required = True
         self.phase_available = 3  # No disponible antes
-    
+
     async def infer_needs(
         self,
         stakeholder: Stakeholder,
@@ -544,12 +547,12 @@ class ImplicitNeedsInferrer:
         """
         if not self._is_enabled_for_tenant(context.tenant_id):
             return None
-        
+
         if context.current_phase < self.phase_available:
             return None
-        
+
         result = await self._infer(stakeholder, context)
-        
+
         # OBLIGATORIO: explicar el "por qué"
         result.explanation = self._generate_explanation(result)
         result.confidence = self._calculate_confidence(result)
@@ -557,10 +560,10 @@ class ImplicitNeedsInferrer:
             "ADVISORY ONLY. Esta inferencia es experimental. "
             "Verificar directamente con el stakeholder."
         )
-        
+
         # Audit log
         await self._log_inference(stakeholder.id, result)
-        
+
         return result
 ```
 
@@ -585,16 +588,16 @@ CREATE TABLE knowledge_graph_nodes (
 CREATE TABLE knowledge_graph_edges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    
+
     source_node_id UUID NOT NULL REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE,
     target_node_id UUID NOT NULL REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE,
-    
+
     relationship_type VARCHAR(100) NOT NULL,
     properties JSONB DEFAULT '{}',
     confidence NUMERIC(3,2) DEFAULT 1.0,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     UNIQUE(project_id, source_node_id, target_node_id, relationship_type)
 );
 
@@ -611,7 +614,7 @@ CREATE INDEX idx_kg_edges_rel ON knowledge_graph_edges(relationship_type);
 ```yaml
 entity_types:
   - contract
-  - clause      # NUEVO: entidad propia
+  - clause # NUEVO: entidad propia
   - milestone
   - penalty
   - schedule
@@ -625,19 +628,19 @@ entity_types:
   - organization
 
 relationship_types:
-  - CONTAINS      # Contract CONTAINS Clause
-  - REQUIRES      # Clause REQUIRES Activity
-  - DEPENDS_ON    # Activity DEPENDS_ON Activity
-  - FUNDED_BY     # WBS FUNDED_BY Budget_Item
+  - CONTAINS # Contract CONTAINS Clause
+  - REQUIRES # Clause REQUIRES Activity
+  - DEPENDS_ON # Activity DEPENDS_ON Activity
+  - FUNDED_BY # WBS FUNDED_BY Budget_Item
   - NEEDS_MATERIAL # WBS NEEDS_MATERIAL BOM_Item
   - RESPONSIBLE_FOR # Stakeholder RESPONSIBLE_FOR WBS
   - ACCOUNTABLE_FOR # Stakeholder ACCOUNTABLE_FOR WBS
-  - APPROVES      # Stakeholder APPROVES BOM_Item
-  - PENALIZES     # Penalty PENALIZES Milestone
-  - SUPPLIES      # BOM_Item SUPPLIES WBS
-  - REFERENCES    # Clause REFERENCES Stakeholder
-  - DEFINES       # Clause DEFINES Milestone  # NUEVO
-  - RESTRICTS     # Clause RESTRICTS Activity  # NUEVO
+  - APPROVES # Stakeholder APPROVES BOM_Item
+  - PENALIZES # Penalty PENALIZES Milestone
+  - SUPPLIES # BOM_Item SUPPLIES WBS
+  - REFERENCES # Clause REFERENCES Stakeholder
+  - DEFINES # Clause DEFINES Milestone  # NUEVO
+  - RESTRICTS # Clause RESTRICTS Activity  # NUEVO
 ```
 
 ---
@@ -741,7 +744,7 @@ CREATE TABLE users (
     last_login TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     -- CORREGIDO: Unicidad por tenant, no global
     UNIQUE(tenant_id, email)
 );
@@ -794,7 +797,7 @@ ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_documents ON documents
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -810,30 +813,30 @@ CREATE TABLE clauses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    
+
     -- Identificación
     clause_code VARCHAR(50) NOT NULL,  -- "4.2.1", "Anexo III.2"
     clause_type VARCHAR(50),  -- "penalty", "milestone", "responsibility", "payment"
     title VARCHAR(255),
-    
+
     -- Contenido
     full_text TEXT,
     text_start_offset INTEGER,  -- Para evitar duplicar texto
     text_end_offset INTEGER,
-    
+
     -- Extracción
     extracted_entities JSONB,  -- stakeholders, dates, amounts encontrados
     extraction_confidence NUMERIC(3,2),
     extraction_model VARCHAR(50),
-    
+
     -- Auditoría
     manually_verified BOOLEAN DEFAULT FALSE,
     verified_by UUID REFERENCES users(id),
     verified_at TIMESTAMPTZ,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     UNIQUE(project_id, document_id, clause_code)
 );
 
@@ -841,7 +844,7 @@ ALTER TABLE clauses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_clauses ON clauses
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -895,7 +898,7 @@ ALTER TABLE analyses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_analyses ON analyses
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -907,31 +910,31 @@ CREATE TABLE alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     analysis_id UUID REFERENCES analyses(id) ON DELETE CASCADE,
-    
+
     -- Clasificación
     severity VARCHAR(20) NOT NULL,
     type VARCHAR(50),
     rule_id VARCHAR(20),  -- NUEVO: referencia a regla
-    
+
     -- Contenido
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     suggested_action TEXT,
-    
+
     -- TRAZABILIDAD MEJORADA
     source_clause_id UUID REFERENCES clauses(id),  -- NUEVO: FK a cláusula
     affected_document_ids UUID[] DEFAULT '{}',  -- NUEVO: array tipado
     affected_wbs_ids UUID[] DEFAULT '{}',
     affected_bom_ids UUID[] DEFAULT '{}',
     evidence_json JSONB,  -- Evidencia estructurada
-    
+
     -- Estado
     status VARCHAR(50) DEFAULT 'open',
     requires_human_review BOOLEAN DEFAULT FALSE,  -- NUEVO
     resolved_at TIMESTAMPTZ,
     resolved_by UUID REFERENCES users(id),
     resolution_notes TEXT,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -939,7 +942,7 @@ ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_alerts ON alerts
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -952,25 +955,25 @@ CREATE TABLE ai_usage_logs (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id),
     user_id UUID REFERENCES users(id),
-    
+
     -- Modelo y operación
     model VARCHAR(50),
     operation VARCHAR(100),
     prompt_version VARCHAR(50),  -- NUEVO
-    
+
     -- Tokens y coste
     input_tokens INTEGER,
     output_tokens INTEGER,
     cost_usd NUMERIC(10,4),
-    
+
     -- Hashes para auditoría y cache
     input_hash VARCHAR(64),  -- NUEVO: SHA-256
     output_hash VARCHAR(64),  -- NUEVO
-    
+
     -- Metadatos
     latency_ms INTEGER,
     cached BOOLEAN DEFAULT FALSE,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -984,32 +987,32 @@ CREATE POLICY tenant_isolation_ai_logs ON ai_usage_logs
 CREATE TABLE stakeholders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    
+
     -- Identificación
     name VARCHAR(255),
     role VARCHAR(100),
     organization VARCHAR(255),
     department VARCHAR(100),
-    
+
     -- Clasificación
     power_level VARCHAR(20) DEFAULT 'medium',
     interest_level VARCHAR(20) DEFAULT 'medium',
     quadrant VARCHAR(50),
-    
+
     -- Contacto
     email VARCHAR(255),
     phone VARCHAR(50),
-    
+
     -- TRAZABILIDAD: FK a cláusula origen
     source_clause_id UUID REFERENCES clauses(id),  -- CAMBIADO de source_clause_ref
     extraction_confidence NUMERIC(3,2),
-    
+
     -- Auditoría
     is_auto_extracted BOOLEAN DEFAULT TRUE,
     manually_verified BOOLEAN DEFAULT FALSE,
     verified_by UUID REFERENCES users(id),
     verified_at TIMESTAMPTZ,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1018,7 +1021,7 @@ ALTER TABLE stakeholders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_stakeholders ON stakeholders
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1030,34 +1033,34 @@ CREATE TABLE wbs_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES wbs_items(id),
-    
+
     code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     level INTEGER NOT NULL,
     type VARCHAR(50),
-    
+
     -- Referencias
     schedule_activity_ids JSONB,
     budget_item_ids JSONB,
     funded_by_clause_id UUID REFERENCES clauses(id),  -- NUEVO
-    
+
     -- Responsable
     responsible VARCHAR(255),
-    
+
     -- Estimaciones
     estimated_duration_days INTEGER,
     estimated_cost NUMERIC(12,2),
     is_critical_path BOOLEAN DEFAULT FALSE,
-    
+
     -- Auditoría
     requires_approval BOOLEAN DEFAULT FALSE,  -- NUEVO
     approved_by UUID REFERENCES users(id),
     approved_at TIMESTAMPTZ,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     UNIQUE(project_id, code)
 );
 
@@ -1065,7 +1068,7 @@ ALTER TABLE wbs_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_wbs ON wbs_items
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1078,7 +1081,7 @@ CREATE TABLE bom_items (
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     wbs_item_id UUID REFERENCES wbs_items(id),
     parent_bom_id UUID REFERENCES bom_items(id),
-    
+
     -- Versionado
     version_number INTEGER DEFAULT 0,
     version_status VARCHAR(50) DEFAULT 'current',
@@ -1088,7 +1091,7 @@ CREATE TABLE bom_items (
     item_name VARCHAR(255) NOT NULL,
     description TEXT,
     category VARCHAR(100),
-    
+
     -- Cantidades
     unit VARCHAR(50),
     quantity NUMERIC(12,3) NOT NULL,
@@ -1110,14 +1113,14 @@ CREATE TABLE bom_items (
     -- Fechas
     optimal_order_date DATE,
     required_on_site_date DATE,
-    
+
     -- Estado
     status VARCHAR(50) DEFAULT 'planned',
-    
+
     -- TRAZABILIDAD: FK a cláusula
     contract_clause_id UUID REFERENCES clauses(id),  -- CAMBIADO de contract_clause_ref
     specifications JSONB,
-    
+
     -- Auditoría
     requires_approval BOOLEAN DEFAULT FALSE,
     approved_by UUID REFERENCES users(id),
@@ -1131,7 +1134,7 @@ ALTER TABLE bom_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_bom ON bom_items
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1143,18 +1146,18 @@ CREATE TABLE stakeholder_wbs_raci (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     stakeholder_id UUID NOT NULL REFERENCES stakeholders(id) ON DELETE CASCADE,
     wbs_item_id UUID NOT NULL REFERENCES wbs_items(id) ON DELETE CASCADE,
-    
+
     raci_role VARCHAR(20) NOT NULL,  -- R, A, C, I
     approval_threshold NUMERIC(12,2),
-    
+
     is_auto_generated BOOLEAN DEFAULT TRUE,
     override_reason TEXT,
-    
+
     -- Human-in-the-loop
     requires_review BOOLEAN DEFAULT TRUE,  -- NUEVO
     reviewed_by UUID REFERENCES users(id),
     reviewed_at TIMESTAMPTZ,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(stakeholder_id, wbs_item_id, raci_role)
 );
@@ -1177,12 +1180,12 @@ CREATE TABLE stakeholder_alerts (
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     stakeholder_id UUID NOT NULL REFERENCES stakeholders(id) ON DELETE CASCADE,
     alert_id UUID NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
-    
+
     relevance_score NUMERIC(3,2),
     notification_status VARCHAR(50) DEFAULT 'pending',
     sent_at TIMESTAMPTZ,
     acknowledged_at TIMESTAMPTZ,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -1190,7 +1193,7 @@ ALTER TABLE stakeholder_alerts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_stakeholder_alerts ON stakeholder_alerts
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1225,7 +1228,7 @@ ALTER TABLE bom_revisions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_bom_revisions ON bom_revisions
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1254,7 +1257,7 @@ ALTER TABLE procurement_plan_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_snapshots ON procurement_plan_snapshots
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1277,7 +1280,7 @@ ALTER TABLE knowledge_graph_nodes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_kg_nodes ON knowledge_graph_nodes
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1288,14 +1291,14 @@ CREATE POLICY tenant_isolation_kg_nodes ON knowledge_graph_nodes
 CREATE TABLE knowledge_graph_edges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    
+
     source_node_id UUID NOT NULL REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE,
     target_node_id UUID NOT NULL REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE,
-    
+
     relationship_type VARCHAR(100) NOT NULL,
     properties JSONB DEFAULT '{}',
     confidence NUMERIC(3,2) DEFAULT 1.0,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(project_id, source_node_id, target_node_id, relationship_type)
 );
@@ -1304,7 +1307,7 @@ ALTER TABLE knowledge_graph_edges ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_kg_edges ON knowledge_graph_edges
     FOR ALL USING (
         project_id IN (
-            SELECT id FROM projects 
+            SELECT id FROM projects
             WHERE tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
         )
     );
@@ -1312,26 +1315,26 @@ CREATE POLICY tenant_isolation_kg_edges ON knowledge_graph_edges
 
 ### 5.4 Resumen de RLS Coverage
 
-| Tabla | RLS | Tipo Aislamiento | Verificado |
-|-------|-----|------------------|------------|
-| tenants | ✅ | Self-only | ✅ |
-| users | ✅ | By tenant_id | ✅ |
-| projects | ✅ | By tenant_id | ✅ |
-| documents | ✅ | Via project→tenant | ✅ |
-| **clauses** | ✅ | Via project→tenant | ✅ **NUEVO** |
-| extractions | ✅ | Via document→project→tenant | ✅ |
-| analyses | ✅ | Via project→tenant | ✅ |
-| alerts | ✅ | Via project→tenant | ✅ |
-| ai_usage_logs | ✅ | By tenant_id | ✅ |
-| stakeholders | ✅ | Via project→tenant | ✅ |
-| wbs_items | ✅ | Via project→tenant | ✅ |
-| bom_items | ✅ | Via project→tenant | ✅ |
-| stakeholder_wbs_raci | ✅ | Via stakeholder→project→tenant | ✅ |
-| stakeholder_alerts | ✅ | Via project→tenant | ✅ |
-| bom_revisions | ✅ | Via project→tenant | ✅ |
-| procurement_plan_snapshots | ✅ | Via project→tenant | ✅ |
-| knowledge_graph_nodes | ✅ | Via project→tenant | ✅ |
-| knowledge_graph_edges | ✅ | Via project→tenant | ✅ |
+| Tabla                      | RLS | Tipo Aislamiento               | Verificado   |
+| -------------------------- | --- | ------------------------------ | ------------ |
+| tenants                    | ✅  | Self-only                      | ✅           |
+| users                      | ✅  | By tenant_id                   | ✅           |
+| projects                   | ✅  | By tenant_id                   | ✅           |
+| documents                  | ✅  | Via project→tenant             | ✅           |
+| **clauses**                | ✅  | Via project→tenant             | ✅ **NUEVO** |
+| extractions                | ✅  | Via document→project→tenant    | ✅           |
+| analyses                   | ✅  | Via project→tenant             | ✅           |
+| alerts                     | ✅  | Via project→tenant             | ✅           |
+| ai_usage_logs              | ✅  | By tenant_id                   | ✅           |
+| stakeholders               | ✅  | Via project→tenant             | ✅           |
+| wbs_items                  | ✅  | Via project→tenant             | ✅           |
+| bom_items                  | ✅  | Via project→tenant             | ✅           |
+| stakeholder_wbs_raci       | ✅  | Via stakeholder→project→tenant | ✅           |
+| stakeholder_alerts         | ✅  | Via project→tenant             | ✅           |
+| bom_revisions              | ✅  | Via project→tenant             | ✅           |
+| procurement_plan_snapshots | ✅  | Via project→tenant             | ✅           |
+| knowledge_graph_nodes      | ✅  | Via project→tenant             | ✅           |
+| knowledge_graph_edges      | ✅  | Via project→tenant             | ✅           |
 
 **Total: 18 tablas con RLS ✅**
 
@@ -1349,18 +1352,18 @@ document_security:
     encryption_method: "AES-256"
     access_control: "per project/tenant"
     path_structure: "/{tenant_id}/{project_id}/{document_id}"
-    
+
   retention:
     policy_default: "indefinite"
     ai_payloads_full: "30 days"
     ai_logs_summary: "90 days"
     deleted_documents: "30 days (soft delete)"
-    
+
   optimization:
-    store_full_text: false  # Preferir offsets
+    store_full_text: false # Preferir offsets
     store_chunks_with_ids: true
     deduplicate_content: true
-    
+
   pii_handling:
     anonymizer_enabled: true
     detected_types:
@@ -1384,18 +1387,18 @@ ai_security:
       - input_tokens
       - output_tokens
       - cost_usd
-      - input_hash   # SHA-256 para detectar duplicados
-      - output_hash  # Para verificación y cache
+      - input_hash # SHA-256 para detectar duplicados
+      - output_hash # Para verificación y cache
       - user_id
       - project_id
       - timestamp
-      
+
   provider_policy:
     anthropic:
-      no_training: true  # Contractual
-      zero_retention: true  # Si disponible
+      no_training: true # Contractual
+      zero_retention: true # Si disponible
       document_in_privacy_policy: true
-      
+
   rate_limiting:
     per_tenant:
       requests_per_minute: 60
@@ -1403,10 +1406,10 @@ ai_security:
       budget_monthly_usd: "configurable"
     per_user:
       requests_per_minute: 20
-      
+
   cost_control:
-    budget_alerts: [50, 75, 90, 100]  # % del presupuesto
-    auto_block_at: 100  # % 
+    budget_alerts: [50, 75, 90, 100] # % del presupuesto
+    auto_block_at: 100 # %
     model_fallback: "haiku when budget low"
 ```
 
@@ -1415,20 +1418,20 @@ ai_security:
 ```yaml
 mcp_security:
   database_server:
-    sql_allowed: false  # NO SQL arbitrario
+    sql_allowed: false # NO SQL arbitrario
     only_allowlist: true
-    allowed_views: 8  # Ver §4.4
+    allowed_views: 8 # Ver §4.4
     allowed_functions: 5
-    
+
   query_limits:
     statement_timeout: "5s"
     row_limit: 1000
     max_cost: 10000
-    
+
   rate_limiting:
     per_tenant_per_minute: 60
     per_tenant_per_hour: 500
-    
+
   audit:
     log_all_queries: true
     log_results_count: true
@@ -1443,18 +1446,18 @@ gdpr_compliance:
     - "Solo recopilar datos necesarios"
     - "Offsets en lugar de texto completo cuando posible"
     - "Hashes en lugar de PII"
-    
+
   right_to_access:
     endpoint: "GET /api/users/me/data-export"
     format: "JSON + PDF"
     response_time: "30 days max"
-    
+
   right_to_erasure:
     endpoint: "DELETE /api/users/me"
     cascade: true
     soft_delete_period: "30 days"
     hard_delete: "automated after period"
-    
+
   right_to_portability:
     format: "JSON"
     includes:
@@ -1463,11 +1466,11 @@ gdpr_compliance:
       - documents_metadata
       - analyses
       - alerts
-      
+
   data_processing_agreement:
     required: true
     template: "/legal/dpa-template.pdf"
-    
+
   privacy_policy:
     url: "/privacy"
     last_updated: "required field"
@@ -1482,20 +1485,20 @@ CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL,
     user_id UUID,
-    
+
     -- Acción
     action VARCHAR(100) NOT NULL,
     resource_type VARCHAR(50),
     resource_id UUID,
-    
+
     -- Contexto
     ip_address INET,
     user_agent TEXT,
-    
+
     -- Datos
     old_values JSONB,
     new_values JSONB,
-    
+
     -- Metadatos
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1520,16 +1523,16 @@ CREATE INDEX idx_audit_time ON audit_logs(created_at);
 
 Antes de dar luz verde a cada fase, el CTO debe verificar:
 
-| # | Gate | Descripción | Verificación |
-|---|------|-------------|--------------|
-| 1 | **Multi-tenant Isolation** | RLS en TODAS las tablas con tenant_id/project_id | Test cross-tenant |
-| 2 | **Identity Model** | UNIQUE(tenant_id, email) + casts UUID | Test mismo email 2 tenants |
-| 3 | **MCP Security** | No SQL libre, allowlist + límites | Penetration test |
-| 4 | **Legal Traceability** | Tabla clauses + FKs reales | Query de trazabilidad |
-| 5 | **Coherence Score Formal** | Fórmula, pesos, calibración, anti-gaming | Documentación |
-| 6 | **Human-in-the-loop** | Obligatorio en outputs de riesgo | UX review |
-| 7 | **Observability** | Límites tenant, auditoría prompts/tokens | Dashboard verificar |
-| 8 | **Document Security** | PII, cifrado, retención, RBAC | Security audit |
+| #   | Gate                       | Descripción                                      | Verificación               |
+| --- | -------------------------- | ------------------------------------------------ | -------------------------- |
+| 1   | **Multi-tenant Isolation** | RLS en TODAS las tablas con tenant_id/project_id | Test cross-tenant          |
+| 2   | **Identity Model**         | UNIQUE(tenant_id, email) + casts UUID            | Test mismo email 2 tenants |
+| 3   | **MCP Security**           | No SQL libre, allowlist + límites                | Penetration test           |
+| 4   | **Legal Traceability**     | Tabla clauses + FKs reales                       | Query de trazabilidad      |
+| 5   | **Coherence Score Formal** | Fórmula, pesos, calibración, anti-gaming         | Documentación              |
+| 6   | **Human-in-the-loop**      | Obligatorio en outputs de riesgo                 | UX review                  |
+| 7   | **Observability**          | Límites tenant, auditoría prompts/tokens         | Dashboard verificar        |
+| 8   | **Document Security**      | PII, cifrado, retención, RBAC                    | Security audit             |
 
 ### 7.2 Checklist por Fase
 
@@ -1556,13 +1559,13 @@ Antes de dar luz verde a cada fase, el CTO debe verificar:
 
 ### 7.3 Riesgos CTO-Level Documentados
 
-| Riesgo | Mitigación | Estado |
-|--------|------------|--------|
-| **Legal/Compliance** | Disclaimer: "no interpreta, asiste con trazabilidad" | Documentado |
-| **Alucinación** | Evidencia + confidence + human-in-loop obligatorio | Implementado |
-| **Escalabilidad Grafo** | NetworkX MVP → Plan Neo4j/Falkor si crece | ADR documentado |
-| **MCP Superficie** | Capabilities mínimas, allowlist estricto | Implementado |
-| **Implicit Needs** | Fase 3+, opt-in, advisory-only | Decisión tomada |
+| Riesgo                  | Mitigación                                           | Estado          |
+| ----------------------- | ---------------------------------------------------- | --------------- |
+| **Legal/Compliance**    | Disclaimer: "no interpreta, asiste con trazabilidad" | Documentado     |
+| **Alucinación**         | Evidencia + confidence + human-in-loop obligatorio   | Implementado    |
+| **Escalabilidad Grafo** | NetworkX MVP → Plan Neo4j/Falkor si crece            | ADR documentado |
+| **MCP Superficie**      | Capabilities mínimas, allowlist estricto             | Implementado    |
+| **Implicit Needs**      | Fase 3+, opt-in, advisory-only                       | Decisión tomada |
 
 ---
 
@@ -1571,6 +1574,7 @@ Antes de dar luz verde a cada fase, el CTO debe verificar:
 ### 8.1 Objetivo
 
 Lanzar MVP funcional con:
+
 - Auditoría tridimensional automática
 - Extracción de cláusulas con trazabilidad
 - Extracción básica de stakeholders
@@ -1583,24 +1587,25 @@ Lanzar MVP funcional con:
 
 **Foco:** Seguridad desde día 1
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S0.1 | Setup monorepo + CI/CD | P0 | Pipeline funciona |
-| S0.2 | Supabase + Auth | P0 | Login funciona |
-| S0.3 | **RLS 18 tablas** | P0 | Test cross-tenant PASA |
-| S0.4 | **UNIQUE(tenant_id, email)** | P0 | Mismo email 2 tenants OK |
-| S0.5 | Logging estructurado + Sentry | P0 | Errors capturados |
-| S0.6 | R2 con paths tenant/project | P0 | Aislamiento storage |
-| S0.7 | ai_usage_logs tabla | P0 | Logs capturados |
+| ID   | Feature                       | Prioridad | Criterio Aceptación      |
+| ---- | ----------------------------- | --------- | ------------------------ |
+| S0.1 | Setup monorepo + CI/CD        | P0        | Pipeline funciona        |
+| S0.2 | Supabase + Auth               | P0        | Login funciona           |
+| S0.3 | **RLS 18 tablas**             | P0        | Test cross-tenant PASA   |
+| S0.4 | **UNIQUE(tenant_id, email)**  | P0        | Mismo email 2 tenants OK |
+| S0.5 | Logging estructurado + Sentry | P0        | Errors capturados        |
+| S0.6 | R2 con paths tenant/project   | P0        | Aislamiento storage      |
+| S0.7 | ai_usage_logs tabla           | P0        | Logs capturados          |
 
 **Tests Críticos Sprint 0:**
+
 ```python
 def test_tenant_cannot_access_other_tenant_projects():
     """CRÍTICO: Aislamiento multi-tenant"""
-    
+
 def test_same_email_different_tenants_allowed():
     """CRÍTICO: B2B enterprise support"""
-    
+
 def test_rls_blocks_all_tables():
     """CRÍTICO: Verificar 18 tablas"""
 ```
@@ -1609,25 +1614,26 @@ def test_rls_blocks_all_tables():
 
 **Foco:** Documentos y trazabilidad legal
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S1.1 | Upload documentos a R2 | P0 | PDF/Excel/BC3 suben |
-| S1.2 | Parser PDF (PyMuPDF) | P0 | Texto extraído |
-| S1.3 | Parser Excel (openpyxl) | P0 | Hojas parseadas |
-| S1.4 | Parser BC3 (pyfiebdc) | P0 | Partidas extraídas |
-| S1.5 | Anonymizer Service | P0 | PII detectado/reemplazado |
-| S1.6 | **ClauseExtractorAgent** | P0 | Cláusulas con IDs estables |
-| S1.7 | **Tabla clauses + FKs** | P0 | Trazabilidad funciona |
-| S1.8 | Golden Dataset v0 | P1 | 10 proyectos anotados |
+| ID   | Feature                  | Prioridad | Criterio Aceptación        |
+| ---- | ------------------------ | --------- | -------------------------- |
+| S1.1 | Upload documentos a R2   | P0        | PDF/Excel/BC3 suben        |
+| S1.2 | Parser PDF (PyMuPDF)     | P0        | Texto extraído             |
+| S1.3 | Parser Excel (openpyxl)  | P0        | Hojas parseadas            |
+| S1.4 | Parser BC3 (pyfiebdc)    | P0        | Partidas extraídas         |
+| S1.5 | Anonymizer Service       | P0        | PII detectado/reemplazado  |
+| S1.6 | **ClauseExtractorAgent** | P0        | Cláusulas con IDs estables |
+| S1.7 | **Tabla clauses + FKs**  | P0        | Trazabilidad funciona      |
+| S1.8 | Golden Dataset v0        | P1        | 10 proyectos anotados      |
 
 **Tests Críticos Sprint 1-2:**
+
 ```python
 def test_clause_extraction_creates_stable_ids():
     """CRÍTICO: IDs estables para trazabilidad"""
-    
+
 def test_clause_fk_from_stakeholder():
     """CRÍTICO: FK funciona"""
-    
+
 def test_anonymizer_detects_dni_email_phone_iban():
     """CRÍTICO: PII protegido"""
 ```
@@ -1636,101 +1642,102 @@ def test_anonymizer_detects_dni_email_phone_iban():
 
 **Foco:** Detección de incoherencias
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S3.1 | AI Service + Claude API | P0 | Extracción funciona |
-| S3.2 | Cost controller | P0 | Bloquea al exceder |
-| S3.3 | Cache Redis | P0 | Evita duplicados |
-| S3.4 | WBSGeneratorAgent | P0 | WBS 4 niveles |
-| S3.5 | BOMBuilderAgent | P0 | BOM con lead times |
-| S3.6 | CoherenceEngine v0 | P0 | 10 reglas core |
-| S3.7 | AlertGenerator | P0 | Alertas con evidencias |
-| S3.8 | **Coherence Score v1** | P0 | Fórmula implementada |
+| ID   | Feature                 | Prioridad | Criterio Aceptación    |
+| ---- | ----------------------- | --------- | ---------------------- |
+| S3.1 | AI Service + Claude API | P0        | Extracción funciona    |
+| S3.2 | Cost controller         | P0        | Bloquea al exceder     |
+| S3.3 | Cache Redis             | P0        | Evita duplicados       |
+| S3.4 | WBSGeneratorAgent       | P0        | WBS 4 niveles          |
+| S3.5 | BOMBuilderAgent         | P0        | BOM con lead times     |
+| S3.6 | CoherenceEngine v0      | P0        | 10 reglas core         |
+| S3.7 | AlertGenerator          | P0        | Alertas con evidencias |
+| S3.8 | **Coherence Score v1**  | P0        | Fórmula implementada   |
 
 **Reglas Core (10 para MVP):**
 
-| ID | Regla | Severidad |
-|----|-------|-----------|
-| R1 | Plazo contrato ≠ fecha fin cronograma | Critical |
-| R2 | Hito sin actividad en cronograma | High |
-| R5 | Cronograma excede plazo contractual | Critical |
-| R6 | Suma partidas ≠ precio contrato (±5%) | Medium |
-| R11 | WBS sin actividades vinculadas | High |
-| R12 | WBS sin partidas asignadas | High |
-| R14 | Material crítico con fecha pedido tardía | Critical |
-| R15 | BOM sin partida presupuestaria | High |
-| R19 | Stakeholder sin datos contacto | Low |
-| R20 | Aprobador contractual no identificado | Medium |
+| ID  | Regla                                    | Severidad |
+| --- | ---------------------------------------- | --------- |
+| R1  | Plazo contrato ≠ fecha fin cronograma    | Critical  |
+| R2  | Hito sin actividad en cronograma         | High      |
+| R5  | Cronograma excede plazo contractual      | Critical  |
+| R6  | Suma partidas ≠ precio contrato (±5%)    | Medium    |
+| R11 | WBS sin actividades vinculadas           | High      |
+| R12 | WBS sin partidas asignadas               | High      |
+| R14 | Material crítico con fecha pedido tardía | Critical  |
+| R15 | BOM sin partida presupuestaria           | High      |
+| R19 | Stakeholder sin datos contacto           | Low       |
+| R20 | Aprobador contractual no identificado    | Medium    |
 
 #### Sprint 4 (Semanas 7-8): Stakeholders + RACI
 
 **Foco:** Identificación de stakeholders
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S4.1 | StakeholderExtractorAgent | P0 | Extrae nombres/roles |
-| S4.2 | StakeholderClassifier | P0 | Cuadrante asignado |
-| S4.3 | RACIGeneratorAgent | P0 | Matriz generada |
-| S4.4 | **Human-in-loop RACI** | P0 | Requiere revisión |
-| S4.5 | Knowledge Graph básico | P1 | Nodos + edges |
+| ID   | Feature                   | Prioridad | Criterio Aceptación  |
+| ---- | ------------------------- | --------- | -------------------- |
+| S4.1 | StakeholderExtractorAgent | P0        | Extrae nombres/roles |
+| S4.2 | StakeholderClassifier     | P0        | Cuadrante asignado   |
+| S4.3 | RACIGeneratorAgent        | P0        | Matriz generada      |
+| S4.4 | **Human-in-loop RACI**    | P0        | Requiere revisión    |
+| S4.5 | Knowledge Graph básico    | P1        | Nodos + edges        |
 
 #### Sprint 5 (Semanas 9-10): UI Mínima Pilotos
 
 **Foco:** Feedback temprano de usuarios
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S5.1 | Dashboard + Score gauge | P0 | Carga <2s |
-| S5.2 | Lista proyectos | P0 | Filtros funcionan |
-| S5.3 | **Evidence Viewer** | P0 | Link a cláusula/WBS/BOM |
-| S5.4 | Panel alertas | P0 | Severidad visible |
-| S5.5 | Stakeholder Map | P0 | Matriz poder/interés |
-| S5.6 | RACI viewer | P0 | Editable |
-| S5.7 | Export PDF | P1 | Con trazabilidad |
+| ID   | Feature                 | Prioridad | Criterio Aceptación     |
+| ---- | ----------------------- | --------- | ----------------------- |
+| S5.1 | Dashboard + Score gauge | P0        | Carga <2s               |
+| S5.2 | Lista proyectos         | P0        | Filtros funcionan       |
+| S5.3 | **Evidence Viewer**     | P0        | Link a cláusula/WBS/BOM |
+| S5.4 | Panel alertas           | P0        | Severidad visible       |
+| S5.5 | Stakeholder Map         | P0        | Matriz poder/interés    |
+| S5.6 | RACI viewer             | P0        | Editable                |
+| S5.7 | Export PDF              | P1        | Con trazabilidad        |
 
 #### Sprint 6 (Semanas 11-12): Hardening + Pilots
 
 **Foco:** Estabilidad y feedback
 
-| ID | Feature | Prioridad | Criterio Aceptación |
-|----|---------|-----------|---------------------|
-| S6.1 | Security testing | P0 | 0 vulnerabilidades high |
-| S6.2 | AI accuracy testing | P0 | >85% en golden dataset |
-| S6.3 | Load testing | P0 | 100 usuarios, <1% error |
-| S6.4 | **Cross-tenant attack tests** | P0 | Todos bloqueados |
-| S6.5 | Deploy producción | P0 | Uptime >99% |
-| S6.6 | Onboard 3-5 pilots | P0 | Feedback recopilado |
-| S6.7 | Documentación básica | P1 | Usuario + API |
+| ID   | Feature                       | Prioridad | Criterio Aceptación     |
+| ---- | ----------------------------- | --------- | ----------------------- |
+| S6.1 | Security testing              | P0        | 0 vulnerabilidades high |
+| S6.2 | AI accuracy testing           | P0        | >85% en golden dataset  |
+| S6.3 | Load testing                  | P0        | 100 usuarios, <1% error |
+| S6.4 | **Cross-tenant attack tests** | P0        | Todos bloqueados        |
+| S6.5 | Deploy producción             | P0        | Uptime >99%             |
+| S6.6 | Onboard 3-5 pilots            | P0        | Feedback recopilado     |
+| S6.7 | Documentación básica          | P1        | Usuario + API           |
 
 ### 8.3 Criterios de Aceptación Fase 1
 
-| Categoría | Criterio | Target |
-|-----------|----------|--------|
-| **Seguridad** | RLS en todas las tablas | 18/18 |
-| **Seguridad** | Tests cross-tenant | 100% pasan |
-| **Funcional** | Parsers (PDF/Excel/BC3) | Funcionan |
-| **IA** | Accuracy extracción | >85% |
-| **IA** | Cláusulas con ID estable | 100% |
-| **Coherencia** | Reglas implementadas | 10 core |
-| **Coherencia** | Score calculado | Fórmula v1 |
-| **UX** | Evidence viewer | Links funcionan |
-| **UX** | Human-in-loop | Implementado |
-| **Performance** | Load test 100 usuarios | <1% error |
-| **Pilots** | Empresas onboarded | 3-5 |
+| Categoría       | Criterio                 | Target          |
+| --------------- | ------------------------ | --------------- |
+| **Seguridad**   | RLS en todas las tablas  | 18/18           |
+| **Seguridad**   | Tests cross-tenant       | 100% pasan      |
+| **Funcional**   | Parsers (PDF/Excel/BC3)  | Funcionan       |
+| **IA**          | Accuracy extracción      | >85%            |
+| **IA**          | Cláusulas con ID estable | 100%            |
+| **Coherencia**  | Reglas implementadas     | 10 core         |
+| **Coherencia**  | Score calculado          | Fórmula v1      |
+| **UX**          | Evidence viewer          | Links funcionan |
+| **UX**          | Human-in-loop            | Implementado    |
+| **Performance** | Load test 100 usuarios   | <1% error       |
+| **Pilots**      | Empresas onboarded       | 3-5             |
+
 d": alert.rule_id,
-            "severity": alert.severity,
-            "weight": weight,
-            "impact_raw": impact,
-            "impact_normalized": impact_normalized,
-            "confidence": confidence,
-            "penalty": penalty
-        })
-    
+"severity": alert.severity,
+"weight": weight,
+"impact_raw": impact,
+"impact_normalized": impact_normalized,
+"confidence": confidence,
+"penalty": penalty
+})
+
     # Normalización con sigmoid para mantener 0-100
     # Suaviza el score para que no sea demasiado sensible
     normalized_score = int(100 / (1 + raw_penalty / 50))
     normalized_score = max(0, min(100, normalized_score))
-    
+
     return CoherenceResult(
         score=normalized_score,
         raw_penalty=raw_penalty,
@@ -1741,29 +1748,28 @@ d": alert.rule_id,
         calculated_at=datetime.utcnow()
     )
 
+def \_calculate_impact(alert: Alert, context: ProjectContext) -> float:
+"""
+Calcula impacto en € o días según tipo de alerta.
+"""
+if alert.type in ["budget_overrun", "cost_variance"]: # Impacto económico
+return alert.evidence_json.get("amount_eur", 0)
 
-def _calculate_impact(alert: Alert, context: ProjectContext) -> float:
-    """
-    Calcula impacto en € o días según tipo de alerta.
-    """
-    if alert.type in ["budget_overrun", "cost_variance"]:
-        # Impacto económico
-        return alert.evidence_json.get("amount_eur", 0)
-    
     elif alert.type in ["date_mismatch", "schedule_delay"]:
         # Impacto en días × coste diario proyecto
         days = alert.evidence_json.get("variance_days", 0)
         daily_cost = context.total_budget / context.total_duration_days
         return abs(days) * daily_cost
-    
+
     elif alert.type == "critical_path_impact":
         # Impacto máximo si afecta ruta crítica
         return context.max_impact * 0.8
-    
+
     else:
         # Default: impacto medio
         return context.max_impact * 0.3
-```
+
+````
 
 ### 12.2 Interpretación del Score
 
@@ -1786,11 +1792,11 @@ calibration:
       - contract_types: [obra_civil, industrial, edificacion]
       - complexity: [simple, medium, complex]
       - languages: [es, en]
-    
+
     validation:
       - coherence_rules: "500 pares (proyecto, alerta_esperada)"
       - score_correlation: "vs expert assessment"
-      
+
   calibration_process:
     frequency: "Cada 20 proyectos piloto"
     metrics:
@@ -1801,7 +1807,7 @@ calibration:
       - "Pesos por severidad"
       - "Umbrales de impacto"
       - "Confidence thresholds"
-```
+````
 
 ### 12.4 Anti-Gaming
 
@@ -1810,24 +1816,24 @@ class AntiGamingPolicy:
     """
     Previene manipulación del Coherence Score.
     """
-    
+
     rules = [
         # 1. No dismiss sin documentación
         "Alerts cannot be dismissed without resolution_notes",
-        
+
         # 2. Historial inmutable
         "Score history is append-only, never modified",
-        
+
         # 3. Audit trail
         "All resolutions logged with user_id, timestamp, notes",
-        
+
         # 4. Re-escaneo automático
         "Score recalculated on document changes",
-        
+
         # 5. Tiempo mínimo entre resoluciones
         "Min 1 hour between bulk resolutions (>5 alerts)",
     ]
-    
+
     async def validate_resolution(
         self,
         alert_id: UUID,
@@ -1838,15 +1844,15 @@ class AntiGamingPolicy:
         Valida que la resolución cumple políticas anti-gaming.
         """
         errors = []
-        
+
         if not resolution.notes or len(resolution.notes) < 20:
             errors.append("Resolution notes must be at least 20 characters")
-        
+
         if resolution.dismiss_reason == "not_applicable":
             # Requiere aprobación de segundo usuario
             if not resolution.approved_by or resolution.approved_by == user.id:
                 errors.append("Dismiss requires approval from different user")
-        
+
         return ValidationResult(
             valid=len(errors) == 0,
             errors=errors
@@ -1859,46 +1865,46 @@ class AntiGamingPolicy:
 
 ### 13.1 Métricas de Producto
 
-| Métrica | MVP | Fase 2 | Fase 3 |
-|---------|-----|--------|--------|
-| Usuarios activos mensuales | 15 | 50 | 150 |
-| Proyectos analizados | 20 | 100 | 300 |
-| Documentos procesados | 60 | 300 | 900 |
-| Cláusulas extraídas | 200 | 1,500 | 5,000 |
-| Alertas generadas | 100 | 800 | 3,000 |
-| Alertas resueltas | 50% | 65% | 75% |
-| Stakeholders identificados | 200 | 1,000 | 3,000 |
-| RACI entries | - | 2,000 | 8,000 |
-| NPS | 30 | 40 | 50 |
+| Métrica                    | MVP | Fase 2 | Fase 3 |
+| -------------------------- | --- | ------ | ------ |
+| Usuarios activos mensuales | 15  | 50     | 150    |
+| Proyectos analizados       | 20  | 100    | 300    |
+| Documentos procesados      | 60  | 300    | 900    |
+| Cláusulas extraídas        | 200 | 1,500  | 5,000  |
+| Alertas generadas          | 100 | 800    | 3,000  |
+| Alertas resueltas          | 50% | 65%    | 75%    |
+| Stakeholders identificados | 200 | 1,000  | 3,000  |
+| RACI entries               | -   | 2,000  | 8,000  |
+| NPS                        | 30  | 40     | 50     |
 
 ### 13.2 Métricas de Negocio
 
-| Métrica | MVP | Fase 2 | Fase 3 |
-|---------|-----|--------|--------|
-| MRR | €0 | €5K | €25K |
-| Clientes de pago | 0 | 5 | 25 |
-| Churn mensual | - | <10% | <5% |
-| LTV/CAC | - | >3 | >5 |
+| Métrica          | MVP | Fase 2 | Fase 3 |
+| ---------------- | --- | ------ | ------ |
+| MRR              | €0  | €5K    | €25K   |
+| Clientes de pago | 0   | 5      | 25     |
+| Churn mensual    | -   | <10%   | <5%    |
+| LTV/CAC          | -   | >3     | >5     |
 
 ### 13.3 Métricas de Impacto
 
-| Métrica | Target | Medición |
-|---------|--------|----------|
-| Reducción tiempo análisis | 80% (8h→1.5h) | Survey pilotos |
-| Reducción sobrecostes evitables | 15-30% | Seguimiento 6 meses |
-| Detección temprana riesgos | +87% | Alertas vs issues reales |
-| Mejora OTIF | +28% | Datos proveedor |
-| Reducción crisis tardías | -71% | Incidentes reportados |
+| Métrica                         | Target        | Medición                 |
+| ------------------------------- | ------------- | ------------------------ |
+| Reducción tiempo análisis       | 80% (8h→1.5h) | Survey pilotos           |
+| Reducción sobrecostes evitables | 15-30%        | Seguimiento 6 meses      |
+| Detección temprana riesgos      | +87%          | Alertas vs issues reales |
+| Mejora OTIF                     | +28%          | Datos proveedor          |
+| Reducción crisis tardías        | -71%          | Incidentes reportados    |
 
 ### 13.4 Métricas de Seguridad
 
-| Métrica | Target | Frecuencia |
-|---------|--------|------------|
-| Cross-tenant access attempts | 0 | Continuo |
-| PII leaks | 0 | Continuo |
-| Failed auth attempts spike | Alert <100/min | Continuo |
-| RLS bypass attempts | 0 | Semanal audit |
-| MCP unauthorized queries | 0 | Diario |
+| Métrica                      | Target         | Frecuencia    |
+| ---------------------------- | -------------- | ------------- |
+| Cross-tenant access attempts | 0              | Continuo      |
+| PII leaks                    | 0              | Continuo      |
+| Failed auth attempts spike   | Alert <100/min | Continuo      |
+| RLS bypass attempts          | 0              | Semanal audit |
+| MCP unauthorized queries     | 0              | Diario        |
 
 ---
 
@@ -1906,40 +1912,40 @@ class AntiGamingPolicy:
 
 ### 14.1 Riesgos Técnicos
 
-| Riesgo | Prob. | Impacto | Mitigación | Owner |
-|--------|-------|---------|------------|-------|
-| Claude API downtime | Baja | Alto | Cache + retry + fallback | Backend |
-| Accuracy <80% | Media | Alto | Golden dataset + prompt tuning | AI Lead |
-| Latencia >5min | Media | Medio | Paralelización + optimización | Backend |
-| **Data leak tenants** | Baja | **Crítico** | RLS 18 tablas + tests | Security |
-| Graph RAG complexity | Media | Medio | NetworkX MVP, escalar después | Backend |
-| **MCP SQL injection** | Media | **Crítico** | Allowlist estricto | Security |
+| Riesgo                | Prob. | Impacto     | Mitigación                     | Owner    |
+| --------------------- | ----- | ----------- | ------------------------------ | -------- |
+| Claude API downtime   | Baja  | Alto        | Cache + retry + fallback       | Backend  |
+| Accuracy <80%         | Media | Alto        | Golden dataset + prompt tuning | AI Lead  |
+| Latencia >5min        | Media | Medio       | Paralelización + optimización  | Backend  |
+| **Data leak tenants** | Baja  | **Crítico** | RLS 18 tablas + tests          | Security |
+| Graph RAG complexity  | Media | Medio       | NetworkX MVP, escalar después  | Backend  |
+| **MCP SQL injection** | Media | **Crítico** | Allowlist estricto             | Security |
 
 ### 14.2 Riesgos de Producto
 
-| Riesgo | Prob. | Impacto | Mitigación | Owner |
-|--------|-------|---------|------------|-------|
-| Adopción lenta EPC | Media | Alto | Pilots gratis + casos éxito | Product |
-| **Percepción "interpreta legal"** | Media | **Alto** | Disclaimer explícito | Legal |
-| Resistencia usuarios | Alta | Medio | UX simple + onboarding | Product |
-| **Implicit needs backlash** | Media | Alto | Opt-in + advisory + Fase 3 | Product |
+| Riesgo                            | Prob. | Impacto  | Mitigación                  | Owner   |
+| --------------------------------- | ----- | -------- | --------------------------- | ------- |
+| Adopción lenta EPC                | Media | Alto     | Pilots gratis + casos éxito | Product |
+| **Percepción "interpreta legal"** | Media | **Alto** | Disclaimer explícito        | Legal   |
+| Resistencia usuarios              | Alta  | Medio    | UX simple + onboarding      | Product |
+| **Implicit needs backlash**       | Media | Alto     | Opt-in + advisory + Fase 3  | Product |
 
 ### 14.3 Riesgos de Negocio
 
-| Riesgo | Prob. | Impacto | Mitigación | Owner |
-|--------|-------|---------|------------|-------|
-| Competidor con funding | Media | Medio | Diferenciación nicho EPC | CEO |
-| Cambio pricing Claude | Baja | Medio | Model routing + budget | CTO |
-| Regulación IA (EU AI Act) | Media | Alto | Compliance by design | Legal |
+| Riesgo                    | Prob. | Impacto | Mitigación               | Owner |
+| ------------------------- | ----- | ------- | ------------------------ | ----- |
+| Competidor con funding    | Media | Medio   | Diferenciación nicho EPC | CEO   |
+| Cambio pricing Claude     | Baja  | Medio   | Model routing + budget   | CTO   |
+| Regulación IA (EU AI Act) | Media | Alto    | Compliance by design     | Legal |
 
 ### 14.4 Riesgos de Agentes
 
-| Riesgo | Prob. | Impacto | Mitigación | Owner |
-|--------|-------|---------|------------|-------|
-| Acción incorrecta | Media | Alto | Human-in-loop obligatorio | Product |
-| Prompt injection docs | Media | Alto | Sanitización + sandboxing | Security |
-| Over-reliance IA | Media | Medio | Confidence scores visibles | UX |
-| Alucinaciones | Media | Alto | Evidencia + verificación | AI Lead |
+| Riesgo                | Prob. | Impacto | Mitigación                 | Owner    |
+| --------------------- | ----- | ------- | -------------------------- | -------- |
+| Acción incorrecta     | Media | Alto    | Human-in-loop obligatorio  | Product  |
+| Prompt injection docs | Media | Alto    | Sanitización + sandboxing  | Security |
+| Over-reliance IA      | Media | Medio   | Confidence scores visibles | UX       |
+| Alucinaciones         | Media | Alto    | Evidencia + verificación   | AI Lead  |
 
 ---
 
@@ -1968,31 +1974,31 @@ tests/security/test_tenant_isolation.py
 
 class TestTenantIsolation:
     """Tests CRÍTICOS de aislamiento multi-tenant"""
-    
+
     async def test_user_cannot_access_other_tenant_projects(self):
         """Gate 1: Aislamiento projects"""
-        
+
     async def test_user_cannot_access_other_tenant_documents(self):
         """Gate 1: Aislamiento documents"""
-        
+
     async def test_user_cannot_access_other_tenant_clauses(self):
         """Gate 1: Aislamiento clauses (NUEVO)"""
-        
+
     async def test_user_cannot_access_other_tenant_alerts(self):
         """Gate 1: Aislamiento alerts"""
-        
+
     async def test_user_cannot_access_other_tenant_stakeholders(self):
         """Gate 1: Aislamiento stakeholders"""
-        
+
     async def test_same_email_different_tenants_works(self):
         """Gate 2: B2B enterprise support"""
-        
+
     async def test_rls_blocks_direct_sql_attack(self):
         """Gate 1: SQL directo bloqueado"""
-        
+
     async def test_mcp_rejects_arbitrary_sql(self):
         """Gate 3: MCP allowlist"""
-        
+
     async def test_mcp_respects_query_limits(self):
         """Gate 3: MCP límites"""
 ```
@@ -2004,19 +2010,19 @@ tests/traceability/test_clause_fks.py
 
 class TestClauseTraceability:
     """Tests de trazabilidad legal (Gate 4)"""
-    
+
     async def test_stakeholder_has_clause_fk(self):
         """Stakeholder referencia clause_id"""
-        
+
     async def test_bom_item_has_clause_fk(self):
         """BOM item referencia clause_id"""
-        
+
     async def test_alert_has_clause_fk(self):
         """Alert referencia source_clause_id"""
-        
+
     async def test_evidence_viewer_shows_clause_link(self):
         """UI muestra link a cláusula original"""
-        
+
     async def test_clause_deletion_cascades_correctly(self):
         """FK cascade funciona"""
 ```
@@ -2028,22 +2034,22 @@ tests/coherence/test_score.py
 
 class TestCoherenceScore:
     """Tests del Coherence Score (Gate 5)"""
-    
+
     async def test_perfect_project_scores_100(self):
         """Proyecto sin alertas = 100"""
-        
+
     async def test_critical_alert_reduces_score_significantly(self):
         """Alerta critical reduce score"""
-        
+
     async def test_score_formula_matches_spec(self):
         """Fórmula implementada = especificación"""
-        
+
     async def test_breakdown_shows_top_drivers(self):
         """Breakdown muestra top 5 drivers"""
-        
+
     async def test_anti_gaming_requires_resolution_notes(self):
         """No dismiss sin notas"""
-        
+
     async def test_score_history_is_immutable(self):
         """Historial no modificable"""
 ```
@@ -2054,11 +2060,11 @@ class TestCoherenceScore:
 
 ### 16.1 Entornos
 
-| Entorno | URL | Deploy | Base de Datos |
-|---------|-----|--------|---------------|
-| Development | localhost | Manual | Local |
-| Staging | staging.c2pro.app | Auto (push main) | Supabase staging |
-| Production | app.c2pro.app | Manual (tag) | Supabase prod |
+| Entorno     | URL               | Deploy           | Base de Datos    |
+| ----------- | ----------------- | ---------------- | ---------------- |
+| Development | localhost         | Manual           | Local            |
+| Staging     | staging.c2pro.app | Auto (push main) | Supabase staging |
+| Production  | app.c2pro.app     | Manual (tag)     | Supabase prod    |
 
 ### 16.2 Pre-Deployment Checklist
 
@@ -2069,18 +2075,18 @@ pre_deployment:
     - [ ] Coverage >80% critical paths
     - [ ] No high/critical vulnerabilities (Snyk)
     - [ ] Code review approved
-    
+
   security:
     - [ ] RLS tests pass (all 18 tables)
     - [ ] Cross-tenant tests pass
     - [ ] MCP allowlist tests pass
     - [ ] No secrets in code
-    
+
   documentation:
     - [ ] Changelog updated
     - [ ] Version bumped (semver)
     - [ ] API docs updated
-    
+
   database:
     - [ ] Migrations tested in staging
     - [ ] Backup verified
@@ -2095,13 +2101,13 @@ deployment:
     - [ ] Notify team in Slack
     - [ ] Verify staging is stable
     - [ ] Backup production DB
-    
+
   deploy:
     - [ ] Deploy backend (Railway)
     - [ ] Run smoke tests backend
     - [ ] Deploy frontend (Vercel)
     - [ ] Run smoke tests frontend
-    
+
   post_deploy:
     - [ ] Verify Sentry (no new errors)
     - [ ] Verify UptimeRobot
@@ -2112,12 +2118,12 @@ deployment:
 
 ### 16.4 Rollback Plan
 
-| Componente | Método | Tiempo |
-|------------|--------|--------|
-| Backend | Railway revert | <2 min |
-| Frontend | Vercel revert | <1 min |
-| Database | Supabase PITR | ~15 min |
-| Cache | Redis flush | <1 min |
+| Componente | Método         | Tiempo  |
+| ---------- | -------------- | ------- |
+| Backend    | Railway revert | <2 min  |
+| Frontend   | Vercel revert  | <1 min  |
+| Database   | Supabase PITR  | ~15 min |
+| Cache      | Redis flush    | <1 min  |
 
 ---
 
@@ -2303,7 +2309,7 @@ rules:
 golden_dataset:
   version: "1.0.0"
   description: "Dataset para validación de accuracy AI y Coherence Score"
-  
+
   composition:
     total_projects: 50
     by_type:
@@ -2311,13 +2317,13 @@ golden_dataset:
       industrial: 15
       edificacion: 15
     by_complexity:
-      simple: 15    # <10 WBS items, <50 BOM items
-      medium: 20    # 10-50 WBS, 50-200 BOM
-      complex: 15   # >50 WBS, >200 BOM
+      simple: 15 # <10 WBS items, <50 BOM items
+      medium: 20 # 10-50 WBS, 50-200 BOM
+      complex: 15 # >50 WBS, >200 BOM
     by_language:
       spanish: 40
       english: 10
-      
+
   annotations:
     clauses:
       total: 500
@@ -2329,7 +2335,7 @@ golden_dataset:
         - amounts_mentioned
       annotators: 2
       agreement_threshold: 0.85
-      
+
     stakeholders:
       total: 300
       fields:
@@ -2341,19 +2347,19 @@ golden_dataset:
         - interest_level
       annotators: 2
       agreement_threshold: 0.80
-      
+
     coherence_alerts:
       total: 500
       format: "(project_id, expected_rule_id, expected_severity)"
       coverage: "All 20 rules at least 10 examples each"
-      
+
   validation_metrics:
     extraction_accuracy: ">85%"
     stakeholder_accuracy: ">80%"
     coherence_precision: ">85%"
     coherence_recall: ">80%"
     score_correlation: ">0.85 vs expert"
-    
+
   versioning:
     location: "/tests/golden/"
     format: "JSON + annotations CSV"
@@ -2365,78 +2371,94 @@ golden_dataset:
 
 ```markdown
 ## ADR-001: FastAPI vs Flask/Django
+
 **Status:** Accepted
 **Context:** Necesitamos framework backend para API
 **Decision:** FastAPI
 **Reasons:**
+
 - Async nativo para AI API calls
 - Pydantic v2 built-in
 - OpenAPI automático
 - Mejor DX
 
 ## ADR-002: Supabase vs AWS RDS
+
 **Status:** Accepted
 **Context:** Necesitamos PostgreSQL managed
 **Decision:** Supabase
 **Reasons:**
+
 - RLS nativo (crítico para multi-tenancy)
 - Auth incluido
 - Backups + PITR
 - Free tier generoso
 
 ## ADR-003: Claude vs GPT-4
+
 **Status:** Accepted
 **Context:** Modelo de lenguaje principal
 **Decision:** Claude (Sonnet 4 + Haiku 4)
 **Reasons:**
+
 - Mejor en documentos largos (200K context)
 - Menos alucinaciones en extracción
 - MCP support nativo
 - Pricing competitivo
 
 ## ADR-004: Graph RAG vs Vector RAG
+
 **Status:** Accepted
 **Context:** Arquitectura de retrieval
 **Decision:** Graph RAG con NetworkX
 **Reasons:**
+
 - Mejora 6.4 puntos en multi-hop
 - Relaciones explícitas para trazabilidad
 - Mejor para coherencia
 
 ## ADR-005: MCP vs Custom APIs
+
 **Status:** Accepted
 **Context:** Integración de agentes
 **Decision:** MCP Protocol
 **Reasons:**
+
 - Estándar abierto
 - Interoperabilidad
 - Seguridad mejorada
 - Reduce time-to-market
 
 ## ADR-006: NetworkX vs Neo4j (MVP)
+
 **Status:** Accepted
 **Context:** Graph database para MVP
 **Decision:** NetworkX in-memory
 **Reasons:**
+
 - Suficiente para MVP (<100K nodos)
 - Sin infraestructura adicional
 - Migración a Neo4j posible después
-**Review trigger:** nodes > 50K OR latency > 1s
+  **Review trigger:** nodes > 50K OR latency > 1s
 
 ## ADR-007: Clauses como entidad separada
+
 **Status:** Accepted (v2.4.0)
 **Context:** Trazabilidad legal
 **Decision:** Tabla clauses con FKs desde stakeholders, bom_items, alerts
 **Reasons:**
+
 - Trazabilidad real (no texto libre)
 - Queries de evidencia eficientes
 - Audit trail completo
 
 ## ADR-008: Implicit Needs → Fase 3 Experimental
+
 **Status:** Accepted (v2.4.0)
 **Context:** Feature de inferencia de necesidades implícitas
 **Decision:** Mover a Fase 3 como experimental opt-in
 **Reasons:**
+
 - Riesgo compliance/sesgos
 - Requiere más validación
 - MVP sin este feature sigue siendo valioso
@@ -2444,20 +2466,20 @@ golden_dataset:
 
 ### 17.4 Glosario
 
-| Término | Definición |
-|---------|------------|
-| **WBS** | Work Breakdown Structure - Estructura de desglose del trabajo |
-| **BOM** | Bill of Materials - Lista de materiales |
-| **RACI** | Responsible, Accountable, Consulted, Informed |
-| **RLS** | Row Level Security - Seguridad a nivel de fila |
-| **MCP** | Model Context Protocol - Protocolo de contexto de modelo |
-| **Graph RAG** | Retrieval Augmented Generation con Knowledge Graphs |
-| **Coherence Score** | Indicador 0-100 de alineación entre documentos |
-| **EPC** | Engineering, Procurement, Construction |
-| **Incoterm** | International Commercial Terms |
-| **PITR** | Point-in-Time Recovery |
-| **Golden Dataset** | Dataset anotado para validación de accuracy |
-| **Human-in-the-loop** | Validación humana obligatoria antes de acción |
+| Término               | Definición                                                    |
+| --------------------- | ------------------------------------------------------------- |
+| **WBS**               | Work Breakdown Structure - Estructura de desglose del trabajo |
+| **BOM**               | Bill of Materials - Lista de materiales                       |
+| **RACI**              | Responsible, Accountable, Consulted, Informed                 |
+| **RLS**               | Row Level Security - Seguridad a nivel de fila                |
+| **MCP**               | Model Context Protocol - Protocolo de contexto de modelo      |
+| **Graph RAG**         | Retrieval Augmented Generation con Knowledge Graphs           |
+| **Coherence Score**   | Indicador 0-100 de alineación entre documentos                |
+| **EPC**               | Engineering, Procurement, Construction                        |
+| **Incoterm**          | International Commercial Terms                                |
+| **PITR**              | Point-in-Time Recovery                                        |
+| **Golden Dataset**    | Dataset anotado para validación de accuracy                   |
+| **Human-in-the-loop** | Validación humana obligatoria antes de acción                 |
 
 ---
 
@@ -2466,7 +2488,7 @@ golden_dataset:
 ## — FIN DEL ROADMAP v2.4.0 —
 
 **C2Pro - Contract Intelligence Platform**
-*Cognitive Operating System for EPC Procurement*
+_Cognitive Operating System for EPC Procurement_
 
 © 2024-2026 Todos los derechos reservados
 
@@ -2479,8 +2501,8 @@ golden_dataset:
 
 ---
 
-*Última actualización: 05 de Enero de 2026*
-*Próxima revisión: Tras completar Sprint 0*
+_Última actualización: 05 de Enero de 2026_
+_Próxima revisión: Tras completar Sprint 0_
 
 </div>
 
@@ -2489,4 +2511,5 @@ golden_dataset:
 Last Updated: 2026-02-13
 
 Changelog:
+
 - 2026-02-13: Normalized inline sample labels that were being interpreted as H1 headings by markdown linters.

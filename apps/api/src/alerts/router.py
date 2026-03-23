@@ -12,21 +12,23 @@ Endpoints:
 """
 
 from typing import Annotated, Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
+from src.analysis.adapters.persistence.models import Alert
+from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.core.approval import ApprovalStatus
 from src.core.database import get_session_with_tenant
+from src.documents.adapters.persistence.models import ClauseORM
+from src.projects.adapters.persistence.models import ProjectORM
 
 router = APIRouter(tags=["alerts"])
-
-
-# In-memory storage for fake implementation
-_fake_alerts: dict[UUID, dict] = {}
 
 
 # ===========================================
@@ -106,6 +108,91 @@ class AlertListResponse(BaseModel):
     total: int
 
 
+def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
+    return AlertResponse(
+        id=alert.id,
+        project_id=alert.project_id,
+        tenant_id=tenant_id,
+        rule_code=alert.rule_id or "AI_EXTRACTED",
+        category=alert.category or "risk",
+        severity=alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
+        message=alert.title,
+        status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
+        affected_entities=alert.affected_entities or {},
+        reviewed_by=alert.reviewed_by,
+        reviewed_at=alert.reviewed_at,
+        created_at=alert.created_at,
+    )
+
+
+async def _get_project_for_tenant(session, project_id: UUID, tenant_id: UUID) -> ProjectORM | None:
+    result = await session.execute(
+        select(ProjectORM).where(
+            ProjectORM.id == project_id,
+            ProjectORM.tenant_id == tenant_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_alert_for_tenant(session, alert_id: UUID, tenant_id: UUID) -> Alert | None:
+    result = await session.execute(
+        select(Alert)
+        .join(ProjectORM, ProjectORM.id == Alert.project_id)
+        .where(
+            Alert.id == alert_id,
+            ProjectORM.tenant_id == tenant_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _metadata_bucket(alert: Alert, key: str) -> list[dict]:
+    metadata = dict(alert.alert_metadata or {})
+    bucket = list(metadata.get(key, []))
+    metadata[key] = bucket
+    alert.alert_metadata = metadata
+    return bucket
+
+
+def _append_history(alert: Alert, action: str, user_id: UUID, **details: str) -> None:
+    history = _metadata_bucket(alert, "history")
+    history.append(
+        {
+            "action": action,
+            "timestamp": datetime.utcnow().isoformat(),
+            "user_id": str(user_id),
+            **details,
+        }
+    )
+
+
+def _apply_review(alert: Alert, decision: str, current_user: User, comment: str) -> None:
+    alert.reviewed_by = current_user.id
+    alert.reviewed_at = datetime.utcnow()
+    alert.review_comment = comment
+    if decision == "approve":
+        alert.approval_status = ApprovalStatus.APPROVED
+        alert.status = AlertStatus.ACKNOWLEDGED
+    else:
+        alert.approval_status = ApprovalStatus.REJECTED
+        alert.status = AlertStatus.DISMISSED
+        alert.resolved_at = datetime.utcnow()
+        alert.resolved_by = current_user.id
+        alert.resolution_notes = comment
+
+
+def _apply_status_filter(query, raw_status: str):
+    normalized = raw_status.lower()
+    if normalized == "pending":
+        return query.where(Alert.approval_status == ApprovalStatus.PENDING)
+    if normalized == "approved":
+        return query.where(Alert.approval_status == ApprovalStatus.APPROVED)
+    if normalized == "rejected":
+        return query.where(Alert.approval_status == ApprovalStatus.REJECTED)
+    return query.where(Alert.status == AlertStatus(normalized))
+
+
 # ===========================================
 # ENDPOINTS
 # ===========================================
@@ -116,31 +203,67 @@ async def create_alert(
     request: CreateAlertRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> AlertResponse:
-    """
-    Create a new alert.
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, request.project_id, current_user.tenant_id)
+        if project is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    GREEN PHASE: Minimal implementation using "Fake It" pattern.
-    """
-    # Create alert
-    alert_id = uuid4()
-    alert_data = {
-        "id": alert_id,
-        "project_id": request.project_id,
-        "tenant_id": current_user.tenant_id,
-        "rule_code": request.rule_code,
-        "category": request.category,
-        "severity": request.severity,
-        "message": request.message,
-        "status": "pending",
-        "affected_entities": request.affected_entities,
-        "reviewed_by": None,
-        "reviewed_at": None,
-        "created_at": datetime.utcnow(),
-    }
+        alert = Alert(
+            project_id=request.project_id,
+            severity=AlertSeverity(request.severity),
+            category=request.category,
+            rule_id=request.rule_code,
+            title=request.message,
+            description=request.message,
+            affected_entities=request.affected_entities,
+            status=AlertStatus.OPEN,
+            approval_status=ApprovalStatus.PENDING,
+            alert_metadata={},
+        )
+        session.add(alert)
+        await session.flush()
+        _append_history(alert, "created", current_user.id, rule_code=request.rule_code)
+        await session.commit()
+        await session.refresh(alert)
+        return _serialize_alert(alert, current_user.tenant_id)
 
-    _fake_alerts[alert_id] = alert_data
 
-    return AlertResponse(**alert_data)
+@router.get("/alerts", response_model=AlertListResponse)
+async def list_alerts(
+    current_user: Annotated[User, Depends(get_current_user)],
+    project_id: UUID | None = None,
+    document_id: UUID | None = None,
+    status: str | None = None,
+    category: str | None = None,
+    severity: str | None = None,
+) -> AlertListResponse:
+    """List tenant-scoped alerts with optional project/document filters."""
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        query = (
+            select(Alert)
+            .join(ProjectORM, ProjectORM.id == Alert.project_id)
+            .where(ProjectORM.tenant_id == current_user.tenant_id)
+        )
+
+        if project_id:
+            query = query.where(Alert.project_id == project_id)
+        if document_id:
+            query = query.join(ClauseORM, ClauseORM.id == Alert.source_clause_id).where(
+                ClauseORM.document_id == document_id
+            )
+        if status:
+            query = _apply_status_filter(query, status)
+        if category:
+            query = query.where(Alert.category == category)
+        if severity:
+            query = query.where(Alert.severity == AlertSeverity(severity))
+
+        query = query.order_by(Alert.created_at.desc())
+        result = await session.execute(query)
+        db_alerts = result.scalars().all()
+
+    alerts = [_serialize_alert(alert, current_user.tenant_id) for alert in db_alerts]
+    return AlertListResponse(items=alerts, total=len(alerts))
 
 
 @router.get("/projects/{project_id}/alerts", response_model=AlertListResponse)
@@ -156,20 +279,24 @@ async def list_project_alerts(
 
     Returns alerts from the database.
     """
-    from sqlalchemy import select
-    from src.analysis.adapters.persistence.models import Alert
-
     async with get_session_with_tenant(current_user.tenant_id) as session:
         # Build query
-        query = select(Alert).where(Alert.project_id == project_id)
+        query = (
+            select(Alert)
+            .join(ProjectORM, ProjectORM.id == Alert.project_id)
+            .where(
+                Alert.project_id == project_id,
+                ProjectORM.tenant_id == current_user.tenant_id,
+            )
+        )
 
         # Apply filters
         if status:
-            query = query.where(Alert.status == status)
+            query = _apply_status_filter(query, status)
         if category:
             query = query.where(Alert.category == category)
         if severity:
-            query = query.where(Alert.severity == severity)
+            query = query.where(Alert.severity == AlertSeverity(severity))
 
         # Sort by severity (critical first) then by created_at
         query = query.order_by(Alert.created_at.desc())
@@ -178,22 +305,7 @@ async def list_project_alerts(
         db_alerts = result.scalars().all()
 
     # Convert to response format
-    alerts = []
-    for alert in db_alerts:
-        alerts.append(AlertResponse(
-            id=alert.id,
-            project_id=alert.project_id,
-            tenant_id=current_user.tenant_id,  # Use current user's tenant
-            rule_code=alert.rule_id or "AI_EXTRACTED",
-            category=alert.category or "risk",
-            severity=alert.severity.value if hasattr(alert.severity, 'value') else str(alert.severity),
-            message=alert.title,
-            status=alert.status.value if hasattr(alert.status, 'value') else str(alert.status),
-            affected_entities=alert.affected_entities or {},
-            reviewed_by=alert.reviewed_by,
-            reviewed_at=alert.reviewed_at,
-            created_at=alert.created_at,
-        ))
+    alerts = [_serialize_alert(alert, current_user.tenant_id) for alert in db_alerts]
 
     return AlertListResponse(
         items=alerts,
@@ -207,28 +319,16 @@ async def review_alert(
     request: ReviewAlertRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> AlertResponse:
-    """
-    Approve or reject an alert.
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        alert = await _get_alert_for_tenant(session, alert_id, current_user.tenant_id)
+        if alert is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
-    GREEN PHASE: Updates alert status in fake storage.
-    """
-    # Check if alert exists and belongs to tenant
-    alert = _fake_alerts.get(alert_id)
-
-    if not alert or alert["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
-        )
-
-    # Update alert status
-    alert["status"] = "approved" if request.decision == "approve" else "rejected"
-    alert["reviewed_by"] = current_user.id
-    alert["reviewed_at"] = datetime.utcnow()
-
-    _fake_alerts[alert_id] = alert
-
-    return AlertResponse(**alert)
+        _apply_review(alert, request.decision, current_user, request.comment)
+        _append_history(alert, "reviewed", current_user.id, decision=request.decision)
+        await session.commit()
+        await session.refresh(alert)
+        return _serialize_alert(alert, current_user.tenant_id)
 
 
 @router.post("/alerts/bulk-review")
@@ -236,49 +336,29 @@ async def bulk_review_alerts(
     request: BulkReviewRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Bulk approve or reject multiple alerts.
-
-    GREEN PHASE: Processes multiple alerts.
-
-    Anti-gaming: Detects mass approval (50+ in 1 minute).
-    """
-    alert_count = len(request.alert_ids)
-
-    # Anti-gaming detection
-    warning = None
-    if alert_count >= 50:
-        warning = "Mass approval detected: Reviewing 50+ alerts simultaneously may indicate gaming behavior"
-
-    # Update alerts
-    approved_count = 0
-    rejected_count = 0
-
-    for alert_id_str in request.alert_ids:
-        alert_id = UUID(alert_id_str)
-        alert = _fake_alerts.get(alert_id)
-
-        if alert and alert["tenant_id"] == current_user.tenant_id:
-            alert["status"] = "approved" if request.decision == "approve" else "rejected"
-            alert["reviewed_by"] = current_user.id
-            alert["reviewed_at"] = datetime.utcnow()
-            _fake_alerts[alert_id] = alert
-
-            if request.decision == "approve":
-                approved_count += 1
-            else:
-                rejected_count += 1
-
-    result = {
-        "approved_count": approved_count if request.decision == "approve" else 0,
-        "rejected_count": rejected_count if request.decision == "reject" else 0,
-        "total_processed": approved_count + rejected_count,
-    }
-
-    if warning:
-        result["warning"] = warning
-
-    return result
+    alert_ids = [UUID(alert_id) for alert_id in request.alert_ids]
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        result = await session.execute(
+            select(Alert)
+            .join(ProjectORM, ProjectORM.id == Alert.project_id)
+            .where(
+                Alert.id.in_(alert_ids),
+                ProjectORM.tenant_id == current_user.tenant_id,
+            )
+        )
+        alerts = list(result.scalars().all())
+        for alert in alerts:
+            _apply_review(alert, request.decision, current_user, request.comment)
+            _append_history(alert, "bulk_reviewed", current_user.id, decision=request.decision)
+        await session.commit()
+        warning = None
+        if request.decision == "approve" and len(alerts) >= 50:
+            warning = "Mass approval pattern detected"
+        return {
+            "processed_count": len(alerts),
+            "decision": request.decision,
+            "warning": warning,
+        }
 
 
 @router.post("/alerts/{alert_id}/evidence", status_code=201)
@@ -287,29 +367,27 @@ async def attach_evidence(
     request: AttachEvidenceRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Attach evidence to an alert.
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        alert = await _get_alert_for_tenant(session, alert_id, current_user.tenant_id)
+        if alert is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
-    GREEN PHASE: Stores evidence metadata.
-    """
-    # Check if alert exists and belongs to tenant
-    alert = _fake_alerts.get(alert_id)
-
-    if not alert or alert["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
+        evidence = _metadata_bucket(alert, "evidence")
+        evidence.append(
+            {
+                "type": request.type,
+                "content": request.content,
+                "source": request.source,
+                "added_by": str(current_user.id),
+                "added_at": datetime.utcnow().isoformat(),
+            }
         )
-
-    # Store evidence (in real impl, would store in DB)
-    evidence_id = uuid4()
-
-    return {
-        "id": str(evidence_id),
-        "alert_id": str(alert_id),
-        "type": request.type,
-        "created_at": datetime.utcnow().isoformat(),
-    }
+        _append_history(alert, "evidence_attached", current_user.id, evidence_type=request.type)
+        await session.commit()
+        return {
+            "alert_id": str(alert.id),
+            "evidence_count": len(evidence),
+        }
 
 
 @router.post("/alerts/{alert_id}/resolve", response_model=AlertResponse)
@@ -318,25 +396,16 @@ async def resolve_alert(
     request: ResolveAlertRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> AlertResponse:
-    """
-    Resolve an alert.
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        alert = await _get_alert_for_tenant(session, alert_id, current_user.tenant_id)
+        if alert is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
-    GREEN PHASE: Marks alert as resolved.
-    """
-    # Check if alert exists and belongs to tenant
-    alert = _fake_alerts.get(alert_id)
-
-    if not alert or alert["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
-        )
-
-    # Update status to resolved
-    alert["status"] = "resolved"
-    _fake_alerts[alert_id] = alert
-
-    return AlertResponse(**alert)
+        alert.mark_resolved(current_user.id, request.resolution)
+        _append_history(alert, "resolved", current_user.id, resolution=request.resolution)
+        await session.commit()
+        await session.refresh(alert)
+        return _serialize_alert(alert, current_user.tenant_id)
 
 
 @router.get("/alerts/{alert_id}/history")
@@ -344,32 +413,14 @@ async def get_alert_history(
     alert_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Get status transition history for an alert.
-
-    GREEN PHASE: Returns minimal history.
-    """
-    # Check if alert exists and belongs to tenant
-    alert = _fake_alerts.get(alert_id)
-
-    if not alert or alert["tenant_id"] != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
-        )
-
-    # Return fake history
-    return {
-        "alert_id": str(alert_id),
-        "transitions": [
-            {
-                "from_status": "pending",
-                "to_status": alert["status"],
-                "changed_by": str(alert["reviewed_by"]) if alert["reviewed_by"] else None,
-                "changed_at": alert["reviewed_at"].isoformat() if alert["reviewed_at"] else None,
-            }
-        ],
-    }
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        alert = await _get_alert_for_tenant(session, alert_id, current_user.tenant_id)
+        if alert is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+        return {
+            "alert_id": str(alert.id),
+            "items": list((alert.alert_metadata or {}).get("history", [])),
+        }
 
 
 @router.post("/alerts/bulk-delete")
@@ -377,37 +428,24 @@ async def bulk_delete_alerts(
     request: BulkDeleteRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """
-    Bulk delete multiple alerts.
-
-    GREEN PHASE: Minimal implementation for TS-E2E-FLW-BLK-001.
-
-    Args:
-        request: Bulk delete request
-        current_user: Current authenticated user
-
-    Returns:
-        Summary of deleted alerts
-    """
-    deleted_count = 0
-
-    for alert_id_str in request.alert_ids:
-        alert_id = UUID(alert_id_str)
-        alert = _fake_alerts.get(alert_id)
-
-        # Check tenant and optional status filter
-        if alert and alert["tenant_id"] == current_user.tenant_id:
-            # Apply status filter if provided
-            if request.status_filter:
-                if alert["status"] == request.status_filter:
-                    del _fake_alerts[alert_id]
-                    deleted_count += 1
-            else:
-                # No filter, delete all
-                del _fake_alerts[alert_id]
-                deleted_count += 1
-
-    return {
-        "deleted_count": deleted_count,
-        "total_requested": len(request.alert_ids),
-    }
+    alert_ids = [UUID(alert_id) for alert_id in request.alert_ids]
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        result = await session.execute(
+            select(Alert)
+            .join(ProjectORM, ProjectORM.id == Alert.project_id)
+            .where(
+                Alert.id.in_(alert_ids),
+                ProjectORM.tenant_id == current_user.tenant_id,
+            )
+        )
+        alerts = list(result.scalars().all())
+        deleted_count = 0
+        for alert in alerts:
+            if request.status_filter == "rejected" and alert.approval_status != ApprovalStatus.REJECTED:
+                continue
+            await session.delete(alert)
+            deleted_count += 1
+        await session.commit()
+        return {
+            "deleted_count": deleted_count,
+        }

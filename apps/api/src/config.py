@@ -7,13 +7,13 @@ Soporta múltiples ambientes (dev, staging, prod).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Self
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings):  # type: ignore[misc]
     """
     Configuración global de la aplicación.
 
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     db_pool_recycle: int = Field(default=1800, ge=300, description="Recycle connections after N seconds")
     db_echo: bool = Field(default=False, description="Log SQL queries")
 
-    @field_validator("database_url")
+    @field_validator("database_url")  # type: ignore[misc]
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """Valida que la URL de base de datos sea PostgreSQL."""
@@ -93,6 +93,21 @@ class Settings(BaseSettings):
 
     # Password hashing
     bcrypt_rounds: int = Field(default=12, ge=10, le=14)
+    integration_api_keys: dict[str, str] = Field(
+        default_factory=dict,
+        validation_alias="INTEGRATION_API_KEYS",
+        description="Mapping of integration API key to tenant_id",
+    )
+    auth_bootstrap_fallback_mode: Literal["deny", "non_production", "always"] = Field(
+        default="non_production",
+        validation_alias="AUTH_BOOTSTRAP_FALLBACK_MODE",
+        description="Controls ORM fallback when auth_bootstrap SQL helpers fail",
+    )
+    auth_bootstrap_emit_metrics: bool = Field(
+        default=True,
+        validation_alias="AUTH_BOOTSTRAP_EMIT_METRICS",
+        description="Emit structured telemetry for auth bootstrap resolution paths",
+    )
 
     # ===========================================
     # CLERK (Authentication)
@@ -293,17 +308,52 @@ class Settings(BaseSettings):
     # VALIDATION
     # ===========================================
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", mode="before")  # type: ignore[misc]
     @classmethod
-    def parse_cors_origins(cls, v):
+    def parse_cors_origins(cls, v: Any) -> list[str]:
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
             if not v.strip():  # Handle empty string
                 return []
-            return [origin.strip() for origin in v.split(",")]
-        return v
+            if v.strip().startswith("["):
+                import json
 
-    @field_validator("ai_budget_monthly_default")
+                return list(json.loads(v))
+            return [origin.strip() for origin in v.split(",")]
+        if isinstance(v, list):
+            return [str(origin) for origin in v]
+        return []
+
+    @field_validator("integration_api_keys", mode="before")  # type: ignore[misc]
+    @classmethod
+    def parse_integration_api_keys(cls, v: Any) -> dict[str, str]:
+        if v in (None, "", {}):
+            return {}
+        if isinstance(v, str):
+            import json
+
+            raw = json.loads(v)
+            return {str(key): str(value) for key, value in dict(raw).items()}
+        if isinstance(v, dict):
+            return {str(key): str(value) for key, value in v.items()}
+        return {}
+
+    @model_validator(mode="after")  # type: ignore[misc]
+    def validate_security_posture(self) -> Self:
+        if self.environment in {"production", "staging"}:
+            if any(origin == "*" for origin in self.cors_origins):
+                raise ValueError("wildcard CORS is not allowed outside development/test")
+
+            localhost_markers = ("localhost", "127.0.0.1")
+            if any(any(marker in origin for marker in localhost_markers) for origin in self.cors_origins):
+                raise ValueError("localhost origins are not allowed outside development/test")
+
+            if self.auth_bootstrap_fallback_mode == "non_production":
+                self.auth_bootstrap_fallback_mode = "deny"
+
+        return self
+
+    @field_validator("ai_budget_monthly_default")  # type: ignore[misc]
     @classmethod
     def validate_budget(cls, v: float) -> float:
         """Valida que el budget sea positivo."""
@@ -311,14 +361,16 @@ class Settings(BaseSettings):
             raise ValueError("ai_budget_monthly_default must be >= 0")
         return v
 
-    @field_validator("budget_alert_admin_emails", mode="before")
+    @field_validator("budget_alert_admin_emails", mode="before")  # type: ignore[misc]
     @classmethod
-    def parse_budget_alert_admin_emails(cls, v):
+    def parse_budget_alert_admin_emails(cls, v: Any) -> list[str]:
         if isinstance(v, str):
             if not v.strip():
                 return []
             return [email.strip() for email in v.split(",") if email.strip()]
-        return v
+        if isinstance(v, list):
+            return [str(email).strip() for email in v if str(email).strip()]
+        return []
 
 
 # ===========================================

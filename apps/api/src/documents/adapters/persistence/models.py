@@ -49,17 +49,16 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     # Classification
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, name="document_type", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentType, name="documenttype", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         index=True,
     )
@@ -76,7 +75,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
 
     # Processing
     upload_status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, name="document_status", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentStatus, name="documentstatus", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         default=DocumentStatus.UPLOADED,
         index=True,
     )
@@ -101,10 +100,9 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     # Relationships
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="select")
 
-    # TODO: Re-enable relationship when Clause FK is restored (GREEN phase)
-    # clauses: Mapped[list["ClauseORM"]] = relationship(
-    #     "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
-    # )
+    clauses: Mapped[list["ClauseORM"]] = relationship(
+        "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
+    )
 
     # Indexes
     __table_args__ = (
@@ -132,17 +130,15 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    # TODO: Re-enable FK when documents table is fully integrated (GREEN phase)
     document_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("documents.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("documents.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -185,10 +181,9 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     )
 
     # Relationships
-    # TODO: Re-enable relationship when Document FK is restored (GREEN phase)
-    # document: Mapped["DocumentORM"] = relationship(
-    #     "DocumentORM", back_populates="clauses", lazy="selectin"
-    # )
+    document: Mapped["DocumentORM"] = relationship(
+        "DocumentORM", back_populates="clauses", lazy="selectin"
+    )
 
     verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
 

@@ -57,6 +57,13 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_PATTERNS = [
+    ("EMAIL_ADDRESS", re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")),
+    ("PHONE_NUMBER", re.compile(r"(?:\+?\d{1,3}[\s-]?)?(?:\d[\s-]?){8,14}\d")),
+    ("IBAN_CODE", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
+    ("SPANISH_ID", re.compile(r"\b(?:\d{8}[A-Z]|[XYZ]\d{7}[A-Z])\b")),
+]
+
 
 # =====================================================
 # DATA MODELS
@@ -360,15 +367,10 @@ class PiiAnonymizerService:
                 statistics={}
             )
 
-        # If presidio is not available, return text unchanged
+        # If presidio is not available, use regex fallback
         if not PRESIDIO_AVAILABLE or self._analyzer is None:
-            logger.warning("Presidio not available - returning text unchanged")
-            return AnonymizedResult(
-                anonymized_text=text,
-                mapping={},
-                entities_found=[],
-                statistics={}
-            )
+            logger.warning("Presidio not available - using regex fallback anonymization")
+            return self._anonymize_with_regex_fallback(text)
 
         logger.info(f"Anonymizing document ({len(text)} chars)...")
 
@@ -431,6 +433,60 @@ class PiiAnonymizerService:
             mapping=self._entity_mapping.copy(),
             entities_found=entities_metadata,
             statistics=entity_stats
+        )
+
+    def _anonymize_with_regex_fallback(self, text: str) -> AnonymizedResult:
+        replacements: list[tuple[int, int, str]] = []
+        entities_metadata: List[Dict[str, Any]] = []
+        entity_stats: Dict[str, int] = {}
+
+        for entity_type, pattern in _FALLBACK_PATTERNS:
+            for match in pattern.finditer(text):
+                original_value = match.group(0)
+                placeholder = self._get_or_create_placeholder(entity_type, original_value)
+                replacements.append((match.start(), match.end(), placeholder))
+                entity_stats[entity_type] = entity_stats.get(entity_type, 0) + 1
+                entities_metadata.append(
+                    {
+                        "type": entity_type,
+                        "original_value": original_value,
+                        "placeholder": placeholder,
+                        "score": 1.0,
+                        "start": match.start(),
+                        "end": match.end(),
+                    }
+                )
+
+        if not replacements:
+            return AnonymizedResult(
+                anonymized_text=text,
+                mapping={},
+                entities_found=[],
+                statistics={},
+            )
+
+        replacements.sort(key=lambda item: (item[0], -(item[1] - item[0])))
+        filtered: list[tuple[int, int, str]] = []
+        last_end = -1
+        for start, end, placeholder in replacements:
+            if start < last_end:
+                continue
+            filtered.append((start, end, placeholder))
+            last_end = end
+
+        parts: list[str] = []
+        cursor = 0
+        for start, end, placeholder in filtered:
+            parts.append(text[cursor:start])
+            parts.append(placeholder)
+            cursor = end
+        parts.append(text[cursor:])
+
+        return AnonymizedResult(
+            anonymized_text="".join(parts),
+            mapping=self._entity_mapping.copy(),
+            entities_found=entities_metadata,
+            statistics=entity_stats,
         )
 
     def _get_or_create_placeholder(
