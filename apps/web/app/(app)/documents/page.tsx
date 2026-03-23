@@ -1,20 +1,20 @@
-import { DocumentsService } from '@/lib/api/generated/services/DocumentsService';
-import type { ProjectDocumentsGroup } from '@/lib/api/generated/models';
-import { DocumentsListClient } from '@/components/features/documents/DocumentsListClient';
-import { Button } from '@/components/ui/button';
-import { Upload } from 'lucide-react';
+import type { ProjectDocumentsGroup } from "@/lib/api/contracts";
+import { listProjectDocumentGroups } from "@/lib/api/services/documents";
+import { DocumentsListClient } from "@/components/features/documents/DocumentsListClient";
+import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 
 export default async function DocumentsPage() {
   let groups: ProjectDocumentsGroup[] = [];
   let loadError: string | null = null;
 
   try {
-    groups = await DocumentsService.list();
+    groups = await listProjectDocumentGroups();
   } catch (error) {
     loadError =
       error instanceof Error
         ? error.message
-        : 'Could not load documents right now.';
+        : "Could not load documents right now.";
   }
 
   return (
@@ -37,7 +37,7 @@ export default async function DocumentsPage() {
 
       {loadError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {loadError}. Verify backend API is running at{' '}
+          {loadError}. Verify backend API is running at{" "}
           <code>http://localhost:8000/api/v1</code>.
         </div>
       ) : null}

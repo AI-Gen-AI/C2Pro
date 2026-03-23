@@ -19,6 +19,7 @@ from sqlalchemy import text
 from src.core.cache import get_cache_service
 from src.core.database import get_raw_session
 from src.core.resilience import CircuitBreakerRegistry, CircuitBreakerState
+from src.core.tasks.celery_app import celery_app
 
 logger = structlog.get_logger()
 
@@ -36,6 +37,7 @@ router = APIRouter(
 
 # Timeout for dependency checks in seconds
 HEALTH_CHECK_TIMEOUT = 2
+DOCUMENT_PARSING_QUEUE = "document_parsing"
 
 # ===========================================
 # LIVENESS PROBE
@@ -204,10 +206,54 @@ async def circuit_breaker_status():
 @router.get(
     "",
     summary="Generic Health Check",
-    description="Alias for the readiness probe. Useful for simple uptime monitors."
+    description="Simple uptime check. Returns {status: ok} for basic monitoring."
 )
 async def generic_health_check():
-    """
-    A simple alias for the /ready endpoint.
-    """
-    return await readiness_check()
+    return {"status": "ok"}
+
+
+@router.get(
+    "/worker",
+    summary="Celery Worker Health",
+    description="Checks that a Celery worker is online and consuming the document_parsing queue.",
+)
+async def worker_health_check() -> dict[str, Any]:
+    """Checks Celery worker availability for document parsing jobs."""
+    try:
+        inspect = celery_app.control.inspect()
+        ping_result = inspect.ping() or {}
+        queue_result = inspect.active_queues() or {}
+
+        workers_online = sorted(ping_result.keys())
+        workers_consuming_queue = sorted(
+            worker_name
+            for worker_name, queues in queue_result.items()
+            if any(queue.get("name") == DOCUMENT_PARSING_QUEUE for queue in queues)
+        )
+    except Exception as exc:
+        logger.error("health_check_worker_failed", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "unhealthy",
+                "queue": DOCUMENT_PARSING_QUEUE,
+                "workers_online": [],
+                "workers_consuming_queue": [],
+                "error": str(exc),
+            },
+        ) from exc
+
+    result = {
+        "status": "healthy" if workers_consuming_queue else "unhealthy",
+        "queue": DOCUMENT_PARSING_QUEUE,
+        "workers_online": workers_online,
+        "workers_consuming_queue": workers_consuming_queue,
+    }
+
+    if not workers_consuming_queue:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result,
+        )
+
+    return result

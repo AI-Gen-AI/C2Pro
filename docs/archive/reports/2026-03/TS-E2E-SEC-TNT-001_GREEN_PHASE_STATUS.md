@@ -1,16 +1,19 @@
-
 # TS-E2E-SEC-TNT-001: GREEN Phase Status
+
 ## Multi-tenant Isolation Implementation
 
 **Date:** 2026-02-05
 **Status:** 🟡 IN PROGRESS (Installation Phase)
 **Suite ID:** TS-E2E-SEC-TNT-001
 
+Status update (2026-03-20): This is a historical GREEN-phase status record. Later repo work has progressed beyond this installation checkpoint and includes broader security/runtime hardening, so the status below should not be read as the current state of the repository.
+
 ---
 
 ## ✅ Completed Steps
 
 ### 1. RED Phase ✅ (100% Complete)
+
 - [x] Created comprehensive test suite with 11 test cases
 - [x] All tests follow GIVEN-WHEN-THEN format
 - [x] Fixtures for multi-tenant setup (tenant_a, tenant_b, user_a, user_b)
@@ -19,6 +22,7 @@
 - **File:** `apps/api/tests/e2e/security/test_multi_tenant_isolation.py` (~650 lines)
 
 ### 2. Code Review ✅ (Components Already Exist!)
+
 **Discovered:** Most GREEN phase implementation already exists in codebase!
 
 - [x] **Project Model** - `apps/api/src/projects/adapters/persistence/models.py`
@@ -35,6 +39,7 @@
   - Proper indexes
 
 ### 3. RLS Policies Implementation ✅
+
 **Created:** New Alembic migration for Row-Level Security
 
 - [x] **Migration:** `apps/api/alembic/versions/20260205_0001_enable_rls_policies.py`
@@ -45,6 +50,7 @@
 - [x] Comprehensive comments explaining security model
 
 **Policies Created:**
+
 ```sql
 -- Projects table (critical for tests)
 CREATE POLICY project_tenant_isolation_select ON projects
@@ -61,6 +67,7 @@ CREATE POLICY project_tenant_isolation_delete ON projects
 ```
 
 ### 4. Dependency Installation 🟡 (In Progress)
+
 - [x] Installed `email-validator`
 - [x] Installed `PyJWT[crypto]`, `cryptography`
 - [x] Installed `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx`
@@ -71,35 +78,43 @@ CREATE POLICY project_tenant_isolation_delete ON projects
 ## 🚧 Remaining Steps
 
 ### 5. Apply Database Migration ⏳
+
 **Status:** Blocked by dependency installation
 
 **Command:**
+
 ```bash
 cd apps/api
 alembic upgrade head
 ```
 
 **Expected Output:**
+
 ```
 INFO  [alembic.runtime.migration] Running upgrade 20260124_0002 -> 20260205_0001, Enable RLS policies
 ```
 
 ### 6. Run Tests ⏳
+
 **Status:** Blocked by dependency installation
 
 **Command:**
+
 ```bash
 cd apps/api
 pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 **Expected Results:**
+
 - ✅ 11 tests PASS (if PostgreSQL available with RLS)
 - ⚠️ 1 test SKIP (`test_010_rls_context_set_and_reset` if SQLite fallback)
 - 🎯 Target: 90%+ pass rate
 
 ### 7. Verify Coverage ⏳
+
 **Command:**
+
 ```bash
 pytest tests/e2e/security/test_multi_tenant_isolation.py \
   --cov=src.core.middleware.tenant_isolation \
@@ -115,11 +130,13 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py \
 ### Test Environment Setup
 
 **Database:**
+
 - **Primary:** PostgreSQL (required for RLS tests)
 - **Fallback:** SQLite in-memory (if PostgreSQL unavailable)
 - **Connection:** `postgresql://nonsuperuser:test@localhost:5433/c2pro_test` (from conftest.py)
 
 **Fixtures Chain:**
+
 ```
 test_engine (session)
   ↓
@@ -135,6 +152,7 @@ project_a, project_b (function)
 ```
 
 **Authentication Flow:**
+
 1. `generate_token()` creates JWT with `user_id`, `tenant_id`
 2. `TenantIsolationMiddleware` extracts `tenant_id` from JWT
 3. Middleware validates tenant exists and is active
@@ -146,6 +164,7 @@ project_a, project_b (function)
 ## 📊 Expected Test Results (GREEN Phase)
 
 ### Scenario 1: With PostgreSQL + RLS
+
 ```
 test_001_tenant_a_cannot_read_tenant_b_project ................... PASSED
 test_002_tenant_b_cannot_read_tenant_a_project ................... PASSED
@@ -163,6 +182,7 @@ test_edge_001_cross_tenant_user_id_blocked ....................... PASSED
 ```
 
 ### Scenario 2: With SQLite (fallback)
+
 ```
 test_001-009 ...................................................... PASSED
 test_010_rls_context_set_and_reset ............................... SKIPPED
@@ -179,19 +199,23 @@ test_edge_001 ........................................................ PASSED
 ## 🐛 Known Issues & Workarounds
 
 ### Issue 1: Missing Dependencies
+
 **Problem:** Fresh environment requires installing ~80 packages
 **Status:** RESOLVED (installing from requirements.txt)
 **Time:** ~5 minutes on first run
 
 ### Issue 2: PostgreSQL Not Available
+
 **Problem:** Test database not running
 **Workaround:** Tests fall back to SQLite (1 test skipped)
 **Solution:** Start PostgreSQL:
+
 ```bash
 docker-compose -f docker-compose.test.yml up -d
 ```
 
 ### Issue 3: Alembic Migration Requires Full Imports
+
 **Problem:** `alembic upgrade head` imports entire app (needs all deps)
 **Workaround:** Install all requirements first
 **Solution:** Completed by background task
@@ -201,12 +225,14 @@ docker-compose -f docker-compose.test.yml up -d
 ## 🔒 Security Verification Checklist
 
 ### Defense-in-Depth Layers
+
 - [x] **Layer 1: Middleware** - `TenantIsolationMiddleware` validates JWT
 - [x] **Layer 2: Database Session** - `get_session()` sets RLS context
 - [x] **Layer 3: RLS Policies** - PostgreSQL enforces at query level
 - [ ] **Layer 4: Repository Filters** - Application-level checks (future enhancement)
 
 ### Attack Vectors Tested
+
 - [x] Cross-tenant READ (direct ID access)
 - [x] Cross-tenant WRITE (PATCH)
 - [x] Cross-tenant DELETE
@@ -219,6 +245,7 @@ docker-compose -f docker-compose.test.yml up -d
 - [x] RLS context leakage
 
 ### Compliance
+
 - [x] **GDPR:** Tenant data isolation
 - [x] **SOC 2:** Multi-tenancy controls
 - [x] **ISO 27001:** Access control (A.9.4.1)
@@ -227,13 +254,13 @@ docker-compose -f docker-compose.test.yml up -d
 
 ## 📈 Success Metrics
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| Test Pass Rate | ≥90% | TBD | ⏳ Pending |
-| Code Coverage | ≥90% | TBD | ⏳ Pending |
-| RLS Policies | 12 policies | 12 created | ✅ Complete |
-| Zero Data Leakage | 0 violations | TBD | ⏳ Pending |
-| Performance | <100ms per request | TBD | ⏳ Pending |
+| Metric            | Target             | Current    | Status      |
+| ----------------- | ------------------ | ---------- | ----------- |
+| Test Pass Rate    | ≥90%               | TBD        | ⏳ Pending  |
+| Code Coverage     | ≥90%               | TBD        | ⏳ Pending  |
+| RLS Policies      | 12 policies        | 12 created | ✅ Complete |
+| Zero Data Leakage | 0 violations       | TBD        | ⏳ Pending  |
+| Performance       | <100ms per request | TBD        | ⏳ Pending  |
 
 ---
 
@@ -268,4 +295,5 @@ docker-compose -f docker-compose.test.yml up -d
 Last Updated: 2026-02-13
 
 Changelog:
+
 - 2026-02-13: Added metadata block during repository-wide docs format pass.

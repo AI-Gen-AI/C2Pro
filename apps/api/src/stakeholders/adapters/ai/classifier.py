@@ -6,6 +6,8 @@ from typing import Any, Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.analysis.adapters.ai.anthropic_client import AIService
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, StakeholderQuadrant
 
@@ -64,8 +66,8 @@ class EnrichedStakeholder(BaseModel):
 
 
 class StakeholderClassifier:
-    def __init__(self, tenant_id: str | None = None) -> None:
-        self._service = AIService(tenant_id=tenant_id)
+    def __init__(self, tenant_id: str | None = None, db: AsyncSession | None = None) -> None:
+        self._service = AIService(tenant_id=tenant_id, db=db)
 
     async def classify_batch(
         self,

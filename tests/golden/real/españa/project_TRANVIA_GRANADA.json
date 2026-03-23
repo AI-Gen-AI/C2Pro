@@ -1,0 +1,144 @@
+{
+  "project_metadata": {
+    "id": "P-UTE",
+    "name": "Tranvia Granada",
+    "type": "Obra Civil",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Expediente de electrificacion del Metro Ligero de Granada. El pliego de analizadores exige equipos tipo AREVA M571 D o similar aprobado por la Direccion de Obra para MT y BT, conectados a switch dedicado, con comunicaciones RS232/RS485 y fibra y soporte Modbus RTU/TCP-IP. La documentacion de compras y subcontratas incorpora partidas de hilo de contacto, rectificadores, cargadores de baterias y tendido de cable totalmente conexionado y probado.",
+    "schedule_summary": {
+      "lead_times": {
+        "contact_wire_weeks": 8,
+        "battery_chargers_weeks": "7-12",
+        "rectifiers_weeks": "20-24"
+      }
+    },
+    "budget_summary": {
+      "contact_wire_material_eur": 121447.68,
+      "rectifiers_total_equivalent_eur": 613500.0,
+      "tendido_cable_reference_eur": 56668.9,
+      "cash_flow_december_eur": 841633.95,
+      "line_items": [
+        {
+          "name": "Hilo de contacto",
+          "cost": 121447.68
+        },
+        {
+          "name": "Rectificadores",
+          "cost": 613500.0
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "El analizador de red sera tipo AREVA M571 D o similar aprobado por la Direccion de Obra para celdas de media tension y cuadros de baja tension.",
+        "metadata": {
+          "approved_equipment": "AREVA M571 D"
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "El suministro e instalacion de analizadores debe incluir firmware, software, puertos de comunicacion RS232/RS485 y fibra, con soporte Modbus RTU y TCP/IP.",
+        "metadata": {
+          "protocols": ["Modbus RTU", "Modbus TCP/IP"]
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "El hilo de contacto de cobre compromete un plazo de entrega de 8 semanas desde la confirmacion del pedido y las longitudes a producir.",
+        "metadata": {
+          "duration_weeks": 8
+        }
+      },
+      {
+        "clause_code": "CL-SCOPE-02",
+        "type": "scope",
+        "text": "Las partidas de tendido de cable incluyen suministro, tirado, conexion, terminales y pruebas finales, quedando totalmente conexionadas y probadas conforme al PPTP de Energia.",
+        "metadata": {
+          "tested_and_commissioned": true
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Francisco Javier Gessa Sorroche",
+        "mention": "Dir. de Compras",
+        "role": "Direccion de compras",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Alberto Boj Agudo",
+        "mention": "ABA",
+        "role": "Gestion de compras ferroviarias",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Francisco Jose Moreno Pantoja",
+        "mention": "FJMP",
+        "role": "Gestor operativo de compras y NOCs",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Direccion de Obra",
+        "mention": "Direccion de Obra",
+        "role": "Aprobacion tecnica",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "PAY-GRA-01",
+        "severity": "critical",
+        "description": "Las condiciones de pago ofertadas por algunos proveedores chocan con la politica corporativa de pagar a 180 dias o con formula PPB, lo que bloquea o tensiona NOCs y cierres de compra.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "supplier_payment_terms"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "corporate_payment_policy"
+          }
+        ]
+      },
+      {
+        "rule_id": "PROC-GRA-01",
+        "severity": "critical",
+        "description": "Se documenta emision de pedidos sin el visto bueno obligatorio del departamento de compras, lo que introduce un incumplimiento interno de control sobre paquetes de alto importe.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "rectifiers_total_equivalent_eur"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "missing_procurement_approval"
+          }
+        ]
+      },
+      {
+        "rule_id": "RISK-GRA-01",
+        "severity": "warning",
+        "description": "El comparativo de rectificadores incorpora explicitamente una partida de 'riesgos nuevo proveedor', senal de que existe riesgo de integracion y calendario sin un registro ADR formal en la carpeta seleccionada.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "rectifiers_total_equivalent_eur"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "new_supplier_risk"
+          }
+        ]
+      }
+    ]
+  }
+}

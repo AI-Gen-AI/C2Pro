@@ -1,8 +1,11 @@
 # Quick Session Summary - 2026-02-07
 
+Status update (2026-03-20): This summary is a historical checkpoint for the 2026-02-07 coherence work session. Current repo status is materially ahead of this snapshot, including completion of real coherence dashboard derivation and several later hardening tasks across ops, authz, MCP, ORM, and AI pricing.
+
 ## ✅ What Was Completed
 
 ### 3 Test Suites Fully Implemented ✨
+
 1. **TS-UA-COH-UC-002** - Recalculate on Alert Use Case (11 tests, 94% coverage)
 2. **TS-UA-SVC-COH-001** - Coherence Calculation Service (20 tests, 99% coverage)
 3. **TS-INT-DB-COH-001** - Coherence Repository + DB (12 tests, ready for PostgreSQL)
@@ -14,6 +17,7 @@
 ## 📁 New Files Created (16 files)
 
 ### Production Code (9 files)
+
 ```
 src/coherence/
 ├── application/
@@ -28,6 +32,7 @@ src/coherence/
 ```
 
 ### Test Files (3 files)
+
 ```
 tests/modules/coherence/
 ├── application/
@@ -38,6 +43,7 @@ tests/modules/coherence/
 ```
 
 ### Documentation (4 files)
+
 ```
 ├── SESSION_PROGRESS_2026-02-07.md ........................... NEW 📄
 ├── TEST_SUITES_COMPLETED_STATUS.md .......................... NEW 📄
@@ -49,11 +55,11 @@ tests/modules/coherence/
 
 ## 🎯 Coverage Achieved
 
-| Component | Coverage | Status |
-|-----------|----------|--------|
-| RecalculateOnAlertUseCase | 94% | ✅ Excellent |
-| CoherenceCalculationService | 99% | ✅ Excellent |
-| CoherenceRepository | Ready | ⏳ Needs DB |
+| Component                   | Coverage | Status       |
+| --------------------------- | -------- | ------------ |
+| RecalculateOnAlertUseCase   | 94%      | ✅ Excellent |
+| CoherenceCalculationService | 99%      | ✅ Excellent |
+| CoherenceRepository         | Ready    | ⏳ Needs DB  |
 
 **Overall Application Layer:** 98%+ coverage
 
@@ -62,6 +68,7 @@ tests/modules/coherence/
 ## 🚀 How to Run Tests
 
 ### Application Layer Tests (Work Now)
+
 ```bash
 cd apps/api
 
@@ -76,6 +83,7 @@ pytest tests/modules/coherence/application/ --cov=src/coherence/application --co
 ```
 
 ### Integration Tests (Need Database)
+
 ```bash
 # 1. Start PostgreSQL
 docker-compose -f docker-compose.test.yml up -d
@@ -94,6 +102,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 📊 Test Breakdown
 
 ### TS-UA-COH-UC-002 (11 tests)
+
 - ✅ Alert action triggers (RESOLVED, DISMISSED, ACKNOWLEDGED)
 - ✅ Score delta calculations
 - ✅ Previous/new score tracking
@@ -102,6 +111,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 - ✅ Gaming detection integration
 
 ### TS-UA-SVC-COH-001 (20 tests)
+
 - ✅ Single & batch calculations
 - ✅ Result caching
 - ✅ Cache invalidation
@@ -110,6 +120,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 - ✅ Graceful degradation without publisher
 
 ### TS-INT-DB-COH-001 (12 tests)
+
 - ⏳ Save/retrieve results
 - ⏳ Get latest for project
 - ⏳ Pagination
@@ -123,6 +134,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 🏗️ Architecture Implemented
 
 ### Clean Architecture Layers
+
 ```
 ┌─────────────────────────────────────┐
 │     Presentation Layer (API)        │  ← TODO
@@ -142,6 +154,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ```
 
 ### Key Patterns
+
 - ✅ Repository Pattern
 - ✅ Service Layer Pattern
 - ✅ Command/Query Separation
@@ -155,24 +168,26 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 
 ### Coherence Module: ~85% Complete
 
-| Layer | Status | Tests | Coverage |
-|-------|--------|-------|----------|
-| Domain | ✅ | ~164 | 95-100% |
-| Application | ✅ | 47 | 98%+ |
-| Infrastructure | ⏳ | 12 | Ready |
-| API | 📋 | 0 | TODO |
-| E2E | 📋 | 0 | TODO |
+| Layer          | Status | Tests | Coverage |
+| -------------- | ------ | ----- | -------- |
+| Domain         | ✅     | ~164  | 95-100%  |
+| Application    | ✅     | 47    | 98%+     |
+| Infrastructure | ⏳     | 12    | Ready    |
+| API            | 📋     | 0     | TODO     |
+| E2E            | 📋     | 0     | TODO     |
 
 ---
 
 ## 🎯 Next Steps
 
 ### Immediate (Next Session)
+
 1. ✅ **Run TS-INT-DB-COH-001 tests** with PostgreSQL
 2. 📋 **Create API endpoints** for coherence calculations
 3. 📋 **Implement HTTP adapter tests** (TS-INT-HTTP-COH-001)
 
 ### Short-term (1-2 Weeks)
+
 4. 📋 **Event bus integration** for real-time notifications
 5. 📋 **End-to-end testing** with full workflow
 6. 📋 **Performance testing** for batch operations
@@ -193,7 +208,9 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 📝 Important Notes
 
 ### Database Migration Needed
+
 The `coherence_results` table needs to be created:
+
 ```sql
 CREATE TABLE coherence_results (
     id UUID PRIMARY KEY,
@@ -213,7 +230,9 @@ CREATE INDEX ix_coherence_results_project_calculated
 ```
 
 ### Event Publisher Setup
+
 Wire up event publishing in API layer:
+
 ```python
 from src.events.event_bus import EventBus
 from src.coherence.application.services import CoherenceCalculationService
@@ -253,11 +272,13 @@ coherence_service = CoherenceCalculationService(event_publisher=event_bus)
 ## 📞 Contact Points
 
 ### For Questions
+
 - See detailed docs: `SESSION_PROGRESS_2026-02-07.md`
 - See test status: `TEST_SUITES_COMPLETED_STATUS.md`
 - See original spec: `context/C2PRO_TEST_SUITES_INDEX_v1.1.md`
 
 ### For Running Tests
+
 ```bash
 # Application tests (work now)
 cd apps/api && pytest tests/modules/coherence/application/ -v

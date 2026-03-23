@@ -1,7 +1,10 @@
 # Auditoría Estratégica Integral — C2Pro
+
 **Fecha:** 2026-02-19
 **Tipo:** Arquitectura, Separación Demo/Producción, Orden Frontend
 **Versión del codebase auditada:** main branch (Feb 2026)
+
+Actualización de estado (2026-03-20): esta auditoría estratégica se mantiene como línea base histórica. Desde febrero, el repositorio avanzó en varios frentes de hardening y cierre operativo, incluyendo dashboard de coherence con datos persistidos, MCP DB-backed, wiring de Sentry, verificación bootstrap de Supabase, reintegración ORM, authz de mutaciones de alertas y pricing centralizado vía `ModelRouter`.
 
 ---
 
@@ -20,13 +23,13 @@ El proyecto tiene una **base conceptual sólida** y documentación técnica exha
 
 ### Nivel de Riesgo: **ALTO**
 
-| Dimensión | Nivel | Justificación |
-|-----------|-------|---------------|
-| Deuda técnica | **Alto** | Directorios duplicados, datos demo en producción, rutas redundantes |
-| Escalabilidad | **Medio-Alto** | Frontend no escala sin reorganización; backend escala mejor |
-| Mantenibilidad | **Alto** | Un desarrollador nuevo no puede determinar qué es demo y qué es producción |
-| Coherencia arquitectónica | **Medio** | Backend sigue hexagonal parcialmente; frontend sin patrón claro |
-| Riesgo de producto | **Alto** | Un usuario en producción puede ver datos ficticios |
+| Dimensión                 | Nivel          | Justificación                                                              |
+| ------------------------- | -------------- | -------------------------------------------------------------------------- |
+| Deuda técnica             | **Alto**       | Directorios duplicados, datos demo en producción, rutas redundantes        |
+| Escalabilidad             | **Medio-Alto** | Frontend no escala sin reorganización; backend escala mejor                |
+| Mantenibilidad            | **Alto**       | Un desarrollador nuevo no puede determinar qué es demo y qué es producción |
+| Coherencia arquitectónica | **Medio**      | Backend sigue hexagonal parcialmente; frontend sin patrón claro            |
+| Riesgo de producto        | **Alto**       | Un usuario en producción puede ver datos ficticios                         |
 
 ### Grado de Escalabilidad
 
@@ -41,11 +44,11 @@ El proyecto tiene una **base conceptual sólida** y documentación técnica exha
 
 **P1.1 — Datos demo hardcodeados en rutas de producción**
 
-| Archivo | Líneas | Problema |
-|---------|--------|----------|
-| `apps/web/app/(app)/page.tsx` | 12-27 | `const DATA = { score: 78, project: 'Torre Skyline'... }` — Dashboard principal sin API real |
-| `apps/web/app/(app)/documents/page.tsx` | 38-151 | `const mockDocuments = [...]` — 8 documentos ficticios, sin llamada API |
-| `apps/web/app/dashboard/projects/[id]/coherence/page.tsx` | ~1-25 | Datos hardcodeados de coherencia |
+| Archivo                                                   | Líneas | Problema                                                                                     |
+| --------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `apps/web/app/(app)/page.tsx`                             | 12-27  | `const DATA = { score: 78, project: 'Torre Skyline'... }` — Dashboard principal sin API real |
+| `apps/web/app/(app)/documents/page.tsx`                   | 38-151 | `const mockDocuments = [...]` — 8 documentos ficticios, sin llamada API                      |
+| `apps/web/app/dashboard/projects/[id]/coherence/page.tsx` | ~1-25  | Datos hardcodeados de coherencia                                                             |
 
 **Impacto:** Un usuario en producción navegando a `/documents` ve datos ficticios. No existe mecanismo que impida esto.
 
@@ -59,10 +62,11 @@ apps/web/src/components/features/coherence/CoherenceGauge.tsx → 89 líneas, us
 ```
 
 Los pages importan de ambas ubicaciones simultáneamente:
+
 ```typescript
 // En app/(app)/projects/[id]/coherence/page.tsx:
-import { CoherenceGauge } from '@/src/components/features/coherence/CoherenceGauge';
-import { BreakdownChart } from '@/components/coherence/BreakdownChart';
+import { CoherenceGauge } from "@/src/components/features/coherence/CoherenceGauge";
+import { BreakdownChart } from "@/components/coherence/BreakdownChart";
 ```
 
 **Impacto:** UI inconsistente, bundle bloat, pesadilla de mantenimiento.
@@ -136,6 +140,7 @@ class Project:
 **P2.3 — Orquestación LangGraph: solo 7 de 17 nodos implementados**
 
 La documentación define 17 nodos (N1-N17). El código real tiene 7 nodos ad-hoc que no corresponden 1:1 con el plan:
+
 - `router`, `risk_extractor`, `wbs_extractor`, `budget_parser`, `critique`, `human_interrupt`, `save_to_db`
 
 Los servicios individuales (extracción, coherencia, stakeholders) existen pero **no están integrados como nodos del grafo**.
@@ -143,6 +148,7 @@ Los servicios individuales (extracción, coherencia, stakeholders) existen pero 
 **P2.4 — MSW configurado pero las pages lo ignoran**
 
 El provider inicializa MSW correctamente en modo demo:
+
 ```typescript
 // providers.tsx
 if (!env.IS_DEMO) return;
@@ -151,6 +157,7 @@ await worker.start(...);
 ```
 
 Pero las pages hardcodean datos en vez de llamar a la API (que MSW interceptaría):
+
 ```typescript
 // (app)/page.tsx — NO llama API, usa const DATA = {...}
 ```
@@ -171,15 +178,15 @@ Este store se define pero ningún componente lo consulta para decidir si mostrar
 
 ### P3 — Medios (Deuda técnica acumulable)
 
-| ID | Problema | Ubicación |
-|----|----------|-----------|
-| P3.1 | Tres sistemas de mock data (MSW, `lib/mockData.ts`, inline en pages) | Frontend completo |
-| P3.2 | Mensajes de error en español en código inglés | `lib/api/client.ts` ("Sin permisos") |
-| P3.3 | No hay error boundaries en el frontend | App-wide |
-| P3.4 | Feature flags del backend no se verifican en todos los endpoints | `apps/api/src/config.py` |
-| P3.5 | Coherence engine tiene `engine.py` y `engine_v2.py` coexistiendo | `coherence/` |
-| P3.6 | Prompts de ejemplo con datos ficticios en código fuente | `core/ai/example_prompts.py` |
-| P3.7 | HITL solo tiene ports/domain definidos, sin service implementation | `modules/hitl/` |
+| ID   | Problema                                                             | Ubicación                            |
+| ---- | -------------------------------------------------------------------- | ------------------------------------ |
+| P3.1 | Tres sistemas de mock data (MSW, `lib/mockData.ts`, inline en pages) | Frontend completo                    |
+| P3.2 | Mensajes de error en español en código inglés                        | `lib/api/client.ts` ("Sin permisos") |
+| P3.3 | No hay error boundaries en el frontend                               | App-wide                             |
+| P3.4 | Feature flags del backend no se verifican en todos los endpoints     | `apps/api/src/config.py`             |
+| P3.5 | Coherence engine tiene `engine.py` y `engine_v2.py` coexistiendo     | `coherence/`                         |
+| P3.6 | Prompts de ejemplo con datos ficticios en código fuente              | `core/ai/example_prompts.py`         |
+| P3.7 | HITL solo tiene ports/domain definidos, sin service implementation   | `modules/hitl/`                      |
 
 ---
 
@@ -338,6 +345,7 @@ apps/web/
 ```
 
 **Directorios a eliminar:**
+
 - `apps/web/src/components/` → Consolidar en `apps/web/components/features/`
 - `apps/web/app/dashboard/` → Eliminar completamente
 - `apps/web/app/demo/` → Eliminar (demo se controla por env, no por ruta)
@@ -351,13 +359,13 @@ apps/web/
 
 **Objetivo:** Definir qué es demo y qué es producción sin tocar código.
 
-| Tarea | Detalle |
-|-------|---------|
-| 1.1 | Inventariar cada page del frontend y clasificarla: ¿usa API real o datos mock? |
-| 1.2 | Inventariar cada endpoint del backend y clasificar: ¿tiene mock data hardcodeada? |
-| 1.3 | Documentar la matriz page ↔ endpoint ↔ fuente de datos |
-| 1.4 | Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta" |
-| 1.5 | Definir qué endpoints backend son necesarios para que las pages funcionen sin mock |
+| Tarea | Detalle                                                                              |
+| ----- | ------------------------------------------------------------------------------------ |
+| 1.1   | Inventariar cada page del frontend y clasificarla: ¿usa API real o datos mock?       |
+| 1.2   | Inventariar cada endpoint del backend y clasificar: ¿tiene mock data hardcodeada?    |
+| 1.3   | Documentar la matriz page ↔ endpoint ↔ fuente de datos                               |
+| 1.4   | Definir el contrato: "En producción, TODA page llama a API. En demo, MSW intercepta" |
+| 1.5   | Definir qué endpoints backend son necesarios para que las pages funcionen sin mock   |
 
 **Entregable:** Documento `DEMO_VS_PROD_CONTRACT.md` con la matriz completa.
 
@@ -367,18 +375,18 @@ apps/web/
 
 **Objetivo:** Una sola estructura de componentes, una sola estructura de rutas.
 
-| Tarea | Detalle |
-|-------|---------|
-| 2.1 | Auditar `components/` vs `src/components/features/` componente por componente |
-| 2.2 | Para cada duplicado, elegir la mejor implementación y consolidar |
-| 2.3 | Mover todos los componentes de `src/components/features/` a `components/features/` |
-| 2.4 | Actualizar todos los imports (buscar `@/src/components` → `@/components/features`) |
-| 2.5 | Eliminar `app/dashboard/` (duplicado de `app/(app)/`) |
-| 2.6 | Eliminar `app/demo/` (demo se controla por env variable, no por ruta) |
-| 2.7 | Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica |
-| 2.8 | Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts` |
-| 2.9 | Verificar que MSW handlers cubren todos los endpoints que las pages necesitan |
-| 2.10 | Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional |
+| Tarea | Detalle                                                                                  |
+| ----- | ---------------------------------------------------------------------------------------- |
+| 2.1   | Auditar `components/` vs `src/components/features/` componente por componente            |
+| 2.2   | Para cada duplicado, elegir la mejor implementación y consolidar                         |
+| 2.3   | Mover todos los componentes de `src/components/features/` a `components/features/`       |
+| 2.4   | Actualizar todos los imports (buscar `@/src/components` → `@/components/features`)       |
+| 2.5   | Eliminar `app/dashboard/` (duplicado de `app/(app)/`)                                    |
+| 2.6   | Eliminar `app/demo/` (demo se controla por env variable, no por ruta)                    |
+| 2.7   | Renombrar `app/(dashboard)/` a `app/(app)/` para claridad semántica                      |
+| 2.8   | Eliminar `lib/mockData.ts` — mover datos relevantes a `mocks/data/seed.ts`               |
+| 2.9   | Verificar que MSW handlers cubren todos los endpoints que las pages necesitan            |
+| 2.10  | Hacer que `useAppModeStore` realmente controle el banner demo y cualquier UI condicional |
 
 **Entregable:** Frontend con estructura única y limpia. Zero datos mock en pages.
 
@@ -388,16 +396,16 @@ apps/web/
 
 **Objetivo:** Eliminar mock data de producción, corregir bounded contexts.
 
-| Tarea | Detalle |
-|-------|---------|
-| 3.1 | Eliminar `MOCK_PROJECT_DB` y `MOCK_SCORE_DB` de `coherence/service.py` |
-| 3.2 | Eliminar `_DefaultExtractionService` y `_DefaultIngestionService` de `decision_intelligence/ports.py` — reemplazar con errores explícitos si no se inyecta dependencia |
-| 3.3 | Mover `core/ai/example_prompts.py` a tests o docs |
-| 3.4 | Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass) |
-| 3.5 | Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`) |
-| 3.6 | Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio |
-| 3.7 | Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain` |
-| 3.8 | Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo |
+| Tarea | Detalle                                                                                                                                                                |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1   | Eliminar `MOCK_PROJECT_DB` y `MOCK_SCORE_DB` de `coherence/service.py`                                                                                                 |
+| 3.2   | Eliminar `_DefaultExtractionService` y `_DefaultIngestionService` de `decision_intelligence/ports.py` — reemplazar con errores explícitos si no se inyecta dependencia |
+| 3.3   | Mover `core/ai/example_prompts.py` a tests o docs                                                                                                                      |
+| 3.4   | Consolidar entidad `Project` en una sola definición (elegir Pydantic o dataclass)                                                                                      |
+| 3.5   | Eliminar `engine.py` legacy de coherence (mantener solo `engine_v2.py`)                                                                                                |
+| 3.6   | Crear shared DTOs/events para comunicación entre bounded contexts en vez de importar modelos de dominio                                                                |
+| 3.7   | Refactorizar `analysis/adapters/graph/knowledge_graph.py` para no importar de `documents.domain`, `procurement.domain`, `stakeholders.domain`                          |
+| 3.8   | Extraer `AlertSeverity` a un módulo shared kernel si es necesario compartirlo                                                                                          |
 
 **Entregable:** Backend sin mock data en src/, bounded contexts respetados.
 
@@ -407,16 +415,16 @@ apps/web/
 
 **Objetivo:** Cada page solo hace fetch + renderiza componentes.
 
-| Tarea | Detalle |
-|-------|---------|
-| 4.1 | `(app)/page.tsx` → Server component que llama a `DashboardService.getSummary()` |
-| 4.2 | `(app)/documents/page.tsx` → Server component que llama a `DocumentsService.list()` |
-| 4.3 | `(app)/projects/[id]/coherence/page.tsx` → llama a `CoherenceService.getScore(id)` |
-| 4.4 | Asegurar que cada page tiene: loading state, error state, empty state |
-| 4.5 | Implementar error boundaries a nivel de layout |
-| 4.6 | Agregar MSW handlers para cada endpoint nuevo que las pages necesiten |
-| 4.7 | Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión) |
-| 4.8 | Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages |
+| Tarea | Detalle                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------- |
+| 4.1   | `(app)/page.tsx` → Server component que llama a `DashboardService.getSummary()`               |
+| 4.2   | `(app)/documents/page.tsx` → Server component que llama a `DocumentsService.list()`           |
+| 4.3   | `(app)/projects/[id]/coherence/page.tsx` → llama a `CoherenceService.getScore(id)`            |
+| 4.4   | Asegurar que cada page tiene: loading state, error state, empty state                         |
+| 4.5   | Implementar error boundaries a nivel de layout                                                |
+| 4.6   | Agregar MSW handlers para cada endpoint nuevo que las pages necesiten                         |
+| 4.7   | Verificar que `NEXT_PUBLIC_APP_MODE=demo` + MSW produce la misma UX que antes (sin regresión) |
+| 4.8   | Eliminar cualquier `const DATA = {...}` o `const mock* = [...]` que quede en pages            |
 
 **Entregable:** Frontend donde toda data viene de API (real o mock via MSW).
 
@@ -424,16 +432,16 @@ apps/web/
 
 ### Fase 5 — Consolidación y Validación (Semana 9-10)
 
-| Tarea | Detalle |
-|-------|---------|
-| 5.1 | Ejecutar todos los tests existentes y verificar que pasan |
-| 5.2 | Verificar flujo completo en modo demo (MSW) |
-| 5.3 | Verificar flujo completo en modo producción (API real) |
-| 5.4 | Documentar la arquitectura final en un ADR |
-| 5.5 | Actualizar los diagramas de flujo para reflejar la realidad del código |
-| 5.6 | Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes |
-| 5.7 | Implementar HITL service real (no solo ports) |
-| 5.8 | Verificar que feature flags del backend realmente bloquean endpoints no-ready |
+| Tarea | Detalle                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------- |
+| 5.1   | Ejecutar todos los tests existentes y verificar que pasan                                 |
+| 5.2   | Verificar flujo completo en modo demo (MSW)                                               |
+| 5.3   | Verificar flujo completo en modo producción (API real)                                    |
+| 5.4   | Documentar la arquitectura final en un ADR                                                |
+| 5.5   | Actualizar los diagramas de flujo para reflejar la realidad del código                    |
+| 5.6   | Integrar los nodos faltantes del LangGraph (N1-N17) como wrapping de use cases existentes |
+| 5.7   | Implementar HITL service real (no solo ports)                                             |
+| 5.8   | Verificar que feature flags del backend realmente bloquean endpoints no-ready             |
 
 ---
 
@@ -523,20 +531,20 @@ apps/web/
 
 ### Componentes del Diagrama de Flujo v2.2.1
 
-| Componente | Estado | Cobertura |
-|------------|--------|-----------|
-| LangGraph Orchestration (17 nodos) | Parcial | 41% — 7 nodos ad-hoc implementados |
-| GraphState (48 campos) | Completo | 100% |
-| Coherence Engine v2 (6 categorías) | Completo | 100% — subscores, pesos, reglas |
-| WBS/BOM Generation | Completo | 100% — modelos, servicios, AI extraction |
-| Procurement Planning | Completo | 100% — lead time, Incoterms, plan generator |
-| Stakeholder Management + RACI | Completo | 100% — extracción, clasificación, matriz |
-| Document Ingestion Pipeline | Parcial | 70% — parsers existen, clasificación por categoría falta |
-| PII Anonymizer | Completo | 100% — detección, redacción, config por tenant |
-| Human-in-the-Loop | Esqueleto | 40% — solo ports/domain, sin service |
-| MCP Gateway | Completo | 100% — allowlist, rate limit, audit |
-| Redis Event Bus | Completo | 100% — tenant-scoped pub/sub |
-| Database Schema + RLS | Completo | 95% — todas las tablas core, políticas RLS |
+| Componente                         | Estado    | Cobertura                                                |
+| ---------------------------------- | --------- | -------------------------------------------------------- |
+| LangGraph Orchestration (17 nodos) | Parcial   | 41% — 7 nodos ad-hoc implementados                       |
+| GraphState (48 campos)             | Completo  | 100%                                                     |
+| Coherence Engine v2 (6 categorías) | Completo  | 100% — subscores, pesos, reglas                          |
+| WBS/BOM Generation                 | Completo  | 100% — modelos, servicios, AI extraction                 |
+| Procurement Planning               | Completo  | 100% — lead time, Incoterms, plan generator              |
+| Stakeholder Management + RACI      | Completo  | 100% — extracción, clasificación, matriz                 |
+| Document Ingestion Pipeline        | Parcial   | 70% — parsers existen, clasificación por categoría falta |
+| PII Anonymizer                     | Completo  | 100% — detección, redacción, config por tenant           |
+| Human-in-the-Loop                  | Esqueleto | 40% — solo ports/domain, sin service                     |
+| MCP Gateway                        | Completo  | 100% — allowlist, rate limit, audit                      |
+| Redis Event Bus                    | Completo  | 100% — tenant-scoped pub/sub                             |
+| Database Schema + RLS              | Completo  | 95% — todas las tablas core, políticas RLS               |
 
 ### Gaps Críticos entre Diagrama y Código
 
@@ -585,46 +593,46 @@ apps/web/
 
 ### Entidades Principales
 
-| Entidad | Tipo | Módulo | Archivo | Observaciones |
-|---------|------|--------|---------|---------------|
-| Project | Aggregate Root | projects | `domain/models.py` + `domain/project.py` | **DUPLICADA** — dos representaciones |
-| Document | Aggregate Root | documents | `domain/models.py` | Lifecycle correcto (UPLOADED→PARSED) |
-| Clause | Entity | documents | `domain/models.py` | Bien definida, con verificación manual |
-| SubClause | Entity | documents | `domain/entities/subclause.py` | Frozen dataclass, validación jerárquica |
-| CoherenceAlert | Entity | coherence | `domain/alert_mapping.py` | Mapeo determinístico R1-R20 |
-| WBSItem | Aggregate Root | procurement | `domain/models.py` | Jerárquico, con presupuesto |
-| BOMItem | Entity | procurement | `domain/models.py` | Vinculado a WBS items |
-| Stakeholder | Aggregate Root | stakeholders | `domain/models.py` | Con poder/interés |
-| RaciAssignment | Entity | stakeholders | `domain/models.py` | Mapeo rol-actividad |
-| ReviewItem | Entity | hitl | `domain/entities.py` | Con SLA tracking |
-| GraphNode | Value Object | analysis | `domain/models.py` | Frozen, representación grafo |
+| Entidad        | Tipo           | Módulo       | Archivo                                  | Observaciones                           |
+| -------------- | -------------- | ------------ | ---------------------------------------- | --------------------------------------- |
+| Project        | Aggregate Root | projects     | `domain/models.py` + `domain/project.py` | **DUPLICADA** — dos representaciones    |
+| Document       | Aggregate Root | documents    | `domain/models.py`                       | Lifecycle correcto (UPLOADED→PARSED)    |
+| Clause         | Entity         | documents    | `domain/models.py`                       | Bien definida, con verificación manual  |
+| SubClause      | Entity         | documents    | `domain/entities/subclause.py`           | Frozen dataclass, validación jerárquica |
+| CoherenceAlert | Entity         | coherence    | `domain/alert_mapping.py`                | Mapeo determinístico R1-R20             |
+| WBSItem        | Aggregate Root | procurement  | `domain/models.py`                       | Jerárquico, con presupuesto             |
+| BOMItem        | Entity         | procurement  | `domain/models.py`                       | Vinculado a WBS items                   |
+| Stakeholder    | Aggregate Root | stakeholders | `domain/models.py`                       | Con poder/interés                       |
+| RaciAssignment | Entity         | stakeholders | `domain/models.py`                       | Mapeo rol-actividad                     |
+| ReviewItem     | Entity         | hitl         | `domain/entities.py`                     | Con SLA tracking                        |
+| GraphNode      | Value Object   | analysis     | `domain/models.py`                       | Frozen, representación grafo            |
 
 ### Value Objects Identificados
 
-| Value Object | Módulo | Notas |
-|--------------|--------|-------|
-| CoherenceCategory | coherence | Enum: SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME |
-| AlertSeverity | analysis | Enum: LOW, MEDIUM, HIGH, CRITICAL — **compartido indebidamente** |
-| DocumentStatus | documents | Enum: UPLOADED, QUEUED, PARSING, PARSED, ERROR |
-| RACIRole | stakeholders | Enum: RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED |
-| HITLStatus | orchestration | Enum: NOT_REQUIRED, PENDING, APPROVED, REJECTED, ESCALATED |
-| BOMCategory | procurement | Enum: MATERIAL, EQUIPMENT, SERVICE, CONSUMABLE |
+| Value Object      | Módulo        | Notas                                                            |
+| ----------------- | ------------- | ---------------------------------------------------------------- |
+| CoherenceCategory | coherence     | Enum: SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME             |
+| AlertSeverity     | analysis      | Enum: LOW, MEDIUM, HIGH, CRITICAL — **compartido indebidamente** |
+| DocumentStatus    | documents     | Enum: UPLOADED, QUEUED, PARSING, PARSED, ERROR                   |
+| RACIRole          | stakeholders  | Enum: RESPONSIBLE, ACCOUNTABLE, CONSULTED, INFORMED              |
+| HITLStatus        | orchestration | Enum: NOT_REQUIRED, PENDING, APPROVED, REJECTED, ESCALATED       |
+| BOMCategory       | procurement   | Enum: MATERIAL, EQUIPMENT, SERVICE, CONSUMABLE                   |
 
 ### Casos de Uso Identificados vs Implementados
 
-| Caso de Uso | Módulo | ¿Implementado? |
-|-------------|--------|-----------------|
-| Upload Document | documents | ✅ Completo |
-| Parse Document | documents | ✅ Completo |
-| Extract Clauses | documents | ✅ Parcial (sin clasificación por categoría) |
-| Calculate Coherence Score | coherence | ✅ Completo |
-| Generate WBS from Document | procurement | ✅ Completo |
-| Generate BOM from WBS | procurement | ✅ Completo |
-| Extract Stakeholders | stakeholders | ✅ Completo |
-| Generate RACI Matrix | stakeholders | ✅ Completo |
-| Analyze Document (orchestrated) | analysis | ⚠️ Parcial (7/17 nodos) |
-| Review Item (HITL) | hitl | ❌ Solo ports |
-| Decision Intelligence Execute | decision_intelligence | ⚠️ Skeleton con defaults peligrosos |
+| Caso de Uso                     | Módulo                | ¿Implementado?                               |
+| ------------------------------- | --------------------- | -------------------------------------------- |
+| Upload Document                 | documents             | ✅ Completo                                  |
+| Parse Document                  | documents             | ✅ Completo                                  |
+| Extract Clauses                 | documents             | ✅ Parcial (sin clasificación por categoría) |
+| Calculate Coherence Score       | coherence             | ✅ Completo                                  |
+| Generate WBS from Document      | procurement           | ✅ Completo                                  |
+| Generate BOM from WBS           | procurement           | ✅ Completo                                  |
+| Extract Stakeholders            | stakeholders          | ✅ Completo                                  |
+| Generate RACI Matrix            | stakeholders          | ✅ Completo                                  |
+| Analyze Document (orchestrated) | analysis              | ⚠️ Parcial (7/17 nodos)                      |
+| Review Item (HITL)              | hitl                  | ❌ Solo ports                                |
+| Decision Intelligence Execute   | decision_intelligence | ⚠️ Skeleton con defaults peligrosos          |
 
 ### Problemas de Modelado
 
@@ -635,4 +643,4 @@ apps/web/
 
 ---
 
-*Fin de la auditoría. Este documento debe tratarse como base para la toma de decisiones arquitectónicas.*
+_Fin de la auditoría. Este documento debe tratarse como base para la toma de decisiones arquitectónicas._

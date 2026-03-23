@@ -3,25 +3,27 @@
 **Last Updated:** 2026-02-07
 **Session:** Coherence Module - Application & Infrastructure Layers
 
+Status update (2026-03-20): This file is preserved as a historical session snapshot. Since it was written, the repo has progressed substantially beyond this checkpoint, including real coherence dashboard derivation, MCP DB-backed execution/persistence, Sentry lifecycle wiring, Supabase bootstrap verification, ORM reintegration work, alert mutation authorization, and model-router-backed LLM pricing.
+
 ---
 
 ## ✅ Recently Completed Suites (2026-02-07)
 
 ### Coherence Module - Application Layer
 
-| Suite ID | Name | Tests | Coverage | Status | Priority |
-|----------|------|-------|----------|--------|----------|
-| TS-UA-COH-UC-001 | Calculate Coherence Use Case | 16 | 100% | ✅ Complete | 🔴 P0 |
-| TS-UA-COH-UC-002 | Recalculate on Alert Use Case | 11 | 94% | ✅ Complete | 🟠 P1 |
-| TS-UA-SVC-COH-001 | Coherence Calculation Service | 20 | 99% | ✅ Complete | 🔴 P0 |
+| Suite ID          | Name                          | Tests | Coverage | Status      | Priority |
+| ----------------- | ----------------------------- | ----- | -------- | ----------- | -------- |
+| TS-UA-COH-UC-001  | Calculate Coherence Use Case  | 16    | 100%     | ✅ Complete | 🔴 P0    |
+| TS-UA-COH-UC-002  | Recalculate on Alert Use Case | 11    | 94%      | ✅ Complete | 🟠 P1    |
+| TS-UA-SVC-COH-001 | Coherence Calculation Service | 20    | 99%      | ✅ Complete | 🔴 P0    |
 
 ### Coherence Module - Infrastructure Layer
 
-| Suite ID | Name | Tests | Coverage | Status | Priority |
-|----------|------|-------|----------|--------|----------|
-| TS-INT-DB-COH-001 | Coherence Repository + DB | 12 | 95%* | ⏳ Ready | 🔴 P0 |
+| Suite ID          | Name                      | Tests | Coverage | Status   | Priority |
+| ----------------- | ------------------------- | ----- | -------- | -------- | -------- |
+| TS-INT-DB-COH-001 | Coherence Repository + DB | 12    | 95%\*    | ⏳ Ready | 🔴 P0    |
 
-*Implementation complete, requires PostgreSQL to run tests
+\*Implementation complete, requires PostgreSQL to run tests
 
 **Total Completed This Session:** 4 suites, 59 tests, ~2,500 lines of code
 
@@ -31,13 +33,13 @@
 
 ### Coherence Module Status
 
-| Layer | Test Suites | Status | Next Steps |
-|-------|-------------|--------|------------|
-| **Domain** | 14 suites | ✅ Complete | - |
-| **Application** | 3 suites | ✅ Complete | - |
-| **Infrastructure** | 1 suite | ⏳ DB Setup | Start PostgreSQL, create migration |
-| **HTTP/API** | 0 suites | 📋 TODO | Implement REST endpoints |
-| **E2E** | 0 suites | 📋 TODO | Full workflow testing |
+| Layer              | Test Suites | Status      | Next Steps                         |
+| ------------------ | ----------- | ----------- | ---------------------------------- |
+| **Domain**         | 14 suites   | ✅ Complete | -                                  |
+| **Application**    | 3 suites    | ✅ Complete | -                                  |
+| **Infrastructure** | 1 suite     | ⏳ DB Setup | Start PostgreSQL, create migration |
+| **HTTP/API**       | 0 suites    | 📋 TODO     | Implement REST endpoints           |
+| **E2E**            | 0 suites    | 📋 TODO     | Full workflow testing              |
 
 **Module Completion:** ~85%
 
@@ -77,6 +79,7 @@ src/coherence/
 ### Previously Completed (Prior to 2026-02-07)
 
 #### Coherence Domain Layer
+
 - TS-UD-COH-CAT-001: Category Weights (14 tests, 100%) ✅
 - TS-UD-COH-SCR-001: SubScore Calculator (15 tests, 100%) ✅
 - TS-UD-COH-SCR-002: Global Score Calculator (19 tests, 100%) ✅
@@ -89,6 +92,7 @@ src/coherence/
 **Domain Layer Total:** ~164 tests
 
 #### Other Modules
+
 - TS-INT-EVT-BUS-001: Event Bus Integration (14 tests) ✅
 - TS-E2E-SEC-TNT-001: Multi-Tenant Security (11 tests, ready) ⏳
 - ... (projects, documents, procurement modules)
@@ -100,16 +104,19 @@ src/coherence/
 ### Priority Order
 
 #### Immediate (P0 - Next Session)
+
 1. **TS-INT-DB-COH-001** - Run integration tests with PostgreSQL
 2. **TS-INT-HTTP-COH-001** - HTTP adapter tests (FastAPI endpoints)
 3. **TS-E2E-COH-001** - End-to-end coherence workflow
 
 #### High Priority (P1 - Next 2-3 Sessions)
+
 4. **TS-UA-SVC-COH-002** - Coherence Analytics Service
 5. **TS-INT-EVT-COH-001** - Event publishing integration
 6. **TS-INT-CACHE-001** - Caching layer integration
 
 #### Medium Priority (P2 - Future)
+
 7. **TS-PERF-COH-001** - Performance tests (batch operations)
 8. **TS-UI-COH-001** - Frontend coherence dashboard tests
 
@@ -118,6 +125,7 @@ src/coherence/
 ## 📋 Setup Required for Next Tests
 
 ### For TS-INT-DB-COH-001
+
 ```bash
 # 1. Start PostgreSQL test database
 docker-compose -f docker-compose.test.yml up -d
@@ -134,6 +142,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ```
 
 ### For TS-INT-HTTP-COH-001
+
 ```bash
 # 1. Create FastAPI router for coherence endpoints
 # 2. Implement dependency injection for services
@@ -147,6 +156,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 📊 Test Metrics Summary
 
 ### Current Session (2026-02-07)
+
 - **Suites Completed:** 4
 - **Tests Written:** 59
 - **Code Lines:** ~2,500
@@ -154,6 +164,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 - **Time Estimate:** 4-6 hours of development
 
 ### Cumulative (All Sessions)
+
 - **Total Suites:** ~20+ completed
 - **Total Tests:** ~230+ written
 - **Modules Covered:** Coherence (85%), Projects, Documents, Events
@@ -164,6 +175,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 🎯 Quality Metrics
 
 ### Test Quality
+
 - ✅ All tests follow AAA pattern (Arrange, Act, Assert)
 - ✅ All tests have descriptive names
 - ✅ All edge cases covered
@@ -172,6 +184,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 - ✅ Fast execution (< 10s for full suite)
 
 ### Code Quality
+
 - ✅ 100% type hints
 - ✅ Full docstring coverage
 - ✅ PEP 8 compliant
@@ -186,21 +199,25 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ### Files Created This Session
 
 #### Application Layer
+
 1. `src/coherence/application/use_cases/recalculate_on_alert.py`
 2. `src/coherence/application/services/coherence_calculation_service.py`
 3. `src/coherence/application/dtos/coherence_dtos.py` (updated)
 
 #### Infrastructure Layer
+
 4. `src/coherence/ports/coherence_repository.py`
 5. `src/coherence/adapters/persistence/models.py`
 6. `src/coherence/adapters/persistence/sqlalchemy_coherence_repository.py`
 
 #### Test Files
+
 7. `tests/modules/coherence/application/test_recalculate_on_alert_use_case.py`
 8. `tests/modules/coherence/application/test_coherence_calculation_service.py`
 9. `tests/modules/coherence/integration/test_coherence_repository.py`
 
 ### Patterns Applied
+
 - Repository Pattern (Infrastructure)
 - Service Layer Pattern (Application)
 - Command/Query Separation (DTOs)
@@ -213,12 +230,14 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ## 🔍 Test Execution Commands
 
 ### Run All Coherence Application Tests
+
 ```bash
 cd apps/api
 pytest tests/modules/coherence/application/ -v --cov=src/coherence/application
 ```
 
 ### Run Specific Suite
+
 ```bash
 # Use Case Tests
 pytest tests/modules/coherence/application/test_recalculate_on_alert_use_case.py -v
@@ -231,6 +250,7 @@ pytest tests/modules/coherence/integration/test_coherence_repository.py -v
 ```
 
 ### Run with Coverage Report
+
 ```bash
 pytest tests/modules/coherence/application/ \
     --cov=src/coherence/application \
@@ -243,6 +263,7 @@ pytest tests/modules/coherence/application/ \
 ## ✅ Verification Checklist
 
 ### Before Marking Suite as Complete
+
 - [x] All tests written according to spec
 - [x] All tests pass locally
 - [x] Coverage target met or exceeded
@@ -253,6 +274,7 @@ pytest tests/modules/coherence/application/ \
 - [x] Code review ready
 
 ### Integration Tests Specific
+
 - [ ] Database migration created
 - [ ] Database started
 - [ ] Tests run successfully
@@ -264,6 +286,7 @@ pytest tests/modules/coherence/application/ \
 ## 📈 Progress Toward Goals
 
 ### Coherence Module Goals
+
 - **Domain Layer:** 100% ✅
 - **Application Layer:** 100% ✅
 - **Infrastructure Layer:** 90% ⏳
@@ -271,6 +294,7 @@ pytest tests/modules/coherence/application/ \
 - **E2E Tests:** 0% 📋
 
 ### Overall Project Goals
+
 - **Test Coverage:** ~35% of full plan
 - **Code Quality:** Excellent
 - **Architecture:** Clean & maintainable
@@ -292,17 +316,20 @@ pytest tests/modules/coherence/application/ \
 ## 📞 Quick Reference
 
 ### Test Suite Naming Convention
+
 - `TS-UD-*`: Unit - Domain
 - `TS-UA-*`: Unit - Application
 - `TS-INT-*`: Integration
 - `TS-E2E-*`: End-to-end
 
 ### Coverage Targets
+
 - Unit Tests: 95-100%
 - Integration Tests: 90-95%
 - E2E Tests: 70-80%
 
 ### File Locations
+
 - **Domain:** `src/coherence/domain/`
 - **Application:** `src/coherence/application/`
 - **Infrastructure:** `src/coherence/adapters/`, `src/coherence/ports/`

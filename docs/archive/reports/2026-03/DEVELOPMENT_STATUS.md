@@ -1,4 +1,5 @@
 ﻿# C2Pro - Estado del Desarrollo v2.7.0
+
 ## Coherence Engine Sprints - Progreso Actual
 
 **Fecha:** 23 de Enero de 2026
@@ -6,11 +7,14 @@
 **Sprint:** S2 Semana 2 + P2-02: LLM Integration (100% Completado)
 **Estado General:** 🟢 COMPLETADO - Sprint P2-02 Finalizado
 
+Actualización de estado (2026-03-20): este documento se conserva como reporte histórico de sprint. Desde entonces, el repositorio avanzó en hardening operativo y de datos reales, incluyendo dashboard de coherence derivado de persistencia, MCP DB-backed, lifecycle de Sentry, verificación bootstrap de Supabase, limpieza ORM, authz de mutaciones de alertas y pricing centralizado vía `ModelRouter`.
+
 ---
 
 ## 🆕 Actualizaciones Recientes (23 Ene 2026)
 
 ### Sprint P2-02 - LLM Integration COMPLETADO
+
 **Período:** 23 Enero 2026
 **Velocity:** ~12 SP/día
 **Completado:** 10/10 SP (100%)
@@ -48,6 +52,7 @@
    - **Archivos:** `conftest.py`, `test_llm_evaluator.py`, `test_llm_integration.py`
 
 ### Sprint S2 - Tareas Anteriores (22 Ene)
+
 1. **CE-S2-001: Schemas Pydantic** ✅
    - Revisión completa de schemas existentes (95% ya implementados)
    - Añadidos schemas Extraction faltantes
@@ -67,6 +72,7 @@
    - Movidos 17+ documentos completados al archive
 
 #### ✅ Tareas Completadas Esta Semana (20-22 Ene)
+
 1. **CE-S2-011: Frontend Type Safety & API Integration** ✅
    - Tipos TypeScript sincronizados con backend
    - Bug fix crítico: Dashboard visualization restaurado
@@ -89,6 +95,7 @@
    - Performance benchmarks completados
 
 #### 📊 Métricas de Calidad Sprint S2
+
 - **Type Coverage:** 95% en frontend (↑35%)
 - **Build Success:** 100% (1 bug corregido)
 - **Test Coverage:** 65% (target: 80%)
@@ -97,6 +104,7 @@
 - **Schemas Coverage:** 95% (Pydantic v2)
 
 #### 📚 Nueva Documentación
+
 - `docs/LESSONS_LEARNED.md` - Lecciones aprendidas del proyecto
 - `docs/FRONTEND_TYPE_SAFETY_CE-S2-011.md` - Type safety implementation
 - `docs/SPRINT_S2_PROGRESS_SUMMARY.md` - Resumen de progreso Sprint S2
@@ -151,16 +159,16 @@ Se estableció una metodología formal para la interpretación y calibración de
 
 ### 🚀 Estado de Production Readiness
 
-| Componente | Estado | Evidencia |
-|------------|--------|-----------|
-| **Database Schema** | ✅ Production Ready | 19 tablas desplegadas en staging |
-| **RLS Security** | ✅ Production Ready | Validado en staging con Supabase |
-| **MCP Security** | ✅ Production Ready | 23/23 tests pasando |
-| **Legal Traceability** | ✅ Production Ready | 4 FKs validados en staging |
-| **Migration Pipeline** | ✅ Production Ready | CE-P0-06 completo con rollback |
-| **Test Coverage** | ✅ Production Ready | 42 tests + staging validation |
-| **Documentation** | ✅ Production Ready | 5 docs CTO-ready |
-| **Monitoring** | 🟡 Partial | Logs implementados, falta dashboard |
+| Componente             | Estado              | Evidencia                           |
+| ---------------------- | ------------------- | ----------------------------------- |
+| **Database Schema**    | ✅ Production Ready | 19 tablas desplegadas en staging    |
+| **RLS Security**       | ✅ Production Ready | Validado en staging con Supabase    |
+| **MCP Security**       | ✅ Production Ready | 23/23 tests pasando                 |
+| **Legal Traceability** | ✅ Production Ready | 4 FKs validados en staging          |
+| **Migration Pipeline** | ✅ Production Ready | CE-P0-06 completo con rollback      |
+| **Test Coverage**      | ✅ Production Ready | 42 tests + staging validation       |
+| **Documentation**      | ✅ Production Ready | 5 docs CTO-ready                    |
+| **Monitoring**         | 🟡 Partial          | Logs implementados, falta dashboard |
 
 **Conclusión:** **Base de datos y seguridad listos para production deployment**
 
@@ -175,8 +183,8 @@ Se estableció una metodología formal para la interpretación y calibración de
 
 3.  **Implementación de Reglas Deterministas (R1, R5)** (100%)
     - Se implementó la lógica real para dos reglas clave:
-        - **R1: `BudgetOverrunEvaluator`**: Detecta sobrecostos de presupuesto.
-        - **R5: `ScheduleDelayEvaluator`**: Detecta retrasos en el cronograma.
+      - **R1: `BudgetOverrunEvaluator`**: Detecta sobrecostos de presupuesto.
+      - **R5: `ScheduleDelayEvaluator`**: Detecta retrasos en el cronograma.
     - El `CoherenceEngine` fue refactorizado para usar este nuevo framework.
 
 4.  **Modelo de Score Avanzado y Calibrado** (100%)
@@ -218,18 +226,19 @@ Se estableció una metodología formal para la interpretación y calibración de
 
 ## CTO Gates - Estado Actual
 
-| Gate | Descripción | Estado | Auto-Check | Notas |
-|------|-------------|--------|------------|-------|
-| **Gate 1** | Multi-tenant Isolation (RLS 18 tablas) | ✅ VALIDATED | Sí | **19 tablas con RLS en staging** |
-| **Gate 2** | Identity Model (UNIQUE tenant_id, email) | ✅ VALIDATED | Sí | **Constraint verificado en staging** |
-| **Gate 3** | MCP Security (allowlist + límites) | ✅ VALIDATED | Sí | **23/23 tests pasando + 4 vistas en staging** |
-| **Gate 4** | Legal Traceability (clauses + FKs) | ✅ VALIDATED | Sí | **4 FKs verificados en staging** |
-| **Gate 5** | Coherence Score Formal | ✅ VALIDATED | Sí | **Framework completo + LLM rules implementadas (P2-02).** CoherenceLLMService, LlmRuleEvaluator, 6 reglas cualitativas. |
-| **Gate 6** | Human-in-the-loop | 🟡 PARTIAL | No | Flags en modelos, wireframes al 70%, falta implementación completa UX |
-| **Gate 7** | Observability | 🟡 PARTIAL | Sí | Tabla ai_usage_logs creada, error logging unificado, falta dashboard |
-| **Gate 8** | Document Security | 🟡 PARTIAL | No | Schema listo, PDF viewer funcionando, falta cifrado R2 |
+| Gate       | Descripción                              | Estado       | Auto-Check | Notas                                                                                                                   |
+| ---------- | ---------------------------------------- | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Gate 1** | Multi-tenant Isolation (RLS 18 tablas)   | ✅ VALIDATED | Sí         | **19 tablas con RLS en staging**                                                                                        |
+| **Gate 2** | Identity Model (UNIQUE tenant_id, email) | ✅ VALIDATED | Sí         | **Constraint verificado en staging**                                                                                    |
+| **Gate 3** | MCP Security (allowlist + límites)       | ✅ VALIDATED | Sí         | **23/23 tests pasando + 4 vistas en staging**                                                                           |
+| **Gate 4** | Legal Traceability (clauses + FKs)       | ✅ VALIDATED | Sí         | **4 FKs verificados en staging**                                                                                        |
+| **Gate 5** | Coherence Score Formal                   | ✅ VALIDATED | Sí         | **Framework completo + LLM rules implementadas (P2-02).** CoherenceLLMService, LlmRuleEvaluator, 6 reglas cualitativas. |
+| **Gate 6** | Human-in-the-loop                        | 🟡 PARTIAL   | No         | Flags en modelos, wireframes al 70%, falta implementación completa UX                                                   |
+| **Gate 7** | Observability                            | 🟡 PARTIAL   | Sí         | Tabla ai_usage_logs creada, error logging unificado, falta dashboard                                                    |
+| **Gate 8** | Document Security                        | 🟡 PARTIAL   | No         | Schema listo, PDF viewer funcionando, falta cifrado R2                                                                  |
 
 **Resumen Gates:**
+
 - ✅ Validated: 5/8 (62.5%) - **Production Ready**
 - 🟡 Partial: 3/8 (37.5%)
 - ⏳ Pending: 0/8 (0%)
@@ -241,6 +250,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 ### 1. Base de Datos (✅ Completo y Validado en Staging)
 
 #### Migraciones
+
 - **Archivo:** `infrastructure/supabase/migrations/002_security_foundation_v2.4.0.sql`
 - **Tamaño:** ~850 líneas
 - **Tablas creadas:** 19 (desplegadas en staging)
@@ -249,6 +259,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 - **Deployment:** ✅ Staging (2026-01-07) - Zero errores
 
 #### Tablas Core
+
 1. ✅ `tenants` - Organizaciones (RLS: self-only)
 2. ✅ `users` - Usuarios (RLS: by tenant_id, UNIQUE corregido)
 3. ✅ `projects` - Proyectos (RLS: by tenant_id)
@@ -260,6 +271,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 9. ✅ `ai_usage_logs` - Logging de IA (RLS: by tenant_id)
 
 #### Tablas Stakeholder Intelligence
+
 10. ✅ `stakeholders` - Con FK a clauses (RLS: via project→tenant)
 11. ✅ `wbs_items` - Con FK a clauses (RLS: via project→tenant)
 12. ✅ `bom_items` - Con FK a clauses (RLS: via project→tenant)
@@ -267,17 +279,21 @@ Se estableció una metodología formal para la interpretación y calibración de
 14. ✅ `stakeholder_alerts` - Notificaciones (RLS: via project→tenant)
 
 #### Tablas Procurement (Fase 2)
+
 15. ✅ `bom_revisions` - Versionado (RLS: via project→tenant)
 16. ✅ `procurement_plan_snapshots` - Snapshots (RLS: via project→tenant)
 
 #### Tablas Knowledge Graph
+
 17. ✅ `knowledge_graph_nodes` - Nodos con integridad (RLS: via project→tenant)
 18. ✅ `knowledge_graph_edges` - Edges con FKs (RLS: via project→tenant)
 
 #### Tablas Audit
+
 19. ✅ `audit_logs` - Auditoría completa (RLS: by tenant_id)
 
 #### Vistas MCP (Allowlist)
+
 - ✅ `v_project_summary` - Resumen de proyectos
 - ✅ `v_project_alerts` - Alertas abiertas con cláusulas
 - ✅ `v_project_clauses` - Cláusulas por proyecto
@@ -286,6 +302,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 ### 2. Modelos SQLAlchemy (✅ Completo)
 
 #### Documents Module
+
 - **Archivo:** `apps/api/src/modules/documents/models.py`
 - **Modelos:**
   - ✅ `Document` - Documentos con cifrado
@@ -299,6 +316,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - Properties útiles
 
 #### Analysis Module
+
 - **Archivo:** `apps/api/src/modules/analysis/models.py`
 - **Modelos:**
   - ✅ `Analysis` - Análisis con coherence_score
@@ -313,6 +331,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - Anti-gaming (requires notes to dismiss)
 
 #### Stakeholders Module
+
 - **Archivo:** `apps/api/src/modules/stakeholders/models.py`
 - **Modelos:**
   - ✅ `Stakeholder` - Con FK a clauses
@@ -328,6 +347,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - Incoterms support
 
 #### Projects Module (Actualizado)
+
 - **Archivo:** `apps/api/src/modules/projects/models.py`
 - **Cambios:**
   - ✅ Relaciones agregadas: stakeholders, wbs_items, bom_items
@@ -336,6 +356,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ✅ Properties mejoradas
 
 #### Auth Module (Sin cambios necesarios)
+
 - **Archivo:** `apps/api/src/modules/auth/models.py`
 - **Modelos:** `Tenant`, `User`
 - **Nota:** UNIQUE constraint se corrige en migración SQL
@@ -343,6 +364,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 ### 3. Infraestructura (✅ Completo)
 
 #### Migration Runner
+
 - **Archivo:** `infrastructure/supabase/run_migrations.py`
 - **Features:**
   - ✅ Ejecución automática de migraciones pendientes
@@ -354,6 +376,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ✅ Confirmación obligatoria para producción
 
 #### Validaciones Automáticas
+
 1. RLS count >= 18
 2. UNIQUE constraint en users
 3. Tabla clauses existe
@@ -361,6 +384,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 5. Vistas MCP >= 4
 
 #### Documentación
+
 - ✅ `infrastructure/supabase/README.md` - Guía completa de migraciones
 - ✅ `docs/DEVELOPMENT_STATUS.md` - Este documento
 - ✅ Troubleshooting guide
@@ -373,6 +397,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 ### ✅ Sprint Semana 1 - COMPLETADO
 
 #### 1. ✅ MCP Database Server - COMPLETADO
+
 - **Estado:** ✅ IMPLEMENTADO Y VALIDADO
   - ✅ Allowlist de vistas y funciones
   - ✅ Query limits (timeout, row count, cost)
@@ -382,12 +407,14 @@ Se estableció una metodología formal para la interpretación y calibración de
 - **CTO Gate:** ✅ Gate 3 (MCP Security) - 23/23 tests pasando
 
 #### 2. ✅ Tests de Seguridad - COMPLETADO Y VALIDADO
+
 - **Estado:** ✅ 100% IMPLEMENTADO Y VALIDADO (42/42 tests)
 - **Local:** 24/42 tests pasando (MCP + JWT básico)
 - **Staging:** Gates 1-4 completamente validados
 - **CTO Gates:** ✅ Gates 1-4 VALIDADOS en staging
 
 #### 3. ✅ Migraciones en Staging - COMPLETADO
+
 - **Estado:** ✅ EXITOSAMENTE APLICADAS
 - **Fecha:** 2026-01-07
 - **Resultado:**
@@ -398,6 +425,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ✅ Todos los CTO Gates 1-4 validados
 
 #### 4. ✅ Infraestructura de Migraciones (CE-P0-06) - COMPLETADO
+
 - **Estado:** ✅ ENTERPRISE-GRADE COMPLETO
 - **Entregables:**
   - ✅ 9 subtasks implementadas (CE-20 a CE-28)
@@ -407,6 +435,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ✅ One-command execution
 
 #### 5. ✅ Fixtures Estabilizados - COMPLETADO
+
 - **Estado:** ✅ ASGI y fixtures async estables
 - **Mejoras:**
   - ✅ httpx actualizado a 0.28.1
@@ -417,6 +446,7 @@ Se estableció una metodología formal para la interpretación y calibración de
 ### Sprint Semana 2 - ✅ CASI COMPLETADO (90%)
 
 #### 1. ✅ Schemas Pydantic - COMPLETADO (23 Ene 2026)
+
 - **Estado:** ✅ 95% de schemas implementados
 - **Archivos revisados:**
   - `apps/api/src/modules/auth/schemas.py` ✅
@@ -431,6 +461,7 @@ Se estableció una metodología formal para la interpretación y calibración de
   - ExtractionResponse, ExtractionListResponse
 
 #### 2. ✅ CI/CD Setup - COMPLETADO (23 Ene 2026)
+
 - **Workflows implementados:**
   - `.github/workflows/ci.yml` - Jobs paralelos, services, coverage
   - `.github/workflows/deploy-staging.yml` - Smart change detection
@@ -628,6 +659,7 @@ c2pro/
 ## Estadísticas del Sprint
 
 ### Código Generado
+
 - **SQL:** ~1,050 líneas (migrations + verification scripts)
 - **Python:** ~5,160 líneas (models + tests + infrastructure)
 - **Bash/Batch:** ~400 líneas (orchestration scripts)
@@ -635,18 +667,21 @@ c2pro/
 - **Total:** ~10,010 líneas
 
 ### Modelos Creados
+
 - **SQLAlchemy:** 11 modelos
 - **Enums:** 14 enums
 - **Relationships:** 25+ relaciones
 - **Test Fixtures:** 15+ fixtures
 
 ### Tests Implementados
+
 - **Security Tests:** 42 tests (100% implementados)
 - **Local Passing:** 24/42 (MCP 23/23 + JWT 1/10)
 - **Staging Validated:** Gates 1-4 (100%)
 - **Coverage MCP:** 54%
 
 ### Coverage de ROADMAP v2.4.0
+
 - **Sección 5 (Modelo de Datos):** 100% ✅
 - **Sección 6 (Seguridad):** 90% ✅ (Gates 1-4 validados)
 - **Sección 7 (CTO Gates):** 50% ✅ (4/8 gates validated)
@@ -658,12 +693,12 @@ c2pro/
 
 ### Riesgos Identificados
 
-| Riesgo | Probabilidad | Impacto | Mitigación |
-|--------|--------------|---------|------------|
-| RLS no funciona correctamente | Media | Crítico | Tests exhaustivos antes de producción |
-| Migraciones fallan en staging | Baja | Alto | Rollback automático + backup |
-| Performance degradation con RLS | Media | Medio | Índices optimizados + monitoring |
-| Constraint UNIQUE causa conflictos | Baja | Medio | Migración gradual + validación |
+| Riesgo                             | Probabilidad | Impacto | Mitigación                            |
+| ---------------------------------- | ------------ | ------- | ------------------------------------- |
+| RLS no funciona correctamente      | Media        | Crítico | Tests exhaustivos antes de producción |
+| Migraciones fallan en staging      | Baja         | Alto    | Rollback automático + backup          |
+| Performance degradation con RLS    | Media        | Medio   | Índices optimizados + monitoring      |
+| Constraint UNIQUE causa conflictos | Baja         | Medio   | Migración gradual + validación        |
 
 ### Decisiones Técnicas Tomadas
 
@@ -685,6 +720,7 @@ c2pro/
 ## 📊 Resumen de Estado Actual
 
 ### ✅ Completado y Production Ready
+
 1. **Base de datos:** 19 tablas desplegadas en staging con RLS
 2. **Seguridad:** Gates 1-4 validados (50% de todos los gates)
 3. **Tests:** 42 tests implementados, 24 pasando localmente, todos validados en staging
@@ -693,6 +729,7 @@ c2pro/
 6. **Coherence Engine:** Framework P2-01 con scoring calibrado
 
 ### ✅ Completado Esta Sesión
+
 1. **Sprint P2-02 - LLM Integration:** 100% completado (10/10 SP)
    - ✅ CE-22: CoherenceLLMService
    - ✅ CE-23: LlmRuleEvaluator
@@ -705,10 +742,12 @@ c2pro/
    - ✅ CI/CD Setup completo
 
 ### 🟡 En Progreso
+
 1. **Gate 5:** Coherence Score - ✅ VALIDATED (P2-02 completado)
 2. **Gates 6-8:** Human-in-the-loop (40%), Observability (30%), Document Security (25%)
 
 ### ⏭️ Próximos Hitos
+
 1. **Corto Plazo (Esta Semana):**
    - Schemas Pydantic completos
    - Coherence Engine v0.4 (reglas LLM)
@@ -725,18 +764,18 @@ c2pro/
 
 ### 🎯 Métricas de Progreso
 
-| Categoría | Progreso | Estado |
-|-----------|----------|--------|
-| **Database & Schema** | 100% | ✅ Production Ready |
-| **Security Gates (1-4)** | 100% | ✅ Validated in Staging |
-| **Security Gates (5-8)** | 50% | 🟡 Gate 5 ✅ + 6-8 In Progress |
-| **Test Coverage** | 70% | 🟡 Good Progress (↑5%, target: 80%) |
-| **Infrastructure** | 100% | ✅ Enterprise Grade |
-| **Documentation** | 100% | ✅ CTO Ready |
-| **API Endpoints** | 45% | 🟡 In Development (↑5%) |
-| **Frontend** | 65% | 🟡 Solid Foundation (↑5%) |
-| **Type Safety** | 95% | ✅ Excellent |
-| **LLM Integration** | 100% | ✅ NEW - P2-02 Complete |
+| Categoría                | Progreso | Estado                              |
+| ------------------------ | -------- | ----------------------------------- |
+| **Database & Schema**    | 100%     | ✅ Production Ready                 |
+| **Security Gates (1-4)** | 100%     | ✅ Validated in Staging             |
+| **Security Gates (5-8)** | 50%      | 🟡 Gate 5 ✅ + 6-8 In Progress      |
+| **Test Coverage**        | 70%      | 🟡 Good Progress (↑5%, target: 80%) |
+| **Infrastructure**       | 100%     | ✅ Enterprise Grade                 |
+| **Documentation**        | 100%     | ✅ CTO Ready                        |
+| **API Endpoints**        | 45%      | 🟡 In Development (↑5%)             |
+| **Frontend**             | 65%      | 🟡 Solid Foundation (↑5%)           |
+| **Type Safety**          | 95%      | ✅ Excellent                        |
+| **LLM Integration**      | 100%     | ✅ NEW - P2-02 Complete             |
 
 **Overall Progress:** **80%** hacia MVP Production Ready (↑5% hoy)
 
@@ -745,6 +784,7 @@ c2pro/
 ## Contacto y Referencias
 
 ### Documentación Principal
+
 - **ROADMAP:** `docs/ROADMAP_v2.4.0.md`
 - **Migraciones:** `infrastructure/supabase/README.md`
 - **Estado:** `docs/DEVELOPMENT_STATUS.md` (este archivo)
@@ -752,6 +792,7 @@ c2pro/
 ### Reportes Relacionados
 
 **Sprint S2 (Enero 2026):**
+
 - **SPRINT_S2_PROGRESS_SUMMARY.md:** Resumen completo Sprint S2
 - **FRONTEND_TYPE_SAFETY_CE-S2-011.md:** Type safety & bug fixes
 - **WIREFRAMES_REVIEW_CE-S2-010.md:** 6 vistas core + PDF viewer
@@ -761,6 +802,7 @@ c2pro/
 - **LESSONS_LEARNED.md:** Lecciones aprendidas del proyecto
 
 **Sprints Anteriores:**
+
 - **GATES_VALIDATION_REPORT_2026-01-07.md:** Validación Gates 1-3 local
 - **STAGING_DEPLOYMENT_REPORT_2026-01-07.md:** Deployment exitoso en staging
 - **TEST_RESULTS_2026-01-06.md:** Resultados tests de seguridad
@@ -768,7 +810,9 @@ c2pro/
 - **DELIVERABLES.md:** CE-P0-06 implementation complete
 
 ### Próxima Actualización
+
 Este documento se actualizará al completar:
+
 - Schemas Pydantic (DTOs)
 - Coherence Engine v0.4 (reglas LLM)
 - Deployment a producción
@@ -778,12 +822,14 @@ Este documento se actualizará al completar:
 ## 📊 Estadísticas Actualizadas (22 Ene 2026)
 
 ### Código Generado Sprint S2
+
 - **TypeScript (Frontend):** ~2,500 líneas (types, components, hooks)
 - **Python (Backend):** ~800 líneas (schemas, error handling)
 - **Markdown (Docs):** ~4,200 líneas (6 documentos nuevos)
 - **Total Sprint S2:** ~7,500 líneas
 
 ### Código Total Proyecto
+
 - **SQL:** ~1,050 líneas
 - **Python (Backend):** ~6,000 líneas
 - **TypeScript (Frontend):** ~3,500 líneas
@@ -792,6 +838,7 @@ Este documento se actualizará al completar:
 - **Total Acumulado:** ~18,550 líneas
 
 ### Coverage Sprint S2
+
 - **Frontend Type Safety:** 95% (↑35% desde Sprint S1)
 - **Backend Test Coverage:** 65% (↑11% desde Sprint S1)
 - **Documentation Coverage:** 100% (todas las tareas documentadas)
@@ -816,13 +863,13 @@ docs/
 
 ## 🔄 Control de Versiones del Documento
 
-| Versión | Fecha | Sprint | Cambios Principales |
-|---------|-------|--------|---------------------|
-| 1.0 | 2026-01-05 | P0-06 | Initial version - Security Foundation |
-| 2.0 | 2026-01-08 | P2-01 | Coherence Score Methodology + Staging Deploy |
-| 2.6 | 2026-01-22 | S2 Semana 2 | Frontend Type Safety + Wireframes + Sprint S2 Summary |
-| 2.6.1 | 2026-01-23 | S2 Semana 2 | CE-S2-001 Schemas + CE-S2-002 CI/CD + Docs Organization |
-| **2.7.0** | **2026-01-23** | **P2-02** | **LLM Integration: CE-22/23/24/25 - CoherenceLLMService, LlmRuleEvaluator, 6 Reglas Cualitativas, Testing Strategy** |
+| Versión   | Fecha          | Sprint      | Cambios Principales                                                                                                  |
+| --------- | -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1.0       | 2026-01-05     | P0-06       | Initial version - Security Foundation                                                                                |
+| 2.0       | 2026-01-08     | P2-01       | Coherence Score Methodology + Staging Deploy                                                                         |
+| 2.6       | 2026-01-22     | S2 Semana 2 | Frontend Type Safety + Wireframes + Sprint S2 Summary                                                                |
+| 2.6.1     | 2026-01-23     | S2 Semana 2 | CE-S2-001 Schemas + CE-S2-002 CI/CD + Docs Organization                                                              |
+| **2.7.0** | **2026-01-23** | **P2-02**   | **LLM Integration: CE-22/23/24/25 - CoherenceLLMService, LlmRuleEvaluator, 6 Reglas Cualitativas, Testing Strategy** |
 
 ---
 
@@ -835,4 +882,5 @@ docs/
 Last Updated: 2026-02-13
 
 Changelog:
+
 - 2026-02-13: Added metadata block during repository-wide docs format pass.

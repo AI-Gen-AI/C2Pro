@@ -1,0 +1,142 @@
+{
+  "project_metadata": {
+    "id": "P-009188-002",
+    "name": "Camb. Remod. bombeo Mandem",
+    "type": "Obra Civil",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Contrato administrativo de obras para la modificacion electromecanica de la estacion de bombeo del Mandem (Altea) entre el Consorcio de Aguas de la Marina Baja e Instalaciones Inabensa, S.A. Importe adjudicado: 1.609.282,94 EUR IVA incluido; plazo de ejecucion: 8 meses desde el acta de replanteo; garantia: 1 ano. El pliego exige ejecucion estricta conforme a proyecto, pliego tecnico, oferta adjudicada y control de calidad, y preve penalidades por demora y por cumplimiento defectuoso.",
+    "schedule_summary": {
+      "duration_months": 8,
+      "supplier_milestones": {
+        "first_pump_expected": "2015-07",
+        "remaining_pumps_expected": "2015-07",
+        "latest_accepted_date": "2015-09-30"
+      }
+    },
+    "budget_summary": {
+      "tender_value_eur": 2011603.67,
+      "awarded_value_eur": 1609282.94,
+      "target_procurement_budget_eur": 1397044.01,
+      "flowserve_contract_eur": 603506.95,
+      "line_items": [
+        {
+          "name": "Bombas principales Flowserve",
+          "cost": 603506.95
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "La contratista ejecutara la modificacion electromecanica del bombeo del Mandem con estricta sujecion al proyecto, al pliego administrativo, al pliego tecnico y a la oferta adjudicada.",
+        "metadata": {
+          "scope_type": "electromechanical retrofit"
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "El plazo total de ejecucion de la obra es de ocho meses desde el acta de comprobacion del replanteo.",
+        "metadata": {
+          "duration_months": 8
+        }
+      },
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "Si el contratista incurre en demora imputable, la Administracion podra imponer penalidades diarias de 0,20 EUR por cada 1.000 EUR del precio del contrato y penalizar el cumplimiento defectuoso hasta el 10% del presupuesto.",
+        "metadata": {
+          "daily_penalty_ratio": 0.2,
+          "defective_work_cap_pct": 10.0
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "La obra queda sujeta a un plazo de garantia de un ano y el contratista responde por defectos y vicios ocultos detectados tras la recepcion.",
+        "metadata": {
+          "guarantee_years": 1
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Consorcio de Aguas de la Marina Baja",
+        "mention": "Consorcio para el Abastecimiento de Aguas y Saneamientos de la Marina Baja",
+        "role": "Cliente",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Instalaciones Inabensa, S.A.",
+        "mention": "Inabensa",
+        "role": "Contratista principal",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Flowserve Spain, S.L.",
+        "mention": "Flowserve",
+        "role": "Proveedor de bombas",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Jaime Berenguer Ponsoda",
+        "mention": "Director de Obra",
+        "role": "Direccion facultativa",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "SCH-MAN-01",
+        "severity": "critical",
+        "description": "Las fechas previstas para suministro de bombas y la situacion reportada en noviembre de 2015 muestran retrasos relevantes frente al plazo contractual de 8 meses.",
+        "conflicting_elements": [
+          {
+            "source": "schedule_summary",
+            "identifier": "latest_accepted_date"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "duration_months"
+          }
+        ]
+      },
+      {
+        "rule_id": "FIN-MAN-01",
+        "severity": "warning",
+        "description": "El seguimiento de compras documenta una desviacion agregada del 9,42% sobre el target de aprovisionamiento, con sobrecostes fuertes en varios paquetes criticos.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "target_procurement_budget_eur"
+          },
+          {
+            "source": "budget_summary",
+            "identifier": "flowserve_contract_eur"
+          }
+        ]
+      },
+      {
+        "rule_id": "RISK-MAN-01",
+        "severity": "warning",
+        "description": "El expediente contiene documentacion ADR asociada a avales y hitos de suministro de las bombas principales, lo que revela dependencia administrativa adicional sobre un paquete critico.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "flowserve_supply"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "adr_bond_dependency"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -26,6 +26,9 @@ class TriggerDocumentAnalysisUseCase:
         if not document:
             raise ValueError("document not found")
 
+        if not document.is_parsed():
+            raise ValueError("document must be parsed before analysis")
+
         parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
         if not parsed_text:
             raise ValueError("parsed_text not available")

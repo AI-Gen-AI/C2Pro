@@ -12,10 +12,16 @@ from uuid import UUID
 import structlog
 import jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.config import settings
+from src.core.auth.bootstrap_lookup import (
+    create_bootstrap_tenant,
+    create_bootstrap_user,
+    lookup_user_by_email as bootstrap_lookup_user_by_email,
+)
 from src.core.exceptions import (
     AuthenticationError,
     ConflictError,
@@ -246,7 +252,18 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     Returns:
         Usuario si existe, None si no
     """
-    result = await db.execute(select(User).where(User.email == email))
+    record = await bootstrap_lookup_user_by_email(db, email)
+    if record is None:
+        return None
+
+    if not settings.database_url.startswith("sqlite"):
+        await db.execute(text(f"SET LOCAL app.current_tenant = '{str(record.tenant_id)}'"))
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.tenant).selectinload(Tenant.users))
+        .where(User.id == record.user_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -298,39 +315,38 @@ class AuthService:
         try:
             # 1. Crear Tenant
             tenant_slug = generate_tenant_slug(request.company_name)
-
-            tenant = Tenant(
-                name=request.company_name,
-                slug=tenant_slug,
-                subscription_plan=SubscriptionPlan.FREE,
-                subscription_status="active",
-                subscription_started_at=datetime.utcnow(),
-                ai_budget_monthly=settings.ai_budget_monthly_default,
-                ai_spend_current=0.0,
-                ai_spend_last_reset=datetime.utcnow(),
-            )
-
-            db.add(tenant)
-            await db.flush()  # Para obtener el ID del tenant
-
-            # 2. Crear Usuario (primer usuario es admin)
             hashed_pwd = hash_password(request.password)
-
-            user = User(
-                tenant_id=tenant.id,
+            tenant_record = await create_bootstrap_tenant(
+                db,
+                tenant_name=request.company_name,
+                tenant_slug=tenant_slug,
+            )
+            user_record = await create_bootstrap_user(
+                db,
+                tenant_id=tenant_record.tenant_id,
                 email=request.email,
                 hashed_password=hashed_pwd,
                 first_name=request.first_name,
                 last_name=request.last_name,
-                role=UserRole.ADMIN,  # Primer usuario es admin
-                is_active=True,
-                is_verified=False,  # Requerirá verificación de email
+                role=UserRole.ADMIN.value,
             )
 
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-            await db.refresh(tenant)
+            if not settings.database_url.startswith("sqlite"):
+                await db.execute(
+                    text(f"SET LOCAL app.current_tenant = '{str(tenant_record.tenant_id)}'")
+                )
+
+            tenant_result = await db.execute(
+                select(Tenant).options(selectinload(Tenant.users)).where(Tenant.id == tenant_record.tenant_id)
+            )
+            tenant = tenant_result.scalar_one()
+
+            user_result = await db.execute(
+                select(User).options(selectinload(User.tenant).selectinload(Tenant.users)).where(
+                    User.id == user_record.user_id
+                )
+            )
+            user = user_result.scalar_one()
 
             logger.info(
                 "user_registered", user_id=str(user.id), tenant_id=str(tenant.id), email=user.email

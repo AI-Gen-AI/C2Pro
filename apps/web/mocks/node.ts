@@ -1,7 +1,7 @@
 import { setupServer } from "msw/node";
-import { handlers } from "./handlers";
+import { testHandlers } from "./handlers";
 import { seedDemoData } from "./data";
 
 seedDemoData();
 
-export const server = setupServer(...handlers);
+export const server = setupServer(...testHandlers);

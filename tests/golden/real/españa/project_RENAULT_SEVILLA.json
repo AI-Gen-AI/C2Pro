@@ -1,0 +1,145 @@
+{
+  "project_metadata": {
+    "id": "P-006328",
+    "name": "Fasa Renault - Sevilla",
+    "type": "Industrial",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Proyecto industrial de remodelacion de subestacion en Renault Sevilla para sustituir transformadores de 8 MVA por equipos de 15 MVA. El expediente incluye pedido a Alkargo para suministro y fabricacion de transformadores, reparacion del T1 averiado y alquiler temporal con Eldu de un transformador de 10 MVA para mantener el servicio provisional. La asesoria juridica deja constancia de penalizaciones por retraso y de la posibilidad de resolucion contractual ante incumplimiento.",
+    "schedule_summary": {
+      "critical_window": "2015-08",
+      "delivery_targets": {
+        "transformer_1": "2015-12",
+        "transformer_2": "2016-W02"
+      }
+    },
+    "budget_summary": {
+      "alkargo_order_total_eur": 236663.9,
+      "advance_payment_without_bond_eur": 70999.17,
+      "temporary_rental_weekly_eur": 6290.0,
+      "required_supplier_payment_eur": 277385.0,
+      "line_items": [
+        {
+          "name": "Pedido Alkargo",
+          "cost": 236663.9
+        },
+        {
+          "name": "Alquiler temporal Eldu",
+          "cost": 6290.0
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "Si las entregas no se realizan en los plazos acordados, Inabensa puede resolver el contrato y aplicar penalizaciones del 2% por cada semana completa o incompleta de retraso sobre el importe total del pedido.",
+        "metadata": {
+          "weekly_penalty_pct": 2.0
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "La reparacion del Trafo 1 debe entregarse a finales de diciembre y el Trafo 2 como maximo en la semana 2 de enero.",
+        "metadata": {
+          "transformer_1_target": "2015-12",
+          "transformer_2_target": "2016-W02"
+        }
+      },
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "Renault suministrara directamente parte de los materiales de los transformadores y pagara directamente a Alkargo una parte del coste, reduciendo el alcance economico del pedido principal de Inabensa.",
+        "metadata": {
+          "scope_reduction": true
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "Durante el alquiler provisional del transformador, Inabensa debe usar el equipo de forma diligente, devolverlo en perfectas condiciones y responder de los danos o uso indebido.",
+        "metadata": {
+          "rental_bond_eur": 6290.0
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Renault Factoria Sevilla",
+        "mention": "Renault",
+        "role": "Cliente final",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Instalaciones Inabensa, S.A.",
+        "mention": "Inabensa",
+        "role": "Contratista principal",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Alkargo, S.Coop.",
+        "mention": "Alkargo",
+        "role": "Proveedor/fabricante de transformadores",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "ABB",
+        "mention": "ABB",
+        "role": "Soporte tecnico y posible reparador",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "SCH-REN-01",
+        "severity": "critical",
+        "description": "Los hitos exigidos por el cliente y por Inabensa chocan con los plazos minimos declarados por el proveedor, generando un conflicto fuerte de calendario.",
+        "conflicting_elements": [
+          {
+            "source": "schedule_summary",
+            "identifier": "delivery_targets"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "supplier_minimum_lead_time"
+          }
+        ]
+      },
+      {
+        "rule_id": "RISK-REN-01",
+        "severity": "critical",
+        "description": "El expediente documenta pagos anticipados sin aval suficiente y un contexto de tension financiera del proveedor, elevando el riesgo comercial y de cumplimiento.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "advance_payment_without_bond_eur"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "supplier_distress"
+          }
+        ]
+      },
+      {
+        "rule_id": "TEC-REN-01",
+        "severity": "warning",
+        "description": "Los informes tecnicos muestran problemas de protecciones y selectividad en el T1 y en la instalacion general, por lo que existe riesgo tecnico adicional aunque se reponga el equipo.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "transformer_repair_scope"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "protection_selectivity_issue"
+          }
+        ]
+      }
+    ]
+  }
+}

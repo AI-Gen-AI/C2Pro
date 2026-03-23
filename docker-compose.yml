@@ -1,7 +1,7 @@
 # ===========================================
 # C2PRO - Docker Compose for Local Development
 # ===========================================
-# 
+#
 # Uso:
 #   docker-compose up -d        # Iniciar servicios
 #   docker-compose down         # Parar servicios
@@ -28,7 +28,6 @@ services:
       POSTGRES_DB: c2pro
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/supabase/migrations:/docker-entrypoint-initdb.d:ro
     # PostgreSQL performance tuning for local development
     command:
       - "postgres"
@@ -57,7 +56,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
 
   # ===========================================
   # Redis (Local - simula Upstash)
@@ -89,8 +87,8 @@ services:
     container_name: c2pro-minio
     restart: unless-stopped
     ports:
-      - "9000:9000"   # API
-      - "9011:9001"   # Console
+      - "9000:9000" # API
+      - "9011:9001" # Console
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -140,10 +138,17 @@ services:
       - R2_ACCESS_KEY_ID=minioadmin
       - R2_SECRET_ACCESS_KEY=minioadmin
       - R2_BUCKET_NAME=c2pro-documents
+      - C2PRO_AI_MOCK=1
+      # Clerk Authentication
+      - CLERK_ISSUER=https://content-cardinal-74.clerk.accounts.dev
+      - CLERK_JWKS_URL=https://content-cardinal-74.clerk.accounts.dev/.well-known/jwks.json
+      # CORS - allow frontend on ports 3000, 3001, 3002
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001","http://localhost:3002"]
     env_file:
       - .env
     volumes:
       - ./apps/api/src:/app/src:ro
+      - ./apps/api/alembic:/app/alembic:ro
       - uploads_data:/app/uploads
     depends_on:
       postgres:
@@ -168,6 +173,8 @@ services:
     container_name: c2pro-celery-worker
     restart: unless-stopped
     command: celery -A src.core.tasks.celery_app.celery_app worker --loglevel=info
+    healthcheck:
+      disable: true
     environment:
       - ENVIRONMENT=development
       - DEBUG=true

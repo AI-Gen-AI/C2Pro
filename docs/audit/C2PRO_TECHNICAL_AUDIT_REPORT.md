@@ -5,6 +5,8 @@
 **Methodology:** Tree of Thoughts + Multiple Perspectives
 **Scope:** Full-stack audit of c2pro multi-agent LLM application
 
+Status update (2026-03-20): Since this audit snapshot was written, several tracked hardening items have been completed in the repo, including Sentry lifecycle wiring, MCP rate/audit persistence, Supabase bootstrap/security checklist completion, deferred ORM model reintegration, alert mutation admin authorization, and `ModelRouter`-backed LLM pricing. Treat the detailed sections below as a dated audit baseline, not a current open-items list for those areas.
+
 ---
 
 ## Phase 1: Expert Agents Report
@@ -25,11 +27,11 @@
 
 **Blockers:**
 
-| # | Blocker | Impact |
-|---|---------|--------|
-| F1 | No confirmed E2E test suite running against the real backend | Cannot validate user flows beyond mocked data |
-| F2 | MSW mocks may drift from actual API contracts | False-positive test results |
-| F3 | Streaming/real-time feedback for long-running LLM operations not yet implemented | UX gap during 10-60s orchestration runs |
+| #   | Blocker                                                                          | Impact                                        |
+| --- | -------------------------------------------------------------------------------- | --------------------------------------------- |
+| F1  | No confirmed E2E test suite running against the real backend                     | Cannot validate user flows beyond mocked data |
+| F2  | MSW mocks may drift from actual API contracts                                    | False-positive test results                   |
+| F3  | Streaming/real-time feedback for long-running LLM operations not yet implemented | UX gap during 10-60s orchestration runs       |
 
 **Next Steps:**
 
@@ -53,11 +55,11 @@
 
 **Blockers:**
 
-| # | Blocker | Impact |
-|---|---------|--------|
-| B1 | No evidence of a working `docker-compose up` that boots all services end-to-end | Developers cannot spin up the full stack locally |
-| B2 | Database migration state unknown (have migrations run successfully against a real DB?) | Schema may be out of sync |
-| B3 | Celery/background task runner for document processing not confirmed operational | Upload → parse → orchestrate pipeline may hang |
+| #   | Blocker                                                                                | Impact                                           |
+| --- | -------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| B1  | No evidence of a working `docker-compose up` that boots all services end-to-end        | Developers cannot spin up the full stack locally |
+| B2  | Database migration state unknown (have migrations run successfully against a real DB?) | Schema may be out of sync                        |
+| B3  | Celery/background task runner for document processing not confirmed operational        | Upload → parse → orchestrate pipeline may hang   |
 
 **Next Steps:**
 
@@ -75,25 +77,25 @@
 
 - **CI Workflows (6 found):**
 
-| Workflow | Trigger | Purpose | Status |
-|----------|---------|---------|--------|
-| `tests.yml` | push/PR | Unit (70% threshold), integration, S5 AI gates | **In Progress** |
-| `e2e-security-tests.yml` | push/PR | RLS multi-tenant isolation (11 scenarios) | **In Progress** |
-| `frontend-ci.yml` | push/PR | Next.js build, lint | **In Progress** |
-| `frontend-e2e.yml` | push/PR | Playwright E2E | **Unknown** |
-| `evaluation-regression.yml` | scheduled | LLM accuracy drift detection | **Unknown** |
-| `scheduled-drift-checks.yml` | nightly | Cost & performance monitoring | **Unknown** |
+| Workflow                     | Trigger   | Purpose                                        | Status          |
+| ---------------------------- | --------- | ---------------------------------------------- | --------------- |
+| `tests.yml`                  | push/PR   | Unit (70% threshold), integration, S5 AI gates | **In Progress** |
+| `e2e-security-tests.yml`     | push/PR   | RLS multi-tenant isolation (11 scenarios)      | **In Progress** |
+| `frontend-ci.yml`            | push/PR   | Next.js build, lint                            | **In Progress** |
+| `frontend-e2e.yml`           | push/PR   | Playwright E2E                                 | **Unknown**     |
+| `evaluation-regression.yml`  | scheduled | LLM accuracy drift detection                   | **Unknown**     |
+| `scheduled-drift-checks.yml` | nightly   | Cost & performance monitoring                  | **Unknown**     |
 
 - **Docker:** Multi-stage Dockerfile for backend (3.11-slim builder → runtime). Non-root user, health checks, metadata labels.
 - **Local Dev:** `docker-compose.yml` exists with PostgreSQL, Redis, MinIO services. Bootstrap script at `infrastructure/scripts/bootstrap_test_infra.py`.
 
 **Blockers:**
 
-| # | Blocker | Impact |
-|---|---------|--------|
-| C1 | No evidence of a working Staging environment | Cannot test deployments before production |
-| C2 | CI pipeline status unknown — are all 6 workflows green? | May be accumulating broken builds |
-| C3 | No deployment automation to Railway/Vercel confirmed | Manual deploys are error-prone and slow |
+| #   | Blocker                                                 | Impact                                    |
+| --- | ------------------------------------------------------- | ----------------------------------------- |
+| C1  | No evidence of a working Staging environment            | Cannot test deployments before production |
+| C2  | CI pipeline status unknown — are all 6 workflows green? | May be accumulating broken builds         |
+| C3  | No deployment automation to Railway/Vercel confirmed    | Manual deploys are error-prone and slow   |
 
 **Next Steps:**
 
@@ -118,11 +120,11 @@
 
 **Blockers:**
 
-| # | Blocker | Impact |
-|---|---------|--------|
-| S1 | PII anonymization depends on optional `spacy` — may not be installed in all environments | PII could leak to Claude in dev/test |
-| S2 | No confirmed secrets scanning in CI (e.g., `gitleaks`, `trufflehog`) | API keys could be committed accidentally |
-| S3 | CORS configuration not audited — may be overly permissive in dev | XSS vector in non-production |
+| #   | Blocker                                                                                  | Impact                                   |
+| --- | ---------------------------------------------------------------------------------------- | ---------------------------------------- |
+| S1  | PII anonymization depends on optional `spacy` — may not be installed in all environments | PII could leak to Claude in dev/test     |
+| S2  | No confirmed secrets scanning in CI (e.g., `gitleaks`, `trufflehog`)                     | API keys could be committed accidentally |
+| S3  | CORS configuration not audited — may be overly permissive in dev                         | XSS vector in non-production             |
 
 **Next Steps:**
 
@@ -140,34 +142,35 @@
 
 - **Test Files Found:**
 
-| Category | Location | Count | Status |
-|----------|----------|-------|--------|
-| Unit | `tests/unit/` | Multiple | **Exist, status unknown** |
-| Integration | `tests/integration/`, `tests/test_i*.py` | 8+ suites (I3, I5, I6, I10-I14) | **Exist, status unknown** |
-| E2E Security | `tests/e2e/security/` | 11 scenarios | **Exist, status unknown** |
-| E2E Workflow | `tests/e2e/workflows/` | Document upload flow | **Exist, status unknown** |
-| Performance | `tests/performance/` | Stress test + Locust | **Exist, status unknown** |
-| Accuracy | `tests/accuracy/` | LLM regression | **Exist, status unknown** |
-| Frontend Unit | `apps/web/**/*.test.*` | Unknown count | **Exist, status unknown** |
-| Frontend E2E | Playwright config | Unknown | **Exist, status unknown** |
+| Category      | Location                                 | Count                           | Status                    |
+| ------------- | ---------------------------------------- | ------------------------------- | ------------------------- |
+| Unit          | `tests/unit/`                            | Multiple                        | **Exist, status unknown** |
+| Integration   | `tests/integration/`, `tests/test_i*.py` | 8+ suites (I3, I5, I6, I10-I14) | **Exist, status unknown** |
+| E2E Security  | `tests/e2e/security/`                    | 11 scenarios                    | **Exist, status unknown** |
+| E2E Workflow  | `tests/e2e/workflows/`                   | Document upload flow            | **Exist, status unknown** |
+| Performance   | `tests/performance/`                     | Stress test + Locust            | **Exist, status unknown** |
+| Accuracy      | `tests/accuracy/`                        | LLM regression                  | **Exist, status unknown** |
+| Frontend Unit | `apps/web/**/*.test.*`                   | Unknown count                   | **Exist, status unknown** |
+| Frontend E2E  | Playwright config                        | Unknown                         | **Exist, status unknown** |
 
 - **Mock Mode:** `C2PRO_AI_MOCK=1` enables mock LLM responses — **critical for deterministic testing**.
 - **Test Light Mode:** `C2PRO_TEST_LIGHT=1` disables cost controller — **enables CI without budget checks**.
 - **Fixtures:** Async DB fixtures with RLS isolation, authenticated HTTP client, pre-created test projects.
 
 **THE CORE PROBLEM:** Tests exist in significant volume, but there is **no evidence they have been executed successfully**. The project has invested heavily in writing test code but has not confirmed:
+
 1. All tests pass.
 2. The test infrastructure (DB, Redis, mock LLM) boots correctly.
 3. The E2E flow (upload document → parse → orchestrate → view results) completes.
 
 **Blockers:**
 
-| # | Blocker | Severity | Impact |
-|---|---------|----------|--------|
-| Q1 | No confirmed green test run for any test suite | **CRITICAL** | Cannot validate any functionality |
-| Q2 | Test infrastructure bootstrap not verified | **HIGH** | Tests may fail on setup, not on logic |
-| Q3 | No E2E test covering the full LLM pipeline with mock mode | **HIGH** | Core value proposition untested |
-| Q4 | LLM accuracy regression tests never confirmed to run | **MEDIUM** | Model drift undetectable |
+| #   | Blocker                                                   | Severity     | Impact                                |
+| --- | --------------------------------------------------------- | ------------ | ------------------------------------- |
+| Q1  | No confirmed green test run for any test suite            | **CRITICAL** | Cannot validate any functionality     |
+| Q2  | Test infrastructure bootstrap not verified                | **HIGH**     | Tests may fail on setup, not on logic |
+| Q3  | No E2E test covering the full LLM pipeline with mock mode | **HIGH**     | Core value proposition untested       |
+| Q4  | LLM accuracy regression tests never confirmed to run      | **MEDIUM**   | Model drift undetectable              |
 
 **Proposed E2E Testing Strategy for LLM Workflows:**
 
@@ -219,13 +222,13 @@
 
 - **Agent Architecture (actual, not "writer"/"reviewer"):**
 
-| Agent | File | Role |
-|-------|------|------|
-| `BaseAgent` | `base_agent.py` | Abstract base with retry + JSON hardening |
-| `RiskExtractionAgent` | `risk_agent.py` | Extract risks from contracts (6 categories) |
-| `WBSExtractionAgent` | `wbs_agent.py` | Extract WBS items (deliverables, work packages, activities) |
-| LLM Coherence Evaluator | `llm_evaluator.py` | Detect contradictions, ambiguities, vague terms |
-| Citation Validator | Node N15 | Verify claims against source documents |
+| Agent                   | File               | Role                                                        |
+| ----------------------- | ------------------ | ----------------------------------------------------------- |
+| `BaseAgent`             | `base_agent.py`    | Abstract base with retry + JSON hardening                   |
+| `RiskExtractionAgent`   | `risk_agent.py`    | Extract risks from contracts (6 categories)                 |
+| `WBSExtractionAgent`    | `wbs_agent.py`     | Extract WBS items (deliverables, work packages, activities) |
+| LLM Coherence Evaluator | `llm_evaluator.py` | Detect contradictions, ambiguities, vague terms             |
+| Citation Validator      | Node N15           | Verify claims against source documents                      |
 
 - **Orchestration:** LangGraph 17-node graph (`workflow.py`):
 
@@ -263,12 +266,12 @@ N1(ingest) → N2(anonymize) → N3(route) → [N4|N5|N9](extract) → N12(criti
 
 **Blockers:**
 
-| # | Blocker | Impact |
-|---|---------|--------|
-| A1 | LangGraph workflow never confirmed to run end-to-end | 17-node pipeline may have broken edges or state issues |
-| A2 | No golden dataset for accuracy benchmarking | Cannot measure extraction quality or detect drift |
-| A3 | "Writer" and "reviewer" roles mentioned in project description don't map to actual agents | Terminology mismatch — actual agents are `RiskExtraction`, `WBS`, `Coherence`, `Citation` |
-| A4 | PostgreSQL checkpointer for LangGraph state not confirmed operational | Graph may lose state on failure |
+| #   | Blocker                                                                                   | Impact                                                                                    |
+| --- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| A1  | LangGraph workflow never confirmed to run end-to-end                                      | 17-node pipeline may have broken edges or state issues                                    |
+| A2  | No golden dataset for accuracy benchmarking                                               | Cannot measure extraction quality or detect drift                                         |
+| A3  | "Writer" and "reviewer" roles mentioned in project description don't map to actual agents | Terminology mismatch — actual agents are `RiskExtraction`, `WBS`, `Coherence`, `Citation` |
+| A4  | PostgreSQL checkpointer for LangGraph state not confirmed operational                     | Graph may lose state on failure                                                           |
 
 **Next Steps:**
 
@@ -298,36 +301,36 @@ The immediate priority is to make the system **testable and executable**. This d
 
 ### Audit Checklist
 
-| # | Area | Item | Status | Notes |
-|---|------|------|--------|-------|
-| 1 | **Backend** | FastAPI app structure & routing | **In Progress** | Routes exist, not confirmed running |
-| 2 | **Backend** | PostgreSQL schema & migrations | **In Progress** | 9 migrations written, execution unverified |
-| 3 | **Backend** | Multi-tenant RLS isolation | **In Progress** | Policies + 11 test scenarios written |
-| 4 | **Backend** | Document upload & parsing pipeline | **In Progress** | PDF/Excel/Word/BC3 parsers written |
-| 5 | **Backend** | Redis event bus & caching | **In Progress** | Code exists, operational status unknown |
-| 6 | **AI/LLM** | LangGraph 17-node orchestration | **In Progress** | Full graph defined, never executed E2E |
-| 7 | **AI/LLM** | Model routing (Haiku/Sonnet/Opus) | **In Progress** | YAML config + fallback, untested at runtime |
-| 8 | **AI/LLM** | Cost controller & budget enforcement | **In Progress** | Code complete, no real usage data |
-| 9 | **AI/LLM** | PII anonymization (Presidio) | **In Progress** | Optional dependency — may not be installed |
-| 10 | **AI/LLM** | Hallucination mitigation (4 layers) | **In Progress** | Citation validator, coherence, confidence, HITL written |
-| 11 | **AI/LLM** | Mock LLM mode (`C2PRO_AI_MOCK=1`) | **In Progress** | Exists, not confirmed functional |
-| 12 | **Frontend** | Page structure & routing | **In Progress** | All pages scaffolded |
-| 13 | **Frontend** | State management (Zustand) | **In Progress** | 4 stores implemented |
-| 14 | **Frontend** | Demo mode for offline testing | **In Progress** | Flag exists, UX coverage unclear |
-| 15 | **Frontend** | API client (orval OpenAPI codegen) | **In Progress** | Generated, sync with backend unverified |
-| 16 | **CI/CD** | GitHub Actions workflows (6) | **In Progress** | Files exist, pass/fail status unknown |
-| 17 | **CI/CD** | Docker multi-stage build | **In Progress** | Dockerfile written, build not confirmed |
-| 18 | **CI/CD** | Staging environment | **Pending** | No Staging env exists |
-| 19 | **CI/CD** | Production deployment automation | **Pending** | Target infra identified (Vercel/Railway), no automation |
-| 20 | **Security** | Clerk authentication | **In Progress** | Integrated, flow not tested E2E |
-| 21 | **Security** | Secrets scanning in CI | **Pending** | No `gitleaks` or equivalent |
-| 22 | **Security** | CORS audit | **Pending** | Configuration not reviewed |
-| 23 | **QA** | Unit test suite execution | **Blocked** | Tests written, never confirmed green |
-| 24 | **QA** | Integration test suite execution | **Blocked** | Requires working Docker stack |
-| 25 | **QA** | E2E test (full pipeline) | **Blocked** | Requires all services + mock LLM |
-| 26 | **QA** | Golden dataset for accuracy | **Pending** | No benchmark contracts exist |
-| 27 | **QA** | Performance/load testing | **Pending** | Locust file exists, never run |
-| 28 | **QA** | Frontend E2E (Playwright) | **Blocked** | Requires running backend |
+| #   | Area         | Item                                 | Status          | Notes                                                   |
+| --- | ------------ | ------------------------------------ | --------------- | ------------------------------------------------------- |
+| 1   | **Backend**  | FastAPI app structure & routing      | **In Progress** | Routes exist, not confirmed running                     |
+| 2   | **Backend**  | PostgreSQL schema & migrations       | **In Progress** | 9 migrations written, execution unverified              |
+| 3   | **Backend**  | Multi-tenant RLS isolation           | **In Progress** | Policies + 11 test scenarios written                    |
+| 4   | **Backend**  | Document upload & parsing pipeline   | **In Progress** | PDF/Excel/Word/BC3 parsers written                      |
+| 5   | **Backend**  | Redis event bus & caching            | **In Progress** | Code exists, operational status unknown                 |
+| 6   | **AI/LLM**   | LangGraph 17-node orchestration      | **In Progress** | Full graph defined, never executed E2E                  |
+| 7   | **AI/LLM**   | Model routing (Haiku/Sonnet/Opus)    | **In Progress** | YAML config + fallback, untested at runtime             |
+| 8   | **AI/LLM**   | Cost controller & budget enforcement | **In Progress** | Code complete, no real usage data                       |
+| 9   | **AI/LLM**   | PII anonymization (Presidio)         | **In Progress** | Optional dependency — may not be installed              |
+| 10  | **AI/LLM**   | Hallucination mitigation (4 layers)  | **In Progress** | Citation validator, coherence, confidence, HITL written |
+| 11  | **AI/LLM**   | Mock LLM mode (`C2PRO_AI_MOCK=1`)    | **In Progress** | Exists, not confirmed functional                        |
+| 12  | **Frontend** | Page structure & routing             | **In Progress** | All pages scaffolded                                    |
+| 13  | **Frontend** | State management (Zustand)           | **In Progress** | 4 stores implemented                                    |
+| 14  | **Frontend** | Demo mode for offline testing        | **In Progress** | Flag exists, UX coverage unclear                        |
+| 15  | **Frontend** | API client (orval OpenAPI codegen)   | **In Progress** | Generated, sync with backend unverified                 |
+| 16  | **CI/CD**    | GitHub Actions workflows (6)         | **In Progress** | Files exist, pass/fail status unknown                   |
+| 17  | **CI/CD**    | Docker multi-stage build             | **In Progress** | Dockerfile written, build not confirmed                 |
+| 18  | **CI/CD**    | Staging environment                  | **Pending**     | No Staging env exists                                   |
+| 19  | **CI/CD**    | Production deployment automation     | **Pending**     | Target infra identified (Vercel/Railway), no automation |
+| 20  | **Security** | Clerk authentication                 | **In Progress** | Integrated, flow not tested E2E                         |
+| 21  | **Security** | Secrets scanning in CI               | **Pending**     | No `gitleaks` or equivalent                             |
+| 22  | **Security** | CORS audit                           | **Pending**     | Configuration not reviewed                              |
+| 23  | **QA**       | Unit test suite execution            | **Blocked**     | Tests written, never confirmed green                    |
+| 24  | **QA**       | Integration test suite execution     | **Blocked**     | Requires working Docker stack                           |
+| 25  | **QA**       | E2E test (full pipeline)             | **Blocked**     | Requires all services + mock LLM                        |
+| 26  | **QA**       | Golden dataset for accuracy          | **Pending**     | No benchmark contracts exist                            |
+| 27  | **QA**       | Performance/load testing             | **Pending**     | Locust file exists, never run                           |
+| 28  | **QA**       | Frontend E2E (Playwright)            | **Blocked**     | Requires running backend                                |
 
 ---
 
@@ -335,29 +338,30 @@ The immediate priority is to make the system **testable and executable**. This d
 
 **Priority 0 — Unblock Testability (Days 1-3)**
 
-| # | Task | Owner (Agent) | Depends On | Deliverable |
-|---|------|---------------|------------|-------------|
-| 1 | **Boot local infrastructure:** Run `docker-compose up -d` (PostgreSQL, Redis, MinIO). Fix any issues. | Backend + CI/CD | None | All services healthy |
-| 2 | **Run database migrations:** Execute `alembic upgrade head` against local PostgreSQL. Fix schema errors. | Backend | Task 1 |  `alembic current` shows latest revision |
-| 3 | **Run unit tests:** `C2PRO_AI_MOCK=1 pytest tests/unit/ -v`. Fix failures. | QA | None | Green unit test suite with pass count |
-| 4 | **Start FastAPI server:** `uvicorn src.main:app` against Docker services. Verify `/health` and `/docs`. | Backend | Tasks 1, 2 | Swagger UI accessible |
-| 5 | **Run integration tests:** `C2PRO_AI_MOCK=1 pytest tests/integration/ -v`. Fix failures. | QA | Tasks 1, 2 | Green integration suite |
+| #   | Task                                                                                                         | Owner (Agent)   | Depends On | Deliverable                             |
+| --- | ------------------------------------------------------------------------------------------------------------ | --------------- | ---------- | --------------------------------------- |
+| 1   | [x] **Boot local infrastructure:** Run `docker-compose up -d` (PostgreSQL, Redis, MinIO). Fix any issues.    | Backend + CI/CD | None       | All services healthy                    |
+| 2   | [x] **Run database migrations:** Execute `alembic upgrade head` against local PostgreSQL. Fix schema errors. | Backend         | Task 1     | `alembic current` shows latest revision |
+| 3   | [x] **Run unit tests:** `C2PRO_AI_MOCK=1 pytest tests/unit/ -v`. Fix failures.                               | QA              | None       | Green unit test suite (276 passed)      |
+| 4   | [x] **Start FastAPI server:** `uvicorn src.main:app` against Docker services. Verify `/health` and `/docs`.  | Backend         | Tasks 1, 2 | Swagger UI accessible                   |
+| 5   | [x] **Run integration tests:** `C2PRO_AI_MOCK=1 pytest tests/integration/ -v`. Fix failures.                 | QA              | Tasks 1, 2 | Green integration suite (5 passed)      |
 
 **Priority 1 — First E2E Flow (Days 3-5)**
 
-| # | Task | Owner (Agent) | Depends On | Deliverable |
-|---|------|---------------|------------|-------------|
-| 6 | **Test document upload:** `POST /documents/upload` with a real PDF. Verify storage + parsing. | Backend + QA | Task 4 | Document parsed, clauses extracted |
-| 7 | **Test LangGraph pipeline:** Trigger orchestration with `C2PRO_AI_MOCK=1`. Verify N1→N16 executes. | AI/LLMOps | Tasks 4, 6 | Graph completes, results in DB |
-| 8 | **Test frontend connection:** Start Next.js dev server, authenticate via Clerk, navigate to project. | Frontend | Task 4 | Dashboard renders with real data |
-| 9 | **Run E2E security tests:** `pytest tests/e2e/security/ -v`. Verify all 11 tenant isolation scenarios. | Security + QA | Tasks 1, 2 | 11/11 scenarios pass |
-| 10 | **Validate HITL flow:** Simulate low-confidence extraction, verify review item appears in queue. | AI/LLMOps + QA | Task 7 | Review item created, UI shows it |
+| #   | Task                                                                                                                                                                                                                                                                                                                                                                     | Owner (Agent)  | Depends On | Deliverable                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ---------- | --------------------------------------------------------------------------------------- |
+| 6   | [x] **Test document upload:** `POST /documents/upload` with a real PDF. Verify storage + parsing.                                                                                                                                                                                                                                                                        | Backend + QA   | Task 4     | Document parsed, clauses extracted                                                      |
+| 7   | [x] **Test LangGraph pipeline:** Trigger orchestration with `C2PRO_AI_MOCK=1`.Verify N1→N16 executes.                                                                                                                                                                                                                                                                    | AI/LLMOps      | Tasks 4, 6 | Graph completes results in DB                                                           |
+| 8   | [x] **Test frontend connection:** Next.js dev server runs on :3001, Clerk sign-in succeeds, protected `/projects` loads without API errors, and (`0 projects` for the signed-in account).                                                                                                                                                                                | Frontend       | Task 4     | Completed and manually confirmed in browser                                             |
+| 9   | [x] **Run E2E security tests:** `pytest tests/e2e/security/ -v`. Verify tenant isolation scenarios.                                                                                                                                                                                                                                                                      | Security + QA  | Tasks 1, 2 | 24/24 tests passed (12 MCP gateway + 12 multi-tenant isolation)                         |
+| 9.1 | [~] **Fix RLS fail-closed vulnerability:** RLS policies used `COALESCE(..., tenant_id)` which allowed access to ALL rows when `app.current_tenant` was not set. Migration file `20260318_0002` exists in repo and the vulnerability is correctly identified, but the live DB currently remains on `alembic_version = 20260225_0001` and still shows permissive policies. | Security       | Task 9     | Fix drafted in code, but live rollout and bootstrap-safe verification are still pending |
+| 10  | **Validate HITL flow:** Simulate low-confidence extraction, verify review item appears in queue.                                                                                                                                                                                                                                                                         | AI/LLMOps + QA | Task 7     | Review item created, UI shows it                                                        |
 
 **Priority 2 — Stabilize & Harden (Days 5-10)**
 
-| # | Task | Owner (Agent) | Depends On | Deliverable |
-|---|------|---------------|------------|-------------|
-| 11 | **Create golden dataset:** 5 contracts with manually annotated risks, WBS, stakeholders, coherence. | AI/LLMOps | Task 7 | Dataset + expected output JSON |
+| # | Task | Owner (Agent) | Depends On | Deliverable ||---|------|---------------|------------|-------------|
+
+| 11 | **Create golden dataset:** High-quality contracts (aiming for >10) with manually annotated risks, WBS, stakeholders, coherence. | AI/LLMOps | Task 7 | Dataset + expected output JSON |
 | 12 | **Run accuracy regression:** Test golden dataset with real Claude API. Measure precision/recall. | AI/LLMOps | Task 11 | Accuracy baseline documented |
 | 13 | **Confirm all CI workflows green:** Push to a PR branch, verify all 6 GitHub Actions pass. | CI/CD | Tasks 3, 5 | All workflows green on PR |
 | 14 | **Make Presidio/spacy required:** Add to `requirements.txt` or implement regex fallback. | Security | None | PII anonymization guaranteed |
@@ -367,14 +371,14 @@ The immediate priority is to make the system **testable and executable**. This d
 
 **Priority 3 — Production Readiness (Days 10-20)**
 
-| # | Task | Owner (Agent) | Depends On | Deliverable |
-|---|------|---------------|------------|-------------|
-| 18 | **Set up Staging environment:** Railway preview + Supabase branch DB + Vercel preview. | CI/CD | Task 13 | Staging URL accessible |
-| 19 | **Automate deployments:** Merge to `main` → auto-deploy to Staging. Manual promote to Prod. | CI/CD | Task 18 | CI/CD pipeline green with auto-deploy |
-| 20 | **Run performance tests:** Execute Locust load test against Staging. Identify bottlenecks. | QA | Task 18 | P95 latency and throughput baseline |
-| 21 | **Document agent terminology:** Clarify "writer"/"reviewer" vs actual agents (Risk, WBS, Coherence, Citation). | AI/LLMOps | None | Updated architecture docs |
-| 22 | **Set up LangSmith production tracing:** Configure production project, dashboards, alerts. | AI/LLMOps | Task 19 | LangSmith dashboard live |
-| 23 | **Implement scheduled drift checks:** Enable `evaluation-regression.yml` and `scheduled-drift-checks.yml`. | AI/LLMOps + CI/CD | Tasks 11, 19 | Nightly checks running |
+| #   | Task                                                                                                           | Owner (Agent)     | Depends On   | Deliverable                           |
+| --- | -------------------------------------------------------------------------------------------------------------- | ----------------- | ------------ | ------------------------------------- |
+| 18  | **Set up Staging environment:** Railway preview + Supabase branch DB + Vercel preview.                         | CI/CD             | Task 13      | Staging URL accessible                |
+| 19  | **Automate deployments:** Merge to `main` → auto-deploy to Staging. Manual promote to Prod.                    | CI/CD             | Task 18      | CI/CD pipeline green with auto-deploy |
+| 20  | **Run performance tests:** Execute Locust load test against Staging. Identify bottlenecks.                     | QA                | Task 18      | P95 latency and throughput baseline   |
+| 21  | **Document agent terminology:** Clarify "writer"/"reviewer" vs actual agents (Risk, WBS, Coherence, Citation). | AI/LLMOps         | None         | Updated architecture docs             |
+| 22  | **Set up LangSmith production tracing:** Configure production project, dashboards, alerts.                     | AI/LLMOps         | Task 19      | LangSmith dashboard live              |
+| 23  | **Implement scheduled drift checks:** Enable `evaluation-regression.yml` and `scheduled-drift-checks.yml`.     | AI/LLMOps + CI/CD | Tasks 11, 19 | Nightly checks running                |
 
 ---
 
@@ -382,8 +386,8 @@ The immediate priority is to make the system **testable and executable**. This d
 
 The project description references **"writer"** and **"reviewer"** agent roles. Based on codebase analysis, the actual agent architecture is:
 
-| Described Role | Actual Implementation | Function |
-|---|---|---|
+| Described Role | Actual Implementation | Function ||---|---|---|
+
 | "Writer" (inference) | `RiskExtractionAgent`, `WBSExtractionAgent`, Coherence Evaluator | Agents that **generate** structured output from documents |
 | "Reviewer" (quality) | `CritiqueNode` (N12), `CitationValidator` (N15), HITL (N13/N14) | Agents/nodes that **validate and critique** generated output |
 
@@ -393,15 +397,36 @@ The "writer"/"reviewer" pattern is correctly implemented as a **generator-critic
 
 ### Risk Register
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
+| Risk | Probability | Impact | Mitigation ||------|-------------|--------|------------|
+
 | Infrastructure never boots correctly | Medium | **Critical** | Priority 0, Task 1 — fix immediately |
 | Tests pass with mocks but fail with real LLM | High | High | Golden dataset (Task 11) + weekly real-LLM runs |
 | PII leaks to Claude in environments without Presidio | Medium | **Critical** | Task 14 — make Presidio required |
 | Cost overrun from unmonitored LLM usage | Low | High | Budget controller exists, needs real-world validation |
 | LangGraph state corruption on failure | Medium | High | Test checkpointer (Task 7), add recovery logic |
 | Frontend-backend API contract drift | Medium | Medium | Automate orval sync in CI (Task 13) |
+| RLS policy is fail-open in the live DB | **Critical** | **Critical** | Drafted migration exists, but live DB still shows permissive policies and requires bootstrap/auth-path refactor before safe rollout |
+| Tables with `project_id` lack direct RLS | Medium | Medium | Do not rely on FK alone for row visibility; either keep child-table RLS or enforce all access through protected joins |
 
 ---
 
-*Report generated by Lead Engineering & Product Orchestrator — C2Pro Technical Audit Session*
+## Phase 3: Audit Resolution Tasks (NEW)
+
+### Operational Integrity
+
+- [x] **Task 3.1: LangGraph PostgreSQL Checkpointer:** Verify that `workflow.py` correctly persists state to Postgres between node transitions, allowing for manual recovery of stalled analysis runs.
+- [x] **Task 3.2: Celery Worker Health Check:** Implement a `/api/v1/health/worker` endpoint that confirms the Celery background worker is alive and consuming the `document_parsing` queue.
+- [ ] **Task 3.3: Golden Dataset Baseline:** Curate 5 reference contracts and create a `tests/accuracy/golden_responses.json` to enable automated accuracy regression testing.
+
+### Deployment & CI/CD
+
+- [x] **Task 3.4: Automated Gitleaks Scanning:** Integrate `gitleaks` into the GitHub Actions `tests.yml` to prevent accidental API key leaks.
+- [x] **Task 3.5: Vercel/Railway CD Pipeline:** Establish the "Merge-to-Main" auto-deployment path for both `apps/web` and `apps/api`.
+
+### UI/UX Polish
+
+- [x] **Task 3.6: LLM Execution Streaming:** Implement a WebSocket or SSE-based "Node Progress Tracker" so users see which node (N1-N16) the analysis is currently in. (UI Implemented in AnalysisProgressTracker.tsx)
+
+---
+
+_Report generated by Lead Engineering & Product Orchestrator — C2Pro Technical Audit Session_

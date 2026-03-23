@@ -16,31 +16,42 @@ interface UseProjectDocumentsResult {
 }
 
 /**
+ * Map backend DocumentType to frontend type
+ */
+const documentTypeMap: Record<string, DocumentInfo['type']> = {
+  contract: 'contract',
+  schedule: 'schedule',
+  bom: 'bom',
+  budget: 'bom', // Map budget to bom for now
+  specification: 'specification',
+  drawing: 'drawing',
+  other: 'contract',
+};
+
+/**
  * Transform backend DocumentResponse to frontend DocumentInfo
  */
 function transformDocument(doc: DocumentListResponse): DocumentInfo {
-  // Map backend DocumentType to frontend type
-  const typeMap: Record<string, any> = {
-    CONTRACT: 'contract',
-    SCHEDULE: 'schedule',
-    BOM: 'bom',
-    SPECIFICATION: 'specification',
-    DRAWING: 'drawing',
-    OTHER: 'contract',
-  };
+  // Map file format to extension based on filename
+  const extension = doc.filename?.split('.').pop()?.toLowerCase() || 'pdf';
+  const validExtension = ['pdf', 'xlsx', 'docx', 'dwg'].includes(extension)
+    ? extension as DocumentInfo['extension']
+    : 'pdf';
 
-  // Map file format to extension
-  const extension = 'pdf';
+  // Map document type (if provided in response, otherwise default)
+  const backendType = doc.document_type?.toLowerCase();
+  const mappedType = backendType ? documentTypeMap[backendType] || 'contract' : 'contract';
 
   return {
     id: doc.id,
     name: doc.filename || 'Untitled',
-    type: 'contract',
-    extension,
+    type: mappedType,
+    extension: validExtension,
     url: '',
     totalPages: undefined,
     fileSize: doc.file_size_bytes || 0,
     uploadedAt: doc.uploaded_at ? new Date(doc.uploaded_at) : undefined,
+    status: doc.status,
   };
 }
 

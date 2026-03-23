@@ -180,41 +180,65 @@ async def user_b(db, tenant_b: Tenant) -> User:
 @pytest_asyncio.fixture
 async def project_a(db, tenant_a: Tenant):
     """
-    Create a project for Tenant A.
+    Create a project for Tenant A in the database.
     """
-    from src.projects.adapters.http.router import _add_fake_project
+    from src.projects.adapters.persistence.models import ProjectORM
 
-    project_data = {
-        "id": uuid4(),
-        "tenant_id": tenant_a.id,
-        "name": "Project A",
-        "code": "PROJ-A-001",
-        "project_type": "construction",
-        "estimated_budget": 100000.0,
-        "currency": "EUR",
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=tenant_a.id,
+        name="Project A",
+        code="PROJ-A-001",
+        project_type="construction",
+        status="active",
+        estimated_budget=100000.0,
+        currency="EUR",
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+
+    return {
+        "id": project.id,
+        "tenant_id": project.tenant_id,
+        "name": project.name,
+        "code": project.code,
+        "project_type": project.project_type,
+        "estimated_budget": project.estimated_budget,
+        "currency": project.currency,
     }
-    _add_fake_project(project_data)
-    return project_data
 
 
 @pytest_asyncio.fixture
 async def project_b(db, tenant_b: Tenant):
     """
-    Create a project for Tenant B.
+    Create a project for Tenant B in the database.
     """
-    from src.projects.adapters.http.router import _add_fake_project
+    from src.projects.adapters.persistence.models import ProjectORM
 
-    project_data = {
-        "id": uuid4(),
-        "tenant_id": tenant_b.id,
-        "name": "Project B",
-        "code": "PROJ-B-001",
-        "project_type": "construction",
-        "estimated_budget": 50000.0,
-        "currency": "EUR",
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=tenant_b.id,
+        name="Project B",
+        code="PROJ-B-001",
+        project_type="construction",
+        status="active",
+        estimated_budget=50000.0,
+        currency="EUR",
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+
+    return {
+        "id": project.id,
+        "tenant_id": project.tenant_id,
+        "name": project.name,
+        "code": project.code,
+        "project_type": project.project_type,
+        "estimated_budget": project.estimated_budget,
+        "currency": project.currency,
     }
-    _add_fake_project(project_data)
-    return project_data
 
 
 # ===========================================

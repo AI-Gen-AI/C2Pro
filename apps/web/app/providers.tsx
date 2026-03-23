@@ -1,6 +1,7 @@
 "use client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ClerkProvider } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -10,19 +11,37 @@ import { DemoModeProvider } from "@/contexts/demo-mode";
 import { createQueryClient } from "@/lib/api/queryClient";
 import "@/lib/api/config";
 import { SentryInit } from "@/components/providers/SentryInit";
-import { useAppModeStore, selectIsDemoMode } from "@/stores/app-mode";
+import {
+  useAppModeStore,
+  selectIsDemoMode,
+  isExplicitDemoRoute,
+} from "@/stores/app-mode";
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const pathname = usePathname();
+  const syncWithPathname = useAppModeStore((state) => state.syncWithPathname);
+  const demoEnvironmentEnabled = useAppModeStore(
+    (state) => state.demoEnvironmentEnabled,
+  );
   const isDemoMode = useAppModeStore(selectIsDemoMode);
   const [client] = useState(() => createQueryClient());
-  const [mswReady, setMswReady] = useState(!isDemoMode);
+  const shouldUseDemoMode =
+    demoEnvironmentEnabled && isExplicitDemoRoute(pathname);
+  const [mswReady, setMswReady] = useState(!shouldUseDemoMode);
 
   useEffect(() => {
-    if (!isDemoMode) return;
+    syncWithPathname(pathname);
+  }, [pathname, syncWithPathname]);
+
+  useEffect(() => {
+    if (!shouldUseDemoMode) {
+      setMswReady(true);
+      return;
+    }
 
     async function initMsw() {
       const { worker } = await import("@/mocks/browser");
@@ -31,7 +50,7 @@ export function Providers({ children }: ProvidersProps) {
     }
 
     initMsw();
-  }, [isDemoMode]);
+  }, [shouldUseDemoMode]);
 
   if (!mswReady) {
     return (

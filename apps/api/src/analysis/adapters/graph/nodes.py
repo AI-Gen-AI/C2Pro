@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -245,10 +246,12 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         return state
 
     from src.core.database import get_session_with_tenant
+    from sqlalchemy import delete
     from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
     from src.analysis.adapters.persistence.models import Alert, Analysis
     from src.analysis.domain.enums import AnalysisStatus, AnalysisType
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+    from src.procurement.adapters.persistence.models import WBSItemORM
 
     project_id = UUID(state["project_id"])
     tenant_id = UUID(state["tenant_id"])
@@ -257,10 +260,15 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     async with get_session_with_tenant(tenant_id) as session:
         repo = SqlAlchemyAnalysisRepository(session)
         wbs_repo = SQLAlchemyWBSRepository(session)
+        alerts_count = len(state.get("extracted_risks", []))
         analysis = Analysis(
             project_id=project_id,
             analysis_type=analysis_type,
             status=AnalysisStatus.COMPLETED,
+            coherence_score=state.get("coherence_score"),
+            coherence_breakdown=state.get("coherence_breakdown"),
+            alerts_count=alerts_count,
+            completed_at=datetime.utcnow(),
             result_json={"risks": state["extracted_risks"], "wbs": state["extracted_wbs"]},
         )
         await repo.add_analysis(analysis)
@@ -286,6 +294,11 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
             await repo.add_alerts(alerts)
 
         if state["extracted_wbs"]:
+            # Re-analysis is expected in real usage; replace previous WBS snapshot
+            # for this project to avoid duplicate (project_id, code) conflicts.
+            await session.execute(
+                delete(WBSItemORM).where(WBSItemORM.project_id == project_id)
+            )
             await wbs_repo.bulk_create_from_dicts(project_id, state["extracted_wbs"])
 
         state["analysis_id"] = str(analysis.id)

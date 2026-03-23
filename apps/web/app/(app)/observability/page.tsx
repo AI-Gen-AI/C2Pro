@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { env } from '@/config/env';
 
 interface SystemStatus {
   api_status: string;
@@ -19,8 +20,6 @@ interface RecentAnalysis {
   completed_at: string | null;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 export default function ObservabilityPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
@@ -33,7 +32,7 @@ export default function ObservabilityPage() {
       setError(null);
       try {
         // Fetch System Status
-        const statusResponse = await fetch(`${API_BASE_URL}/api/v1/observability/status`);
+        const statusResponse = await fetch(`${env.API_BASE_URL}/observability/status`);
         if (!statusResponse.ok) {
           throw new Error(`Error fetching system status: ${statusResponse.statusText}`);
         }
@@ -41,7 +40,7 @@ export default function ObservabilityPage() {
         setSystemStatus(statusData);
 
         // Fetch Recent Analyses
-        const analysesResponse = await fetch(`${API_BASE_URL}/api/v1/observability/analyses`);
+        const analysesResponse = await fetch(`${env.API_BASE_URL}/observability/analyses`);
         if (!analysesResponse.ok) {
           throw new Error(`Error fetching recent analyses: ${analysesResponse.statusText}`);
         }

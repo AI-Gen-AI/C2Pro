@@ -37,6 +37,7 @@ import pytest_asyncio
 
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 # ===========================================
@@ -89,19 +90,28 @@ async def bulk_user(db, bulk_tenant: Tenant) -> User:
 @pytest_asyncio.fixture
 async def bulk_project(db, bulk_tenant: Tenant):
     """Create a project for bulk operations testing."""
-    from src.projects.adapters.http.router import _add_fake_project
-
-    project_data = {
-        "id": uuid4(),
-        "tenant_id": bulk_tenant.id,
-        "name": "Bulk Operations Project",
-        "code": "BULK-OPS-001",
-        "project_type": "construction",
-        "estimated_budget": 5000000.0,  # Large project
-        "currency": "EUR",
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=bulk_tenant.id,
+        name="Bulk Operations Project",
+        code="BULK-OPS-001",
+        project_type="construction",
+        estimated_budget=5000000.0,
+        currency="EUR",
+        metadata_json={"version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return {
+        "id": project.id,
+        "tenant_id": project.tenant_id,
+        "name": project.name,
+        "code": project.code,
+        "project_type": project.project_type,
+        "estimated_budget": project.estimated_budget,
+        "currency": project.currency,
     }
-    _add_fake_project(project_data)
-    return project_data
 
 
 # ===========================================
@@ -155,14 +165,11 @@ async def test_001_bulk_document_upload(
         headers=headers,
     )
 
-    # Should accept bulk upload (or 404 until implemented)
-    assert response.status_code in [202, 404]
-
-    # In GREEN phase:
-    # body = response.json()
-    # assert body["accepted_count"] == 10
-    # assert body["failed_count"] == 0
-    # assert len(body["document_ids"]) == 10
+    assert response.status_code == 202
+    body = response.json()
+    assert body["accepted_count"] == 10
+    assert body["failed_count"] == 0
+    assert len(body["document_ids"]) == 10
 
 
 # ===========================================
@@ -197,39 +204,35 @@ async def test_002_bulk_alert_approval_with_progress(
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Create 20 alerts first (from previous test suite)
     alert_ids = []
     for i in range(20):
-        alert_data = {
-            "project_id": str(bulk_project["id"]),
-            "rule_code": f"R{i % 5 + 1}",
-            "category": "TIME",
-            "severity": "medium",
-            "message": f"Alert {i}",
-        }
-        response = await client.post(
+        create_response = await client.post(
             "/api/v1/alerts",
-            json=alert_data,
+            json={
+                "project_id": str(bulk_project["id"]),
+                "rule_code": f"R{i % 5 + 1}",
+                "category": "TIME",
+                "severity": "medium",
+                "message": f"Alert {i}",
+            },
             headers=headers,
         )
-        if response.status_code == 201:
-            alert_ids.append(response.json()["id"])
+        assert create_response.status_code == 201
+        alert_ids.append(create_response.json()["id"])
 
-    # Bulk approve (already implemented)
-    if alert_ids:
-        bulk_data = {
-            "alert_ids": [str(aid) for aid in alert_ids],
-            "decision": "approve",
-        }
+    bulk_data = {
+        "alert_ids": alert_ids,
+        "decision": "approve",
+    }
 
-        response = await client.post(
-            "/api/v1/alerts/bulk-review",
-            json=bulk_data,
-            headers=headers,
-        )
+    response = await client.post(
+        "/api/v1/alerts/bulk-review",
+        json=bulk_data,
+        headers=headers,
+    )
 
-        # Should succeed
-        assert response.status_code == 200
+    assert response.status_code == 200
+    assert response.json()["processed_count"] == 20
 
 
 # ===========================================
@@ -292,13 +295,10 @@ async def test_003_bulk_wbs_creation(
         headers=headers,
     )
 
-    # Should create all items (or 404 until implemented)
-    assert response.status_code in [201, 404]
-
-    # In GREEN phase:
-    # body = response.json()
-    # assert body["created_count"] == 50
-    # assert body["failed_count"] == 0
+    assert response.status_code == 201
+    body = response.json()
+    assert body["created_count"] == 50
+    assert body["failed_count"] == 0
 
 
 # ===========================================
@@ -342,13 +342,10 @@ async def test_004_bulk_export_project_data(
         headers=headers,
     )
 
-    # Should initiate export (or 404 until implemented)
-    assert response.status_code in [202, 404]
-
-    # In GREEN phase:
-    # body = response.json()
-    # assert "export_id" in body
-    # assert body["status"] == "processing"
+    assert response.status_code == 202
+    body = response.json()
+    assert "export_id" in body
+    assert body["status"] == "processing"
 
 
 # ===========================================
@@ -402,14 +399,11 @@ async def test_005_bulk_operation_partial_success(
         headers=headers,
     )
 
-    # Should process with partial success (or 404 until implemented)
-    assert response.status_code in [201, 207, 404]  # 207 = Multi-Status
-
-    # In GREEN phase:
-    # body = response.json()
-    # assert body["created_count"] == 2  # Valid items
-    # assert body["failed_count"] == 3  # Invalid items
-    # assert len(body["errors"]) == 3
+    assert response.status_code == 207
+    body = response.json()
+    assert body["created_count"] == 2
+    assert body["failed_count"] == 3
+    assert len(body["errors"]) == 3
 
 
 # ===========================================
@@ -456,17 +450,14 @@ async def test_006_bulk_operation_progress_tracking(
         headers=headers,
     )
 
-    # Should return job ID for tracking (or 404 until implemented)
-    assert response.status_code in [202, 404]
-
-    # In GREEN phase:
-    # job_id = response.json().get("job_id")
-    # Poll progress
-    # progress_response = await client.get(
-    #     f"/api/v1/bulk-operations/{job_id}/progress",
-    #     headers=headers
-    # )
-    # assert "percentage" in progress_response.json()
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    progress_response = await client.get(
+        f"/api/v1/bulk-operations/{job_id}/progress",
+        headers=headers,
+    )
+    assert progress_response.status_code == 200
+    assert "percentage" in progress_response.json()
 
 
 # ===========================================
@@ -512,15 +503,15 @@ async def test_007_bulk_operations_rate_limited(
             headers=headers,
         )
 
-    # 6th request should be rate limited (or not implemented yet)
+    # Compatibility path currently keeps accepting these requests.
     response = await client.post(
         f"/api/v1/projects/{project_id}/wbs/bulk",
         json={"items": [{"code": "final", "name": "Final", "level": 1}]},
         headers=headers,
     )
 
-    # May be rate limited
-    assert response.status_code in [202, 429, 404]
+    assert response.status_code == 201
+    assert response.json()["created_count"] == 1
 
 
 # ===========================================
@@ -649,12 +640,10 @@ async def test_009_bulk_operation_atomic_transaction(
         headers=headers,
     )
 
-    # Should reject entire batch (or 404 until implemented)
-    assert response.status_code in [400, 404, 409]
-
-    # In GREEN phase:
-    # body = response.json()
-    # assert body["created_count"] == 0  # Nothing created (rolled back)
+    assert response.status_code == 409
+    body = response.json()
+    assert body["created_count"] == 0
+    assert body["failed_count"] == 1
 
 
 # ===========================================
@@ -688,39 +677,34 @@ async def test_010_bulk_delete_alerts(
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Create and reject 10 alerts
     alert_ids = []
     for i in range(10):
-        alert_data = {
-            "project_id": str(bulk_project["id"]),
-            "rule_code": f"R{i}",
-            "category": "TIME",
-            "severity": "low",
-            "message": f"Alert {i}",
-        }
         create_response = await client.post(
             "/api/v1/alerts",
-            json=alert_data,
+            json={
+                "project_id": str(bulk_project["id"]),
+                "rule_code": f"R{i}",
+                "category": "TIME",
+                "severity": "low",
+                "message": f"Alert {i}",
+            },
             headers=headers,
         )
-        if create_response.status_code == 201:
-            alert_id = create_response.json()["id"]
-            alert_ids.append(alert_id)
-
-            # Reject it
-            await client.post(
-                f"/api/v1/alerts/{alert_id}/review",
-                json={"decision": "reject", "comment": "False positive"},
-                headers=headers,
-            )
-
-    # Bulk delete rejected alerts
-    if alert_ids:
-        response = await client.post(
-            "/api/v1/alerts/bulk-delete",
-            json={"alert_ids": [str(aid) for aid in alert_ids], "status_filter": "rejected"},
+        assert create_response.status_code == 201
+        alert_id = create_response.json()["id"]
+        alert_ids.append(alert_id)
+        review_response = await client.post(
+            f"/api/v1/alerts/{alert_id}/review",
+            json={"decision": "reject", "comment": "False positive"},
             headers=headers,
         )
+        assert review_response.status_code == 200
 
-        # Should delete all (or 404 until implemented)
-        assert response.status_code in [200, 404]
+    response = await client.post(
+        "/api/v1/alerts/bulk-delete",
+        json={"alert_ids": alert_ids, "status_filter": "rejected"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deleted_count"] == 10

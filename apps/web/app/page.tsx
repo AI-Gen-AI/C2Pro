@@ -20,7 +20,7 @@ export default function RootPage() {
       } else if (userRole === 'tenant_admin') {
         router.push('/admin/tenant');
       } else {
-        router.push('/dashboard/projects');
+        router.push('/projects');
       }
       return;
     } else {

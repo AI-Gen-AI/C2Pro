@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Search, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, Search, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { deleteDocument } from '@/lib/api';
 import { formatFileSize } from '@/types/document';
+import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
 
 type DocumentStatus = 'Analyzed' | 'Processing' | 'Uploaded' | 'Error';
 
@@ -63,58 +73,56 @@ function labelType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-// Mock documents for E2E testing
-const mockDocuments = [
-  {
-    id: "doc-1",
-    name: "Contract Amendment v2.pdf",
-    type: "Contract",
-    status: "Analyzed",
-    uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    fileSize: 2500000,
-  },
-  {
-    id: "doc-2",
-    name: "Project Schedule.xlsx",
-    type: "Schedule",
-    status: "Analyzed",
-    uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    fileSize: 450000,
-  },
-  {
-    id: "doc-3",
-    name: "Budget Estimate.pdf",
-    type: "Budget",
-    status: "Processing",
-    uploadedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    fileSize: 1200000,
-  },
-];
-
 export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
-  const { documents, loading, error } = useProjectDocuments(projectId);
+  const { documents, loading, error, refetch } = useProjectDocuments(projectId);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Use mock data for E2E tests if no real data
-  const displayDocuments = documents.length > 0 ? documents : mockDocuments;
+  const handleUploadComplete = () => {
+    setUploadDialogOpen(false);
+    refetch();
+  };
+
+  const handleDeleteClick = (docId: string, docName: string) => {
+    setDocumentToDelete({ id: docId, name: docName });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!documentToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDocument(documentToDelete.id);
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const rows = useMemo(
     () =>
-      displayDocuments.map((doc) => ({
+      documents.map((doc) => ({
         id: doc.id,
         name: doc.name,
         type: labelType(doc.type || 'PDF'),
-        status: normalizeStatus((doc as { status?: string }).status ?? 'Analyzed'),
+        status: normalizeStatus(doc.status ?? 'parsed'),
         uploadedAt: doc.uploadedAt,
         size: formatFileSize(doc.fileSize),
       })),
-    [displayDocuments]
+    [documents]
   );
 
   const typeOptions = useMemo(
@@ -136,6 +144,7 @@ export default function ProjectDocumentsPage() {
   const analyzedCount = rows.filter((row) => row.status === 'Analyzed').length;
   const processingCount = rows.filter((row) => row.status === 'Processing').length;
   const errorCount = rows.filter((row) => row.status === 'Error').length;
+  const hasBackendDocuments = rows.length > 0;
 
   return (
     <div className="space-y-6" data-testid="documents-page">
@@ -153,11 +162,68 @@ export default function ProjectDocumentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
           <p className="text-muted-foreground">Project: {projectId}</p>
         </div>
-        <Button>
+        <Button onClick={() => setUploadDialogOpen(true)}>
           <Upload className="mr-2 h-4 w-4" />
           Upload Document
         </Button>
       </div>
+
+      {/* Upload Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Upload Documents</DialogTitle>
+          </DialogHeader>
+          <DocumentUploadDropzone
+            projectId={projectId}
+            maxFileSizeBytes={50 * 1024 * 1024}
+            onUploadComplete={handleUploadComplete}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        if (!isDeleting) {
+          setDeleteDialogOpen(open);
+          if (!open) setDocumentToDelete(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{documentToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setDocumentToDelete(null);
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -231,12 +297,13 @@ export default function ProjectDocumentsPage() {
                 <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Size</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Upload Date</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     Loading documents...
                   </td>
                 </tr>
@@ -272,13 +339,25 @@ export default function ProjectDocumentsPage() {
                       <td className="px-4 py-3 text-sm text-muted-foreground" data-testid="document-date">
                         {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '-'}
                       </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteClick(doc.id, doc.name)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                    No documents found for this project
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                    {hasBackendDocuments
+                      ? 'No documents match the current filters'
+                      : 'No documents found for this project'}
                   </td>
                 </tr>
               )}

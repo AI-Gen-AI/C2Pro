@@ -10,6 +10,7 @@ Comprehensive tests for middleware components including:
 
 import pytest
 import time
+from contextlib import asynccontextmanager
 from unittest.mock import Mock, AsyncMock, patch
 from types import SimpleNamespace
 from uuid import uuid4, UUID
@@ -333,6 +334,55 @@ class TestTenantIsolationMiddleware:
 
         assert response.status_code == 401
         assert "Invalid authentication context" in response.json()["detail"]
+        assert response.json()["reason_code"] == "tenant_inactive_or_missing"
+
+    @pytest.mark.asyncio
+    async def test_auth_bootstrap_policy_block_returns_reason_code(self, app):
+        """
+        Should return deterministic reason code when bootstrap fallback is blocked.
+        """
+        app.add_middleware(TenantIsolationMiddleware)
+        client = TestClient(app)
+
+        with patch(
+            "src.core.middleware.tenant_isolation.TenantIsolationMiddleware._extract_auth_context",
+            new=AsyncMock(
+                return_value=(
+                    None,
+                    None,
+                    False,
+                    "Auth bootstrap fallback blocked by policy",
+                    "auth_bootstrap_fallback_blocked",
+                )
+            ),
+        ):
+            response = client.get("/protected", headers={"Authorization": "Bearer ignored"})
+
+        assert response.status_code == 401
+        assert response.json()["reason_code"] == "auth_bootstrap_fallback_blocked"
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_for_clerk_user_uses_bootstrap_lookup(self):
+        """
+        Should resolve Clerk tenant through the bootstrap lookup adapter.
+        """
+        middleware = TenantIsolationMiddleware(app=Mock())
+        expected_tenant_id = uuid4()
+        record = SimpleNamespace(tenant_id=expected_tenant_id)
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
+            with patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(return_value=record),
+            ) as mock_lookup:
+                tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
+
+        assert tenant_id == expected_tenant_id
+        mock_lookup.assert_awaited_once()
 
 
 # ===========================================

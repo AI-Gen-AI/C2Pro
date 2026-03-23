@@ -114,23 +114,23 @@ apps/api/src/
 
 ### Métricas de Progreso
 
-| Área                    | Estado          | Progreso | Nota (2026-02-14)                                     |
-| ----------------------- | --------------- | -------- | ----------------------------------------------------- |
-| Estructura Modular      | ✅ Activo       | 100%     |                                                       |
-| Core Transversal        | ✅ Consolidado  | 100%     |                                                       |
-| Routers HTTP Delgados   | ✅ Implementado | 100%     |                                                       |
-| Regla Cross-Módulo      | ✅ Aplicada     | 100%     |                                                       |
-| Coherence Engine v2     | 🔄 En Progreso  | 85%      | 12/12 suites dominio OK, falta dashboard + YAML rules |
-| MCP Gateway             | ✅ Completado   | 100%     | 4/4 tareas Gateway completadas                        |
-| Anonymizer Service      | 🔄 En Progreso  | 75%      | Detección + Estrategias OK, falta audit + tests       |
-| Seguridad Multitenant   | 🔄 En Progreso  | 70%      | Middleware + Context OK, falta repo filters + RLS     |
-| Observabilidad Completa | 🔄 En Progreso  | 40%      |                                                       |
-| TDD Suites              | 🔄 En Progreso  | 99%      | 88/89 suites completadas (ver TDD Backlog v1.4)       |
-| AI Pipeline (I1-I2)     | ✅ Completado   | 100%     | Ingestion contract + OCR/table reliability completados |
-| AI Pipeline (I3-I4)     | ✅ Completado   | 100%     | Clause extraction normalization + hybrid retrieval/rerank/gating completados |
-| AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados |
-| AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados |
-| AI Pipeline (I10-I12)   | ✅ Completado   | 100%     | Stakeholder/RACI + HITL workflow + LangSmith/eval harness + S5 security assertions + DevOps CI gates/scheduled drift checks completados |
+| Área                    | Estado          | Progreso | Nota (2026-02-14)                                                                                                                                                                                                                     |
+| ----------------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Estructura Modular      | ✅ Activo       | 100%     |                                                                                                                                                                                                                                       |
+| Core Transversal        | ✅ Consolidado  | 100%     |                                                                                                                                                                                                                                       |
+| Routers HTTP Delgados   | ✅ Implementado | 100%     |                                                                                                                                                                                                                                       |
+| Regla Cross-Módulo      | ✅ Aplicada     | 100%     |                                                                                                                                                                                                                                       |
+| Coherence Engine v2     | 🔄 En Progreso  | 85%      | 12/12 suites dominio OK, falta dashboard + YAML rules                                                                                                                                                                                 |
+| MCP Gateway             | ✅ Completado   | 100%     | 4/4 tareas Gateway completadas + rate limiting Redis/auditoría DB-backed                                                                                                                                                              |
+| Anonymizer Service      | 🔄 En Progreso  | 75%      | Detección + Estrategias OK, falta audit + tests                                                                                                                                                                                       |
+| Seguridad Multitenant   | 🔄 En Progreso  | 70%      | Middleware + Context OK, falta repo filters + RLS                                                                                                                                                                                     |
+| Observabilidad Completa | 🔄 En Progreso  | 50%      | Sentry lifecycle cableado; faltan traces end-to-end, visualización y budget alerts                                                                                                                                                    |
+| TDD Suites              | 🔄 En Progreso  | 99%      | 88/89 suites completadas (ver TDD Backlog v1.4)                                                                                                                                                                                       |
+| AI Pipeline (I1-I2)     | ✅ Completado   | 100%     | Ingestion contract + OCR/table reliability completados                                                                                                                                                                                |
+| AI Pipeline (I3-I4)     | ✅ Completado   | 100%     | Clause extraction normalization + hybrid retrieval/rerank/gating completados                                                                                                                                                          |
+| AI Pipeline (I5-I6)     | ✅ Completado   | 100%     | Graph integrity + coherence pure-rule engine + standardized alert contract completados                                                                                                                                                |
+| AI Pipeline (I7-I9)     | ✅ Completado   | 100%     | Risk scoring aggregation + WBS/BOM generation + procurement intelligence + S4 security assertions completados                                                                                                                         |
+| AI Pipeline (I10-I12)   | ✅ Completado   | 100%     | Stakeholder/RACI + HITL workflow + LangSmith/eval harness + S5 security assertions + DevOps CI gates/scheduled drift checks completados                                                                                               |
 | AI Pipeline (I13)       | ✅ Completado   | 100%     | Real E2E route contract estabilizado (`/api/v1/decision-intelligence/execute`) + auth/tenant deterministic harness + S6 blocking CI gate; hardening de orquestación en curso (`TS-I13-MAP-001` completada, `TS-I13-EDGE-001` parcial) |
 
 ---
@@ -886,6 +886,7 @@ class LeadTimeCalculator:
 | `coherence.updated`  | Coherence | UI Dashboard, Audit         |
 
 Reglas de transporte (Redis Pub/Sub):
+
 - Canal canónico: `c2pro.{env}.{tenant_id}.{topic}`
 - Scope multi-tenant obligatorio: suscripciones y publicación por `tenant_id`
 - Metadatos mínimos de observabilidad por evento: `correlation_id`, `tenant_id`, `topic`
@@ -960,11 +961,11 @@ Upload → API → Job Queue → Worker → [
 
 ### 12.2 Tareas de Testing
 
-| ID     | Tarea                          | Estado       | Esfuerzo |
-| ------ | ------------------------------ | ------------ | -------- |
-| 12.2.1 | Unit tests dominio y use cases | ⏳ PENDIENTE | L        |
-| 12.2.2 | Integración adaptadores        | ⏳ PENDIENTE | L        |
-| 12.2.3 | Contratos APIs externas        | ⏳ PENDIENTE | M        |
+| ID     | Tarea                          | Estado                                                                                                           | Esfuerzo |
+| ------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------- |
+| 12.2.1 | Unit tests dominio y use cases | ⏳ PENDIENTE                                                                                                     | L        |
+| 12.2.2 | Integración adaptadores        | ⏳ PENDIENTE                                                                                                     | L        |
+| 12.2.3 | Contratos APIs externas        | ⏳ PENDIENTE                                                                                                     | M        |
 | 12.2.4 | E2E flujos críticos            | 🔄 EN PROGRESO (TS-E2E-ERR-TIM-001 + TS-E2E-ERR-CON-001 + TS-E2E-ERR-REC-001 + TS-E2E-PER-LRG-001 implementados) | L        |
 
 ### 12.3 Tests de Integración Cross-Módulo
@@ -1005,6 +1006,7 @@ Upload → API → Job Queue → Worker → [
 Estado: `✅ COMPLETADO (2026-02-15)`
 
 Prerrequisitos normativos para ejecución real E2E (sin mocks de servicio):
+
 1. Infra preflight obligatorio:
    `python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis`
 2. Tenant/auth deterministic seed en harness E2E:
@@ -1015,17 +1017,20 @@ Prerrequisitos normativos para ejecución real E2E (sin mocks de servicio):
    job `i13-real-e2e` en `.github/workflows/tests.yml`.
 
 Rationale del parche de migración (bloqueo infra):
+
 - Archivo: `apps/api/alembic/versions/20260124_0001_add_raci_evidence_text.py`
 - Cambio: guards idempotentes para existencia de tabla/columna en `upgrade/downgrade`.
 - Motivo: evitar fallas de bootstrap por estados parciales de esquema no relacionados con lógica I13.
 
 Riesgos conocidos y mitigación:
+
 1. Riesgo: los guards pueden ocultar drift estructural severo.
    Mitigación: verificación de head alembic en bootstrap + artefactos de diagnóstico CI.
 2. Riesgo: fallback manual omita Redis y de falsos positivos.
    Mitigación: `--require-redis` en rutas CI/S6 bloqueantes.
 
 Runbook operativo:
+
 - `docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`
 
 ---
@@ -1052,7 +1057,7 @@ Runbook operativo:
 | 13.2.1 | trace_id end-to-end      | ⏳ PENDIENTE   | M        |
 | 13.2.2 | logging JSON (Structlog) | 🔄 EN PROGRESO | S        |
 | 13.2.3 | visualización grafos IA  | ⏳ PENDIENTE   | M        |
-| 13.2.4 | Integración Sentry       | ⏳ PENDIENTE   | M        |
+| 13.2.4 | Integración Sentry       | ✅ COMPLETADO  | M        |
 | 13.2.5 | AI Usage Dashboard       | ⏳ PENDIENTE   | L        |
 | 13.2.6 | Budget alerts $30/día    | ⏳ PENDIENTE   | M        |
 
@@ -1345,22 +1350,22 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 
 **Fecha:** 2026-02-14
 
-| Sección            | Cambio                                               | Razón                                                                  |
-| ------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| Sec 2 (Roadmap)    | Fase 1: 95% → 85%, Fase 2: 40% → 65%                 | Ajuste realista: Sec 6 incompleta, suites TDD avanzadas                |
-| Sec 3 (Métricas)   | Coherence 60% → 85%, MCP 75% → 100%, +3 nuevas filas | Refleja suites completadas y estado actual                             |
-| Sec 3 (Estructura) | Agregados 8 módulos faltantes al árbol               | Codebase tiene anonymizer, alerts, mcp, modules/, etc.                 |
-| Sec 9.3.5.1-4      | PENDIENTE → COMPLETADO                               | Ya implementados como parte de suites TS-UD-PRJ-DTO-001, TS-UD-PROC-\* |
-| Sec 12 (Frontend)  | S2-10 SSE processing stepper + withCredentials → ✅  | Cobertura RED/GREEN en unit + integración MSW (FLAG-3)                 |
-| Sec 3 / Phase 4    | AI Pipeline I1-I2 (Ingestion + OCR/Table) → ✅       | Cierre de Sprint 1 Core AI con suites TS-I1-CIC-001 y TS-I2-OCR-TBL-001 |
-| Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅      | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001 |
-| Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅           | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001 |
-| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅ | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + extensiones I9 (`TS-I9-PROC-APP-002`, `TS-I9-PROC-TXN-001`, `TS-I9-PROC-ADP-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-HTTP-001`, `TS-I9-PROC-INT-001`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-001`, `TS-SEC-I9-002`) + TS-SEC-S4-001 |
-| Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅ | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001 |
-| Sec 3 / Phase 4    | AI Pipeline I13 real E2E path → ✅ | Contrato de ruta I13 + harness auth/tenant determinístico + CI S6 bloqueante `i13-real-e2e` |
-| Sec 12.7           | Nuevo contrato operativo I13 real E2E + rationale de parche de migración | Formaliza prerrequisitos, riesgos y runbook (`docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`) |
-| Sec 10.2 / 10.4.4  | Catálogo Event Bus Redis + reglas de tenant scope/metadata → ✅ | Formaliza canal `c2pro.{env}.{tenant_id}.{topic}` y cierre documental del Event Bus |
-| Sec 6 / Sec 12.7   | Contrato RLS GUC `app.current_tenant` hardening → ✅ | Se agrega bootstrap de GUC a nivel conexión PostgreSQL + validación RED/GREEN de suite E2E de aislamiento tenant |
+| Sección            | Cambio                                                                   | Razón                                                                                                                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sec 2 (Roadmap)    | Fase 1: 95% → 85%, Fase 2: 40% → 65%                                     | Ajuste realista: Sec 6 incompleta, suites TDD avanzadas                                                                                                                                                                                                                                           |
+| Sec 3 (Métricas)   | Coherence 60% → 85%, MCP 75% → 100%, +3 nuevas filas                     | Refleja suites completadas y estado actual                                                                                                                                                                                                                                                        |
+| Sec 3 (Estructura) | Agregados 8 módulos faltantes al árbol                                   | Codebase tiene anonymizer, alerts, mcp, modules/, etc.                                                                                                                                                                                                                                            |
+| Sec 9.3.5.1-4      | PENDIENTE → COMPLETADO                                                   | Ya implementados como parte de suites TS-UD-PRJ-DTO-001, TS-UD-PROC-\*                                                                                                                                                                                                                            |
+| Sec 12 (Frontend)  | S2-10 SSE processing stepper + withCredentials → ✅                      | Cobertura RED/GREEN en unit + integración MSW (FLAG-3)                                                                                                                                                                                                                                            |
+| Sec 3 / Phase 4    | AI Pipeline I1-I2 (Ingestion + OCR/Table) → ✅                           | Cierre de Sprint 1 Core AI con suites TS-I1-CIC-001 y TS-I2-OCR-TBL-001                                                                                                                                                                                                                           |
+| Sec 3 / Phase 4    | AI Pipeline I3-I4 (Extraction + Retrieval) → ✅                          | Cierre de Sprint 2 Core AI con suites TS-I3-\* y TS-I4-\* + TS-SEC-EXT-RET-001                                                                                                                                                                                                                    |
+| Sec 3 / Phase 4    | AI Pipeline I5-I6 (Graph + Coherence) → ✅                               | Cierre de Sprint 3 Core AI con suites TS-I5-\* y TS-I6-\* + TS-SEC-GRAPH-COH-001                                                                                                                                                                                                                  |
+| Sec 3 / Phase 4    | AI Pipeline I7-I9 (Scoring + WBS/BOM + Procurement) → ✅                 | Cierre de Sprint 4 Core AI con suites TS-I7-\*, TS-I8-\*, TS-I9-\* + extensiones I9 (`TS-I9-PROC-APP-002`, `TS-I9-PROC-TXN-001`, `TS-I9-PROC-ADP-001`, `TS-I9-PROC-ADP-002`, `TS-I9-PROC-HTTP-001`, `TS-I9-PROC-INT-001`, `TS-I9-PROC-INT-002`, `TS-SEC-I9-001`, `TS-SEC-I9-002`) + TS-SEC-S4-001 |
+| Sec 3 / Phase 4    | AI Pipeline I10-I12 (Stakeholders + HITL + Observability) → ✅           | Cierre de Sprint 5 Core AI con suites TS-I10-\*, TS-I11-\*, TS-I12-\* + TS-SEC-S5-001 + TS-DEVOPS-S5-001                                                                                                                                                                                          |
+| Sec 3 / Phase 4    | AI Pipeline I13 real E2E path → ✅                                       | Contrato de ruta I13 + harness auth/tenant determinístico + CI S6 bloqueante `i13-real-e2e`                                                                                                                                                                                                       |
+| Sec 12.7           | Nuevo contrato operativo I13 real E2E + rationale de parche de migración | Formaliza prerrequisitos, riesgos y runbook (`docs/runbooks/I13_REAL_E2E_INFRA_RUNBOOK.md`)                                                                                                                                                                                                       |
+| Sec 10.2 / 10.4.4  | Catálogo Event Bus Redis + reglas de tenant scope/metadata → ✅          | Formaliza canal `c2pro.{env}.{tenant_id}.{topic}` y cierre documental del Event Bus                                                                                                                                                                                                               |
+| Sec 6 / Sec 12.7   | Contrato RLS GUC `app.current_tenant` hardening → ✅                     | Se agrega bootstrap de GUC a nivel conexión PostgreSQL + validación RED/GREEN de suite E2E de aislamiento tenant                                                                                                                                                                                  |
 
 ---
 
@@ -1368,8 +1373,8 @@ rg "from.*adapters\.persistence\.models" apps/api/src/*/application/
 
 **Fecha:** 2026-02-17
 
-| Sección            | Cambio | Razón |
-| ------------------ | ------ | ----- |
-| Encabezado         | `Versión` 2.1.1 → 2.1.2; `Última Actualización` → 2026-02-17 | Reflejar sincronización documental de avances de 2026-02-16/17 |
-| Sec 3 (Métricas)   | Nota de I13 ampliada con hardening de orquestación (`TS-I13-MAP-001` completada, `TS-I13-EDGE-001` parcial) | Trazabilidad de trabajo post-cierre E2E real I13 |
-| Backlog/Arquitectura | Se documenta cierre `TS-UD-WBS-001` (módulo `wbs`) y avances de orquestación I13 | Evitar brecha entre cambios de código recientes y estado oficial |
+| Sección              | Cambio                                                                                                      | Razón                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Encabezado           | `Versión` 2.1.1 → 2.1.2; `Última Actualización` → 2026-02-17                                                | Reflejar sincronización documental de avances de 2026-02-16/17   |
+| Sec 3 (Métricas)     | Nota de I13 ampliada con hardening de orquestación (`TS-I13-MAP-001` completada, `TS-I13-EDGE-001` parcial) | Trazabilidad de trabajo post-cierre E2E real I13                 |
+| Backlog/Arquitectura | Se documenta cierre `TS-UD-WBS-001` (módulo `wbs`) y avances de orquestación I13                            | Evitar brecha entre cambios de código recientes y estado oficial |

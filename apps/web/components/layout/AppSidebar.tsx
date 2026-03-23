@@ -75,6 +75,11 @@ export function AppSidebar() {
           <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
             {isDemoMode ? 'Demo Workspace' : 'Torre Skyline'}
           </span>
+          {isDemoMode ? (
+            <p className="mt-1 text-[11px] font-medium text-warning">
+              Sample data only
+            </p>
+          ) : null}
         </div>
       )}
 

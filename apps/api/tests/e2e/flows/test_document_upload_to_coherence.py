@@ -34,6 +34,7 @@ import pytest_asyncio
 
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 # ===========================================
@@ -85,20 +86,29 @@ async def flow_user(db, flow_tenant: Tenant) -> User:
 
 @pytest_asyncio.fixture
 async def flow_project(db, flow_tenant: Tenant):
-    """Create a project for flow testing."""
-    from src.projects.adapters.http.router import _add_fake_project
-
-    project_data = {
-        "id": uuid4(),
-        "tenant_id": flow_tenant.id,
-        "name": "E2E Flow Project",
-        "code": "E2E-FLOW-001",
-        "project_type": "construction",
-        "estimated_budget": 500000.0,
-        "currency": "EUR",
+    """Create a persisted project for flow testing."""
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=flow_tenant.id,
+        name="E2E Flow Project",
+        code="E2E-FLOW-001",
+        project_type="construction",
+        estimated_budget=500000.0,
+        currency="EUR",
+        metadata_json={"version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return {
+        "id": project.id,
+        "tenant_id": project.tenant_id,
+        "name": project.name,
+        "code": project.code,
+        "project_type": project.project_type,
+        "estimated_budget": project.estimated_budget,
+        "currency": project.currency,
     }
-    _add_fake_project(project_data)
-    return project_data
 
 
 # ===========================================
@@ -206,7 +216,7 @@ async def test_002_document_upload_creates_database_record(
         "file": ("specs.pdf", b"%PDF-1.4 specifications", "application/pdf"),
     }
     data = {
-        "document_type": "specifications",
+        "document_type": "specification",
         "description": "Technical specifications",
     }
 
@@ -536,7 +546,7 @@ async def test_008_multiple_documents_all_processed(
     # Upload 3 documents
     documents = [
         ("contract.pdf", "contract"),
-        ("specifications.pdf", "specifications"),
+        ("specifications.pdf", "specification"),
         ("schedule.pdf", "schedule"),
     ]
 

@@ -6,9 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "typecheck": "tsc --noEmit",
-    "generate-client": "openapi --input http://localhost:8000/api/v1/openapi.json --output ./lib/api/generated --client axios",
     "generate:api": "orval",
-    "generate:api:check": "orval && git diff --exit-code -- lib/api/generated mocks",
+    "generate:api:check": "orval && git diff --exit-code -- lib/api/generated schema/api.json",
     "start": "next start",
     "lint": "eslint .",
     "test": "node ./scripts/vitest-no-warn.mjs run src/tests/integration",
@@ -16,7 +15,8 @@
     "test:all": "node ./scripts/vitest-no-warn.mjs run",
     "test:watch": "vitest",
     "test:coverage": "node ./scripts/vitest-no-warn.mjs run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:openspec": "npm --prefix ../.. run verify:openspec --"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.0",

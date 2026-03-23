@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,10 +37,14 @@ from src.modules.decision_intelligence.adapters.http.router import (
 )
 from src.alerts.router import router as alerts_router
 from src.bulk_operations.router import router as bulk_operations_router
-from src.core.routers.health import router as health_router
+from src.core.routers.health import router as health_router, worker_health_check
 from src.modules.hitl.adapters.http.router import router as hitl_router
 from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
 from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+from src.analysis.adapters.graph.workflow import (
+    close_checkpointer_resources,
+    ensure_checkpointer_ready,
+)
 
 # Import AI tools to trigger registration via @register_tool decorators
 import src.analysis.adapters.ai.tools  # noqa: F401
@@ -89,7 +94,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     app.state.mcp_server = get_mcp_server()
     logger.info("mcp_server_initialized")
 
-    # TODO: Inicializar Sentry cuando esté configurado
+    await ensure_checkpointer_ready()
+    logger.info("langgraph_checkpointer_initialized")
+
+    sentry_enabled = bool(settings.sentry_dsn)
+    app.state.sentry_enabled = sentry_enabled
+    if sentry_enabled:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.sentry_environment or settings.environment,
+            traces_sample_rate=settings.sentry_traces_sample_rate,
+        )
+        logger.info("sentry_initialized")
 
     logger.info("application_started")
 
@@ -111,7 +127,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             await close_event_bus()
             logger.info("event_bus_closed")
 
-    # TODO: Flush Sentry events
+    if getattr(app.state, "sentry_enabled", False):
+        sentry_sdk.flush()
+        logger.info("sentry_flushed")
+
+    await close_checkpointer_resources()
+    logger.info("langgraph_checkpointer_closed")
 
     logger.info("application_stopped")
 
@@ -220,8 +241,17 @@ def create_application() -> FastAPI:
 
     api_v1_prefix = settings.api_v1_prefix
 
+    app.add_api_route(
+        f"{api_v1_prefix}/health/worker",
+        worker_health_check,
+        methods=["GET"],
+        tags=["Health"],
+        summary="Celery Worker Health",
+    )
+
     # --- Core routers (always enabled) ---
-    app.include_router(health_router)
+    app.include_router(health_router)  # raw: /health/... (docker-compose, infra probes)
+    app.include_router(health_router, prefix=api_v1_prefix)  # prefixed: /api/v1/health/... (gateway, deploy workflow)
     app.include_router(auth_router, prefix=api_v1_prefix)
     app.include_router(projects_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
@@ -256,8 +286,8 @@ def create_application() -> FastAPI:
             router as coherence_router,
             dashboard_router as coherence_dashboard_router,
         )
-        app.include_router(coherence_router)
-        app.include_router(coherence_dashboard_router)
+        app.include_router(coherence_router, prefix=api_v1_prefix)
+        app.include_router(coherence_dashboard_router, prefix=api_v1_prefix)
         logger.info("router_registered", feature="coherence_analysis")
     else:
         logger.info("router_skipped", feature="coherence_analysis", reason="feature_flag_disabled")
@@ -283,7 +313,11 @@ def create_application() -> FastAPI:
     # RACI Generation (feature_raci_generation)
     if settings.feature_raci_generation:
         try:
-            from src.stakeholders.adapters.http.raci_router import router as raci_router
+            from src.stakeholders.adapters.http.raci_router import (
+                router as raci_router,
+                raci_global_router,
+            )
+            app.include_router(raci_global_router, prefix=api_v1_prefix)
             app.include_router(raci_router, prefix=api_v1_prefix)
             logger.info("router_registered", feature="raci_generation")
         except ImportError:

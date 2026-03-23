@@ -23,7 +23,7 @@ export default function SignInPage() {
 
         {/* Clerk SignIn Component */}
         <SignIn
-          forceRedirectUrl="/dashboard"
+          forceRedirectUrl="/projects"
           appearance={{
             elements: {
               rootBox: "w-full",

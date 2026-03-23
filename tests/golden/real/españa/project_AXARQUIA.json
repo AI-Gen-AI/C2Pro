@@ -1,0 +1,132 @@
+{
+  "project_metadata": {
+    "id": "P-008504",
+    "name": "Hospital de la Axarquia",
+    "type": "Edificacion",
+    "complexity": "Medium",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Pedido 4500677750 de Instalaciones Inabensa, S.A. a Finanzauto, S.A. para un modulo de cogeneracion Caterpillar G3412 de 370 ekW destinado a la obra Hospital de la Axarquia, Velez-Malaga. Importe base 189.671,00 EUR, plazo de entrega 24/08/2015, pago a 180 dias, con hitos de facturacion 20% a recepcion del pedido y 80% a entrega fisica. El pedido remite a condiciones particulares, avales y garantia Caterpillar.",
+    "schedule_summary": {
+      "delivery_date": "2015-08-24",
+      "commercial_lead_weeks": 30,
+      "key_events": [
+        "factura final emitida en agosto 2015",
+        "aval de garantia entregado en septiembre 2015"
+      ]
+    },
+    "budget_summary": {
+      "base_value_eur": 189671.0,
+      "vat_included_eur": 229501.91,
+      "tower_offer_eur": 20787.0,
+      "alternative_tower_offer_eur": 30652.5,
+      "line_items": [
+        {
+          "name": "Modulo de cogeneracion Caterpillar G3412",
+          "cost": 189671.0
+        },
+        {
+          "name": "Torre de refrigeracion",
+          "cost": 20787.0
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "El alcance incluye el suministro del modulo de cogeneracion G3412 con contenedor insonorizado, motor, generador, intercambiador, recuperador de calor, rampa de gas, cuadros de control y servicios auxiliares.",
+        "metadata": {
+          "power_kw": 370
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "La entrega fisica del equipo debe realizarse como maximo el 24/08/2015.",
+        "metadata": {
+          "date": "2015-08-24"
+        }
+      },
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "Las condiciones particulares establecen una penalizacion por retraso del 0,5% por semana laboral completa, con limite agregado del 3% del importe neto del pedido.",
+        "metadata": {
+          "weekly_penalty_pct": 0.5,
+          "cap_pct": 3.0
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "La garantia cubre 18 meses desde disponibilidad para entrega o 12 meses desde la puesta en marcha, lo que antes ocurra, con cobertura extendida adicional Caterpillar.",
+        "metadata": {
+          "warranty_months_max": 18,
+          "extended_coverage": true
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Instalaciones Inabensa, S.A.",
+        "mention": "Inabensa",
+        "role": "Comprador y contratista principal",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Finanzauto, S.A.",
+        "mention": "Finanzauto",
+        "role": "Proveedor del modulo de cogeneracion",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Juan Antonio Rubiales",
+        "mention": "contacto del pedido",
+        "role": "Coordinacion operativa",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Fatima Robles Garcia",
+        "mention": "destinataria administrativa de facturas",
+        "role": "Administracion",
+        "quadrant": "Informed"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "CTR-AXA-01",
+        "severity": "critical",
+        "description": "Las condiciones generales del pedido y el anexo particular contienen regimenes de penalizacion distintos, por lo que la jerarquia contractual debe aclararse para evitar disputa por retrasos.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "general_penalty_terms"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "specific_annex_penalty_terms"
+          }
+        ]
+      },
+      {
+        "rule_id": "OPS-AXA-01",
+        "severity": "warning",
+        "description": "La documentacion de torres de refrigeracion introduce requisitos de tratamiento de agua y control bacteriologico, incluido Legionella, que elevan el riesgo operativo y sanitario si no se contratan o integran correctamente.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "tower_offer_eur"
+          },
+          {
+            "source": "contract_text",
+            "identifier": "hospital_operation_risk"
+          }
+        ]
+      }
+    ]
+  }
+}

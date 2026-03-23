@@ -101,7 +101,8 @@ def mock_settings():
 @pytest.fixture
 def mock_tenant_db():
     """
-    Patch get_raw_session so _validate_tenant_exists never hits a real DB.
+    Patch get_raw_session and the bootstrap tenant lookup so
+    _validate_tenant_exists never hits a real DB.
 
     Yields the mock *result* object.  Reconfigure per-test before the
     request:
@@ -121,8 +122,18 @@ def mock_tenant_db():
     async def _session():
         yield mock_session
 
+    async def _lookup_tenant_by_id(_session_obj, _tenant_id):
+        tenant = mock_result.scalar_one_or_none()
+        if tenant is None:
+            return None
+        return tenant
+
     with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
-        yield mock_result
+        with patch(
+            "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
+            new=AsyncMock(side_effect=_lookup_tenant_by_id),
+        ):
+            yield mock_result
 
 
 @pytest.fixture
@@ -249,6 +260,61 @@ class TestValidAuthentication:
 
         assert response.status_code == 200
         assert "application/json" in response.headers.get("content-type", "")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_uad_http_bootstrap_lookup_clerk_user_resolution(self, mock_settings):
+        """
+        Given: Clerk user bootstrap lookup returns a tenant record
+        When: _get_tenant_for_clerk_user is called
+        Then: the middleware returns the tenant_id from the bootstrap adapter
+        """
+        middleware = TenantIsolationMiddleware(app=MagicMock())
+        expected_tenant_id = uuid4()
+        record = MagicMock()
+        record.tenant_id = expected_tenant_id
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
+            with patch(
+                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+                new=AsyncMock(return_value=record),
+            ) as mock_lookup:
+                tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
+
+        assert tenant_id == expected_tenant_id
+        mock_lookup.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_uad_http_bootstrap_lookup_tenant_validation(self, mock_settings):
+        """
+        Given: Tenant bootstrap lookup returns an active tenant record
+        When: _validate_tenant_exists is called
+        Then: the middleware returns True based on the bootstrap adapter result
+        """
+        middleware = TenantIsolationMiddleware(app=MagicMock())
+        tenant_id = uuid4()
+        record = MagicMock()
+        record.tenant_id = tenant_id
+        record.is_active = True
+
+        @asynccontextmanager
+        async def _session():
+            yield AsyncMock()
+
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
+            with patch(
+                "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
+                new=AsyncMock(return_value=record),
+            ) as mock_lookup:
+                is_active = await middleware._validate_tenant_exists(tenant_id)
+
+        assert is_active is True
+        mock_lookup.assert_awaited_once()
 
 
 # ===========================================

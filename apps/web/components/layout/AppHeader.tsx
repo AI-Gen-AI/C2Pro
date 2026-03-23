@@ -1,6 +1,8 @@
 'use client';
 
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, LogOut, Search, User } from 'lucide-react';
+import { useClerk, useUser } from '@clerk/nextjs';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +16,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import {
+  useAppModeStore,
+  selectIsDemoMode,
+  isExplicitDemoRoute,
+} from '@/stores/app-mode';
 
 interface AppHeaderProps {
   title?: string;
@@ -21,6 +28,27 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
+  const { signOut } = useClerk();
+  const { user } = useUser();
+  const pathname = usePathname();
+  
+  const demoEnvironmentEnabled = useAppModeStore(
+    (state) => state.demoEnvironmentEnabled,
+  );
+  const isDemoInStore = useAppModeStore(selectIsDemoMode);
+  const isDemoMode = demoEnvironmentEnabled && (isDemoInStore || isExplicitDemoRoute(pathname));
+
+  const handleSignOut = () => {
+    signOut({ redirectUrl: '/sign-in' });
+  };
+
+  const userInitials = user?.firstName && user?.lastName
+    ? `${user.firstName[0]}${user.lastName[0]}`
+    : user?.emailAddresses?.[0]?.emailAddress?.substring(0, 2).toUpperCase() || 'U';
+
+  const userName = user?.fullName || user?.emailAddresses?.[0]?.emailAddress || 'User';
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress || '';
+
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card px-6">
       {/* Left: Breadcrumb / Title */}
@@ -43,7 +71,25 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
             ))}
           </nav>
         ) : (
-          <h1 className="text-xl font-semibold">{title}</h1>
+          <>
+            <h1 className="text-xl font-semibold">{title}</h1>
+            {isDemoMode ? (
+              <>
+                <Badge
+                  variant="outline"
+                  className="border-warning/40 bg-warning-bg text-warning"
+                >
+                  Demo Workspace
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="hidden border-warning/30 text-warning md:inline-flex"
+                >
+                  Sample Data
+                </Badge>
+              </>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -116,18 +162,18 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
               aria-label="User menu"
             >
               <Avatar className="h-8 w-8">
-                <AvatarImage src="" />
+                <AvatarImage src={user?.imageUrl} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  JD
+                  {userInitials}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="flex flex-col">
-              <span>John Doe</span>
+              <span>{userName}</span>
               <span className="text-xs font-normal text-muted-foreground">
-                john.doe@company.com
+                {userEmail}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -137,7 +183,10 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
             </DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign out</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

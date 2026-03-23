@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 from src.core.auth.models import Tenant, User
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:
@@ -27,34 +28,35 @@ def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _seed_project(test_tenant: Tenant) -> dict:
-    from src.projects.adapters.http.router import _add_fake_project
-
-    project = {
-        "id": uuid4(),
-        "tenant_id": test_tenant.id,
-        "name": "Performance RED Project",
-        "code": f"PER-RED-{uuid4().hex[:6]}",
-        "project_type": "construction",
-        "estimated_budget": 750000.0,
-        "currency": "EUR",
-        "version": 1,
-    }
-    _add_fake_project(project)
-    return project
+async def _seed_project(db, test_tenant: Tenant) -> dict:
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Performance RED Project",
+        code=f"PER-RED-{uuid4().hex[:6]}",
+        project_type="construction",
+        estimated_budget=750000.0,
+        currency="EUR",
+        metadata_json={"version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return {"id": project.id, "tenant_id": project.tenant_id, "version": 1}
 
 
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_001_large_bulk_upload_meets_throughput_sla_and_contract(
     client,
+    db,
     test_user: User,
     test_tenant: Tenant,
     generate_token,
 ) -> None:
     """TS-E2E-PER-LRG-001: 100 docs bulk upload must satisfy SLA + perf metadata."""
     headers = _headers(generate_token, test_user, test_tenant)
-    project = await _seed_project(test_tenant)
+    project = await _seed_project(db, test_tenant)
 
     docs = [
         {"filename": f"doc-{i}.pdf", "document_type": "contract", "file_data": f"blob-{i}"}
@@ -108,13 +110,14 @@ async def test_002_list_projects_p95_under_1500ms_for_10_concurrent_requests(
 @pytest.mark.e2e
 async def test_003_overload_returns_structured_429_with_retry_after(
     client,
+    db,
     test_user: User,
     test_tenant: Tenant,
     generate_token,
 ) -> None:
     """TS-E2E-PER-LRG-001: overload must degrade gracefully with structured 429."""
     headers = _headers(generate_token, test_user, test_tenant)
-    project = await _seed_project(test_tenant)
+    project = await _seed_project(db, test_tenant)
 
     payload = {"items": [{"code": "1", "name": "Root", "level": 1}]}
     responses = await asyncio.gather(

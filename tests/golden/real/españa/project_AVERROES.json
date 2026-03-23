@@ -1,0 +1,93 @@
+{
+  "project_metadata": {
+    "id": "O-010160",
+    "name": "Nuevo Edificio Hospital Averroes de Córdoba",
+    "type": "Health / Edificación",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Documento NÚM. 2 - ACUERDO CONTRACTUAL. Objeto: Suministro de recursos técnicos y profesionales, materiales, mano de obra, equipos y herramientas necesarias para la ejecución total y entrega del alcance de los trabajos definidos en las BASES DEL CONCURSO convocado por HOSPITAL AVERROES S.L.\n\nEl Contrato se realizará bajo el principio general de contrato de PRECIO CERRADO Y LLAVE EN MANO. El adjudicatario se compromete a construir el Proyecto de Ejecución que ha sido redactado por sus propios medios y aprobado por LA PROPIEDAD. El plazo total de ejecución será de veintiséis (26) meses desde la fecha de comienzo acordada.\n\nPenalizaciones: El adjudicatario acepta que las penalizaciones a aplicar por incumplimiento de su propia programación se vean aumentadas a razón de un diez (10%) por ciento de incremento por cada mes de reducción o de aumento, aplicable en todos los tipos de penalización. Garantía: El citado Aval original de cinco por ciento (5%) del importe total del precio fijado se establece en el documento de CONDICIONES DE CONTRATACIÓN. Retenciones: Cinco por ciento (5%) sobre la base imponible de toda la facturación.",
+    "schedule_summary": {
+      "execution_period_months": 26,
+      "warranty_period_months": 24,
+      "retention_return_f1": "50% at Acta de Recepción",
+      "retention_return_f2": "50% at end of warranty"
+    },
+    "budget_summary": {
+      "contract_model": "Precio Cerrado y Llave en Mano",
+      "gastos_generales_pct": 13.0,
+      "beneficio_industrial_pct": 6.0,
+      "safety_health_min_pct": 1.5,
+      "main_lots": [
+        "Lote-1: Honorarios de proyectos y documentos técnicos",
+        "Lote-2: Presupuesto contrata ejecución de las obras"
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-OBJ-01",
+        "type": "scope",
+        "text": "Suministro de recursos técnicos y profesionales, materiales, mano de obra, equipos y herramientas necesarias para la ejecución total y entrega del alcance de los trabajos",
+        "metadata": { "scope_type": "Turnkey" }
+      },
+      {
+        "clause_code": "CL-PRICE-01",
+        "type": "penalty",
+        "text": "El Contrato se realizará bajo el principio general de contrato de PRECIO CERRADO Y LLAVE EN MANO",
+        "metadata": { "price_type": "Fixed" }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "El plazo total de ejecución será de veintiséis (26) meses desde la fecha de comienzo acordada",
+        "metadata": { "duration_months": 26 }
+      },
+      {
+        "clause_code": "CL-PENALTY-01",
+        "type": "penalty",
+        "text": "penalizaciones a aplicar por incumplimiento de su propia programación se vean aumentadas a razón de un diez (10%) por ciento de incremento por cada mes",
+        "metadata": { "penalty_rate_pct": 10.0 }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "HOSPITAL AVERROES S.L.",
+        "mention": "LA PROPIEDAD",
+        "role": "Client / Owner",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "Empresa Contratista",
+        "mention": "EL CONTRATISTA",
+        "role": "Main Contractor",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Safety Manager",
+        "mention": "Safety Manager",
+        "role": "Safety Oversight",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Gerente",
+        "mention": "GERENTE",
+        "role": "Project Approval",
+        "quadrant": "Accountable"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "RISK-SCOPE-01",
+        "severity": "high",
+        "description": "The contractor assumes full risk for the project design as it was 'redactado por sus propios medios', creating high exposure in a fixed-price turnkey contract.",
+        "conflicting_elements": [
+          { "source": "contract_text", "identifier": "CL-PRICE-01" },
+          { "source": "contract_text", "identifier": "CL-OBJ-01" }
+        ]
+      }
+    ]
+  }
+}

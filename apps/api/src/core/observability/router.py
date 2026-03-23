@@ -41,10 +41,6 @@ async def get_recent_analyses(
     "/performance/snapshot",
     summary="Get performance snapshot",
 )
-@router.get(
-    "/observability/performance/snapshot",
-    summary="Get performance snapshot",
-)
 async def get_performance_snapshot() -> dict[str, float]:
     """Refers to Suite ID: TS-E2E-PER-LRG-001."""
     return {

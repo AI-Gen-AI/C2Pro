@@ -1,6 +1,9 @@
+"""
+TS-I6-COH-SVC-001: Coherence alert generator.
+"""
+
 from __future__ import annotations
 
-from typing import Iterable
 from uuid import UUID
 
 from src.shared_kernel.enums import AlertSeverity
@@ -43,6 +46,13 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "R6": AlertSeverity.MEDIUM,
 }
 
+SUMMARY_TEMPLATES: dict[str, str] = {
+    "R12": "Se detectaron {count} dependencias de cronograma invalidas. Ejemplos: {examples}.",
+    "R14": "Se detectaron {count} materiales con riesgo de lead time. Ejemplos: {examples}.",
+    "R15": "Se detectaron {count} items del BOM sin partida presupuestaria asociada. Ejemplos: {examples}.",
+    "R20": "Se detectaron {count} tareas sin responsable asignado. Ejemplos: {examples}.",
+}
+
 
 class AlertGenerator:
     def __init__(self, project_id: UUID, analysis_id: UUID | None = None) -> None:
@@ -52,8 +62,6 @@ class AlertGenerator:
     def generate(self, rule_result: CoherenceRuleResult) -> list[AlertCreate]:
         """
         Builds alert payloads from a single rule result.
-
-        TODO: Group repeated findings into a summary alert when needed.
         """
         if not rule_result.is_violated:
             return []
@@ -62,9 +70,12 @@ class AlertGenerator:
         evidence = rule_result.evidence or {}
 
         items = self._expand_evidence_items(rule_id, evidence)
+        if self._should_group(rule_id, items):
+            return [self._build_summary_alert(rule_id, evidence, items)]
+
         alerts: list[AlertCreate] = []
         for item in items:
-            description = self._render_message(rule_id, item)
+            description = self._render_message(rule_id, item, grouped=False, item_count=1)
             alerts.append(
                 AlertCreate(
                     project_id=self._project_id,
@@ -77,10 +88,52 @@ class AlertGenerator:
                     source_clause_id=self._source_clause_id(item),
                     related_clause_ids=self._related_clause_ids(item),
                     affected_entities=self._affected_entities(rule_id, item),
-                    alert_metadata={"evidence": item},
+                    alert_metadata={
+                        "evidence": item,
+                        "grouped": False,
+                        "group_size": 1,
+                    },
                 )
             )
         return alerts
+
+    def _should_group(self, rule_id: str, items: list[dict]) -> bool:
+        return rule_id in SUMMARY_TEMPLATES and len(items) > 1
+
+    def _build_summary_alert(
+        self,
+        rule_id: str,
+        evidence: dict,
+        items: list[dict],
+    ) -> AlertCreate:
+        summary_evidence = dict(evidence)
+        group_size = len(items)
+        summary_evidence["grouped"] = True
+        summary_evidence["group_size"] = group_size
+        summary_evidence["sample_items"] = items[:2]
+
+        return AlertCreate(
+            project_id=self._project_id,
+            analysis_id=self._analysis_id,
+            title=self._title_for(rule_id),
+            description=self._render_message(
+                rule_id,
+                summary_evidence,
+                grouped=True,
+                item_count=group_size,
+            ),
+            severity=self._severity_for(rule_id, summary_evidence),
+            rule_id=rule_id,
+            category=self._category_for(rule_id),
+            source_clause_id=self._summary_source_clause_id(items),
+            related_clause_ids=self._summary_related_clause_ids(items),
+            affected_entities=self._summary_affected_entities(rule_id, items),
+            alert_metadata={
+                "evidence": summary_evidence,
+                "grouped": True,
+                "group_size": group_size,
+            },
+        )
 
     def _expand_evidence_items(self, rule_id: str, evidence: dict) -> list[dict]:
         if rule_id == "R12":
@@ -104,7 +157,18 @@ class AlertGenerator:
         merged.update(item)
         return merged
 
-    def _render_message(self, rule_id: str, evidence: dict) -> str:
+    def _render_message(
+        self,
+        rule_id: str,
+        evidence: dict,
+        *,
+        grouped: bool,
+        item_count: int,
+    ) -> str:
+        if grouped and rule_id in SUMMARY_TEMPLATES:
+            examples = self._summary_examples(rule_id, evidence)
+            return SUMMARY_TEMPLATES[rule_id].format(count=item_count, examples=examples)
+
         template = TEMPLATES.get(rule_id)
         if not template:
             return f"Regla {rule_id} detecto una inconsistencia."
@@ -166,5 +230,57 @@ class AlertGenerator:
                 entities["schedule_item_ids"] = ids
         if rule_id == "R14" and evidence.get("material"):
             entities["bom_items"] = [str(evidence["material"])]
+        if rule_id == "R15" and evidence.get("item_name"):
+            entities["bom_items"] = [str(evidence["item_name"])]
+        if rule_id == "R20" and evidence.get("task_name"):
+            entities["task_names"] = [str(evidence["task_name"])]
         return entities
+
+    def _summary_source_clause_id(self, items: list[dict]) -> UUID | None:
+        source_clause_ids = {
+            parsed
+            for item in items
+            if (parsed := self._source_clause_id(item)) is not None
+        }
+        if len(source_clause_ids) == 1:
+            return next(iter(source_clause_ids))
+        return None
+
+    def _summary_related_clause_ids(self, items: list[dict]) -> list[UUID] | None:
+        related: list[UUID] = []
+        for item in items:
+            parsed = self._related_clause_ids(item)
+            if parsed:
+                related.extend(parsed)
+        if not related:
+            return None
+        return list(dict.fromkeys(related))
+
+    def _summary_affected_entities(self, rule_id: str, items: list[dict]) -> dict:
+        merged: dict[str, list[str]] = {}
+        for item in items:
+            entities = self._affected_entities(rule_id, item)
+            for key, values in entities.items():
+                merged.setdefault(key, [])
+                merged[key].extend(values)
+        return {key: list(dict.fromkeys(values)) for key, values in merged.items()}
+
+    def _summary_examples(self, rule_id: str, evidence: dict) -> str:
+        sample_items = evidence.get("sample_items") or []
+        if rule_id == "R12":
+            labels = [
+                f"{item.get('predecessor_name', 'tarea previa')} -> {item.get('successor_name', 'tarea siguiente')}"
+                for item in sample_items
+            ]
+        elif rule_id == "R14":
+            labels = [str(item.get("material", "material")) for item in sample_items]
+        elif rule_id == "R15":
+            labels = [str(item.get("item_name", "item")) for item in sample_items]
+        elif rule_id == "R20":
+            labels = [str(item.get("task_name", "tarea")) for item in sample_items]
+        else:
+            labels = []
+
+        cleaned = [label for label in labels if label]
+        return ", ".join(cleaned) if cleaned else "sin ejemplos"
 

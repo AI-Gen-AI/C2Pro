@@ -138,3 +138,18 @@ class TestDocumentsAnalysisIntegration:
 
         with pytest.raises(ValueError):
             await use_case.execute(document_id=document.id)
+
+    async def test_raises_when_document_is_not_parsed(self) -> None:
+        document = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            document_type=DocumentType.CONTRACT,
+            filename="contract.pdf",
+            upload_status=DocumentStatus.QUEUED,
+            document_metadata={"parsed_text": "Extracted contract text"},
+        )
+        repo = _FakeDocumentRepository(document=document, tenant_id=uuid4())
+        use_case = TriggerDocumentAnalysisUseCase(repo, _CapturingOrchestrator())
+
+        with pytest.raises(ValueError, match="document must be parsed before analysis"):
+            await use_case.execute(document_id=document.id)

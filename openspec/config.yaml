@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.11 FastAPI backend + Next.js 16 React 19 frontend monorepo (apps/api, apps/web)
+  Architecture: Hexagonal modular monolith with strict TDD governance
+  Testing: pytest/pytest-asyncio (backend), Vitest + Playwright (frontend)
+  Style: ruff + mypy strict (backend), ESLint + TypeScript (frontend)
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected modules/packages
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
+  apply:
+    - Follow existing code patterns and conventions
+    - Load relevant coding skills for the project stack
+  verify:
+    docs_only_scope:
+      allowed_paths:
+        - openspec/changes/{change-name}/**/*.md
+        - openspec/config.yaml
+      required_change_artifacts:
+        - proposal.md
+        - design.md
+        - tasks.md
+      required_spec_glob: specs/*/spec.md
+    required_report_sections:
+      - artifact presence
+      - scenario coverage
+      - rules compliance
+      - overall verdict
+    runtime_drift:
+      exit_code: 2
+      escalation_message: Runtime drift detected. Run full backend/frontend verification gates.
+    checks:
+      - Run docs-only verification for OpenSpec process artifacts.
+      - Compare implementation coverage against every spec scenario.
+  archive:
+    - Warn before merging destructive deltas (large removals)

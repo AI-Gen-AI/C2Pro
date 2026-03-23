@@ -6,6 +6,7 @@ Endpoints de autenticación y gestión de usuarios.
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
@@ -26,6 +27,7 @@ from src.core.auth.schemas import (
     UserUpdateRequest,
 )
 from src.core.auth.service import AuthService
+from src.core.auth.models import User
 
 logger = structlog.get_logger()
 
@@ -207,9 +209,39 @@ async def get_me(user_id: CurrentUserId, db: AsyncSession = Depends(get_session)
     try:
         user = await AuthService.get_current_user(db, user_id)
 
+        active_users_result = await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.tenant_id == user.tenant_id,
+                User.is_active.is_(True),
+            )
+        )
+        user_count = int(active_users_result.scalar_one() or 0)
+        tenant = user.tenant
+        tenant_response = TenantResponse(
+            id=tenant.id,
+            name=tenant.name,
+            slug=tenant.slug,
+            subscription_plan=tenant.subscription_plan,
+            subscription_status=tenant.subscription_status,
+            ai_budget_monthly=tenant.ai_budget_monthly,
+            ai_spend_current=tenant.ai_spend_current,
+            budget_usage_percentage=tenant.budget_usage_percentage,
+            is_over_budget=tenant.is_over_budget,
+            max_projects=tenant.max_projects,
+            max_users=tenant.max_users,
+            max_storage_gb=tenant.max_storage_gb,
+            is_active=tenant.is_active,
+            user_count=user_count,
+            is_at_user_limit=user_count >= tenant.max_users,
+            created_at=tenant.created_at,
+            updated_at=tenant.updated_at,
+        )
+
         return MeResponse(
             user=UserResponse.model_validate(user),
-            tenant=TenantResponse.model_validate(user.tenant),
+            tenant=tenant_response,
         )
 
     except NotFoundError as e:

@@ -1,3 +1,11 @@
+<!--
+  Version: 1.0.0
+  Created: 2026-01-31
+  Status: Legacy
+  Purpose: Detailed flow diagrams for C2Pro functional modules (F1-F12)
+  Superseded by: docs/architecture/FLOW_DIAGRAMS.md
+-->
+
 # C2Pro - Diagrama de Flujo del Proyecto (Mermaid)
 
 Este documento concentra el **flujo funcional del negocio** (casos de uso) en un solo diagrama Mermaid y un índice de flujos detallados para mantener contexto LLM.

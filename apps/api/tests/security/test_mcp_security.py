@@ -18,6 +18,7 @@ ESTOS TESTS DEBEN PASAR 100% ANTES DE PRODUCCIÓN.
 from uuid import UUID, uuid4
 
 import pytest
+from unittest.mock import AsyncMock
 
 from src.core.mcp.servers.database_server import (
     DatabaseMCPServer,
@@ -255,11 +256,11 @@ async def test_rate_limiting_per_tenant(mcp_server: DatabaseMCPServer, tenant_id
 
     # Primera, segunda y tercera request deben funcionar
     for i in range(3):
-        mcp_server._check_rate_limit(tenant_id)
+        await mcp_server._check_rate_limit(tenant_id)
 
     # Cuarta request debe fallar
     with pytest.raises(PermissionError, match="Rate limit exceeded"):
-        mcp_server._check_rate_limit(tenant_id)
+        await mcp_server._check_rate_limit(tenant_id)
 
 
 @pytest.mark.asyncio
@@ -275,16 +276,16 @@ async def test_rate_limit_isolation_between_tenants(mcp_server: DatabaseMCPServe
     mcp_server.rate_limits.per_tenant_per_minute = 2
 
     # Tenant A usa su límite
-    mcp_server._check_rate_limit(tenant_a)
-    mcp_server._check_rate_limit(tenant_a)
+    await mcp_server._check_rate_limit(tenant_a)
+    await mcp_server._check_rate_limit(tenant_a)
 
     # Tenant A excede
     with pytest.raises(PermissionError):
-        mcp_server._check_rate_limit(tenant_a)
+        await mcp_server._check_rate_limit(tenant_a)
 
     # Tenant B aún puede hacer requests
-    mcp_server._check_rate_limit(tenant_b)
-    mcp_server._check_rate_limit(tenant_b)
+    await mcp_server._check_rate_limit(tenant_b)
+    await mcp_server._check_rate_limit(tenant_b)
 
 
 @pytest.mark.asyncio
@@ -293,15 +294,15 @@ async def test_rate_limit_status(mcp_server: DatabaseMCPServer, tenant_id: UUID)
     mcp_server.rate_limits.per_tenant_per_minute = 10
 
     # Sin requests
-    status = mcp_server.get_rate_limit_status(tenant_id)
+    status = await mcp_server.get_rate_limit_status(tenant_id)
     assert status["requests_in_window"] == 0
     assert status["remaining"] == 10
 
     # Después de 3 requests
     for _ in range(3):
-        mcp_server._check_rate_limit(tenant_id)
+        await mcp_server._check_rate_limit(tenant_id)
 
-    status = mcp_server.get_rate_limit_status(tenant_id)
+    status = await mcp_server.get_rate_limit_status(tenant_id)
     assert status["requests_in_window"] == 3
     assert status["remaining"] == 7
 
@@ -474,6 +475,44 @@ async def test_realistic_function_call_scenario():
 
     assert request.function_name == "fn_get_clause_by_id"
     assert request.params["clause_id"] == str(clause_id)
+
+
+@pytest.mark.asyncio
+async def test_query_view_logs_with_function_name_none(
+    mcp_server: DatabaseMCPServer, tenant_id: UUID
+):
+    """Query view audit logging must include function_name=None instead of crashing."""
+    mcp_server._execute_view_query = AsyncMock(
+        return_value=type("Result", (), {"row_count": 0, "execution_time_ms": 0.0})()
+    )
+    mcp_server._log_query = AsyncMock()
+
+    request = ViewQueryRequest(view_name="v_project_summary", limit=10)
+
+    await mcp_server.query_view(request=request, tenant_id=tenant_id, db=AsyncMock())
+
+    mcp_server._log_query.assert_awaited_once()
+    assert mcp_server._log_query.await_args.kwargs["view_name"] == "v_project_summary"
+    assert mcp_server._log_query.await_args.kwargs["function_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_call_function_logs_with_view_name_none(
+    mcp_server: DatabaseMCPServer, tenant_id: UUID
+):
+    """Function audit logging must include view_name=None instead of crashing."""
+    mcp_server._execute_function_call = AsyncMock(
+        return_value=type("Result", (), {"row_count": 0, "execution_time_ms": 0.0})()
+    )
+    mcp_server._log_query = AsyncMock()
+
+    request = FunctionCallRequest(function_name="fn_get_clause_by_id", params={})
+
+    await mcp_server.call_function(request=request, tenant_id=tenant_id, db=AsyncMock())
+
+    mcp_server._log_query.assert_awaited_once()
+    assert mcp_server._log_query.await_args.kwargs["function_name"] == "fn_get_clause_by_id"
+    assert mcp_server._log_query.await_args.kwargs["view_name"] is None
 
 
 # ===========================================

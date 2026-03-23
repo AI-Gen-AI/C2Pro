@@ -32,6 +32,27 @@ export interface TenantContextType {
 export type UserRole = "admin" | "member" | null;
 export type ServiceTier = "free" | "pro" | "enterprise";
 
+export function getTenantIdFromOrganizationMetadata(
+  organization: ReturnType<typeof useOrganization>["organization"],
+): string | null {
+  const metadata = organization?.publicMetadata as
+    | Record<string, unknown>
+    | undefined;
+  const tenantId = metadata?.tenant_id;
+
+  return typeof tenantId === "string" && tenantId.length > 0 ? tenantId : null;
+}
+
+export function isDemoOrganization(
+  organization: ReturnType<typeof useOrganization>["organization"],
+): boolean {
+  const metadata = organization?.publicMetadata as
+    | Record<string, unknown>
+    | undefined;
+
+  return metadata?.is_demo === true;
+}
+
 // =============================================================================
 // Hooks
 // =============================================================================
@@ -69,22 +90,21 @@ export function useTenantContext(): TenantContextType {
         return;
       }
 
-      const metadata = organization.publicMetadata as Record<string, unknown>;
-      const clerkTenantId = metadata?.tenant_id as string | undefined;
+      const clerkTenantId = getTenantIdFromOrganizationMetadata(organization);
+      const isDemoOrg = isDemoOrganization(organization);
+
+      setIsDemoMode(isDemoOrg);
 
       if (!clerkTenantId) {
         setError(
-          `Organization "${organization.name}" has no tenant_id configured.`
+          `Organization "${organization.name}" has no tenant_id configured.`,
         );
         setTenantId(null);
         setIsLoading(false);
         return;
       }
 
-      const isDemoOrg = metadata?.is_demo === true;
-
       setTenantId(clerkTenantId);
-      setIsDemoMode(isDemoOrg);
       setError(null);
       setIsLoading(false);
     } catch (err) {
@@ -261,7 +281,7 @@ export type TierFeatureKey = keyof (typeof TIER_FEATURES)["free"];
 
 export function hasFeature(
   tier: ServiceTier,
-  feature: TierFeatureKey
+  feature: TierFeatureKey,
 ): boolean {
   const tierFeatures = TIER_FEATURES[tier];
   const featureValue = tierFeatures[feature];
@@ -281,7 +301,7 @@ export function hasFeature(
 
 export function getFeatureLimit(
   tier: ServiceTier,
-  feature: TierFeatureKey
+  feature: TierFeatureKey,
 ): number {
   const tierFeatures = TIER_FEATURES[tier];
   const featureValue = tierFeatures[feature];
@@ -307,7 +327,7 @@ export function createTenantHeaders(tenantId: string): Record<string, string> {
 
 export function addTenantToParams(
   params: Record<string, unknown>,
-  tenantId: string
+  tenantId: string,
 ): Record<string, unknown> {
   return {
     ...params,

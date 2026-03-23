@@ -20,7 +20,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/sign-in');
     }
   }, [isAuthenticated, isLoading, router]);
 

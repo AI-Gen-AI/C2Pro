@@ -13,8 +13,9 @@ from src.config import settings
 
 # --- Celery Application Instance ---
 
-# How to run a worker for this app (from the project root):
-# celery -A apps.api.src.core.tasks.celery_app.celery_app worker --loglevel=info -P gevent
+# How to run a worker for this app:
+# From project root: celery -A apps.api.src.core.tasks.celery_app.celery_app worker --loglevel=info -P gevent
+# Inside Docker/apps/api: celery -A src.core.tasks.celery_app.celery_app worker --loglevel=info
 #
 # The -P gevent flag is recommended for I/O bound tasks (like API calls).
 
@@ -23,8 +24,8 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
-        "apps.api.src.core.tasks.ingestion_tasks",
-        "apps.api.src.core.tasks.budget_alerts",
+        "src.core.tasks.ingestion_tasks",
+        "src.core.tasks.budget_alerts",
     ],
 )
 

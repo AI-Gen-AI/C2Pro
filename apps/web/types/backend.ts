@@ -81,6 +81,7 @@ export interface DocumentResponse {
 export interface DocumentListResponse {
   id: string;
   filename: string;
+  document_type?: string | null;
   status: 'queued' | 'processing' | 'parsed' | 'error';
   error_message?: string | null;
   uploaded_at: string;

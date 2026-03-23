@@ -50,3 +50,11 @@ erDiagram
 
 ---
 *Este diagrama se genera y actualiza como parte del flujo de trabajo de documentación automatizada.*
+
+## Nota Operativa
+
+Este archivo sigue siendo el ERD de referencia rápida.
+
+La autoridad de migraciones, las reglas por entorno y la secuencia de reconciliación de drift se documentan ahora en:
+
+- `docs/runbooks/RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md`

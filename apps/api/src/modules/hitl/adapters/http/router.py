@@ -9,7 +9,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.core.security import CurrentTenantId, CurrentUserId
+from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.modules.hitl.adapters.http.dependencies import (
     get_hitl_service,
     get_review_queue_repo,
@@ -32,6 +32,7 @@ logger = structlog.get_logger()
 router = APIRouter(
     prefix="/hitl",
     tags=["HITL"],
+    dependencies=[Depends(security_scheme)],
     responses={404: {"description": "Not found"}},
 )
 

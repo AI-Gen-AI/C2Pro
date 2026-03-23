@@ -36,7 +36,7 @@ describe("RootPage", () => {
     render(<RootPage />);
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/dashboard/projects");
+      expect(pushMock).toHaveBeenCalledWith("/projects");
     });
   });
 

@@ -15,12 +15,28 @@ BASELINE_ACCURACY_THRESHOLD = 0.85
 # Path to the golden dataset
 GOLDEN_DATASET_PATH = Path(__file__).parent.parent / "golden"
 
+
+def get_golden_project_files():
+    """Loads all golden dataset file paths, including curated real samples."""
+    return sorted(GOLDEN_DATASET_PATH.rglob("project_*.json"))
+
+
 def get_golden_projects():
-    """Loads all synthetic project files from the golden dataset."""
+    """Loads all golden project files, including curated real datasets."""
     return [
-        json.loads(f.read_text())
-        for f in GOLDEN_DATASET_PATH.glob("project_*.json")
+        json.loads(f.read_text(encoding="utf-8"))
+        for f in get_golden_project_files()
     ]
+
+
+def test_golden_dataset_includes_curated_real_projects():
+    """The regression dataset must include the curated Spain real-project batch."""
+    files = get_golden_project_files()
+    names = {path.name for path in files}
+
+    assert "project_LA_ROBLA.json" in names
+    assert "project_TRANVIA_GRANADA.json" in names
+    assert len(files) >= 18
 
 def simulate_ai_analysis(project_data: dict) -> float:
     """
@@ -38,7 +54,9 @@ def simulate_ai_analysis(project_data: dict) -> float:
     """
     # In a real test, you might want to introduce variability:
     # return random.uniform(0.80, 0.99)
-    print(f"Simulating analysis for project: {project_data.get('name')}")
+    metadata = project_data.get("project_metadata", {})
+    project_name = metadata.get("name") or project_data.get("name") or "Unknown Project"
+    print(f"Simulating analysis for project: {project_name}")
     return random.uniform(BASELINE_ACCURACY_THRESHOLD + 0.05, 0.99)
 
 @pytest.mark.parametrize("project_data", get_golden_projects())
@@ -46,7 +64,7 @@ def test_extraction_accuracy(project_data: dict):
     """
     Tests the extraction accuracy for a single project against the golden standard.
     """
-    project_name = project_data.get("name", "Unknown Project")
+    project_name = project_data.get("project_metadata", {}).get("name", "Unknown Project")
     
     # Simulate running the AI analysis and getting the accuracy score
     accuracy = simulate_ai_analysis(project_data)

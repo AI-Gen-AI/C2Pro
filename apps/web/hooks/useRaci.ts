@@ -3,8 +3,8 @@
  * Fetches RACI matrix data from the backend
  */
 
-import { useState, useEffect } from 'react';
-import { apiClient } from '@/lib/api/client';
+import { useState, useEffect } from "react";
+import { apiClient } from "@/lib/api/client";
 
 export interface RaciRow {
   activity: string;
@@ -12,12 +12,51 @@ export interface RaciRow {
   technicalLead: string;
   stakeholder: string;
   contractor: string;
+  projectId?: string;
+}
+
+interface RaciAssignment {
+  stakeholder_id: string;
+  stakeholder_name: string | null;
+  role: string;
+  is_verified: boolean;
+}
+
+interface RaciTaskRow {
+  task_id: string;
+  task_name: string;
+  assignments: RaciAssignment[];
+}
+
+interface RaciMatrixResponse {
+  matrix: RaciTaskRow[];
 }
 
 interface UseRaciResult {
   data: RaciRow[];
   loading: boolean;
   error: Error | null;
+}
+
+function _transformMatrixToRows(
+  matrix: RaciTaskRow[],
+  projectId?: string,
+): RaciRow[] {
+  return matrix.map((row) => {
+    const byRole: Record<string, string> = {};
+    for (const assignment of row.assignments) {
+      const name = assignment.stakeholder_name ?? assignment.role;
+      byRole[assignment.role.toUpperCase()] = name;
+    }
+    return {
+      activity: row.task_name,
+      projectManager: byRole["RESPONSIBLE"] ?? byRole["ACCOUNTABLE"] ?? "",
+      technicalLead: byRole["ACCOUNTABLE"] ?? "",
+      stakeholder: byRole["CONSULTED"] ?? "",
+      contractor: byRole["INFORMED"] ?? "",
+      projectId,
+    };
+  });
 }
 
 export function useRaci(projectId?: string): UseRaciResult {
@@ -33,21 +72,27 @@ export function useRaci(projectId?: string): UseRaciResult {
       setError(null);
 
       try {
-        const url = projectId
-          ? `/projects/${projectId}/raci`
-          : '/raci';
-        const response = await apiClient.get<RaciRow[]>(url);
-        if (active) setData(response.data);
+        const url = projectId ? `/projects/${projectId}/raci` : "/raci";
+        const response = await apiClient.get<RaciMatrixResponse>(url);
+        if (active) {
+          setData(
+            _transformMatrixToRows(response.data.matrix ?? [], projectId),
+          );
+        }
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err : new Error('Failed to fetch RACI data'));
+        setError(
+          err instanceof Error ? err : new Error("Failed to fetch RACI data"),
+        );
       } finally {
         if (active) setLoading(false);
       }
     }
 
     fetchRaci();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [projectId]);
 
   return { data, loading, error };

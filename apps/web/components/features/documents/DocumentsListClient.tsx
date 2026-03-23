@@ -1,23 +1,23 @@
-'use client';
+"use client";
 
-import { type ChangeEvent, useState } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { type ChangeEvent, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion';
+} from "@/components/ui/accordion";
 import {
   FileText,
   Upload,
@@ -31,34 +31,33 @@ import {
   Clock,
   Loader2,
   FolderOpen,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import type {
-  DocumentListItem,
   DocumentPollingStatus,
   ProjectDocumentsGroup,
-} from '@/lib/api/generated/models';
+} from "@/lib/api/contracts";
 
 interface DocumentsListClientProps {
   groups: ProjectDocumentsGroup[];
 }
 
 const STATUS_LABELS: Record<DocumentPollingStatus, string> = {
-  parsed: 'Analyzed',
-  processing: 'Processing',
-  queued: 'Queued',
-  error: 'Error',
+  parsed: "Analyzed",
+  processing: "Processing",
+  queued: "Queued",
+  error: "Error",
 };
 
 function getStatusIcon(status: DocumentPollingStatus) {
   switch (status) {
-    case 'parsed':
+    case "parsed":
       return CheckCircle2;
-    case 'processing':
+    case "processing":
       return Clock;
-    case 'queued':
+    case "queued":
       return Loader2;
-    case 'error':
+    case "error":
       return AlertTriangle;
     default:
       return FileText;
@@ -67,65 +66,68 @@ function getStatusIcon(status: DocumentPollingStatus) {
 
 function getStatusColor(status: DocumentPollingStatus) {
   switch (status) {
-    case 'parsed':
-      return 'bg-green-100 text-green-700 border-green-200';
-    case 'processing':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'queued':
-      return 'bg-gray-100 text-gray-700 border-gray-200';
-    case 'error':
-      return 'bg-red-100 text-red-700 border-red-200';
+    case "parsed":
+      return "bg-green-100 text-green-700 border-green-200";
+    case "processing":
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    case "queued":
+      return "bg-gray-100 text-gray-700 border-gray-200";
+    case "error":
+      return "bg-red-100 text-red-700 border-red-200";
     default:
-      return 'bg-gray-100 text-gray-700 border-gray-200';
+      return "bg-gray-100 text-gray-700 border-gray-200";
   }
 }
 
 function getTypeColor(docType: string | null | undefined) {
   switch (docType) {
-    case 'contract':
-      return 'bg-blue-100 text-blue-700';
-    case 'schedule':
-      return 'bg-orange-100 text-orange-700';
-    case 'budget':
-      return 'bg-green-100 text-green-700';
-    case 'specification':
-      return 'bg-purple-100 text-purple-700';
+    case "contract":
+      return "bg-blue-100 text-blue-700";
+    case "schedule":
+      return "bg-orange-100 text-orange-700";
+    case "budget":
+      return "bg-green-100 text-green-700";
+    case "specification":
+      return "bg-purple-100 text-purple-700";
     default:
-      return 'bg-gray-100 text-gray-700';
+      return "bg-gray-100 text-gray-700";
   }
 }
 
 function getFileIcon(filename: string) {
-  if (filename.endsWith('.xlsx') || filename.endsWith('.xls')) return FileSpreadsheet;
+  if (filename.endsWith(".xlsx") || filename.endsWith(".xls"))
+    return FileSpreadsheet;
   return FileText;
 }
 
 function formatFileSize(bytes: number | null | undefined): string {
-  if (!bytes) return '—';
+  if (!bytes) return "—";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
 export function DocumentsListClient({ groups }: DocumentsListClientProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Empty state: no documents across any project
   if (groups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-16 text-center">
         <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/50" />
-        <h3 className="text-sm font-medium text-foreground">No documents yet</h3>
+        <h3 className="text-sm font-medium text-foreground">
+          No documents yet
+        </h3>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
           Upload documents to your projects to start analyzing them. Documents
           will appear here grouped by project.
@@ -145,7 +147,7 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
         const matchesStatus =
-          statusFilter === 'all' || doc.status === statusFilter;
+          statusFilter === "all" || doc.status === statusFilter;
         return matchesSearch && matchesStatus;
       }),
     }))
@@ -153,7 +155,7 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
 
   const filteredCount = filteredGroups.reduce(
     (sum, g) => sum + g.documents.length,
-    0
+    0,
   );
 
   return (
@@ -165,7 +167,9 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
           <Input
             placeholder="Search documents..."
             value={searchQuery}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setSearchQuery(e.target.value)
+            }
             className="pl-9"
           />
         </div>
@@ -192,13 +196,17 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Analyzed</p>
           <p className="text-2xl font-bold text-green-600">
-            {allDocuments.filter((d) => d.status === 'parsed').length}
+            {allDocuments.filter((d) => d.status === "parsed").length}
           </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Processing</p>
           <p className="text-2xl font-bold text-blue-600">
-            {allDocuments.filter((d) => d.status === 'processing' || d.status === 'queued').length}
+            {
+              allDocuments.filter(
+                (d) => d.status === "processing" || d.status === "queued",
+              ).length
+            }
           </p>
         </div>
       </div>
@@ -228,7 +236,7 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
                       <div className="font-semibold">{group.projectName}</div>
                       <div className="text-sm text-muted-foreground">
                         {group.documents.length} document
-                        {group.documents.length !== 1 ? 's' : ''}
+                        {group.documents.length !== 1 ? "s" : ""}
                       </div>
                     </div>
                   </div>
@@ -351,9 +359,8 @@ export function DocumentsListClient({ groups }: DocumentsListClientProps) {
       </div>
 
       <div className="text-sm text-muted-foreground">
-        Showing {filteredCount} documents across{' '}
-        {filteredGroups.length} project
-        {filteredGroups.length !== 1 ? 's' : ''}
+        Showing {filteredCount} documents across {filteredGroups.length} project
+        {filteredGroups.length !== 1 ? "s" : ""}
       </div>
     </>
   );

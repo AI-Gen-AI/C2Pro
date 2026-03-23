@@ -1,12 +1,16 @@
 "use client";
 
 import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { uploadDocument } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = new Set(["pdf", "xlsx", "bc3"]);
 
 type DocumentUploadDropzoneProps = {
   projectId: string;
   maxFileSizeBytes?: number;
+  onUploadComplete?: () => void;
 };
 
 function getExtension(fileName: string): string {
@@ -17,16 +21,18 @@ function getExtension(fileName: string): string {
 export function DocumentUploadDropzone({
   projectId,
   maxFileSizeBytes,
+  onUploadComplete,
 }: DocumentUploadDropzoneProps) {
   const [dragState, setDragState] = useState<"idle" | "active">("idle");
   const [message, setMessage] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const ariaLabel =
     dragState === "active" ? "Drop files to upload" : "Upload documents";
 
-  const validateFiles = (files: File[]): void => {
+  const handleUpload = async (files: File[]): Promise<void> => {
     if (files.length === 0) {
       setMessage("No files selected");
       return;
@@ -48,7 +54,26 @@ export function DocumentUploadDropzone({
       return;
     }
 
-    setMessage(`${files.length} files ready for upload`);
+    setUploading(true);
+    setMessage(`Uploading ${files.length} file(s)...`);
+
+    try {
+      for (const file of files) {
+        setStatusMessage(`Uploading: ${file.name}`);
+        await uploadDocument(projectId, file, "CONTRACT");
+      }
+      setMessage(
+        `Upload accepted for ${files.length} file(s). Backend processing is still required.`,
+      );
+      setStatusMessage("Upload request accepted");
+      onUploadComplete?.();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Upload failed";
+      setMessage(`Error: ${errorMessage}`);
+      setStatusMessage("");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onDrop = (event: DragEvent<HTMLButtonElement>): void => {
@@ -56,7 +81,7 @@ export function DocumentUploadDropzone({
     event.stopPropagation();
     setDragState("idle");
     const files = Array.from(event.dataTransfer.files ?? []);
-    validateFiles(files);
+    handleUpload(files);
   };
 
   const onDragEnter = (event: DragEvent<HTMLButtonElement>): void => {
@@ -96,33 +121,43 @@ export function DocumentUploadDropzone({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className="w-full rounded-md border border-dashed p-6 text-primary-text"
+        className={`w-full rounded-md border-2 border-dashed p-8 text-center transition-colors ${
+          dragState === "active"
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-muted-foreground/25 text-muted-foreground hover:border-primary/50"
+        }`}
       >
-        Drag and drop files here
+        <Upload className="mx-auto mb-2 h-8 w-8" />
+        <p>Drag and drop files here</p>
+        <p className="mt-1 text-xs">PDF, XLSX, BC3 (max 50MB)</p>
       </button>
 
-      <div className="mt-3 flex items-center gap-3">
-        <button
+      <div className="mt-4 flex items-center justify-center gap-3">
+        <Button
           type="button"
           onClick={openPicker}
           onKeyDown={onBrowseKeyDown}
-          className="rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          disabled={uploading}
+          variant="default"
         >
+          <Upload className="mr-2 h-4 w-4" />
           Browse files
-        </button>
+        </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
+          accept=".pdf,.xlsx,.bc3"
           className="sr-only"
-          onChange={(event) => validateFiles(Array.from(event.target.files ?? []))}
+          disabled={uploading}
+          onChange={(event) => handleUpload(Array.from(event.target.files ?? []))}
         />
       </div>
 
-      <p role="status" aria-live="polite" className="mt-3 text-sm text-primary-text">
+      <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">
         {statusMessage}
       </p>
-      {message ? <p className="mt-2 text-sm text-primary-text">{message}</p> : null}
+      {message ? <p className="mt-2 text-sm text-foreground">{message}</p> : null}
     </section>
   );
 }

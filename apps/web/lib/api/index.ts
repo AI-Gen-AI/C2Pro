@@ -3,18 +3,24 @@
  * Centralized API functions for data fetching
  */
 
-import type { Alert } from '@/types/project';
-import type { AlertResponse, DocumentListResponse } from '@/types/backend';
-import type { Highlight, Rectangle } from '@/types/highlight';
-import { createHighlight } from '@/types/highlight';
-import { apiClient } from './client';
+import type { Alert } from "@/types/project";
+import type { AlertResponse, DocumentListResponse } from "@/types/backend";
+import type { Highlight, Rectangle } from "@/types/highlight";
+import { env } from "@/config/env";
+import type {
+  ApprovalResponse,
+  ApprovalStatus,
+} from "@/lib/api/generated/models";
+import { reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/api/generated/approvals/approvals";
+import { createHighlight, getHighlightColor } from "@/types/highlight";
+import { apiClient, handleAuthErrorStatus } from "./client";
 
 /**
  * Processed entity type for document analysis
  */
 export interface ProcessedEntity {
   id: string;
-  type: 'stakeholder' | 'wbs' | 'bom' | 'clause';
+  type: "stakeholder" | "wbs" | "bom" | "clause";
   text: string;
   page: number;
   confidence: number;
@@ -23,24 +29,21 @@ export interface ProcessedEntity {
 
 /**
  * Fetch alerts for a specific document
- * TODO: Implement actual API call
  */
-export async function getDocumentAlerts(
-  documentId: string
-): Promise<Alert[]> {
-  const response = await apiClient.get<AlertResponse[]>('/alerts', {
+export async function getDocumentAlerts(documentId: string): Promise<Alert[]> {
+  const response = await apiClient.get<{
+    items: AlertResponse[];
+    total: number;
+  }>("/alerts", {
     params: { document_id: documentId },
   });
-  return response.data;
+  return response.data.items;
 }
 
 /**
  * Create PDF highlights from alert data
- * TODO: Implement highlight creation logic
  */
-export function createHighlightsFromAlerts(
-  alerts: Alert[]
-): Highlight[] {
+export function createHighlightsFromAlerts(alerts: Alert[]): Highlight[] {
   return alerts.flatMap((alert) => {
     const evidence = extractEvidenceLocation(alert);
     if (!evidence) return [];
@@ -59,7 +62,7 @@ export function createHighlightsFromAlerts(
         evidence.page_number,
         [rect],
         severityToColor(alert.severity),
-        alert.title
+        alert.title,
       ),
     ];
   });
@@ -70,36 +73,244 @@ export function createHighlightsFromAlerts(
  */
 export async function getDocumentEntities(
   documentId: string,
-  _pageHeight?: number
+  _pageHeight?: number,
 ): Promise<ProcessedEntity[]> {
   const response = await apiClient.get<ProcessedEntity[]>(
-    `/documents/${documentId}/entities`
+    `/documents/${documentId}/entities`,
   );
   return response.data;
 }
 
 /**
  * Create PDF highlights from extracted entities
- * TODO: Implement highlight creation logic
+ * Maps extracted entities with evidence locations to PDF highlights
  */
 export function createHighlightsFromEntities(
-  entities: ProcessedEntity[]
+  entities: ProcessedEntity[],
 ): Highlight[] {
-  // Placeholder implementation
-  // In production, this would transform entity data into highlight coordinates
-  return [];
+  return entities.flatMap((entity) => {
+    const evidence = entity.metadata?.evidence_location;
+    if (!evidence || !Array.isArray(evidence.bbox)) return [];
+
+    const rect: Rectangle = {
+      left: evidence.bbox[0],
+      top: evidence.bbox[1],
+      width: evidence.bbox[2],
+      height: evidence.bbox[3],
+      normalized: evidence.normalized,
+    };
+
+    return [
+      createHighlight(
+        entity.id,
+        evidence.page_number || entity.page,
+        [rect],
+        getHighlightColor(entity.confidence * 100),
+        entity.text,
+      ),
+    ];
+  });
+}
+
+/**
+ * Paginated document list response from API
+ */
+interface PaginatedDocumentListResponse {
+  items: DocumentListResponse[];
+  total_count: number;
+  skip: number;
+  limit: number;
 }
 
 /**
  * Fetch documents for a specific project
- * TODO: Implement actual API call
  */
 export async function getProjectDocuments(
-  projectId: string
+  projectId: string,
 ): Promise<DocumentListResponse[]> {
-  const response = await apiClient.get<DocumentListResponse[]>(
-    `/projects/${projectId}/documents`
+  const response = await apiClient.get<PaginatedDocumentListResponse>(
+    `/projects/${projectId}/documents`,
   );
+  // API returns paginated response with items array
+  return response.data.items;
+}
+
+/**
+ * Upload a document to a project
+ * Note: File uploads go directly to backend to avoid Next.js proxy
+ * which sets Content-Type: application/json and breaks multipart uploads
+ */
+export async function uploadDocument(
+  projectId: string,
+  file: File,
+  documentType:
+    | "CONTRACT"
+    | "SCHEDULE"
+    | "BOM"
+    | "SPECIFICATION"
+    | "DRAWING"
+    | "OTHER" = "CONTRACT",
+): Promise<{ id: string; task_id: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  // Backend enum expects lowercase values (contract, schedule, etc.)
+  formData.append("document_type", documentType.toLowerCase());
+
+  // Import auth store to get token - file uploads go directly to backend
+  const { useAuthStore } = await import("@/stores/auth");
+  const { token, tenantId } = useAuthStore.getState();
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (tenantId) {
+    headers["X-Tenant-ID"] = tenantId;
+  }
+
+  const response = await fetch(
+    `${env.API_BASE_URL}/projects/${projectId}/documents`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    },
+  );
+
+  if (!response.ok) {
+    handleAuthErrorStatus(response.status);
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Upload failed" }));
+    throw new Error(errorData.detail || `Upload failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get document download URL
+ */
+export function getDocumentDownloadUrl(documentId: string): string {
+  return `${env.API_BASE_URL}/documents/${documentId}/download`;
+}
+
+/**
+ * Delete a document by ID
+ */
+export async function deleteDocument(documentId: string): Promise<void> {
+  await apiClient.delete(`/documents/${documentId}`);
+}
+
+/**
+ * Review an alert (Approve/Reject)
+ */
+export async function reviewAlert(
+  alertId: string,
+  decision: "approve" | "reject",
+  comment: string = "",
+): Promise<AlertResponse> {
+  const response = await apiClient.post<AlertResponse>(
+    `/alerts/${alertId}/review`,
+    {
+      decision,
+      comment,
+    },
+  );
+  return response.data;
+}
+
+export async function reviewApprovalResource(
+  resourceType: string,
+  resourceId: string,
+  status: ApprovalStatus,
+  options?: {
+    correctionData?: Record<string, unknown>;
+    feedbackComment?: string;
+  },
+): Promise<ApprovalResponse> {
+  return reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch(
+    resourceType,
+    resourceId,
+    {
+      status,
+      correction_data: options?.correctionData,
+      feedback_comment: options?.feedbackComment ?? null,
+    },
+  );
+}
+
+/**
+ * Resolve an alert
+ */
+export async function resolveAlert(
+  alertId: string,
+  resolution: string,
+  resolvedBy: string,
+): Promise<AlertResponse> {
+  const response = await apiClient.post<AlertResponse>(
+    `/alerts/${alertId}/resolve`,
+    {
+      resolution,
+      resolved_by: resolvedBy,
+    },
+  );
+  return response.data;
+}
+
+/**
+ * Update a stakeholder's details
+ */
+export async function updateStakeholder(
+  stakeholderId: string,
+  data: {
+    name?: string;
+    role?: string;
+    company?: string;
+    email?: string;
+    power_score?: number;
+    interest_score?: number;
+    stakeholder_metadata?: Record<string, any>;
+  },
+): Promise<any> {
+  const response = await apiClient.patch(
+    `/stakeholders/${stakeholderId}`,
+    data,
+  );
+  return response.data;
+}
+
+/**
+ * Update a WBS item
+ */
+export async function updateWBSItem(
+  wbsId: string,
+  data: {
+    name?: string;
+    description?: string;
+    planned_start?: string;
+    planned_end?: string;
+    status?: string;
+  },
+): Promise<any> {
+  const response = await apiClient.put(`/procurement/wbs/${wbsId}`, data);
+  return response.data;
+}
+
+/**
+ * Update a BOM item
+ */
+export async function updateBOMItem(
+  bomId: string,
+  data: {
+    item_name?: string;
+    quantity?: number;
+    unit?: string;
+    unit_price?: number;
+    status?: string;
+  },
+): Promise<any> {
+  const response = await apiClient.put(`/procurement/bom/${bomId}`, data);
   return response.data;
 }
 
@@ -125,21 +336,21 @@ function extractEvidenceLocation(alert: Alert): {
   };
 }
 
-function severityToColor(severity: Alert['severity']): string {
+function severityToColor(severity: Alert["severity"]): string {
   const normalized = String(severity).toLowerCase();
   switch (normalized) {
-    case 'critical':
-      return 'red';
-    case 'high':
-      return 'orange';
-    case 'medium':
-      return 'yellow';
+    case "critical":
+      return "red";
+    case "high":
+      return "orange";
+    case "medium":
+      return "yellow";
     default:
-      return 'blue';
+      return "blue";
   }
 }
 
 // Re-export API client and auth utilities
-export * from './client';
-export * from './auth';
-export * from './config';
+export * from "./client";
+export * from "./auth";
+export * from "./config";

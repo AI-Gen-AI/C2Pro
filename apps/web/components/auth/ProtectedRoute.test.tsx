@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -23,6 +23,11 @@ vi.mock("@/contexts/AuthContext", () => ({
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("ProtectedRoute", () => {
+  beforeEach(() => {
+    push.mockReset();
+    authState = { isAuthenticated: false, isLoading: false };
+  });
+
   it("renders a loading state while auth is loading", () => {
     authState = { isAuthenticated: false, isLoading: true };
     renderWithProviders(
@@ -36,7 +41,7 @@ describe("ProtectedRoute", () => {
     ).toBeInTheDocument();
   });
 
-  it("redirects to login when unauthenticated", () => {
+  it("redirects to sign-in when unauthenticated", () => {
     authState = { isAuthenticated: false, isLoading: false };
     renderWithProviders(
       <ProtectedRoute>
@@ -44,7 +49,18 @@ describe("ProtectedRoute", () => {
       </ProtectedRoute>,
     );
 
-    expect(push).toHaveBeenCalledWith("/login");
+    expect(push).toHaveBeenCalledWith("/sign-in");
+  });
+
+  it("does not redirect while auth is still resolving after a token loss", () => {
+    authState = { isAuthenticated: false, isLoading: true };
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Secret</div>
+      </ProtectedRoute>,
+    );
+
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("renders children when authenticated", () => {

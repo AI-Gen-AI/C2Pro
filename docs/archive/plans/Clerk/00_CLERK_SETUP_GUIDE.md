@@ -38,6 +38,7 @@ Then go to **Settings** → **User Profiles** → **Custom Fields**
 Click **"Add Field"** and create these:
 
 **Field 1: Service Tier**
+
 ```
 Key: tier
 Type: Text
@@ -49,6 +50,7 @@ Default: free
 ```
 
 **Field 2: Tenant ID**
+
 ```
 Key: tenant_id
 Type: Text
@@ -75,6 +77,7 @@ Default: user
 Click **"Create Organization"**
 
 **Organization 1: C2Pro Platform (Admin)**
+
 ```
 Name: C2Pro Platform Admin
 Slug: c2pro-platform

@@ -1,9 +1,9 @@
-import type { ProjectListItemResponse } from "@/lib/api/generated/models";
+import type { ProjectListItem } from "@/lib/api/contracts";
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 
 interface ProjectListTableProps {
-  projects: ProjectListItemResponse[];
+  projects: ProjectListItem[];
 }
 
 export function ProjectListTable({ projects }: ProjectListTableProps) {
@@ -39,7 +39,10 @@ export function ProjectListTable({ projects }: ProjectListTableProps) {
           </thead>
           <tbody className="divide-y">
             {projects.map((project) => (
-              <tr key={project.id} className="transition-colors hover:bg-muted/30">
+              <tr
+                key={project.id}
+                className="transition-colors hover:bg-muted/30"
+              >
                 <td className="px-4 py-3">
                   <Link
                     href={`/projects/${project.id}`}

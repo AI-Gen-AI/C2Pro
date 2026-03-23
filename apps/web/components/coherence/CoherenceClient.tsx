@@ -1,25 +1,25 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { CoherenceGauge } from '@/components/coherence/CoherenceGauge';
-import { ScoreCard } from '@/components/coherence/ScoreCard';
-import { BreakdownChart } from '@/components/coherence/BreakdownChart';
-import { RadarView } from '@/components/coherence/RadarView';
-import { AlertsDistribution } from '@/components/coherence/AlertsDistribution';
-import { CategoryDetail } from '@/components/coherence/CategoryDetail';
-import type { DashboardSummary } from '@/lib/api/generated/models';
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { CoherenceGauge } from "@/components/coherence/CoherenceGauge";
+import { ScoreCard } from "@/components/coherence/ScoreCard";
+import { BreakdownChart } from "@/components/coherence/BreakdownChart";
+import { RadarView } from "@/components/coherence/RadarView";
+import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
+import { CategoryDetail } from "@/components/coherence/CategoryDetail";
+import type { DashboardSummary } from "@/lib/api/contracts";
 
 const LABELS: Record<string, string> = {
-  SCOPE: 'Scope',
-  BUDGET: 'Budget',
-  QUALITY: 'Quality',
-  TECHNICAL: 'Technical',
-  LEGAL: 'Legal',
-  TIME: 'Time',
+  SCOPE: "Scope",
+  BUDGET: "Budget",
+  QUALITY: "Quality",
+  TECHNICAL: "Technical",
+  LEGAL: "Legal",
+  TIME: "Time",
 };
 
-type ViewMode = 'breakdown' | 'radar' | 'alerts';
+type ViewMode = "breakdown" | "radar" | "alerts";
 
 interface CoherenceClientProps {
   summary: DashboardSummary;
@@ -27,7 +27,7 @@ interface CoherenceClientProps {
 
 export function CoherenceClient({ summary }: CoherenceClientProps) {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>('breakdown');
+  const [view, setView] = useState<ViewMode>("breakdown");
 
   const barData = Object.entries(summary.sub_scores).map(([k, score]) => ({
     name: LABELS[k] ?? k,
@@ -41,7 +41,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
   }));
 
   const catEntries = Object.entries(summary.sub_scores).sort(
-    ([, a], [, b]) => a - b
+    ([, a], [, b]) => a - b,
   );
 
   return (
@@ -49,15 +49,15 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Coherence Dashboard</h3>
         <div className="flex gap-2">
-          {(['breakdown', 'radar', 'alerts'] as ViewMode[]).map((v) => (
+          {(["breakdown", "radar", "alerts"] as ViewMode[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={cn(
-                'rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-all duration-150',
+                "rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-all duration-150",
                 view === v
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground",
               )}
             >
               {v}
@@ -73,9 +73,9 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
           dataPointsChecked={summary.alert_count}
         />
         <div className="rounded-md border bg-card p-5 shadow-sm">
-          {view === 'breakdown' && <BreakdownChart data={barData} />}
-          {view === 'radar' && <RadarView data={radarData} />}
-          {view === 'alerts' && (
+          {view === "breakdown" && <BreakdownChart data={barData} />}
+          {view === "radar" && <RadarView data={radarData} />}
+          {view === "alerts" && (
             <AlertsDistribution
               critical={0}
               high={0}
@@ -97,9 +97,7 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
               weight={summary.weights_used[cat] ?? 0}
               alertCount={0}
               selected={selectedCat === cat}
-              onClick={() =>
-                setSelectedCat(selectedCat === cat ? null : cat)
-              }
+              onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
             />
           ))}
         </div>

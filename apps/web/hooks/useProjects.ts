@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { ProjectsService } from "@/lib/api/generated";
+import { listProjects } from "@/lib/api/services/dashboard";
 
-export const useProjects = () =>
+export const useProjects = (enabled: boolean = true) =>
   useQuery({
     queryKey: ["projects"],
-    queryFn: () => ProjectsService.getProjects(),
+    queryFn: () => listProjects(),
+    enabled,
   });

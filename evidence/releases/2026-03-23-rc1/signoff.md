@@ -21,3 +21,8 @@
 - Swagger workbook evidence: `docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md`
 - Rollback owner: `Operations Lead (rehearsal)`
 - Incident reference, if any: `none`
+
+## Hosted Rehearsal Checklist
+
+- [x] Dispatch hosted suite-matrix workflows for candidate commit `6019548f9589c3bddd208927908be24ad4713d92`.
+- [ ] TODO: Dispatch `.github/workflows/deploy-production.yml` only after the project is explicitly considered production-ready enough for a production-gated rehearsal.

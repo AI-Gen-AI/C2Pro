@@ -27,6 +27,7 @@ from anthropic import Anthropic
 from anthropic.types import Message
 
 from src.config import settings
+from src.core.ai.model_router import ModelRouter, ModelTier
 from src.core.ai.token_counter import get_token_counter
 from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry, CircuitBreakerState
 from src.core.resilience.config import get_circuit_breaker_settings
@@ -203,6 +204,7 @@ class LLMClient:
 
         # Initialize Anthropic client
         self.client = Anthropic(api_key=self.api_key, timeout=timeout_seconds)
+        self.model_router = ModelRouter()
 
         # Circuit breaker (using centralized resilience infrastructure)
         self.circuit_breaker = self._init_circuit_breaker() if enable_circuit_breaker else None
@@ -528,22 +530,19 @@ class LLMClient:
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """
         Calcula el costo de una llamada.
-
-        Usa pricing hardcodeado. En producción, debería usar model_router.
         """
-        # Simplified cost calculation
-        # TODO: Integrate with model_router for accurate pricing
-        if "haiku" in model.lower():
-            input_cost = (input_tokens / 1_000_000) * 0.25
-            output_cost = (output_tokens / 1_000_000) * 1.25
-        elif "opus" in model.lower():
-            input_cost = (input_tokens / 1_000_000) * 15.0
-            output_cost = (output_tokens / 1_000_000) * 75.0
-        else:  # Sonnet
-            input_cost = (input_tokens / 1_000_000) * 3.0
-            output_cost = (output_tokens / 1_000_000) * 15.0
+        model_config = self.model_router.get_model_by_name(model)
+        if model_config is None:
+            lowered_model = model.lower()
+            if "haiku" in lowered_model:
+                model_config = self.model_router.get_model_by_tier(ModelTier.FLASH)
+            elif "opus" in lowered_model:
+                model_config = self.model_router.get_model_by_tier(ModelTier.POWERFUL)
+            else:
+                model_config = self.model_router.get_model_by_tier(ModelTier.STANDARD)
+                logger.warning("llm_model_pricing_fallback", model=model, tier=ModelTier.STANDARD.value)
 
-        return round(input_cost + output_cost, 6)
+        return self.model_router.estimate_cost(model_config, input_tokens, output_tokens)
 
     # ===========================================
     # STATISTICS

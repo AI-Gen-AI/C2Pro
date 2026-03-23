@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.documents.domain.models import DocumentStatus, DocumentType
 
@@ -75,6 +75,8 @@ class DocumentResponse(BaseModel):
 
 class DocumentQueuedResponse(DocumentResponse):
     """Response for async document upload."""
+    processing_status: DocumentPollingStatus = DocumentPollingStatus.QUEUED
+    status_detail: str = "Upload accepted. Ingestion is queued; analysis has not started."
     task_id: str | None = None
 
 
@@ -89,7 +91,9 @@ class DocumentListItem(BaseModel):
     """List item for documents."""
     id: UUID
     filename: str
+    document_type: str | None = None
     status: DocumentPollingStatus
+    status_detail: str
     error_message: str | None = None
     uploaded_at: datetime | None = None
     file_size_bytes: int | None = None
@@ -118,3 +122,13 @@ class RagAnswerResponse(BaseModel):
     """Response for RAG answers."""
     answer: str
     sources: list[dict] = field(default_factory=list)
+
+
+class DocumentEntityResponse(BaseModel):
+    """Entity extracted or derived from a persisted document."""
+    id: UUID
+    type: str
+    text: str
+    page: int
+    confidence: float
+    metadata: dict = Field(default_factory=dict)

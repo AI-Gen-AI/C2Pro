@@ -17,8 +17,7 @@ from uuid import uuid4
 from src.main import app
 from src.core.database import get_session
 from src.projects.domain.models import ProjectStatus, ProjectType
-from src.core.auth.models import User, UserRole
-from src.projects.adapters.http.router import _add_fake_project, _fake_projects
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 # ===========================================
@@ -56,14 +55,6 @@ async def client(db):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(autouse=True)
-def clear_fake_projects():
-    """Ensure test isolation for in-memory projects store."""
-    _fake_projects.clear()
-    yield
-    _fake_projects.clear()
-
-
 @pytest.fixture
 def auth_headers(generate_token, test_user, test_tenant):
     """Generate authorization headers with valid JWT token."""
@@ -79,41 +70,69 @@ def auth_headers(generate_token, test_user, test_tenant):
 @pytest_asyncio.fixture
 async def test_project(db, test_tenant, test_user):
     """Create a test project."""
-    project = {
-        "id": uuid4(),
-        "tenant_id": test_tenant.id,
-        "name": "Test Project",
-        "code": "TEST-001",
-        "description": "A test project for integration tests",
-        "project_type": ProjectType.CONSTRUCTION.value,
-        "status": ProjectStatus.DRAFT.value,
-        "location": "Madrid, Spain",
-        "estimated_budget": 100000.0,
-        "currency": "EUR",
-    }
-    _add_fake_project(project)
-    project = SimpleNamespace(**project)
-    return project
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Test Project",
+        code="TEST-001",
+        description="A test project for integration tests",
+        project_type=ProjectType.CONSTRUCTION.value,
+        status=ProjectStatus.DRAFT.value,
+        coherence_score=88.0,
+        estimated_budget=100000.0,
+        currency="EUR",
+        metadata_json={"location": "Madrid, Spain", "version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return SimpleNamespace(
+        id=project.id,
+        tenant_id=project.tenant_id,
+        name=project.name,
+        code=project.code,
+        description=project.description,
+        project_type=project.project_type,
+        status=project.status,
+        coherence_score=project.coherence_score,
+        location="Madrid, Spain",
+        estimated_budget=project.estimated_budget,
+        currency=project.currency,
+    )
 
 
 @pytest_asyncio.fixture
 async def test_project_2(db, test_tenant, test_user):
     """Create a second test project."""
-    project = {
-        "id": uuid4(),
-        "tenant_id": test_tenant.id,
-        "name": "Second Project",
-        "code": "TEST-002",
-        "description": "Another test project",
-        "project_type": ProjectType.ENGINEERING.value,
-        "status": ProjectStatus.ACTIVE.value,
-        "location": "Barcelona, Spain",
-        "estimated_budget": 200000.0,
-        "currency": "EUR",
-    }
-    _add_fake_project(project)
-    project = SimpleNamespace(**project)
-    return project
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Second Project",
+        code="TEST-002",
+        description="Another test project",
+        project_type=ProjectType.ENGINEERING.value,
+        status=ProjectStatus.ACTIVE.value,
+        coherence_score=72.0,
+        estimated_budget=200000.0,
+        currency="EUR",
+        metadata_json={"location": "Barcelona, Spain", "version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return SimpleNamespace(
+        id=project.id,
+        tenant_id=project.tenant_id,
+        name=project.name,
+        code=project.code,
+        description=project.description,
+        project_type=project.project_type,
+        status=project.status,
+        coherence_score=project.coherence_score,
+        location="Barcelona, Spain",
+        estimated_budget=project.estimated_budget,
+        currency=project.currency,
+    )
 
 
 # ===========================================
@@ -237,6 +256,8 @@ class TestListProjectsEndpoint:
 
         assert data["total"] >= 2  # At least our two test projects
         assert len(data["items"]) >= 2
+        listed = next(item for item in data["items"] if item["id"] == str(test_project.id))
+        assert listed["coherence_score"] == pytest.approx(test_project.coherence_score)
 
     @pytest.mark.asyncio
     async def test_list_projects_with_pagination(self, client, test_project, test_project_2, auth_headers):
@@ -324,6 +345,7 @@ class TestGetProjectEndpoint:
         assert data["name"] == test_project.name
         assert data["code"] == test_project.code
         assert data["status"] == test_project.status
+        assert data["coherence_score"] == pytest.approx(test_project.coherence_score)
 
     @pytest.mark.asyncio
     async def test_get_project_not_found(self, client, auth_headers):
@@ -344,17 +366,20 @@ class TestGetProjectEndpoint:
     async def test_get_project_wrong_tenant(self, client, db, test_tenant_2, test_user, generate_token):
         """Should return 404 when accessing project from different tenant."""
         # Arrange - create project for tenant 2
-        project_tenant2 = {
-            "id": uuid4(),
-            "tenant_id": test_tenant_2.id,
-            "name": "Tenant 2 Project",
-            "code": "T2-001",
-            "project_type": ProjectType.CONSTRUCTION.value,
-            "status": ProjectStatus.DRAFT.value,
-            "estimated_budget": 100000.0,
-            "currency": "EUR",
-        }
-        _add_fake_project(project_tenant2)
+        project_tenant2 = ProjectORM(
+            id=uuid4(),
+            tenant_id=test_tenant_2.id,
+            name="Tenant 2 Project",
+            code="T2-001",
+            project_type=ProjectType.CONSTRUCTION.value,
+            status=ProjectStatus.DRAFT.value,
+            estimated_budget=100000.0,
+            currency="EUR",
+            metadata_json={"version": 1},
+        )
+        db.add(project_tenant2)
+        await db.commit()
+        await db.refresh(project_tenant2)
 
         # Try to access with tenant 1 token
         tenant1_token = generate_token(
@@ -367,7 +392,7 @@ class TestGetProjectEndpoint:
 
         # Act
         response = await client.get(
-            f"{API_PREFIX}/projects/{project_tenant2['id']}",
+            f"{API_PREFIX}/projects/{project_tenant2.id}",
             headers=headers
         )
 
@@ -504,21 +529,24 @@ class TestDeleteProjectEndpoint:
     async def test_delete_project_success(self, client, db, test_tenant, test_user, auth_headers):
         """Should successfully delete a project."""
         # Arrange - create a project to delete
-        project = {
-            "id": uuid4(),
-            "tenant_id": test_tenant.id,
-            "name": "To Delete",
-            "code": "DEL-001",
-            "project_type": ProjectType.CONSTRUCTION.value,
-            "status": ProjectStatus.DRAFT.value,
-            "estimated_budget": 100000.0,
-            "currency": "EUR",
-        }
-        _add_fake_project(project)
+        project = ProjectORM(
+            id=uuid4(),
+            tenant_id=test_tenant.id,
+            name="To Delete",
+            code="DEL-001",
+            project_type=ProjectType.CONSTRUCTION.value,
+            status=ProjectStatus.DRAFT.value,
+            estimated_budget=100000.0,
+            currency="EUR",
+            metadata_json={"version": 1},
+        )
+        db.add(project)
+        await db.commit()
+        await db.refresh(project)
 
         # Act
         response = await client.delete(
-            f"{API_PREFIX}/projects/{project['id']}",
+            f"{API_PREFIX}/projects/{project.id}",
             headers=auth_headers
         )
 
@@ -654,6 +682,25 @@ class TestUpdateProjectStatusEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestProjectBudgetEndpoint:
+    """Tests for GET /projects/{project_id}/budget endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_budget_returns_fake_aggregate_payload(self, client, test_project, auth_headers):
+        """Should return the compatibility budget payload instead of 501."""
+        response = await client.get(
+            f"{API_PREFIX}/projects/{test_project.id}/budget",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.json()
+        assert payload["project_id"] == str(test_project.id)
+        assert payload["total_budget"] == pytest.approx(100000.0)
+        assert payload["remaining_budget"] == pytest.approx(100000.0)
+        assert payload["variance_status"] == "on_track"
 
 
 # ===========================================

@@ -5,6 +5,7 @@ This section is for internal reference material that is still useful, but is not
 ## Contents
 
 - [Lessons learned](./LESSONS_LEARNED.md)
+- [Swagger endpoint workbook](./SWAGGER_ENDPOINT_WORKBOOK.md)
 
 ## Related Sections
 

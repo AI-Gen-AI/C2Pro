@@ -8,7 +8,7 @@ import { BreakdownChart } from "@/components/coherence/BreakdownChart";
 import { RadarView } from "@/components/coherence/RadarView";
 import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
-import type { DashboardSummary } from "@/lib/api/generated/models";
+import type { DashboardSummary } from "@/lib/api/contracts";
 
 const CATEGORY_LABELS: Record<string, string> = {
   SCOPE: "Scope",
@@ -42,7 +42,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   }));
 
   const catEntries = Object.entries(data.sub_scores).sort(
-    ([, a], [, b]) => a - b
+    ([, a], [, b]) => a - b,
   );
 
   return (
@@ -66,7 +66,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
                 "rounded-md border px-3.5 py-1.5 text-xs font-medium capitalize transition-all duration-150",
                 view === v
                   ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
               )}
             >
               {v}
@@ -114,9 +114,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
               weight={data.weights_used[cat] ?? 0}
               alertCount={0}
               selected={selectedCat === cat}
-              onClick={() =>
-                setSelectedCat(selectedCat === cat ? null : cat)
-              }
+              onClick={() => setSelectedCat(selectedCat === cat ? null : cat)}
             />
           ))}
         </div>

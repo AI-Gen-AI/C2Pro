@@ -54,10 +54,9 @@ class Analysis(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -102,10 +101,9 @@ class Analysis(Base):
     )
 
     # Relationships
-    # TODO: Re-enable relationship when Alert FK is restored (GREEN phase)
-    # alerts: Mapped[list["Alert"]] = relationship(
-    #     "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
-    # )
+    alerts: Mapped[list["Alert"]] = relationship(
+        "Alert", back_populates="analysis", lazy="select", cascade="all, delete-orphan"
+    )
 
     # Indexes
     __table_args__ = (
@@ -140,7 +138,8 @@ class Analysis(Base):
     @property
     def critical_alerts(self) -> int:
         """Número de alertas críticas."""
-        return sum(1 for a in self.alerts if a.severity == AlertSeverity.CRITICAL)
+        alerts = getattr(self, "alerts", [])
+        return sum(1 for a in alerts if a.severity == AlertSeverity.CRITICAL)
 
 
 class Alert(Base):
@@ -157,17 +156,15 @@ class Alert(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    # TODO: Re-enable FK when analyses table is fully integrated (GREEN phase)
     analysis_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("analyses.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("analyses.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -188,10 +185,9 @@ class Alert(Base):
     recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # TRAZABILIDAD LEGAL (ROADMAP §5.3)
-    # TODO: Re-enable FK when clauses table is implemented (GREEN phase)
     source_clause_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("clauses.id"),  # Temporarily commented - clauses table not implemented yet
+        ForeignKey("clauses.id"),
         nullable=True,
         index=True,  # FK a cláusula que origina la alerta
     )
@@ -248,10 +244,9 @@ class Alert(Base):
     )
 
     # Relationships
-    # TODO: Re-enable relationship when Analysis FK is restored (GREEN phase)
-    # analysis: Mapped["Analysis"] = relationship(
-    #     "Analysis", back_populates="alerts", lazy="selectin"
-    # )
+    analysis: Mapped["Analysis"] = relationship(
+        "Analysis", back_populates="alerts", lazy="selectin"
+    )
 
     resolver: Mapped["User"] = relationship("User", foreign_keys=[resolved_by], lazy="select")
     reviewer: Mapped["User"] = relationship("User", foreign_keys=[reviewed_by], lazy="select")

@@ -15,25 +15,26 @@ import pytest
 import pytest_asyncio
 
 from src.core.auth.models import Tenant, User
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 @pytest_asyncio.fixture
-async def concurrency_project(test_tenant: Tenant) -> dict:
-    """Create fake project for concurrent-modification tests."""
-    from src.projects.adapters.http.router import _add_fake_project
-
-    project = {
-        "id": uuid4(),
-        "tenant_id": test_tenant.id,
-        "name": "Concurrent Project",
-        "code": "CON-001",
-        "project_type": "construction",
-        "estimated_budget": 1000000.0,
-        "currency": "EUR",
-        "version": 1,
-    }
-    _add_fake_project(project)
-    return project
+async def concurrency_project(db, test_tenant: Tenant) -> dict:
+    """Create persisted project for concurrent-modification tests."""
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Concurrent Project",
+        code="CON-001",
+        project_type="construction",
+        estimated_budget=1000000.0,
+        currency="EUR",
+        metadata_json={"version": 1},
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return {"id": project.id, "tenant_id": project.tenant_id, "version": 1}
 
 
 def _headers(generate_token, user: User, tenant: Tenant) -> dict[str, str]:

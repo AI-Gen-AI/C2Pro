@@ -43,10 +43,9 @@ class StakeholderORM(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project relationship
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -58,12 +57,17 @@ class StakeholderORM(Base):
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Classification
-    power_level: Mapped[PowerLevel] = mapped_column(SQLEnum(PowerLevel), default=PowerLevel.MEDIUM)
+    power_level: Mapped[PowerLevel] = mapped_column(
+        SQLEnum(PowerLevel, values_callable=lambda obj: [e.value for e in obj]),
+        default=PowerLevel.MEDIUM
+    )
     interest_level: Mapped[InterestLevel] = mapped_column(
-        SQLEnum(InterestLevel), default=InterestLevel.MEDIUM
+        SQLEnum(InterestLevel, values_callable=lambda obj: [e.value for e in obj]),
+        default=InterestLevel.MEDIUM
     )
     quadrant: Mapped[StakeholderQuadrant | None] = mapped_column(
-        SQLEnum(StakeholderQuadrant), nullable=True
+        SQLEnum(StakeholderQuadrant, values_callable=lambda obj: [e.value for e in obj]),
+        nullable=True
     )
 
     # Contact
@@ -71,16 +75,15 @@ class StakeholderORM(Base):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Traceability
-    # TODO: Re-enable FKs when clauses/documents tables are implemented (GREEN phase)
     source_clause_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("clauses.id"),  # Temporarily commented - clauses table not implemented yet
+        ForeignKey("clauses.id"),
         nullable=True,
         index=True,
     )
     extracted_from_document_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("documents.id"),  # Temporarily commented - documents table not implemented yet
+        ForeignKey("documents.id"),
         nullable=True,
     )
 
@@ -141,10 +144,9 @@ class StakeholderWBSRaciORM(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Relationships
-    # TODO: Re-enable FK when projects table is fully integrated (GREEN phase)
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        # ForeignKey("projects.id", ondelete="CASCADE"),  # Temporarily commented for E2E test isolation
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

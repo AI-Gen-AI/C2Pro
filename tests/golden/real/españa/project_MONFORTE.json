@@ -1,0 +1,127 @@
+{
+  "project_metadata": {
+    "id": "P-009604",
+    "name": "LAV Monforte del Cid - Murcia",
+    "type": "Obra Civil",
+    "complexity": "Complex",
+    "language": "es"
+  },
+  "input_documents": {
+    "contract_text": "Proyecto de las instalaciones de linea aerea de contacto, telemando de energia y sistemas asociados para el tramo Monforte del Cid - Murcia de la linea de alta velocidad. El alcance incluye diseno, suministro, montaje, pruebas y puesta en servicio de la catenaria C-350 a 2x25 kV, cables feeder, apoyos, cimentaciones, proteccion y control, bajo cumplimiento de normativa UNE-EN 50119, ETI de energia y estandares ADIF. El contrato exige cumplimiento de la Declaracion de Impacto Ambiental, coordinacion con la Direccion de Seguridad en la Circulacion y ejecucion compatible con trabajos nocturnos y bloqueos de via.",
+    "schedule_summary": {
+      "start_date": "2014-02-27",
+      "duration_months": 24,
+      "critical_constraints": [
+        "trabajos nocturnos en banda de mantenimiento",
+        "coordinacion con seguridad en la circulacion",
+        "hitos de suministro condicionados por montaje ferroviario"
+      ]
+    },
+    "budget_summary": {
+      "tender_budget_pem": 26313667.92,
+      "internal_cost_estimate": 18324935.31,
+      "revenue_target": 15105733.99,
+      "margin_percent": 5.0,
+      "line_items": [
+        {
+          "name": "Postes, porticos y silletas",
+          "cost": 2619355.39
+        },
+        {
+          "name": "Coste total estimado",
+          "cost": 18324935.31
+        }
+      ]
+    }
+  },
+  "expected_output": {
+    "clauses": [
+      {
+        "clause_code": "CL-SCOPE-01",
+        "type": "scope",
+        "text": "Diseno, suministro, instalacion y mantenimiento de la linea aerea de contacto C-350 para el tramo Monforte del Cid - Murcia.",
+        "metadata": {
+          "catenary_type": "C-350",
+          "voltage": "2x25 kV"
+        }
+      },
+      {
+        "clause_code": "CL-QUALITY-01",
+        "type": "quality",
+        "text": "Las instalaciones deben cumplir UNE-EN 50119, la ETI de Energia y las normas ADIF aplicables.",
+        "metadata": {
+          "standards": ["UNE-EN 50119", "TSI Energy", "ADIF NAP"]
+        }
+      },
+      {
+        "clause_code": "CL-SCOPE-02",
+        "type": "scope",
+        "text": "La ejecucion queda sujeta al cumplimiento de la Declaracion de Impacto Ambiental y a los planes de gestion de residuos y emisiones.",
+        "metadata": {
+          "environmental_compliance": true
+        }
+      },
+      {
+        "clause_code": "CL-DEADLINE-01",
+        "type": "deadline",
+        "text": "El proyecto se programa con inicio en 2014 y una duracion contractual de 24 meses.",
+        "metadata": {
+          "start_date": "2014-02-27",
+          "duration_months": 24
+        }
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "ADIF",
+        "mention": "Administrador de Infraestructuras Ferroviarias",
+        "role": "Cliente",
+        "quadrant": "Accountable"
+      },
+      {
+        "name": "UTE contratista",
+        "mention": "adjudicatario del tramo Monforte-Murcia",
+        "role": "Contratista principal",
+        "quadrant": "Responsible"
+      },
+      {
+        "name": "Direccion de Seguridad en la Circulacion",
+        "mention": "Direccion de Seguridad en la Circulacion",
+        "role": "Supervision de explotacion ferroviaria",
+        "quadrant": "Consulted"
+      }
+    ],
+    "coherence_alerts": [
+      {
+        "rule_id": "FIN-MON-01",
+        "severity": "critical",
+        "description": "Existe una diferencia muy significativa entre el presupuesto de licitacion, el coste interno estimado y el objetivo de ingreso, lo que apunta a una oferta agresiva con riesgo de margen insuficiente.",
+        "conflicting_elements": [
+          {
+            "source": "budget_summary",
+            "identifier": "tender_budget_pem"
+          },
+          {
+            "source": "budget_summary",
+            "identifier": "revenue_target"
+          }
+        ]
+      },
+      {
+        "rule_id": "OPS-MON-01",
+        "severity": "warning",
+        "description": "La combinacion de trabajos nocturnos, bloqueos de via y coordinacion con seguridad ferroviaria introduce una restriccion operativa alta sobre el calendario del proyecto.",
+        "conflicting_elements": [
+          {
+            "source": "contract_text",
+            "identifier": "night_shift_constraints"
+          },
+          {
+            "source": "schedule_summary",
+            "identifier": "critical_constraints"
+          }
+        ]
+      }
+    ]
+  }
+}
