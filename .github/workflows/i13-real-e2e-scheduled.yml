@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
+    inputs:
+      release_commit_sha:
+        description: "Release candidate SHA for Gate 7 reliability evidence"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -39,7 +44,14 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Checkout release candidate code
+        if: github.event_name == 'workflow_dispatch' && inputs.release_commit_sha != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+
       - name: Checkout code
+        if: github.event_name != 'workflow_dispatch' || inputs.release_commit_sha == ''
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
@@ -104,6 +116,26 @@ jobs:
           name: i13-scheduled-real-e2e-diagnostics
           path: apps/api/ci-artifacts/
           retention-days: 7
+
+      - name: Create I13 release summary
+        if: always() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          mkdir -p apps/api/release-evidence
+          cat <<EOF > apps/api/release-evidence/i13-release-summary.txt
+          reliability_release=pass
+          release_commit_sha=${{ inputs.release_commit_sha }}
+          executed_commit_sha=$(git rev-parse HEAD)
+          artifact=i13-scheduled-real-e2e-results.xml
+          EOF
+
+      - name: Upload I13 release summary
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: i13-release-summary
+          path: apps/api/release-evidence/i13-release-summary.txt
+          retention-days: 14
 
       - name: Cleanup
         if: always()

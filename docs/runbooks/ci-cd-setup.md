@@ -4,54 +4,55 @@ This document describes the GitHub Actions workflows and required secrets config
 
 ## Workflows Overview
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `ci.yml` | PR to main, Push to main | Run tests, linting, security checks |
-| `deploy-staging.yml` | Push to main | Auto-deploy to staging |
-| `deploy-production.yml` | Manual (workflow_dispatch) | Deploy to production with approval |
+| Workflow                | Trigger                    | Purpose                             |
+| ----------------------- | -------------------------- | ----------------------------------- |
+| `ci.yml`                | PR to main, Push to main   | Run tests, linting, security checks |
+| `deploy-staging.yml`    | Push to main               | Auto-deploy to staging              |
+| `deploy-production.yml` | Manual (workflow_dispatch) | Deploy to production with approval  |
 
 ## Required GitHub Secrets
 
 ### Supabase
 
-| Secret | Description | Environment |
-|--------|-------------|-------------|
-| `SUPABASE_URL` | Supabase project URL | All |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key | All |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | All |
-| `SUPABASE_DB_URL_STAGING` | Database connection string | Staging |
-| `SUPABASE_DB_URL_PRODUCTION` | Database connection string | Production |
-| `SUPABASE_URL_PRODUCTION` | Production Supabase URL | Production |
-| `SUPABASE_ANON_KEY_PRODUCTION` | Production anon key | Production |
+| Secret                         | Description                | Environment |
+| ------------------------------ | -------------------------- | ----------- |
+| `SUPABASE_URL`                 | Supabase project URL       | All         |
+| `SUPABASE_ANON_KEY`            | Supabase anonymous key     | All         |
+| `SUPABASE_SERVICE_ROLE_KEY`    | Supabase service role key  | All         |
+| `SUPABASE_DB_URL_STAGING`      | Database connection string | Staging     |
+| `SUPABASE_DB_URL_PRODUCTION`   | Database connection string | Production  |
+| `SUPABASE_URL_PRODUCTION`      | Production Supabase URL    | Production  |
+| `SUPABASE_ANON_KEY_PRODUCTION` | Production anon key        | Production  |
 
 ### Railway (Backend)
 
-| Secret | Description | Environment |
-|--------|-------------|-------------|
-| `RAILWAY_TOKEN` | Railway API token | Staging |
-| `RAILWAY_TOKEN_PRODUCTION` | Railway API token | Production |
+| Secret                        | Description                        | Environment |
+| ----------------------------- | ---------------------------------- | ----------- |
+| `RAILWAY_TOKEN`               | Railway API token                  | Staging     |
+| `RAILWAY_SERVICE_API_STAGING` | Railway backend service identifier | Staging     |
+| `RAILWAY_TOKEN_PRODUCTION`    | Railway API token                  | Production  |
 
 ### Vercel (Frontend)
 
-| Secret | Description | Environment |
-|--------|-------------|-------------|
-| `VERCEL_TOKEN` | Vercel API token | All |
-| `VERCEL_ORG_ID` | Vercel organization ID | All |
-| `VERCEL_PROJECT_ID` | Vercel project ID (staging) | Staging |
-| `VERCEL_PROJECT_ID_PRODUCTION` | Vercel project ID (production) | Production |
+| Secret                         | Description                    | Environment |
+| ------------------------------ | ------------------------------ | ----------- |
+| `VERCEL_TOKEN`                 | Vercel API token               | All         |
+| `VERCEL_ORG_ID`                | Vercel organization ID         | All         |
+| `VERCEL_PROJECT_ID`            | Vercel project ID (staging)    | Staging     |
+| `VERCEL_PROJECT_ID_PRODUCTION` | Vercel project ID (production) | Production  |
 
 ### API URLs
 
-| Secret | Description | Environment |
-|--------|-------------|-------------|
-| `STAGING_API_URL` | Backend API URL for staging | Staging |
-| `PRODUCTION_API_URL` | Backend API URL for production | Production |
+| Secret               | Description                    | Environment |
+| -------------------- | ------------------------------ | ----------- |
+| `STAGING_API_URL`    | Backend API URL for staging    | Staging     |
+| `PRODUCTION_API_URL` | Backend API URL for production | Production  |
 
 ### External Services
 
-| Secret | Description | Environment |
-|--------|-------------|-------------|
-| `ANTHROPIC_API_KEY` | Claude API key | All |
+| Secret              | Description    | Environment |
+| ------------------- | -------------- | ----------- |
+| `ANTHROPIC_API_KEY` | Claude API key | All         |
 
 ## How to Configure Secrets
 
@@ -101,6 +102,102 @@ Manual trigger with approval:
 5. **Post-deploy** - Create Git tag, summary
 6. **Rollback** - Notify on failure with rollback steps
 
+## Leadership Gap Closure
+
+- [x] `LEAD-GAP-RELEASE-GOVERNANCE` Define release promotion, rollback, and environment signoff workflow for staging-to-production releases.
+
+## Release Promotion Workflow
+
+Promotion path:
+
+1. Code merges to `main` only after CI passes and required reviewers approve.
+2. `deploy-staging.yml` deploys the changed backend/frontend services to staging.
+3. Staging validation is executed against the changed surfaces: API health, frontend build/load, critical auth path, and any feature-specific smoke checks.
+4. Release candidate evidence is assembled in `evidence/releases/<release-id>/` with commit SHA, workflow references, validation notes, performance results, and DR records.
+5. Production deployment is triggered manually through `deploy-production.yml` only after the Gate 7 bundle is complete and required signoff is collected.
+
+Promotion prerequisites:
+
+- latest `main` commit is green in CI
+- staging deployment is healthy
+- release bundle exists at `evidence/releases/<release-id>/`
+- `manifest.yaml` references the exact candidate commit SHA
+- required suite matrix is green for backend, frontend, security, evaluation, and release-time I13 reliability validation
+- no open Sev-1 or Sev-2 incident affecting release-critical systems
+- rollback path is confirmed for the components being changed
+- on-call coverage is confirmed per `docs/runbooks/incident-response.md`
+
+## Environment Signoff Workflow
+
+Required signoff before production:
+
+| Area                 | Signoff Owner          | Required Confirmation                                                   |
+| :------------------- | :--------------------- | :---------------------------------------------------------------------- |
+| Staging health       | Team Alpha (Sentinel)  | deploy completed, health checks pass, infra dependencies stable         |
+| Backend/API behavior | Team Bravo (Nexus)     | release-critical API flows verified, no blocking data or AI regressions |
+| Frontend/user flows  | Team Charlie (Prism)   | protected routes, auth flows, and affected UI paths verified in staging |
+| Release authority    | Engineering Leadership | evidence reviewed, rollback owner named, production window approved     |
+
+Signoff rules:
+
+- Signoff must be explicit in the release ticket, workflow summary, or designated release channel.
+- Missing signoff from any required owner blocks production promotion.
+- If the release touches only one surface, the unaffected teams may mark "no-impact reviewed" instead of full execution, but Engineering Leadership must still approve.
+
+## Rollback Workflow
+
+Rollback triggers:
+
+- failed production health checks after deploy
+- tenant isolation, auth, or security regression
+- data-integrity concern during or after migration
+- user-facing critical path unavailable after release
+- Sev-1 or Sev-2 incident attributed to the fresh deployment
+
+Rollback responsibilities:
+
+| Area                | Rollback Owner                                   | Validation After Rollback                                       |
+| :------------------ | :----------------------------------------------- | :-------------------------------------------------------------- |
+| Database migrations | Team Alpha (Sentinel)                            | schema version stable, app reconnects, no integrity alarms      |
+| Backend service     | Team Alpha (Sentinel) with service owner support | `/health` and worker health green, core API smoke checks pass   |
+| Frontend deployment | Team Charlie (Prism)                             | application loads, auth path works, affected UI recovers        |
+| Business validation | Team Bravo (Nexus)                               | analysis/coherence critical path works against restored runtime |
+
+Rollback execution rules:
+
+1. Do not retry the same production deploy until root cause is understood.
+2. Declare rollback decision in the incident/release channel with owner and reason.
+3. Restore the affected layer in this order when applicable: database safety first, backend second, frontend third.
+4. Re-run critical health and smoke checks after rollback.
+5. Record the rollback outcome and whether a new release candidate is required.
+
+## Minimum Release Evidence
+
+Each production release must retain:
+
+- commit SHA / tag promoted
+- staging validation result
+- required suite matrix with workflow or artifact references
+- Swagger workbook status and unresolved item list
+- named release approver
+- named product, security, and operations approvers
+- named rollback owner
+- performance acceptance record
+- backup/restore verification record
+- production deploy timestamp
+- post-deploy validation result
+- incident or rollback reference if anything deviated
+
+Recommended bundle layout:
+
+```text
+evidence/releases/<release-id>/
+├── manifest.yaml
+├── signoff.md
+├── performance.md
+└── disaster-recovery.md
+```
+
 ## Troubleshooting
 
 ### CI Fails on PR
@@ -146,7 +243,9 @@ act -s SUPABASE_URL=xxx -s SUPABASE_ANON_KEY=xxx
 
 ---
 
-Last Updated: 2026-02-13
+Last Updated: 2026-03-22
 
 Changelog:
+
+- 2026-03-22: Added release promotion, rollback, and environment signoff workflow to close the release-governance leadership gap.
 - 2026-02-13: Added metadata block during repository-wide docs format pass.

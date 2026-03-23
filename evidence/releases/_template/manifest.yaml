@@ -1,0 +1,42 @@
+release_id: 2026-03-22-rc1
+commit_sha: "<git-sha>"
+promotion_workflow: ".github/workflows/deploy-production.yml"
+required_suites:
+  backend:
+    workflow: ".github/workflows/tests.yml"
+    status: pass
+    artifact: "backend-release-summary"
+  frontend:
+    workflow: ".github/workflows/frontend-ci.yml"
+    status: pass
+    artifact: "frontend-release-summary"
+  security:
+    workflow: ".github/workflows/e2e-security-tests.yml"
+    status: pass
+    artifact: "security-release-summary"
+  evaluation:
+    workflow: ".github/workflows/evaluation-regression.yml"
+    status: pass
+    artifact: "evaluation-release-summary"
+  reliability:
+    workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
+    status: pass
+    artifact: "i13-release-summary"
+    mode: release-dispatch
+swagger_workbook:
+  status: complete
+  reference: "docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md"
+  unchecked_items: []
+manual_signoff:
+  product: "<name>"
+  security: "<name>"
+  operations: "<name>"
+  release_authority: "<name>"
+performance:
+  target_set: "docs/performance/baseline.md"
+  result: pass
+  report: "performance.md"
+dr_evidence:
+  result: pass
+  report: "disaster-recovery.md"
+waivers: []

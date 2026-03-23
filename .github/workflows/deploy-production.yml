@@ -1,0 +1,153 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Gate 7 release bundle identifier"
+        required: true
+        type: string
+      commit_sha:
+        description: "Commit SHA to validate and promote"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  validate-release:
+    name: Validate Gate 7 Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install validator dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Validate release evidence bundle
+        run: |
+          python scripts/validate_release_evidence.py \
+            --bundle-dir "evidence/releases/${{ inputs.release_id }}" \
+            --commit-sha "${{ inputs.commit_sha }}"
+
+  dispatch-release-reliability:
+    name: Dispatch Release Reliability Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    needs: [validate-release]
+
+    steps:
+      - name: Dispatch I13 reliability workflow for release candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run i13-real-e2e-scheduled.yml \
+            --ref "${{ inputs.commit_sha }}" \
+            -f release_commit_sha="${{ inputs.commit_sha }}"
+
+      - name: Wait for I13 reliability evidence and download summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 5
+          RUN_ID=$(gh run list \
+            --workflow i13-real-e2e-scheduled.yml \
+            --limit 20 \
+            --json databaseId,headSha,event \
+            --jq '.[] | select(.headSha == "${{ inputs.commit_sha }}" and .event == "workflow_dispatch") | .databaseId' | head -n 1)
+          test -n "$RUN_ID"
+          gh run watch "$RUN_ID" --exit-status
+          mkdir -p release-evidence/i13
+          gh run download "$RUN_ID" --name i13-release-summary --dir release-evidence/i13
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    needs: [validate-release, dispatch-release-reliability]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy backend to Railway production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
+        run: railway up --service api
+
+      - name: Health check backend
+        env:
+          PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+        run: curl --fail --silent --show-error "$PRODUCTION_API_URL/api/v1/health"
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    needs: [deploy-backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pull Vercel environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: pnpm dlx vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build frontend artifacts
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: pnpm dlx vercel build --prod --token "$VERCEL_TOKEN"
+
+      - name: Deploy frontend to Vercel production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: pnpm dlx vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
