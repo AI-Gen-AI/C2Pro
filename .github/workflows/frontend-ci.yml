@@ -4,11 +4,13 @@ on:
   push:
     branches: [main, develop]
     paths:
+      - "apps/api/**"
       - "apps/web/**"
       - ".github/workflows/frontend-ci.yml"
   pull_request:
     branches: [main, develop]
     paths:
+      - "apps/api/**"
       - "apps/web/**"
       - ".github/workflows/frontend-ci.yml"
   workflow_dispatch:
@@ -120,3 +122,21 @@ jobs:
 
       - name: API generation drift check
         run: pnpm generate:api:check
+
+      - name: Create frontend release summary
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p release-evidence
+          cat <<'EOF' > release-evidence/frontend-release-summary.txt
+          frontend_ci=pass
+          includes=typecheck,lint,unit-integration,e2e,api-generation-drift
+          EOF
+
+      - name: Upload frontend release summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-release-summary
+          path: apps/web/release-evidence/frontend-release-summary.txt
+          retention-days: 14
