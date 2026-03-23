@@ -90,6 +90,9 @@ claves postgre.txt
 Skills/
 .atl/
 
+# Local sample assets (never commit to main)
+docs/assets/samples/
+
 # Build/cache artifacts
 apps/web/tsconfig.tsbuildinfo
 dev-log.ndjson
