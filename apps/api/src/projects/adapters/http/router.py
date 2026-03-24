@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -320,8 +320,8 @@ async def get_project(
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(
     current_user: Annotated[User, Depends(get_current_user)],
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1),
     status: str | None = None,
     search: str | None = None,
 ) -> ProjectListResponse:

@@ -106,7 +106,7 @@ jobs:
       - name: Run unit tests
         working-directory: apps/api
         run: |
-          python -m pytest tests/unit/ -v --tb=short --junit-xml=unit-test-results.xml --cov-fail-under=70
+          python -m pytest tests/unit/ -m "not integration" -v --tb=short --junit-xml=unit-test-results.xml --cov-fail-under=70
 
       - name: Upload unit test results
         uses: actions/upload-artifact@v4
