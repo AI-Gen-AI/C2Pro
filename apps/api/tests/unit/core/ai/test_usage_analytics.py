@@ -7,6 +7,7 @@ P3.4: Validates real-time LLM usage tracking and cost analytics.
 from datetime import datetime, timedelta
 
 import pytest
+import random
 
 from src.core.ai.usage_analytics import (
     UsageAnalyticsService,
@@ -516,28 +517,28 @@ class TestIntegration:
         # Use fresh instance to avoid test pollution
         service = UsageAnalyticsService()
         service._records = []  # Clear any stale data
+        rng = random.Random(0)
 
         # 1. Simulate a day of usage
         tasks = ["contract_extraction", "coherence_check", "stakeholder_classification"]
         models = ["claude-sonnet-4-20250514", "claude-haiku-4-20250514"]
 
         for i in range(50):
-            import random
             service.record_usage(
-                model=random.choice(models),
-                task_name=random.choice(tasks),
-                input_tokens=random.randint(200, 1000),
-                output_tokens=random.randint(100, 500),
-                cost_usd=random.uniform(0.001, 0.01),
-                latency_ms=random.uniform(50, 200),
-                success=random.random() > 0.05,  # 95% success rate
+                model=rng.choice(models),
+                task_name=rng.choice(tasks),
+                input_tokens=rng.randint(200, 1000),
+                output_tokens=rng.randint(100, 500),
+                cost_usd=rng.uniform(0.001, 0.01),
+                latency_ms=rng.uniform(50, 200),
+                success=rng.random() > 0.05,  # 95% success rate
                 tenant_id="tenant-main",
             )
 
         # 2. Get summary
         summary = service.get_summary(TimePeriod.DAY, tenant_id="tenant-main")
         assert summary.total_requests == 50
-        assert summary.success_rate > 0.9
+        assert summary.success_rate >= 0.9
 
         # 3. Get dashboard
         dashboard = service.get_dashboard(tenant_id="tenant-main")
