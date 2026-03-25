@@ -1,0 +1,91 @@
+{
+  "case_id": "TECH-201",
+  "name": "Technical risk cascade analysis in irrigation canal expansion",
+  "dimensions": ["Technical", "Scope"],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-Ampliación de la 1a Fase del Canal de Navarra y su zona regable. Ramal Ega-Arga/Contrato/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/O-Ampliación de la 1a Fase del Canal de Navarra y su zona regable. Ramal Ega-Arga/Planificación/Cronograma.xlsx",
+    "specifications_path": "docs/assets/samples/España/O-Ampliación de la 1a Fase del Canal de Navarra y su zona regable. Ramal Ega-Arga/Especificaciones/Technical_specs.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "tech_extractor", "scope_extractor", "risk_identifier", "cascade_analyzer", "impact_modeler", "issue_reporter"],
+    "optional_nodes": ["mitigation_suggester"],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 3,
+      "max_calls": 7
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "identify_technical_risks",
+      "required_args": ["specifications", "scope"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "analyze_risk_cascade",
+      "required_args": ["risks"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "model_impact",
+      "required_args": ["cascade_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "technical_risks",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "cascade_effects",
+      "operator": "greater_than",
+      "expected_value": 0
+    },
+    {
+      "path": "scope_impact",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "TECH-201",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "risk cascade"
+    },
+    {
+      "rule_id": "TECH-202",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "hydraulic"
+    },
+    {
+      "rule_id": "SCOPE-201",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "expansion"
+    }
+  ],
+  "metadata": {
+    "source_project": "Canal de Navarra - Ramal Ega-Arga",
+    "project_id": "O-CANAL",
+    "sector": "Water (Irrigation)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 80
+  }
+}

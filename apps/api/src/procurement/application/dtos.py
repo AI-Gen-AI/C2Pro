@@ -147,3 +147,23 @@ class BOMItemResponse(BOMItemBase):
     updated_at: datetime = Field(..., description="Timestamp of last update")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Planning Schemas
+# ---------------------------------------------------------------------------
+
+
+class ProcurementPlanningRequest(BaseModel):
+    """Request DTO for procurement planning."""
+
+    project_id: UUID
+    required_on_site: datetime
+
+
+class PlanningDecision(BaseModel):
+    """Service output for procurement planning decisions."""
+
+    plan_fingerprint: str
+    conflicts: list[dict] = Field(default_factory=list)
+    requires_human_review: bool = False

@@ -1,0 +1,57 @@
+{
+  "case_id": "LEG-001",
+  "name": "Missing contract signature detection in hospital project",
+  "dimensions": ["Legal"],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/Especificaciones/HAC-PROY-OBRA-Doc-2-Acuerdo-contractual-v0.pdf",
+    "schedule_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/Especificaciones/HAC-PROY-OBRA-Doc-1c-Bases-Esquema-presupuesto-v0.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "contract_parser", "signature_validator", "issue_reporter"],
+    "optional_nodes": ["party_identifier"],
+    "forbidden_nodes": ["cost_analyzer", "schedule_analyzer"],
+    "max_loops": 1
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_signatures",
+      "required_args": ["doc_path"],
+      "min_calls": 1,
+      "max_calls": 2
+    },
+    {
+      "tool_name": "validate_parties",
+      "required_args": ["contract_parties"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "contract_status",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Legal"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-001",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "signature"
+    }
+  ],
+  "metadata": {
+    "source_project": "Hospital Averroes",
+    "project_id": "O-010160",
+    "sector": "Health",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 20
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "case_id": "MULTI-303",
+  "name": "New supplier risk assessment with cross-dimensional compliance in urban transit",
+  "dimensions": ["Legal", "Technical", "Quality", "Cost", "Schedule"],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-UTE Tranvía Granada/Compras/Analizadores de red/Pliego analizador.pdf",
+    "schedule_path": "docs/assets/samples/España/P-UTE Tranvía Granada/Cash Flow Electrificación Granada-Sept. 2015.xls",
+    "budget_path": "docs/assets/samples/España/P-UTE Tranvía Granada/Cash Flow Electrificación Granada-Sept. 2015.xls"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "supplier_qualifier", "technical_evaluator", "quality_auditor", "cost_analyzer", "schedule_integrator", "compliance_validator", "risk_matrix_builder", "approval_recommender", "issue_reporter"],
+    "optional_nodes": ["benchmark_comparator", "reference_checker"],
+    "forbidden_nodes": [],
+    "max_loops": 7
+  },
+  "tool_calls": [
+    {
+      "tool_name": "qualify_supplier",
+      "required_args": ["supplier_data"],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "evaluate_technical_capability",
+      "required_args": ["supplier_specs", "project_requirements"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "audit_quality_systems",
+      "required_args": ["supplier_certifications"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "analyze_cost_competitiveness",
+      "required_args": ["quotations", "market_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "integrate_schedule",
+      "required_args": ["supplier_leadtime", "project_schedule"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "validate_compliance",
+      "required_args": ["all_evaluation_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "build_risk_matrix",
+      "required_args": ["all_dimensions"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "recommend_approval",
+      "required_args": ["risk_matrix", "compliance_status"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "supplier_qualification_status",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "technical_evaluation_score",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "quality_audit_result",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "cost_analysis_complete",
+      "operator": "equals",
+      "expected_value": true
+    },
+    {
+      "path": "schedule_integration_status",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "approval_recommendation",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-303",
+      "dimension": "Legal",
+      "severity": "medium",
+      "description_contains": "contract terms"
+    },
+    {
+      "rule_id": "TECH-303",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "new supplier"
+    },
+    {
+      "rule_id": "QUAL-303",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "certification"
+    },
+    {
+      "rule_id": "COST-303",
+      "dimension": "Cost",
+      "severity": "low",
+      "description_contains": "competitiveness"
+    },
+    {
+      "rule_id": "SCHED-303",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "lead time"
+    }
+  ],
+  "metadata": {
+    "source_project": "Tranvía Granada",
+    "project_id": "P-UTE-GRANADA",
+    "sector": "Infrastructure (Urban Transit)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "new_supplier_risk": true,
+    "explicit_risk_documentation": true,
+    "adr_evidence": true,
+    "expected_extraction_time_seconds": 110
+  }
+}

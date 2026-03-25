@@ -1,8 +1,9 @@
 import requests
 import json
+import os
 
 url = "http://localhost:8000/api/v1/hitl/route"
-token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3OWVlZTdkMi1mNjdkLTQ4ZDUtOTNkYi1hZjdkMWJiY2ZhOWQiLCJ0ZW5hbnRfaWQiOiI3NWI4ZTc3Yi0xZThiLTQ4MWQtYjQyZC1iYTAzZTgyNTg5M2YiLCJlbWFpbCI6InRlc3RAYzJwcm8uZGV2Iiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc0MDMzOTQ1LCJpYXQiOjE3NzM5NDc1NDUsInR5cGUiOiJhY2Nlc3MifQ.eUE9APPZrxIGMkmHqPApZGZj7agEgG60k3mzP_JMhEc"
+token = os.getenv("C2PRO_HITL_TEST_TOKEN", "replace-me-with-a-local-dev-token")
 
 headers = {
     "accept": "application/json",

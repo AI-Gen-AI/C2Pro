@@ -12,7 +12,7 @@ services:
   # PostgreSQL Test Database
   # ===========================================
   postgres-test:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: c2pro-postgres-test
     restart: unless-stopped
     ports:
@@ -59,7 +59,7 @@ services:
     container_name: c2pro-redis-test
     restart: unless-stopped
     ports:
-      - "6380:6379"  # Use 6380 to avoid conflict with dev Redis on 6379
+      - "6380:6379" # Use 6380 to avoid conflict with dev Redis on 6379
     command: >
       redis-server
       --maxmemory 128mb

@@ -62,3 +62,24 @@ def test_production_settings_reject_wildcard_cors_origins(
 
     with pytest.raises(ValueError, match="wildcard CORS"):
         Settings(_env_file=None)
+
+
+def test_test_settings_allow_missing_supabase_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test"
+    )
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY", "test-secret-key-min-32-chars-required-for-testing-purposes-only"
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.supabase_url == "http://test.supabase.local"
+    assert settings.supabase_anon_key == "test-anon-key"
+    assert settings.supabase_service_role_key == "test-service-role-key"

@@ -23,6 +23,11 @@ class IStakeholderRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_all_stakeholders(self, tenant_id: UUID) -> List[Stakeholder]:
+        """Retrieves all stakeholders for a given tenant."""
+        pass
+
+    @abstractmethod
     async def get_stakeholders_by_project(
         self,
         project_id: UUID,

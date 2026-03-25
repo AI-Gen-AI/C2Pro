@@ -7,7 +7,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from uuid import UUID
+from uuid import UUID, uuid4
+from typing import Literal, Any
+
+
+@dataclass(frozen=True)
+class PartyResolutionResult:
+    original_name: str
+    resolved_stakeholder_id: UUID | None = None
+    canonical_id: UUID | None = None
+    ambiguity_flag: bool = False
+    action: Literal["new", "merged", "new_with_canonical"] = "new"
+    warning_message: str | None = None
 
 
 class PowerLevel(str, Enum):
@@ -61,6 +72,12 @@ class Stakeholder:
     review_comment: str | None = None
     stakeholder_metadata: dict = field(default_factory=dict)
 
+    # I10 AI Extraction Fields
+    canonical_id: UUID | None = None
+    aliases: set[str] = field(default_factory=set)
+    confidence: float = 1.0
+    ambiguity_flag: bool = False
+
     def __post_init__(self) -> None:
         if self.project_id is None:
             raise ValueError("project_id is required")
@@ -106,6 +123,23 @@ class RaciAssignment:
 
     def is_verified(self) -> bool:
         return self.manually_verified and self.verified_at is not None
+
+
+@dataclass
+class RaciResponsibility:
+    stakeholder_id: UUID
+    role: RACIRole
+    confidence: float = 1.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RaciActivity:
+    description: str
+    activity_id: UUID = field(default_factory=uuid4)
+    responsibilities: list[RaciResponsibility] = field(default_factory=list)
+    confidence: float = 1.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _derive_quadrant(power_level: PowerLevel, interest_level: InterestLevel) -> StakeholderQuadrant:
