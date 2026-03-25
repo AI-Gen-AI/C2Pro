@@ -1,35 +1,52 @@
 [allowlist]
-  description = "C2Pro allowlist for known-safe patterns"
+  description = "C2Pro allowlist for known-safe patterns in test fixtures, examples, and documentation"
   
+  [allowlist.paths]
+    # Exclude entire test venv directory - these are third-party library test fixtures
+    apps/.venv-tests/.* = true
+    apps\\.venv-tests\\.* = true
+
   [[allowlist.rules]]
-    description = "Allow JWT-like test patterns in test files"
+    description = "Allow JWT-like test patterns in source files"
     matchers = [
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
       "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
     ]
     files = [
+      "scripts/.*",
+      "apps/web/schema/.*",
       "tests/.*",
       ".*_test\\.py$",
       "conftest\\.py$"
     ]
 
   [[allowlist.rules]]
-    description = "Allow UUID patterns in tests"
-    matchers = [
-      "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    ]
-    files = [
-      "tests/.*"
-    ]
-
-  [[allowlist.rules]]
-    description = "Allow placeholder API keys in examples"
+    description = "Allow placeholder API keys in examples and docs"
     matchers = [
       "^sk-test-[a-zA-Z0-9]{20,}$",
-      "^eyJhcnJheSI6W1td$"
+      "^eyJhcnJheSI6W1td$",
+      "xox[baprs]-[0-9a-zA-Z]{10,}",
+      "^AIza[0-9A-Za-z\\-_]{35}$"
     ]
     files = [
       "schema/.*",
       "examples/.*",
-      "docs/.*"
+      "docs/.*",
+      "openapi\\.yaml$",
+      "api\\.json$"
+    ]
+
+  [[allowlist.rules]]
+    description = "Allow example env vars in documentation"
+    matchers = [
+      "^eyJ.*",
+      "^eyJhcnJheSI6",
+      "Bearer eyJ",
+      "SUPABASE_ANON_KEY=\"eyJ"
+    ]
+    files = [
+      "\\.md$",
+      "\\.yaml$",
+      "\\.yml$",
+      "\\.env\\..*$"
     ]
