@@ -1,0 +1,94 @@
+{
+  "case_id": "MULTI-201",
+  "name": "Cross-dimensional coherence analysis in metro L9 Barcelona mega-project",
+  "dimensions": ["Schedule", "Cost", "Technical"],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-UTE L9 Metro Barcelona/Contrato/Contrato_UTE.pdf",
+    "schedule_path": "docs/assets/samples/España/P-UTE L9 Metro Barcelona/Planificación/Cronograma_maestro.xlsx",
+    "budget_path": "docs/assets/samples/España/P-UTE L9 Metro Barcelona/Presupuesto/Budget_consolidado.xlsx",
+    "specifications_path": "docs/assets/samples/España/P-UTE L9 Metro Barcelona/Especificaciones/Technical_specs.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "multi_extractor", "schedule_extractor", "cost_extractor", "tech_extractor", "cross_dimensional_analyzer", "dependency_mapper", "issue_reporter"],
+    "optional_nodes": ["conflict_resolver", "priority_calculator"],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": ["doc_path"],
+      "min_calls": 3,
+      "max_calls": 8
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": ["doc_path"],
+      "min_calls": 3,
+      "max_calls": 8
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "analyze_cross_dimensional",
+      "required_args": ["schedule_data", "cost_data", "tech_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "map_dependencies",
+      "required_args": ["dimensional_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "cross_dimensional_issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 2
+    },
+    {
+      "path": "dependency_conflicts",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "MULTI-201",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "critical path"
+    },
+    {
+      "rule_id": "MULTI-202",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget overrun"
+    },
+    {
+      "rule_id": "MULTI-203",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "specification"
+    }
+  ],
+  "metadata": {
+    "source_project": "UTE L9 Metro Barcelona",
+    "project_id": "P-UTE-L9",
+    "sector": "Infrastructure (Metro)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "mega_project": true,
+    "expected_extraction_time_seconds": 90
+  }
+}

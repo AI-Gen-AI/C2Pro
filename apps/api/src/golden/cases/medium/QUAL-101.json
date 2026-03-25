@@ -1,0 +1,58 @@
+{
+  "case_id": "QUAL-101",
+  "name": "Quality standard deviation in substation construction",
+  "dimensions": ["Quality"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-010191 Obra civil para la Construcción de la Nueva Subestación Mudejar 400 kV en Andorra(Teruel) para REE/Pliego/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/O-010191 Obra civil para la Construcción de la Nueva Subestación Mudejar 400 kV en Andorra(Teruel) para REE/Planificación/Schedule.xlsx",
+    "specifications_path": "docs/assets/samples/España/O-010191 Obra civil para la Construcción de la Nueva Subestación Mudejar 400 kV en Andorra(Teruel) para REE/Especificaciones/Technical_Specs.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "spec_extractor", "quality_analyzer", "standard_validator", "issue_reporter"],
+    "optional_nodes": ["tolerance_calculator"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "analyze_quality_standards",
+      "required_args": ["specifications"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "validate_tolerances",
+      "required_args": ["quality_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "quality_deviations",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-101",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "tolerance"
+    }
+  ],
+  "metadata": {
+    "source_project": "Subestación Mudejar 400 kV",
+    "project_id": "O-010191",
+    "sector": "Energy (Electrical)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 50
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "case_id": "QUAL-201",
+  "name": "Quality assurance chain breakdown in industrial HVAC project",
+  "dimensions": ["Quality", "Technical"],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-EADS-Casa Climatización en Airbus Puerto Real/Contrato/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/P-EADS-Casa Climatización en Airbus Puerto Real/Planificación/Cronograma.xlsx",
+    "specifications_path": "docs/assets/samples/España/P-EADS-Casa Climatización en Airbus Puerto Real/Especificaciones/HVAC_specs.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "quality_extractor", "tech_extractor", "qa_chain_analyzer", "breakdown_detector", "compliance_validator", "issue_reporter"],
+    "optional_nodes": ["certification_checker"],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "analyze_qa_chain",
+      "required_args": ["quality_data", "specifications"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "detect_breakdowns",
+      "required_args": ["qa_chain"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "validate_compliance",
+      "required_args": ["qa_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "qa_breakdowns",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "compliance_gaps",
+      "operator": "greater_than",
+      "expected_value": 0
+    },
+    {
+      "path": "certification_issues",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-201",
+      "dimension": "Quality",
+      "severity": "high",
+      "description_contains": "QA chain"
+    },
+    {
+      "rule_id": "QUAL-202",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "certification"
+    },
+    {
+      "rule_id": "TECH-203",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "HVAC"
+    }
+  ],
+  "metadata": {
+    "source_project": "Climatización Airbus Puerto Real",
+    "project_id": "P-EADS",
+    "sector": "Industrial (Aerospace)",
+    "country": "Spain",
+    "client": "EADS/Airbus",
+    "created_date": "2026-03-24",
+    "aerospace_quality_standards": true,
+    "expected_extraction_time_seconds": 85
+  }
+}

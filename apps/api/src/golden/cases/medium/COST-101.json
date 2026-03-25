@@ -1,0 +1,70 @@
+{
+  "case_id": "COST-101",
+  "name": "Procurement cost variance across multiple suppliers in water project",
+  "dimensions": ["Cost"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009188-002 Camb. Remod. bombeo Mandem/Documentación Proyecto/Modific.electromecánica INABENSA-contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009188-002 Camb. Remod. bombeo Mandem/Estado Suministros Proyectos.xls",
+    "budget_path": "docs/assets/samples/España/P-009188-002 Camb. Remod. bombeo Mandem/Estado Suministros Proyectos.xls"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "cost_extractor", "supplier_analyzer", "variance_calculator", "issue_reporter"],
+    "optional_nodes": ["currency_normalizer", "inflation_adjuster"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": ["doc_path"],
+      "min_calls": 3,
+      "max_calls": 8
+    },
+    {
+      "tool_name": "analyze_suppliers",
+      "required_args": ["procurement_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "calculate_variance",
+      "required_args": ["baseline", "actual"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "cost_variance_percent",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "supplier_risks",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-101",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "variance"
+    },
+    {
+      "rule_id": "COST-102",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "supplier"
+    }
+  ],
+  "metadata": {
+    "source_project": "Remod. bombeo Mandem",
+    "project_id": "P-009188-002",
+    "sector": "Water",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "adr_evidence": true,
+    "expected_extraction_time_seconds": 50
+  }
+}

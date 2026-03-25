@@ -1,0 +1,68 @@
+{
+  "case_id": "SCOPE-101",
+  "name": "Scope creep detection in tunnel construction project",
+  "dimensions": ["Scope"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-010952 Túnel Atocha-Chamartin/Contrato/Contrato_firmado.pdf",
+    "schedule_path": "docs/assets/samples/España/O-010952 Túnel Atocha-Chamartin/Planificación/Cronograma.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "scope_extractor", "change_order_analyzer", "scope_comparator", "issue_reporter"],
+    "optional_nodes": ["wbs_builder", "cost_impact_estimator"],
+    "forbidden_nodes": [],
+    "max_loops": 4
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 6
+    },
+    {
+      "tool_name": "analyze_change_orders",
+      "required_args": ["contract_scope", "current_scope"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "estimate_scope_impact",
+      "required_args": ["scope_changes"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "scope_changes",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "scope_creep_detected",
+      "operator": "equals",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-101",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "creep"
+    },
+    {
+      "rule_id": "SCOPE-102",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "change order"
+    }
+  ],
+  "metadata": {
+    "source_project": "Túnel Atocha-Chamartin",
+    "project_id": "O-010952",
+    "sector": "Infrastructure (Tunnel)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 55
+  }
+}

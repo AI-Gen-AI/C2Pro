@@ -11,10 +11,10 @@ from uuid import UUID
 
 import pytest
 
-from src.modules.procurement.adapters.persistence.snapshot_repository import (
+from src.procurement.adapters.persistence.snapshot_repository import (
     SQLAlchemyProcurementSnapshotRepository,
 )
-from src.modules.procurement.domain.entities import ProcurementPlanItem
+from src.procurement.domain.models import ProcurementPlanItem
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,57 @@
+{
+  "case_id": "SCHED-001",
+  "name": "Simple milestone date mismatch detection in rail project",
+  "dimensions": ["Schedule"],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Documentación Proyecto/16_Contrato firmado/Lapola_Contrato firmado_ASTS_ADIF.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Documentación Proyecto/Desglose del Pliego.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "schedule_extractor", "date_comparator", "issue_reporter"],
+    "optional_nodes": ["milestone_normalizer"],
+    "forbidden_nodes": ["cost_analyzer"],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_milestones",
+      "required_args": ["contract_dates", "schedule_dates"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Schedule"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-001",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "milestone"
+    }
+  ],
+  "metadata": {
+    "source_project": "LAV La Robla-Pobla de Lena",
+    "project_id": "P-009192",
+    "sector": "Infrastructure (Rail)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 30
+  }
+}

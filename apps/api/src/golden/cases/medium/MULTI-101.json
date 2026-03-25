@@ -1,0 +1,70 @@
+{
+  "case_id": "MULTI-101",
+  "name": "Schedule-cost cross-reference issue in metro construction",
+  "dimensions": ["Schedule", "Cost"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-010988 Metro Madrid/Documentación Proyecto/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/P-010988 Metro Madrid/Planificación/Cronograma.xlsx",
+    "budget_path": "docs/assets/samples/España/P-010988 Metro Madrid/Presupuesto/Budget.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "schedule_extractor", "cost_extractor", "cross_reference_analyzer", "issue_reporter"],
+    "optional_nodes": ["date_formatter", "currency_normalizer"],
+    "forbidden_nodes": [],
+    "max_loops": 4
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "cross_reference_analysis",
+      "required_args": ["schedule_data", "cost_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "cross_reference_issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues",
+      "operator": "contains",
+      "expected_value": "Schedule"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "MULTI-101",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "payment milestone"
+    },
+    {
+      "rule_id": "MULTI-102",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "cash flow"
+    }
+  ],
+  "metadata": {
+    "source_project": "Metro Madrid",
+    "project_id": "P-010988",
+    "sector": "Infrastructure (Metro)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 60
+  }
+}

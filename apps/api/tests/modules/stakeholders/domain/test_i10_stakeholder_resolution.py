@@ -3,26 +3,50 @@ I10 - Stakeholder Resolution + RACI Inference (Domain)
 Test Suite ID: TS-I10-STKH-DOM-001
 """
 
-from uuid import uuid4
+from datetime import datetime
+from uuid import uuid4, UUID
 
 import pytest
 
-from src.modules.stakeholders.domain.entities import (
+from src.stakeholders.domain.models import (
+    InterestLevel,
     PartyResolutionResult,
-    RACIActivity,
-    RACIResponsibility,
+    PowerLevel,
+    RaciActivity,
+    RaciResponsibility,
     RACIRole,
     Stakeholder,
 )
-from src.modules.stakeholders.domain.services import RACIValidator, StakeholderResolver
+from src.stakeholders.domain.services.stakeholder_resolver import StakeholderResolver
+from src.stakeholders.domain.services.raci_validator import validate_activity_raci
+
+
+class RACIValidator:
+    def validate_activity_raci(self, activity: RaciActivity) -> list[str]:
+        return validate_activity_raci(activity)
+
+
+def _make_stakeholder(**overrides) -> Stakeholder:
+    now = datetime.utcnow()
+    base = {
+        "id": uuid4(),
+        "project_id": uuid4(),
+        "power_level": PowerLevel.MEDIUM,
+        "interest_level": InterestLevel.MEDIUM,
+        "approval_status": "approved",
+        "created_at": now,
+        "updated_at": now,
+        "name": "Default Name",
+    }
+    base.update(overrides)
+    return Stakeholder(**base)
 
 
 def test_i10_resolver_merges_alias_to_existing_canonical_stakeholder() -> None:
     """Refers to I10.1: stakeholder aliases must resolve to existing canonical identity."""
     canonical_id = uuid4()
     existing = [
-        Stakeholder(
-            id=uuid4(),
+        _make_stakeholder(
             name="Contractor Inc.",
             canonical_id=canonical_id,
             aliases={"Contractor", "Main Contractor"},
@@ -43,15 +67,13 @@ def test_i10_resolver_merges_alias_to_existing_canonical_stakeholder() -> None:
 def test_i10_resolver_flags_ambiguous_party_for_human_validation() -> None:
     """Refers to I10.6: ambiguous party mapping must be flagged and not auto-merged."""
     existing = [
-        Stakeholder(
-            id=uuid4(),
+        _make_stakeholder(
             name="Client Holdings LLC",
             canonical_id=uuid4(),
             aliases={"Client Holdings"},
             confidence=0.90,
         ),
-        Stakeholder(
-            id=uuid4(),
+        _make_stakeholder(
             name="Client Holdings Group",
             canonical_id=uuid4(),
             aliases={"Client Holdings"},
@@ -71,13 +93,13 @@ def test_i10_resolver_flags_ambiguous_party_for_human_validation() -> None:
 
 def test_i10_raci_validator_rejects_multiple_accountable_assignments() -> None:
     """Refers to I10.2: each activity must have exactly one Accountable assignment."""
-    activity = RACIActivity(
+    activity = RaciActivity(
         description="Approve change order package for structural revision.",
         confidence=0.92,
         responsibilities=[
-            RACIResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.96),
-            RACIResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.94),
-            RACIResponsibility(stakeholder_id=uuid4(), role=RACIRole.RESPONSIBLE, confidence=0.90),
+            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.96),
+            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.94),
+            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.RESPONSIBLE, confidence=0.90),
         ],
     )
     validator = RACIValidator()

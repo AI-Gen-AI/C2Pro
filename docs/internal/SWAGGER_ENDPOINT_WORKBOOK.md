@@ -8,6 +8,7 @@ Use it to understand what each area does and to track functional validation.
 - Source: Manual capture from current Swagger UI endpoint list.
 - Swagger runtime reference: local backend Swagger UI (`http://localhost:8000/docs`).
 - OpenAPI reference: `http://localhost:8000/api/v1/openapi.json`.
+- Active release evidence: `evidence/releases/2026-03-24-rc1/`.
 - Purpose: Development support, QA walk-throughs, and regression tracking.
 - Status: Updated 2026-03-20.
 
@@ -185,25 +186,25 @@ Use this workbook as the Swagger evidence source for Gate 7 release certificatio
 - [x] Login returns valid tokens (`POST /api/v1/auth/login`).
 - [x] Refresh rotates token correctly (`POST /api/v1/auth/refresh`).
 - [x] Me returns current user (`GET /api/v1/auth/me`).
-- [ ] Me update persists profile fields (`PUT /api/v1/auth/me`).
-- [ ] Logout invalidates session semantics (`POST /api/v1/auth/logout`).
-- [ ] Change-password accepts valid current password and updates credential (`POST /api/v1/auth/change-password`).
+- [x] Me update persists profile fields (`PUT /api/v1/auth/me`). (Live runtime verification: `2026-03-24-rc1`, profile fields persisted on `http://localhost:8000`.)
+- [x] Logout invalidates session semantics (`POST /api/v1/auth/logout`). (Live runtime verification: `2026-03-24-rc1`, logout returned `204` and the same bearer token was rejected by `GET /api/v1/auth/me` with `401 token_revoked` after API restart.)
+- [x] Change-password accepts valid current password and updates credential (`POST /api/v1/auth/change-password`). (Live runtime verification: `2026-03-24-rc1`, login with the new password succeeded.)
 
 ### Projects
 
 - [x] `GET /api/v1/projects/health` returns module OK.
-- [ ] `GET /api/v1/projects/stats` returns valid aggregates.
+- [x] `GET /api/v1/projects/stats` returns valid aggregates. (Live runtime verification: `2026-03-24-rc1`, aggregate counts matched the temporary tenant project set.)
 - [x] `POST /api/v1/projects` creates project with tenant context.
 - [x] `GET /api/v1/projects` lists only tenant projects.
 - [x] `GET /api/v1/projects/{project_id}` returns project by id.
-- [ ] `PUT /api/v1/projects/{project_id}` updates full object.
+- [x] `PUT /api/v1/projects/{project_id}` updates full object. (Live runtime verification: `2026-03-24-rc1`, full update succeeded with valid enum status `active`.)
 - [x] `PATCH /api/v1/projects/{project_id}` applies partial changes.
 - [x] `DELETE /api/v1/projects/{project_id}` removes project safely.
 - [x] `PATCH /api/v1/projects/{project_id}/status` updates status only.
-- [ ] `POST /api/v1/projects/{project_id}/documents/bulk` enqueues/uploads in bulk.
-- [ ] `POST /api/v1/projects/{project_id}/wbs/bulk` creates WBS items in batch.
-- [ ] `POST /api/v1/projects/{project_id}/export` returns export artifact/job.
-- [ ] `GET /api/v1/projects/{project_id}/budget` returns consistent budget data.
+- [x] `POST /api/v1/projects/{project_id}/documents/bulk` enqueues/uploads in bulk. (Live runtime verification: `2026-03-24-rc1`, accepted 2/2 documents.)
+- [x] `POST /api/v1/projects/{project_id}/wbs/bulk` creates WBS items in batch. (Live runtime verification: `2026-03-24-rc1`, created 2/2 items.)
+- [x] `POST /api/v1/projects/{project_id}/export` returns export artifact/job. (Live runtime verification: `2026-03-24-rc1`, returned `202` with `export_id` and `job_id`.)
+- [x] `GET /api/v1/projects/{project_id}/budget` returns consistent budget data. (Live runtime verification: `2026-03-24-rc1`, budget totals matched seeded project values.)
 
 ### Documents
 
