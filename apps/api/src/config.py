@@ -81,9 +81,11 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ===========================================
 
     # JWT (Supabase)
-    supabase_url: str = Field(..., description="Supabase project URL")
-    supabase_anon_key: str = Field(..., description="Supabase anon/public key")
-    supabase_service_role_key: str = Field(..., description="Supabase service role key (admin)")
+    supabase_url: str | None = Field(default=None, description="Supabase project URL")
+    supabase_anon_key: str | None = Field(default=None, description="Supabase anon/public key")
+    supabase_service_role_key: str | None = Field(
+        default=None, description="Supabase service role key (admin)"
+    )
 
     # JWT Settings
     jwt_secret_key: str = Field(..., description="Secret key for JWT signing")
@@ -340,6 +342,25 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
     @model_validator(mode="after")  # type: ignore[misc]
     def validate_security_posture(self) -> Self:
+        if self.environment == "test":
+            if self.supabase_url is None:
+                self.supabase_url = "http://test.supabase.local"
+            if self.supabase_anon_key is None:
+                self.supabase_anon_key = "test-anon-key"
+            if self.supabase_service_role_key is None:
+                self.supabase_service_role_key = "test-service-role-key"
+        elif any(
+            value is None
+            for value in (
+                self.supabase_url,
+                self.supabase_anon_key,
+                self.supabase_service_role_key,
+            )
+        ):
+            raise ValueError(
+                "supabase_url, supabase_anon_key, and supabase_service_role_key are required outside test"
+            )
+
         if self.environment in {"production", "staging"}:
             if any(origin == "*" for origin in self.cors_origins):
                 raise ValueError("wildcard CORS is not allowed outside development/test")
