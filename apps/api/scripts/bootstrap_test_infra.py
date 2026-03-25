@@ -30,6 +30,25 @@ def wait_for_port(host: str, port: int, timeout_seconds: int) -> bool:
     return False
 
 
+def wait_for_database_ready(
+    admin_url: str,
+    timeout_seconds: int,
+    retry_interval_seconds: float = 1.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+
+    while time.time() < deadline:
+        try:
+            with psycopg.connect(admin_url, autocommit=True):
+                return
+        except psycopg.OperationalError as exc:
+            last_error = exc
+            time.sleep(retry_interval_seconds)
+
+    raise RuntimeError(f"Database admin connection did not become ready: {last_error}")
+
+
 def run_command(command: list[str], cwd: Path | None = None) -> None:
     subprocess.run(command, cwd=str(cwd) if cwd else None, check=True)
 
@@ -117,6 +136,10 @@ def main() -> int:
                 "Use --start-services or start test DB manually."
             )
     print(f"OK DB port reachable: {args.db_host}:{args.db_port}")
+
+    print("== Preflight: DB readiness ==")
+    wait_for_database_ready(args.admin_url, args.wait_seconds)
+    print("OK DB admin connection ready")
 
     print("== Preflight: Ensure DB exists ==")
     if args.recreate_db:
