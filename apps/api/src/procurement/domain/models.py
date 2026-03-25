@@ -39,6 +39,14 @@ class ProcurementStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ProcurementPriority(str, Enum):
+    """Priority for procurement execution order."""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 # ===========================================
 # BUDGET-RELATED DOMAIN MODELS
 # ===========================================
@@ -225,3 +233,39 @@ class BOMItemList:
     def filter_by_status(self, status: ProcurementStatus) -> List[BOMItem]:
         """Filter BOM items by procurement status."""
         return [item for item in self.items if item.procurement_status == status]
+
+
+# ===========================================
+# PROCUREMENT PLANNING DOMAIN MODELS
+# ===========================================
+
+
+@dataclass(frozen=True)
+class ProcurementPlanItem:
+    """Line item in a generated procurement plan."""
+    bom_item_id: UUID
+    item_name: str
+    quantity: Decimal
+    total_cost: Decimal
+    required_on_site_date: datetime | date
+    optimal_order_date: datetime | date
+    priority: ProcurementPriority
+    alerts: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ProcurementPlan:
+    """Procurement plan aggregate."""
+    required_on_site_date: datetime | date
+    items: list[ProcurementPlanItem]
+    total_cost: Decimal
+
+
+@dataclass(frozen=True)
+class ProcurementConflict:
+    """Conflict detected in the procurement timeline or budget posture."""
+    item_id: UUID
+    reason_code: str
+    impact: str
+    message: str
+    metadata: dict = field(default_factory=dict)

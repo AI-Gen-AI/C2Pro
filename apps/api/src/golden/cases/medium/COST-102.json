@@ -1,0 +1,64 @@
+{
+  "case_id": "COST-102",
+  "name": "Currency exchange risk in international naval project",
+  "dimensions": ["Cost"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-P-712 Ship berthing power upgrade, naval station, Rota, Spain/Contract/Contract.pdf",
+    "schedule_path": "docs/assets/samples/España/O-P-712 Ship berthing power upgrade, naval station, Rota, Spain/Schedule/Schedule.xlsx",
+    "budget_path": "docs/assets/samples/España/O-P-712 Ship berthing power upgrade, naval station, Rota, Spain/Budget/Budget.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "cost_extractor", "currency_analyzer", "risk_calculator", "issue_reporter"],
+    "optional_nodes": ["exchange_rate_fetcher"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "analyze_currency_exposure",
+      "required_args": ["cost_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "calculate_fx_risk",
+      "required_args": ["currency_exposure"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "fx_exposure",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "currency_risks",
+      "operator": "greater_than",
+      "expected_value": 0
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-102",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "currency"
+    }
+  ],
+  "metadata": {
+    "source_project": "Ship berthing power upgrade Rota",
+    "project_id": "O-P-712",
+    "sector": "Naval",
+    "country": "Spain",
+    "client": "US Navy",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 50
+  }
+}

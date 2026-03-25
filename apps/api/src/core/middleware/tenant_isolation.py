@@ -22,6 +22,7 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_id,
     lookup_user_by_clerk_user_id,
 )
+from src.core.auth.token_revocation import is_token_revoked
 from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
 
@@ -221,6 +222,10 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                     "authenticated_sse_session_required",
                 )
             return None, None, False, None, None
+
+        if is_token_revoked(token):
+            logger.debug("token_revoked")
+            return None, None, False, "Token has been revoked", "token_revoked"
 
         # First, try the local JWT flow used by Swagger/testing.
         try:

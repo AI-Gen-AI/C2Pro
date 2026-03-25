@@ -1,0 +1,57 @@
+{
+  "case_id": "SCHED-102",
+  "name": "Resource leveling conflict in railway electrification",
+  "dimensions": ["Schedule"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-011056 Rehabilitación de la línea aérea de contacto en el tramo Santa María de la Alameda-La Cañada/Contrato/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/O-011056 Rehabilitación de la línea aérea de contacto en el tramo Santa María de la Alameda-La Cañada/Planificación/Schedule.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "schedule_extractor", "resource_analyzer", "leveling_optimizer", "issue_reporter"],
+    "optional_nodes": ["conflict_resolver"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "analyze_resources",
+      "required_args": ["schedule_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "detect_conflicts",
+      "required_args": ["resource_allocation"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "resource_conflicts",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-102",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "resource"
+    }
+  ],
+  "metadata": {
+    "source_project": "Rehabilitación línea aérea Santa María-La Cañada",
+    "project_id": "O-011056",
+    "sector": "Infrastructure (Rail)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 45
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "case_id": "MULTI-202",
+  "name": "Legal-technical compliance gap in biofuels plant",
+  "dimensions": ["Legal", "Technical", "Quality"],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Contrato/Contrato.pdf",
+    "schedule_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Planificación/Schedule.xlsx",
+    "specifications_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Especificaciones/Technical_specs.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "legal_extractor", "tech_extractor", "quality_extractor", "compliance_analyzer", "gap_identifier", "issue_reporter"],
+    "optional_nodes": ["regulatory_matcher", "standard_validator"],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": ["doc_path", "clause_type"],
+      "min_calls": 3,
+      "max_calls": 7
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "analyze_compliance",
+      "required_args": ["legal_requirements", "technical_specs"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "identify_gaps",
+      "required_args": ["compliance_data"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "compliance_gaps",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "regulatory_issues",
+      "operator": "greater_than",
+      "expected_value": 0
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "MULTI-204",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "compliance"
+    },
+    {
+      "rule_id": "MULTI-205",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "environmental"
+    },
+    {
+      "rule_id": "MULTI-206",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "certification"
+    }
+  ],
+  "metadata": {
+    "source_project": "Waste to Biofuels Sevilla",
+    "project_id": "O-WTB",
+    "sector": "Energy (Biofuels)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "environmental_risk": true,
+    "expected_extraction_time_seconds": 85
+  }
+}

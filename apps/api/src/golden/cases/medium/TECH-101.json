@@ -1,0 +1,70 @@
+{
+  "case_id": "TECH-101",
+  "name": "Technical specification mismatch in transformer rental agreement",
+  "dimensions": ["Technical"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Eldu/CONTRATO ALQUILER TRAFO ALKARGO 37424.pdf",
+    "schedule_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015 - Aceptación Presupuesto con Condiciones.pdf",
+    "specifications_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015 - Aceptación Presupuesto con Condiciones.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "spec_extractor", "technical_comparator", "compatibility_checker", "issue_reporter"],
+    "optional_nodes": ["unit_converter", "standard_matcher"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "compare_technical_specs",
+      "required_args": ["contract_specs", "equipment_specs"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "check_compatibility",
+      "required_args": ["technical_requirements"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "spec_mismatches",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "compatibility_issues",
+      "operator": "greater_than",
+      "expected_value": 0
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "TECH-101",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "specification"
+    },
+    {
+      "rule_id": "TECH-102",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "transformer"
+    }
+  ],
+  "metadata": {
+    "source_project": "Fasa Renault - Sevilla",
+    "project_id": "P-006328",
+    "sector": "Industrial",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "technical_incident_evidence": true,
+    "expected_extraction_time_seconds": 45
+  }
+}

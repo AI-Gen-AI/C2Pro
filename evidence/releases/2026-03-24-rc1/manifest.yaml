@@ -1,0 +1,48 @@
+release_id: 2026-03-24-rc1
+commit_sha: "4a63abb40d9966557237888670a528ffc85ce80f"
+promotion_workflow: ".github/workflows/deploy-production.yml"
+required_suites:
+  backend:
+    workflow: ".github/workflows/tests.yml"
+    status: failure
+    artifact: "run 23461179644 - backend-release-summary (artifact 6068834951) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179644"
+    note: "Exact-commit run failed: unit tests, secrets scan, and integration bootstrap were not green."
+  frontend:
+    workflow: ".github/workflows/frontend-ci.yml"
+    status: failure
+    artifact: "run 23461179621 - no artifacts produced - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179621"
+    note: "Exact-commit run failed during dependency installation in lint and typecheck jobs."
+  security:
+    workflow: ".github/workflows/e2e-security-tests.yml"
+    status: failure
+    artifact: "run 23461179642 - security-release-summary (artifact 6068811167) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179642"
+    note: "Exact-commit run failed in the E2E security test execution step."
+  evaluation:
+    workflow: ".github/workflows/evaluation-regression.yml"
+    status: pass
+    artifact: "run 23475367872 - evaluation-release-summary (artifact 6074064386) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23475367872"
+    note: "Exact-commit evaluation workflow completed successfully."
+  reliability:
+    workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
+    status: failure
+    artifact: "run 23474463385 - i13-scheduled-real-e2e-diagnostics (artifact 6073741067), i13-scheduled-real-e2e-junit (artifact 6073740993) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23474463385"
+    note: "Exact-commit scheduled reliability run failed in I13 Real E2E Reliability; annotations reported exit code 1 and `/usr/bin/git` exit code 128."
+    mode: release-dispatch
+swagger_workbook:
+  status: complete
+  reference: "docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md"
+  report: "swagger-verification.md"
+  unchecked_items: []
+manual_signoff:
+  product: "pending"
+  security: "pending"
+  operations: "pending"
+  release_authority: "pending"
+performance:
+  target_set: "docs/performance/baseline.md"
+  result: pass
+  report: "performance.md"
+dr_evidence:
+  result: pass
+  report: "disaster-recovery.md"
+waivers: []

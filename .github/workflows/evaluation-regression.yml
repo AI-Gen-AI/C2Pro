@@ -8,14 +8,18 @@ on:
       - "apps/api/src/modules/extraction/**"
       - "apps/api/src/modules/retrieval/**"
       - "apps/api/src/modules/observability/**"
+      - "apps/api/src/golden/**"
       - "infrastructure/evaluation/**"
       - "apps/api/tests/evaluation/**"
+      - "apps/api/tests/golden/**"
   pull_request:
     branches: [main, develop]
     paths:
       - "apps/api/src/coherence/**"
       - "apps/api/src/modules/extraction/**"
       - "apps/api/src/modules/retrieval/**"
+      - "apps/api/src/golden/**"
+      - "apps/api/tests/golden/**"
   schedule:
     # Daily at 5 AM UTC (staggered from i13-real-e2e-scheduled at 4 AM to avoid runner contention)
     - cron: "0 5 * * *"
@@ -30,11 +34,23 @@ on:
           - coherence
           - extraction
           - retrieval
+          - golden-dataset
       smoke_test_only:
         description: "Run smoke tests only (subset of examples)"
         required: false
         type: boolean
         default: false
+      golden_difficulty:
+        description: "Golden dataset difficulty filter (optional)"
+        required: false
+        type: choice
+        options:
+          - all
+          - easy
+          - medium
+          - hard
+          - expert
+        default: all
 
 permissions:
   contents: read
@@ -199,11 +215,124 @@ jobs:
           name: retrieval-eval-results
           path: apps/api/retrieval-eval-results.xml
 
+  golden-dataset-eval:
+    name: Golden Dataset Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'golden-dataset') ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Golden Dataset Regression Tests
+        working-directory: apps/api/src
+        env:
+          PYTHONPATH: .
+        run: |
+          # Determine difficulty filter
+          DIFFICULTY_ARG=""
+          if [ "${{ inputs.golden_difficulty }}" != "" ] && [ "${{ inputs.golden_difficulty }}" != "all" ]; then
+            DIFFICULTY_ARG="--difficulty ${{ inputs.golden_difficulty }}"
+          fi
+
+          # Run with mock executor (dry-run) to validate dataset integrity
+          # When real workflow executor is connected, remove --mock flag
+          python -m golden.runner \
+            $DIFFICULTY_ARG \
+            --output json \
+            --output-file ../golden-eval-results.json
+
+          # Also generate text report for logs
+          python -m golden.runner \
+            $DIFFICULTY_ARG \
+            --output text
+
+      - name: Convert to JUnit XML
+        if: always()
+        working-directory: apps/api
+        run: |
+          python -c "
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          # Read JSON results
+          results_file = Path('golden-eval-results.json')
+          if not results_file.exists():
+              print('No results file found')
+              exit(0)
+
+          with open(results_file) as f:
+              data = json.load(f)
+
+          summary = data.get('summary', {})
+          cases = data.get('cases', [])
+
+          # Build JUnit XML
+          testsuites = ET.Element('testsuites')
+          testsuite = ET.SubElement(testsuites, 'testsuite',
+              name='GoldenDatasetRegression',
+              tests=str(summary.get('total_cases', 0)),
+              failures=str(summary.get('failed_cases', 0)),
+              errors=str(summary.get('error_cases', 0)),
+              time=str(summary.get('total_time_ms', 0) / 1000)
+          )
+
+          for case in cases:
+              testcase = ET.SubElement(testsuite, 'testcase',
+                  name=case.get('case_id', 'unknown'),
+                  classname='GoldenDataset',
+                  time=str(case.get('execution_time_ms', 0) / 1000)
+              )
+              if not case.get('passed', True):
+                  failure = ET.SubElement(testcase, 'failure',
+                      message=case.get('error') or 'Test failed',
+                      type='AssertionError'
+                  )
+                  failure.text = json.dumps(case, indent=2)
+
+          tree = ET.ElementTree(testsuites)
+          tree.write('golden-eval-results.xml', encoding='unicode', xml_declaration=True)
+          print('Generated golden-eval-results.xml')
+          "
+
+      - name: Upload Golden Dataset Results (JSON)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-eval-results-json
+          path: apps/api/golden-eval-results.json
+
+      - name: Upload Golden Dataset Results (JUnit XML)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-eval-results
+          path: apps/api/golden-eval-results.xml
+
   drift-check:
     name: Drift Detection
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [coherence-eval, extraction-eval, retrieval-eval]
+    needs: [coherence-eval, extraction-eval, retrieval-eval, golden-dataset-eval]
     if: always() && github.event_name == 'schedule'
 
     steps:
@@ -242,7 +371,7 @@ jobs:
 
   eval-summary:
     name: Evaluation Summary
-    needs: [coherence-eval, extraction-eval, retrieval-eval]
+    needs: [coherence-eval, extraction-eval, retrieval-eval, golden-dataset-eval]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -293,6 +422,39 @@ jobs:
             echo "| Hybrid Retrieval | :warning: No results |" >> $GITHUB_STEP_SUMMARY
           fi
 
+          if [ -f eval-results/golden-eval-results/golden-eval-results.xml ]; then
+            if grep -q 'failures="0"' eval-results/golden-eval-results/golden-eval-results.xml && \
+               grep -q 'errors="0"' eval-results/golden-eval-results/golden-eval-results.xml; then
+              echo "| Golden Dataset | :white_check_mark: Passed |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Golden Dataset | :x: Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Golden Dataset | :warning: No results |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Add Golden Dataset details if JSON results exist
+          if [ -f eval-results/golden-eval-results-json/golden-eval-results.json ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Golden Dataset Details" >> $GITHUB_STEP_SUMMARY
+            python3 -c "
+          import json
+          with open('eval-results/golden-eval-results-json/golden-eval-results.json') as f:
+              data = json.load(f)
+          summary = data.get('summary', {})
+          print(f\"- **Total Cases:** {summary.get('total_cases', 'N/A')}\")
+          print(f\"- **Pass Rate:** {summary.get('overall_pass_rate', 0):.1f}%\")
+          print(f\"- **Average Score:** {summary.get('avg_score', 0):.2f}\")
+          by_diff = data.get('by_difficulty', {})
+          if by_diff:
+              print('')
+              print('| Difficulty | Total | Passed | Failed |')
+              print('|------------|-------|--------|--------|')
+              for diff, stats in by_diff.items():
+                  print(f\"| {diff} | {stats.get('total', 0)} | {stats.get('passed', 0)} | {stats.get('failed', 0)} |\")
+          " >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "_Triggered by: ${{ github.event_name }}_" >> $GITHUB_STEP_SUMMARY
 
@@ -303,7 +465,7 @@ jobs:
           mkdir -p release-evidence
           cat <<'EOF' > release-evidence/evaluation-release-summary.txt
           evaluation_release=pass
-          jobs=coherence,extraction,retrieval
+          jobs=coherence,extraction,retrieval,golden-dataset
           EOF
 
       - name: Upload evaluation release summary

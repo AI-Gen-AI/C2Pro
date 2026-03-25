@@ -14,39 +14,12 @@ from uuid import UUID
 
 from src.procurement.domain.lead_time_alerts import LeadTimeAlert, LeadTimeAlertEvaluator
 from src.procurement.domain.lead_time_calculator import LeadTimeCalculator
-from src.procurement.domain.models import BOMItem
-
-
-class ProcurementPriority(str, Enum):
-    """Priority for procurement execution order."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-@dataclass(frozen=True)
-class ProcurementPlanItem:
-    """Line item in a generated procurement plan."""
-
-    bom_item_id: UUID
-    item_name: str
-    quantity: Decimal
-    total_cost: Decimal
-    required_on_site_date: date
-    optimal_order_date: date
-    priority: ProcurementPriority
-    alerts: list[LeadTimeAlert] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ProcurementPlan:
-    """Procurement plan aggregate."""
-
-    required_on_site_date: date
-    items: list[ProcurementPlanItem]
-    total_cost: Decimal
+from src.procurement.domain.models import (
+    BOMItem,
+    ProcurementPlan,
+    ProcurementPlanItem,
+    ProcurementPriority,
+)
 
 
 class ProcurementPlanGenerator:

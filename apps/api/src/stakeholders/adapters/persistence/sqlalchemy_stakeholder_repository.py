@@ -117,6 +117,16 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = result.scalar_one_or_none()
         return self._to_domain(orm) if orm else None
 
+    async def get_all_stakeholders(self, tenant_id: UUID) -> List[Stakeholder]:
+        stmt = (
+            select(StakeholderORM)
+            .join(ProjectORM, ProjectORM.id == StakeholderORM.project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
+        result = await self.session.execute(stmt)
+        items = result.scalars().all()
+        return [self._to_domain(item) for item in items]
+
     async def get_stakeholders_by_project(
         self,
         project_id: UUID,
