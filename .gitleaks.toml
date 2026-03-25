@@ -1,0 +1,35 @@
+[allowlist]
+  description = "C2Pro allowlist for known-safe patterns"
+  
+  [[allowlist.rules]]
+    description = "Allow JWT-like test patterns in test files"
+    matchers = [
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+      "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
+    ]
+    files = [
+      "tests/.*",
+      ".*_test\\.py$",
+      "conftest\\.py$"
+    ]
+
+  [[allowlist.rules]]
+    description = "Allow UUID patterns in tests"
+    matchers = [
+      "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    ]
+    files = [
+      "tests/.*"
+    ]
+
+  [[allowlist.rules]]
+    description = "Allow placeholder API keys in examples"
+    matchers = [
+      "^sk-test-[a-zA-Z0-9]{20,}$",
+      "^eyJhcnJheSI6W1td$"
+    ]
+    files = [
+      "schema/.*",
+      "examples/.*",
+      "docs/.*"
+    ]
