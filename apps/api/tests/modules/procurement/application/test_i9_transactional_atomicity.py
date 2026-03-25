@@ -12,11 +12,11 @@ from uuid import UUID
 
 import pytest
 
-from src.modules.procurement.application.ports import (
+from src.procurement.application.planning_service import (
     ProcurementPlanningService,
     ProcurementSnapshotRepository,
 )
-from src.modules.procurement.domain.entities import ProcurementPlanItem
+from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
 
 
 @pytest.fixture
@@ -24,10 +24,13 @@ def snapshot_repository() -> AsyncMock:
     repo = AsyncMock(spec=ProcurementSnapshotRepository)
     repo.get_snapshot_items.return_value = [
         ProcurementPlanItem(
+            bom_item_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             item_name="Primary Switchgear",
+            quantity=Decimal("1"),
             required_on_site_date=date(2026, 9, 1),
             optimal_order_date=date(2026, 8, 20),
             total_cost=Decimal("150000.00"),
+            priority=ProcurementPriority.CRITICAL,
         )
     ]
     return repo

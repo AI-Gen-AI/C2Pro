@@ -26,6 +26,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
 
   s5-core-ai-gates:
     name: S5 Core AI Gates (I10-I12 + Security)
@@ -106,7 +107,7 @@ jobs:
       - name: Run unit tests
         working-directory: apps/api
         run: |
-          python -m pytest tests/unit/ -v --tb=short --junit-xml=unit-test-results.xml --cov-fail-under=70
+          python -m pytest tests/unit/ -m "not integration" -v --tb=short --junit-xml=unit-test-results.xml --cov-fail-under=70
 
       - name: Upload unit test results
         uses: actions/upload-artifact@v4

@@ -1,0 +1,15 @@
+{
+  "overall_accuracy": 85.0,
+  "by_difficulty": {
+    "Easy": 100.0
+  },
+  "by_dimension": {
+    "Schedule": 85.0
+  },
+  "total_cases": 10,
+  "passed_cases": 8,
+  "failed_cases": 2,
+  "avg_score": 0.85,
+  "timestamp": "2026-03-24T12:00:00Z",
+  "execution_time_ms": 0.0
+}

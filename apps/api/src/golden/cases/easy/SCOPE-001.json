@@ -1,0 +1,57 @@
+{
+  "case_id": "SCOPE-001",
+  "name": "Work scope item missing from schedule in urban rail project",
+  "dimensions": ["Scope"],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-UTE Tranvía Granada/Compras/Analizadores de red/Pliego analizador.pdf",
+    "schedule_path": "docs/assets/samples/España/P-UTE Tranvía Granada/Cash Flow Electrificación Granada-Sept. 2015.xls"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "scope_extractor", "scope_comparator", "issue_reporter"],
+    "optional_nodes": ["wbs_builder"],
+    "forbidden_nodes": ["cost_analyzer"],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": ["contract_scope", "schedule_scope"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "scope_gaps",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-001",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "Tranvía Granada",
+    "project_id": "P-UTE",
+    "sector": "Infrastructure (Urban Rail)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 30
+  }
+}

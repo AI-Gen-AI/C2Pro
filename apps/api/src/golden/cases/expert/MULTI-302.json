@@ -1,0 +1,122 @@
+{
+  "case_id": "MULTI-302",
+  "name": "Supplier distress and technical failure chain analysis in industrial project",
+  "dimensions": ["Cost", "Technical", "Legal", "Schedule"],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Eldu/CONTRATO ALQUILER TRAFO ALKARGO 37424.pdf",
+    "schedule_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015 - Aceptación Presupuesto con Condiciones.pdf",
+    "budget_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015 - Aceptación Presupuesto con Condiciones.pdf",
+    "specifications_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015 - Aceptación Presupuesto con Condiciones.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "supplier_analyzer", "technical_risk_extractor", "financial_health_checker", "failure_chain_modeler", "legal_exposure_calculator", "schedule_impact_analyzer", "contingency_planner", "issue_reporter"],
+    "optional_nodes": ["alternative_supplier_finder", "insurance_validator"],
+    "forbidden_nodes": [],
+    "max_loops": 7
+  },
+  "tool_calls": [
+    {
+      "tool_name": "analyze_suppliers",
+      "required_args": ["procurement_data"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 3,
+      "max_calls": 7
+    },
+    {
+      "tool_name": "check_financial_health",
+      "required_args": ["supplier_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "model_failure_chain",
+      "required_args": ["technical_risks", "supplier_risks"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "calculate_legal_exposure",
+      "required_args": ["contracts", "failure_scenarios"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "analyze_schedule_impact",
+      "required_args": ["failure_chain", "schedule_data"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "plan_contingencies",
+      "required_args": ["all_risks"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "supplier_distress_indicators",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "failure_chain_severity",
+      "operator": "greater_than",
+      "expected_value": 0.5
+    },
+    {
+      "path": "legal_exposure_amount",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "schedule_delay_days",
+      "operator": "greater_than",
+      "expected_value": 0
+    },
+    {
+      "path": "contingency_actions",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-302",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "supplier distress"
+    },
+    {
+      "rule_id": "TECH-302",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "equipment failure"
+    },
+    {
+      "rule_id": "LEG-302",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "warranty"
+    },
+    {
+      "rule_id": "SCHED-302",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "delivery delay"
+    }
+  ],
+  "metadata": {
+    "source_project": "Fasa Renault - Sevilla",
+    "project_id": "P-006328",
+    "sector": "Industrial (Automotive)",
+    "country": "Spain",
+    "client": "Renault",
+    "created_date": "2026-03-24",
+    "technical_incident_evidence": true,
+    "supplier_distress_evidence": true,
+    "adr_evidence": true,
+    "expected_extraction_time_seconds": 120
+  }
+}

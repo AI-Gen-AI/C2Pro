@@ -482,6 +482,17 @@ class TestLogoutEndpoint:
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    @pytest.mark.asyncio
+    async def test_logout_revokes_current_token(self, client, auth_headers):
+        """Should reject the current bearer token after logout."""
+        # Act
+        logout_response = await client.post(f"{API_PREFIX}/auth/logout", headers=auth_headers)
+        me_response = await client.get(f"{API_PREFIX}/auth/me", headers=auth_headers)
+
+        # Assert
+        assert logout_response.status_code == status.HTTP_204_NO_CONTENT
+        assert me_response.status_code == status.HTTP_401_UNAUTHORIZED
+
 
 class TestChangePasswordEndpoint:
     """Tests for POST /auth/change-password endpoint."""

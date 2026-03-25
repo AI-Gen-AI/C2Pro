@@ -5,7 +5,7 @@ Endpoints de autenticación y gestión de usuarios.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from src.core.auth.schemas import (
     UserUpdateRequest,
 )
 from src.core.auth.service import AuthService
+from src.core.auth.token_revocation import revoke_token
 from src.core.auth.models import User
 
 logger = structlog.get_logger()
@@ -311,13 +312,17 @@ async def update_me(
     removing the tokens. This endpoint is for logging purposes.
     """,
 )
-async def logout(user_id: CurrentUserId):
+async def logout(request: Request, user_id: CurrentUserId):
     """
     Cierra sesión del usuario actual.
 
     Nota: Con JWT, el logout real se maneja en el cliente eliminando los tokens.
     Este endpoint es principalmente para logging/auditoría.
     """
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        revoke_token(authorization[7:])
+
     logger.info("user_logged_out", user_id=str(user_id))
     return None
 

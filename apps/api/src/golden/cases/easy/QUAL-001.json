@@ -1,0 +1,53 @@
+{
+  "case_id": "QUAL-001",
+  "name": "Technical specification compliance check in solar plant",
+  "dimensions": ["Quality"],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-010211 Smart Solar Plant Sanlúcar/Compras/Módulos/Módulos FV_SSP/Atersa/Contrato/Borrador contrato suministro paneles fotovoltáicos SSP-Atersa.docx",
+    "schedule_path": "docs/assets/samples/España/P-010211 Smart Solar Plant Sanlúcar/Compras/Módulos/Módulos FV_SSP/Atersa/Ofertas/Oferta 04-11-14/IN 20141104_ Rev.4 Presupuesto módulos FV SanLucar la Mayor.pdf",
+    "specifications_path": "docs/assets/samples/España/P-010211 Smart Solar Plant Sanlúcar/Compras/Módulos/Módulos FV_SSP/Atersa/Ofertas/Oferta 04-11-14/IN 20141104_ Rev.4 Presupuesto módulos FV SanLucar la Mayor.pdf"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "spec_extractor", "compliance_checker", "issue_reporter"],
+    "optional_nodes": ["unit_converter"],
+    "forbidden_nodes": ["cost_analyzer"],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": ["doc_path"],
+      "min_calls": 2,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "check_compliance",
+      "required_args": ["contract_specs", "technical_specs"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "compliance_status",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-001",
+      "dimension": "Quality",
+      "severity": "low",
+      "description_contains": "specification"
+    }
+  ],
+  "metadata": {
+    "source_project": "Smart Solar Plant Sanlúcar",
+    "project_id": "P-010211",
+    "sector": "Energy (Solar)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 25
+  }
+}

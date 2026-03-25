@@ -1,0 +1,52 @@
+{
+  "case_id": "LEG-102",
+  "name": "Warranty terms conflict between main contract and subcontract",
+  "dimensions": ["Legal"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009437 Reforma Centro de Transformación CT6 - El Pozo/Contrato/Contrato_principal.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009437 Reforma Centro de Transformación CT6 - El Pozo/Planificación/Cronograma.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "contract_parser", "warranty_extractor", "terms_comparator", "issue_reporter"],
+    "optional_nodes": ["legal_term_normalizer"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": ["doc_path", "clause_type"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "compare_warranty_terms",
+      "required_args": ["main_contract", "subcontract"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "warranty_conflicts",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-102",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "warranty"
+    }
+  ],
+  "metadata": {
+    "source_project": "Reforma CT6 - El Pozo",
+    "project_id": "P-009437",
+    "sector": "Energy (Electrical)",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "expected_extraction_time_seconds": 45
+  }
+}

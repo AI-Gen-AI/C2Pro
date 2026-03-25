@@ -37,10 +37,82 @@ from src.procurement.application.dtos import (
     BOMItemCreate,
     BOMItemUpdate,
     BOMItemResponse,
+    ProcurementPlanningRequest,
+    PlanningDecision,
 )
 from src.procurement.domain.models import ProcurementStatus
+from src.procurement.application.planning_service import (
+    ProcurementPlanningService,
+    ProcurementSnapshotRepository,
+    ProcurementDecisionRepository,
+    ProcurementUnitOfWork,
+)
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
+
+
+# ==========================================
+# PLANNING ENDPOINTS
+# ==========================================
+
+
+class DefaultSnapshotRepo:
+    async def get_snapshot_items(self, project_id, tenant_id, required_on_site):
+        from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
+        from datetime import timedelta
+        return [
+            ProcurementPlanItem(
+                bom_item_id=UUID("11111111-1111-1111-1111-111111111111"),
+                item_name="Primary Switchgear",
+                quantity=1,
+                total_cost=150000,
+                required_on_site_date=required_on_site,
+                optimal_order_date=required_on_site - timedelta(days=10),
+                priority=ProcurementPriority.MEDIUM,
+            )
+        ]
+
+class NoopDecisionRepo:
+    async def save_plan_items(self, project_id, tenant_id, items): pass
+    async def save_conflicts(self, project_id, tenant_id, conflicts): pass
+
+class NoopUoW:
+    async def commit(self): pass
+    async def rollback(self): pass
+
+def get_planning_service() -> ProcurementPlanningService:
+    return ProcurementPlanningService(
+        repository=DefaultSnapshotRepo(),
+        decision_repository=NoopDecisionRepo(),
+        uow=NoopUoW(),
+    )
+
+
+@router.post("/planning", response_model=PlanningDecision)
+async def build_procurement_plan(
+    payload: ProcurementPlanningRequest,
+    tenant_id: CurrentTenantId,
+    service: ProcurementPlanningService = Depends(get_planning_service),
+):
+    """
+    Build a tenant-scoped procurement plan for a project snapshot.
+    """
+    try:
+        return await service.build_procurement_plan(
+            project_id=payload.project_id,
+            tenant_id=tenant_id,
+            required_on_site=payload.required_on_site,
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Procurement planning failed: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Procurement planning failed: {str(e)}"
+        )
 
 
 # ==========================================

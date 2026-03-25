@@ -12,10 +12,10 @@ from uuid import UUID
 
 import pytest
 
-from src.modules.procurement.adapters.persistence.snapshot_repository import (
+from src.procurement.adapters.persistence.snapshot_repository import (
     SQLAlchemyProcurementDecisionRepository,
 )
-from src.modules.procurement.domain.entities import ProcurementPlanItem
+from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
 
 
 @pytest.mark.asyncio
@@ -25,10 +25,13 @@ async def test_i9_adp_txn_rolls_back_when_second_write_fails_red() -> None:
     repo = SQLAlchemyProcurementDecisionRepository(session=session)
     items = [
         ProcurementPlanItem(
+            bom_item_id=UUID("11111111-1111-1111-1111-111111111111"),
             item_name="Primary Switchgear",
+            quantity=Decimal("1"),
             required_on_site_date=date(2026, 9, 1),
             optimal_order_date=date(2026, 8, 20),
             total_cost=Decimal("150000.00"),
+            priority=ProcurementPriority.MEDIUM,
         )
     ]
     conflicts = [{"reason_code": "LATE_ORDER_WINDOW", "impact": "HIGH"}]
@@ -54,10 +57,13 @@ async def test_i9_adp_txn_idempotent_retry_does_not_duplicate_rows_red() -> None
     repo = SQLAlchemyProcurementDecisionRepository(session=session)
     items = [
         ProcurementPlanItem(
+            bom_item_id=UUID("11111111-1111-1111-1111-111111111111"),
             item_name="Primary Switchgear",
+            quantity=Decimal("1"),
             required_on_site_date=date(2026, 9, 1),
             optimal_order_date=date(2026, 8, 20),
             total_cost=Decimal("150000.00"),
+            priority=ProcurementPriority.MEDIUM,
         )
     ]
     conflicts = [{"reason_code": "LATE_ORDER_WINDOW", "impact": "HIGH"}]

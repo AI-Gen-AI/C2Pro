@@ -12,11 +12,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.modules.procurement.application.ports import (
+from src.procurement.application.planning_service import (
     ProcurementPlanningService,
     ProcurementSnapshotRepository,
 )
-from src.modules.procurement.domain.entities import ProcurementPlanItem
+from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
 
 
 @pytest.fixture
@@ -24,10 +24,13 @@ def mock_repository() -> AsyncMock:
     repo = AsyncMock(spec=ProcurementSnapshotRepository)
     repo.get_snapshot_items.return_value = [
         ProcurementPlanItem(
+            bom_item_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             item_name="Primary Switchgear",
+            quantity=Decimal("1"),
             required_on_site_date=date(2026, 9, 1),
             optimal_order_date=date(2026, 8, 20),
             total_cost=Decimal("150000.00"),
+            priority=ProcurementPriority.CRITICAL,
         )
     ]
     return repo
@@ -38,7 +41,11 @@ async def test_i9_build_procurement_plan_uses_repository_snapshot_with_tenant_sc
     mock_repository: AsyncMock,
 ) -> None:
     """I9 app contract: service must request snapshot via repository using project+tenant scope."""
-    service = ProcurementPlanningService(repository=mock_repository)
+    service = ProcurementPlanningService(
+        repository=mock_repository,
+        decision_repository=AsyncMock(),
+        uow=AsyncMock()
+    )
     project_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
     tenant_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
     required = date(2026, 9, 1)
@@ -63,7 +70,11 @@ async def test_i9_build_procurement_plan_propagates_repository_failures_without_
 ) -> None:
     """I9 app contract: repository failures must fail fast (no synthetic fallback generation)."""
     mock_repository.get_snapshot_items.side_effect = RuntimeError("snapshot unavailable")
-    service = ProcurementPlanningService(repository=mock_repository)
+    service = ProcurementPlanningService(
+        repository=mock_repository,
+        decision_repository=AsyncMock(),
+        uow=AsyncMock()
+    )
 
     with pytest.raises(RuntimeError, match="snapshot unavailable"):
         await service.build_procurement_plan(

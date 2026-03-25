@@ -11,7 +11,7 @@ from uuid import UUID
 
 import pytest
 
-from src.modules.procurement.application.integration import ProcurementPipelineIntegrationService
+from src.procurement.application.integration_service import ProcurementPipelineIntegrationService
 
 
 @pytest.mark.asyncio

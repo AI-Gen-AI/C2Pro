@@ -23,7 +23,7 @@ from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_wo
 from src.config import settings
 
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
 class TestLangGraphCheckpointer:

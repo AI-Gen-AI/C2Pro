@@ -1,0 +1,69 @@
+{
+  "case_id": "LEG-101",
+  "name": "Penalty clause inconsistency between contract and procurement in hospital",
+  "dimensions": ["Legal"],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-008504 Hospital de la Axarquía/Compras/Motor de cogeneración,/Contrato/Contrato final/Pedido/Pedido 4500677750 Finanzauto.pdf",
+    "schedule_path": "docs/assets/samples/España/P-008504 Hospital de la Axarquía/Comparativas/Comparativa Hospital La Axarquía 20150202.xlsx"
+  },
+  "trajectory": {
+    "required_nodes": ["document_loader", "contract_parser", "penalty_extractor", "clause_comparator", "issue_reporter"],
+    "optional_nodes": ["legal_term_normalizer"],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": ["doc_path", "clause_type"],
+      "min_calls": 2,
+      "max_calls": 5
+    },
+    {
+      "tool_name": "compare_clauses",
+      "required_args": ["contract_clauses", "procurement_clauses"],
+      "min_calls": 1
+    },
+    {
+      "tool_name": "validate_penalties",
+      "required_args": ["penalty_clauses"],
+      "min_calls": 1
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "clause_conflicts",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "penalty_inconsistencies",
+      "operator": "greater_than",
+      "expected_value": 0
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-101",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "penalty"
+    },
+    {
+      "rule_id": "LEG-102",
+      "dimension": "Legal",
+      "severity": "medium",
+      "description_contains": "inconsistency"
+    }
+  ],
+  "metadata": {
+    "source_project": "Hospital de la Axarquía",
+    "project_id": "P-008504",
+    "sector": "Health",
+    "country": "Spain",
+    "created_date": "2026-03-24",
+    "health_risk_flag": true,
+    "expected_extraction_time_seconds": 55
+  }
+}
