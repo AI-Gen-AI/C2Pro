@@ -1,0 +1,23 @@
+{
+  "overall_accuracy": 100.0,
+  "by_difficulty": {
+    "Easy": 100.0,
+    "Medium": 100.0,
+    "Hard": 100.0,
+    "Expert": 100.0
+  },
+  "by_dimension": {
+    "Cost": 100.0,
+    "Legal": 100.0,
+    "Schedule": 100.0,
+    "Technical": 100.0,
+    "Quality": 100.0,
+    "Scope": 100.0
+  },
+  "total_cases": 25,
+  "passed_cases": 25,
+  "failed_cases": 0,
+  "avg_score": 1.0,
+  "timestamp": "2026-03-25T23:55:40.344209+00:00",
+  "execution_time_ms": 94.2838191986084
+}
