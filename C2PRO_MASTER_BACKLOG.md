@@ -720,14 +720,20 @@ _No active tasks identified._
 | [ ]  | 🟢 P3    | TASK-195 | Env Setup  | Integration tests: PASSED                                            | `.github\CICD_SETUP.md`                                 |
 | [ ]  | 🟢 P3    | TASK-197 | None       | Coverage: ≥60% (orange), ≥80% (green)                                | `.github\CICD_SETUP.md`                                 |
 
-### 2.5 Testing & Quality (87 tasks)
+### 2.5 Security
+
+| Done | Priority | ID       | Dependency | Description                             | Source File                                                |
+| :--- | :------- | :------- | :--------- | :-------------------------------------- | :--------------------------------------------------------- |
+| [ ]  | 🔴 P0    | TASK-558 | Security   | Security audit passes (no exposed data) | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
+
+### 2.6 Testing & Quality (87 tasks)
 
 | Done | Priority | ID        | Dependency        | Description                                                                                                                                                   | Source File                                             |
 | :--- | :------- | :-------- | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------ |
 | [x]  | 🔴 P0    | TASK-044  | None              | Python 3.11+ installed                                                                                                                                        | `NEXT_STEPS_TO_RUN_TESTS.md`                            |
 | [x]  | 🔴 P0    | TASK-047  | Env Setup         | PostgreSQL running (optional - SQLite fallback available)                                                                                                     | `NEXT_STEPS_TO_RUN_TESTS.md`                            |
-| [ ]  | 🔴 P0    | TASK-227  | None              | `get_auth_headers()` - Headers con JWT válido                                                                                                                 | `apps\api\tests\security\SECURITY_TESTS_STATUS.md`      |
-| [ ]  | 🔴 P0    | TASK-244  | Env Setup         | Configurar BD de test (PostgreSQL test)                                                                                                                       | `apps\api\tests\security\SECURITY_TESTS_STATUS.md`      |
+| [x]  | 🔴 P0    | TASK-227  | None              | `get_auth_headers()` - Headers con JWT válido                                                                                                                 | `apps\api\tests\security\SECURITY_TESTS_STATUS.md`      |
+| [x]  | 🔴 P0    | TASK-244  | Env Setup         | Configurar BD de test (PostgreSQL test)                                                                                                                       | `apps\api\tests\security\SECURITY_TESTS_STATUS.md`      |
 | [x]  | 🔴 P0    | TASK-1183 | None              | PostgreSQL iniciado (`docker-compose up -d`)                                                                                                                  | `docs\runbooks\INSTRUCCIONES_TESTS.md`                  |
 | [ ]  | 🔴 P0    | TASK-1186 | Env Setup         | Tests ejecutados (`pytest tests/security/ -v`)                                                                                                                | `docs\runbooks\INSTRUCCIONES_TESTS.md`                  |
 | [ ]  | 🔴 P1    | TASK-517  | Testing & Quality | All P0 tests passing (investigate timeout/errors)                                                                                                             | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
@@ -813,7 +819,7 @@ _No active tasks identified._
 | [ ]  | 🟢 P3    | TASK-1225 | None              | No accessibility violations                                                                                                                                   | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`               |
 | [ ]  | 🟢 P3    | TASK-1226 | Env Setup         | Full clean end-to-end execution summary for every runnable test completed in this session                                                                     | `docs\testing\TEST_INVENTORY_2026-03-02.md`             |
 
-### 2.6 General & Management (293 tasks)
+### 2.7 General & Management (293 tasks)
 
 | Done | Priority | ID        | Dependency        | Description                                                                                                                                                                                                                   | Source File                                                 |
 | :--- | :------- | :-------- | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
