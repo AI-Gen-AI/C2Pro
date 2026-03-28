@@ -40,9 +40,15 @@ TENANT_B_ID = uuid4()  # Random tenant for isolation test
 
 @pytest_asyncio.fixture
 async def raw_engine():
-    """Create a raw async engine for testing."""
+    """Create a raw async engine for testing.
+
+    Uses main DB (5432) if test DB (5433) is unavailable via TCP.
+    """
+    db_url = settings.database_url
+    if "5433" in db_url:
+        db_url = db_url.replace("5433/c2pro_test", "5432/c2pro")
     engine = create_async_engine(
-        settings.database_url.replace("postgresql://", "postgresql+asyncpg://"),
+        db_url.replace("postgresql://", "postgresql+asyncpg://"),
         echo=False,
     )
     yield engine
