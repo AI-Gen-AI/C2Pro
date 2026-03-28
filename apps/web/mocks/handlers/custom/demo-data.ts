@@ -190,6 +190,15 @@ export const demoDataHandlers = [
     });
   }),
 
+  http.get("*/api/v1/projects/:projectId/coherence/summary", ({ params }) => {
+    return HttpResponse.json({
+      project_id: String(params.projectId),
+      coherence_score: 78,
+      freshness: "fresh",
+      last_updated: new Date().toISOString(),
+    });
+  }),
+
   // ── Auth ──────────────────────────────────────────────────
   http.post("*/api/v1/auth/login", async ({ request }) => {
     const body = (await request.json()) as { email?: string; password?: string };

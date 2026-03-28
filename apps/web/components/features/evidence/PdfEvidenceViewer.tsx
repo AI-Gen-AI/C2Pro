@@ -75,11 +75,22 @@ export function PdfEvidenceViewer({
   const isDemo = env.APP_MODE === "demo";
 
   const [watermark] = useState(() => {
-    if (isDemo) {
-      return readStoredDemoWatermark() ?? createDemoWatermark();
-    }
+    const stored = readStoredDemoWatermark();
+    if (stored) return stored;
 
-    return sanitizeWatermarkPayload({});
+    // Use session-based data for watermark even in production
+    // This allows testing "Real Flow" without Demo hacks
+    const activeTenantId = isDemo ? "tenant-demo" : "tenant-prod";
+    
+    return sanitizeWatermarkPayload({
+      pseudonymId: createWatermarkToken({
+        tenantId: activeTenantId,
+        userSeed: "session-user",
+        sessionNonce: "evidence-viewer",
+      }),
+      environment: isDemo ? "local" : "production",
+      timestampIso: new Date().toISOString(),
+    });
   });
 
   useEffect(() => {

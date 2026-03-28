@@ -12,7 +12,8 @@ describe("S2-11 RED - three-layer Server Component test strategy", () => {
       process.cwd(),
       "..",
       "..",
-      "context",
+      "docs",
+      "architecture",
       "C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md",
     );
     const doc = readFileSync(docPath, "utf-8");
@@ -49,7 +50,8 @@ describe("S2-11 RED - three-layer Server Component test strategy", () => {
       process.cwd(),
       "..",
       "..",
-      "context",
+      "docs",
+      "testing",
       "C2PRO_TDD_BACKLOG_v1.0.md",
     );
     const backlog = readFileSync(backlogPath, "utf-8");
