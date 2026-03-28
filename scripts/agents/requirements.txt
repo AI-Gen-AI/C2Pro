@@ -2,8 +2,9 @@
 # Core AI stack — versions aligned with apps/api/requirements.txt
 anthropic>=0.18.1,<1.0.0
 langchain>=0.2.0,<0.4.0
-langchain-core>=0.2.40,<0.4.0
-langgraph>=0.2.35,<0.4.0
+langchain-core>=0.3.81,<0.4.0
+langgraph>=0.3.34,<0.4.0
+langgraph-checkpoint>=3.0.1,<4.0.0
 langsmith>=0.1.0,<0.3.0
 
 # GitHub API
