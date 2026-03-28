@@ -58,9 +58,7 @@ async def rls_test_session(raw_engine):
     but we can verify the RLS policy behavior by checking the
     query results with and without tenant context.
     """
-    async_session = sessionmaker(
-        raw_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session = sessionmaker(raw_engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         yield session
 
@@ -77,9 +75,7 @@ class TestRLSFailClosed:
         Previously, COALESCE(..., tenant_id) would return ALL rows when context was empty.
         """
         # Ensure no tenant context is set (clear any existing)
-        await rls_test_session.execute(
-            text("RESET app.current_tenant")
-        )
+        await rls_test_session.execute(text("RESET app.current_tenant"))
 
         # Verify tenant context is empty
         result = await rls_test_session.execute(
@@ -91,44 +87,50 @@ class TestRLSFailClosed:
         # Query projects without tenant context - as superuser we bypass RLS
         # This test documents the expected behavior for non-superuser roles
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 -- This shows what a non-superuser with this policy would see
                 SELECT COUNT(*)
                 FROM projects p
                 WHERE p.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-            """)
+            """
+            )
         )
         count = result.scalar()
         assert count == 0, f"Expected 0 rows without tenant context, got: {count}"
 
     @pytest.mark.asyncio
-    async def test_002_with_tenant_context_returns_tenant_rows(self, rls_test_session: AsyncSession):
+    async def test_002_with_tenant_context_returns_tenant_rows(
+        self, rls_test_session: AsyncSession
+    ):
         """
         SECURITY TEST: With valid app.current_tenant, queries return only that tenant's rows.
         """
         # Set tenant context
-        await rls_test_session.execute(
-            text(f"SET LOCAL app.current_tenant = '{TENANT_A_ID}'")
-        )
+        await rls_test_session.execute(text(f"SET LOCAL app.current_tenant = '{TENANT_A_ID}'"))
 
         # Query using the same logic as RLS policy
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 SELECT COUNT(*)
                 FROM projects p
                 WHERE p.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-            """)
+            """
+            )
         )
         count = result.scalar()
 
         # Should only see Tenant A's projects (may be 0 if none exist, but not ALL projects)
         # The key is that it's filtering correctly
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 SELECT DISTINCT tenant_id
                 FROM projects p
                 WHERE p.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-            """)
+            """
+            )
         )
         tenant_ids = [row[0] for row in result.fetchall()]
 
@@ -142,34 +144,31 @@ class TestRLSFailClosed:
         SECURITY TEST: Tenant A context cannot access Tenant B's data.
         """
         # Get all projects count (as superuser)
-        result = await rls_test_session.execute(
-            text("SELECT COUNT(*) FROM projects")
-        )
+        result = await rls_test_session.execute(text("SELECT COUNT(*) FROM projects"))
         total_projects = result.scalar()
 
         if total_projects == 0:
             pytest.skip("No projects in database to test isolation")
 
         # Set Tenant A context
-        await rls_test_session.execute(
-            text(f"SET LOCAL app.current_tenant = '{TENANT_A_ID}'")
-        )
+        await rls_test_session.execute(text(f"SET LOCAL app.current_tenant = '{TENANT_A_ID}'"))
 
         # Query for any project NOT belonging to Tenant A
         result = await rls_test_session.execute(
-            text(f"""
+            text(
+                f"""
                 SELECT COUNT(*)
                 FROM projects p
                 WHERE p.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
                   AND p.tenant_id != '{TENANT_A_ID}'
-            """)
+            """
+            )
         )
         cross_tenant_count = result.scalar()
 
         # Should find 0 rows from other tenants
         assert cross_tenant_count == 0, (
-            f"Cross-tenant access detected! "
-            f"Found {cross_tenant_count} rows from other tenants"
+            f"Cross-tenant access detected! " f"Found {cross_tenant_count} rows from other tenants"
         )
 
     @pytest.mark.asyncio
@@ -181,14 +180,16 @@ class TestRLSFailClosed:
         """
         # Check policy definitions for the dangerous COALESCE pattern
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 SELECT tablename, policyname, qual
                 FROM pg_policies
                 WHERE schemaname = 'public'
                   AND tablename IN ('projects', 'users', 'tenants', 'review_items')
                   AND cmd = 'SELECT'
                 ORDER BY tablename
-            """)
+            """
+            )
         )
 
         policies = result.fetchall()
@@ -211,14 +212,10 @@ class TestRLSFailClosed:
         This is expected behavior - superusers bypass RLS unless FORCE ROW LEVEL SECURITY is set.
         """
         # Clear tenant context
-        await rls_test_session.execute(
-            text("RESET app.current_tenant")
-        )
+        await rls_test_session.execute(text("RESET app.current_tenant"))
 
         # Superuser should see all projects
-        result = await rls_test_session.execute(
-            text("SELECT COUNT(*) FROM projects")
-        )
+        result = await rls_test_session.execute(text("SELECT COUNT(*) FROM projects"))
         count = result.scalar()
 
         # We're running as superuser (postgres), so we should see all rows
@@ -227,11 +224,13 @@ class TestRLSFailClosed:
         # The latter would mean FORCE ROW LEVEL SECURITY is enabled
 
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 SELECT relforcerowsecurity
                 FROM pg_class
                 WHERE relname = 'projects'
-            """)
+            """
+            )
         )
         force_rls = result.scalar()
 
@@ -249,25 +248,28 @@ class TestRLSPolicyCompleteness:
     async def test_006_all_tenant_tables_have_rls(self, rls_test_session: AsyncSession):
         """
         Verify all tables with tenant_id column have RLS enabled.
+        Note: Views don't need RLS - they inherit from base tables.
         """
         result = await rls_test_session.execute(
-            text("""
+            text(
+                """
                 SELECT c.table_name
                 FROM information_schema.columns c
                 JOIN pg_class pc ON pc.relname = c.table_name
                 WHERE c.column_name = 'tenant_id'
                   AND c.table_schema = 'public'
                   AND pc.relnamespace = 'public'::regnamespace
+                  AND pc.relkind = 'r'
                   AND pc.relrowsecurity = false
-            """)
+            """
+            )
         )
 
         tables_without_rls = [row[0] for row in result.fetchall()]
 
         if tables_without_rls:
             pytest.fail(
-                f"SECURITY GAP: Tables with tenant_id but no RLS enabled: "
-                f"{tables_without_rls}"
+                f"SECURITY GAP: Tables with tenant_id but no RLS enabled: " f"{tables_without_rls}"
             )
 
     @pytest.mark.asyncio
@@ -282,17 +284,17 @@ class TestRLSPolicyCompleteness:
         for table in protected_tables:
             for op in required_ops:
                 result = await rls_test_session.execute(
-                    text(f"""
+                    text(
+                        f"""
                         SELECT COUNT(*)
                         FROM pg_policies
                         WHERE schemaname = 'public'
                           AND tablename = '{table}'
                           AND cmd = '{op}'
-                    """)
+                    """
+                    )
                 )
                 count = result.scalar()
 
                 if count == 0:
-                    pytest.fail(
-                        f"SECURITY GAP: No {op} policy on table '{table}'"
-                    )
+                    pytest.fail(f"SECURITY GAP: No {op} policy on table '{table}'")
