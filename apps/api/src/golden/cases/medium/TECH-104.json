@@ -1,0 +1,76 @@
+{
+  "case_id": "TECH-104",
+  "name": "Technical variance analysis for P-HHR Meca-Medina",
+  "dimensions": [
+    "Technical"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-HHR Meca-Medina/Homologación proveedores/OUT 20131024 AG Internal pre-homologation of suppliers and subcontractors.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-HHR Meca-Medina/Documentación de proyecto/HVPS/IN 20131023 ABAA RV_ HHR_ Time schedule HVPS  Purchase & Procurement Statregy.pdf",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-HHR Meca-Medina/3-Local Purchases/Compras/Manpower/IN 20131226 DMG Re_ Rm_ Fw_ Budget.pdf",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-HHR Meca-Medina/3-Local Purchases/Compras/Earth cable/Technical specifications Cable RV 1x50 mm2 - Bahra Cable.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-HHR Meca-Medina/2-HVPS-Substations/Compras/3-Celdas/ABB/CSS Drawings 2x400kVA rev1.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "technical_extractor",
+      "context_builder",
+      "technical_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "analyze_technical_conflicts",
+      "required_args": [
+        "technical_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Technical"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "TECH-104",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-HHR Meca-Medina",
+    "sector": "High-Speed Rail",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

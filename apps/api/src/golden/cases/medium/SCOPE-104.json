@@ -1,0 +1,73 @@
+{
+  "case_id": "SCOPE-104",
+  "name": "Scope variance analysis for Importacion en Kuwait",
+  "dimensions": [
+    "Scope"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IN 20180214 FGC_Info importacion Kuwait.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IMPORTACIÓN KUWAIT.PDF"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "scope_extractor",
+      "context_builder",
+      "scope_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": [
+        "scope_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-104",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "Importacion en Kuwait",
+    "sector": "Logistics",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

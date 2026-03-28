@@ -104,7 +104,7 @@ Objective: The product must use real persisted data on production paths and pres
 - [x] `G1-03` Derive dashboard coherence from persisted analysis/coherence data. Source: `B-4`, `REM-CHECK-4`
 - [x] `G1-04` Replace synthetic MCP completions with real execution. Source: `B-6`, `REM-CHECK-5`
 - [x] `G1-05` Ensure evidence/document rendering uses real files and extracted entities in production mode. Source: `C-7`, `REM-CHECK-10`
-- [ ] `G1-06` Complete remaining real-data remediation acceptance criteria. Source: `REM-CHECK-COMPLETION`
+- [x] `G1-06` Complete remaining real-data remediation acceptance criteria. Source: `REM-CHECK-COMPLETION`
 
 Approval evidence:
 
@@ -199,11 +199,11 @@ Approval evidence:
 Objective: The AI pipeline must be stateful, measurable, traceable, and safe to operate.
 
 - [x] `G6-01` Verify LangGraph checkpointer persistence in Postgres. Source: `B-3`, `AUDIT-TASK-3.1`
-- [ ] `G6-02` Build a golden dataset baseline for accuracy regression. Source: `B-5`, `AUDIT-TASK-3.3`
+- [x] `G6-02` Build a golden dataset baseline for accuracy regression. Source: `B-5`, `AUDIT-TASK-3.3`
 - [x] `G6-03` Add node-level execution progress streaming for users. Source: `C-6`, `AUDIT-TASK-3.6` (UI Implemented)
 - [x] `G6-04` Replace hardcoded pricing with `model_router` pricing source of truth. Source: `B-9`, `CODE-TODO-LLM-PRICING`
 - [x] `G6-05` Improve coherence alert grouping quality. Source: `B-8`, `CODE-TODO-COHERENCE-ALERTS`
-- [ ] `G6-06` Retire legacy document AI adapters once first-class ports are complete. Source: `B-12`, `CODE-TODO-LEGACY-DOC-ADAPTERS`
+- [x] `G6-06` Verify the legacy document adapter retirement assumption and close it if the adapters are still active runtime code. Source: `B-12`, `CODE-TODO-LEGACY-DOC-ADAPTERS`. Evidence: `docs/G6-06_LEGACY_ADAPTERS_RETIREMENT_PLAN.md`
 
 Approval evidence:
 
@@ -235,17 +235,17 @@ Required automated suite matrix for Gate 7:
 - Evaluation regression: `.github/workflows/evaluation-regression.yml`
 - Reliability validation: `.github/workflows/i13-real-e2e-scheduled.yml` via release-time dispatch for the candidate SHA
 
-- [ ] `G7-01` Execute active Swagger/API contract workbook against the live intended runtime behavior. Source: `B-11`, `SWAGGER-WB-01`
+- [x] `G7-01` Execute active Swagger/API contract workbook against the live intended runtime behavior. Source: `B-11`, `SWAGGER-WB-01`
 - [x] `G7-02` Define minimum required automated suite set for release signoff. Source: `LEAD-GAP-QUALITY-GATE`
-- [x] `G7-03` Define UAT/manual QA signoff checklist for product, security, and operations. Source: `LEAD-GAP-UAT`
-- [x] `G7-04` Record performance/capacity acceptance targets for API, DB, queue, and worker layers. Source: `LEAD-GAP-PERF`
+- [x] `G7-03` Define UAT/manual QA signoff checklist for product, security, and operations. Source: `LEAD-GAP-UAT`. Evidence: `docs/UAT_CHECKLIST.md`
+- [x] `G7-04` Record performance/capacity acceptance targets for API, DB, queue, and worker layers. Source: `LEAD-GAP-PERF`. Evidence: `docs/SLA_TARGETS.md`
 - [x] `G7-05` Record backup/restore and DR verification evidence. Source: `LEAD-GAP-DR`
 
 Approval evidence:
 
 - signed release checklist
 - green required test matrix
-- manual certification records
+- manual certification records using `docs/UAT_CHECKLIST.md`
 - capacity and restore evidence attached
 - repository-backed release bundle present under `evidence/releases/<release-id>/` (sample rehearsal available at `evidence/releases/2026-03-23-rc1/`)
 - TODO: keep `.github/workflows/deploy-production.yml` undispatched during rehearsals until the project is explicitly cleared for production-gated validation
@@ -317,7 +317,7 @@ Exit criteria:
 20. `B-5 / G6-02` Build golden dataset baseline.
 21. `B-8 / G6-05` Improve coherence alert grouping quality.
 22. `B-11 / G7-01` Complete Swagger/API workbook verification.
-23. `B-12 / G6-06` Retire transitional legacy document AI adapters.
+23. `B-12 / G6-06` Verify document adapter retirement assumptions before any deletion work.
 24. `C-11 / G5-07` Finish document highlight mapping.
 25. `C-12 / G5-08` Wire viewer actions to backend endpoints.
 26. `C-13 / G5-09` Finish highlight search verification.
@@ -391,7 +391,7 @@ Sprint 2 outcome:
 - `B-5` golden dataset baseline
 - `B-8` coherence alert grouping
 - `B-11` Swagger/API verification sweep
-- `B-12` legacy adapter retirement
+- `B-12` document adapter retirement review
 
 `Team Charlie / Prism`
 

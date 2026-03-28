@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 from uuid import uuid4
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -46,6 +46,19 @@ async def test_redis_rate_limit_backend_tracks_requests_per_tenant() -> None:
 @pytest.mark.asyncio
 async def test_log_query_persists_audit_row_to_database() -> None:
     db = AsyncMock()
+    columns_result = Mock()
+    columns_result.scalars.return_value.all.return_value = [
+        "tenant_id",
+        "user_id",
+        "action",
+        "resource_type",
+        "resource_id",
+        "changes",
+        "ip_address",
+        "user_agent",
+        "created_at",
+    ]
+    db.execute.side_effect = [columns_result, None]
     server = DatabaseMCPServer(
         query_limits=QueryLimits(statement_timeout="2s", row_limit=100, max_cost=5000),
         rate_limits=RateLimits(per_tenant_per_minute=10, per_tenant_per_hour=100),
@@ -66,9 +79,9 @@ async def test_log_query_persists_audit_row_to_database() -> None:
         execution_time_ms=12.5,
     )
 
-    assert db.execute.await_count == 1
-    statement = db.execute.await_args.args[0]
-    params = db.execute.await_args.args[1]
+    assert db.execute.await_count == 2
+    statement = db.execute.await_args_list[1].args[0]
+    params = db.execute.await_args_list[1].args[1]
     assert "INSERT INTO audit_logs" in str(statement)
     assert params["tenant_id"] == tenant_id
     assert params["user_id"] == user_id
@@ -76,6 +89,45 @@ async def test_log_query_persists_audit_row_to_database() -> None:
     assert params["action"] == "mcp.query.view"
     assert params["resource_type"] == "mcp_view"
     assert json.loads(params["changes"])["view_name"] == "v_project_summary"
+
+
+@pytest.mark.asyncio
+async def test_log_query_falls_back_to_legacy_audit_log_columns() -> None:
+    db = AsyncMock()
+    columns_result = Mock()
+    columns_result.scalars.return_value.all.return_value = [
+        "tenant_id",
+        "user_id",
+        "action",
+        "resource_type",
+        "resource_id",
+        "metadata",
+        "created_at",
+    ]
+    db.execute.side_effect = [columns_result, None]
+
+    server = DatabaseMCPServer()
+    tenant_id = uuid4()
+    user_id = uuid4()
+
+    await server._log_query(
+        db=db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        query_type="view",
+        view_name="v_project_summary",
+        function_name=None,
+        project_id=None,
+        row_count=1,
+        execution_time_ms=7.0,
+    )
+
+    assert db.execute.await_count == 2
+    statement = db.execute.await_args_list[1].args[0]
+    params = db.execute.await_args_list[1].args[1]
+    assert "metadata" in str(statement)
+    assert "changes" not in str(statement)
+    assert json.loads(params["metadata"])["view_name"] == "v_project_summary"
 
 
 @pytest.mark.asyncio

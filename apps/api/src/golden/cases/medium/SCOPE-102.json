@@ -1,0 +1,76 @@
+{
+  "case_id": "SCOPE-102",
+  "name": "Scope variance analysis for P-008788 OHTL 300-132-33 kV Tender #62",
+  "dimensions": [
+    "Scope"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Documentación del proyecto/Contrato con el cliente/contract copy-tender#62.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/1. Torres/1. Contrato/Negociacion para continuidad suministro/Tender 62 - Schedule Towers.xls",
+    "budget_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/22. Fencing/IN 20170320 CHC_Presupuestos para cercado.pdf",
+    "specifications_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/4.1. Aisladores&cadenas composite/NGK/0_List of Technical DocumentsLTD27352.pdf",
+    "drawings_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/6. Luces, esferas y tomas/Avaids/GA Drawing of Span Marker FRP Type.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "scope_extractor",
+      "context_builder",
+      "scope_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": [
+        "scope_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-102",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-008788 OHTL 300-132-33 kV Tender #62",
+    "sector": "Transmission",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

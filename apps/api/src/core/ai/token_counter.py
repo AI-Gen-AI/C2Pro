@@ -23,9 +23,13 @@ logger = structlog.get_logger()
 # ===========================================
 
 MODEL_PRICING: dict[str, dict[str, float]] = {
-    # Claude 4 models (2025)
+    # Claude 4.5 models (2025-2026)
     "claude-opus-4-20250514": {"input": 15.00, "output": 75.00},
+    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
     "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},  # Haiku 4.5 (Oct 2025)
+    # Claude 4 models (2025)
     "claude-haiku-4-20250514": {"input": 0.25, "output": 1.25},
     # Claude 3.5 models
     "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
@@ -46,8 +50,13 @@ DEFAULT_PRICING = {"input": 3.00, "output": 15.00}
 
 # Token limits per model
 MODEL_CONTEXT_LIMITS: dict[str, int] = {
+    # Claude 4.5 models (2025-2026)
     "claude-opus-4-20250514": 200_000,
+    "claude-opus-4-6": 200_000,
     "claude-sonnet-4-20250514": 200_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
+    # Claude 4 models (2025)
     "claude-haiku-4-20250514": 200_000,
     "claude-3-5-sonnet-20241022": 200_000,
     "claude-3-5-sonnet-20240620": 200_000,

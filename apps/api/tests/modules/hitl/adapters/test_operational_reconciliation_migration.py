@@ -45,3 +45,10 @@ class TestOperationalReconciliationMigration:
         assert "FORCE ROW LEVEL SECURITY" in contents
         assert "tenant_isolation_ai_usage_logs" in contents
         assert "tenant_isolation_audit_logs" in contents
+
+    def test_migration_reconciles_existing_audit_logs_columns(self) -> None:
+        contents = self._migration_path().read_text(encoding="utf-8")
+
+        assert "ALTER TABLE audit_logs" in contents
+        assert "ADD COLUMN IF NOT EXISTS changes JSONB" in contents
+        assert "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()" in contents

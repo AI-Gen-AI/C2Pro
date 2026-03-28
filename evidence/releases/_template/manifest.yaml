@@ -1,42 +1,101 @@
-release_id: 2026-03-22-rc1
-commit_sha: "<git-sha>"
+# Release Manifest Template
+# See docs/internal/RELEASE_SIGNOFF_POLICY.md for threshold definitions
+
+release_id: "<YYYY-MM-DD-rc#>"
+commit_sha: "<40-char-git-sha>"
 promotion_workflow: ".github/workflows/deploy-production.yml"
+release_type: standard  # mvr | standard | ga
+
+# Minimum thresholds (from RELEASE_SIGNOFF_POLICY.md)
+thresholds:
+  unit_coverage_min: 70
+  security_coverage_min: 60
+  integration_pass_rate_min: 95
+  frontend_e2e_pass_rate_min: 90
+  golden_pass_rate_min: 90
+  coherence_accuracy_min: 75
+  extraction_f1_min: 75
+  retrieval_mrr_min: 65
+
 required_suites:
   backend:
     workflow: ".github/workflows/tests.yml"
-    status: pass
-    artifact: "backend-release-summary"
+    status: pending  # pass | failure | pending
+    artifact: "<run-id> - backend-release-summary (artifact <id>) - <url>"
+    jobs:
+      secrets_scan: pending
+      unit_tests: pending
+      integration_tests: pending
+      s5_core_ai_gates: pending
+    coverage: null  # percentage when available
+    note: ""
+
   frontend:
     workflow: ".github/workflows/frontend-ci.yml"
-    status: pass
-    artifact: "frontend-release-summary"
+    status: pending
+    artifact: "<run-id> - frontend-release-summary (artifact <id>) - <url>"
+    jobs:
+      typecheck: pending
+      lint: pending
+      tests_e2e: pending
+      api_drift_check: pending
+    note: ""
+
   security:
     workflow: ".github/workflows/e2e-security-tests.yml"
-    status: pass
-    artifact: "security-release-summary"
+    status: pending
+    artifact: "<run-id> - security-release-summary (artifact <id>) - <url>"
+    coverage: null
+    note: ""
+
   evaluation:
     workflow: ".github/workflows/evaluation-regression.yml"
-    status: pass
-    artifact: "evaluation-release-summary"
+    status: pending
+    artifact: "<run-id> - evaluation-release-summary (artifact <id>) - <url>"
+    metrics:
+      coherence_accuracy: null
+      extraction_f1: null
+      retrieval_mrr: null
+      golden_pass_rate: null
+    note: ""
+
   reliability:
     workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
-    status: pass
-    artifact: "i13-release-summary"
+    status: not_required  # not_required for mvr/standard, required for ga
+    artifact: "<run-id> - i13-release-summary (artifact <id>) - <url>"
     mode: release-dispatch
+    note: ""
+
 swagger_workbook:
-  status: complete
+  status: pending  # pending | complete | partial
   reference: "docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md"
+  report: "swagger-verification.md"
   unchecked_items: []
+
 manual_signoff:
-  product: "<name>"
-  security: "<name>"
-  operations: "<name>"
-  release_authority: "<name>"
+  product: pending      # pending | approved | waived
+  security: pending
+  operations: pending
+  release_authority: pending
+
 performance:
   target_set: "docs/performance/baseline.md"
-  result: pass
+  result: pending  # pending | pass | failure | waived
   report: "performance.md"
+
 dr_evidence:
-  result: pass
+  result: pending
   report: "disaster-recovery.md"
+
+# Waivers for non-blocking failures
+# See RELEASE_SIGNOFF_POLICY.md for waiver process
 waivers: []
+# Example waiver:
+# - suite: integration_tests
+#   failure: "2 flaky tests in test_concurrent_uploads"
+#   risk_level: LOW
+#   mitigation: "Tests are quarantined, manual verification passed"
+#   owner: "@developer"
+#   approved_by: "@tech-lead"
+#   expires: "2026-04-15"
+#   ticket: "https://github.com/org/repo/issues/123"

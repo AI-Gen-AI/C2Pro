@@ -1,0 +1,74 @@
+{
+  "case_id": "SCOPE-004",
+  "name": "Scope signal for P-Technical Buildings (Dimetronic)",
+  "dimensions": [
+    "Scope"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-Technical Buildings (Dimetronic)/Local purchases and subcontractors/OUT 20131112 AG Re_ Negotiation meeting with subcontractors - TB Dimetronic.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-Technical Buildings (Dimetronic)/Local purchases and subcontractors/2.Power Supply Cable/Anixter/Oferta 0200_Inabensa.xls",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-Technical Buildings (Dimetronic)/Local purchases and subcontractors/2.Power Supply Cable/AC Lineas/OFERTA 14-03422 TB Meca-Medina.xls",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-Technical Buildings (Dimetronic)/IN 20141105 JCG Rm_ RV_ Ejecución Arabia.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-Technical Buildings (Dimetronic)/Purchase Administration/OUT 20141125 AG Technical Buildings  Dimetronic.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "scope_extractor",
+      "scope_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": [
+        "scope_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-004",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-Technical Buildings (Dimetronic)",
+    "sector": "Rail Systems",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

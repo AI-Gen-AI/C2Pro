@@ -1,0 +1,71 @@
+{
+  "case_id": "SCHED-002",
+  "name": "Schedule signal for Importacion en Kuwait",
+  "dimensions": [
+    "Schedule"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IN 20180214 FGC_Info importacion Kuwait.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IMPORTACIÓN KUWAIT.PDF"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "schedule_extractor",
+      "schedule_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_schedules",
+      "required_args": [
+        "schedule_data"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Schedule"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-002",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "milestone"
+    }
+  ],
+  "metadata": {
+    "source_project": "Importacion en Kuwait",
+    "sector": "Logistics",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

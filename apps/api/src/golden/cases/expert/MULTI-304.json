@@ -1,0 +1,165 @@
+{
+  "case_id": "MULTI-304",
+  "name": "Nightly full coherence audit for P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena",
+  "dimensions": [
+    "Legal",
+    "Quality",
+    "Scope",
+    "Schedule",
+    "Cost",
+    "Technical"
+  ],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Documentación Proyecto/16_Contrato firmado/Lapola_Doc contractual_X3_Sellado.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/33. SDH-PDH/Nokia/OT/Mtto No aplica/4.2 F. Programa de Trabajos.docx",
+    "budget_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/Racks/Presupuesto AVE Fase II Alvarez B.xlsx",
+    "specifications_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/1. Fibra Óptica/1-Agreement/PC0903009192-001A - Anexo 1 - Technical Specifications.pdf",
+    "drawings_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/31. Baculos/Baculos/PLANO COLUMNA ABATIBLE FOLD POLE.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "scope_extractor",
+      "schedule_extractor",
+      "cost_extractor",
+      "quality_extractor",
+      "technical_extractor",
+      "cross_reference_validator",
+      "dependency_mapper",
+      "risk_aggregator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator",
+      "mitigation_planner"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 8
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path",
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "aggregate_risks",
+      "required_args": [
+        "all_issues"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 3
+    },
+    {
+      "path": "coherence_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_score",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-304",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    },
+    {
+      "rule_id": "QUAL-304",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    },
+    {
+      "rule_id": "SCOPE-304",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    },
+    {
+      "rule_id": "SCHED-304",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-304",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget"
+    },
+    {
+      "rule_id": "TECH-304",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena",
+    "sector": "Rail Signaling",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "full_dimensional_coverage": 6
+  }
+}

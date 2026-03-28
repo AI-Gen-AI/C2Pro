@@ -1,0 +1,74 @@
+{
+  "case_id": "SCHED-004",
+  "name": "Schedule signal for P-APM Jeddah",
+  "dimensions": [
+    "Schedule"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/OUT 20140305 ABAA Rm_ APM Project  communications section  - Purchase Administration.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Power cable/Anixter revisión/Cables Summary-V3(anixter).xls",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Panels/Alseteen/BOQ.pdf",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Heliax and radiax cable/IN 20140221 JMFC Rm_ Cables Commscope.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/OUT 20140218 DMG Re_ APM  AC.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "schedule_extractor",
+      "schedule_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_schedules",
+      "required_args": [
+        "schedule_data"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Schedule"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-004",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "milestone"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-APM Jeddah",
+    "sector": "Port Infrastructure",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

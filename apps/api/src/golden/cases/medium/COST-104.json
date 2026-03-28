@@ -1,0 +1,76 @@
+{
+  "case_id": "COST-104",
+  "name": "Cost variance analysis for O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla",
+  "dimensions": [
+    "Cost"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Compras/OUT 20130613 Lanzamiento. Abeinsa BD - Proyecto Waste to Biofuels  - Petición Oferta -.pdf",
+    "schedule_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Comparativas/Comparativa P.Waste To Biofuels  2013-07-09.xlsx",
+    "budget_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Compras/Seccionadores/Electrotaz/OFERTA TAZ INABENSA 15373A-10512.pdf",
+    "specifications_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Documentación proyecto/Especificaciones/SNE01900 Pararr66.pdf",
+    "drawings_path": "docs/assets/samples/España/O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla/Compras/Relación Aparamenta SE 66-6 KV W2B_Rev0.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "cost_extractor",
+      "context_builder",
+      "cost_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_budget_totals",
+      "required_args": [
+        "cost_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Cost"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-104",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "budget"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-Proyecto Waste to Biofuels SE 66-6 kV Sevilla",
+    "sector": "Biofuels",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

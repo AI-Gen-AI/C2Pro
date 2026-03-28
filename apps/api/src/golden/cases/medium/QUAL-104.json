@@ -1,0 +1,76 @@
+{
+  "case_id": "QUAL-104",
+  "name": "Quality variance analysis for P-Delaney-Colorado River 500 KV AC Transmission Line",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Documentación proyecto/Doc. de O&C IISA/4. Peticiones/4. Peticiones/Cotizaciones Abengoa T&I/RFQ Subcontractors/v-guyed chukar scheme.pdf",
+    "schedule_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Documentación proyecto/Doc. original fase oferta/39. (Int Prod)- DCR Transmission/2. Offer/6. Schedules/EPC OHL Schedule.mpp",
+    "budget_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/1.- Steel Towers A572-50/1.- Comensa/Budgetary Proposal Delaney-Colorado River 500kV-Abengoa T&I-12-11-14.pdf",
+    "specifications_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/5.- Porcelain Insulators/RfQ Docs/T-9d Attachment 1. Porcelain Insulator Spec Sheet.pdf",
+    "drawings_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/2.- Conductor ACSR Chukar/3.- Emta/Cross_Sectional_Drawing_ACSR_Chukar.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "context_builder",
+      "quality_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-104",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-Delaney-Colorado River 500 KV AC Transmission Line",
+    "sector": "Transmission",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

@@ -507,49 +507,65 @@ class TestHierarchicalLoading:
         assert loaded is not None
 
 
-class TestCore25Integration:
-    """Integration tests for loading the actual Core-25 dataset."""
+class TestCore100Integration:
+    """Integration tests for loading the actual Core-100 nightly dataset."""
 
-    def test_load_core25_dataset(self) -> None:
-        """Test loading the actual Core-25 golden dataset."""
+    def test_load_core100_dataset(self) -> None:
+        """Test loading the actual Core-100 golden dataset."""
         # Get the actual golden dataset directory
         golden_dir = Path(__file__).parent.parent.parent / "src" / "golden"
         loader = GoldenDatasetLoader(golden_dir)
 
         cases = loader.load_all_cases()
-        assert len(cases) == 25, f"Expected 25 cases, got {len(cases)}"
+        assert len(cases) == 100, f"Expected 100 cases, got {len(cases)}"
 
-    def test_core25_statistics(self) -> None:
-        """Test statistics for Core-25 dataset."""
+    def test_core100_statistics(self) -> None:
+        """Test statistics for Core-100 dataset."""
         golden_dir = Path(__file__).parent.parent.parent / "src" / "golden"
         loader = GoldenDatasetLoader(golden_dir)
 
         stats = loader.get_statistics()
-        assert stats["total_cases"] == 25
-        assert stats["by_difficulty"]["Easy"] == 5
-        assert stats["by_difficulty"]["Medium"] == 10
-        assert stats["by_difficulty"]["Hard"] == 7
-        assert stats["by_difficulty"]["Expert"] == 3
+        assert stats["total_cases"] == 100
+        assert stats["by_difficulty"]["Easy"] == 20
+        assert stats["by_difficulty"]["Medium"] == 30
+        assert stats["by_difficulty"]["Hard"] == 30
+        assert stats["by_difficulty"]["Expert"] == 20
 
-    def test_core25_filter_by_dimension(self) -> None:
-        """Test filtering Core-25 by dimension."""
+    def test_core100_filter_by_dimension(self) -> None:
+        """Test filtering Core-100 by dimension."""
         golden_dir = Path(__file__).parent.parent.parent / "src" / "golden"
         loader = GoldenDatasetLoader(golden_dir)
 
         schedule_cases = loader.filter_by_dimension(CoherenceDimension.Schedule)
-        # Should have cases with Schedule dimension
-        assert len(schedule_cases) >= 5  # At least easy + some medium
+        assert len(schedule_cases) >= 20
 
-    def test_core25_get_cases_by_difficulty_dir(self) -> None:
-        """Test loading Core-25 cases by difficulty directory."""
+    def test_core100_get_cases_by_difficulty_dir(self) -> None:
+        """Test loading Core-100 cases by difficulty directory."""
         golden_dir = Path(__file__).parent.parent.parent / "src" / "golden"
         loader = GoldenDatasetLoader(golden_dir)
 
         easy_cases = loader.get_cases_by_difficulty_dir("easy")
-        assert len(easy_cases) == 5
+        assert len(easy_cases) == 20
 
         expert_cases = loader.get_cases_by_difficulty_dir("expert")
-        assert len(expert_cases) == 3
+        assert len(expert_cases) == 20
+
+    def test_core100_country_distribution(self) -> None:
+        """Test the nightly dataset spans the four sample geographies."""
+        golden_dir = Path(__file__).parent.parent.parent / "src" / "golden"
+        loader = GoldenDatasetLoader(golden_dir)
+
+        cases = loader.load_all_cases()
+        country_counter: dict[str, int] = {}
+        for case in cases:
+            country = case.metadata.get("country") if case.metadata else None
+            assert country is not None, f"{case.case_id} missing metadata.country"
+            country_counter[country] = country_counter.get(country, 0) + 1
+
+        assert set(country_counter) == {"Spain", "USA", "Kuwait", "Saudi Arabia"}
+        assert country_counter["USA"] >= 10
+        assert country_counter["Kuwait"] >= 10
+        assert country_counter["Saudi Arabia"] >= 10
 
 
 class TestSecurityFeatures:

@@ -25,6 +25,20 @@ class CompositeFileParser(IFileParserService):
         self.excel_parser = excel_parser
         self.pdf_parser = pdf_parser
 
+    @classmethod
+    def create(cls) -> "CompositeFileParser":
+        """
+        Factory method to create a CompositeFileParser with default parser instances.
+        
+        Returns:
+            CompositeFileParser with BC3, Excel, and PDF parsers initialized.
+        """
+        return cls(
+            bc3_parser=BC3FileParser(),
+            excel_parser=ExcelFileParser(),
+            pdf_parser=PDFFileParser(),
+        )
+
     async def parse_document_file(self, document: Document, file_path: Path) -> Dict[str, Any]:
         """
         Parses a document file based on its type and format by delegating to specific parsers.

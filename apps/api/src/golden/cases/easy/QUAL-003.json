@@ -1,0 +1,74 @@
+{
+  "case_id": "QUAL-003",
+  "name": "Quality signal for P-008788 OHTL 300-132-33 kV Tender #62",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Documentación del proyecto/Contrato con el cliente/contract copy-tender#62.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/1. Torres/1. Contrato/Negociacion para continuidad suministro/Tender 62 - Schedule Towers.xls",
+    "budget_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/22. Fencing/IN 20170320 CHC_Presupuestos para cercado.pdf",
+    "specifications_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/4.1. Aisladores&cadenas composite/NGK/0_List of Technical DocumentsLTD27352.pdf",
+    "drawings_path": "docs/assets/samples/Kuwait/P-008788 OHTL 300-132-33 kV Tender #62/Compras/6. Luces, esferas y tomas/Avaids/GA Drawing of Span Marker FRP Type.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "quality_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-003",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-008788 OHTL 300-132-33 kV Tender #62",
+    "sector": "Transmission",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

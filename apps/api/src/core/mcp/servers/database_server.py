@@ -606,44 +606,104 @@ class DatabaseMCPServer:
             "project_id": str(project_id) if project_id else None,
         }
 
-        await db.execute(
+        available_columns = await self._get_audit_log_columns(db)
+        if not available_columns:
+            logger.warning(
+                "mcp_audit_log_table_unavailable",
+                tenant_id=str(tenant_id),
+                query_type=query_type,
+            )
+            return
+
+        statement, params = self._build_audit_log_insert(
+            available_columns=available_columns,
+            audit_log=audit_log,
+            project_id=project_id,
+            changes=changes,
+        )
+        await db.execute(statement, params)
+
+    async def _get_audit_log_columns(self, db: AsyncSession) -> set[str]:
+        result = await db.execute(
             text(
                 """
-                INSERT INTO audit_logs (
-                    tenant_id,
-                    user_id,
-                    action,
-                    resource_type,
-                    resource_id,
-                    changes,
-                    ip_address,
-                    user_agent,
-                    created_at
-                ) VALUES (
-                    :tenant_id,
-                    :user_id,
-                    :action,
-                    :resource_type,
-                    :resource_id,
-                    CAST(:changes AS JSONB),
-                    :ip_address,
-                    :user_agent,
-                    :created_at
-                )
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'audit_logs'
                 """
-            ),
-            {
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-                "action": f"mcp.query.{query_type}",
-                "resource_type": f"mcp_{query_type}",
-                "resource_id": project_id,
-                "changes": json.dumps(changes),
-                "ip_address": None,
-                "user_agent": None,
-                "created_at": audit_log.timestamp,
-            },
+            )
         )
+        return {str(column_name) for column_name in result.scalars().all()}
+
+    def _build_audit_log_insert(
+        self,
+        *,
+        available_columns: set[str],
+        audit_log: QueryAuditLog,
+        project_id: UUID | None,
+        changes: dict[str, Any],
+    ) -> tuple[Any, dict[str, Any]]:
+        payload: dict[str, Any] = {
+            "tenant_id": audit_log.tenant_id,
+            "action": f"mcp.query.{audit_log.query_type}",
+            "resource_type": f"mcp_{audit_log.query_type}",
+        }
+        insert_columns = ["tenant_id", "action", "resource_type"]
+        insert_values = [":tenant_id", ":action", ":resource_type"]
+
+        if "user_id" in available_columns:
+            insert_columns.append("user_id")
+            insert_values.append(":user_id")
+            payload["user_id"] = audit_log.user_id
+        elif "actor_id" in available_columns:
+            insert_columns.append("actor_id")
+            insert_values.append(":actor_id")
+            payload["actor_id"] = str(audit_log.user_id) if audit_log.user_id else "system"
+
+        if "resource_id" in available_columns:
+            insert_columns.append("resource_id")
+            insert_values.append(":resource_id")
+            payload["resource_id"] = project_id
+
+        if "changes" in available_columns:
+            insert_columns.append("changes")
+            insert_values.append("CAST(:changes AS JSONB)")
+            payload["changes"] = json.dumps(changes)
+        elif "metadata" in available_columns:
+            insert_columns.append("metadata")
+            insert_values.append("CAST(:metadata AS JSONB)")
+            payload["metadata"] = json.dumps(changes)
+
+        if "ip_address" in available_columns:
+            insert_columns.append("ip_address")
+            insert_values.append(":ip_address")
+            payload["ip_address"] = None
+
+        if "user_agent" in available_columns:
+            insert_columns.append("user_agent")
+            insert_values.append(":user_agent")
+            payload["user_agent"] = None
+
+        if "created_at" in available_columns:
+            insert_columns.append("created_at")
+            insert_values.append(":created_at")
+            payload["created_at"] = audit_log.timestamp
+        elif "timestamp" in available_columns:
+            insert_columns.append("timestamp")
+            insert_values.append(":timestamp")
+            payload["timestamp"] = audit_log.timestamp
+
+        statement = text(
+            f"""
+            INSERT INTO audit_logs (
+                {", ".join(insert_columns)}
+            ) VALUES (
+                {", ".join(insert_values)}
+            )
+            """
+        )
+        return statement, payload
 
     async def _increment_rate_limit_count(self, tenant_id: str, now_epoch: float) -> int:
         try:

@@ -1,6 +1,6 @@
-"""Tests for Core-25 golden dataset validation.
+"""Tests for Core-100 golden dataset validation.
 
-Validates that all 25 golden case JSON files conform to the GoldenCase schema.
+Validates that all 100 golden case JSON files conform to the GoldenCase schema.
 """
 
 import json
@@ -26,17 +26,17 @@ def get_all_case_files() -> list[Path]:
     return sorted(case_files)
 
 
-class TestCore25DatasetValidation:
-    """Validation tests for the Core-25 golden dataset."""
+class TestCore100DatasetValidation:
+    """Validation tests for the Core-100 golden dataset."""
 
     def test_correct_number_of_cases(self) -> None:
-        """Verify we have exactly 25 cases in Core-25."""
+        """Verify we have exactly 100 cases in Core-100."""
         case_files = get_all_case_files()
-        assert len(case_files) == 25, f"Expected 25 cases, found {len(case_files)}"
+        assert len(case_files) == 100, f"Expected 100 cases, found {len(case_files)}"
 
     def test_difficulty_distribution(self) -> None:
         """Verify correct distribution of difficulty levels."""
-        expected = {"easy": 5, "medium": 10, "hard": 7, "expert": 3}
+        expected = {"easy": 20, "medium": 30, "hard": 30, "expert": 20}
 
         for difficulty, expected_count in expected.items():
             difficulty_dir = CASES_DIR / difficulty
@@ -108,6 +108,28 @@ class TestCore25DatasetValidation:
             case_ids.append(data["case_id"])
 
         assert len(case_ids) == len(set(case_ids)), "Duplicate case_ids found"
+
+    def test_country_coverage(self) -> None:
+        """Verify the nightly Core-100 set covers all supported sample regions."""
+        country_counter: dict[str, int] = {}
+
+        for case_file in get_all_case_files():
+            with open(case_file, encoding="utf-8") as f:
+                data = json.load(f)
+
+            metadata = data.get("metadata", {})
+            country = metadata.get("country")
+            assert country is not None, f"{case_file.name} missing metadata.country"
+            country_counter[country] = country_counter.get(country, 0) + 1
+
+        expected_countries = {"Spain", "USA", "Kuwait", "Saudi Arabia"}
+        assert set(country_counter) == expected_countries, (
+            f"Unexpected country coverage: {country_counter}"
+        )
+        for country in expected_countries:
+            assert country_counter[country] >= 10, (
+                f"{country} must contribute at least 10 nightly cases"
+            )
 
     @pytest.mark.parametrize("case_file", get_all_case_files(), ids=lambda p: p.stem)
     def test_trajectory_has_required_nodes(self, case_file: Path) -> None:

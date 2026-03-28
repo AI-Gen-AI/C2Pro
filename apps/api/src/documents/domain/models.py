@@ -45,6 +45,10 @@ class ClauseType(str, Enum):
     GENERAL = "other"
 
 
+# Alias for ClauseCategory - used in tests and other parts of the codebase
+ClauseCategory = ClauseType
+
+
 @dataclass
 class Clause:
     """

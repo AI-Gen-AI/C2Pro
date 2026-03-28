@@ -33,6 +33,7 @@ coherence/
 ## Componentes
 
 ### Core
+
 - **`rules.py`**: Define el esquema de las reglas de coherencia usando Pydantic y una función para cargarlas desde un archivo YAML.
 - **`models.py`**: Contiene los modelos Pydantic para las estructuras de datos principales: `ProjectContext`, `Clause`, `Evidence`, `Alert`, y `CoherenceResult`.
 - **`config.py`**: Almacena la configuración del motor, como los pesos de severidad para el cálculo del score.
@@ -41,6 +42,7 @@ coherence/
 - **`router.py`**: Expone la funcionalidad del motor a través de un endpoint API de FastAPI.
 
 ### LLM Integration (v0.2 - CE-22/CE-23)
+
 - **`llm_integration.py`**: Servicio de integración LLM para análisis cualitativo
 - **`rules_engine/llm_evaluator.py`**: Evaluador de reglas basado en LLM
 

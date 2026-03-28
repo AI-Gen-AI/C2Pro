@@ -1,0 +1,76 @@
+{
+  "case_id": "LEG-103",
+  "name": "Legal variance analysis for P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena",
+  "dimensions": [
+    "Legal"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Documentación Proyecto/16_Contrato firmado/Lapola_Doc contractual_X3_Sellado.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/33. SDH-PDH/Nokia/OT/Mtto No aplica/4.2 F. Programa de Trabajos.docx",
+    "budget_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/Racks/Presupuesto AVE Fase II Alvarez B.xlsx",
+    "specifications_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/1. Fibra Óptica/1-Agreement/PC0903009192-001A - Anexo 1 - Technical Specifications.pdf",
+    "drawings_path": "docs/assets/samples/España/P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena/Compras/31. Baculos/Baculos/PLANO COLUMNA ABATIBLE FOLD POLE.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "context_builder",
+      "legal_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "analyze_legal_terms",
+      "required_args": [
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Legal"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-103",
+      "dimension": "Legal",
+      "severity": "medium",
+      "description_contains": "contractual"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-009192 Señaliz. y comunicaciones LAV La Roda-Pobla de Lena",
+    "sector": "Rail Signaling",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

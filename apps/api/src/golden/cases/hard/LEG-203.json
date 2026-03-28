@@ -1,0 +1,79 @@
+{
+  "case_id": "LEG-203",
+  "name": "Legal cascading review for P-009604 LAV Monforte-Murcia",
+  "dimensions": [
+    "Legal"
+  ],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Subcontratas/102.Pilotaje/1-Agreement/PC0903009604 - Cordobesa de Pilotaje - Contrato Firmado.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Follow-up PO/Seguimiento pedidos Monforte Murcia 20140728.xlsx",
+    "budget_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Subcontratas/106.Topografia/Diedro/Presupuesto topo_ ina2014-007.pdf",
+    "specifications_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Compras/Cimentaciones/IN 20141014 MTGF _  Recuentos actualizados _ Cimentaciones especiales Elche.pdf",
+    "drawings_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Planos/S-15E-ESP.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "dependency_mapper",
+      "context_builder",
+      "legal_analyzer",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "analyze_legal_terms",
+      "required_args": [
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Legal"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-203",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-009604 LAV Monforte-Murcia",
+    "sector": "High-Speed Rail",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

@@ -217,6 +217,13 @@ async def _ensure_rls_and_audit_compatibility(conn) -> None:
     if await _table_exists(conn, "audit_logs"):
         if not await _column_exists(conn, "audit_logs", "user_id"):
             await conn.execute(text('ALTER TABLE public.audit_logs ADD COLUMN user_id UUID'))
+        if not await _column_exists(conn, "audit_logs", "changes"):
+            await conn.execute(
+                text(
+                    "ALTER TABLE public.audit_logs "
+                    "ADD COLUMN changes JSONB DEFAULT '{}'::jsonb"
+                )
+            )
         if not await _column_exists(conn, "audit_logs", "created_at"):
             await conn.execute(
                 text(
