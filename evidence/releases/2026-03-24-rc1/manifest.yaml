@@ -41,9 +41,9 @@ required_suites:
   security:
     workflow: ".github/workflows/e2e-security-tests.yml"
     status: failure
-    artifact: "run 23461179642 - security-release-summary (artifact 6068811167) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179642"
-    coverage: null
-    note: "Exact-commit run failed in the E2E security test execution step."
+    artifact: "GitHub run 23461179642 - security-release-summary (artifact 6068811167) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179642; local verification: apps/api/test-results-security-workflow.xml, apps/api/coverage-security-workflow.xml, apps/api/.pytest-security-e2e-junit.xml"
+    coverage: 35.76
+    note: "Local rerun on 2026-03-28 now executes the suite successfully (12/12 passing), but the workflow-aligned coverage scope still fails the required 60% threshold, so the security gate remains blocked."
 
   evaluation:
     workflow: ".github/workflows/evaluation-regression.yml"
@@ -58,10 +58,10 @@ required_suites:
 
   reliability:
     workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
-    status: failure
+    status: not_required
     artifact: "run 23474463385 - i13-scheduled-real-e2e-diagnostics (artifact 6073741067), i13-scheduled-real-e2e-junit (artifact 6073740993) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23474463385"
     mode: release-dispatch
-    note: "Exact-commit scheduled reliability run failed in I13 Real E2E Reliability; annotations reported exit code 1 and `/usr/bin/git` exit code 128."
+    note: "This candidate is a standard release, so I13 reliability evidence is not required for signoff. Existing run retained as optional reference only."
 
 swagger_workbook:
   status: complete

@@ -25,4 +25,24 @@ describe("useAuthStore", () => {
     expect(cleared.token).toBeNull();
     expect(cleared.tenantId).toBeNull();
   });
+
+  it("overwrites prior credentials when a new auth payload arrives", () => {
+    const state = useAuthStore.getState();
+    state.setAuth({ token: "token-123", tenantId: "tenant-1" });
+    state.setAuth({ token: "token-456", tenantId: "tenant-2" });
+
+    const updated = useAuthStore.getState();
+    expect(updated.token).toBe("token-456");
+    expect(updated.tenantId).toBe("tenant-2");
+  });
+
+  it("supports clearing credentials by setting null auth values", () => {
+    const state = useAuthStore.getState();
+    state.setAuth({ token: "token-123", tenantId: "tenant-1" });
+    state.setAuth({ token: null, tenantId: null });
+
+    const updated = useAuthStore.getState();
+    expect(updated.token).toBeNull();
+    expect(updated.tenantId).toBeNull();
+  });
 });

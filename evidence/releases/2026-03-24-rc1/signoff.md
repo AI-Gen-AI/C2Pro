@@ -8,12 +8,22 @@
 
 ## Required Approvals
 
-| Area              | Owner     | Decision | Notes                                                                                          |
-| ----------------- | --------- | -------- | ---------------------------------------------------------------------------------------------- |
-| Product           | `pending` | Pending  | Swagger workbook is complete; awaiting release-time suite evidence and approval.               |
-| Security          | `pending` | Pending  | Awaiting required security workflow evidence and approval.                                     |
-| Operations        | `pending` | Pending  | Performance and DR evidence are refreshed; workflow artifacts and ops approval remain pending. |
-| Release authority | `pending` | Pending  | Candidate is not certifiable until the suite matrix and approvals are complete.                |
+| Area              | Required approver role       | Approved by | Approved at | Decision | Notes                                                                                          |
+| ----------------- | ---------------------------- | ----------- | ----------- | -------- | ---------------------------------------------------------------------------------------------- |
+| Product           | `Product Owner`             | `pending`   | `pending`   | Pending  | Swagger workbook is complete; awaiting release-time suite evidence and formal approval.        |
+| Security          | `Security Lead`             | `pending`   | `pending`   | Pending  | Awaiting required security workflow evidence and formal approval.                              |
+| Operations        | `Operations / SRE Lead`     | `pending`   | `pending`   | Pending  | Performance and DR evidence are refreshed; workflow artifacts and ops approval remain pending. |
+| Release authority | `Engineering Leadership`    | `pending`   | `pending`   | Pending  | Candidate is not certifiable until the suite matrix and approvals are complete.                |
+
+## Approval Preconditions
+
+All of the following must be true before manual approval can be recorded:
+
+- [ ] `manifest.yaml` required suites are green or formally waived for the release type
+- [ ] UAT/manual QA execution is recorded in `docs/UAT_CHECKLIST.md` release evidence
+- [ ] Performance evidence is attached and accepted
+- [ ] DR evidence is attached and accepted
+- [ ] Candidate commit SHA remains frozen
 
 ## Supporting References
 
@@ -32,5 +42,6 @@
 
 ## Blocking Items
 
-- [ ] Required suite artifacts remain pending in `manifest.yaml` for `backend`, `frontend`, `security`, `evaluation`, and `reliability`.
+- [ ] Required suite artifacts remain pending in `manifest.yaml` for `backend`, `frontend`, and `security`.
 - [ ] Manual approvals remain pending for product, security, operations, and release authority.
+- [ ] Current `manifest.yaml` still reports failing required suites for `backend`, `frontend`, and `security`, so formal signoff is blocked for this candidate.

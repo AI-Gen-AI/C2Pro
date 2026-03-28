@@ -40,8 +40,8 @@ The C2Pro project has achieved excellent maturity in its core domain logic and i
 
 ### 🌐 Frontend & UI/UX (DEV-FE)
 
-- [ ] **[FE-001]** | File: `FRONTEND_TESTING_PLAN.md` | Status: Pending | **Description:** Setup Vitest, Playwright, and MSW for all frontend modules.
-- [ ] **[FE-002]** | File: `FRONTEND_TESTING_PLAN.md` | Status: Pending | **Description:** Write and validate 30 Authentication tests (Auth flow).
+- [x] **[FE-001]** | File: `FRONTEND_TESTING_PLAN.md` | Status: Complete | **Description:** Vitest, Playwright, and MSW are configured for the active frontend app and verified with typecheck, MSW-backed Vitest runs, and Playwright test discovery.
+- [x] **[FE-002]** | File: `FRONTEND_TESTING_PLAN.md` | Status: Complete | **Description:** Thirty frontend authentication tests are implemented and verified in the stable auth slice (`30/30` passing).
 - [ ] **[FE-003]** | File: `MOCKUP_REVIEW_SUMMARY.md` | Status: Pending | **Description:** Implement `react-pdf` for the real Evidence Viewer in the UI.
 - [ ] **[FE-004]** | File: `MOCKUP_REVIEW_SUMMARY.md` | Status: Pending | **Description:** Implement `dnd-kit` for Stakeholder Map drag & drop functionality.
 - [ ] **[FE-005]** | File: `MOCKUP_REVIEW_SUMMARY.md` | Status: Pending | **Description:** Connect all UI views to the real Backend API (currently using mocks in some areas).
@@ -54,7 +54,7 @@ The C2Pro project has achieved excellent maturity in its core domain logic and i
 
 ### 📝 Documentation & Compliance (DOC)
 
-- [ ] **[DOC-001]** | File: `signoff.md` | Status: Pending | **Description:** Obtain formal approvals for Product, Security, and Operations in the release bundle.
+- [ ] **[DOC-001]** | File: `signoff.md` | Status: Blocked | **Description:** Formal approvals still require named human approvers and a release bundle with passing required suites; the signoff artifact is prepared but not approvable yet.
 - [ ] **[DOC-002]** | File: `C2PRO_TDD_BACKLOG_v1.0.md` | Status: Pending | **Description:** Implement remaining P3 (Low Priority) Unit Tests (44 tests).
 - [ ] **[DOC-003]** | File: `MASTER_AUDIT_PLAN.md` | Status: In Progress | **Description:** Sync all TDD Backlog counts with the Exhaustive Suite Index v1.1.1.
 

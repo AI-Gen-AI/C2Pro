@@ -52,6 +52,17 @@ describe("ProtectedRoute", () => {
     expect(push).toHaveBeenCalledWith("/sign-in");
   });
 
+  it("does not render protected children while redirecting an unauthenticated user", () => {
+    authState = { isAuthenticated: false, isLoading: false };
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Secret</div>
+      </ProtectedRoute>,
+    );
+
+    expect(screen.queryByText("Secret")).not.toBeInTheDocument();
+  });
+
   it("does not redirect while auth is still resolving after a token loss", () => {
     authState = { isAuthenticated: false, isLoading: true };
     renderWithProviders(
@@ -72,5 +83,16 @@ describe("ProtectedRoute", () => {
     );
 
     expect(screen.getByText("Secret")).toBeInTheDocument();
+  });
+
+  it("does not redirect authenticated users", () => {
+    authState = { isAuthenticated: true, isLoading: false };
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Secret</div>
+      </ProtectedRoute>,
+    );
+
+    expect(push).not.toHaveBeenCalled();
   });
 });
