@@ -126,4 +126,76 @@ describe("AuthSync integration", () => {
       tenantId: null,
     });
   });
+
+  it("does not clear query cache when the tenant stays the same", async () => {
+    useAuthStore.setState({ token: "token-123", tenantId: "tenant-uuid-1" });
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: "token-123",
+        tenantId: "tenant-uuid-1",
+      });
+    });
+    expect(queryClientClearSpy).not.toHaveBeenCalled();
+  });
+
+  it("stores a null tenant id when Clerk organization metadata lacks a mapped tenant", async () => {
+    mockTenantUuid = null;
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: "token-123",
+        tenantId: null,
+      });
+    });
+  });
+
+  it("routes token retrieval exceptions through the auth failure path", async () => {
+    getTokenMock.mockRejectedValue(new Error("token refresh failed"));
+    useAuthStore.setState({ token: "stale-token", tenantId: "tenant-uuid-1" });
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
+    });
+    expect(useAuthStore.getState()).toMatchObject({
+      token: null,
+      tenantId: null,
+    });
+  });
+
+  it("does not report a 401 when the user is simply signed out", async () => {
+    mockIsSignedIn = false;
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: null,
+        tenantId: null,
+      });
+    });
+    expect(handleAuthErrorStatus).not.toHaveBeenCalled();
+  });
 });

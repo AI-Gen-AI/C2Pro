@@ -8,12 +8,20 @@
 
 ## Required Approvals
 
-| Area              | Owner    | Decision         | Notes     |
-| ----------------- | -------- | ---------------- | --------- |
-| Product           | `<name>` | Approve / Reject | `<notes>` |
-| Security          | `<name>` | Approve / Reject | `<notes>` |
-| Operations        | `<name>` | Approve / Reject | `<notes>` |
-| Release authority | `<name>` | Approve / Reject | `<notes>` |
+| Area              | Required approver role    | Approved by | Approved at | Decision         | Notes     |
+| ----------------- | ------------------------- | ----------- | ----------- | ---------------- | --------- |
+| Product           | `<role>`                  | `<name>`    | `<datetime>`| Approve / Reject | `<notes>` |
+| Security          | `<role>`                  | `<name>`    | `<datetime>`| Approve / Reject | `<notes>` |
+| Operations        | `<role>`                  | `<name>`    | `<datetime>`| Approve / Reject | `<notes>` |
+| Release authority | `<role>`                  | `<name>`    | `<datetime>`| Approve / Reject | `<notes>` |
+
+## Approval Preconditions
+
+- [ ] `manifest.yaml` required suites are green or formally waived
+- [ ] UAT/manual QA execution record is attached
+- [ ] Performance evidence is attached
+- [ ] DR evidence is attached
+- [ ] Candidate commit SHA is frozen
 
 ## Supporting References
 

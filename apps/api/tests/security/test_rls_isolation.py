@@ -148,7 +148,8 @@ async def test_user_cannot_upload_document_to_other_tenant_project(
         # The request should be rejected. The API should respond with a 404 Not Found
         # because the project is not visible to User B, thus DocumentService._get_project_tenant_id fails.
         assert response.status_code == 404
-        assert response.json()["detail"] in {"Project not found", "Not Found"}
+        detail = response.json().get("detail", "")
+        assert "Project not found" in detail or detail == "Not Found"
 
     finally:
         # Clean up: delete the test data using superuser connection

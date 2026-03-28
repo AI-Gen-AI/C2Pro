@@ -1,9 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  apiClient,
-  orvalApiClient,
-  resetAuthFailureStateForTests,
-} from "./client";
+
+const mockedAxiosClient = vi.hoisted(() => {
+  const requestHandlers: Array<{
+    fulfilled?: (config: { headers?: Record<string, string> }) => unknown;
+  }> = [];
+  const responseHandlers: Array<{
+    rejected?: (error: { response?: { status?: number } }) => Promise<never>;
+  }> = [];
+
+  return {
+    request: vi.fn(),
+    interceptors: {
+      request: {
+        handlers: requestHandlers,
+        use: vi.fn(
+          (fulfilled: (config: { headers?: Record<string, string> }) => unknown) => {
+            requestHandlers.push({ fulfilled });
+            return requestHandlers.length - 1;
+          },
+        ),
+      },
+      response: {
+        handlers: responseHandlers,
+        use: vi.fn(
+          (
+            _fulfilled: ((response: unknown) => unknown) | undefined,
+            rejected: ((error: { response?: { status?: number } }) => Promise<never>) | undefined,
+          ) => {
+            responseHandlers.push({ rejected });
+            return responseHandlers.length - 1;
+          },
+        ),
+      },
+    },
+  };
+});
+
+const mockedAxiosModule = vi.hoisted(() => ({
+  create: vi.fn(() => mockedAxiosClient),
+}));
 
 const mockedStore = vi.hoisted(() => ({
   clear: vi.fn(),
@@ -19,6 +54,17 @@ const mockedEnv = vi.hoisted(() => ({
 }));
 
 const mockedToast = vi.hoisted(() => vi.fn());
+
+vi.mock("axios", () => ({
+  default: mockedAxiosModule,
+  AxiosError: class AxiosError extends Error {},
+}));
+
+import {
+  apiClient,
+  orvalApiClient,
+  resetAuthFailureStateForTests,
+} from "./client";
 
 mockedStore.getState.mockReturnValue({
   token: "token-123",
@@ -92,9 +138,7 @@ describe("apiClient auth interceptor", () => {
   });
 
   it("exports a callable Orval mutator that delegates through the shared axios client", async () => {
-    const requestSpy = vi
-      .spyOn(apiClient, "request")
-      .mockResolvedValue({ data: { ok: true } });
+    mockedAxiosClient.request.mockResolvedValue({ data: { ok: true } });
 
     await expect(
       orvalApiClient<{ ok: boolean }>({
@@ -103,7 +147,7 @@ describe("apiClient auth interceptor", () => {
       }),
     ).resolves.toEqual({ ok: true });
 
-    expect(requestSpy).toHaveBeenCalledWith(
+    expect(mockedAxiosClient.request).toHaveBeenCalledWith(
       expect.objectContaining({
         url: "/documents",
         method: "GET",
