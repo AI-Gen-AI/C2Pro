@@ -112,6 +112,60 @@ Many packages don't yet have prebuilt wheels for Python 3.13 on Windows and requ
 
 ---
 
+## ✅ Production-Like Benchmark Environment (Verified 2026-03-28)
+
+The local benchmark environment required for security validation is now available and running through Docker Compose on the developer workstation.
+
+**Verified runtime:**
+
+- `c2pro-api` on `http://localhost:8000`
+- `c2pro-postgres` on `localhost:5432`
+- `c2pro-redis` on `localhost:6379`
+- `c2pro-celery-worker`
+- Supporting local services: MinIO and Supabase containers
+
+**Verification performed:**
+
+- Docker stack is up and healthy for API, PostgreSQL, and Redis
+- Local PostgreSQL migration state is at Alembic head (`20260321_0002`)
+- API health endpoint previously responded successfully on the local runtime
+
+This environment is sufficient to satisfy the infrastructure prerequisite for production-like security benchmarking. The remaining benchmark work is execution and latency measurement, tracked separately under `ENV-002`.
+
+---
+
+## ✅ Security E2E Benchmark Run (ENV-002, Verified 2026-03-28)
+
+The multi-tenant isolation security E2E suite was executed against the local PostgreSQL test database and measured using JUnit per-test timing output.
+
+**Command context:**
+
+- Working directory: `apps/api`
+- Test database: `postgresql://postgres:postgres@localhost:5433/c2pro_test`
+- Suite: `tests/e2e/security/test_multi_tenant_isolation.py`
+
+**Results:**
+
+- Test cases executed: `12`
+- Pass rate: `12/12`
+- Average per-test latency: `4.798 s`
+- P95 per-test latency: `8.005 s`
+- Max per-test latency: `8.005 s`
+
+**Slowest cases:**
+
+- `test_001_tenant_a_cannot_read_tenant_b_project`: `8.005 s`
+- `test_003_tenant_a_cannot_update_tenant_b_project`: `6.179 s`
+- `test_008_concurrent_requests_tenant_isolation`: `6.142 s`
+
+**Benchmark evidence:**
+
+- JUnit timing artifact: `apps/api/.pytest-security-e2e-junit.xml`
+
+During benchmark execution, a startup lifecycle bug was discovered and fixed: the cached LangGraph app retained a closed checkpointer pool between application lifespans. The fix resets the cached graph app during shutdown so repeated test startup remains valid.
+
+---
+
 ## ✅ Recommended Path Forward
 
 ### Option 1: Use Python 3.11 (Easiest)
