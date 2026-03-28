@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
+from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
@@ -101,14 +102,18 @@ def _document_status_detail_for_polling(status: DocumentStatus) -> str:
     if status == DocumentStatus.PARSING:
         return "Document parsing is in progress. Analysis has not started."
     if status == DocumentStatus.PARSED:
-        return "Document parsing and RAG ingestion completed. Analysis must be triggered separately."
+        return (
+            "Document parsing and RAG ingestion completed. Analysis must be triggered separately."
+        )
     if status == DocumentStatus.ERROR:
         return "Document processing failed before analysis could start."
     return "Document ingestion is still in progress. Analysis has not started."
 
 
 # --- Dependency wiring ---
-def get_document_repository(db: AsyncSession = Depends(get_session)) -> SqlAlchemyDocumentRepository:
+def get_document_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyDocumentRepository:
     return SqlAlchemyDocumentRepository(session=db)
 
 
@@ -159,8 +164,13 @@ def get_rag_ingestion_service(
 def get_upload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
+    project_repo: SqlAlchemyProjectRepository = Depends(get_project_repository),
 ) -> UploadDocumentUseCase:
-    return UploadDocumentUseCase(document_repository=repo, storage_service=storage)
+    return UploadDocumentUseCase(
+        document_repository=repo,
+        storage_service=storage,
+        project_repository=project_repo,
+    )
 
 
 def get_get_document_use_case(
@@ -198,6 +208,7 @@ def get_list_documents_use_case(
 ) -> ListProjectDocumentsUseCase:
     return ListProjectDocumentsUseCase(document_repository=repo)
 
+
 def get_get_document_with_clauses_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
 ) -> GetDocumentWithClausesUseCase:
@@ -219,10 +230,12 @@ def get_parse_document_use_case(
         rag_ingestion_service=rag_ingestion,
     )
 
+
 def get_rag_service(
     db: AsyncSession = Depends(get_session),
 ) -> SqlAlchemyRagService:
     return SqlAlchemyRagService(db_session=db)
+
 
 def get_answer_rag_use_case(
     rag_service: SqlAlchemyRagService = Depends(get_rag_service),
@@ -239,7 +252,7 @@ def get_answer_rag_use_case(
 async def upload_document_for_processing(
     project_id: UUID,
     user_id: CurrentUserId,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     document_type: DocumentType = Form(...),
     file: UploadFile = File(...),
     upload_use_case: UploadDocumentUseCase = Depends(get_upload_use_case),
@@ -262,6 +275,7 @@ async def upload_document_for_processing(
         file=file,
         document_type=document_type,
         user_id=user_id,
+        tenant_id=tenant_id,
     )
 
     from src.core.tasks.ingestion_tasks import process_document_async
@@ -322,7 +336,11 @@ async def get_document_entities_endpoint(
 
     entities: list[DocumentEntityResponse] = []
     for clause in document.clauses:
-        evidence_location = clause.extracted_entities.get("evidence_location", {}) if clause.extracted_entities else {}
+        evidence_location = (
+            clause.extracted_entities.get("evidence_location", {})
+            if clause.extracted_entities
+            else {}
+        )
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,

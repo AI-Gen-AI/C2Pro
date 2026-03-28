@@ -28,8 +28,8 @@ The C2Pro project has achieved excellent maturity in its core domain logic and i
 
 ### 🏗️ Infrastructure & Environment (ENV)
 
-- [ ] **[ENV-001]** | File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` | Status: Pending | **Description:** Setup production-like environment for security benchmarks.
-- [ ] **[ENV-002]** | File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` | Status: Pending | **Description:** Run and measure p95 latency for E2E security suite.
+- [x] **[ENV-001]** | File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` | Status: Complete | **Description:** Production-like local Docker benchmark environment verified (`c2pro-api`, `c2pro-postgres`, `c2pro-redis`, `c2pro-celery-worker`, supporting MinIO/Supabase services).
+- [x] **[ENV-002]** | File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` | Status: Complete | **Description:** Security E2E suite executed on local PostgreSQL test stack with `12/12` passing and `p95 = 8.005s` per test case.
 - [ ] **[ENV-003]** | File: `signoff.md` | Status: Pending | **Description:** Refresh Performance and Disaster Recovery (DR) evidence.
 
 ### 💻 Backend & Core AI (DEV-BK)

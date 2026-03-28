@@ -271,14 +271,16 @@ async def ensure_checkpointer_ready() -> None:
 
 async def close_checkpointer_resources() -> None:
     """Close pooled DB resources used by the checkpointer on app shutdown."""
-    global _checkpointer_pool, _checkpointer_ready
+    global _checkpointer_pool, _checkpointer_ready, _graph_app
 
     if _checkpointer_pool is None:
+        _graph_app = None
         return
 
     await _checkpointer_pool.close()
     _checkpointer_pool = None
     _checkpointer_ready = False
+    _graph_app = None
 
 
 def _persist_graph_diagram(app) -> None:

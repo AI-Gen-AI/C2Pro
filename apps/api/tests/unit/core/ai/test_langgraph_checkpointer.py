@@ -19,6 +19,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
+from src.analysis.adapters.graph import workflow as workflow_module
 from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_workflow
 from src.config import settings
 
@@ -104,6 +105,22 @@ class TestLangGraphCheckpointer:
         assert app is not None
         assert app.checkpointer is not None
         assert app.checkpointer == checkpointer
+
+    async def test_close_checkpointer_resources_resets_cached_graph_app(self):
+        """Verify shutdown clears the cached graph app so the next lifespan rebuilds it."""
+        workflow_module._graph_app = None
+
+        app_before_shutdown = workflow_module.get_graph_app()
+        await workflow_module.ensure_checkpointer_ready()
+
+        await workflow_module.close_checkpointer_resources()
+
+        assert workflow_module._graph_app is None
+
+        app_after_shutdown = workflow_module.get_graph_app()
+
+        assert app_after_shutdown is not app_before_shutdown
+        assert app_after_shutdown.checkpointer is not app_before_shutdown.checkpointer
 
     async def test_checkpoint_query_performance(self, db_session):
         """Verify indexes exist for efficient checkpoint lookups."""

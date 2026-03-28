@@ -8,15 +8,23 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
-from src.config import settings # Keep settings for now, refactor later
+from src.config import settings  # Keep settings for now, refactor later
 from src.documents.domain.models import Document, DocumentType, DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
+from src.projects.ports.project_repository import ProjectRepository
+
 
 class UploadDocumentUseCase:
-    def __init__(self, document_repository: IDocumentRepository, storage_service: IStorageService):
+    def __init__(
+        self,
+        document_repository: IDocumentRepository,
+        storage_service: IStorageService,
+        project_repository: ProjectRepository,
+    ):
         self.document_repository = document_repository
         self.storage_service = storage_service
+        self.project_repository = project_repository
 
     async def execute(
         self,
@@ -24,6 +32,7 @@ class UploadDocumentUseCase:
         file: UploadFile,
         document_type: DocumentType,
         user_id: UUID,
+        tenant_id: UUID,
         metadata: Optional[dict] = None,
     ) -> Document:
         """
@@ -45,13 +54,11 @@ class UploadDocumentUseCase:
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. Allowed types: {', '.join(settings.allowed_document_types)}",
             )
-        
-        # 2. Get tenant_id (from project or current user's context)
-        # This dependency on Project.tenant_id needs to be handled via a port/repository in the Project module
-        # For now, we'll keep the call to document_repository's helper.
-        tenant_id = await self.document_repository.get_project_tenant_id(project_id)
-        if not tenant_id:
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+        # 2. Verify project exists and belongs to the current tenant (RLS enforcement)
+        project_exists = await self.project_repository.exists_by_id(project_id, tenant_id)
+        if not project_exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
         # 3. Create a new document domain entity
         new_document = Document(
@@ -59,7 +66,7 @@ class UploadDocumentUseCase:
             project_id=project_id,
             document_type=document_type,
             filename=file.filename,
-            upload_status=DocumentStatus.QUEUED, # Start as QUEUED as per new plan
+            upload_status=DocumentStatus.QUEUED,  # Start as QUEUED as per new plan
             parsed_at=None,
             parsing_error=None,
             # Other fields from the original Document model
@@ -70,7 +77,7 @@ class UploadDocumentUseCase:
 
         # 4. Add document to repository (this will create the ORM record)
         await self.document_repository.add(new_document)
-        await self.document_repository.commit() # Commit transaction for the new document record
+        await self.document_repository.commit()  # Commit transaction for the new document record
 
         # 5. Upload the file to storage using the document's ID
         file.file.seek(0)
@@ -80,7 +87,9 @@ class UploadDocumentUseCase:
 
         # 6. Update document record with storage URL
         await self.document_repository.update_storage_path(new_document.id, storage_path)
-        await self.document_repository.update_status(new_document.id, DocumentStatus.UPLOADED) # Mark as UPLOADED after successful storage
+        await self.document_repository.update_status(
+            new_document.id, DocumentStatus.UPLOADED
+        )  # Mark as UPLOADED after successful storage
         await self.document_repository.commit()
 
         # 7. Refresh the domain entity from repository to get latest state
