@@ -1,1888 +1,1899 @@
 # C2Pro MASTER BACKLOG & DOCUMENTATION AUDIT
+
 > **Unified Roadmap** | Generated on 2026-03-28
 
 ## 1. Documentation Registry & Health Check
-| File | Scope | Health | Status | Tasks |
-| :--- | :--- | :--- | :--- | :--- |
-| `.atl\skill-registry.md` | Current | ✅ | N/A | 0 |
-| `.atlskill-registry.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\agents.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\coding-style.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\development-workflow.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\git-workflow.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\hooks.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\patterns.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\performance.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\security.md` | Current | ✅ | N/A | 0 |
-| `.claude\rules\testing.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\api-design\SKILL.md` | Current | 🔄 | 422 }); | 12 |
-| `.claude\skills\backend-patterns\SKILL.md` | Current | ✅ | error.statusCode }) | 0 |
-| `.claude\skills\c2pro-context-analyzer\c2pro-context-analyzer\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\c2pro-doc-analyzer\SKILL.md` | Current | 🔄 | N/A | 5 |
-| `.claude\skills\coding-standards\SKILL.md` | Current | ✅ | 'active' | 'resolved' | 'closed' | 0 |
-| `.claude\skills\documentation-lookup\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\e2e-testing\SKILL.md` | Current | ✅ | ** PASSING / FAILING | 0 |
-| `.claude\skills\eval-harness\SKILL.md` | Current | 🔄 | READY FOR REVIEW | 11 |
-| `.claude\skills\python-patterns\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\python-testing\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\security-review\SKILL.md` | Current | 🔄 | 403 } | 60 |
-| `.claude\skills\strategic-compact\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\tdd-workflow\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.claude\skills\verification-loop\SKILL.md` | Current | ✅ | N/A | 0 |
-| `.github\CICD_SETUP.md` | Current | 🔄 | N/A | 4 |
-| `.github\agents\ai.orchestration.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\architect.auditor.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\backend.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\doc.agent.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\frontend.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\infrastructure.agent.md` | Current | ✅ | N/A | 0 |
-| `.github\agents\security.auditor.agent.md` | Current | ✅ | N/A | 0 |
-| `CLAUDE.md` | Current | ✅ | N/A | 0 |
-| `COMPLETE_MD_AUDIT.md` | Current | ✅ | N/A | 0 |
-| `Critical arquitecture.md` | Current | ✅ | N/A | 0 |
-| `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` | Current | 🔄 | ** ✅ **GREEN PHASE COMPLETE** - Tests Ready to Run | 7 |
-| `FRONTEND_TESTING_PLAN.md` | Current | 🔄 | 'draft' } | 18 |
-| `GITHUB_ACTIONS_SETUP_COMPLETE.md` | Current | 🔄 | N/A | 1 |
-| `MASTER_AUDIT_PLAN.md` | Current | 🔄 | Pending | **Description:** Setup production-like environment for security benchmarks. | 17 |
-| `NEXT_STEPS_TO_RUN_TESTS.md` | Current | 🔄 | ** 🟡 Environment Setup Incomplete | 6 |
-| `QUICK_SESSION_SUMMARY.md` | Current | 🔄 | ** ✅ **Production Ready** (pending DB setup) | 2 |
-| `QUICK_START.md` | Current | ✅ | N/A | 0 |
-| `README.md` | Current | 🔄 | N/A | 7 |
-| `REFINED_AUDIT_REPORT.md` | Current | ✅ | N/A | 0 |
-| `RUN_TESTS_STATUS.md` | Current | ✅ | ** ⚠️ **BLOCKED - Test Fixture/Schema Issues (DB reachable)** | 0 |
-| `SECRETS.md` | Current | ✅ | N/A | 0 |
-| `SECURITY_REMEDIATION_CHECKLIST.md` | Current | 🔄 | N/A | 37 |
-| `SESSION_PROGRESS_2026-02-07.md` | Current | ✅ | ** ✅ COMPLETE | 0 |
-| `SKILL_c2pro-patterns.md` | Current | 🔄 | N/A | 5 |
-| `Skills\.agents\skills\mcp-builder\SKILL.md` | Current | ✅ | N/A | 0 |
-| `Skills\.agents\skills\mcp-builder\reference\evaluation.md` | Current | ✅ | N/A | 0 |
-| `Skills\.agents\skills\mcp-builder\reference\mcp_best_practices.md` | Current | ✅ | N/A | 0 |
-| `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` | Current | 🔄 | N/A | 39 |
-| `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` | Current | 🔄 | N/A | 37 |
-| `TDD_GREEN_PHASE_STATUS.md` | Current | ✅ | N/A | 0 |
-| `TESTING.md` | Current | ✅ | N/A | 0 |
-| `TEST_SUITES_COMPLETED_STATUS.md` | Current | 🔄 | ** ✅ **EXCELLENT PROGRESS** | 5 |
-| `agents.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\httpcore-1.0.9.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\httpx-0.27.0.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\huggingface_hub\templates\datasetcard_template.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\huggingface_hub\templates\modelcard_template.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\idna-3.11.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\langsmith\cli\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\langsmith\sandbox\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\mypyc\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\mypyc\doc\cpython-timings.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\mypyc\doc\dev-intro.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\mypyc\doc\future.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\mypyc\external\googletest\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\_core\src\npysort\x86-simd-sort\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\fft\pocketfft\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\distributions\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\mt19937\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\pcg64\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\philox\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\sfc64\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\splitmix64\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\numpy\random\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\pymupdf-1.26.7.dist-info\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\starlette-0.36.3.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\uuid_utils-0.14.0.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv-tests\Lib\site-packages\uvicorn-0.27.1.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\httpcore-1.0.9.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\httpx-0.27.0.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\huggingface_hub\templates\datasetcard_template.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\huggingface_hub\templates\modelcard_template.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\idna-3.11.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\langsmith\cli\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\langsmith\sandbox\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\mypyc\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\mypyc\doc\cpython-timings.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\mypyc\doc\dev-intro.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\mypyc\doc\future.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\mypyc\external\googletest\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\pymupdf-1.26.7.dist-info\README.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\starlette-0.36.3.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\uuid_utils-0.14.0.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\.venv311\Lib\site-packages\uvicorn-0.27.1.dist-info\licenses\LICENSE.md` | Current | ✅ | N/A | 0 |
-| `apps\api\.pytest_cache_local\README.md` | Current | ✅ | N/A | 0 |
-| `apps\api\README.md` | Current | 🔄 | N/A | 7 |
-| `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` | Current | 🔄 | N/A | 10 |
-| `apps\api\alembic\database.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\coherence\README.md` | Current | ✅ | on-track. End date: 2025-12-31.", | 0 |
-| `apps\api\src\core\CACHE_USAGE.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\CE-S2-009_IMPLEMENTATION_SUMMARY.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ERROR_HANDLING_EXAMPLES.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\CE-S2-008_IMPLEMENTATION_SUMMARY.md` | Current | 🔄 | N/A | 1 |
-| `apps\api\src\core\ai\MODEL_ROUTER_USAGE.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` | Current | 🔄 | N/A | 6 |
-| `apps\api\src\core\ai\README.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\README_FLASH.md` | Current | 🔄 | N/A | 1 |
-| `apps\api\src\core\ai\README_LLM_CLIENT.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\README_PROMPT_CACHE.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\prompts\v1\clause_extraction.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\mcp\README.md` | Current | ✅ | N/A | 0 |
-| `apps\api\src\core\privacy\ANONYMIZER_USAGE_GUIDE.md` | Current | ✅ | N/A | 0 |
-| `apps\api\tests\FIXTURES_IMPLEMENTATION_SUMMARY.md` | Current | ✅ | ** Base Fixtures Implemented ✅ | 0 |
-| `apps\api\tests\README.md` | Current | ✅ | N/A | 0 |
-| `apps\api\tests\coherence\fixtures\DEVELOPMENT_STATUS.md` | Current | ✅ | N/A | 0 |
-| `apps\api\tests\security\SECURITY_TESTS_STATUS.md` | Current | 🔄 | N/A | 34 |
-| `apps\web\.clerk\.tmp\README.md` | Current | ✅ | N/A | 0 |
-| `apps\web\README_SETUP.md` | Current | ✅ | ** ✅ Complete | 0 |
-| `context\README.md` | Current | ✅ | N/A | 0 |
-| `context\experimental\README.md` | Current | ✅ | Current | 0 |
-| `context\working\BOOTSTRAP_AUTH_LOOKUP_DRAFT_2026-03-19.md` | Current | ✅ | Draft | 0 |
-| `context\working\DB_MIGRATION_RECONCILIATION_PLAN_2026-03-18.md` | Current | ✅ | Complete | 0 |
-| `context\working\agents\agent_backend_tdd.md` | Current | ✅ | N/A | 0 |
-| `context\working\agents\agent_devops.md` | Current | ✅ | N/A | 0 |
-| `context\working\agents\agent_doc.md` | Current | ✅ | N/A | 0 |
-| `context\working\agents\agent_frontend_tdd.md` | Current | ✅ | N/A | 0 |
-| `context\working\agents\agent_planner.md` | Current | ✅ | Plan ready. @qa-agent, please begin Step 2._ | 0 |
-| `context\working\agents\agent_product.md` | Current | ✅ | Story ready for `@planner-agent` to architect and `@qa-agent` to test.* | 0 |
-| `context\working\agents\agent_qa.md` | Current | ✅ | N/A | 0 |
-| `context\working\agents\agent_security.md` | Current | ✅ | N/A | 0 |
-| `diseño arquitectura.md` | Current | ✅ | N/A | 0 |
-| `docs\ARCHITECTURE_INDEX.md` | Current | ✅ | ** Current | 0 |
-| `docs\C2PRO_MEMORY_PROTOCOL.md` | Current | ✅ | N/A | 0 |
-| `docs\CASE_CREATION_GUIDELINES.md` | Current | 🔄 | N/A | 15 |
-| `docs\COVERAGE_IMPROVEMENT_PLAN.md` | Current | 🔄 | N/A | 4 |
-| `docs\DECISION_LOG.md` | Current | ✅ | ** Proposed | Accepted | Deprecated | Superseded | 0 |
-| `docs\MASTER_DEVELOPMENT_STATUS.md` | Current | ✅ | N/A | 0 |
-| `docs\ORCHESTRATION_REPORT_G6-02.md` | Current | ✅ | N/A | 0 |
-| `docs\ORCHESTRATION_REPORT_G6-02_CORE100.md` | Current | ✅ | N/A | 0 |
-| `docs\ORCHESTRATION_REPORT_G6-02_CORE25.md` | Current | ✅ | N/A | 0 |
-| `docs\README.md` | Current | ✅ | N/A | 0 |
-| `docs\RELEASE_CRITERIA.md` | Current | 🔄 | N/A | 1 |
-| `docs\SLA_TARGETS.md` | Current | ✅ | N/A | 0 |
-| `docs\TASK_DOC_ADAPTER_COVERAGE.md` | Current | ✅ | N/A | 0 |
-| `docs\TEST_COVERAGE_ISSUES_REPORT.md` | Current | ✅ | N/A | 0 |
-| `docs\UAT_CHECKLIST.md` | Current | ✅ | N/A | 0 |
-| `docs\api\README.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` | Current | ✅ | ** APPROVED — Ready for Sprint Planning | 0 |
-| `docs\architecture\FLOW_DIAGRAMS.md` | Current | ✅ | ** Current (reflects code after Phases 1–5) | 0 |
-| `docs\architecture\LANGGRAPH_CHECKPOINTING.md` | Current | ✅ | ** ✅ Implemented | 0 |
-| `docs\architecture\README.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\decisions\001-modular-monolith-architecture.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\decisions\002-supabase-for-mvp.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\decisions\003-ai-architecture.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\decisions\004-frontend-layer-rules.md` | Current | ✅ | ** Accepted | 0 |
-| `docs\architecture\decisions\005-three-layer-sc-test-strategy.md` | Current | ✅ | ** Accepted | 0 |
-| `docs\architecture\decisions\006-post-reorganization-architecture.md` | Current | ✅ | ** Accepted | 0 |
-| `docs\architecture\decisions\ADR-004-circuit-breakers.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\decisions\README.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\diagrams\c2pro_master_flow_diagram_v2.2.1.md` | Current | ✅ | N/A | 0 |
-| `docs\architecture\notes\ARCH_NOTE_REDIS_EVENT_BUS_CONTRACT_2026-02-15.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\README.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\samples\Convesratiopn_deep.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\samples\España\AUDIT_ESPAÑA_DATASET.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\samples\conversation gemini.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\samples\conversationCodex.md` | Current | ✅ | N/A | 0 |
-| `docs\assets\schedules\README.md` | Current | ✅ | N/A | 0 |
-| `docs\audit\C2PRO_TECHNICAL_AUDIT_REPORT.md` | Current | 🔄 | N/A | 1 |
-| `docs\audit\REAL_DATA_REMEDIATION_CHECKLIST_2026-03-18.md` | Current | ✅ | N/A | 0 |
-| `docs\audit\REAL_DATA_RUNTIME_AUDIT_2026-03-18.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\API_AUDIT_BACKEND_FRONTEND_2026-03-20.md` | Current | ✅ | `Substantially implemented` | 0 |
-| `docs\audits\API_REMEDIATION_CHECKLIST_2026-03-20.md` | Current | ✅ | "ok"}` ✅ (aligns with MSW mock and frontend test expectations) | 0 |
-| `docs\audits\DEMO_VS_PROD_CONTRACT.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\DOCS_AUDIT_2026-02-13.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\DOCUMENTATION_AUDIT_2026-03-09.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PHASE1_BACKEND_ENDPOINT_INVENTORY.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PHASE1_FRONTEND_PAGE_INVENTORY.md` | Current | ✅ | "parsed", clauses: 47, ... }, | 0 |
-| `docs\audits\PHASE1_PAGE_ENDPOINT_MATRIX.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PHASE1_REQUIRED_ENDPOINTS.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PHASE2_COMPONENT_AUDIT.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PHASE2_DUPLICATE_CONSOLIDATION.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` | Current | 🔄 | ** FINAL | 6 |
-| `docs\audits\README.md` | Current | ✅ | N/A | 0 |
-| `docs\audits\REORGANIZATION_PLAN_CHECKLIST.md` | Current | 🔄 | N/A | 1 |
-| `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` | Current | 🔄 | N/A | 33 |
-| `docs\audits\UX_AUDIT_REPORT_v1.0.md` | Current | ✅ | ** 100% Implemented & Tested | 0 |
-| `docs\audits\multi_agent_qa_audit_report.md` | Current | ✅ | N/A | 0 |
-| `docs\coherence_engine\CE-26_ENGINE_V2_INTEGRATION.md` | Current | ✅ | N/A | 0 |
-| `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` | Current | 🔄 | ✅ COMPLETE** (2026-03-28) | 30 |
-| `docs\coherence_engine\PHASE_2_VERIFICATION.md` | Current | ✅ | N/A | 0 |
-| `docs\coherence_engine\README.md` | Current | ✅ | N/A | 0 |
-| `docs\coherence_engine\coherence_langgraph_subgraph_v3.md` | Current | ✅ | {status}", | 0 |
-| `docs\coherence_engine\coherence_score_restructuring_v3.md` | Current | ✅ | N/A | 0 |
-| `docs\coherence_engine\deterministic_rules_engine_v3.md` | Current | ✅ | '{status}'", | 0 |
-| `docs\coherence_engine\deterministic_rules_v3_final.md` | Current | ✅ | '{status}'", {"status": status}) | 0 |
-| `docs\coherence_engine\scoring_methodology_v1.md` | Current | ✅ | APPROVED | 0 |
-| `docs\internal\LESSONS_LEARNED.md` | Current | 🔄 | N/A | 5 |
-| `docs\internal\README.md` | Current | ✅ | N/A | 0 |
-| `docs\internal\RELEASE_SIGNOFF_POLICY.md` | Current | 🔄 | <pass|failure> | 14 |
-| `docs\internal\SWAGGER_ENDPOINT_WORKBOOK.md` | Current | ✅ | Updated 2026-03-27 - **G7-01 Complete** | 0 |
-| `docs\performance\README.md` | Current | ✅ | N/A | 0 |
-| `docs\performance\baseline.md` | Current | 🔄 | N/A | 3 |
-| `docs\performance\sql_optimization.md` | Current | ✅ | N/A | 0 |
-| `docs\planning\COHERENCE_SCORE_ENHANCEMENT_ANALYSIS.md` | Current | ✅ | N/A | 0 |
-| `docs\planning\COHERENCE_SCORE_IMPLEMENTATION_PLAN.md` | Current | ✅ | N/A | 0 |
-| `docs\planning\EXECUTIVE_STATUS_REPORT_2026-03-19.md` | Current | ✅ | N/A | 0 |
-| `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` | Current | 🔄 | N/A | 3 |
-| `docs\planning\LANGGRAPH_AUDIT_REPORT_2026-03-21.md` | Current | ✅ | PASS (with recommendations) | 0 |
-| `docs\planning\MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md` | Current | ✅ | ** ACTIVE | 0 |
-| `docs\planning\PRODUCTION_READINESS_GATE_2026-03-19.md` | Current | 🔄 | `OPEN` | 1 |
-| `docs\planning\README.md` | Current | ✅ | N/A | 0 |
-| `docs\planning\ROADMAP_v2.4.0.md` | Current | 🔄 | ** Accepted | 30 |
-| `docs\planning\TASK_B3_LANGGRAPH_CHECKPOINTER_COMPLETION_REPORT.md` | Current | ✅ | `COMPLETE` (checkpoint persistence proven and full analysis flow restored) | 0 |
-| `docs\runbooks\AUTH_BOOTSTRAP_FALLBACK_POLICY.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` | Current | 🔄 | N/A | 6 |
-| `docs\runbooks\I13_REAL_E2E_INFRA_RUNBOOK.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\INSTRUCCIONES_TESTS.md` | Current | 🔄 | N/A | 8 |
-| `docs\runbooks\POSTGRESQL_TESTS_CONFIG_REPORT.md` | Current | ✅ | Up About 1 hour (healthy) | 0 |
-| `docs\runbooks\README.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md` | Current | ✅ | - legacy prototype / reference-only | 0 |
-| `docs\runbooks\RUNBOOK_MIGRATION_HEALTH_CHECK_2026-02-15.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\RUNBOOK_TEST_INFRA_BOOTSTRAP_2026-02-15.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\SUPABASE_WINDOWS_CONFIG_REPORT.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\backup-restore.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\ci-cd-setup.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\incident-response.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\migrations\ce-p0-06.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\supabase\README.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\supabase\SETUP_INSTRUCTIONS.md` | Current | ✅ | N/A | 0 |
-| `docs\runbooks\supabase\testing.md` | Current | ✅ | N/A | 0 |
-| `docs\specifications\CONTRATOS_PUBLICOS.md` | Current | ✅ | N/A | 0 |
-| `docs\specifications\README.md` | Current | ✅ | N/A | 0 |
-| `docs\specifications\especificacion_tecnica.md` | Current | ✅ | N/A | 0 |
-| `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` | Current | 🔄 | ** Sprint 7 en progreso - TS-E2E-J2-001 GREEN Phase completada | 12 |
-| `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` | Current | 🔄 | ** Ready for Execution | 26 |
-| `docs\testing\C2PRO_TEST_SUITES_INDEX_v1.1.md` | Current | ✅ | N/A | 0 |
-| `docs\testing\FS1_AUTH_SYNC_TEST_PLAN.md` | Current | ✅ | N/A | 0 |
-| `docs\testing\PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` | Current | ✅ | N/A | 0 |
-| `docs\testing\README.md` | Current | ✅ | N/A | 0 |
-| `docs\testing\TEST_INVENTORY_2026-03-02.md` | Current | 🔄 | - `TI-176` remains skipped by design (`ProjectService not yet implemented`) | 1 |
-| `docs\testing\TEST_SUITE_REPORT.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\01-dashboard.md` | Current | 🔄 | N/A | 5 |
-| `docs\wireframes\02-projects.md` | Current | 🔄 | [ All ▼ ]  Type: [ All ▼ ]  Score: [ All ▼ ]     │   │     │ | 10 |
-| `docs\wireframes\03-evidence-viewer.md` | Current | 🔄 | Not Ordered  ⚠️ Risk: 5 days until due        │ │  │ | 10 |
-| `docs\wireframes\04-alerts.md` | Current | 🔄 | [ Open ▼ ]   Date: [ Last 7 days ▼ ]   [Reset]              │ │ | 10 |
-| `docs\wireframes\06-raci-matrix.md` | Current | 🔄 | 🤖 Auto-generated (Requires Review)                    │  │ │ | 12 |
-| `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` | Current | 🔄 | ** ✅ COMPLETADO Y LISTO PARA TESTING | 3 |
-| `docs\wireframes\CE-S2-010_CRITICAL_FIX_02_IMPLEMENTATION.md` | Current | ✅ | 'resolved', | 0 |
-| `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` | Current | 🔄 | ** ✅ **READY FOR DEPLOYMENT** | 15 |
-| `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_IMPLEMENTATION.md` | Current | ✅ | ** ✅ IMPLEMENTATION COMPLETE - PENDING TESTING | 0 |
-| `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` | Current | 🔄 | ** ✅ READY FOR APPROVAL | 9 |
-| `docs\wireframes\CE-S2-010_HIGHLIGHT_SYNC_IMPLEMENTATION.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` | Current | 🔄 | N/A | 17 |
-| `docs\wireframes\CE-S2-010_MOCKUP_REVIEW.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\CE-S2-010_MULTIPLE_DOCUMENTS_IMPLEMENTATION.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\CE-S2-010_OCR_BACKEND_INTEGRATION.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\CE-S2-010_PDF_VIEWER_IMPLEMENTATION.md` | Current | ✅ | N/A | 0 |
-| `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` | Current | 🔄 | ** ✅ PASSED (38.84s, no TypeScript errors) | 6 |
-| `docs\wireframes\CE-S2-010_VERIFICATION_REPORT.md` | Current | ✅ | ** ✅ **READY FOR MANUAL TESTING** | 0 |
-| `docs\wireframes\CE-S2-010_WIREFRAME_SPECS.md` | Current | ✅ | "resolved", resolution: {...} } | 0 |
-| `docs\wireframes\DOCUMENT_TABS_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\EXPORT_HIGHLIGHTS_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` | Current | 🔄 | N/A | 14 |
-| `docs\wireframes\README.md` | Current | ✅ | ** ✅ Complete | 0 |
-| `docs\wireframes\RECENT_DOCUMENTS_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\SPLIT_VIEW_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\VIEWER_PERSISTENCE_IMPLEMENTATION.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `docs\wireframes\WIREFRAMES_REVIEW_CE-S2-010.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-23-rc1\disaster-recovery.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-23-rc1\performance.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-23-rc1\signoff.md` | Current | 🔄 | N/A | 2 |
-| `evidence\releases\2026-03-24-rc1\disaster-recovery.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-24-rc1\performance.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-24-rc1\signoff.md` | Current | 🔄 | `Referenced in final signoff bundle` | 2 |
-| `evidence\releases\2026-03-24-rc1\swagger-verification-2026-03-26.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\2026-03-24-rc1\swagger-verification.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\README.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\_template\disaster-recovery.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\_template\performance.md` | Current | ✅ | N/A | 0 |
-| `evidence\releases\_template\signoff.md` | Current | ✅ | N/A | 0 |
-| `frontend_development_report.md` | Current | ✅ | N/A | 0 |
-| `gemini.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\mandatory-session-close\proposal.md` | Current | 🔄 | N/A | 3 |
-| `openspec\changes\mandatory-session-close\specs\session-lifecycle\spec.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap-v2\design.md` | Current | 🔄 | str  # PASS | FAIL | NA | 2 |
-| `openspec\changes\openspec-bootstrap-v2\proposal.md` | Current | 🔄 | N/A | 3 |
-| `openspec\changes\openspec-bootstrap-v2\specs\openspec\spec.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap-v2\tasks.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap-v2\verify-report.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap\design.md` | Current | 🔄 | N/A | 2 |
-| `openspec\changes\openspec-bootstrap\proposal.md` | Current | 🔄 | N/A | 3 |
-| `openspec\changes\openspec-bootstrap\specs\openspec\spec.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap\tasks.md` | Current | ✅ | N/A | 0 |
-| `openspec\changes\openspec-bootstrap\verify-report.md` | Current | ✅ | timed out/inconclusive | 0 |
-| `sandbox\README.md` | Current | ✅ | N/A | 0 |
-| `tests\AGENT_10_COMPLETE_SUMMARY.md` | Current | ✅ | ** COMPLETE | 0 |
-| `tests\README.md` | Current | ✅ | N/A | 0 |
-| `tests\TS-UA-DTO-ALL-001_IMPLEMENTATION_SUMMARY.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `tests\TS-UA-DTO-SER-001_IMPLEMENTATION_SUMMARY.md` | Current | ✅ | ** ✅ COMPLETED | 0 |
-| `tests\fixtures\files\README.md` | Current | ✅ | N/A | 0 |
-| `windows-setup.md` | Current | ✅ | N/A | 0 |
-| `FRONTEND_TESTING_PLAN_archived_20260210.md` | Legacy | ✅ | N/A | 0 |
-| `OLDAgents.md` | Legacy | ✅ | N/A | 0 |
-| `SECURITY_AUDIT_GOLDEN_DATASET.md` | Legacy | ✅ | N/A | 0 |
-| `apps\api\src\core\ai\prompts\v1\stakeholder_classification.md` | Legacy | ✅ | N/A | 0 |
-| `context\archive\legacy\C2PRO_FRONTEND_MASTER_PLAN_PHASE2.md` | Legacy | ✅ | ** Phase 2 Complete — Ready for Phase 3 Consolidation | 0 |
-| `context\archive\legacy\C2PRO_TECHNICAL_DESIGN_DOCUMENT_v3_0 (1).md` | Legacy | ✅ | ** APPROVED — Ready for Sprint Planning | 0 |
-| `context\archive\legacy\DIAGRAMA_FLUJO_PROYECTO.md` | Legacy | ✅ | Legacy | 0 |
-| `context\archive\legacy\mearmaid.md` | Legacy | ✅ | Legacy | 0 |
-| `docs\G6-06_LEGACY_ADAPTERS_RETIREMENT_PLAN.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\README.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\architecture\PLAN_ARQUITECTURA.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\architecture\PLAN_ARQUITECTURA_v2.1.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\architecture\decisions\001-monolith-first.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\changelogs\CHANGELOG_2026-01-06.md` | Legacy | 🔄 | N/A | 2 |
-| `docs\archive\duplicates\PHASE4_TDD_IMPLEMENTATION_ROADMAP_context.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\duplicates\START_HERE (1).md` | Legacy | 🔄 | ** ✅ APPROVED & READY | 7 |
-| `docs\archive\implementation\supabase\S0.2_S0.3_IMPLEMENTATION_SUMMARY.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md` | Legacy | 🔄 | N/A | 3 |
-| `docs\archive\migrations\MIGRATION_COMPLETED.md` | Legacy | 🔄 | N/A | 17 |
-| `docs\archive\migrations\MIGRATION_PLAN.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\migrations\SCHEMA_SYNC_COMPLETE_REPORT.md` | Legacy | ✅ | 'uploaded', 'parsing', 'parsed', 'error' | 0 |
-| `docs\archive\migrations\STAGING_DEPLOYMENT_REPORT_2026-01-07.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\migrations\migration_execution_plan.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\migrations\staging_pre_migration_state.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\C2PRO_FRONTEND_MASTER_PLAN_v1.md` | Legacy | ✅ | ** Implementation-ready. All 31 Phase 2 flags resolved or accepted with documented mitigations. Zero open critical or high-severity items. | 0 |
-| `docs\archive\planning\2026-02\FRONTEND_S1_S3_PLANNER_HANDOFF_2026-02-14.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\FRONTEND_S3_UPDATED_EXECUTION_AND_TEST_PLAN_2026-02-14.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\PLANNER_REPORT_I1_I14_2026-02-14.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\PLAN_I13_INFRA_CRITICAL_PATH_2026-02-15.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\PLAN_LANGGRAPH_ORCHESTRATION_I13_2026-02-15.md` | Legacy | ✅ | ** APPROVED by Human Lead | 0 |
-| `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` | Legacy | 🔄 | ** APPROVED | 10 |
-| `docs\archive\planning\2026-02\PLAN_REDIS_EVENT_BUS_IMPLEMENTATION_2026-02-15.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\TACTICAL_BOARD_S1_S3_2026-02-14.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md` | Legacy | 🔄 | N/A | 3 |
-| `docs\archive\planning\README.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` | Legacy | 🔄 | ** ✅ Ready to configure | 9 |
-| `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` | Legacy | 🔄 | ** ✅ Ready to implement | 12 |
-| `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` | Legacy | 🔄 | ** ✅ COMPLETE | 81 |
-| `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` | Legacy | 🔄 | ** Ready for Implementation | 41 |
-| `docs\archive\plans\Clerk\README.md` | Legacy | 🔄 | ** ✅ APPROVED & READY FOR IMPLEMENTATION | 27 |
-| `docs\archive\plans\Clerk\START_HERE.md` | Legacy | 🔄 | ** ✅ APPROVED & READY | 7 |
-| `docs\archive\plans\README.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\plans\tdd-testing\I10_STAKEHOLDER_RACI_HARDENING_IMPLEMENTATION_PLAN_2026-02-17.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` | Legacy | 🔄 | N/A | 6 |
-| `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` | Legacy | 🔄 | N/A | 10 |
-| `docs\archive\plans\tdd-testing\I9_PROCUREMENT_PLANNING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\plans\tdd-testing\TDD_MASTER_PLAN.md` | Legacy | ✅ | ** Ready for QA Agent Execution | 0 |
-| `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` | Legacy | 🔄 | ** Ready for Execution | 11 |
-| `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` | Legacy | 🔄 | ** RED - All tests should initially FAIL | 11 |
-| `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` | Legacy | 🔄 | ** GREEN - Write minimal code to pass tests | 20 |
-| `docs\archive\plans\ux-implementation\ARCHITECTURE_DIAGRAMS.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` | Legacy | 🔄 | ** Ready for Execution | 6 |
-| `docs\archive\plans\ux-implementation\PRODUCT_SUMMARY.md` | Legacy | ✅ | ** Ready for Development | 0 |
-| `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` | Legacy | 🔄 | ** Ready to Execute 🚀 | 97 |
-| `docs\archive\plans\ux-implementation\README.md` | Legacy | 🔄 | ** Complete | 12 |
-| `docs\archive\reports\2026-03\DATABASE_CONNECTION_ISSUE.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\DEVELOPMENT_STATUS.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\INFRASTRUCTURE_AUDIT_2026-03-07.md` | Legacy | ✅ | - test fixture is pinned to `localhost:5433/c2pro_test` | 0 |
-| `docs\archive\reports\2026-03\INFRASTRUCTURE_AUDIT_EXTENDED_COMMITTEE_2026-03-07.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\INFRASTRUCTURE_RECOVERY_TRACKER.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\MULTI_AGENT_COMMITTEE_REVIEW_2026-03-07.md` | Legacy | ✅ | OPERATIONAL | 0 |
-| `docs\archive\reports\2026-03\README.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` | Legacy | 🔄 | N/A | 6 |
-| `docs\archive\reports\2026-03\TEST_COVERAGE_ANALYSIS.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\TEST_STATUS_CHECKLIST_2026-03-08.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md` | Legacy | 🔄 | ** 🟡 IN PROGRESS (Installation Phase) | 1 |
-| `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` | Legacy | 🔄 | ** ✅ RED PHASE COMPLETE | 5 |
-| `docs\archive\reports\README.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\roadmaps\ROADMAP_v2.2.0.md` | Legacy | 🔄 | N/A | 71 |
-| `docs\archive\roadmaps\ROADMAP_v2.3.0.md` | Legacy | 🔄 | str = None | 41 |
-| `docs\archive\sprints\SPRINT_1_COMPLETED.md` | Legacy | 🔄 | N/A | 21 |
-| `docs\archive\sprints\SPRINT_1_PLAN.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\CACHE_IMPLEMENTATION_REVIEW_CE-S2-004.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` | Legacy | 🔄 | N/A | 10 |
-| `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` | Legacy | 🔄 | N/A | 10 |
-| `docs\archive\tasks\CE-P0-06_QUICK_START.md` | Legacy | 🔄 | N/A | 19 |
-| `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` | Legacy | 🔄 | N/A | 64 |
-| `docs\archive\tasks\CE-P0-06_SUMMARY.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` | Legacy | 🔄 | Ready for execution                            │ | 95 |
-| `docs\archive\tasks\CTO_GATES_QUICKSTART.md` | Legacy | 🔄 | N/A | 8 |
-| `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` | Legacy | 🔄 | ✅ ALL GATES PASSED | 16 |
-| `docs\archive\tasks\DELIVERABLES.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\ERROR_HANDLING_REVIEW_CE-S2-009.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\FIXTURES_STABILIZATION_REPORT.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md` | Legacy | 🔄 | ProjectStatus; | 4 |
-| `docs\archive\tasks\GATES_VALIDATION_REPORT_2026-01-07.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\GATE_IMPLEMENTATION_COMPLETE.md` | Legacy | ✅ | ✅ COMPLETE | 0 |
-| `docs\archive\tasks\PROMPT_TEMPLATES_REVIEW_CE-S2-008.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\TEST_ANALYSIS_REPORT.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` | Legacy | 🔄 | N/A | 7 |
-| `docs\archive\wireframes\aliases\alerts.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\wireframes\aliases\dashboard.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\wireframes\aliases\evidence.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\wireframes\aliases\projects.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\wireframes\aliases\raci.md` | Legacy | ✅ | N/A | 0 |
-| `docs\archive\wireframes\aliases\stakeholders.md` | Legacy | ✅ | N/A | 0 |
-| `docs\wireframes\05-stakeholders.md` | Legacy | 🔄 | ✅ Verified manually                                 │   │  │ | 10 |
-| `tests\golden\README.md` | Legacy | ✅ | N/A | 0 |
+
+| File                                                                                                                 | Scope   | Health | Status                                                                                                                                       | Tasks                                                                       |
+| :------------------------------------------------------------------------------------------------------------------- | :------ | :----- | :------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | ---------- | ---------- | --- |
+| `.atl\skill-registry.md`                                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.atlskill-registry.md`                                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\agents.md`                                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\coding-style.md`                                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\development-workflow.md`                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\git-workflow.md`                                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\hooks.md`                                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\patterns.md`                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\performance.md`                                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\security.md`                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\rules\testing.md`                                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\api-design\SKILL.md`                                                                                 | Current | 🔄     | 422 });                                                                                                                                      | 12                                                                          |
+| `.claude\skills\backend-patterns\SKILL.md`                                                                           | Current | ✅     | error.statusCode })                                                                                                                          | 0                                                                           |
+| `.claude\skills\c2pro-context-analyzer\c2pro-context-analyzer\SKILL.md`                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\c2pro-doc-analyzer\SKILL.md`                                                                         | Current | 🔄     | N/A                                                                                                                                          | 5                                                                           |
+| `.claude\skills\coding-standards\SKILL.md`                                                                           | Current | ✅     | 'active'                                                                                                                                     | 'resolved'                                                                  | 'closed'   | 0          |
+| `.claude\skills\documentation-lookup\SKILL.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\e2e-testing\SKILL.md`                                                                                | Current | ✅     | \*\* PASSING / FAILING                                                                                                                       | 0                                                                           |
+| `.claude\skills\eval-harness\SKILL.md`                                                                               | Current | 🔄     | READY FOR REVIEW                                                                                                                             | 11                                                                          |
+| `.claude\skills\python-patterns\SKILL.md`                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\python-testing\SKILL.md`                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\security-review\SKILL.md`                                                                            | Current | 🔄     | 403 }                                                                                                                                        | 60                                                                          |
+| `.claude\skills\strategic-compact\SKILL.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\tdd-workflow\SKILL.md`                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.claude\skills\verification-loop\SKILL.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\CICD_SETUP.md`                                                                                              | Current | 🔄     | N/A                                                                                                                                          | 4                                                                           |
+| `.github\agents\ai.orchestration.agent.md`                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\architect.auditor.agent.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\backend.agent.md`                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\doc.agent.agent.md`                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\frontend.agent.md`                                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\infrastructure.agent.md`                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `.github\agents\security.auditor.agent.md`                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `CLAUDE.md`                                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `COMPLETE_MD_AUDIT.md`                                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `Critical arquitecture.md`                                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                                                                                | Current | 🔄     | ** ✅ **GREEN PHASE COMPLETE\*\* - Tests Ready to Run                                                                                        | 7                                                                           |
+| `FRONTEND_TESTING_PLAN.md`                                                                                           | Current | 🔄     | 'draft' }                                                                                                                                    | 18                                                                          |
+| `GITHUB_ACTIONS_SETUP_COMPLETE.md`                                                                                   | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `MASTER_AUDIT_PLAN.md`                                                                                               | Current | 🔄     | Pending                                                                                                                                      | **Description:** Setup production-like environment for security benchmarks. | 17         |
+| `NEXT_STEPS_TO_RUN_TESTS.md`                                                                                         | Current | 🔄     | \*\* 🟡 Environment Setup Incomplete                                                                                                         | 6                                                                           |
+| `QUICK_SESSION_SUMMARY.md`                                                                                           | Current | 🔄     | ** ✅ **Production Ready\*\* (pending DB setup)                                                                                              | 2                                                                           |
+| `QUICK_START.md`                                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `README.md`                                                                                                          | Current | 🔄     | N/A                                                                                                                                          | 7                                                                           |
+| `REFINED_AUDIT_REPORT.md`                                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `RUN_TESTS_STATUS.md`                                                                                                | Current | ✅     | ** ⚠️ **BLOCKED - Test Fixture/Schema Issues (DB reachable)\*\*                                                                              | 0                                                                           |
+| `SECRETS.md`                                                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `SECURITY_REMEDIATION_CHECKLIST.md`                                                                                  | Current | 🔄     | N/A                                                                                                                                          | 37                                                                          |
+| `SESSION_PROGRESS_2026-02-07.md`                                                                                     | Current | ✅     | \*\* ✅ COMPLETE                                                                                                                             | 0                                                                           |
+| `SKILL_c2pro-patterns.md`                                                                                            | Current | 🔄     | N/A                                                                                                                                          | 5                                                                           |
+| `Skills\.agents\skills\mcp-builder\SKILL.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `Skills\.agents\skills\mcp-builder\reference\evaluation.md`                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `Skills\.agents\skills\mcp-builder\reference\mcp_best_practices.md`                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`                                                     | Current | 🔄     | N/A                                                                                                                                          | 39                                                                          |
+| `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md`                                                   | Current | 🔄     | N/A                                                                                                                                          | 37                                                                          |
+| `TDD_GREEN_PHASE_STATUS.md`                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `TESTING.md`                                                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `TEST_SUITES_COMPLETED_STATUS.md`                                                                                    | Current | 🔄     | ** ✅ **EXCELLENT PROGRESS\*\*                                                                                                               | 5                                                                           |
+| `agents.md`                                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\httpcore-1.0.9.dist-info\licenses\LICENSE.md`                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\httpx-0.27.0.dist-info\licenses\LICENSE.md`                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\huggingface_hub\templates\datasetcard_template.md`                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\huggingface_hub\templates\modelcard_template.md`                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\idna-3.11.dist-info\licenses\LICENSE.md`                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\langsmith\cli\README.md`                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\langsmith\sandbox\README.md`                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\mypyc\README.md`                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\mypyc\doc\cpython-timings.md`                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\mypyc\doc\dev-intro.md`                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\mypyc\doc\future.md`                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\mypyc\external\googletest\README.md`                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\_core\src\npysort\x86-simd-sort\LICENSE.md` | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\fft\pocketfft\LICENSE.md`                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\LICENSE.md`                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\distributions\LICENSE.md`        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\mt19937\LICENSE.md`              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\pcg64\LICENSE.md`                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\philox\LICENSE.md`               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\sfc64\LICENSE.md`                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy-2.4.2.dist-info\licenses\numpy\random\src\splitmix64\LICENSE.md`           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\numpy\random\LICENSE.md`                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\pymupdf-1.26.7.dist-info\README.md`                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\starlette-0.36.3.dist-info\licenses\LICENSE.md`                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\uuid_utils-0.14.0.dist-info\licenses\LICENSE.md`                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv-tests\Lib\site-packages\uvicorn-0.27.1.dist-info\licenses\LICENSE.md`                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\httpcore-1.0.9.dist-info\licenses\LICENSE.md`                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\httpx-0.27.0.dist-info\licenses\LICENSE.md`                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\huggingface_hub\templates\datasetcard_template.md`                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\huggingface_hub\templates\modelcard_template.md`                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\idna-3.11.dist-info\licenses\LICENSE.md`                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\langsmith\cli\README.md`                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\langsmith\sandbox\README.md`                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\mypyc\README.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\mypyc\doc\cpython-timings.md`                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\mypyc\doc\dev-intro.md`                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\mypyc\doc\future.md`                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\mypyc\external\googletest\README.md`                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\pymupdf-1.26.7.dist-info\README.md`                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\starlette-0.36.3.dist-info\licenses\LICENSE.md`                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\uuid_utils-0.14.0.dist-info\licenses\LICENSE.md`                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\.venv311\Lib\site-packages\uvicorn-0.27.1.dist-info\licenses\LICENSE.md`                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\.pytest_cache_local\README.md`                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\README.md`                                                                                                 | Current | 🔄     | N/A                                                                                                                                          | 7                                                                           |
+| `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`                                                                 | Current | 🔄     | N/A                                                                                                                                          | 10                                                                          |
+| `apps\api\alembic\database.md`                                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\coherence\README.md`                                                                                   | Current | ✅     | on-track. End date: 2025-12-31.",                                                                                                            | 0                                                                           |
+| `apps\api\src\core\CACHE_USAGE.md`                                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\CE-S2-009_IMPLEMENTATION_SUMMARY.md`                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ERROR_HANDLING_EXAMPLES.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\CE-S2-008_IMPLEMENTATION_SUMMARY.md`                                                           | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `apps\api\src\core\ai\MODEL_ROUTER_USAGE.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                                                                     | Current | 🔄     | N/A                                                                                                                                          | 6                                                                           |
+| `apps\api\src\core\ai\README.md`                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\README_FLASH.md`                                                                               | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `apps\api\src\core\ai\README_LLM_CLIENT.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\README_PROMPT_CACHE.md`                                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\prompts\v1\clause_extraction.md`                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\mcp\README.md`                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\privacy\ANONYMIZER_USAGE_GUIDE.md`                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\tests\FIXTURES_IMPLEMENTATION_SUMMARY.md`                                                                  | Current | ✅     | \*\* Base Fixtures Implemented ✅                                                                                                            | 0                                                                           |
+| `apps\api\tests\README.md`                                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\tests\coherence\fixtures\DEVELOPMENT_STATUS.md`                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\tests\security\SECURITY_TESTS_STATUS.md`                                                                   | Current | 🔄     | N/A                                                                                                                                          | 34                                                                          |
+| `apps\web\.clerk\.tmp\README.md`                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\web\README_SETUP.md`                                                                                           | Current | ✅     | \*\* ✅ Complete                                                                                                                             | 0                                                                           |
+| `context\README.md`                                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\experimental\README.md`                                                                                     | Current | ✅     | Current                                                                                                                                      | 0                                                                           |
+| `context\working\BOOTSTRAP_AUTH_LOOKUP_DRAFT_2026-03-19.md`                                                          | Current | ✅     | Draft                                                                                                                                        | 0                                                                           |
+| `context\working\DB_MIGRATION_RECONCILIATION_PLAN_2026-03-18.md`                                                     | Current | ✅     | Complete                                                                                                                                     | 0                                                                           |
+| `context\working\agents\agent_backend_tdd.md`                                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\working\agents\agent_devops.md`                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\working\agents\agent_doc.md`                                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\working\agents\agent_frontend_tdd.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\working\agents\agent_planner.md`                                                                            | Current | ✅     | Plan ready. @qa-agent, please begin Step 2.\_                                                                                                | 0                                                                           |
+| `context\working\agents\agent_product.md`                                                                            | Current | ✅     | Story ready for `@planner-agent` to architect and `@qa-agent` to test.\*                                                                     | 0                                                                           |
+| `context\working\agents\agent_qa.md`                                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\working\agents\agent_security.md`                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `diseño arquitectura.md`                                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\ARCHITECTURE_INDEX.md`                                                                                         | Current | ✅     | \*\* Current                                                                                                                                 | 0                                                                           |
+| `docs\C2PRO_MEMORY_PROTOCOL.md`                                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\CASE_CREATION_GUIDELINES.md`                                                                                   | Current | 🔄     | N/A                                                                                                                                          | 15                                                                          |
+| `docs\COVERAGE_IMPROVEMENT_PLAN.md`                                                                                  | Current | 🔄     | N/A                                                                                                                                          | 4                                                                           |
+| `docs\DECISION_LOG.md`                                                                                               | Current | ✅     | \*\* Proposed                                                                                                                                | Accepted                                                                    | Deprecated | Superseded | 0   |
+| `docs\MASTER_DEVELOPMENT_STATUS.md`                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\ORCHESTRATION_REPORT_G6-02.md`                                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\ORCHESTRATION_REPORT_G6-02_CORE100.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\ORCHESTRATION_REPORT_G6-02_CORE25.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\README.md`                                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\RELEASE_CRITERIA.md`                                                                                           | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `docs\SLA_TARGETS.md`                                                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\TASK_DOC_ADAPTER_COVERAGE.md`                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\TEST_COVERAGE_ISSUES_REPORT.md`                                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\UAT_CHECKLIST.md`                                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\api\README.md`                                                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md`                                                          | Current | ✅     | \*\* APPROVED — Ready for Sprint Planning                                                                                                    | 0                                                                           |
+| `docs\architecture\FLOW_DIAGRAMS.md`                                                                                 | Current | ✅     | \*\* Current (reflects code after Phases 1–5)                                                                                                | 0                                                                           |
+| `docs\architecture\LANGGRAPH_CHECKPOINTING.md`                                                                       | Current | ✅     | \*\* ✅ Implemented                                                                                                                          | 0                                                                           |
+| `docs\architecture\README.md`                                                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\decisions\001-modular-monolith-architecture.md`                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\decisions\002-supabase-for-mvp.md`                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\decisions\003-ai-architecture.md`                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\decisions\004-frontend-layer-rules.md`                                                            | Current | ✅     | \*\* Accepted                                                                                                                                | 0                                                                           |
+| `docs\architecture\decisions\005-three-layer-sc-test-strategy.md`                                                    | Current | ✅     | \*\* Accepted                                                                                                                                | 0                                                                           |
+| `docs\architecture\decisions\006-post-reorganization-architecture.md`                                                | Current | ✅     | \*\* Accepted                                                                                                                                | 0                                                                           |
+| `docs\architecture\decisions\ADR-004-circuit-breakers.md`                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\decisions\README.md`                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\diagrams\c2pro_master_flow_diagram_v2.2.1.md`                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\architecture\notes\ARCH_NOTE_REDIS_EVENT_BUS_CONTRACT_2026-02-15.md`                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\README.md`                                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\samples\Convesratiopn_deep.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\samples\España\AUDIT_ESPAÑA_DATASET.md`                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\samples\conversation gemini.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\samples\conversationCodex.md`                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\assets\schedules\README.md`                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audit\C2PRO_TECHNICAL_AUDIT_REPORT.md`                                                                         | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `docs\audit\REAL_DATA_REMEDIATION_CHECKLIST_2026-03-18.md`                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audit\REAL_DATA_RUNTIME_AUDIT_2026-03-18.md`                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\API_AUDIT_BACKEND_FRONTEND_2026-03-20.md`                                                               | Current | ✅     | `Substantially implemented`                                                                                                                  | 0                                                                           |
+| `docs\audits\API_REMEDIATION_CHECKLIST_2026-03-20.md`                                                                | Current | ✅     | "ok"}` ✅ (aligns with MSW mock and frontend test expectations)                                                                              | 0                                                                           |
+| `docs\audits\DEMO_VS_PROD_CONTRACT.md`                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\DOCS_AUDIT_2026-02-13.md`                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\DOCUMENTATION_AUDIT_2026-03-09.md`                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PHASE1_BACKEND_ENDPOINT_INVENTORY.md`                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PHASE1_FRONTEND_PAGE_INVENTORY.md`                                                                      | Current | ✅     | "parsed", clauses: 47, ... },                                                                                                                | 0                                                                           |
+| `docs\audits\PHASE1_PAGE_ENDPOINT_MATRIX.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PHASE1_REQUIRED_ENDPOINTS.md`                                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PHASE2_COMPONENT_AUDIT.md`                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PHASE2_DUPLICATE_CONSOLIDATION.md`                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`                                                               | Current | 🔄     | \*\* FINAL                                                                                                                                   | 6                                                                           |
+| `docs\audits\README.md`                                                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\audits\REORGANIZATION_PLAN_CHECKLIST.md`                                                                       | Current | 🔄     | N/A                                                                                                                                          | 1                                                                           |
+| `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`                                                             | Current | 🔄     | N/A                                                                                                                                          | 33                                                                          |
+| `docs\audits\UX_AUDIT_REPORT_v1.0.md`                                                                                | Current | ✅     | \*\* 100% Implemented & Tested                                                                                                               | 0                                                                           |
+| `docs\audits\multi_agent_qa_audit_report.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\coherence_engine\CE-26_ENGINE_V2_INTEGRATION.md`                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                                                                    | Current | 🔄     | ✅ COMPLETE\*\* (2026-03-28)                                                                                                                 | 30                                                                          |
+| `docs\coherence_engine\PHASE_2_VERIFICATION.md`                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\coherence_engine\README.md`                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\coherence_engine\coherence_langgraph_subgraph_v3.md`                                                           | Current | ✅     | {status}",                                                                                                                                   | 0                                                                           |
+| `docs\coherence_engine\coherence_score_restructuring_v3.md`                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\coherence_engine\deterministic_rules_engine_v3.md`                                                             | Current | ✅     | '{status}'",                                                                                                                                 | 0                                                                           |
+| `docs\coherence_engine\deterministic_rules_v3_final.md`                                                              | Current | ✅     | '{status}'", {"status": status})                                                                                                             | 0                                                                           |
+| `docs\coherence_engine\scoring_methodology_v1.md`                                                                    | Current | ✅     | APPROVED                                                                                                                                     | 0                                                                           |
+| `docs\internal\LESSONS_LEARNED.md`                                                                                   | Current | 🔄     | N/A                                                                                                                                          | 5                                                                           |
+| `docs\internal\README.md`                                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\internal\RELEASE_SIGNOFF_POLICY.md`                                                                            | Current | 🔄     | <pass                                                                                                                                        | failure>                                                                    | 14         |
+| `docs\internal\SWAGGER_ENDPOINT_WORKBOOK.md`                                                                         | Current | ✅     | Updated 2026-03-27 - **G7-01 Complete**                                                                                                      | 0                                                                           |
+| `docs\performance\README.md`                                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\performance\baseline.md`                                                                                       | Current | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `docs\performance\sql_optimization.md`                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\planning\COHERENCE_SCORE_ENHANCEMENT_ANALYSIS.md`                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\planning\COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\planning\EXECUTIVE_STATUS_REPORT_2026-03-19.md`                                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md`                                                          | Current | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `docs\planning\LANGGRAPH_AUDIT_REPORT_2026-03-21.md`                                                                 | Current | ✅     | PASS (with recommendations)                                                                                                                  | 0                                                                           |
+| `docs\planning\MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md`                                                           | Current | ✅     | \*\* ACTIVE                                                                                                                                  | 0                                                                           |
+| `docs\planning\PRODUCTION_READINESS_GATE_2026-03-19.md`                                                              | Current | 🔄     | `OPEN`                                                                                                                                       | 1                                                                           |
+| `docs\planning\README.md`                                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\planning\ROADMAP_v2.4.0.md`                                                                                    | Current | 🔄     | \*\* Accepted                                                                                                                                | 30                                                                          |
+| `docs\planning\TASK_B3_LANGGRAPH_CHECKPOINTER_COMPLETION_REPORT.md`                                                  | Current | ✅     | `COMPLETE` (checkpoint persistence proven and full analysis flow restored)                                                                   | 0                                                                           |
+| `docs\runbooks\AUTH_BOOTSTRAP_FALLBACK_POLICY.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                                                                         | Current | 🔄     | N/A                                                                                                                                          | 6                                                                           |
+| `docs\runbooks\I13_REAL_E2E_INFRA_RUNBOOK.md`                                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\INSTRUCCIONES_TESTS.md`                                                                               | Current | 🔄     | N/A                                                                                                                                          | 8                                                                           |
+| `docs\runbooks\POSTGRESQL_TESTS_CONFIG_REPORT.md`                                                                    | Current | ✅     | Up About 1 hour (healthy)                                                                                                                    | 0                                                                           |
+| `docs\runbooks\README.md`                                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\RUNBOOK_DATABASE_MIGRATION_AUTHORITY_2026-03-19.md`                                                   | Current | ✅     | - legacy prototype / reference-only                                                                                                          | 0                                                                           |
+| `docs\runbooks\RUNBOOK_MIGRATION_HEALTH_CHECK_2026-02-15.md`                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\RUNBOOK_TEST_INFRA_BOOTSTRAP_2026-02-15.md`                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\SUPABASE_WINDOWS_CONFIG_REPORT.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\backup-restore.md`                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\ci-cd-setup.md`                                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\incident-response.md`                                                                                 | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\migrations\ce-p0-06.md`                                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\supabase\README.md`                                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\supabase\SETUP_INSTRUCTIONS.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\runbooks\supabase\testing.md`                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\specifications\CONTRATOS_PUBLICOS.md`                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\specifications\README.md`                                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\specifications\especificacion_tecnica.md`                                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`                                                                             | Current | 🔄     | \*\* Sprint 7 en progreso - TS-E2E-J2-001 GREEN Phase completada                                                                             | 12                                                                          |
+| `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`                                                                            | Current | 🔄     | \*\* Ready for Execution                                                                                                                     | 26                                                                          |
+| `docs\testing\C2PRO_TEST_SUITES_INDEX_v1.1.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\testing\FS1_AUTH_SYNC_TEST_PLAN.md`                                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\testing\PHASE4_TDD_IMPLEMENTATION_ROADMAP.md`                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\testing\README.md`                                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\testing\TEST_INVENTORY_2026-03-02.md`                                                                          | Current | 🔄     | - `TI-176` remains skipped by design (`ProjectService not yet implemented`)                                                                  | 1                                                                           |
+| `docs\testing\TEST_SUITE_REPORT.md`                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\01-dashboard.md`                                                                                    | Current | 🔄     | N/A                                                                                                                                          | 5                                                                           |
+| `docs\wireframes\02-projects.md`                                                                                     | Current | 🔄     | [ All ▼ ] Type: [ All ▼ ] Score: [ All ▼ ] │ │ │                                                                                             | 10                                                                          |
+| `docs\wireframes\03-evidence-viewer.md`                                                                              | Current | 🔄     | Not Ordered ⚠️ Risk: 5 days until due │ │ │                                                                                                  | 10                                                                          |
+| `docs\wireframes\04-alerts.md`                                                                                       | Current | 🔄     | [ Open ▼ ] Date: [ Last 7 days ▼ ] [Reset] │ │                                                                                               | 10                                                                          |
+| `docs\wireframes\06-raci-matrix.md`                                                                                  | Current | 🔄     | 🤖 Auto-generated (Requires Review) │ │ │                                                                                                    | 12                                                                          |
+| `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md`                                                        | Current | 🔄     | \*\* ✅ COMPLETADO Y LISTO PARA TESTING                                                                                                      | 3                                                                           |
+| `docs\wireframes\CE-S2-010_CRITICAL_FIX_02_IMPLEMENTATION.md`                                                        | Current | ✅     | 'resolved',                                                                                                                                  | 0                                                                           |
+| `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                                                                         | Current | 🔄     | ** ✅ **READY FOR DEPLOYMENT\*\*                                                                                                             | 15                                                                          |
+| `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_IMPLEMENTATION.md`                                                       | Current | ✅     | \*\* ✅ IMPLEMENTATION COMPLETE - PENDING TESTING                                                                                            | 0                                                                           |
+| `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`                                                                 | Current | 🔄     | \*\* ✅ READY FOR APPROVAL                                                                                                                   | 9                                                                           |
+| `docs\wireframes\CE-S2-010_HIGHLIGHT_SYNC_IMPLEMENTATION.md`                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_IMPLEMENTATION.md`                                                    | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`                                                              | Current | 🔄     | N/A                                                                                                                                          | 17                                                                          |
+| `docs\wireframes\CE-S2-010_MOCKUP_REVIEW.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\CE-S2-010_MULTIPLE_DOCUMENTS_IMPLEMENTATION.md`                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\CE-S2-010_OCR_BACKEND_INTEGRATION.md`                                                               | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\CE-S2-010_PDF_VIEWER_IMPLEMENTATION.md`                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`                                                                     | Current | 🔄     | \*\* ✅ PASSED (38.84s, no TypeScript errors)                                                                                                | 6                                                                           |
+| `docs\wireframes\CE-S2-010_VERIFICATION_REPORT.md`                                                                   | Current | ✅     | ** ✅ **READY FOR MANUAL TESTING\*\*                                                                                                         | 0                                                                           |
+| `docs\wireframes\CE-S2-010_WIREFRAME_SPECS.md`                                                                       | Current | ✅     | "resolved", resolution: {...} }                                                                                                              | 0                                                                           |
+| `docs\wireframes\DOCUMENT_TABS_IMPLEMENTATION.md`                                                                    | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\EXPORT_HIGHLIGHTS_IMPLEMENTATION.md`                                                                | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                                                                           | Current | 🔄     | N/A                                                                                                                                          | 14                                                                          |
+| `docs\wireframes\README.md`                                                                                          | Current | ✅     | \*\* ✅ Complete                                                                                                                             | 0                                                                           |
+| `docs\wireframes\RECENT_DOCUMENTS_IMPLEMENTATION.md`                                                                 | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\SPLIT_VIEW_IMPLEMENTATION.md`                                                                       | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\VIEWER_PERSISTENCE_IMPLEMENTATION.md`                                                               | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `docs\wireframes\WIREFRAMES_REVIEW_CE-S2-010.md`                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-23-rc1\disaster-recovery.md`                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-23-rc1\performance.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-23-rc1\signoff.md`                                                                        | Current | 🔄     | N/A                                                                                                                                          | 2                                                                           |
+| `evidence\releases\2026-03-24-rc1\disaster-recovery.md`                                                              | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-24-rc1\performance.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-24-rc1\signoff.md`                                                                        | Current | 🔄     | `Referenced in final signoff bundle`                                                                                                         | 2                                                                           |
+| `evidence\releases\2026-03-24-rc1\swagger-verification-2026-03-26.md`                                                | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\2026-03-24-rc1\swagger-verification.md`                                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\README.md`                                                                                        | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\_template\disaster-recovery.md`                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\_template\performance.md`                                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `evidence\releases\_template\signoff.md`                                                                             | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `frontend_development_report.md`                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `gemini.md`                                                                                                          | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\mandatory-session-close\proposal.md`                                                               | Current | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `openspec\changes\mandatory-session-close\specs\session-lifecycle\spec.md`                                           | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap-v2\design.md`                                                                   | Current | 🔄     | str # PASS                                                                                                                                   | FAIL                                                                        | NA         | 2          |
+| `openspec\changes\openspec-bootstrap-v2\proposal.md`                                                                 | Current | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `openspec\changes\openspec-bootstrap-v2\specs\openspec\spec.md`                                                      | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap-v2\tasks.md`                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap-v2\verify-report.md`                                                            | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap\design.md`                                                                      | Current | 🔄     | N/A                                                                                                                                          | 2                                                                           |
+| `openspec\changes\openspec-bootstrap\proposal.md`                                                                    | Current | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `openspec\changes\openspec-bootstrap\specs\openspec\spec.md`                                                         | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap\tasks.md`                                                                       | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `openspec\changes\openspec-bootstrap\verify-report.md`                                                               | Current | ✅     | timed out/inconclusive                                                                                                                       | 0                                                                           |
+| `sandbox\README.md`                                                                                                  | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `tests\AGENT_10_COMPLETE_SUMMARY.md`                                                                                 | Current | ✅     | \*\* COMPLETE                                                                                                                                | 0                                                                           |
+| `tests\README.md`                                                                                                    | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `tests\TS-UA-DTO-ALL-001_IMPLEMENTATION_SUMMARY.md`                                                                  | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `tests\TS-UA-DTO-SER-001_IMPLEMENTATION_SUMMARY.md`                                                                  | Current | ✅     | \*\* ✅ COMPLETED                                                                                                                            | 0                                                                           |
+| `tests\fixtures\files\README.md`                                                                                     | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `windows-setup.md`                                                                                                   | Current | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `FRONTEND_TESTING_PLAN_archived_20260210.md`                                                                         | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `OLDAgents.md`                                                                                                       | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `SECURITY_AUDIT_GOLDEN_DATASET.md`                                                                                   | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `apps\api\src\core\ai\prompts\v1\stakeholder_classification.md`                                                      | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `context\archive\legacy\C2PRO_FRONTEND_MASTER_PLAN_PHASE2.md`                                                        | Legacy  | ✅     | \*\* Phase 2 Complete — Ready for Phase 3 Consolidation                                                                                      | 0                                                                           |
+| `context\archive\legacy\C2PRO_TECHNICAL_DESIGN_DOCUMENT_v3_0 (1).md`                                                 | Legacy  | ✅     | \*\* APPROVED — Ready for Sprint Planning                                                                                                    | 0                                                                           |
+| `context\archive\legacy\DIAGRAMA_FLUJO_PROYECTO.md`                                                                  | Legacy  | ✅     | Legacy                                                                                                                                       | 0                                                                           |
+| `context\archive\legacy\mearmaid.md`                                                                                 | Legacy  | ✅     | Legacy                                                                                                                                       | 0                                                                           |
+| `docs\G6-06_LEGACY_ADAPTERS_RETIREMENT_PLAN.md`                                                                      | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\README.md`                                                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\architecture\PLAN_ARQUITECTURA.md`                                                                     | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\architecture\PLAN_ARQUITECTURA_v2.1.md`                                                                | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\architecture\decisions\001-monolith-first.md`                                                          | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\changelogs\CHANGELOG_2026-01-06.md`                                                                    | Legacy  | 🔄     | N/A                                                                                                                                          | 2                                                                           |
+| `docs\archive\duplicates\PHASE4_TDD_IMPLEMENTATION_ROADMAP_context.md`                                               | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\duplicates\START_HERE (1).md`                                                                          | Legacy  | 🔄     | \*\* ✅ APPROVED & READY                                                                                                                     | 7                                                                           |
+| `docs\archive\implementation\supabase\S0.2_S0.3_IMPLEMENTATION_SUMMARY.md`                                           | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md`                                           | Legacy  | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `docs\archive\migrations\MIGRATION_COMPLETED.md`                                                                     | Legacy  | 🔄     | N/A                                                                                                                                          | 17                                                                          |
+| `docs\archive\migrations\MIGRATION_PLAN.md`                                                                          | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\migrations\SCHEMA_SYNC_COMPLETE_REPORT.md`                                                             | Legacy  | ✅     | 'uploaded', 'parsing', 'parsed', 'error'                                                                                                     | 0                                                                           |
+| `docs\archive\migrations\STAGING_DEPLOYMENT_REPORT_2026-01-07.md`                                                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\migrations\migration_execution_plan.md`                                                                | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\migrations\staging_pre_migration_state.md`                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\C2PRO_FRONTEND_MASTER_PLAN_v1.md`                                                     | Legacy  | ✅     | \*\* Implementation-ready. All 31 Phase 2 flags resolved or accepted with documented mitigations. Zero open critical or high-severity items. | 0                                                                           |
+| `docs\archive\planning\2026-02\FRONTEND_S1_S3_PLANNER_HANDOFF_2026-02-14.md`                                         | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\FRONTEND_S3_UPDATED_EXECUTION_AND_TEST_PLAN_2026-02-14.md`                            | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\PLANNER_REPORT_I1_I14_2026-02-14.md`                                                  | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\PLAN_I13_INFRA_CRITICAL_PATH_2026-02-15.md`                                           | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\PLAN_LANGGRAPH_ORCHESTRATION_I13_2026-02-15.md`                                       | Legacy  | ✅     | \*\* APPROVED by Human Lead                                                                                                                  | 0                                                                           |
+| `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`                                        | Legacy  | 🔄     | \*\* APPROVED                                                                                                                                | 10                                                                          |
+| `docs\archive\planning\2026-02\PLAN_REDIS_EVENT_BUS_IMPLEMENTATION_2026-02-15.md`                                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\TACTICAL_BOARD_S1_S3_2026-02-14.md`                                                   | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md`                                                   | Legacy  | 🔄     | N/A                                                                                                                                          | 3                                                                           |
+| `docs\archive\planning\README.md`                                                                                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                                                   | Legacy  | 🔄     | \*\* ✅ Ready to configure                                                                                                                   | 9                                                                           |
+| `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                                                  | Legacy  | 🔄     | \*\* ✅ Ready to implement                                                                                                                   | 12                                                                          |
+| `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                                              | Legacy  | 🔄     | \*\* ✅ COMPLETE                                                                                                                             | 81                                                                          |
+| `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                                                   | Legacy  | 🔄     | \*\* Ready for Implementation                                                                                                                | 41                                                                          |
+| `docs\archive\plans\Clerk\README.md`                                                                                 | Legacy  | 🔄     | \*\* ✅ APPROVED & READY FOR IMPLEMENTATION                                                                                                  | 27                                                                          |
+| `docs\archive\plans\Clerk\START_HERE.md`                                                                             | Legacy  | 🔄     | \*\* ✅ APPROVED & READY                                                                                                                     | 7                                                                           |
+| `docs\archive\plans\README.md`                                                                                       | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\plans\tdd-testing\I10_STAKEHOLDER_RACI_HARDENING_IMPLEMENTATION_PLAN_2026-02-17.md`                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md`                              | Legacy  | 🔄     | N/A                                                                                                                                          | 6                                                                           |
+| `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md`                              | Legacy  | 🔄     | N/A                                                                                                                                          | 10                                                                          |
+| `docs\archive\plans\tdd-testing\I9_PROCUREMENT_PLANNING_IMPLEMENTATION_CHECKLIST_2026-02-16.md`                      | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\plans\tdd-testing\TDD_MASTER_PLAN.md`                                                                  | Legacy  | ✅     | \*\* Ready for QA Agent Execution                                                                                                            | 0                                                                           |
+| `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                                              | Legacy  | 🔄     | \*\* Ready for Execution                                                                                                                     | 11                                                                          |
+| `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                                                  | Legacy  | 🔄     | \*\* RED - All tests should initially FAIL                                                                                                   | 11                                                                          |
+| `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                                                  | Legacy  | 🔄     | \*\* GREEN - Write minimal code to pass tests                                                                                                | 20                                                                          |
+| `docs\archive\plans\ux-implementation\ARCHITECTURE_DIAGRAMS.md`                                                      | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                                                           | Legacy  | 🔄     | \*\* Ready for Execution                                                                                                                     | 6                                                                           |
+| `docs\archive\plans\ux-implementation\PRODUCT_SUMMARY.md`                                                            | Legacy  | ✅     | \*\* Ready for Development                                                                                                                   | 0                                                                           |
+| `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                                                            | Legacy  | 🔄     | \*\* Ready to Execute 🚀                                                                                                                     | 97                                                                          |
+| `docs\archive\plans\ux-implementation\README.md`                                                                     | Legacy  | 🔄     | \*\* Complete                                                                                                                                | 12                                                                          |
+| `docs\archive\reports\2026-03\DATABASE_CONNECTION_ISSUE.md`                                                          | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\DEVELOPMENT_STATUS.md`                                                                 | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\INFRASTRUCTURE_AUDIT_2026-03-07.md`                                                    | Legacy  | ✅     | - test fixture is pinned to `localhost:5433/c2pro_test`                                                                                      | 0                                                                           |
+| `docs\archive\reports\2026-03\INFRASTRUCTURE_AUDIT_EXTENDED_COMMITTEE_2026-03-07.md`                                 | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\INFRASTRUCTURE_RECOVERY_TRACKER.md`                                                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\MULTI_AGENT_COMMITTEE_REVIEW_2026-03-07.md`                                            | Legacy  | ✅     | OPERATIONAL                                                                                                                                  | 0                                                                           |
+| `docs\archive\reports\2026-03\README.md`                                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                                                         | Legacy  | 🔄     | N/A                                                                                                                                          | 6                                                                           |
+| `docs\archive\reports\2026-03\TEST_COVERAGE_ANALYSIS.md`                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\TEST_STATUS_CHECKLIST_2026-03-08.md`                                                   | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md`                                              | Legacy  | 🔄     | \*\* 🟡 IN PROGRESS (Installation Phase)                                                                                                     | 1                                                                           |
+| `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`                                          | Legacy  | 🔄     | \*\* ✅ RED PHASE COMPLETE                                                                                                                   | 5                                                                           |
+| `docs\archive\reports\README.md`                                                                                     | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                                                            | Legacy  | 🔄     | N/A                                                                                                                                          | 71                                                                          |
+| `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                                                            | Legacy  | 🔄     | str = None                                                                                                                                   | 41                                                                          |
+| `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                                                         | Legacy  | 🔄     | N/A                                                                                                                                          | 21                                                                          |
+| `docs\archive\sprints\SPRINT_1_PLAN.md`                                                                              | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\CACHE_IMPLEMENTATION_REVIEW_CE-S2-004.md`                                                        | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                                                        | Legacy  | 🔄     | N/A                                                                                                                                          | 10                                                                          |
+| `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                                             | Legacy  | 🔄     | N/A                                                                                                                                          | 10                                                                          |
+| `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                                                         | Legacy  | 🔄     | N/A                                                                                                                                          | 19                                                                          |
+| `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                                             | Legacy  | 🔄     | N/A                                                                                                                                          | 64                                                                          |
+| `docs\archive\tasks\CE-P0-06_SUMMARY.md`                                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                                                        | Legacy  | 🔄     | Ready for execution │                                                                                                                        | 95                                                                          |
+| `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                                                         | Legacy  | 🔄     | N/A                                                                                                                                          | 8                                                                           |
+| `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                                                  | Legacy  | 🔄     | ✅ ALL GATES PASSED                                                                                                                          | 16                                                                          |
+| `docs\archive\tasks\DELIVERABLES.md`                                                                                 | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\ERROR_HANDLING_REVIEW_CE-S2-009.md`                                                              | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\FIXTURES_STABILIZATION_REPORT.md`                                                                | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md`                                                               | Legacy  | 🔄     | ProjectStatus;                                                                                                                               | 4                                                                           |
+| `docs\archive\tasks\GATES_VALIDATION_REPORT_2026-01-07.md`                                                           | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\GATE_IMPLEMENTATION_COMPLETE.md`                                                                 | Legacy  | ✅     | ✅ COMPLETE                                                                                                                                  | 0                                                                           |
+| `docs\archive\tasks\PROMPT_TEMPLATES_REVIEW_CE-S2-008.md`                                                            | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\TEST_ANALYSIS_REPORT.md`                                                                         | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                                                      | Legacy  | 🔄     | N/A                                                                                                                                          | 7                                                                           |
+| `docs\archive\wireframes\aliases\alerts.md`                                                                          | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\wireframes\aliases\dashboard.md`                                                                       | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\wireframes\aliases\evidence.md`                                                                        | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\wireframes\aliases\projects.md`                                                                        | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\wireframes\aliases\raci.md`                                                                            | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\archive\wireframes\aliases\stakeholders.md`                                                                    | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
+| `docs\wireframes\05-stakeholders.md`                                                                                 | Legacy  | 🔄     | ✅ Verified manually │ │ │                                                                                                                   | 10                                                                          |
+| `tests\golden\README.md`                                                                                             | Legacy  | ✅     | N/A                                                                                                                                          | 0                                                                           |
 
 ## 2. Active Development Backlog (Categorized)
+
 ### 2.1 Backend (0 tasks)
-*No active tasks identified.*
+
+_No active tasks identified._
 
 ### 2.2 Frontend (157 tasks)
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🔴 P0 | TASK-008 | Env Setup | Setup test infrastructure (Vitest, Playwright, MSW) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-011 | Env Setup | Write authentication tests (30 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-012 | Env Setup | **Deliverable**: Auth flow fully tested | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-050 | None | Database migration created (TODO) | `QUICK_SESSION_SUMMARY.md` |
-| [ ] | 🔴 P0 | TASK-101 | None | Database migration created | `TEST_SUITES_COMPLETED_STATUS.md` |
-| [ ] | 🔴 P0 | TASK-1174 | Security Sign-off | Proyecto Clerk en entorno Production. | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🔴 P0 | TASK-1337 | None | **Alerts Center:** Implementar campo Root Cause para Critical/High | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟠 P1 | TASK-013 | Env Setup | Projects CRUD tests (50 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟠 P1 | TASK-014 | Backend API | Dashboard tests (20 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟠 P1 | TASK-051 | None | API endpoints implemented (TODO) | `QUICK_SESSION_SUMMARY.md` |
-| [ ] | 🟠 P1 | TASK-1227 | Backend API | Custom dashboard layouts | `docs\wireframes\01-dashboard.md` |
-| [ ] | 🟠 P1 | TASK-1230 | Backend API | Dashboard templates | `docs\wireframes\01-dashboard.md` |
-| [ ] | 🟠 P1 | TASK-1238 | None | Batch upload/import projects | `docs\wireframes\02-projects.md` |
-| [ ] | 🟠 P1 | TASK-1258 | Backend API | Alert analytics dashboard | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟠 P1 | TASK-1339 | Backend API | **Dashboard:** Implementar Sheet de drill-down para Coherence Score | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟡 P2 | TASK-017 | Backend API | UI component library tests (40 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟡 P2 | TASK-1229 | None | Export to PDF/Excel | `docs\wireframes\01-dashboard.md` |
-| [ ] | 🟡 P2 | TASK-1237 | None | Export to multiple formats (PDF, Excel, JSON) | `docs\wireframes\02-projects.md` |
-| [ ] | 🟡 P2 | TASK-1239 | None | Project templates | `docs\wireframes\02-projects.md` |
-| [ ] | 🟡 P2 | TASK-1242 | None | Interactive graph visualization (D3.js) | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟡 P2 | TASK-1247 | None | Export to multiple formats | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟡 P2 | TASK-1249 | None | Evidence templates | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟡 P2 | TASK-1254 | None | Alert templates | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟡 P2 | TASK-1272 | None | RACI templates by project type | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟡 P2 | TASK-1344 | None | **Stakeholder Map:** Implementar drag & drop con @dnd-kit | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-009 | Env Setup | Create test utilities and helpers | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-010 | Env Setup | Setup CI/CD pipeline for tests | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-015 | Env Setup | Navigation tests (15 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-016 | Env Setup | **Deliverable**: Core app functionality tested | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-018 | Env Setup | Form validation tests (25 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-019 | Env Setup | Document management tests (20 tests) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-020 | None | **Deliverable**: 80% code coverage achieved | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-021 | Backend API | Visual regression tests (all pages) | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-022 | None | Accessibility audit and fixes | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-023 | None | Performance optimization | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-024 | Env Setup | Cross-browser testing | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-025 | Backend API | **Deliverable**: Production-ready test suite | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-102 | None | Database started | `TEST_SUITES_COMPLETED_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-103 | Env Setup | Tests run successfully | `TEST_SUITES_COMPLETED_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-104 | None | Cleanup verified | `TEST_SUITES_COMPLETED_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-105 | None | Performance acceptable | `TEST_SUITES_COMPLETED_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-257 | None | `case_id` follows naming convention | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-258 | None | `case_id` prefix matches primary dimension | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-259 | None | `name` is descriptive (5-200 characters) | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-260 | None | `dimensions` list is non-empty (1-6 items) | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-261 | None | `difficulty` matches number range | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-262 | None | `input_documents` has `contract_path` and `schedule_path` | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-263 | Backend API | `trajectory.required_nodes` has at least 1 node | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-264 | None | Difficulty number range matches directory (easy/001-099, etc.) | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-265 | None | Dimensions in `expected_issues` match case `dimensions` | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-266 | None | `rule_id` patterns match the rule format (`{PREFIX}-{NUMBER}`) | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-267 | Backend API | No overlap between required/optional/forbidden nodes | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-268 | Env Setup | Case tests a real, meaningful scenario | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-269 | None | Expected issues are realistic and verifiable | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-270 | None | Tool call assertions match actual workflow capabilities | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-271 | None | Metadata includes `source_project` for traceability | `docs\CASE_CREATION_GUIDELINES.md` |
-| [ ] | 🟢 P3 | TASK-1175 | Env Setup | Variables con claves `pk_live_...` y `sk_live_...` (no test). | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-1176 | None | Dominio de producción configurado en Clerk (y URLs permitidas de sign-in/sign-up). | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-1177 | None | Plantillas de correo y remitente de producción verificados en Clerk. | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-1178 | Backend API | Frontend desplegado con variables de producción. | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-1179 | Backend API | Backend desplegado y accesible desde frontend. | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-1228 | None | Widget configuration | `docs\wireframes\01-dashboard.md` |
-| [ ] | 🟢 P3 | TASK-1231 | None | Real-time collaboration indicators | `docs\wireframes\01-dashboard.md` |
-| [ ] | 🟢 P3 | TASK-1232 | None | Column customization (show/hide columns) | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1233 | None | Save custom filter presets | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1234 | Backend API | Inline editing (quick edit mode) | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1235 | Backend API | Kanban view toggle | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1236 | Backend API | Advanced search with query builder | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1240 | None | Favorites/bookmarks | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1241 | None | Project tags/labels | `docs\wireframes\02-projects.md` |
-| [ ] | 🟢 P3 | TASK-1243 | Backend API | 3D relationship viewer | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1244 | Backend API | Timeline view of evidence evolution | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1245 | None | Evidence comparison (before/after) | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1246 | None | AI explanation of relationships | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1248 | None | Collaborative annotations | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1250 | None | Custom evidence chains | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1251 | None | Integration with project chat | `docs\wireframes\03-evidence-viewer.md` |
-| [ ] | 🟢 P3 | TASK-1252 | None | Alert rules customization | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1253 | None | Custom severity levels | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1255 | None | Recurring alerts | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1256 | None | Alert subscriptions (email/Slack) | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1257 | None | SLA tracking and violations | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1259 | None | Machine learning for priority prediction | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1260 | None | Integration with project management tools | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1261 | None | Automated resolution suggestions | `docs\wireframes\04-alerts.md` |
-| [ ] | 🟢 P3 | TASK-1273 | None | Historical comparison (before/after) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1274 | None | Workload analysis (how many R's per person) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1275 | None | Conflict detection (overloaded stakeholders) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1276 | None | Integration with HR systems | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1277 | None | Auto-escalation for unassigned items | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1278 | Backend API | Mobile-optimized list view | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1279 | None | Collaborative editing (real-time) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1280 | None | Version control (RACI history) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1281 | None | Custom role types (beyond RACI) | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1282 | None | AI suggestions based on changes | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1283 | Backend API | Gantt-style timeline view | `docs\wireframes\06-raci-matrix.md` |
-| [ ] | 🟢 P3 | TASK-1284 | None | API call to PATCH /api/extracted-entities/{id} | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
-| [ ] | 🟢 P3 | TASK-1285 | None | API call to PATCH /api/extracted-entities/{id} | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
-| [ ] | 🟢 P3 | TASK-1286 | None | integrar con backend) | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
-| [ ] | 🟢 P3 | TASK-1287 | None | Crear branch `feature/highlight-search` | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1288 | None | Commit changes | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1289 | None | Push to remote | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1290 | None | Create PR con descripción arriba | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1291 | Backend API | Request reviews | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1292 | None | ¿Cuál tarea? (especifica del cronograma) | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1293 | None | Crear plan de implementación | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1294 | None | Proceder con desarrollo | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1295 | None | ¿Qué feature? (Fuzzy Search / Search History / etc.) | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1296 | None | Crear plan | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1297 | None | Implementar | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1298 | Env Setup | Ejecutar test cases críticos | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1299 | None | Reportar resultados | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1300 | None | Luego decidir A, B o C | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1301 | None | Add screenshots or screen recording] | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1302 | None | Hook useHighlightSearch implementado | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1303 | None | Componente HighlightSearchBar implementado | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1304 | Backend API | Integración en EvidenceViewer completada | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1305 | None | Keyboard shortcuts funcionando | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1306 | Env Setup | Todos los test cases pasados | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1307 | None | Performance verificada (< 500ms) | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1308 | Backend API | Accessibility review completado | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1309 | None | Documentación actualizada | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1310 | None | Demo grabada para stakeholders | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1311 | None | Revisar este plan con el usuario | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1312 | None | Confirmar prioridad (Media está OK) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1313 | Env Setup | Decidir: ¿Implementar ahora o después del testing manual de Highlight Search? | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1314 | None | Crear branch `feature/keyboard-navigation` | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1315 | None | Implementar Fase 1: Estado (15 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1316 | None | Implementar Fase 2: handleKeyDown (30 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1317 | None | Implementar Fase 3: useEffect auto-navegación (30 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1318 | Backend API | Implementar Fase 4: Indicador UI (45 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1319 | None | Implementar Fase 5: Reset documento (10 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1320 | None | Implementar Fase 6: Accessibility (30 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1321 | Env Setup | Testing local: Ejecutar 7 test cases (30 min) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1322 | Backend API | Build verification: `npm run build` (0 errors) | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1323 | None | Commit con mensaje descriptivo | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1324 | None | Push a remote | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1325 | None | Crear Pull Request | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1326 | Backend API | Solicitar code review | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1327 | None | Merge después de aprobación | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1328 | None | Browser: Chrome/Firefox/Safari (specify: _________) | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1329 | None | Screen Resolution: _________ | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1330 | None | OS: Windows/Mac/Linux (specify: _________) | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1331 | None | Application launches successfully | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1332 | Backend API | Navigate to Evidence Viewer page | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1333 | None | Confirm at least 1 document is loaded (e.g., Contract_Final.pdf) | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1334 | Backend API | **Evidence Viewer:** Implementar Dialog de confirmación para Approve/Reject | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1335 | Backend API | **Evidence Viewer:** Agregar validación obligatoria para confidence < 90% | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1336 | None | **Alerts Center:** Agregar validación dinámica según severity | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1338 | Backend API | **Evidence Viewer:** Integrar react-pdf para visor real | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1340 | None | **Alerts Center:** Agregar Sheet lateral para detalles de alerta | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1341 | None | **Alerts Center:** Implementar bulk actions con validación | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1342 | Backend API | **Project List:** Agregar Quick View Sheet | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1343 | Backend API | **Evidence Viewer:** Implementar highlight sync PDF ↔ Data Panel | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1345 | Backend API | **RACI Matrix:** Implementar Auto-Assign AI Dialog | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1346 | None | **Project List:** Implementar Dialog de creación de proyecto (wizard) | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-1347 | None | **Todas las vistas:** Conectar con API backend real | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md` |
+
+| Done | Priority | ID        | Dependency        | Description                                                                        | Source File                                                   |
+| :--- | :------- | :-------- | :---------------- | :--------------------------------------------------------------------------------- | :------------------------------------------------------------ |
+| [ ]  | 🔴 P0    | TASK-008  | Env Setup         | Setup test infrastructure (Vitest, Playwright, MSW)                                | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🔴 P0    | TASK-011  | Env Setup         | Write authentication tests (30 tests)                                              | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🔴 P0    | TASK-012  | Env Setup         | **Deliverable**: Auth flow fully tested                                            | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🔴 P0    | TASK-050  | None              | Database migration created (TODO)                                                  | `QUICK_SESSION_SUMMARY.md`                                    |
+| [ ]  | 🔴 P0    | TASK-101  | None              | Database migration created                                                         | `TEST_SUITES_COMPLETED_STATUS.md`                             |
+| [ ]  | 🔴 P0    | TASK-1174 | Security Sign-off | Proyecto Clerk en entorno Production.                                              | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🔴 P0    | TASK-1337 | None              | **Alerts Center:** Implementar campo Root Cause para Critical/High                 | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟠 P1    | TASK-013  | Env Setup         | Projects CRUD tests (50 tests)                                                     | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟠 P1    | TASK-014  | Backend API       | Dashboard tests (20 tests)                                                         | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟠 P1    | TASK-051  | None              | API endpoints implemented (TODO)                                                   | `QUICK_SESSION_SUMMARY.md`                                    |
+| [ ]  | 🟠 P1    | TASK-1227 | Backend API       | Custom dashboard layouts                                                           | `docs\wireframes\01-dashboard.md`                             |
+| [ ]  | 🟠 P1    | TASK-1230 | Backend API       | Dashboard templates                                                                | `docs\wireframes\01-dashboard.md`                             |
+| [ ]  | 🟠 P1    | TASK-1238 | None              | Batch upload/import projects                                                       | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟠 P1    | TASK-1258 | Backend API       | Alert analytics dashboard                                                          | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟠 P1    | TASK-1339 | Backend API       | **Dashboard:** Implementar Sheet de drill-down para Coherence Score                | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟡 P2    | TASK-017  | Backend API       | UI component library tests (40 tests)                                              | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟡 P2    | TASK-1229 | None              | Export to PDF/Excel                                                                | `docs\wireframes\01-dashboard.md`                             |
+| [ ]  | 🟡 P2    | TASK-1237 | None              | Export to multiple formats (PDF, Excel, JSON)                                      | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟡 P2    | TASK-1239 | None              | Project templates                                                                  | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟡 P2    | TASK-1242 | None              | Interactive graph visualization (D3.js)                                            | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟡 P2    | TASK-1247 | None              | Export to multiple formats                                                         | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟡 P2    | TASK-1249 | None              | Evidence templates                                                                 | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟡 P2    | TASK-1254 | None              | Alert templates                                                                    | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟡 P2    | TASK-1272 | None              | RACI templates by project type                                                     | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟡 P2    | TASK-1344 | None              | **Stakeholder Map:** Implementar drag & drop con @dnd-kit                          | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-009  | Env Setup         | Create test utilities and helpers                                                  | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-010  | Env Setup         | Setup CI/CD pipeline for tests                                                     | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-015  | Env Setup         | Navigation tests (15 tests)                                                        | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-016  | Env Setup         | **Deliverable**: Core app functionality tested                                     | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-018  | Env Setup         | Form validation tests (25 tests)                                                   | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-019  | Env Setup         | Document management tests (20 tests)                                               | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-020  | None              | **Deliverable**: 80% code coverage achieved                                        | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-021  | Backend API       | Visual regression tests (all pages)                                                | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-022  | None              | Accessibility audit and fixes                                                      | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-023  | None              | Performance optimization                                                           | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-024  | Env Setup         | Cross-browser testing                                                              | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-025  | Backend API       | **Deliverable**: Production-ready test suite                                       | `FRONTEND_TESTING_PLAN.md`                                    |
+| [ ]  | 🟢 P3    | TASK-102  | None              | Database started                                                                   | `TEST_SUITES_COMPLETED_STATUS.md`                             |
+| [ ]  | 🟢 P3    | TASK-103  | Env Setup         | Tests run successfully                                                             | `TEST_SUITES_COMPLETED_STATUS.md`                             |
+| [ ]  | 🟢 P3    | TASK-104  | None              | Cleanup verified                                                                   | `TEST_SUITES_COMPLETED_STATUS.md`                             |
+| [ ]  | 🟢 P3    | TASK-105  | None              | Performance acceptable                                                             | `TEST_SUITES_COMPLETED_STATUS.md`                             |
+| [ ]  | 🟢 P3    | TASK-257  | None              | `case_id` follows naming convention                                                | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-258  | None              | `case_id` prefix matches primary dimension                                         | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-259  | None              | `name` is descriptive (5-200 characters)                                           | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-260  | None              | `dimensions` list is non-empty (1-6 items)                                         | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-261  | None              | `difficulty` matches number range                                                  | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-262  | None              | `input_documents` has `contract_path` and `schedule_path`                          | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-263  | Backend API       | `trajectory.required_nodes` has at least 1 node                                    | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-264  | None              | Difficulty number range matches directory (easy/001-099, etc.)                     | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-265  | None              | Dimensions in `expected_issues` match case `dimensions`                            | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-266  | None              | `rule_id` patterns match the rule format (`{PREFIX}-{NUMBER}`)                     | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-267  | Backend API       | No overlap between required/optional/forbidden nodes                               | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-268  | Env Setup         | Case tests a real, meaningful scenario                                             | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-269  | None              | Expected issues are realistic and verifiable                                       | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-270  | None              | Tool call assertions match actual workflow capabilities                            | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-271  | None              | Metadata includes `source_project` for traceability                                | `docs\CASE_CREATION_GUIDELINES.md`                            |
+| [ ]  | 🟢 P3    | TASK-1175 | Env Setup         | Variables con claves `pk_live_...` y `sk_live_...` (no test).                      | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🟢 P3    | TASK-1176 | None              | Dominio de producción configurado en Clerk (y URLs permitidas de sign-in/sign-up). | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🟢 P3    | TASK-1177 | None              | Plantillas de correo y remitente de producción verificados en Clerk.               | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🟢 P3    | TASK-1178 | Backend API       | Frontend desplegado con variables de producción.                                   | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🟢 P3    | TASK-1179 | Backend API       | Backend desplegado y accesible desde frontend.                                     | `docs\runbooks\CLERK_AUTH_DEV_PROD_GUIDE.md`                  |
+| [ ]  | 🟢 P3    | TASK-1228 | None              | Widget configuration                                                               | `docs\wireframes\01-dashboard.md`                             |
+| [ ]  | 🟢 P3    | TASK-1231 | None              | Real-time collaboration indicators                                                 | `docs\wireframes\01-dashboard.md`                             |
+| [ ]  | 🟢 P3    | TASK-1232 | None              | Column customization (show/hide columns)                                           | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1233 | None              | Save custom filter presets                                                         | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1234 | Backend API       | Inline editing (quick edit mode)                                                   | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1235 | Backend API       | Kanban view toggle                                                                 | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1236 | Backend API       | Advanced search with query builder                                                 | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1240 | None              | Favorites/bookmarks                                                                | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1241 | None              | Project tags/labels                                                                | `docs\wireframes\02-projects.md`                              |
+| [ ]  | 🟢 P3    | TASK-1243 | Backend API       | 3D relationship viewer                                                             | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1244 | Backend API       | Timeline view of evidence evolution                                                | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1245 | None              | Evidence comparison (before/after)                                                 | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1246 | None              | AI explanation of relationships                                                    | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1248 | None              | Collaborative annotations                                                          | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1250 | None              | Custom evidence chains                                                             | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1251 | None              | Integration with project chat                                                      | `docs\wireframes\03-evidence-viewer.md`                       |
+| [ ]  | 🟢 P3    | TASK-1252 | None              | Alert rules customization                                                          | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1253 | None              | Custom severity levels                                                             | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1255 | None              | Recurring alerts                                                                   | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1256 | None              | Alert subscriptions (email/Slack)                                                  | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1257 | None              | SLA tracking and violations                                                        | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1259 | None              | Machine learning for priority prediction                                           | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1260 | None              | Integration with project management tools                                          | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1261 | None              | Automated resolution suggestions                                                   | `docs\wireframes\04-alerts.md`                                |
+| [ ]  | 🟢 P3    | TASK-1273 | None              | Historical comparison (before/after)                                               | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1274 | None              | Workload analysis (how many R's per person)                                        | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1275 | None              | Conflict detection (overloaded stakeholders)                                       | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1276 | None              | Integration with HR systems                                                        | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1277 | None              | Auto-escalation for unassigned items                                               | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1278 | Backend API       | Mobile-optimized list view                                                         | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1279 | None              | Collaborative editing (real-time)                                                  | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1280 | None              | Version control (RACI history)                                                     | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1281 | None              | Custom role types (beyond RACI)                                                    | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1282 | None              | AI suggestions based on changes                                                    | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1283 | Backend API       | Gantt-style timeline view                                                          | `docs\wireframes\06-raci-matrix.md`                           |
+| [ ]  | 🟢 P3    | TASK-1284 | None              | API call to PATCH /api/extracted-entities/{id}                                     | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
+| [ ]  | 🟢 P3    | TASK-1285 | None              | API call to PATCH /api/extracted-entities/{id}                                     | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
+| [ ]  | 🟢 P3    | TASK-1286 | None              | integrar con backend)                                                              | `docs\wireframes\CE-S2-010_CRITICAL_FIX_01_IMPLEMENTATION.md` |
+| [ ]  | 🟢 P3    | TASK-1287 | None              | Crear branch `feature/highlight-search`                                            | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1288 | None              | Commit changes                                                                     | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1289 | None              | Push to remote                                                                     | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1290 | None              | Create PR con descripción arriba                                                   | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1291 | Backend API       | Request reviews                                                                    | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1292 | None              | ¿Cuál tarea? (especifica del cronograma)                                           | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1293 | None              | Crear plan de implementación                                                       | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1294 | None              | Proceder con desarrollo                                                            | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1295 | None              | ¿Qué feature? (Fuzzy Search / Search History / etc.)                               | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1296 | None              | Crear plan                                                                         | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1297 | None              | Implementar                                                                        | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1298 | Env Setup         | Ejecutar test cases críticos                                                       | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1299 | None              | Reportar resultados                                                                | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1300 | None              | Luego decidir A, B o C                                                             | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1301 | None              | Add screenshots or screen recording]                                               | `docs\wireframes\CE-S2-010_FINAL_SUMMARY.md`                  |
+| [ ]  | 🟢 P3    | TASK-1302 | None              | Hook useHighlightSearch implementado                                               | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1303 | None              | Componente HighlightSearchBar implementado                                         | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1304 | Backend API       | Integración en EvidenceViewer completada                                           | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1305 | None              | Keyboard shortcuts funcionando                                                     | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1306 | Env Setup         | Todos los test cases pasados                                                       | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1307 | None              | Performance verificada (< 500ms)                                                   | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1308 | Backend API       | Accessibility review completado                                                    | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1309 | None              | Documentación actualizada                                                          | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1310 | None              | Demo grabada para stakeholders                                                     | `docs\wireframes\CE-S2-010_HIGHLIGHT_SEARCH_PLAN.md`          |
+| [ ]  | 🟢 P3    | TASK-1311 | None              | Revisar este plan con el usuario                                                   | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1312 | None              | Confirmar prioridad (Media está OK)                                                | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1313 | Env Setup         | Decidir: ¿Implementar ahora o después del testing manual de Highlight Search?      | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1314 | None              | Crear branch `feature/keyboard-navigation`                                         | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1315 | None              | Implementar Fase 1: Estado (15 min)                                                | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1316 | None              | Implementar Fase 2: handleKeyDown (30 min)                                         | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1317 | None              | Implementar Fase 3: useEffect auto-navegación (30 min)                             | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1318 | Backend API       | Implementar Fase 4: Indicador UI (45 min)                                          | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1319 | None              | Implementar Fase 5: Reset documento (10 min)                                       | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1320 | None              | Implementar Fase 6: Accessibility (30 min)                                         | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1321 | Env Setup         | Testing local: Ejecutar 7 test cases (30 min)                                      | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1322 | Backend API       | Build verification: `npm run build` (0 errors)                                     | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1323 | None              | Commit con mensaje descriptivo                                                     | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1324 | None              | Push a remote                                                                      | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1325 | None              | Crear Pull Request                                                                 | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1326 | Backend API       | Solicitar code review                                                              | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1327 | None              | Merge después de aprobación                                                        | `docs\wireframes\CE-S2-010_KEYBOARD_NAVIGATION_PLAN.md`       |
+| [ ]  | 🟢 P3    | TASK-1328 | None              | Browser: Chrome/Firefox/Safari (specify: \***\*\_\*\***)                           | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1329 | None              | Screen Resolution: \***\*\_\*\***                                                  | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1330 | None              | OS: Windows/Mac/Linux (specify: \***\*\_\*\***)                                    | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1331 | None              | Application launches successfully                                                  | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1332 | Backend API       | Navigate to Evidence Viewer page                                                   | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1333 | None              | Confirm at least 1 document is loaded (e.g., Contract_Final.pdf)                   | `docs\wireframes\CE-S2-010_TESTING_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1334 | Backend API       | **Evidence Viewer:** Implementar Dialog de confirmación para Approve/Reject        | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1335 | Backend API       | **Evidence Viewer:** Agregar validación obligatoria para confidence < 90%          | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1336 | None              | **Alerts Center:** Agregar validación dinámica según severity                      | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1338 | Backend API       | **Evidence Viewer:** Integrar react-pdf para visor real                            | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1340 | None              | **Alerts Center:** Agregar Sheet lateral para detalles de alerta                   | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1341 | None              | **Alerts Center:** Implementar bulk actions con validación                         | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1342 | Backend API       | **Project List:** Agregar Quick View Sheet                                         | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1343 | Backend API       | **Evidence Viewer:** Implementar highlight sync PDF ↔ Data Panel                   | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1345 | Backend API       | **RACI Matrix:** Implementar Auto-Assign AI Dialog                                 | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1346 | None              | **Project List:** Implementar Dialog de creación de proyecto (wizard)              | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
+| [ ]  | 🟢 P3    | TASK-1347 | None              | **Todas las vistas:** Conectar con API backend real                                | `docs\wireframes\MOCKUP_REVIEW_SUMMARY.md`                    |
 
 ### 2.3 AI & Intelligence (118 tasks)
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🟠 P1 | TASK-216 | Backend API | **Prompt Analytics Dashboard**: Visualizar métricas por versión | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-1365 | None | Tools enable complete workflows, not just API endpoint wrappers | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟠 P1 | TASK-1391 | None | Server name follows format: `{service}-mcp-server` | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟠 P1 | TASK-1404 | None | Tools enable complete workflows, not just API endpoint wrappers | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟠 P1 | TASK-1413 | None | Server name follows format: `{service}_mcp` | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟡 P2 | TASK-218 | None | **Template Validator**: Linter para detectar errores en templates | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟡 P2 | TASK-220 | None | **Multi-idioma**: Soporte para templates en inglés/español | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-215 | None | Guardar en tabla ai_usage_logs | `apps\api\src\core\ai\CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-217 | Env Setup | **A/B Testing Framework**: Comparar v1.0 vs v1.1 automáticamente | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-219 | None | **Prompt Optimization**: Auto-sugerir mejoras basadas en métricas | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-221 | None | implementar) | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-222 | None | Implementar cache | `apps\api\src\core\ai\README_FLASH.md` |
-| [ ] | 🟢 P3 | TASK-272 | Env Setup | All 58 new tests added | `docs\COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-273 | Env Setup | All tests pass | `docs\COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-274 | None | Coverage >= 70% | `docs\COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-275 | Env Setup | No regression in existing tests | `docs\COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1088 | None | Formula: `score = 100 × e^(-λ × penalty_density)` | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1089 | None | Score never reaches 0 (floor = 5.0) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1090 | None | Score with findings never reaches 100 (ceiling = 97.0) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1091 | None | Larger scope (more clauses) absorbs findings better | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1092 | None | Low confidence findings have reduced impact | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1093 | None | Deterministic signals weighted higher than LLM | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1094 | None | Diagnostic output includes: penalty density, scope factor, severity distribution | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1095 | None | LLM returns `impact_score` and `confidence` floats | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1096 | None | Responses are validated and clamped to [0.0, 1.0] | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1097 | None | Batch prompt reduces token usage | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1098 | None | Cost tracking per evaluation | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1099 | None | Graceful fallback on parse errors | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1100 | None | Graph topology: `prepare_context → [det, rag, llm] (parallel) → cross_clause → scoring → format` | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1101 | None | Fan-out works correctly (parallel evaluation) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1102 | None | Fan-in collects all signals | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1103 | None | Subgraph compiles without errors | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1104 | None | Can be invoked standalone and from main pipeline | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1105 | None | Port follows hexagonal architecture (interface, not implementation) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1106 | None | pgvector cosine similarity query: `1 - (embedding <=> target)` | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1107 | None | Threshold configurable (default: 0.85) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1108 | None | Zero LLM cost (pure SQL) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1109 | None | Cross-document pairs detected and fed to cross_clause_eval | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1110 | None | `POST /v0/coherence/evaluate` returns `{"alerts": [...], "score": float}` (unchanged) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1111 | None | Score is now a granular float (not 0/100) | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1112 | None | low_budget_mode defaults to True | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1113 | None | Diagnostics available via query param or separate endpoint | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1114 | Env Setup | Golden tests: 0 findings → 100, moderate → 50-80, severe → 10-30 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1115 | None | Edge cases: empty clauses, missing data, malformed dates | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1116 | None | Cost stays under $0.01/project in low_budget_mode | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1117 | Env Setup | All existing tests pass | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md` |
-| [ ] | 🟢 P3 | TASK-1366 | None | Tool names reflect natural task subdivisions | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1367 | None | Response formats optimize for agent context efficiency | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1368 | None | Human-readable identifiers used where appropriate | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1369 | Backend API | Error messages guide agents toward correct usage | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1370 | None | FOCUSED IMPLEMENTATION: Most important and valuable tools implemented | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1371 | None | All tools registered using `registerTool` with complete configuration | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1372 | None | All tools include `title`, `description`, `inputSchema`, and `annotations` | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1373 | None | Annotations correctly set (readOnlyHint, destructiveHint, idempotentHint, openWorldHint) | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1374 | Env Setup | All tools use Zod schemas for runtime input validation with `.strict()` enforcement | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1375 | None | All Zod schemas have proper constraints and descriptive error messages | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1376 | None | All tools have comprehensive descriptions with explicit input/output types | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1377 | None | Descriptions include return value examples and complete schema documentation | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1378 | None | Error messages are clear, actionable, and educational | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1379 | None | TypeScript interfaces are defined for all data structures | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1380 | None | Strict TypeScript is enabled in tsconfig.json | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1381 | None | No use of `any` type - use `unknown` or proper types instead | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1382 | None | All async functions have explicit Promise<T> return types | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1383 | None | Error handling uses proper type guards (e.g., `axios.isAxiosError`, `z.ZodError`) | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1384 | None | Resources registered for appropriate data endpoints | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1385 | None | Appropriate transport configured (stdio or streamable HTTP) | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1386 | None | Notifications implemented for dynamic server capabilities | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1387 | None | Type-safe with SDK interfaces | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1388 | None | Package.json includes all necessary dependencies | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1389 | Backend API | Build script produces working JavaScript in dist/ directory | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1390 | None | Main entry point is properly configured as dist/index.js | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1392 | None | tsconfig.json properly configured with strict mode | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1393 | None | Pagination is properly implemented where applicable | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1394 | Env Setup | Large responses check CHARACTER_LIMIT constant and truncate with clear messages | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1395 | None | Filtering options are provided for potentially large result sets | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1396 | None | All network operations handle timeouts and connection errors gracefully | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1397 | None | Common functionality is extracted into reusable functions | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1398 | None | Return types are consistent across similar operations | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1399 | Backend API | `npm run build` completes successfully without errors | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1400 | None | dist/index.js created and executable | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1401 | Env Setup | Server runs: `node dist/index.js --help` | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1402 | None | All imports resolve correctly | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1403 | None | Sample tool calls work as expected | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1405 | None | Tool names reflect natural task subdivisions | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1406 | None | Response formats optimize for agent context efficiency | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1407 | None | Human-readable identifiers used where appropriate | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1408 | Backend API | Error messages guide agents toward correct usage | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1409 | None | FOCUSED IMPLEMENTATION: Most important and valuable tools implemented | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1410 | None | All tools have descriptive names and documentation | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1411 | None | Return types are consistent across similar operations | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1412 | None | Error handling is implemented for all external calls | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1414 | None | All network operations use async/await | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1415 | None | Common functionality is extracted into reusable functions | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1416 | None | Error messages are clear, actionable, and educational | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1417 | None | Outputs are properly validated and formatted | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1418 | None | All tools implement 'name' and 'annotations' in the decorator | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1419 | None | Annotations correctly set (readOnlyHint, destructiveHint, idempotentHint, openWorldHint) | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1420 | None | All tools use Pydantic BaseModel for input validation with Field() definitions | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1421 | None | All Pydantic Fields have explicit types and descriptions with constraints | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1422 | None | All tools have comprehensive docstrings with explicit input/output types | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1423 | None | Docstrings include complete schema structure for dict/JSON returns | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1424 | None | Pydantic models handle input validation (no manual validation needed) | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1425 | None | Context injection used for logging, progress, or elicitation | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1426 | None | Resources registered for appropriate data endpoints | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1427 | None | Lifespan management implemented for persistent connections | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1428 | None | Structured output types used (TypedDict, Pydantic models) | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1429 | None | Appropriate transport configured (stdio or streamable HTTP) | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1430 | None | File includes proper imports including Pydantic imports | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1431 | None | Pagination is properly implemented where applicable | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1432 | None | Filtering options are provided for potentially large result sets | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1433 | None | All async functions are properly defined with `async def` | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1434 | None | HTTP client usage follows async patterns with proper context managers | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1435 | None | Type hints are used throughout the code | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1436 | None | Constants are defined at module level in UPPER_CASE | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1437 | Env Setup | Server runs successfully: `python your_server.py --help` | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1438 | None | All imports resolve correctly | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1439 | None | Sample tool calls work as expected | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
-| [ ] | 🟢 P3 | TASK-1440 | None | Error scenarios handled gracefully | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+
+| Done | Priority | ID        | Dependency  | Description                                                                                      | Source File                                                        |
+| :--- | :------- | :-------- | :---------- | :----------------------------------------------------------------------------------------------- | :----------------------------------------------------------------- |
+| [ ]  | 🟠 P1    | TASK-216  | Backend API | **Prompt Analytics Dashboard**: Visualizar métricas por versión                                  | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟠 P1    | TASK-1365 | None        | Tools enable complete workflows, not just API endpoint wrappers                                  | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟠 P1    | TASK-1391 | None        | Server name follows format: `{service}-mcp-server`                                               | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟠 P1    | TASK-1404 | None        | Tools enable complete workflows, not just API endpoint wrappers                                  | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟠 P1    | TASK-1413 | None        | Server name follows format: `{service}_mcp`                                                      | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟡 P2    | TASK-218  | None        | **Template Validator**: Linter para detectar errores en templates                                | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟡 P2    | TASK-220  | None        | **Multi-idioma**: Soporte para templates en inglés/español                                       | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟢 P3    | TASK-215  | None        | Guardar en tabla ai_usage_logs                                                                   | `apps\api\src\core\ai\CE-S2-008_IMPLEMENTATION_SUMMARY.md`         |
+| [ ]  | 🟢 P3    | TASK-217  | Env Setup   | **A/B Testing Framework**: Comparar v1.0 vs v1.1 automáticamente                                 | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟢 P3    | TASK-219  | None        | **Prompt Optimization**: Auto-sugerir mejoras basadas en métricas                                | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟢 P3    | TASK-221  | None        | implementar)                                                                                     | `apps\api\src\core\ai\PROMPT_TEMPLATES_GUIDE.md`                   |
+| [ ]  | 🟢 P3    | TASK-222  | None        | Implementar cache                                                                                | `apps\api\src\core\ai\README_FLASH.md`                             |
+| [ ]  | 🟢 P3    | TASK-272  | Env Setup   | All 58 new tests added                                                                           | `docs\COVERAGE_IMPROVEMENT_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-273  | Env Setup   | All tests pass                                                                                   | `docs\COVERAGE_IMPROVEMENT_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-274  | None        | Coverage >= 70%                                                                                  | `docs\COVERAGE_IMPROVEMENT_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-275  | Env Setup   | No regression in existing tests                                                                  | `docs\COVERAGE_IMPROVEMENT_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-1088 | None        | Formula: `score = 100 × e^(-λ × penalty_density)`                                                | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1089 | None        | Score never reaches 0 (floor = 5.0)                                                              | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1090 | None        | Score with findings never reaches 100 (ceiling = 97.0)                                           | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1091 | None        | Larger scope (more clauses) absorbs findings better                                              | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1092 | None        | Low confidence findings have reduced impact                                                      | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1093 | None        | Deterministic signals weighted higher than LLM                                                   | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1094 | None        | Diagnostic output includes: penalty density, scope factor, severity distribution                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1095 | None        | LLM returns `impact_score` and `confidence` floats                                               | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1096 | None        | Responses are validated and clamped to [0.0, 1.0]                                                | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1097 | None        | Batch prompt reduces token usage                                                                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1098 | None        | Cost tracking per evaluation                                                                     | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1099 | None        | Graceful fallback on parse errors                                                                | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1100 | None        | Graph topology: `prepare_context → [det, rag, llm] (parallel) → cross_clause → scoring → format` | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1101 | None        | Fan-out works correctly (parallel evaluation)                                                    | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1102 | None        | Fan-in collects all signals                                                                      | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1103 | None        | Subgraph compiles without errors                                                                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1104 | None        | Can be invoked standalone and from main pipeline                                                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1105 | None        | Port follows hexagonal architecture (interface, not implementation)                              | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1106 | None        | pgvector cosine similarity query: `1 - (embedding <=> target)`                                   | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1107 | None        | Threshold configurable (default: 0.85)                                                           | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1108 | None        | Zero LLM cost (pure SQL)                                                                         | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1109 | None        | Cross-document pairs detected and fed to cross_clause_eval                                       | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1110 | None        | `POST /v0/coherence/evaluate` returns `{"alerts": [...], "score": float}` (unchanged)            | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1111 | None        | Score is now a granular float (not 0/100)                                                        | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1112 | None        | low_budget_mode defaults to True                                                                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1113 | None        | Diagnostics available via query param or separate endpoint                                       | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1114 | Env Setup   | Golden tests: 0 findings → 100, moderate → 50-80, severe → 10-30                                 | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1115 | None        | Edge cases: empty clauses, missing data, malformed dates                                         | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1116 | None        | Cost stays under $0.01/project in low_budget_mode                                                | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1117 | Env Setup   | All existing tests pass                                                                          | `docs\coherence_engine\IMPLEMENTATION_PLAN_v3.md`                  |
+| [ ]  | 🟢 P3    | TASK-1366 | None        | Tool names reflect natural task subdivisions                                                     | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1367 | None        | Response formats optimize for agent context efficiency                                           | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1368 | None        | Human-readable identifiers used where appropriate                                                | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1369 | Backend API | Error messages guide agents toward correct usage                                                 | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1370 | None        | FOCUSED IMPLEMENTATION: Most important and valuable tools implemented                            | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1371 | None        | All tools registered using `registerTool` with complete configuration                            | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1372 | None        | All tools include `title`, `description`, `inputSchema`, and `annotations`                       | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1373 | None        | Annotations correctly set (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)         | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1374 | Env Setup   | All tools use Zod schemas for runtime input validation with `.strict()` enforcement              | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1375 | None        | All Zod schemas have proper constraints and descriptive error messages                           | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1376 | None        | All tools have comprehensive descriptions with explicit input/output types                       | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1377 | None        | Descriptions include return value examples and complete schema documentation                     | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1378 | None        | Error messages are clear, actionable, and educational                                            | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1379 | None        | TypeScript interfaces are defined for all data structures                                        | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1380 | None        | Strict TypeScript is enabled in tsconfig.json                                                    | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1381 | None        | No use of `any` type - use `unknown` or proper types instead                                     | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1382 | None        | All async functions have explicit Promise<T> return types                                        | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1383 | None        | Error handling uses proper type guards (e.g., `axios.isAxiosError`, `z.ZodError`)                | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1384 | None        | Resources registered for appropriate data endpoints                                              | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1385 | None        | Appropriate transport configured (stdio or streamable HTTP)                                      | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1386 | None        | Notifications implemented for dynamic server capabilities                                        | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1387 | None        | Type-safe with SDK interfaces                                                                    | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1388 | None        | Package.json includes all necessary dependencies                                                 | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1389 | Backend API | Build script produces working JavaScript in dist/ directory                                      | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1390 | None        | Main entry point is properly configured as dist/index.js                                         | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1392 | None        | tsconfig.json properly configured with strict mode                                               | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1393 | None        | Pagination is properly implemented where applicable                                              | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1394 | Env Setup   | Large responses check CHARACTER_LIMIT constant and truncate with clear messages                  | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1395 | None        | Filtering options are provided for potentially large result sets                                 | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1396 | None        | All network operations handle timeouts and connection errors gracefully                          | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1397 | None        | Common functionality is extracted into reusable functions                                        | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1398 | None        | Return types are consistent across similar operations                                            | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1399 | Backend API | `npm run build` completes successfully without errors                                            | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1400 | None        | dist/index.js created and executable                                                             | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1401 | Env Setup   | Server runs: `node dist/index.js --help`                                                         | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1402 | None        | All imports resolve correctly                                                                    | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1403 | None        | Sample tool calls work as expected                                                               | `Skills\.agents\skills\mcp-builder\reference\node_mcp_server.md`   |
+| [ ]  | 🟢 P3    | TASK-1405 | None        | Tool names reflect natural task subdivisions                                                     | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1406 | None        | Response formats optimize for agent context efficiency                                           | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1407 | None        | Human-readable identifiers used where appropriate                                                | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1408 | Backend API | Error messages guide agents toward correct usage                                                 | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1409 | None        | FOCUSED IMPLEMENTATION: Most important and valuable tools implemented                            | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1410 | None        | All tools have descriptive names and documentation                                               | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1411 | None        | Return types are consistent across similar operations                                            | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1412 | None        | Error handling is implemented for all external calls                                             | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1414 | None        | All network operations use async/await                                                           | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1415 | None        | Common functionality is extracted into reusable functions                                        | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1416 | None        | Error messages are clear, actionable, and educational                                            | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1417 | None        | Outputs are properly validated and formatted                                                     | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1418 | None        | All tools implement 'name' and 'annotations' in the decorator                                    | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1419 | None        | Annotations correctly set (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)         | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1420 | None        | All tools use Pydantic BaseModel for input validation with Field() definitions                   | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1421 | None        | All Pydantic Fields have explicit types and descriptions with constraints                        | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1422 | None        | All tools have comprehensive docstrings with explicit input/output types                         | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1423 | None        | Docstrings include complete schema structure for dict/JSON returns                               | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1424 | None        | Pydantic models handle input validation (no manual validation needed)                            | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1425 | None        | Context injection used for logging, progress, or elicitation                                     | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1426 | None        | Resources registered for appropriate data endpoints                                              | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1427 | None        | Lifespan management implemented for persistent connections                                       | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1428 | None        | Structured output types used (TypedDict, Pydantic models)                                        | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1429 | None        | Appropriate transport configured (stdio or streamable HTTP)                                      | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1430 | None        | File includes proper imports including Pydantic imports                                          | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1431 | None        | Pagination is properly implemented where applicable                                              | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1432 | None        | Filtering options are provided for potentially large result sets                                 | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1433 | None        | All async functions are properly defined with `async def`                                        | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1434 | None        | HTTP client usage follows async patterns with proper context managers                            | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1435 | None        | Type hints are used throughout the code                                                          | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1436 | None        | Constants are defined at module level in UPPER_CASE                                              | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1437 | Env Setup   | Server runs successfully: `python your_server.py --help`                                         | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1438 | None        | All imports resolve correctly                                                                    | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1439 | None        | Sample tool calls work as expected                                                               | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
+| [ ]  | 🟢 P3    | TASK-1440 | None        | Error scenarios handled gracefully                                                               | `Skills\.agents\skills\mcp-builder\reference\python_mcp_server.md` |
 
 ### 2.4 DevOps & Infrastructure (5 tasks)
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🔴 P0 | TASK-196 | Env Setup | E2E security tests: PASSED | `.github\CICD_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-026 | None | GREEN phase - Re-enable when [component] is integrated` | `GITHUB_ACTIONS_SETUP_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-194 | Env Setup | Unit tests: PASSED | `.github\CICD_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-195 | Env Setup | Integration tests: PASSED | `.github\CICD_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-197 | None | Coverage: ≥60% (orange), ≥80% (green) | `.github\CICD_SETUP.md` |
+
+| Done | Priority | ID       | Dependency | Description                                             | Source File                        |
+| :--- | :------- | :------- | :--------- | :------------------------------------------------------ | :--------------------------------- |
+| [ ]  | 🔴 P0    | TASK-196 | Env Setup  | E2E security tests: PASSED                              | `.github\CICD_SETUP.md`            |
+| [ ]  | 🟢 P3    | TASK-026 | None       | GREEN phase - Re-enable when [component] is integrated` | `GITHUB_ACTIONS_SETUP_COMPLETE.md` |
+| [ ]  | 🟢 P3    | TASK-194 | Env Setup  | Unit tests: PASSED                                      | `.github\CICD_SETUP.md`            |
+| [ ]  | 🟢 P3    | TASK-195 | Env Setup  | Integration tests: PASSED                               | `.github\CICD_SETUP.md`            |
+| [ ]  | 🟢 P3    | TASK-197 | None       | Coverage: ≥60% (orange), ≥80% (green)                   | `.github\CICD_SETUP.md`            |
 
 ### 2.5 Testing & Quality (87 tasks)
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🔴 P0 | TASK-044 | None | Python 3.11+ installed | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🔴 P0 | TASK-047 | Env Setup | PostgreSQL running (optional - SQLite fallback available) | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🔴 P0 | TASK-227 | None | `get_auth_headers()` - Headers con JWT válido | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🔴 P0 | TASK-244 | Env Setup | Configurar BD de test (PostgreSQL test) | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🔴 P0 | TASK-1183 | None | PostgreSQL iniciado (`docker-compose up -d`) | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🔴 P0 | TASK-1186 | Env Setup | Tests ejecutados (`pytest tests/security/ -v`) | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🔴 P0 | TASK-1197 | Env Setup | E2E críticos pasan (`pytest tests/e2e -m critical`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟠 P1 | TASK-239 | Env Setup | test_tenant_cannot_access_other_tenant_projects | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟠 P1 | TASK-1203 | None | Use case input/output contracts | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-045 | None | Virtual environment activated (`apps/.venv`) | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-046 | None | Dependencies installed (Option 1 or 2 above) | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-048 | Backend API | `pyfiebdc` removed/commented from `requirements.txt` | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-049 | None | Working directory: `apps/api` | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-223 | Env Setup | `client: AsyncClient` - Cliente HTTP de test | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-224 | Env Setup | `db_session` - Sesión de BD de test | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-225 | Env Setup | `test_app` - Instancia de FastAPI para tests | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-226 | Env Setup | `create_test_token()` - Genera JWT custom | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-228 | None | `create_expired_token()` - Token expirado | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-229 | None | `create_invalid_signature_token()` - Firma inválida | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-230 | None | `create_tenant()` - Crea tenant en BD | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-231 | None | `create_user()` - Crea usuario en BD | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-232 | None | `create_project()` - Crea proyecto en BD | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-233 | None | `create_document()` - Crea documento en BD | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-234 | Env Setup | test_protected_endpoint_with_valid_jwt | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-235 | Env Setup | test_protected_endpoint_with_invalid_signature_jwt | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-236 | Env Setup | test_protected_endpoint_with_expired_jwt | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-237 | Env Setup | test_protected_endpoint_with_missing_jwt | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-238 | Env Setup | test_protected_endpoint_with_jwt_for_non_existent_tenant | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-240 | Env Setup | test_user_cannot_upload_document_to_other_tenant_project | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-241 | Env Setup | test_user_cannot_access_clauses_from_other_tenant | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-242 | Env Setup | test_sql_injection_in_project_search (4 payloads) | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-243 | Env Setup | test_sql_injection_in_path_parameter | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-245 | None | Implementar fixtures base (client, db_session) | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-246 | None | Implementar helpers de autenticación | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-247 | Env Setup | Ejecutar migraciones en BD de test | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-248 | None | Implementar factories de datos | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-249 | Env Setup | Completar 5 tests de JWT | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-250 | None | Validar todos pasen | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-251 | Env Setup | Implementar tests cross-tenant | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-252 | None | Validar políticas RLS | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-253 | None | Documentar casos edge | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-254 | Env Setup | Implementar tests con payloads | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-255 | None | Validar protección de ORMs | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-256 | None | Documentar superficie de ataque | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-1180 | None | Docker Desktop instalado | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1181 | None | Docker Desktop corriendo (ícono verde) | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1182 | None | `docker ps` funciona sin error | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1184 | None | Esperar 10 segundos | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1185 | None | Migraciones aplicadas (`psql < migrations/002_*.sql`) | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1187 | None | Ver resultado: `42 passed` ✅ | `docs\runbooks\INSTRUCCIONES_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-1188 | Env Setup | Todos los tests unitarios pasan (`pytest tests/unit -v`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1189 | Env Setup | Coverage > 80% en código nuevo (`pytest --cov`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1190 | Env Setup | No hay tests marcados como `skip` sin justificación | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1191 | Env Setup | No hay tests con `pytest.fail("TODO")` en código completado | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1192 | Env Setup | Linting pasa (`ruff check .`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1193 | Env Setup | Type checking pasa (`mypy .`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1194 | Env Setup | Tests de integración pasan (`pytest tests/integration -v`) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1195 | Env Setup | No hay flaky tests | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1196 | None | Coverage total > 85% | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1198 | Env Setup | Documentación de tests actualizada | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1199 | None | TS-I13-EDGE-001 - Conditional edges para orquestación LangGraph - [ ] En progreso (ruteo por `intent` + `evidence gate` parcial; faltan casos HITL/citations) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-1200 | Env Setup | WBS API schema validation (10 tests) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1201 | None | Error response contracts (validation, 404, 400) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1202 | Env Setup | Domain entity contracts (10 tests) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1204 | Env Setup | WBSTree prop interface (10 tests) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1205 | None | WBSItemCard rendering contract | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1206 | None | Event handler contracts (onSelect, onExpand) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1207 | None | State management contracts | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1208 | Env Setup | Cross-module navigation patterns (6 tests) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1209 | Backend API | API-to-frontend data flow | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1210 | None | State synchronization contracts | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1211 | None | Create WBS item with auto-generated code | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1212 | None | Create child item inherits parent code | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1213 | None | Validate maximum depth (level 4) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1214 | None | Move item updates code and level | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1215 | None | Prevent circular references | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1216 | None | Delete with cascade removes descendants | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1217 | None | Delete without cascade fails if has children | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1218 | None | Filter by completion status | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1219 | None | Search by name/code/description | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1220 | None | Color-code by alert severity | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1221 | None | Keyboard navigation (Arrow keys, Tab, Enter) | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1222 | None | Touch targets minimum 44px | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1223 | None | Swipe gestures on mobile | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1224 | None | ARIA tree structure | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1225 | None | No accessibility violations | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md` |
-| [ ] | 🟢 P3 | TASK-1226 | Env Setup | Full clean end-to-end execution summary for every runnable test completed in this session | `docs\testing\TEST_INVENTORY_2026-03-02.md` |
+
+| Done | Priority | ID        | Dependency  | Description                                                                                                                                                   | Source File                                        |
+| :--- | :------- | :-------- | :---------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------- |
+| [x]  | 🔴 P0    | TASK-044  | None        | Python 3.11+ installed                                                                                                                                        | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [x]  | 🔴 P0    | TASK-047  | Env Setup   | PostgreSQL running (optional - SQLite fallback available)                                                                                                     | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [ ]  | 🔴 P0    | TASK-227  | None        | `get_auth_headers()` - Headers con JWT válido                                                                                                                 | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🔴 P0    | TASK-244  | Env Setup   | Configurar BD de test (PostgreSQL test)                                                                                                                       | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [x]  | 🔴 P0    | TASK-1183 | None        | PostgreSQL iniciado (`docker-compose up -d`)                                                                                                                  | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🔴 P0    | TASK-1186 | Env Setup   | Tests ejecutados (`pytest tests/security/ -v`)                                                                                                                | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🔴 P0    | TASK-1197 | Env Setup   | E2E críticos pasan (`pytest tests/e2e -m critical`)                                                                                                           | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟠 P1    | TASK-239  | Env Setup   | test_tenant_cannot_access_other_tenant_projects                                                                                                               | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟠 P1    | TASK-1203 | None        | Use case input/output contracts                                                                                                                               | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [x]  | 🟢 P3    | TASK-045  | None        | Virtual environment activated (`apps/.venv`)                                                                                                                  | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [x]  | 🟢 P3    | TASK-046  | None        | Dependencies installed (Option 1 or 2 above)                                                                                                                  | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [ ]  | 🟢 P3    | TASK-048  | Backend API | `pyfiebdc` removed/commented from `requirements.txt`                                                                                                          | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [ ]  | 🟢 P3    | TASK-049  | None        | Working directory: `apps/api`                                                                                                                                 | `NEXT_STEPS_TO_RUN_TESTS.md`                       |
+| [ ]  | 🟢 P3    | TASK-223  | Env Setup   | `client: AsyncClient` - Cliente HTTP de test                                                                                                                  | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-224  | Env Setup   | `db_session` - Sesión de BD de test                                                                                                                           | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-225  | Env Setup   | `test_app` - Instancia de FastAPI para tests                                                                                                                  | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-226  | Env Setup   | `create_test_token()` - Genera JWT custom                                                                                                                     | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-228  | None        | `create_expired_token()` - Token expirado                                                                                                                     | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-229  | None        | `create_invalid_signature_token()` - Firma inválida                                                                                                           | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-230  | None        | `create_tenant()` - Crea tenant en BD                                                                                                                         | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-231  | None        | `create_user()` - Crea usuario en BD                                                                                                                          | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-232  | None        | `create_project()` - Crea proyecto en BD                                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-233  | None        | `create_document()` - Crea documento en BD                                                                                                                    | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-234  | Env Setup   | test_protected_endpoint_with_valid_jwt                                                                                                                        | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-235  | Env Setup   | test_protected_endpoint_with_invalid_signature_jwt                                                                                                            | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-236  | Env Setup   | test_protected_endpoint_with_expired_jwt                                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-237  | Env Setup   | test_protected_endpoint_with_missing_jwt                                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-238  | Env Setup   | test_protected_endpoint_with_jwt_for_non_existent_tenant                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-240  | Env Setup   | test_user_cannot_upload_document_to_other_tenant_project                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-241  | Env Setup   | test_user_cannot_access_clauses_from_other_tenant                                                                                                             | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-242  | Env Setup   | test_sql_injection_in_project_search (4 payloads)                                                                                                             | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-243  | Env Setup   | test_sql_injection_in_path_parameter                                                                                                                          | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-245  | None        | Implementar fixtures base (client, db_session)                                                                                                                | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-246  | None        | Implementar helpers de autenticación                                                                                                                          | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-247  | Env Setup   | Ejecutar migraciones en BD de test                                                                                                                            | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-248  | None        | Implementar factories de datos                                                                                                                                | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-249  | Env Setup   | Completar 5 tests de JWT                                                                                                                                      | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-250  | None        | Validar todos pasen                                                                                                                                           | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-251  | Env Setup   | Implementar tests cross-tenant                                                                                                                                | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-252  | None        | Validar políticas RLS                                                                                                                                         | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-253  | None        | Documentar casos edge                                                                                                                                         | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-254  | Env Setup   | Implementar tests con payloads                                                                                                                                | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-255  | None        | Validar protección de ORMs                                                                                                                                    | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-256  | None        | Documentar superficie de ataque                                                                                                                               | `apps\api\tests\security\SECURITY_TESTS_STATUS.md` |
+| [ ]  | 🟢 P3    | TASK-1180 | None        | Docker Desktop instalado                                                                                                                                      | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1181 | None        | Docker Desktop corriendo (ícono verde)                                                                                                                        | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1182 | None        | `docker ps` funciona sin error                                                                                                                                | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1184 | None        | Esperar 10 segundos                                                                                                                                           | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1185 | None        | Migraciones aplicadas (`psql < migrations/002_*.sql`)                                                                                                         | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1187 | None        | Ver resultado: `42 passed` ✅                                                                                                                                 | `docs\runbooks\INSTRUCCIONES_TESTS.md`             |
+| [ ]  | 🟢 P3    | TASK-1188 | Env Setup   | Todos los tests unitarios pasan (`pytest tests/unit -v`)                                                                                                      | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1189 | Env Setup   | Coverage > 80% en código nuevo (`pytest --cov`)                                                                                                               | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1190 | Env Setup   | No hay tests marcados como `skip` sin justificación                                                                                                           | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1191 | Env Setup   | No hay tests con `pytest.fail("TODO")` en código completado                                                                                                   | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1192 | Env Setup   | Linting pasa (`ruff check .`)                                                                                                                                 | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1193 | Env Setup   | Type checking pasa (`mypy .`)                                                                                                                                 | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1194 | Env Setup   | Tests de integración pasan (`pytest tests/integration -v`)                                                                                                    | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1195 | Env Setup   | No hay flaky tests                                                                                                                                            | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1196 | None        | Coverage total > 85%                                                                                                                                          | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1198 | Env Setup   | Documentación de tests actualizada                                                                                                                            | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1199 | None        | TS-I13-EDGE-001 - Conditional edges para orquestación LangGraph - [ ] En progreso (ruteo por `intent` + `evidence gate` parcial; faltan casos HITL/citations) | `docs\testing\C2PRO_TDD_BACKLOG_v1.0.md`           |
+| [ ]  | 🟢 P3    | TASK-1200 | Env Setup   | WBS API schema validation (10 tests)                                                                                                                          | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1201 | None        | Error response contracts (validation, 404, 400)                                                                                                               | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1202 | Env Setup   | Domain entity contracts (10 tests)                                                                                                                            | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1204 | Env Setup   | WBSTree prop interface (10 tests)                                                                                                                             | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1205 | None        | WBSItemCard rendering contract                                                                                                                                | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1206 | None        | Event handler contracts (onSelect, onExpand)                                                                                                                  | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1207 | None        | State management contracts                                                                                                                                    | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1208 | Env Setup   | Cross-module navigation patterns (6 tests)                                                                                                                    | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1209 | Backend API | API-to-frontend data flow                                                                                                                                     | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1210 | None        | State synchronization contracts                                                                                                                               | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1211 | None        | Create WBS item with auto-generated code                                                                                                                      | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1212 | None        | Create child item inherits parent code                                                                                                                        | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1213 | None        | Validate maximum depth (level 4)                                                                                                                              | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1214 | None        | Move item updates code and level                                                                                                                              | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1215 | None        | Prevent circular references                                                                                                                                   | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1216 | None        | Delete with cascade removes descendants                                                                                                                       | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1217 | None        | Delete without cascade fails if has children                                                                                                                  | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1218 | None        | Filter by completion status                                                                                                                                   | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1219 | None        | Search by name/code/description                                                                                                                               | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1220 | None        | Color-code by alert severity                                                                                                                                  | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1221 | None        | Keyboard navigation (Arrow keys, Tab, Enter)                                                                                                                  | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1222 | None        | Touch targets minimum 44px                                                                                                                                    | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1223 | None        | Swipe gestures on mobile                                                                                                                                      | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1224 | None        | ARIA tree structure                                                                                                                                           | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1225 | None        | No accessibility violations                                                                                                                                   | `docs\testing\C2PRO_TDD_TEST_REGISTRY.md`          |
+| [ ]  | 🟢 P3    | TASK-1226 | Env Setup   | Full clean end-to-end execution summary for every runnable test completed in this session                                                                     | `docs\testing\TEST_INVENTORY_2026-03-02.md`        |
 
 ### 2.6 General & Management (293 tasks)
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🔴 P0 | TASK-001 | None | Python 3.11 installed (recommended) OR | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-002 | Backend API | Visual Studio Build Tools installed (if using Python 3.13) | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-003 | None | Virtual environment activated | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-004 | Backend API | Dependencies installed: `pip install -r requirements.txt` | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-005 | Env Setup | PostgreSQL test database running (optional - SQLite fallback available) | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-006 | None | RLS migration applied: `alembic upgrade head` (if using PostgreSQL) | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-007 | None | Working directory: `apps/api` | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` |
-| [ ] | 🔴 P0 | TASK-027 | Security Sign-off | **[ENV-001]** \| File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` \| Status: Pending \| **Description:** Setup production-like environment for security benchmarks. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-028 | Backend API | **[ENV-002]** \| File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` \| Status: Pending \| **Description:** Run and measure p95 latency for E2E security suite. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-033 | Backend API | **[FE-001]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Setup Vitest, Playwright, and MSW for all frontend modules. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-034 | Backend API | **[FE-002]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Write and validate 30 Authentication tests (Auth flow). | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-041 | None | **[DOC-001]** \| File: `signoff.md` \| Status: Pending \| **Description:** Obtain formal approvals for Product, Security, and Operations in the release bundle. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-055 | None | **Gate 8**: Document Security | `README.md` |
-| [ ] | 🔴 P0 | TASK-088 | Env Setup | Run security tests: `pytest tests/golden/test_security.py -v` | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🔴 P0 | TASK-094 | Backend API | Code review with security focus | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🔴 P0 | TASK-095 | None | Update SECURITY_AUDIT document with fixes | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🔴 P0 | TASK-112 | Backend API | Authentication required (or explicitly marked as public) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-113 | Env Setup | Authorization checked (user can only access their own resources) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-149 | Env Setup | Authorization checks before sensitive operations | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-150 | None | Row Level Security enabled in Supabase | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-163 | None | User-based rate limiting (authenticated) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-176 | None | Regular security updates | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-182 | None | **Authentication**: Proper token handling | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-183 | Env Setup | **Authorization**: Role checks in place | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-186 | None | **Security Headers**: CSP, X-Frame-Options configured | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-190 | None | **Row Level Security**: Enabled in Supabase | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🔴 P0 | TASK-1052 | Backend API | Build minimum E2E test suite (critical paths only) | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🔴 P0 | TASK-1125 | None | Security E2E: PASS (60% coverage) | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🔴 P0 | TASK-1136 | None | Manual Signoffs: Product, Security, Operations | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🔴 P0 | TASK-1140 | None | No ORM fallback code path remains in auth bootstrap helpers. | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
-| [ ] | 🔴 P0 | TASK-1141 | Env Setup | All auth bootstrap and tenant isolation tests pass. | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
-| [ ] | 🔴 P0 | TASK-1142 | Env Setup | Runbook `docs/runbooks/AUTH_BOOTSTRAP_FALLBACK_POLICY.md` updated to reflect SQL-only posture. | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
-| [ ] | 🔴 P0 | TASK-1149 | None | Coverage >80% critical paths | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🔴 P0 | TASK-1150 | None | No high/critical vulnerabilities (Snyk) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🔴 P0 | TASK-1350 | Backend API | Required suite artifacts remain pending in `manifest.yaml` for `backend`, `frontend`, `security`, `evaluation`, and `reliability`. | `evidence\releases\2026-03-24-rc1\signoff.md` |
-| [ ] | 🔴 P0 | TASK-1351 | None | Manual approvals remain pending for product, security, operations, and release authority. | `evidence\releases\2026-03-24-rc1\signoff.md` |
-| [ ] | 🟠 P1 | TASK-037 | Backend API | **[FE-005]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Connect all UI views to the real Backend API (currently using mocks in some areas). | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟠 P1 | TASK-120 | None | Are all dependencies injected via FastAPI or Service constructors? | `.claude\skills\c2pro-doc-analyzer\SKILL.md` |
-| [ ] | 🟠 P1 | TASK-160 | None | Rate limiting on all API endpoints | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟠 P1 | TASK-1057 | Backend API | No existe `app/dashboard/` (solo `app/(app)/`) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟠 P1 | TASK-1069 | None | No existen `_Default*Service` que retornen datos ficticios | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟠 P1 | TASK-1078 | None | Cada nodo wrappea un use case existente (no duplica lógica) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟠 P1 | TASK-1080 | None | HITL tiene service implementation (no solo ports) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟠 P1 | TASK-1361 | Backend API | Should the verifier produce JSON in addition to markdown for future dashboarding? | `openspec\changes\openspec-bootstrap-v2\design.md` |
-| [ ] | 🟡 P2 | TASK-036 | Backend API | **[FE-004]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Implement `dnd-kit` for Stakeholder Map drag & drop functionality. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟡 P2 | TASK-039 | Env Setup | **[QA-002]** \| File: `CE-S2-010_VERIFICATION_REPORT.md` \| Status: Pending \| **Description:** Execute test cases TC-001 to TC-010 for Wireframe Specs verification. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟡 P2 | TASK-1356 | None | Should reusable proposal/spec/tasks templates be introduced in a separate follow-up change? | `openspec\changes\openspec-bootstrap\design.md` |
-| [ ] | 🟡 P2 | TASK-1358 | Backend API | At least one follow-up change can be created using the new structure without path or template ambiguity. | `openspec\changes\openspec-bootstrap\proposal.md` |
-| [ ] | 🟢 P3 | TASK-029 | None | **[ENV-003]** \| File: `signoff.md` \| Status: Pending \| **Description:** Refresh Performance and Disaster Recovery (DR) evidence. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-030 | None | **[BK-001]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: In Progress \| **Description:** Complete conditional edges for LangGraph orchestration (HITL/citations cases). | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-031 | Security Sign-off | **[BK-002]** \| File: `signoff.md` \| Status: Pending \| **Description:** Finalize Swagger workbook and obtain Product sign-off. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-032 | Security Sign-off | **[BK-003]** \| File: `signoff.md` \| Status: Pending \| **Description:** Dispatch `.github/workflows/deploy-production.yml` after production-gated rehearsal. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-035 | Backend API | **[FE-003]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Implement `react-pdf` for the real Evidence Viewer in the UI. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-038 | Env Setup | **[QA-001]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: Pending \| **Description:** Execute 48 E2E Test Cases (Cypress/Playwright) - 0% currently implemented. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-040 | Backend API | **[QA-003]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Perform full Accessibility Audit and implement fixes for WCAG AA compliance. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-042 | Env Setup | **[DOC-002]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: Pending \| **Description:** Implement remaining P3 (Low Priority) Unit Tests (44 tests). | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-043 | Backend API | **[DOC-003]** \| File: `MASTER_AUDIT_PLAN.md` \| Status: In Progress \| **Description:** Sync all TDD Backlog counts with the Exhaustive Suite Index v1.1.1. | `MASTER_AUDIT_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-052 | None | **Gate 5**: Coherence Score Formal (en progreso) | `README.md` |
-| [ ] | 🟢 P3 | TASK-053 | None | **Gate 6**: Human-in-the-loop | `README.md` |
-| [ ] | 🟢 P3 | TASK-054 | None | **Gate 7**: Observability | `README.md` |
-| [ ] | 🟢 P3 | TASK-056 | None | **Fase 2**: Coherence Engine MVP (Sprint S2 - 65%) | `README.md` |
-| [ ] | 🟢 P3 | TASK-057 | None | **Fase 3**: Copiloto de Compras | `README.md` |
-| [ ] | 🟢 P3 | TASK-058 | None | **Fase 4**: Control de Ejecución | `README.md` |
-| [ ] | 🟢 P3 | TASK-059 | None | Add case_id validation to reject path separators (`/`, `\`, `..`) | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-060 | None | Use `Path.resolve()` and `is_relative_to()` for path validation | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-061 | Env Setup | Add unit tests for path traversal attempts | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-062 | None | Verify Windows and Unix patterns are blocked | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-063 | None | Add `MAX_JSON_SIZE` constant (10MB recommended) | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-064 | Env Setup | Check `file.stat().st_size` before loading | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-065 | Env Setup | Add test for oversized file rejection | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-066 | None | Add `@field_validator('metadata')` to GoldenCase | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-067 | None | Limit to 100 keys maximum | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-068 | None | Limit to 5 levels of nesting | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-069 | Env Setup | Add test cases for each constraint | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-070 | None | Remove file paths from error messages | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-071 | None | Log only case_id in user-facing errors | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-072 | None | Keep detailed errors in server-side logs only | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-073 | None | Add `model_config = ConfigDict(frozen=True)` to: | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-074 | None | TrajectoryConstraint | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-075 | None | ToolCallAssertion | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-076 | None | StateAssertion | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-077 | None | CoherenceIssueAssertion | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-078 | None | InputDocuments | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-079 | None | GoldenCase | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-080 | None | Add structured logging for access attempts | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-081 | None | Log path traversal blocks with `warning` level | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-082 | None | Log validation failures | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-083 | None | Use consistent log format | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-084 | None | Create TypedDict or Pydantic models for actual results | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-085 | None | Replace `dict[str, Any]` with typed inputs | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-086 | None | Add input validation to evaluators | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-087 | Backend API | Run full test suite: `pytest tests/golden/ -v` | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-089 | Env Setup | Manual testing: | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-090 | None | Try `loader.load_case("../../../etc/passwd")` | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-091 | None | Try `loader.load_case("..\\..\\Windows")` | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-092 | None | Submit oversized JSON file | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-093 | None | Submit deeply nested metadata | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-096 | Env Setup | All tests pass (`pytest`, `vitest`, `playwright`) | `SKILL_c2pro-patterns.md` |
-| [ ] | 🟢 P3 | TASK-097 | None | Coverage gate met (70%+) | `SKILL_c2pro-patterns.md` |
-| [ ] | 🟢 P3 | TASK-098 | None | Secrets scan passed (gitleaks) | `SKILL_c2pro-patterns.md` |
-| [ ] | 🟢 P3 | TASK-099 | Env Setup | Type checking passed (`mypy`, `tsc`) | `SKILL_c2pro-patterns.md` |
-| [ ] | 🟢 P3 | TASK-100 | None | Linting passed (`ruff`, `eslint`) | `SKILL_c2pro-patterns.md` |
-| [ ] | 🟢 P3 | TASK-106 | None | Resource URL follows naming conventions (plural, kebab-case, no verbs) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-107 | None | Correct HTTP method used (GET for reads, POST for creates, etc.) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-108 | None | Appropriate status codes returned (not 200 for everything) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-109 | None | Input validated with schema (Zod, Pydantic, Bean Validation) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-110 | None | Error responses follow standard format with codes and messages | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-111 | None | Pagination implemented for list endpoints (cursor or offset) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-114 | None | Rate limiting configured | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-115 | None | Response does not leak internal details (stack traces, SQL errors) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-116 | None | Consistent naming with existing endpoints (camelCase vs snake_case) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-117 | None | Documented (OpenAPI/Swagger spec updated) | `.claude\skills\api-design\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-118 | None | Have I verified that I am using the most recent version of all referenced docs? | `.claude\skills\c2pro-doc-analyzer\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-119 | None | Is the logic strictly in the Domain layer (pure Python)? | `.claude\skills\c2pro-doc-analyzer\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-121 | None | Does the repository use `AsyncSession` and filter by `tenant_id`? | `.claude\skills\c2pro-doc-analyzer\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-122 | Backend API | Is the Test Suite ID referenced in the file docstring? | `.claude\skills\c2pro-doc-analyzer\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-123 | None | Criterion 1 | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-124 | None | Criterion 2 | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-125 | None | Criterion 3 | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-126 | None | User can register with email/password | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-127 | None | User can login with valid credentials | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-128 | None | Invalid credentials rejected with proper error | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-129 | Backend API | Sessions persist across page reloads | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-130 | None | Logout clears session | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-131 | None | Public routes still accessible | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-132 | None | API responses unchanged | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-133 | None | Database schema compatible | `.claude\skills\eval-harness\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-134 | None | No hardcoded API keys, tokens, or passwords | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-135 | None | All secrets in environment variables | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-136 | None | `.env.local` in .gitignore | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-137 | None | No secrets in git history | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-138 | Security Sign-off | Production secrets in hosting platform (Vercel, Railway) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-139 | None | All user inputs validated with schemas | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-140 | None | File uploads restricted (size, type, extension) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-141 | None | No direct use of user input in queries | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-142 | None | Whitelist validation (not blacklist) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-143 | None | Error messages don't leak sensitive info | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-144 | None | All database queries use parameterized queries | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-145 | None | No string concatenation in SQL | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-146 | Backend API | ORM/query builder used correctly | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-147 | None | Supabase queries properly sanitized | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-148 | None | Tokens stored in httpOnly cookies (not localStorage) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-151 | None | Role-based access control implemented | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-152 | None | Session management secure | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-153 | None | User-provided HTML sanitized | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-154 | None | CSP headers configured | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-155 | None | No unvalidated dynamic content rendering | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-156 | Backend API | React's built-in XSS protection used | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-157 | None | CSRF tokens on state-changing operations | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-158 | None | SameSite=Strict on all cookies | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-159 | None | Double-submit cookie pattern implemented | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-161 | None | Stricter limits on expensive operations | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-162 | None | IP-based rate limiting | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-164 | None | No passwords, tokens, or secrets in logs | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-165 | None | Error messages generic for users | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-166 | None | Detailed errors only in server logs | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-167 | None | No stack traces exposed to users | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-168 | None | Wallet signatures verified | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-169 | None | Transaction details validated | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-170 | Env Setup | Balance checks before transactions | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-171 | None | No blind transaction signing | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-172 | None | Dependencies up to date | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-173 | None | No known vulnerabilities (npm audit clean) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-174 | None | Lock files committed | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-175 | None | Dependabot enabled on GitHub | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-177 | None | **Secrets**: No hardcoded secrets, all in env vars | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-178 | None | **Input Validation**: All user inputs validated | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-179 | None | **SQL Injection**: All queries parameterized | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-180 | None | **XSS**: User content sanitized | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-181 | None | **CSRF**: Protection enabled | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-184 | None | **Rate Limiting**: Enabled on all endpoints | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-185 | Security Sign-off | **HTTPS**: Enforced in production | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-187 | None | **Error Handling**: No sensitive data in errors | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-188 | None | **Logging**: No sensitive data logged | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-189 | None | **Dependencies**: Up to date, no vulnerabilities | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-191 | None | **CORS**: Properly configured | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-192 | None | **File Uploads**: Validated (size, type) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-193 | None | **Wallet Signatures**: Verified (if blockchain) | `.claude\skills\security-review\SKILL.md` |
-| [ ] | 🟢 P3 | TASK-198 | None | Módulo de Documentos (upload, parsing) | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-199 | None | Módulo de Análisis (coherencia) | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-200 | None | Extracción de Stakeholders | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-201 | None | Generación de WBS/BOM | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-202 | Env Setup | Tests unitarios e integración | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-203 | None | CI/CD con GitHub Actions | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-204 | Security Sign-off | Deployment en producción | `apps\api\README.md` |
-| [ ] | 🟢 P3 | TASK-205 | Backend API | ✅ Dependencies installed (`pip install -r requirements.txt`) | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-206 | None | ✅ Spacy model installed (`python install_spacy_model.py`) | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-207 | Env Setup | ✅ All 10 tests passing | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-208 | None | ✅ Anonymizer initialized at startup | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-209 | Env Setup | ✅ Integration with AnthropicWrapper tested | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-210 | None | ✅ Mapping storage encrypted | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-211 | None | ✅ Logs don't contain PII values | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-212 | None | ✅ HTTPS for all external API calls | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-213 | None | ✅ Memory limit configured (min 2GB RAM) | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-214 | Backend API | ✅ Documentation reviewed | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-276 | Env Setup | `REL-RC1-01` UAT checklist complete (`G7-03`, `docs/UAT_CHECKLIST.md`) | `docs\RELEASE_CRITERIA.md` |
-| [ ] | 🟢 P3 | TASK-1047 | Env Setup | **Task 3.3: Golden Dataset Baseline:** Curate 5 reference contracts and create a `tests/accuracy/golden_responses.json` to enable automated accuracy regression testing. | `docs\audit\C2PRO_TECHNICAL_AUDIT_REPORT.md` |
-| [ ] | 🟢 P3 | TASK-1048 | None | Implement database RLS policies (Task 6.2.3) | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-1049 | None | Complete repository tenant filtering (Task 6.2.2) | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-1050 | None | Add anonymizer audit logging (Task 6.4.3.3) | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-1051 | Backend API | Implement AI budget tracking and circuit breaker | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-1053 | None | Complete structured logging with JSON output | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-1054 | None | GREEN phase - incomplete` | `docs\audits\REORGANIZATION_PLAN_CHECKLIST.md` |
-| [ ] | 🟢 P3 | TASK-1055 | None | Solo existe UN directorio de componentes (`components/`) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1056 | None | No existe `src/components/` como directorio paralelo | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1058 | None | No existe `app/demo/` como directorio de rutas | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1059 | Backend API | Ninguna page contiene `const mock`, `const DATA`, o datos hardcodeados | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1060 | Backend API | Todas las pages hacen fetch a la API via el client generado | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1061 | Backend API | MSW handlers cubren todos los endpoints que las pages necesitan | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1062 | Backend API | `useAppModeStore` se usa activamente para controlar UI demo vs prod | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1063 | None | Existe error boundary a nivel de layout | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1064 | Backend API | Cada page tiene loading, error, y empty state | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1065 | None | No hay imports cruzados entre `@/src/` y `@/components/` | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1066 | None | `lib/mockData.ts` no existe (datos mock solo en `mocks/`) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1067 | Backend API | No hay mensajes en español en código con UI en inglés (o viceversa, pero consistente) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1068 | Env Setup | No existe `MOCK_*` variables en código fuente (fuera de tests) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1070 | None | La entidad `Project` tiene una sola definición canónica | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1071 | None | Ningún módulo importa `from src.{otro_modulo}.domain.models` | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1072 | None | Si se comparte un enum (ej: `AlertSeverity`), está en un shared kernel | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1073 | None | `coherence/engine.py` legacy está eliminado (solo `engine_v2.py`) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1074 | None | Feature flags se verifican en cada endpoint protegido | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1075 | Env Setup | `example_prompts.py` no está en `/src/` (movido a tests o docs) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1076 | Env Setup | Cada bounded context puede testearse en aislamiento | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1077 | None | Los 17 nodos del LangGraph están implementados como funciones | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1079 | None | El GraphState tiene todos los campos necesarios (ya cumplido: 48 campos) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1081 | Env Setup | Hay tests de integración para el flujo completo del grafo | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1082 | Security Sign-off | `NEXT_PUBLIC_APP_MODE` controla el modo (demo/production) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1083 | None | En demo: MSW intercepta todas las llamadas HTTP | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1084 | None | En producción: MSW no se inicializa | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1085 | None | No hay rutas exclusivas de demo (demo es un modo, no una ruta) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1086 | None | El backend no tiene modo demo (siempre responde con datos reales) | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1087 | Env Setup | Mock data solo existe en: `apps/web/mocks/` y `tests/` | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | 🟢 P3 | TASK-1118 | Backend API | Ejecutar `npm run build` para verificar errores de TypeScript | `docs\internal\LESSONS_LEARNED.md` |
-| [ ] | 🟢 P3 | TASK-1119 | None | Iniciar dev server y verificar visualmente los componentes modificados | `docs\internal\LESSONS_LEARNED.md` |
-| [ ] | 🟢 P3 | TASK-1120 | None | Revisar git diff para asegurar que no se eliminaron elementos críticos | `docs\internal\LESSONS_LEARNED.md` |
-| [ ] | 🟢 P3 | TASK-1121 | Backend API | Documentar elementos UI críticos en comentarios del código | `docs\internal\LESSONS_LEARNED.md` |
-| [ ] | 🟢 P3 | TASK-1122 | None | Usar búsqueda global antes de eliminar código que parece duplicado | `docs\internal\LESSONS_LEARNED.md` |
-| [ ] | 🟢 P3 | TASK-1123 | None | Secrets Scan: PASS | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1124 | Env Setup | Unit Tests: PASS (70% coverage) | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1126 | None | S5 Core AI Gates: PASS | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1127 | Backend API | Frontend Typecheck: PASS | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1128 | Backend API | Frontend Lint: PASS | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1129 | Backend API | Frontend E2E: 90%+ pass | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1130 | Env Setup | Integration Tests: 95%+ pass | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1131 | Env Setup | API Drift Check: PASS | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1132 | Backend API | Evaluation Suites: All above minimum thresholds | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1133 | None | I13 Real E2E: PASS on exact release commit | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1134 | None | Swagger Workbook: 100% verified | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1135 | None | Performance Baseline: Met | `docs\internal\RELEASE_SIGNOFF_POLICY.md` |
-| [ ] | 🟢 P3 | TASK-1137 | Env Setup | Integrate automated performance tests into CI/CD | `docs\performance\baseline.md` |
-| [ ] | 🟢 P3 | TASK-1138 | None | Set up alerting for P95 regression > 20% | `docs\performance\baseline.md` |
-| [ ] | 🟢 P3 | TASK-1139 | None | Add Prometheus metrics for continuous monitoring | `docs\performance\baseline.md` |
-| [ ] | 🟢 P3 | TASK-1143 | Security Sign-off | keep `.github/workflows/deploy-production.yml` undispatched during rehearsals until the project is explicitly cleared for production-gated validation | `docs\planning\PRODUCTION_READINESS_GATE_2026-03-19.md` |
-| [ ] | 🟢 P3 | TASK-1144 | None | Gate 5+: Coherence Score calibrado con pilotos | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1145 | None | Gate 7+: Cost control probado en producción | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1146 | None | Gate 6+: Human-in-the-loop para Implicit Needs | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1147 | None | Gate 3+: MCP servers externos (SAP, Primavera) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1148 | Env Setup | All tests pass | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1151 | Backend API | Code review approved | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1152 | Env Setup | RLS tests pass (all 18 tables) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1153 | Env Setup | Cross-tenant tests pass | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1154 | Env Setup | MCP allowlist tests pass | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1155 | None | No secrets in code | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1156 | None | Changelog updated | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1157 | None | Version bumped (semver) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1158 | None | API docs updated | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1159 | Env Setup | Migrations tested in staging | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1160 | None | Backup verified | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1161 | None | RLS policies applied | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1162 | None | Notify team in Slack | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1163 | None | Verify staging is stable | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1164 | Security Sign-off | Backup production DB | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1165 | Security Sign-off | Deploy backend (Railway) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1166 | Env Setup | Run smoke tests backend | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1167 | Backend API | Deploy frontend (Vercel) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1168 | Backend API | Run smoke tests frontend | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1169 | None | Verify Sentry (no new errors) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1170 | None | Verify UptimeRobot | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1171 | Env Setup | Check key flows manually | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1172 | Security Sign-off | Monitor 1h post-deploy | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1173 | None | Communicate release (if major) | `docs\planning\ROADMAP_v2.4.0.md` |
-| [ ] | 🟢 P3 | TASK-1348 | Security Sign-off | TODO: Dispatch `.github/workflows/deploy-production.yml` only after the project is explicitly considered production-ready enough for a production-gated rehearsal. | `evidence\releases\2026-03-23-rc1\signoff.md` |
-| [ ] | 🟢 P3 | TASK-1349 | Security Sign-off | Dispatch `.github/workflows/deploy-production.yml` only after the project is explicitly considered production-ready enough for a production-gated rehearsal. | `evidence\releases\2026-03-23-rc1\signoff.md` |
-| [ ] | 🟢 P3 | TASK-1352 | None | A spec defines when a session is considered closable. | `openspec\changes\mandatory-session-close\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1353 | Env Setup | Final completion responses are prohibited before the close sequence runs. | `openspec\changes\mandatory-session-close\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1354 | None | Failure behavior is defined for blocked or partial session-close attempts. | `openspec\changes\mandatory-session-close\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1355 | Env Setup | Should we add automated linting/CI checks for OpenSpec artifact compliance after bootstrap is accepted? | `openspec\changes\openspec-bootstrap\design.md` |
-| [ ] | 🟢 P3 | TASK-1357 | None | Bootstrap change includes complete proposal/design/spec/task artifacts in OpenSpec format. | `openspec\changes\openspec-bootstrap\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1359 | Backend API | Reviewers can validate artifacts directly against `openspec/config.yaml` rules. | `openspec\changes\openspec-bootstrap\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1360 | Env Setup | Should CI auto-run `verify:openspec` only when files under `openspec/changes/**` are touched? | `openspec\changes\openspec-bootstrap-v2\design.md` |
-| [ ] | 🟢 P3 | TASK-1362 | Env Setup | Every v2 bootstrap spec scenario maps to an executable check or deterministic validation step. | `openspec\changes\openspec-bootstrap-v2\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1363 | Backend API | Process-only OpenSpec changes can be verified with a dedicated command that does not require full product suites. | `openspec\changes\openspec-bootstrap-v2\proposal.md` |
-| [ ] | 🟢 P3 | TASK-1364 | Backend API | Reviewers can produce a pass/fail report with traceable evidence for artifact presence and rule compliance. | `openspec\changes\openspec-bootstrap-v2\proposal.md` |
+
+| Done | Priority | ID        | Dependency        | Description                                                                                                                                                                 | Source File                                                 |
+| :--- | :------- | :-------- | :---------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
+| [x]  | 🔴 P0    | TASK-001  | None              | Python 3.11 installed (recommended) OR                                                                                                                                      | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [ ]  | 🔴 P0    | TASK-002  | Backend API       | Visual Studio Build Tools installed (if using Python 3.13)                                                                                                                  | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [x]  | 🔴 P0    | TASK-003  | None              | Virtual environment activated                                                                                                                                               | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [x]  | 🔴 P0    | TASK-004  | Backend API       | Dependencies installed: `pip install -r requirements.txt`                                                                                                                   | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [x]  | 🔴 P0    | TASK-005  | Env Setup         | PostgreSQL test database running (optional - SQLite fallback available)                                                                                                     | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [ ]  | 🔴 P0    | TASK-006  | None              | RLS migration applied: `alembic upgrade head` (if using PostgreSQL)                                                                                                         | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [ ]  | 🔴 P0    | TASK-007  | None              | Working directory: `apps/api`                                                                                                                                               | `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md`                       |
+| [ ]  | 🔴 P0    | TASK-027  | Security Sign-off | **[ENV-001]** \| File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` \| Status: Pending \| **Description:** Setup production-like environment for security benchmarks.              | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🔴 P0    | TASK-028  | Backend API       | **[ENV-002]** \| File: `FINAL_SUMMARY_TS-E2E-SEC-TNT-001.md` \| Status: Pending \| **Description:** Run and measure p95 latency for E2E security suite.                     | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🔴 P0    | TASK-033  | Backend API       | **[FE-001]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Setup Vitest, Playwright, and MSW for all frontend modules.                         | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🔴 P0    | TASK-034  | Backend API       | **[FE-002]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Write and validate 30 Authentication tests (Auth flow).                             | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🔴 P0    | TASK-041  | None              | **[DOC-001]** \| File: `signoff.md` \| Status: Pending \| **Description:** Obtain formal approvals for Product, Security, and Operations in the release bundle.             | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🔴 P0    | TASK-055  | None              | **Gate 8**: Document Security                                                                                                                                               | `README.md`                                                 |
+| [ ]  | 🔴 P0    | TASK-088  | Env Setup         | Run security tests: `pytest tests/golden/test_security.py -v`                                                                                                               | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🔴 P0    | TASK-094  | Backend API       | Code review with security focus                                                                                                                                             | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🔴 P0    | TASK-095  | None              | Update SECURITY_AUDIT document with fixes                                                                                                                                   | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🔴 P0    | TASK-112  | Backend API       | Authentication required (or explicitly marked as public)                                                                                                                    | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🔴 P0    | TASK-113  | Env Setup         | Authorization checked (user can only access their own resources)                                                                                                            | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🔴 P0    | TASK-149  | Env Setup         | Authorization checks before sensitive operations                                                                                                                            | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-150  | None              | Row Level Security enabled in Supabase                                                                                                                                      | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-163  | None              | User-based rate limiting (authenticated)                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-176  | None              | Regular security updates                                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-182  | None              | **Authentication**: Proper token handling                                                                                                                                   | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-183  | Env Setup         | **Authorization**: Role checks in place                                                                                                                                     | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-186  | None              | **Security Headers**: CSP, X-Frame-Options configured                                                                                                                       | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-190  | None              | **Row Level Security**: Enabled in Supabase                                                                                                                                 | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🔴 P0    | TASK-1052 | Backend API       | Build minimum E2E test suite (critical paths only)                                                                                                                          | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🔴 P0    | TASK-1125 | None              | Security E2E: PASS (60% coverage)                                                                                                                                           | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🔴 P0    | TASK-1136 | None              | Manual Signoffs: Product, Security, Operations                                                                                                                              | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🔴 P0    | TASK-1140 | None              | No ORM fallback code path remains in auth bootstrap helpers.                                                                                                                | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
+| [ ]  | 🔴 P0    | TASK-1141 | Env Setup         | All auth bootstrap and tenant isolation tests pass.                                                                                                                         | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
+| [ ]  | 🔴 P0    | TASK-1142 | Env Setup         | Runbook `docs/runbooks/AUTH_BOOTSTRAP_FALLBACK_POLICY.md` updated to reflect SQL-only posture.                                                                              | `docs\planning\FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
+| [ ]  | 🔴 P0    | TASK-1149 | None              | Coverage >80% critical paths                                                                                                                                                | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🔴 P0    | TASK-1150 | None              | No high/critical vulnerabilities (Snyk)                                                                                                                                     | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🔴 P0    | TASK-1350 | Backend API       | Required suite artifacts remain pending in `manifest.yaml` for `backend`, `frontend`, `security`, `evaluation`, and `reliability`.                                          | `evidence\releases\2026-03-24-rc1\signoff.md`               |
+| [ ]  | 🔴 P0    | TASK-1351 | None              | Manual approvals remain pending for product, security, operations, and release authority.                                                                                   | `evidence\releases\2026-03-24-rc1\signoff.md`               |
+| [ ]  | 🟠 P1    | TASK-037  | Backend API       | **[FE-005]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Connect all UI views to the real Backend API (currently using mocks in some areas). | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟠 P1    | TASK-120  | None              | Are all dependencies injected via FastAPI or Service constructors?                                                                                                          | `.claude\skills\c2pro-doc-analyzer\SKILL.md`                |
+| [ ]  | 🟠 P1    | TASK-160  | None              | Rate limiting on all API endpoints                                                                                                                                          | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟠 P1    | TASK-1057 | Backend API       | No existe `app/dashboard/` (solo `app/(app)/`)                                                                                                                              | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟠 P1    | TASK-1069 | None              | No existen `_Default*Service` que retornen datos ficticios                                                                                                                  | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟠 P1    | TASK-1078 | None              | Cada nodo wrappea un use case existente (no duplica lógica)                                                                                                                 | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟠 P1    | TASK-1080 | None              | HITL tiene service implementation (no solo ports)                                                                                                                           | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟠 P1    | TASK-1361 | Backend API       | Should the verifier produce JSON in addition to markdown for future dashboarding?                                                                                           | `openspec\changes\openspec-bootstrap-v2\design.md`          |
+| [ ]  | 🟡 P2    | TASK-036  | Backend API       | **[FE-004]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Implement `dnd-kit` for Stakeholder Map drag & drop functionality.                  | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟡 P2    | TASK-039  | Env Setup         | **[QA-002]** \| File: `CE-S2-010_VERIFICATION_REPORT.md` \| Status: Pending \| **Description:** Execute test cases TC-001 to TC-010 for Wireframe Specs verification.       | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟡 P2    | TASK-1356 | None              | Should reusable proposal/spec/tasks templates be introduced in a separate follow-up change?                                                                                 | `openspec\changes\openspec-bootstrap\design.md`             |
+| [ ]  | 🟡 P2    | TASK-1358 | Backend API       | At least one follow-up change can be created using the new structure without path or template ambiguity.                                                                    | `openspec\changes\openspec-bootstrap\proposal.md`           |
+| [ ]  | 🟢 P3    | TASK-029  | None              | **[ENV-003]** \| File: `signoff.md` \| Status: Pending \| **Description:** Refresh Performance and Disaster Recovery (DR) evidence.                                         | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-030  | None              | **[BK-001]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: In Progress \| **Description:** Complete conditional edges for LangGraph orchestration (HITL/citations cases). | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-031  | Security Sign-off | **[BK-002]** \| File: `signoff.md` \| Status: Pending \| **Description:** Finalize Swagger workbook and obtain Product sign-off.                                            | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-032  | Security Sign-off | **[BK-003]** \| File: `signoff.md` \| Status: Pending \| **Description:** Dispatch `.github/workflows/deploy-production.yml` after production-gated rehearsal.              | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-035  | Backend API       | **[FE-003]** \| File: `MOCKUP_REVIEW_SUMMARY.md` \| Status: Pending \| **Description:** Implement `react-pdf` for the real Evidence Viewer in the UI.                       | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-038  | Env Setup         | **[QA-001]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: Pending \| **Description:** Execute 48 E2E Test Cases (Cypress/Playwright) - 0% currently implemented.         | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-040  | Backend API       | **[QA-003]** \| File: `FRONTEND_TESTING_PLAN.md` \| Status: Pending \| **Description:** Perform full Accessibility Audit and implement fixes for WCAG AA compliance.        | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-042  | Env Setup         | **[DOC-002]** \| File: `C2PRO_TDD_BACKLOG_v1.0.md` \| Status: Pending \| **Description:** Implement remaining P3 (Low Priority) Unit Tests (44 tests).                      | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-043  | Backend API       | **[DOC-003]** \| File: `MASTER_AUDIT_PLAN.md` \| Status: In Progress \| **Description:** Sync all TDD Backlog counts with the Exhaustive Suite Index v1.1.1.                | `MASTER_AUDIT_PLAN.md`                                      |
+| [ ]  | 🟢 P3    | TASK-052  | None              | **Gate 5**: Coherence Score Formal (en progreso)                                                                                                                            | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-053  | None              | **Gate 6**: Human-in-the-loop                                                                                                                                               | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-054  | None              | **Gate 7**: Observability                                                                                                                                                   | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-056  | None              | **Fase 2**: Coherence Engine MVP (Sprint S2 - 65%)                                                                                                                          | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-057  | None              | **Fase 3**: Copiloto de Compras                                                                                                                                             | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-058  | None              | **Fase 4**: Control de Ejecución                                                                                                                                            | `README.md`                                                 |
+| [ ]  | 🟢 P3    | TASK-059  | None              | Add case_id validation to reject path separators (`/`, `\`, `..`)                                                                                                           | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-060  | None              | Use `Path.resolve()` and `is_relative_to()` for path validation                                                                                                             | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-061  | Env Setup         | Add unit tests for path traversal attempts                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-062  | None              | Verify Windows and Unix patterns are blocked                                                                                                                                | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-063  | None              | Add `MAX_JSON_SIZE` constant (10MB recommended)                                                                                                                             | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-064  | Env Setup         | Check `file.stat().st_size` before loading                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-065  | Env Setup         | Add test for oversized file rejection                                                                                                                                       | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-066  | None              | Add `@field_validator('metadata')` to GoldenCase                                                                                                                            | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-067  | None              | Limit to 100 keys maximum                                                                                                                                                   | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-068  | None              | Limit to 5 levels of nesting                                                                                                                                                | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-069  | Env Setup         | Add test cases for each constraint                                                                                                                                          | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-070  | None              | Remove file paths from error messages                                                                                                                                       | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-071  | None              | Log only case_id in user-facing errors                                                                                                                                      | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-072  | None              | Keep detailed errors in server-side logs only                                                                                                                               | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-073  | None              | Add `model_config = ConfigDict(frozen=True)` to:                                                                                                                            | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-074  | None              | TrajectoryConstraint                                                                                                                                                        | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-075  | None              | ToolCallAssertion                                                                                                                                                           | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-076  | None              | StateAssertion                                                                                                                                                              | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-077  | None              | CoherenceIssueAssertion                                                                                                                                                     | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-078  | None              | InputDocuments                                                                                                                                                              | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-079  | None              | GoldenCase                                                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-080  | None              | Add structured logging for access attempts                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-081  | None              | Log path traversal blocks with `warning` level                                                                                                                              | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-082  | None              | Log validation failures                                                                                                                                                     | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-083  | None              | Use consistent log format                                                                                                                                                   | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-084  | None              | Create TypedDict or Pydantic models for actual results                                                                                                                      | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-085  | None              | Replace `dict[str, Any]` with typed inputs                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-086  | None              | Add input validation to evaluators                                                                                                                                          | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-087  | Backend API       | Run full test suite: `pytest tests/golden/ -v`                                                                                                                              | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-089  | Env Setup         | Manual testing:                                                                                                                                                             | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-090  | None              | Try `loader.load_case("../../../etc/passwd")`                                                                                                                               | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-091  | None              | Try `loader.load_case("..\\..\\Windows")`                                                                                                                                   | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-092  | None              | Submit oversized JSON file                                                                                                                                                  | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-093  | None              | Submit deeply nested metadata                                                                                                                                               | `SECURITY_REMEDIATION_CHECKLIST.md`                         |
+| [ ]  | 🟢 P3    | TASK-096  | Env Setup         | All tests pass (`pytest`, `vitest`, `playwright`)                                                                                                                           | `SKILL_c2pro-patterns.md`                                   |
+| [ ]  | 🟢 P3    | TASK-097  | None              | Coverage gate met (70%+)                                                                                                                                                    | `SKILL_c2pro-patterns.md`                                   |
+| [ ]  | 🟢 P3    | TASK-098  | None              | Secrets scan passed (gitleaks)                                                                                                                                              | `SKILL_c2pro-patterns.md`                                   |
+| [ ]  | 🟢 P3    | TASK-099  | Env Setup         | Type checking passed (`mypy`, `tsc`)                                                                                                                                        | `SKILL_c2pro-patterns.md`                                   |
+| [ ]  | 🟢 P3    | TASK-100  | None              | Linting passed (`ruff`, `eslint`)                                                                                                                                           | `SKILL_c2pro-patterns.md`                                   |
+| [ ]  | 🟢 P3    | TASK-106  | None              | Resource URL follows naming conventions (plural, kebab-case, no verbs)                                                                                                      | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-107  | None              | Correct HTTP method used (GET for reads, POST for creates, etc.)                                                                                                            | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-108  | None              | Appropriate status codes returned (not 200 for everything)                                                                                                                  | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-109  | None              | Input validated with schema (Zod, Pydantic, Bean Validation)                                                                                                                | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-110  | None              | Error responses follow standard format with codes and messages                                                                                                              | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-111  | None              | Pagination implemented for list endpoints (cursor or offset)                                                                                                                | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-114  | None              | Rate limiting configured                                                                                                                                                    | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-115  | None              | Response does not leak internal details (stack traces, SQL errors)                                                                                                          | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-116  | None              | Consistent naming with existing endpoints (camelCase vs snake_case)                                                                                                         | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-117  | None              | Documented (OpenAPI/Swagger spec updated)                                                                                                                                   | `.claude\skills\api-design\SKILL.md`                        |
+| [ ]  | 🟢 P3    | TASK-118  | None              | Have I verified that I am using the most recent version of all referenced docs?                                                                                             | `.claude\skills\c2pro-doc-analyzer\SKILL.md`                |
+| [ ]  | 🟢 P3    | TASK-119  | None              | Is the logic strictly in the Domain layer (pure Python)?                                                                                                                    | `.claude\skills\c2pro-doc-analyzer\SKILL.md`                |
+| [ ]  | 🟢 P3    | TASK-121  | None              | Does the repository use `AsyncSession` and filter by `tenant_id`?                                                                                                           | `.claude\skills\c2pro-doc-analyzer\SKILL.md`                |
+| [ ]  | 🟢 P3    | TASK-122  | Backend API       | Is the Test Suite ID referenced in the file docstring?                                                                                                                      | `.claude\skills\c2pro-doc-analyzer\SKILL.md`                |
+| [ ]  | 🟢 P3    | TASK-123  | None              | Criterion 1                                                                                                                                                                 | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-124  | None              | Criterion 2                                                                                                                                                                 | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-125  | None              | Criterion 3                                                                                                                                                                 | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-126  | None              | User can register with email/password                                                                                                                                       | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-127  | None              | User can login with valid credentials                                                                                                                                       | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-128  | None              | Invalid credentials rejected with proper error                                                                                                                              | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-129  | Backend API       | Sessions persist across page reloads                                                                                                                                        | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-130  | None              | Logout clears session                                                                                                                                                       | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-131  | None              | Public routes still accessible                                                                                                                                              | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-132  | None              | API responses unchanged                                                                                                                                                     | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-133  | None              | Database schema compatible                                                                                                                                                  | `.claude\skills\eval-harness\SKILL.md`                      |
+| [ ]  | 🟢 P3    | TASK-134  | None              | No hardcoded API keys, tokens, or passwords                                                                                                                                 | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-135  | None              | All secrets in environment variables                                                                                                                                        | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-136  | None              | `.env.local` in .gitignore                                                                                                                                                  | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-137  | None              | No secrets in git history                                                                                                                                                   | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-138  | Security Sign-off | Production secrets in hosting platform (Vercel, Railway)                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-139  | None              | All user inputs validated with schemas                                                                                                                                      | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-140  | None              | File uploads restricted (size, type, extension)                                                                                                                             | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-141  | None              | No direct use of user input in queries                                                                                                                                      | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-142  | None              | Whitelist validation (not blacklist)                                                                                                                                        | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-143  | None              | Error messages don't leak sensitive info                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-144  | None              | All database queries use parameterized queries                                                                                                                              | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-145  | None              | No string concatenation in SQL                                                                                                                                              | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-146  | Backend API       | ORM/query builder used correctly                                                                                                                                            | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-147  | None              | Supabase queries properly sanitized                                                                                                                                         | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-148  | None              | Tokens stored in httpOnly cookies (not localStorage)                                                                                                                        | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-151  | None              | Role-based access control implemented                                                                                                                                       | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-152  | None              | Session management secure                                                                                                                                                   | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-153  | None              | User-provided HTML sanitized                                                                                                                                                | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-154  | None              | CSP headers configured                                                                                                                                                      | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-155  | None              | No unvalidated dynamic content rendering                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-156  | Backend API       | React's built-in XSS protection used                                                                                                                                        | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-157  | None              | CSRF tokens on state-changing operations                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-158  | None              | SameSite=Strict on all cookies                                                                                                                                              | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-159  | None              | Double-submit cookie pattern implemented                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-161  | None              | Stricter limits on expensive operations                                                                                                                                     | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-162  | None              | IP-based rate limiting                                                                                                                                                      | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-164  | None              | No passwords, tokens, or secrets in logs                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-165  | None              | Error messages generic for users                                                                                                                                            | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-166  | None              | Detailed errors only in server logs                                                                                                                                         | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-167  | None              | No stack traces exposed to users                                                                                                                                            | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-168  | None              | Wallet signatures verified                                                                                                                                                  | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-169  | None              | Transaction details validated                                                                                                                                               | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-170  | Env Setup         | Balance checks before transactions                                                                                                                                          | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-171  | None              | No blind transaction signing                                                                                                                                                | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-172  | None              | Dependencies up to date                                                                                                                                                     | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-173  | None              | No known vulnerabilities (npm audit clean)                                                                                                                                  | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-174  | None              | Lock files committed                                                                                                                                                        | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-175  | None              | Dependabot enabled on GitHub                                                                                                                                                | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-177  | None              | **Secrets**: No hardcoded secrets, all in env vars                                                                                                                          | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-178  | None              | **Input Validation**: All user inputs validated                                                                                                                             | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-179  | None              | **SQL Injection**: All queries parameterized                                                                                                                                | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-180  | None              | **XSS**: User content sanitized                                                                                                                                             | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-181  | None              | **CSRF**: Protection enabled                                                                                                                                                | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-184  | None              | **Rate Limiting**: Enabled on all endpoints                                                                                                                                 | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-185  | Security Sign-off | **HTTPS**: Enforced in production                                                                                                                                           | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-187  | None              | **Error Handling**: No sensitive data in errors                                                                                                                             | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-188  | None              | **Logging**: No sensitive data logged                                                                                                                                       | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-189  | None              | **Dependencies**: Up to date, no vulnerabilities                                                                                                                            | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-191  | None              | **CORS**: Properly configured                                                                                                                                               | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-192  | None              | **File Uploads**: Validated (size, type)                                                                                                                                    | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-193  | None              | **Wallet Signatures**: Verified (if blockchain)                                                                                                                             | `.claude\skills\security-review\SKILL.md`                   |
+| [ ]  | 🟢 P3    | TASK-198  | None              | Módulo de Documentos (upload, parsing)                                                                                                                                      | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-199  | None              | Módulo de Análisis (coherencia)                                                                                                                                             | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-200  | None              | Extracción de Stakeholders                                                                                                                                                  | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-201  | None              | Generación de WBS/BOM                                                                                                                                                       | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-202  | Env Setup         | Tests unitarios e integración                                                                                                                                               | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-203  | None              | CI/CD con GitHub Actions                                                                                                                                                    | `apps\api\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-204  | Security Sign-off | Deployment en producción                                                                                                                                                    | `apps\api\README.md`                                        |
+| [x]  | 🟢 P3    | TASK-205  | Backend API       | ✅ Dependencies installed (`pip install -r requirements.txt`)                                                                                                               | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-206  | None              | ✅ Spacy model installed (`python install_spacy_model.py`)                                                                                                                  | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-207  | Env Setup         | ✅ All 10 tests passing                                                                                                                                                     | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-208  | None              | ✅ Anonymizer initialized at startup                                                                                                                                        | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-209  | Env Setup         | ✅ Integration with AnthropicWrapper tested                                                                                                                                 | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-210  | None              | ✅ Mapping storage encrypted                                                                                                                                                | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-211  | None              | ✅ Logs don't contain PII values                                                                                                                                            | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-212  | None              | ✅ HTTPS for all external API calls                                                                                                                                         | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-213  | None              | ✅ Memory limit configured (min 2GB RAM)                                                                                                                                    | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-214  | Backend API       | ✅ Documentation reviewed                                                                                                                                                   | `apps\api\S1.5_ANONYMIZER_IMPLEMENTATION_SUMMARY.md`        |
+| [ ]  | 🟢 P3    | TASK-276  | Env Setup         | `REL-RC1-01` UAT checklist complete (`G7-03`, `docs/UAT_CHECKLIST.md`)                                                                                                      | `docs\RELEASE_CRITERIA.md`                                  |
+| [ ]  | 🟢 P3    | TASK-1047 | Env Setup         | **Task 3.3: Golden Dataset Baseline:** Curate 5 reference contracts and create a `tests/accuracy/golden_responses.json` to enable automated accuracy regression testing.    | `docs\audit\C2PRO_TECHNICAL_AUDIT_REPORT.md`                |
+| [ ]  | 🟢 P3    | TASK-1048 | None              | Implement database RLS policies (Task 6.2.3)                                                                                                                                | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🟢 P3    | TASK-1049 | None              | Complete repository tenant filtering (Task 6.2.2)                                                                                                                           | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🟢 P3    | TASK-1050 | None              | Add anonymizer audit logging (Task 6.4.3.3)                                                                                                                                 | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🟢 P3    | TASK-1051 | Backend API       | Implement AI budget tracking and circuit breaker                                                                                                                            | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🟢 P3    | TASK-1053 | None              | Complete structured logging with JSON output                                                                                                                                | `docs\audits\PRODUCTION_READINESS_AUDIT_2026-02-14.md`      |
+| [ ]  | 🟢 P3    | TASK-1054 | None              | GREEN phase - incomplete`                                                                                                                                                   | `docs\audits\REORGANIZATION_PLAN_CHECKLIST.md`              |
+| [ ]  | 🟢 P3    | TASK-1055 | None              | Solo existe UN directorio de componentes (`components/`)                                                                                                                    | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1056 | None              | No existe `src/components/` como directorio paralelo                                                                                                                        | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1058 | None              | No existe `app/demo/` como directorio de rutas                                                                                                                              | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1059 | Backend API       | Ninguna page contiene `const mock`, `const DATA`, o datos hardcodeados                                                                                                      | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1060 | Backend API       | Todas las pages hacen fetch a la API via el client generado                                                                                                                 | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1061 | Backend API       | MSW handlers cubren todos los endpoints que las pages necesitan                                                                                                             | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1062 | Backend API       | `useAppModeStore` se usa activamente para controlar UI demo vs prod                                                                                                         | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1063 | None              | Existe error boundary a nivel de layout                                                                                                                                     | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1064 | Backend API       | Cada page tiene loading, error, y empty state                                                                                                                               | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1065 | None              | No hay imports cruzados entre `@/src/` y `@/components/`                                                                                                                    | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1066 | None              | `lib/mockData.ts` no existe (datos mock solo en `mocks/`)                                                                                                                   | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1067 | Backend API       | No hay mensajes en español en código con UI en inglés (o viceversa, pero consistente)                                                                                       | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1068 | Env Setup         | No existe `MOCK_*` variables en código fuente (fuera de tests)                                                                                                              | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1070 | None              | La entidad `Project` tiene una sola definición canónica                                                                                                                     | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1071 | None              | Ningún módulo importa `from src.{otro_modulo}.domain.models`                                                                                                                | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1072 | None              | Si se comparte un enum (ej: `AlertSeverity`), está en un shared kernel                                                                                                      | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1073 | None              | `coherence/engine.py` legacy está eliminado (solo `engine_v2.py`)                                                                                                           | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1074 | None              | Feature flags se verifican en cada endpoint protegido                                                                                                                       | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1075 | Env Setup         | `example_prompts.py` no está en `/src/` (movido a tests o docs)                                                                                                             | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1076 | Env Setup         | Cada bounded context puede testearse en aislamiento                                                                                                                         | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1077 | None              | Los 17 nodos del LangGraph están implementados como funciones                                                                                                               | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1079 | None              | El GraphState tiene todos los campos necesarios (ya cumplido: 48 campos)                                                                                                    | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1081 | Env Setup         | Hay tests de integración para el flujo completo del grafo                                                                                                                   | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1082 | Security Sign-off | `NEXT_PUBLIC_APP_MODE` controla el modo (demo/production)                                                                                                                   | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1083 | None              | En demo: MSW intercepta todas las llamadas HTTP                                                                                                                             | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1084 | None              | En producción: MSW no se inicializa                                                                                                                                         | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1085 | None              | No hay rutas exclusivas de demo (demo es un modo, no una ruta)                                                                                                              | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1086 | None              | El backend no tiene modo demo (siempre responde con datos reales)                                                                                                           | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1087 | Env Setup         | Mock data solo existe en: `apps/web/mocks/` y `tests/`                                                                                                                      | `docs\audits\STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md`    |
+| [ ]  | 🟢 P3    | TASK-1118 | Backend API       | Ejecutar `npm run build` para verificar errores de TypeScript                                                                                                               | `docs\internal\LESSONS_LEARNED.md`                          |
+| [ ]  | 🟢 P3    | TASK-1119 | None              | Iniciar dev server y verificar visualmente los componentes modificados                                                                                                      | `docs\internal\LESSONS_LEARNED.md`                          |
+| [ ]  | 🟢 P3    | TASK-1120 | None              | Revisar git diff para asegurar que no se eliminaron elementos críticos                                                                                                      | `docs\internal\LESSONS_LEARNED.md`                          |
+| [ ]  | 🟢 P3    | TASK-1121 | Backend API       | Documentar elementos UI críticos en comentarios del código                                                                                                                  | `docs\internal\LESSONS_LEARNED.md`                          |
+| [ ]  | 🟢 P3    | TASK-1122 | None              | Usar búsqueda global antes de eliminar código que parece duplicado                                                                                                          | `docs\internal\LESSONS_LEARNED.md`                          |
+| [ ]  | 🟢 P3    | TASK-1123 | None              | Secrets Scan: PASS                                                                                                                                                          | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1124 | Env Setup         | Unit Tests: PASS (70% coverage)                                                                                                                                             | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1126 | None              | S5 Core AI Gates: PASS                                                                                                                                                      | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1127 | Backend API       | Frontend Typecheck: PASS                                                                                                                                                    | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1128 | Backend API       | Frontend Lint: PASS                                                                                                                                                         | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1129 | Backend API       | Frontend E2E: 90%+ pass                                                                                                                                                     | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1130 | Env Setup         | Integration Tests: 95%+ pass                                                                                                                                                | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1131 | Env Setup         | API Drift Check: PASS                                                                                                                                                       | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1132 | Backend API       | Evaluation Suites: All above minimum thresholds                                                                                                                             | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1133 | None              | I13 Real E2E: PASS on exact release commit                                                                                                                                  | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1134 | None              | Swagger Workbook: 100% verified                                                                                                                                             | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1135 | None              | Performance Baseline: Met                                                                                                                                                   | `docs\internal\RELEASE_SIGNOFF_POLICY.md`                   |
+| [ ]  | 🟢 P3    | TASK-1137 | Env Setup         | Integrate automated performance tests into CI/CD                                                                                                                            | `docs\performance\baseline.md`                              |
+| [ ]  | 🟢 P3    | TASK-1138 | None              | Set up alerting for P95 regression > 20%                                                                                                                                    | `docs\performance\baseline.md`                              |
+| [ ]  | 🟢 P3    | TASK-1139 | None              | Add Prometheus metrics for continuous monitoring                                                                                                                            | `docs\performance\baseline.md`                              |
+| [ ]  | 🟢 P3    | TASK-1143 | Security Sign-off | keep `.github/workflows/deploy-production.yml` undispatched during rehearsals until the project is explicitly cleared for production-gated validation                       | `docs\planning\PRODUCTION_READINESS_GATE_2026-03-19.md`     |
+| [ ]  | 🟢 P3    | TASK-1144 | None              | Gate 5+: Coherence Score calibrado con pilotos                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1145 | None              | Gate 7+: Cost control probado en producción                                                                                                                                 | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1146 | None              | Gate 6+: Human-in-the-loop para Implicit Needs                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1147 | None              | Gate 3+: MCP servers externos (SAP, Primavera)                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1148 | Env Setup         | All tests pass                                                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1151 | Backend API       | Code review approved                                                                                                                                                        | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1152 | Env Setup         | RLS tests pass (all 18 tables)                                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1153 | Env Setup         | Cross-tenant tests pass                                                                                                                                                     | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1154 | Env Setup         | MCP allowlist tests pass                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1155 | None              | No secrets in code                                                                                                                                                          | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1156 | None              | Changelog updated                                                                                                                                                           | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1157 | None              | Version bumped (semver)                                                                                                                                                     | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1158 | None              | API docs updated                                                                                                                                                            | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1159 | Env Setup         | Migrations tested in staging                                                                                                                                                | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1160 | None              | Backup verified                                                                                                                                                             | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1161 | None              | RLS policies applied                                                                                                                                                        | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1162 | None              | Notify team in Slack                                                                                                                                                        | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1163 | None              | Verify staging is stable                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1164 | Security Sign-off | Backup production DB                                                                                                                                                        | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1165 | Security Sign-off | Deploy backend (Railway)                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1166 | Env Setup         | Run smoke tests backend                                                                                                                                                     | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1167 | Backend API       | Deploy frontend (Vercel)                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1168 | Backend API       | Run smoke tests frontend                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1169 | None              | Verify Sentry (no new errors)                                                                                                                                               | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1170 | None              | Verify UptimeRobot                                                                                                                                                          | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1171 | Env Setup         | Check key flows manually                                                                                                                                                    | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1172 | Security Sign-off | Monitor 1h post-deploy                                                                                                                                                      | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1173 | None              | Communicate release (if major)                                                                                                                                              | `docs\planning\ROADMAP_v2.4.0.md`                           |
+| [ ]  | 🟢 P3    | TASK-1348 | Security Sign-off | TODO: Dispatch `.github/workflows/deploy-production.yml` only after the project is explicitly considered production-ready enough for a production-gated rehearsal.          | `evidence\releases\2026-03-23-rc1\signoff.md`               |
+| [ ]  | 🟢 P3    | TASK-1349 | Security Sign-off | Dispatch `.github/workflows/deploy-production.yml` only after the project is explicitly considered production-ready enough for a production-gated rehearsal.                | `evidence\releases\2026-03-23-rc1\signoff.md`               |
+| [ ]  | 🟢 P3    | TASK-1352 | None              | A spec defines when a session is considered closable.                                                                                                                       | `openspec\changes\mandatory-session-close\proposal.md`      |
+| [ ]  | 🟢 P3    | TASK-1353 | Env Setup         | Final completion responses are prohibited before the close sequence runs.                                                                                                   | `openspec\changes\mandatory-session-close\proposal.md`      |
+| [ ]  | 🟢 P3    | TASK-1354 | None              | Failure behavior is defined for blocked or partial session-close attempts.                                                                                                  | `openspec\changes\mandatory-session-close\proposal.md`      |
+| [ ]  | 🟢 P3    | TASK-1355 | Env Setup         | Should we add automated linting/CI checks for OpenSpec artifact compliance after bootstrap is accepted?                                                                     | `openspec\changes\openspec-bootstrap\design.md`             |
+| [ ]  | 🟢 P3    | TASK-1357 | None              | Bootstrap change includes complete proposal/design/spec/task artifacts in OpenSpec format.                                                                                  | `openspec\changes\openspec-bootstrap\proposal.md`           |
+| [ ]  | 🟢 P3    | TASK-1359 | Backend API       | Reviewers can validate artifacts directly against `openspec/config.yaml` rules.                                                                                             | `openspec\changes\openspec-bootstrap\proposal.md`           |
+| [ ]  | 🟢 P3    | TASK-1360 | Env Setup         | Should CI auto-run `verify:openspec` only when files under `openspec/changes/**` are touched?                                                                               | `openspec\changes\openspec-bootstrap-v2\design.md`          |
+| [ ]  | 🟢 P3    | TASK-1362 | Env Setup         | Every v2 bootstrap spec scenario maps to an executable check or deterministic validation step.                                                                              | `openspec\changes\openspec-bootstrap-v2\proposal.md`        |
+| [ ]  | 🟢 P3    | TASK-1363 | Backend API       | Process-only OpenSpec changes can be verified with a dedicated command that does not require full product suites.                                                           | `openspec\changes\openspec-bootstrap-v2\proposal.md`        |
+| [ ]  | 🟢 P3    | TASK-1364 | Backend API       | Reviewers can produce a pass/fail report with traceable evidence for artifact presence and rule compliance.                                                                 | `openspec\changes\openspec-bootstrap-v2\proposal.md`        |
 
 ## 3. Legacy Task Resurrections
+
 > Tasks extracted from archived or deprecated folders.
 
-| Done | Priority | ID | Dependency | Description | Source File |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| [ ] | 🔴 P0 | TASK-277 | Backend API | ⏳ Tests ejecutados con PostgreSQL (requiere BD) | `docs\archive\changelogs\CHANGELOG_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-282 | None | Have Python 3.11+ for backend | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🔴 P0 | TASK-318 | Backend API | `S6-E2E-01` run full I1-I14 critical regression matrix. | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md` |
-| [ ] | 🔴 P0 | TASK-335 | None | Auth layout created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🔴 P0 | TASK-341 | None | Public routes accessible without auth | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-347 | None | Google OAuth button works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-359 | Backend API | Layout applies to auth pages | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-378 | None | `useAuth()` returns `tenantId` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-379 | None | `useAuth()` returns `isDemoMode` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-380 | None | `useAuth()` returns `serviceTier` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-411 | None | Cannot access protected routes without auth | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-417 | None | Zero auth-related console errors | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-418 | Backend API | 100% of protected routes require auth | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🔴 P0 | TASK-424 | None | Copy `protected-routes.tsx` to `apps/web/src/components/auth/` | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🔴 P0 | TASK-442 | None | Security audit | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🔴 P0 | TASK-453 | None | Security audit passed | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🔴 P0 | TASK-456 | None | Monitor auth failures in Sentry | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🔴 P0 | TASK-475 | None | Security audit | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🔴 P0 | TASK-480 | None | Can sign up with Google OAuth | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🔴 P0 | TASK-492 | None | Have Python 3.11+ for backend | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🔴 P0 | TASK-501 | None | Confirm strict blocking semantics for critical I12 gates in CI policy. | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🔴 P0 | TASK-504 | None | Enforce strict severity taxonomy handling in scoring (`Critical/High/Medium/Low/Info`) | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🔴 P0 | TASK-515 | None | Performance benchmarks improved | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-517 | Env Setup | All P0 tests passing | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-558 | None | Security audit passes (no exposed data) | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🔴 P0 | TASK-592 | None | `CriticalPathOverlay` - Highlight critical items | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-595 | None | `RiskIndicator` - Low/Medium/High/Critical badges | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-601 | None | Identify critical path | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-652 | None | Gantt displays critical path | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🔴 P0 | TASK-679 | None | Security Engineer | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🔴 P0 | TASK-737 | None | Security scan sin vulnerabilidades high/critical | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🔴 P0 | TASK-809 | None | Activar Row Level Security en Supabase | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🔴 P0 | TASK-827 | None | Python 3.11+ installed | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🔴 P0 | TASK-828 | None | PostgreSQL client (psql) in PATH | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🔴 P0 | TASK-871 | None | FORCE RLS enabled on critical tables | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-909 | None | Performance benchmarks acceptable | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-910 | None | No critical errors in logs | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-946 | None | FORCE RLS enabled on critical tables | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🔴 P0 | TASK-972 | None | `logs/ce26_benchmark_results.json` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🔴 P0 | TASK-999 | None | Critical application functionality broken | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🔴 P0 | TASK-1014 | Security Sign-off | Security team sign-off obtained | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🔴 P0 | TASK-1018 | Security Sign-off | Production deployment authorized | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🔴 P0 | TASK-1030 | Env Setup | Implement Gate 3 MCP Security tests | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-1033 | Backend API | Security Team Review | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-1035 | Security Sign-off | Production Deployment Authorized | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🔴 P0 | TASK-1040 | Backend API | ⏳ JWT tests completos (requieren PostgreSQL) | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-1041 | Backend API | ⏳ RLS tests (requieren PostgreSQL) | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-1042 | Backend API | ⏳ SQL Injection tests (requieren PostgreSQL) | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-1043 | None | ⏳ PostgreSQL iniciado (Docker Desktop detenido) | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-1045 | Backend API | ⏳ **Gate 1 (Multi-tenant RLS):** Tests listos, requiere PostgreSQL | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🔴 P0 | TASK-1046 | Backend API | ⏳ **Gate 2 (Identity Model):** Tests listos, requiere PostgreSQL | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🟠 P1 | TASK-334 | Backend API | Dashboard page created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟠 P1 | TASK-349 | Backend API | Redirects to `/dashboard` after successful sign-in | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟠 P1 | TASK-367 | None | `useServiceTier()` returns free/pro/enterprise | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟠 P1 | TASK-401 | Backend API | Redirected to dashboard | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟠 P1 | TASK-416 | Backend API | Sign-up to dashboard flow < 30 seconds | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟠 P1 | TASK-421 | Backend API | PASO 0: Complete Clerk setup at dashboard.clerk.com (15-20 min) | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-426 | Backend API | Test: Can sign in and see dashboard | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-428 | Backend API | Create protected dashboards (C2Pro Admin, Tenant Admin, User) | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-429 | None | Implement feature gating by service tier | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-436 | None | Create sample projects and alerts | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟠 P1 | TASK-465 | Backend API | Test: Can sign in and see dashboard | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟠 P1 | TASK-466 | Backend API | Create protected dashboards (C2Pro Admin, Tenant Admin, User) | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟠 P1 | TASK-471 | None | Create sample projects/alerts | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟠 P1 | TASK-481 | Backend API | Can see dashboard after login | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟠 P1 | TASK-506 | Env Setup | Add profile resolution tests in service: | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟠 P1 | TASK-507 | None | Refactor profile source from hardcoded service map to repository/port-based resolution | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟠 P1 | TASK-526 | None | Use case input/output contracts | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟠 P1 | TASK-560 | None | `GET /projects/{id}/wbs` - Returns tree structure | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-561 | None | `POST /projects/{id}/wbs/items` - Create WBS item | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-562 | None | `PATCH /projects/{id}/wbs/items/{id}` - Update WBS item | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-563 | None | `DELETE /projects/{id}/wbs/items/{id}` - Delete WBS item | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-564 | None | `POST /projects/{id}/wbs/items/{id}/move` - Move item (drag & drop) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-565 | None | `GET /projects/{id}/procurement/bom` - Get BOM | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-566 | None | `POST /projects/{id}/procurement/lead-times` - Calculate lead times | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-567 | None | `GET /projects/{id}/procurement/plan` - Get procurement plan | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-580 | Backend API | `/projects/[id]/wbs` - Full WBS page | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-596 | None | `/projects/[id]/procurement` - Tabbed interface | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-611 | None | Connect to real API endpoints | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-644 | None | All 8 API endpoints return 200 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-648 | None | Tenant Admin can CRUD items | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟠 P1 | TASK-716 | Backend API | Dashboard carga en <2s con datos de 10+ proyectos | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟠 P1 | TASK-746 | Backend API | Smoke tests frontend (login + dashboard) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟠 P1 | TASK-780 | Backend API | Dashboard carga en <2s | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟠 P1 | TASK-806 | Backend API | Dashboard de coherencia score | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟠 P1 | TASK-836 | Backend API | Monitoring dashboard ready | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟠 P1 | TASK-907 | Backend API | Monitoring dashboard active | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟠 P1 | TASK-914 | Backend API | Metrics dashboard created | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟠 P1 | TASK-986 | Backend API | Metrics dashboard created | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟡 P2 | TASK-437 | None | Create visualization examples | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟡 P2 | TASK-591 | None | `ProcurementGantt` - Timeline visualization | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟡 P2 | TASK-603 | None | Export to PDF/Excel | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟡 P2 | TASK-639 | None | Exports generate files | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟡 P2 | TASK-655 | None | All exports functional | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟡 P2 | TASK-669 | None | Completar CE-S2-010 (wireframes al 100%) | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟡 P2 | TASK-719 | None | Export PDF incluye: score, alertas, documentos, fecha | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟡 P2 | TASK-783 | None | Export PDF incluye score, alertas, documentos | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟡 P2 | TASK-1262 | None | Org chart visualization (hierarchical tree) | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟡 P2 | TASK-1268 | None | Automated communication templates | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-278 | Env Setup | ⏳ Todos los tests pasando (42/42) | `docs\archive\changelogs\CHANGELOG_2026-01-06.md` |
-| [ ] | 🟢 P3 | TASK-279 | None | Have Clerk API keys ready (from PASO 0) | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-280 | None | Have Supabase access | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-281 | None | Have Next.js 14+ project | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-283 | None | Have 4-5 weeks available for team | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-284 | None | Team is familiar with React/Next.js | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-285 | None | Read README.md completely | `docs\archive\duplicates\START_HERE (1).md` |
-| [ ] | 🟢 P3 | TASK-286 | Env Setup | ⬜ Tests integrated into CI/CD | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-287 | None | ⬜ Monitoring configured | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-288 | None | ⬜ Backup strategy configured | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-289 | None | Create API client helpers in `lib/api/` | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-290 | None | Connect to FastAPI backend endpoints | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-291 | None | Update hooks to use real data | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-292 | None | Remove mockData dependencies | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-293 | Backend API | Complete entity extraction UI | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-294 | None | Alert management system | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-295 | None | Advanced PDF annotations | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-296 | None | Multi-document tabs | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-297 | None | OCR integration | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-298 | None | Keyboard navigation | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-299 | Backend API | Split view persistence | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-300 | None | Error boundaries | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-301 | None | Loading states | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-302 | None | Optimistic updates | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-303 | None | Performance optimization | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-304 | None | Accessibility audit | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-305 | None | Mobile responsiveness | `docs\archive\migrations\MIGRATION_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-306 | Env Setup | TS-I13-EDGE-001: 14 tests — Conditional Edges (In progress: 001-01..001-09 implemented in workspace; 001-10..001-14 pending) | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-307 | Env Setup | TS-I13-NODE-001: 6 tests — Intent Classifier | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-308 | Env Setup | TS-I13-NODE-002: 8 tests — Clause Extractor | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-309 | Env Setup | TS-I13-NODE-003: 9 tests — Entity Extractor | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-310 | Env Setup | TS-I13-NODE-004: 10 tests — Coherence Evaluator | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-311 | Env Setup | TS-I13-NODE-005: 6 tests — HITL Gate | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-312 | Env Setup | TS-I13-NODE-006: 8 tests — Other Nodes | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-313 | Env Setup | TS-I13-GRAPH-001: 10 tests — Graph Compilation | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-314 | Env Setup | TS-I13-HITL-001: 8 tests — HITL Interrupts | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-315 | Env Setup | TS-I13-E2E-001: 4 tests — End-to-End Flow | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md` |
-| [ ] | 🟢 P3 | TASK-316 | Env Setup | `S6-QA-01` unskip/normalize I13 E2E RED tests. | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-317 | Env Setup | `S6-QA-02` unskip/normalize I14 governance RED tests. | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md` |
-| [ ] | 🟢 P3 | TASK-319 | None | Clerk project created | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-320 | None | API keys copied to `.env.local` | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-321 | None | Custom metadata fields added (tier, tenant_id, role) | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-322 | None | C2Pro Platform Admin organization created | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-323 | None | Demo Workspace organization created | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-324 | None | First admin user created | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-325 | None | First user assigned to C2Pro Platform Admin org | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-326 | None | Organization metadata configured | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-327 | None | Environment variables saved | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-328 | None | `npm install @clerk/nextjs` completed | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-329 | None | `.env.local` updated with Clerk keys | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-330 | None | Root layout has ClerkProvider | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-331 | None | `middleware.ts` created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-332 | Backend API | Sign-in page created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-333 | Backend API | Sign-up page created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-336 | None | Navbar component created | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-337 | Env Setup | Dev server runs without errors | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-338 | None | Can access `/sign-in` | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-339 | None | Can see Clerk form | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md` |
-| [ ] | 🟢 P3 | TASK-340 | None | File created at `apps/web/middleware.ts` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-342 | None | Protected routes redirect to `/sign-in` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-343 | None | API routes return 401 without valid token | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-344 | None | No TypeScript errors | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-345 | Backend API | Page accessible at `/sign-in` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-346 | None | Clerk sign-in form displays with C2Pro styling | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-348 | None | Email/password sign-in works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-350 | None | Link to `/sign-up` works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-351 | Backend API | Page accessible at `/sign-up` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-352 | None | Clerk sign-up form displays | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-353 | None | Account creation works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-354 | None | Email verification flow works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-355 | None | Redirects to onboarding after sign-up | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-356 | None | Variables added to `.env.local` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-357 | None | Clerk redirects work correctly | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-358 | None | No hardcoded URLs in components | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-360 | None | Consistent styling across sign-in/sign-up | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-361 | None | `/login` redirects to `/sign-in` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-362 | None | `/register` redirects to `/sign-up` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-363 | None | No broken links in app | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-364 | None | File created at `apps/web/lib/clerk-tenant.ts` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-365 | None | `useTenantContext()` returns tenant_id from org metadata | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-366 | None | `useUserRole()` returns admin/member role | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-368 | None | No TypeScript errors | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-369 | Env Setup | Unit tests pass | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-370 | None | `FeatureGate` shows upgrade prompt for insufficient tier | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-371 | None | `AdminOnly` hides content from non-admins | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-372 | Backend API | `TenantRequired` shows org setup prompt | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-373 | None | `DemoModeGuard` prevents writes in demo | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-374 | None | Components use consistent C2Pro styling | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-375 | None | C2Pro Platform Admin org has `tenant_id` and `tier` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-376 | None | Demo Workspace org has `tenant_id`, `tier`, and `is_demo: true` | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-377 | None | `useTenantContext()` correctly extracts metadata | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-381 | None | Existing functionality preserved | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-382 | None | `DemoModeProvider` wraps app | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-383 | None | `useDemoMode()` returns demo state and data | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-384 | None | `DemoModeIndicator` shows when in demo | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-385 | None | Sample data matches C2Pro entities | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-386 | None | JWT verification works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-387 | None | `ClerkUser` class extracts claims | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-388 | None | `get_current_tenant_id()` maps org to tenant | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-389 | None | 401 returned for invalid tokens | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-390 | None | Integration with existing middleware | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-391 | None | `organizations` table created | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-392 | None | `organization_members` table created | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-393 | None | RLS policies updated | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-394 | None | Helper functions created | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-395 | None | Verification queries pass | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-396 | None | User can create account | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-397 | None | Email verification works | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-398 | None | Redirected to onboarding | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-399 | None | User can sign in with email/password | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-400 | None | User can sign in with Google | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-402 | None | User can see organization switcher | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-403 | None | Switching orgs updates tenant_id | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-404 | None | Demo org shows demo indicator | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-405 | None | Admin sees admin-only content | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-406 | None | Member cannot access admin content | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-407 | None | Feature gates work by tier | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-408 | None | API calls include JWT | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-409 | None | Backend verifies token | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-410 | None | RLS filters by tenant_id | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-412 | None | Cannot access other tenant's data | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-413 | None | Demo mode prevents writes | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-414 | None | JWT expiration handled correctly | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-415 | None | No sensitive data in client-side logs | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-419 | None | Tenant isolation verified via RLS logs | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-420 | None | Demo mode indicator visible when active | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
-| [ ] | 🟢 P3 | TASK-422 | Backend API | PASO 1: Frontend environment setup & dependencies (10 min) | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-423 | None | Copy `clerk-tenant.ts` to `apps/web/src/lib/` | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-425 | None | Copy `demo-mode-context.tsx` to `apps/web/src/contexts/` | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-427 | Env Setup | Test: OrganizationSwitcher works | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-430 | None | Create admin panels for tenant management | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-431 | None | Create user management interface | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-432 | Env Setup | Test: Role-based access control | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-433 | None | Implement demo data loading | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-434 | None | Create demo organization in Clerk | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-435 | Env Setup | Test demo/production switching | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-438 | None | Create Clerk JWT verification middleware | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-439 | None | Update RLS policies for Clerk integration | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-440 | None | Create user sync webhook (optional) | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-441 | Env Setup | Test: API calls work with Clerk JWT | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-443 | Env Setup | Performance testing | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-444 | None | Documentation | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-445 | None | Team training | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-446 | None | Launch! 🎉 | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-447 | None | All environment variables set correctly | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-448 | None | Clerk API keys valid | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-449 | None | Supabase RLS policies updated | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-450 | None | Backend JWT verification working | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-451 | None | Demo workspace configured | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-452 | Env Setup | All components tested | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-454 | None | Documentation complete | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-455 | None | Team trained | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-457 | Env Setup | Check RLS policy logs | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-458 | None | Verify demo mode data isolation | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-459 | None | Monitor API performance | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-460 | None | Collect user feedback | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-461 | None | Plan next phase enhancements | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md` |
-| [ ] | 🟢 P3 | TASK-462 | Env Setup | Run PASO 0: Clerk Setup (20 min) | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-463 | Backend API | Run PASO 1: Frontend Environment (30 min) | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-464 | None | Copy 3 TypeScript files to your project | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-467 | None | Implement FeatureGate components | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-468 | None | Create admin panels | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-469 | None | Setup demo data | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-470 | Env Setup | Test demo/production switching | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-472 | None | Setup Clerk JWT verification | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-473 | None | Update RLS policies | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-474 | Env Setup | Test: API calls with Clerk JWT | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-476 | Env Setup | Performance testing | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-477 | None | Documentation | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-478 | None | Team training | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-479 | None | Can sign up with email/password | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-482 | None | Can switch between organizations | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-483 | None | Can see demo data in demo mode | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-484 | None | Feature gates work by tier | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-485 | Backend API | Admin-only pages require admin role | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-486 | None | API calls include tenant_id | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-487 | None | RLS policies filter data correctly | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-488 | None | No cross-tenant data visible | `docs\archive\plans\Clerk\README.md` |
-| [ ] | 🟢 P3 | TASK-489 | None | Have Clerk API keys ready (from PASO 0) | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-490 | None | Have Supabase access | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-491 | None | Have Next.js 14+ project | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-493 | None | Have 4-5 weeks available for team | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-494 | None | Team is familiar with React/Next.js | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-495 | None | Read README.md completely | `docs\archive\plans\Clerk\START_HERE.md` |
-| [ ] | 🟢 P3 | TASK-496 | None | `TS-I12-OBS-INT-001` | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🟢 P3 | TASK-497 | None | `TS-I12-OBS-INT-002` | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🟢 P3 | TASK-498 | None | `TS-I12-OBS-INT-003` | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🟢 P3 | TASK-499 | None | `TS-I12-OBS-SEC-001` | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🟢 P3 | TASK-500 | None | `TS-I12-OBS-DEVOPS-001` | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
-| [ ] | 🟢 P3 | TASK-502 | Env Setup | Remove import-fallback stubs from I7 tests (fail fast if imports break) | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-503 | Env Setup | Add `ScoreConfig` contract validation tests (negative weights, missing keys, threshold monotonicity) | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-505 | Env Setup | Add aggregator edge/boundary tests: | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-508 | Env Setup | All new RED tests for hardening are added and fail for the expected reason. | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-509 | Env Setup | GREEN implementation passes all I7 tests (existing + new hardening tests). | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-510 | None | No silent downgrade to zero contribution for unsupported severities. | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-511 | None | Tenant/project profile resolution is port-driven and isolated. | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
-| [ ] | 🟢 P3 | TASK-512 | Env Setup | All tests still pass | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-513 | None | Code coverage maintained | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-514 | None | No lint errors | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-516 | None | Documentation updated | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-518 | None | Coverage above minimum thresholds | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-519 | Env Setup | No flaky tests | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-520 | Env Setup | E2E journey tests passing | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-521 | Env Setup | Accessibility tests passing | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-522 | Env Setup | Mobile tests passing | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-523 | Env Setup | WBS API schema validation (15 tests) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-524 | None | Error response contracts (validation, 404, 400) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-525 | Env Setup | Domain entity contracts (10 tests) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-527 | Env Setup | WBSTree prop interface (10 tests) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-528 | None | WBSItemCard rendering contract | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-529 | None | Event handler contracts (onSelect, onExpand) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-530 | None | State management contracts | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-531 | Env Setup | Cross-module navigation patterns (6 tests) | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-532 | Backend API | API-to-frontend data flow | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-533 | None | State synchronization contracts | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-534 | None | Create WBS item with auto-generated code | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-535 | None | Create child item inherits parent code | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-536 | None | Validate maximum depth (level 4) | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-537 | None | Move item updates code and level | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-538 | None | Prevent circular references | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-539 | None | Delete with cascade removes descendants | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-540 | None | Delete without cascade fails if has children | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-541 | None | Filter by completion status | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-542 | None | Search by name/code/description | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-543 | None | Color-code by alert severity | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-544 | None | Keyboard navigation (Arrow keys, Tab, Enter) | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-545 | None | Touch targets minimum 44px | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-546 | None | Swipe gestures on mobile | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-547 | None | ARIA tree structure | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-548 | None | No accessibility violations | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-549 | None | Generate code for root item | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-550 | None | Generate code for child item | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-551 | None | Update item properties | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-552 | None | Move item with descendant updates | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-553 | None | Bulk operations (future) | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md` |
-| [ ] | 🟢 P3 | TASK-554 | Env Setup | All new endpoints have contract tests | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-555 | Env Setup | All components have unit tests (80%+ coverage) | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-556 | Env Setup | All user flows have E2E tests | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-557 | None | Accessibility audit passes (WCAG 2.2 AA) | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-559 | Backend API | Performance budget met (<200KB JS per page) | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md` |
-| [ ] | 🟢 P3 | TASK-568 | None | Create `DemoModeProvider` context | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-569 | None | Implement toggle: `?demo=true` query param | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-570 | None | Create mock data structure (Torre Skyline) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-571 | None | Set up feature flags by role | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-572 | Env Setup | Contract tests for all new endpoints | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-573 | None | Validate OpenAPI spec | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-574 | None | `WBSTree` - Recursive tree component | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-575 | None | `WBSItemCard` - Individual item display | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-576 | None | `WBSItemDetail` - Detail panel | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-577 | None | `WBSCCodeEditor` - Code input with validation | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-578 | None | `WBSCoverageIndicator` - Coverage progress bar | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-579 | None | `WBSAlertBadge` - Rule violation badges (R11, R12, R13) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-581 | None | Tree expand/collapse | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-582 | None | Drag & drop (Tenant Admin only) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-583 | None | Create new item (auto-generate code) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-584 | None | Edit item properties | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-585 | None | Delete item (with cascade warning) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-586 | Backend API | View linked clauses | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-587 | None | Show alerts per item | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-588 | None | `BOMTable` - Sortable table with costs | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-589 | None | `LeadTimeCalculator` - Incoterm calculator widget | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-590 | None | `LeadTimeCard` - Individual result display | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-593 | None | `IncotermSelector` - Dropdown with descriptions | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-594 | None | `ProcurementAlertList` - R14 late order alerts | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-597 | Backend API | View BOM generated from WBS | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-598 | None | Calculate lead times (all 11 incoterms) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-599 | None | See customs clearance estimates | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-600 | Backend API | View procurement plan timeline | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-602 | None | Get late order alerts (R14) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-604 | None | Rich mock dataset (Torre Skyline project) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-605 | None | Works offline (no API calls) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-606 | None | All features interactive | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-607 | None | Realistic data (47 WBS items, full BOM) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-608 | None | Alert scenarios included | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-609 | Backend API | Mobile-optimized views | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-610 | Backend API | Remove mock data from Project Overview | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-612 | None | Add loading states | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-613 | None | Add error boundaries | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-614 | Env Setup | Mobile responsive check | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-615 | None | Accessibility audit (WCAG 2.2) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-616 | None | Performance optimization | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-617 | None | WBS to Excel | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-618 | None | WBS to PDF | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-619 | None | BOM to CSV | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-620 | None | Procurement plan to PDF | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-621 | Backend API | User guide for WBS | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-622 | Backend API | User guide for Procurement | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-623 | None | Demo mode documentation | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-624 | None | WBSTree renders all 4 levels | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-625 | None | WBSItemCard displays correct data | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-626 | None | Code validation accepts valid codes (1.1.1.1) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-627 | None | Code validation rejects invalid codes | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-628 | None | BOMTable sorts correctly | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-629 | None | LeadTimeCalculator computes accurately | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-630 | None | Create WBS item → appears in tree | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-631 | None | Move item → updates hierarchy | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-632 | None | Delete item → removes from tree | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-633 | None | Generate BOM → creates items from WBS | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-634 | None | Calculate lead times → returns results | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-635 | Backend API | Full flow: Create project → Add WBS → Generate BOM → Calculate LT → View Plan | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-636 | None | Demo mode works offline | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-637 | None | Role-based permissions enforced | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-638 | None | Mobile navigation works | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-640 | None | Keyboard navigation (Tab, Arrow keys, Enter) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-641 | None | Screen reader labels | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-642 | None | Color contrast (WCAG AA) | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-643 | None | Focus indicators | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-645 | None | Demo mode toggle works | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-646 | Env Setup | Contract tests pass | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-647 | Backend API | Final User can view WBS tree | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-649 | Backend API | Mobile view is usable | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-650 | Backend API | Final User can view procurement data | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-651 | None | Tenant Admin can manage procurement | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-653 | None | Demo mode works without backend | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-654 | Backend API | Project overview shows real data | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-656 | Env Setup | E2E tests pass | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md` |
-| [ ] | 🟢 P3 | TASK-657 | Env Setup | @qa-agent writes contract tests (TDD_WEEK1_TESTS.md) | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-658 | Backend API | @backend-tdd reviews API contracts | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-659 | Backend API | @frontend-tdd reviews component specs | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-660 | None | @backend-tdd implements WBS domain | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-661 | Backend API | @frontend-tdd implements WBS components | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-662 | Env Setup | @qa-agent verifies all tests pass | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-663 | None | @backend-tdd implements Procurement | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-664 | Backend API | @frontend-tdd implements Procurement UI | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-665 | Env Setup | @qa-agent runs E2E journeys | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-666 | None | All teams refactor code | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-667 | Env Setup | @qa-agent runs full regression | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-668 | None | @docs-agent updates documentation | `docs\archive\plans\ux-implementation\README.md` |
-| [ ] | 🟢 P3 | TASK-670 | None | Iniciar CE-S3-001 (Parsers) | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-671 | Security Sign-off | Deploy staging actualizado | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-672 | None | Sprint S3 inicio | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-673 | None | ClauseExtractorAgent implementation | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-674 | None | Coherence Engine v0.4 | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-675 | Env Setup | **Layer 4: Repository Filters** - Application-level checks (future enhancement) | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md` |
-| [ ] | 🟢 P3 | TASK-676 | None | GREEN phase implementation (pending) | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-677 | Env Setup | Tests passing at 90%+ coverage (pending) | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-678 | None | Lead Software Architect | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-680 | None | QA Lead | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-681 | None | User puede registrarse y hacer login con email/password | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-682 | None | JWT válido permite acceso a endpoints protegidos | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-683 | Env Setup | RLS impide acceso a datos de otros tenants (test con 2 tenants) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-684 | None | Middleware rechaza JWTs inválidos o sin tenant_id | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-685 | Env Setup | Sentry captura errores correctamente (test con error manual) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-686 | Env Setup | CI/CD pipeline corre tests y despliega a staging en cada push a main | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-687 | Env Setup | Health check endpoint responde 200 OK | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-688 | None | PDF de contrato sube correctamente y extrae texto completo | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-689 | None | Excel de cronograma parsea todas las hojas y filas | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-690 | None | BC3 de presupuesto parsea capítulos y partidas correctamente | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-691 | None | Archivos se guardan en R2 con estructura: `{tenant_id}/{project_id}/{doc_id}.ext` | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-692 | Backend API | UI muestra progress bar durante upload | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-693 | None | Errores de parsing muestran mensaje claro al usuario | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-694 | Env Setup | Documentos quedan asociados al proyecto correcto (test multi-tenant) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-695 | None | Anonymizer detecta y reemplaza correctamente DNI, emails, teléfonos, IBANs | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-696 | None | Claude API extrae cláusulas de contrato de prueba con >80% accuracy | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-697 | None | Claude API extrae hitos de cronograma con fechas correctas | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-698 | None | Claude API extrae partidas de BC3 con precios correctos | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-699 | Env Setup | Cost controller bloquea requests cuando tenant alcanza budget (test) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-700 | Env Setup | Cache Redis evita llamar a Claude API 2 veces para mismo input (test) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-701 | None | Model router usa Haiku para clasificación simple (ahorro >50% coste) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-702 | None | WBS se genera automáticamente con 4 niveles de jerarquía (proyecto, fase, entregable, tarea) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-703 | None | Todos los WBS items están vinculados a actividades del cronograma | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-704 | None | Todos los WBS items tienen partidas presupuestarias asignadas | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-705 | None | Ruta crítica se identifica correctamente en WBS | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-706 | None | BOM se genera automáticamente por cada WBS item | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-707 | None | BOM incluye lead times calculados para cada material | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-708 | None | BOM calcula fecha óptima de pedido (fecha_necesidad - lead_time - buffer) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-709 | None | Materiales críticos están marcados en BOM | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-710 | None | Motor detecta 18+ tipos de incoherencias en dataset de prueba (incluyendo WBS/BOM) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-711 | None | Proyecto sin incoherencias obtiene score 100 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-712 | None | Proyecto con incoherencia crítica obtiene score ≤80 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-713 | None | Alertas incluyen mensaje claro + acción sugerida | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-714 | None | Análisis se completa en <3 minutos para proyecto típico (3 docs + WBS + BOM) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-715 | Backend API | UI muestra alertas ordenadas por severidad | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-717 | None | Gauge de Coherence Score es visualmente claro (colores: 0-60=rojo, 61-80=amarillo, 81-100=verde) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-718 | None | Filtros de alertas funcionan (severidad, estado) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-720 | None | Responsive design funciona en mobile (>360px width) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-721 | Backend API | Navegación entre páginas es fluida (Next.js prefetch) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-722 | None | Variables de entorno configuradas en Railway + Vercel | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-723 | None | Backups automáticos habilitados en Supabase | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-724 | None | Sentry configurado con alertas a email | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-725 | None | UptimeRobot monitoreando API + Web cada 5 min | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-726 | None | DNS configurado (c2pro.app o similar) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-727 | None | SSL/TLS activo (Vercel automático) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-728 | None | Rate limiting activo (60 req/min general, 10 req/min AI) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-729 | Env Setup | Tests de seguridad pasan al 100% | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-730 | None | AI accuracy >85% en golden dataset | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-731 | Env Setup | Load test soporta 100 usuarios concurrentes con <1% error | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-732 | Security Sign-off | Producción deployada y estable (uptime >99% primera semana) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-733 | None | 3 pilots onboarded y usando la plataforma | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-734 | None | Documentación básica de usuario creada | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-735 | Env Setup | Todos los tests pasan (unit + integration) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-736 | None | Coverage >80% en rutas críticas | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-738 | Backend API | Code review aprobado (si aplica) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-739 | None | Changelog actualizado | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-740 | None | Versión bumpeada (semver) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-741 | Security Sign-off | Backup manual BD antes de deploy (producción) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-742 | None | Variables de entorno verificadas | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-743 | Security Sign-off | Deploy backend (Railway) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-744 | Env Setup | Smoke tests backend (health check) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-745 | Backend API | Deploy frontend (Vercel) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-747 | None | Verificar Sentry (no errores nuevos) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-748 | None | Verificar UptimeRobot (uptime OK) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-749 | None | Verificar logs (no errores críticos) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-750 | None | Comunicar release a usuarios (si cambios mayores) | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-751 | Security Sign-off | Monitorear 1h post-deploy | `docs\archive\roadmaps\ROADMAP_v2.2.0.md` |
-| [ ] | 🟢 P3 | TASK-752 | None | User puede registrarse y hacer login | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-753 | None | JWT válido permite acceso a endpoints protegidos | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-754 | None | RLS impide acceso a datos de otros tenants | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-755 | None | Sentry captura errores correctamente | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-756 | None | CI/CD pipeline funciona | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-757 | Env Setup | Health check responde 200 OK | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-758 | None | PDF de contrato sube y extrae texto completo | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-759 | None | Excel de cronograma parsea todas las hojas | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-760 | None | BC3 de presupuesto parsea capítulos y partidas | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-761 | None | Archivos se guardan en R2 con estructura correcta | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-762 | Backend API | UI muestra progress bar durante upload | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-763 | None | Documentos asociados al proyecto correcto | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-764 | None | Anonymizer detecta DNI, emails, teléfonos, IBANs | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-765 | None | Claude extrae cláusulas con >80% accuracy | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-766 | None | Cost controller bloquea cuando excede budget | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-767 | None | Cache evita llamadas duplicadas | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-768 | None | Model router usa Haiku para clasificación simple | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-769 | None | WBS se genera con 4 niveles de jerarquía | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-770 | None | WBS items vinculados a actividades del cronograma | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-771 | None | WBS items tienen partidas presupuestarias asignadas | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-772 | None | Ruta crítica identificada correctamente | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-773 | None | BOM generado por cada WBS item con materiales | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-774 | None | BOM incluye lead times calculados | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-775 | None | BOM calcula fecha óptima de pedido | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-776 | None | Motor detecta 20+ tipos de incoherencias | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-777 | None | Score 100 para proyecto sin incoherencias | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-778 | None | **NUEVO: Stakeholders extraídos de contrato (nombres, roles, departamentos)** | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-779 | None | **NUEVO: Stakeholders clasificados en cuadrante poder/interés** | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-781 | None | Gauge de Score con colores (0-60 rojo, 61-80 amarillo, 81-100 verde) | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-782 | None | Filtros de alertas funcionan | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-784 | None | Responsive funciona en mobile | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-785 | None | **NUEVO: Lista de stakeholders visible en proyecto** | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-786 | None | **NUEVO: Matriz poder/interés interactiva** | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-787 | Env Setup | Tests de seguridad pasan al 100% | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-788 | None | AI accuracy >85% en golden dataset | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-789 | Env Setup | Load test soporta 100 usuarios con <1% error | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-790 | None | Producción estable (uptime >99%) | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-791 | None | 3 pilots onboarded | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-792 | None | Documentación básica creada | `docs\archive\roadmaps\ROADMAP_v2.3.0.md` |
-| [ ] | 🟢 P3 | TASK-793 | None | Módulo de upload de archivos | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-794 | None | Parser de PDF (contratos) | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-795 | None | Parser de Excel (presupuestos) | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-796 | None | Parser de BC3 (presupuestos) | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-797 | None | Almacenamiento en Cloudflare R2 | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-798 | None | Queue para procesamiento asíncrono | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-799 | None | Extracción de stakeholders con Claude | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-800 | None | Extracción de WBS desde cronograma | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-801 | None | Extracción de BOM desde presupuesto | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-802 | None | Graph database para relaciones | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-803 | None | Motor de coherencia con Graph RAG | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-804 | None | Detección de incoherencias | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-805 | None | Generación de alertas | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-807 | None | Cambiar `JWT_SECRET_KEY` a un valor fuerte | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-808 | None | Configurar `CORS_ORIGINS` con dominios específicos | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-810 | None | Configurar Sentry para error tracking | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-811 | None | Configurar rate limiting con Redis | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-812 | None | SSL/TLS en todas las conexiones | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-813 | None | Secrets en variables de entorno (no en .env) | `docs\archive\sprints\SPRINT_1_COMPLETED.md` |
-| [ ] | 🟢 P3 | TASK-814 | Env Setup | Gate 2 tests (1-1.5 hours) | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-815 | Env Setup | Gate 3 tests (15 minutes - reuse existing) | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-816 | Env Setup | Gate 4 tests (1-1.5 hours) | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-817 | None | Execute `generate_cto_gates_evidence.py` | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-818 | Backend API | Review generated evidence package | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-819 | None | Verify all gates passing | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-820 | Backend API | Review executive summary | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-821 | None | Prepare key metrics | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-822 | Backend API | Schedule CTO review meeting | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-823 | Security Sign-off | Obtain production deployment sign-off | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md` |
-| [ ] | 🟢 P3 | TASK-824 | None | `.env.staging` or `.env` file configured | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-825 | None | DATABASE_URL set correctly | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-826 | None | Database credentials valid | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-829 | Env Setup | pytest installed | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-830 | Backend API | All requirements installed | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-831 | None | Can connect to staging database | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-832 | Backend API | User has required permissions | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-833 | None | Sufficient disk space for backups | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md` |
-| [ ] | 🟢 P3 | TASK-834 | None | Team availability confirmed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-835 | None | Maintenance window scheduled | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-837 | None | Slack channel created: #staging-migration | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-838 | None | Backup strategy verified | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-839 | None | CE-20 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-840 | None | CE-21 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-841 | None | CE-22 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-842 | None | CE-23 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-843 | None | CE-24 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-844 | None | CE-25 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-845 | None | CE-26 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-846 | None | CE-27 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-847 | None | CE-28 completed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-848 | Env Setup | All tests passed | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-849 | None | Evidence package created | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-850 | None | Readiness report generated | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-851 | Security Sign-off | CTO sign-off obtained | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-852 | Security Sign-off | Production migration scheduled | `docs\archive\tasks\CE-P0-06_QUICK_START.md` |
-| [ ] | 🟢 P3 | TASK-853 | None | Database connection successful | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-854 | None | Environment variables validated | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-855 | None | Pre-migration backup created and verified (file size > 0) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-856 | None | Current state documented (table count, policy count, FK count) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-857 | Env Setup | Backup restoration tested in isolated environment | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-858 | None | All migration files have valid SQL syntax | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-859 | Env Setup | Dry-run completes without errors | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-860 | None | Migration order validated (no circular dependencies) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-861 | Env Setup | Local staging mirror test successful | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-862 | None | Estimated execution time documented | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-863 | None | Migration script executes without errors (exit code 0) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-864 | Env Setup | Schema version updated to latest (005) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-865 | None | All expected tables created | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-866 | None | No connection interruptions during migration | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-867 | None | Post-migration backup created | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-868 | None | Migration logs captured | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-869 | None | 14/14 tables have RLS enabled | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-870 | None | All tables have at least 1 RLS policy | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-872 | Env Setup | Gate 1 automated tests pass (7/7) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-873 | Env Setup | Manual cross-tenant isolation test successful (0 rows returned) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-874 | None | All expected FK constraints exist | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-875 | None | No orphaned records found (all counts = 0) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-876 | Env Setup | FK cascade behavior tested and documented | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-877 | None | Indexes exist on all FK columns | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-878 | None | FK constraint count matches expected (minimum 15) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-879 | None | Clause table structure correct | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-880 | Env Setup | Test data insertion successful | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-881 | None | All alerts linked to valid analyses | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-882 | None | No NULL tenant_id values | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-883 | None | No future timestamps | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-884 | Backend API | Smoke test suite passes 100% | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-885 | None | All indexes being utilized (idx_scan > 0) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-886 | None | Query execution times within acceptable ranges | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-887 | None | No significant performance regression (< 10% slower) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-888 | None | Connection pool healthy (no leaks) | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-889 | None | Table sizes reasonable | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-890 | None | Schema version matches target | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-891 | None | All expected tables present | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-892 | None | RLS policies intact | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-893 | None | Foreign keys functional | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-894 | None | Sample queries successful | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-895 | None | No data loss | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-896 | None | Application can connect | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-897 | Env Setup | Rollback script created and tested | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-898 | None | Rollback successful in isolated environment | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-899 | None | Rollback procedure documented | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-900 | Env Setup | Verification checklist created | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-901 | Env Setup | Full rollback cycle tested | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-902 | Env Setup | No data loss during rollback test | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-903 | Security Sign-off | Production backup completed | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-904 | None | Maintenance mode enabled | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-905 | None | Traffic redirected | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-906 | None | Migration team on standby | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-908 | Env Setup | All smoke tests pass | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-911 | Security Sign-off | CTO sign-off obtained | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-912 | Env Setup | All test results aggregated | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-913 | None | Executive summary generated | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-915 | None | Risk assessment completed | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-916 | Env Setup | Go/No-Go checklist prepared | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-917 | None | Database connection verified | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-918 | None | Environment variables validated | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-919 | None | Pre-migration backup created (file size > 0) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-920 | None | Current state documented | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-921 | Env Setup | Backup restoration tested | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-922 | None | `backups/staging_pre_migration_YYYYMMDD_HHMMSS.dump` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-923 | None | `docs/staging_pre_migration_state.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-924 | None | `logs/ce20_validation_results.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-925 | None | All migration files have valid SQL syntax | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-926 | Env Setup | Dry-run completes without errors | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-927 | None | Migration order validated (no circular dependencies) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-928 | Env Setup | Local staging mirror test successful | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-929 | None | Estimated execution time documented | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-930 | None | `logs/syntax_validation.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-931 | Env Setup | `logs/dry_run_output.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-932 | None | `docs/migration_dependency_graph.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-933 | None | `docs/migration_execution_plan.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-934 | None | Migration script executes without errors (exit code 0) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-935 | Env Setup | Schema version updated to latest (005) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-936 | None | All expected tables created | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-937 | None | No connection interruptions during migration | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-938 | None | Post-migration backup created | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-939 | None | Migration logs captured | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-940 | None | `logs/ce22_migration_execution.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-941 | None | `logs/ce22_migration_console.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-942 | None | `backups/staging_post_migration_YYYYMMDD_HHMMSS.dump` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-943 | None | `docs/staging_post_migration_state.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-944 | None | 14/14 tables have RLS enabled | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-945 | None | All tables have at least 1 RLS policy | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-947 | Env Setup | Gate 1 automated tests pass (7/7) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-948 | Env Setup | Manual cross-tenant isolation test successful (0 rows returned) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-949 | Env Setup | `logs/ce23_rls_tests.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-950 | None | `docs/ce23_rls_verification_report.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-951 | None | All expected FK constraints exist | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-952 | None | No orphaned records found (all counts = 0) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-953 | Env Setup | FK cascade behavior tested and documented | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-954 | None | Indexes exist on all FK columns | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-955 | None | FK constraint count matches expected (minimum 15) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-956 | None | `docs/ce24_foreign_key_report.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-957 | None | `logs/ce24_fk_verification.sql` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-958 | None | Clause table structure correct | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-959 | Env Setup | Test data insertion successful | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-960 | None | All alerts linked to valid analyses | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-961 | None | No NULL tenant_id values | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-962 | None | No future timestamps | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-963 | Backend API | Smoke test suite passes 100% | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-964 | Env Setup | `logs/ce25_smoke_tests.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-965 | None | `docs/ce25_data_integrity_report.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-966 | None | All indexes being utilized (idx_scan > 0) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-967 | None | Query execution times within acceptable ranges | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-968 | None | No significant performance regression (< 10% slower) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-969 | None | Connection pool healthy (no leaks) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-970 | None | Table sizes reasonable | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-971 | None | `logs/ce26_performance_analysis.sql` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-973 | None | `docs/ce26_performance_report.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-974 | Env Setup | Rollback script created and tested | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-975 | None | Rollback successful in isolated environment | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-976 | None | Rollback procedure documented | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-977 | Env Setup | Verification checklist created | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-978 | Env Setup | Full rollback cycle tested | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-979 | Env Setup | No data loss during rollback test | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-980 | None | `infrastructure/supabase/rollback_migrations.py` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-981 | None | `docs/ROLLBACK_PROCEDURE.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-982 | Env Setup | `docs/ROLLBACK_VERIFICATION_CHECKLIST.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-983 | Env Setup | `logs/ce27_rollback_test_results.log` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-984 | Env Setup | All test results aggregated | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-985 | None | Executive summary generated | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-987 | None | Risk assessment completed | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-988 | Env Setup | Go/No-Go checklist prepared | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-989 | None | `docs/STAGING_MIGRATION_READINESS_REPORT.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-990 | Security Sign-off | `docs/PRODUCTION_MIGRATION_GO_NO_GO.md` | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-991 | None | `evidence/staging_migration_YYYYMMDD/` (complete package) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-992 | Env Setup | Dry-run passed without errors | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-993 | Env Setup | Local test successful | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-994 | None | Team availability confirmed | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-995 | None | Migration execution failed with errors | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-996 | Env Setup | > 5% of RLS tests fail (CE-23) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-997 | None | Data corruption detected (CE-25) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-998 | None | Performance degradation > 30% (CE-26) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1000 | None | All 9 tasks completed successfully | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1001 | Env Setup | All tests passed (100%) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1002 | None | Performance acceptable (< 10% degradation) | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1003 | Env Setup | Rollback procedure tested | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1004 | None | Evidence package complete | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1005 | None | T-24h: Migration scheduled notification sent | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1006 | None | T-2h: Final go/no-go decision communicated | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1007 | None | T-30m: Maintenance window starting | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1008 | None | T+0h: Migration started | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1009 | None | T+1h: Migration completed / status update | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1010 | None | T+4h: Verification complete | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1011 | None | T+24h: Final report sent | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md` |
-| [ ] | 🟢 P3 | TASK-1012 | None | All 4 gates verified PASSING | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1013 | Backend API | Evidence package reviewed by CTO | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1015 | Security Sign-off | Compliance team sign-off obtained | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1016 | None | Monitoring & alerting configured | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1017 | None | Incident response plan documented | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1019 | Env Setup | Add more test classes for refresh tokens, RBAC, etc. | `docs\archive\tasks\CTO_GATES_QUICKSTART.md` |
-| [ ] | 🟢 P3 | TASK-1020 | Backend API | All MCP endpoints require valid JWT | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1021 | None | Prompt injection patterns are blocked | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1022 | None | Rate limiting: X requests per minute | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1023 | None | Input validation using Pydantic schemas | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1024 | None | Error messages are sanitized | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1025 | Security Sign-off | No stack traces in production responses | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1026 | None | Tenant isolation enforced in MCP context | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1027 | Env Setup | Create verification test directory | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1028 | Env Setup | Implement Gate 1 RLS tests | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1029 | Env Setup | Implement Gate 2 Identity tests | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1031 | Env Setup | Implement Gate 4 Traceability tests | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1032 | None | CTO Approval | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1034 | Backend API | Compliance Team Review | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md` |
-| [ ] | 🟢 P3 | TASK-1036 | None | Extender type safety a más componentes | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md` |
-| [ ] | 🟢 P3 | TASK-1037 | None | Implementar generación automática de tipos desde backend | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md` |
-| [ ] | 🟢 P3 | TASK-1038 | Env Setup | Agregar tests unitarios para componentes críticos | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md` |
-| [ ] | 🟢 P3 | TASK-1039 | Backend API | Implementar Storybook para componentes UI | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md` |
-| [ ] | 🟢 P3 | TASK-1044 | None | ⏳ Migraciones aplicadas | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md` |
-| [ ] | 🟢 P3 | TASK-1263 | None | Stakeholder network graph (relationships) | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1264 | None | Influence mapping (who influences whom) | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1265 | None | Historical tracking (power/interest over time) | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1266 | None | Sentiment analysis (from communications) | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1267 | None | Meeting scheduler integration | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1269 | None | Stakeholder engagement score | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1270 | None | Conflict identification | `docs\wireframes\05-stakeholders.md` |
-| [ ] | 🟢 P3 | TASK-1271 | None | Succession planning (backup contacts) | `docs\wireframes\05-stakeholders.md` |
+| Done | Priority | ID        | Dependency        | Description                                                                                                                  | Source File                                                                             |
+| :--- | :------- | :-------- | :---------------- | :--------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
+| [ ]  | 🔴 P0    | TASK-277  | Backend API       | ⏳ Tests ejecutados con PostgreSQL (requiere BD)                                                                             | `docs\archive\changelogs\CHANGELOG_2026-01-06.md`                                       |
+| [x]  | 🔴 P0    | TASK-282  | None              | Have Python 3.11+ for backend                                                                                                | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🔴 P0    | TASK-318  | Backend API       | `S6-E2E-01` run full I1-I14 critical regression matrix.                                                                      | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md`                      |
+| [ ]  | 🔴 P0    | TASK-335  | None              | Auth layout created                                                                                                          | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🔴 P0    | TASK-341  | None              | Public routes accessible without auth                                                                                        | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-347  | None              | Google OAuth button works                                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-359  | Backend API       | Layout applies to auth pages                                                                                                 | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-378  | None              | `useAuth()` returns `tenantId`                                                                                               | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-379  | None              | `useAuth()` returns `isDemoMode`                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-380  | None              | `useAuth()` returns `serviceTier`                                                                                            | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-411  | None              | Cannot access protected routes without auth                                                                                  | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-417  | None              | Zero auth-related console errors                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-418  | Backend API       | 100% of protected routes require auth                                                                                        | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🔴 P0    | TASK-424  | None              | Copy `protected-routes.tsx` to `apps/web/src/components/auth/`                                                               | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🔴 P0    | TASK-442  | None              | Security audit                                                                                                               | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🔴 P0    | TASK-453  | None              | Security audit passed                                                                                                        | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🔴 P0    | TASK-456  | None              | Monitor auth failures in Sentry                                                                                              | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🔴 P0    | TASK-475  | None              | Security audit                                                                                                               | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🔴 P0    | TASK-480  | None              | Can sign up with Google OAuth                                                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [x]  | 🔴 P0    | TASK-492  | None              | Have Python 3.11+ for backend                                                                                                | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🔴 P0    | TASK-501  | None              | Confirm strict blocking semantics for critical I12 gates in CI policy.                                                       | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🔴 P0    | TASK-504  | None              | Enforce strict severity taxonomy handling in scoring (`Critical/High/Medium/Low/Info`)                                       | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🔴 P0    | TASK-515  | None              | Performance benchmarks improved                                                                                              | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🔴 P0    | TASK-517  | Env Setup         | All P0 tests passing                                                                                                         | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🔴 P0    | TASK-558  | None              | Security audit passes (no exposed data)                                                                                      | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🔴 P0    | TASK-592  | None              | `CriticalPathOverlay` - Highlight critical items                                                                             | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🔴 P0    | TASK-595  | None              | `RiskIndicator` - Low/Medium/High/Critical badges                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🔴 P0    | TASK-601  | None              | Identify critical path                                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🔴 P0    | TASK-652  | None              | Gantt displays critical path                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🔴 P0    | TASK-679  | None              | Security Engineer                                                                                                            | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`             |
+| [ ]  | 🔴 P0    | TASK-737  | None              | Security scan sin vulnerabilidades high/critical                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🔴 P0    | TASK-809  | None              | Activar Row Level Security en Supabase                                                                                       | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [x]  | 🔴 P0    | TASK-827  | None              | Python 3.11+ installed                                                                                                       | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🔴 P0    | TASK-828  | None              | PostgreSQL client (psql) in PATH                                                                                             | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🔴 P0    | TASK-871  | None              | FORCE RLS enabled on critical tables                                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🔴 P0    | TASK-909  | None              | Performance benchmarks acceptable                                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🔴 P0    | TASK-910  | None              | No critical errors in logs                                                                                                   | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🔴 P0    | TASK-946  | None              | FORCE RLS enabled on critical tables                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🔴 P0    | TASK-972  | None              | `logs/ce26_benchmark_results.json`                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🔴 P0    | TASK-999  | None              | Critical application functionality broken                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🔴 P0    | TASK-1014 | Security Sign-off | Security team sign-off obtained                                                                                              | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🔴 P0    | TASK-1018 | Security Sign-off | Production deployment authorized                                                                                             | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🔴 P0    | TASK-1030 | Env Setup         | Implement Gate 3 MCP Security tests                                                                                          | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🔴 P0    | TASK-1033 | Backend API       | Security Team Review                                                                                                         | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🔴 P0    | TASK-1035 | Security Sign-off | Production Deployment Authorized                                                                                             | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🔴 P0    | TASK-1040 | Backend API       | ⏳ JWT tests completos (requieren PostgreSQL)                                                                                | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🔴 P0    | TASK-1041 | Backend API       | ⏳ RLS tests (requieren PostgreSQL)                                                                                          | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🔴 P0    | TASK-1042 | Backend API       | ⏳ SQL Injection tests (requieren PostgreSQL)                                                                                | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [x]  | 🔴 P0    | TASK-1043 | None              | ⏳ PostgreSQL iniciado (Docker Desktop detenido)                                                                             | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🔴 P0    | TASK-1045 | Backend API       | ⏳ **Gate 1 (Multi-tenant RLS):** Tests listos, requiere PostgreSQL                                                          | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🔴 P0    | TASK-1046 | Backend API       | ⏳ **Gate 2 (Identity Model):** Tests listos, requiere PostgreSQL                                                            | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🟠 P1    | TASK-334  | Backend API       | Dashboard page created                                                                                                       | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟠 P1    | TASK-349  | Backend API       | Redirects to `/dashboard` after successful sign-in                                                                           | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟠 P1    | TASK-367  | None              | `useServiceTier()` returns free/pro/enterprise                                                                               | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟠 P1    | TASK-401  | Backend API       | Redirected to dashboard                                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟠 P1    | TASK-416  | Backend API       | Sign-up to dashboard flow < 30 seconds                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟠 P1    | TASK-421  | Backend API       | PASO 0: Complete Clerk setup at dashboard.clerk.com (15-20 min)                                                              | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟠 P1    | TASK-426  | Backend API       | Test: Can sign in and see dashboard                                                                                          | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟠 P1    | TASK-428  | Backend API       | Create protected dashboards (C2Pro Admin, Tenant Admin, User)                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟠 P1    | TASK-429  | None              | Implement feature gating by service tier                                                                                     | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟠 P1    | TASK-436  | None              | Create sample projects and alerts                                                                                            | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟠 P1    | TASK-465  | Backend API       | Test: Can sign in and see dashboard                                                                                          | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟠 P1    | TASK-466  | Backend API       | Create protected dashboards (C2Pro Admin, Tenant Admin, User)                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟠 P1    | TASK-471  | None              | Create sample projects/alerts                                                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟠 P1    | TASK-481  | Backend API       | Can see dashboard after login                                                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟠 P1    | TASK-506  | Env Setup         | Add profile resolution tests in service:                                                                                     | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟠 P1    | TASK-507  | None              | Refactor profile source from hardcoded service map to repository/port-based resolution                                       | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟠 P1    | TASK-526  | None              | Use case input/output contracts                                                                                              | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟠 P1    | TASK-560  | None              | `GET /projects/{id}/wbs` - Returns tree structure                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-561  | None              | `POST /projects/{id}/wbs/items` - Create WBS item                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-562  | None              | `PATCH /projects/{id}/wbs/items/{id}` - Update WBS item                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-563  | None              | `DELETE /projects/{id}/wbs/items/{id}` - Delete WBS item                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-564  | None              | `POST /projects/{id}/wbs/items/{id}/move` - Move item (drag & drop)                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-565  | None              | `GET /projects/{id}/procurement/bom` - Get BOM                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-566  | None              | `POST /projects/{id}/procurement/lead-times` - Calculate lead times                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-567  | None              | `GET /projects/{id}/procurement/plan` - Get procurement plan                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-580  | Backend API       | `/projects/[id]/wbs` - Full WBS page                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-596  | None              | `/projects/[id]/procurement` - Tabbed interface                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-611  | None              | Connect to real API endpoints                                                                                                | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-644  | None              | All 8 API endpoints return 200                                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-648  | None              | Tenant Admin can CRUD items                                                                                                  | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟠 P1    | TASK-716  | Backend API       | Dashboard carga en <2s con datos de 10+ proyectos                                                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟠 P1    | TASK-746  | Backend API       | Smoke tests frontend (login + dashboard)                                                                                     | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟠 P1    | TASK-780  | Backend API       | Dashboard carga en <2s                                                                                                       | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟠 P1    | TASK-806  | Backend API       | Dashboard de coherencia score                                                                                                | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟠 P1    | TASK-836  | Backend API       | Monitoring dashboard ready                                                                                                   | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟠 P1    | TASK-907  | Backend API       | Monitoring dashboard active                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟠 P1    | TASK-914  | Backend API       | Metrics dashboard created                                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟠 P1    | TASK-986  | Backend API       | Metrics dashboard created                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟡 P2    | TASK-437  | None              | Create visualization examples                                                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟡 P2    | TASK-591  | None              | `ProcurementGantt` - Timeline visualization                                                                                  | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟡 P2    | TASK-603  | None              | Export to PDF/Excel                                                                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟡 P2    | TASK-639  | None              | Exports generate files                                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟡 P2    | TASK-655  | None              | All exports functional                                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟡 P2    | TASK-669  | None              | Completar CE-S2-010 (wireframes al 100%)                                                                                     | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟡 P2    | TASK-719  | None              | Export PDF incluye: score, alertas, documentos, fecha                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟡 P2    | TASK-783  | None              | Export PDF incluye score, alertas, documentos                                                                                | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟡 P2    | TASK-1262 | None              | Org chart visualization (hierarchical tree)                                                                                  | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟡 P2    | TASK-1268 | None              | Automated communication templates                                                                                            | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-278  | Env Setup         | ⏳ Todos los tests pasando (42/42)                                                                                           | `docs\archive\changelogs\CHANGELOG_2026-01-06.md`                                       |
+| [ ]  | 🟢 P3    | TASK-279  | None              | Have Clerk API keys ready (from PASO 0)                                                                                      | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-280  | None              | Have Supabase access                                                                                                         | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-281  | None              | Have Next.js 14+ project                                                                                                     | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-283  | None              | Have 4-5 weeks available for team                                                                                            | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-284  | None              | Team is familiar with React/Next.js                                                                                          | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-285  | None              | Read README.md completely                                                                                                    | `docs\archive\duplicates\START_HERE (1).md`                                             |
+| [ ]  | 🟢 P3    | TASK-286  | Env Setup         | ⬜ Tests integrated into CI/CD                                                                                               | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md`              |
+| [ ]  | 🟢 P3    | TASK-287  | None              | ⬜ Monitoring configured                                                                                                     | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md`              |
+| [ ]  | 🟢 P3    | TASK-288  | None              | ⬜ Backup strategy configured                                                                                                | `docs\archive\implementation\supabase\S0.3_TEST_IMPLEMENTATION_SUMMARY.md`              |
+| [ ]  | 🟢 P3    | TASK-289  | None              | Create API client helpers in `lib/api/`                                                                                      | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-290  | None              | Connect to FastAPI backend endpoints                                                                                         | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-291  | None              | Update hooks to use real data                                                                                                | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-292  | None              | Remove mockData dependencies                                                                                                 | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-293  | Backend API       | Complete entity extraction UI                                                                                                | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-294  | None              | Alert management system                                                                                                      | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-295  | None              | Advanced PDF annotations                                                                                                     | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-296  | None              | Multi-document tabs                                                                                                          | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-297  | None              | OCR integration                                                                                                              | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-298  | None              | Keyboard navigation                                                                                                          | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-299  | Backend API       | Split view persistence                                                                                                       | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-300  | None              | Error boundaries                                                                                                             | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-301  | None              | Loading states                                                                                                               | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-302  | None              | Optimistic updates                                                                                                           | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-303  | None              | Performance optimization                                                                                                     | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-304  | None              | Accessibility audit                                                                                                          | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-305  | None              | Mobile responsiveness                                                                                                        | `docs\archive\migrations\MIGRATION_COMPLETED.md`                                        |
+| [ ]  | 🟢 P3    | TASK-306  | Env Setup         | TS-I13-EDGE-001: 14 tests — Conditional Edges (In progress: 001-01..001-09 implemented in workspace; 001-10..001-14 pending) | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-307  | Env Setup         | TS-I13-NODE-001: 6 tests — Intent Classifier                                                                                 | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-308  | Env Setup         | TS-I13-NODE-002: 8 tests — Clause Extractor                                                                                  | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-309  | Env Setup         | TS-I13-NODE-003: 9 tests — Entity Extractor                                                                                  | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-310  | Env Setup         | TS-I13-NODE-004: 10 tests — Coherence Evaluator                                                                              | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-311  | Env Setup         | TS-I13-NODE-005: 6 tests — HITL Gate                                                                                         | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-312  | Env Setup         | TS-I13-NODE-006: 8 tests — Other Nodes                                                                                       | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-313  | Env Setup         | TS-I13-GRAPH-001: 10 tests — Graph Compilation                                                                               | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-314  | Env Setup         | TS-I13-HITL-001: 8 tests — HITL Interrupts                                                                                   | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-315  | Env Setup         | TS-I13-E2E-001: 4 tests — End-to-End Flow                                                                                    | `docs\archive\planning\2026-02\PLAN_LANGGRAPH_TDD_TESTPLAN_I13_2026-02-15.md`           |
+| [ ]  | 🟢 P3    | TASK-316  | Env Setup         | `S6-QA-01` unskip/normalize I13 E2E RED tests.                                                                               | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md`                      |
+| [ ]  | 🟢 P3    | TASK-317  | Env Setup         | `S6-QA-02` unskip/normalize I14 governance RED tests.                                                                        | `docs\archive\planning\2026-02\TACTICAL_BOARD_S4_S6_2026-02-14.md`                      |
+| [ ]  | 🟢 P3    | TASK-319  | None              | Clerk project created                                                                                                        | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-320  | None              | API keys copied to `.env.local`                                                                                              | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-321  | None              | Custom metadata fields added (tier, tenant_id, role)                                                                         | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-322  | None              | C2Pro Platform Admin organization created                                                                                    | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-323  | None              | Demo Workspace organization created                                                                                          | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-324  | None              | First admin user created                                                                                                     | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-325  | None              | First user assigned to C2Pro Platform Admin org                                                                              | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-326  | None              | Organization metadata configured                                                                                             | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-327  | None              | Environment variables saved                                                                                                  | `docs\archive\plans\Clerk\00_CLERK_SETUP_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-328  | None              | `npm install @clerk/nextjs` completed                                                                                        | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-329  | None              | `.env.local` updated with Clerk keys                                                                                         | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-330  | None              | Root layout has ClerkProvider                                                                                                | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-331  | None              | `middleware.ts` created                                                                                                      | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-332  | Backend API       | Sign-in page created                                                                                                         | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-333  | Backend API       | Sign-up page created                                                                                                         | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-336  | None              | Navbar component created                                                                                                     | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-337  | Env Setup         | Dev server runs without errors                                                                                               | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-338  | None              | Can access `/sign-in`                                                                                                        | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-339  | None              | Can see Clerk form                                                                                                           | `docs\archive\plans\Clerk\01_FRONTEND_ENV_SETUP.md`                                     |
+| [ ]  | 🟢 P3    | TASK-340  | None              | File created at `apps/web/middleware.ts`                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-342  | None              | Protected routes redirect to `/sign-in`                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-343  | None              | API routes return 401 without valid token                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-344  | None              | No TypeScript errors                                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-345  | Backend API       | Page accessible at `/sign-in`                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-346  | None              | Clerk sign-in form displays with C2Pro styling                                                                               | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-348  | None              | Email/password sign-in works                                                                                                 | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-350  | None              | Link to `/sign-up` works                                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-351  | Backend API       | Page accessible at `/sign-up`                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-352  | None              | Clerk sign-up form displays                                                                                                  | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-353  | None              | Account creation works                                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-354  | None              | Email verification flow works                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-355  | None              | Redirects to onboarding after sign-up                                                                                        | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-356  | None              | Variables added to `.env.local`                                                                                              | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-357  | None              | Clerk redirects work correctly                                                                                               | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-358  | None              | No hardcoded URLs in components                                                                                              | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-360  | None              | Consistent styling across sign-in/sign-up                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-361  | None              | `/login` redirects to `/sign-in`                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-362  | None              | `/register` redirects to `/sign-up`                                                                                          | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-363  | None              | No broken links in app                                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-364  | None              | File created at `apps/web/lib/clerk-tenant.ts`                                                                               | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-365  | None              | `useTenantContext()` returns tenant_id from org metadata                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-366  | None              | `useUserRole()` returns admin/member role                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-368  | None              | No TypeScript errors                                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-369  | Env Setup         | Unit tests pass                                                                                                              | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-370  | None              | `FeatureGate` shows upgrade prompt for insufficient tier                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-371  | None              | `AdminOnly` hides content from non-admins                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-372  | Backend API       | `TenantRequired` shows org setup prompt                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-373  | None              | `DemoModeGuard` prevents writes in demo                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-374  | None              | Components use consistent C2Pro styling                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-375  | None              | C2Pro Platform Admin org has `tenant_id` and `tier`                                                                          | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-376  | None              | Demo Workspace org has `tenant_id`, `tier`, and `is_demo: true`                                                              | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-377  | None              | `useTenantContext()` correctly extracts metadata                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-381  | None              | Existing functionality preserved                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-382  | None              | `DemoModeProvider` wraps app                                                                                                 | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-383  | None              | `useDemoMode()` returns demo state and data                                                                                  | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-384  | None              | `DemoModeIndicator` shows when in demo                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-385  | None              | Sample data matches C2Pro entities                                                                                           | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-386  | None              | JWT verification works                                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-387  | None              | `ClerkUser` class extracts claims                                                                                            | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-388  | None              | `get_current_tenant_id()` maps org to tenant                                                                                 | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-389  | None              | 401 returned for invalid tokens                                                                                              | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-390  | None              | Integration with existing middleware                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-391  | None              | `organizations` table created                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-392  | None              | `organization_members` table created                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-393  | None              | RLS policies updated                                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-394  | None              | Helper functions created                                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-395  | None              | Verification queries pass                                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-396  | None              | User can create account                                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-397  | None              | Email verification works                                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-398  | None              | Redirected to onboarding                                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-399  | None              | User can sign in with email/password                                                                                         | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-400  | None              | User can sign in with Google                                                                                                 | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-402  | None              | User can see organization switcher                                                                                           | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-403  | None              | Switching orgs updates tenant_id                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-404  | None              | Demo org shows demo indicator                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-405  | None              | Admin sees admin-only content                                                                                                | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-406  | None              | Member cannot access admin content                                                                                           | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-407  | None              | Feature gates work by tier                                                                                                   | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-408  | None              | API calls include JWT                                                                                                        | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-409  | None              | Backend verifies token                                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-410  | None              | RLS filters by tenant_id                                                                                                     | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-412  | None              | Cannot access other tenant's data                                                                                            | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-413  | None              | Demo mode prevents writes                                                                                                    | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-414  | None              | JWT expiration handled correctly                                                                                             | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-415  | None              | No sensitive data in client-side logs                                                                                        | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-419  | None              | Tenant isolation verified via RLS logs                                                                                       | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-420  | None              | Demo mode indicator visible when active                                                                                      | `docs\archive\plans\Clerk\CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md`                 |
+| [ ]  | 🟢 P3    | TASK-422  | Backend API       | PASO 1: Frontend environment setup & dependencies (10 min)                                                                   | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-423  | None              | Copy `clerk-tenant.ts` to `apps/web/src/lib/`                                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-425  | None              | Copy `demo-mode-context.tsx` to `apps/web/src/contexts/`                                                                     | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-427  | Env Setup         | Test: OrganizationSwitcher works                                                                                             | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-430  | None              | Create admin panels for tenant management                                                                                    | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-431  | None              | Create user management interface                                                                                             | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-432  | Env Setup         | Test: Role-based access control                                                                                              | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-433  | None              | Implement demo data loading                                                                                                  | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-434  | None              | Create demo organization in Clerk                                                                                            | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-435  | Env Setup         | Test demo/production switching                                                                                               | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-438  | None              | Create Clerk JWT verification middleware                                                                                     | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-439  | None              | Update RLS policies for Clerk integration                                                                                    | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-440  | None              | Create user sync webhook (optional)                                                                                          | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-441  | Env Setup         | Test: API calls work with Clerk JWT                                                                                          | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-443  | Env Setup         | Performance testing                                                                                                          | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-444  | None              | Documentation                                                                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-445  | None              | Team training                                                                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-446  | None              | Launch! 🎉                                                                                                                   | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-447  | None              | All environment variables set correctly                                                                                      | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-448  | None              | Clerk API keys valid                                                                                                         | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-449  | None              | Supabase RLS policies updated                                                                                                | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-450  | None              | Backend JWT verification working                                                                                             | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-451  | None              | Demo workspace configured                                                                                                    | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-452  | Env Setup         | All components tested                                                                                                        | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-454  | None              | Documentation complete                                                                                                       | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-455  | None              | Team trained                                                                                                                 | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-457  | Env Setup         | Check RLS policy logs                                                                                                        | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-458  | None              | Verify demo mode data isolation                                                                                              | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-459  | None              | Monitor API performance                                                                                                      | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-460  | None              | Collect user feedback                                                                                                        | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-461  | None              | Plan next phase enhancements                                                                                                 | `docs\archive\plans\Clerk\IMPLEMENTATION_GUIDE.md`                                      |
+| [ ]  | 🟢 P3    | TASK-462  | Env Setup         | Run PASO 0: Clerk Setup (20 min)                                                                                             | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-463  | Backend API       | Run PASO 1: Frontend Environment (30 min)                                                                                    | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-464  | None              | Copy 3 TypeScript files to your project                                                                                      | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-467  | None              | Implement FeatureGate components                                                                                             | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-468  | None              | Create admin panels                                                                                                          | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-469  | None              | Setup demo data                                                                                                              | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-470  | Env Setup         | Test demo/production switching                                                                                               | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-472  | None              | Setup Clerk JWT verification                                                                                                 | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-473  | None              | Update RLS policies                                                                                                          | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-474  | Env Setup         | Test: API calls with Clerk JWT                                                                                               | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-476  | Env Setup         | Performance testing                                                                                                          | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-477  | None              | Documentation                                                                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-478  | None              | Team training                                                                                                                | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-479  | None              | Can sign up with email/password                                                                                              | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-482  | None              | Can switch between organizations                                                                                             | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-483  | None              | Can see demo data in demo mode                                                                                               | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-484  | None              | Feature gates work by tier                                                                                                   | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-485  | Backend API       | Admin-only pages require admin role                                                                                          | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-486  | None              | API calls include tenant_id                                                                                                  | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-487  | None              | RLS policies filter data correctly                                                                                           | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-488  | None              | No cross-tenant data visible                                                                                                 | `docs\archive\plans\Clerk\README.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-489  | None              | Have Clerk API keys ready (from PASO 0)                                                                                      | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-490  | None              | Have Supabase access                                                                                                         | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-491  | None              | Have Next.js 14+ project                                                                                                     | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-493  | None              | Have 4-5 weeks available for team                                                                                            | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-494  | None              | Team is familiar with React/Next.js                                                                                          | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-495  | None              | Read README.md completely                                                                                                    | `docs\archive\plans\Clerk\START_HERE.md`                                                |
+| [ ]  | 🟢 P3    | TASK-496  | None              | `TS-I12-OBS-INT-001`                                                                                                         | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🟢 P3    | TASK-497  | None              | `TS-I12-OBS-INT-002`                                                                                                         | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🟢 P3    | TASK-498  | None              | `TS-I12-OBS-INT-003`                                                                                                         | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🟢 P3    | TASK-499  | None              | `TS-I12-OBS-SEC-001`                                                                                                         | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🟢 P3    | TASK-500  | None              | `TS-I12-OBS-DEVOPS-001`                                                                                                      | `docs\archive\plans\tdd-testing\I12_OBSERVABILITY_EVAL_100_COVERAGE_PLAN_2026-02-18.md` |
+| [ ]  | 🟢 P3    | TASK-502  | Env Setup         | Remove import-fallback stubs from I7 tests (fail fast if imports break)                                                      | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-503  | Env Setup         | Add `ScoreConfig` contract validation tests (negative weights, missing keys, threshold monotonicity)                         | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-505  | Env Setup         | Add aggregator edge/boundary tests:                                                                                          | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-508  | Env Setup         | All new RED tests for hardening are added and fail for the expected reason.                                                  | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-509  | Env Setup         | GREEN implementation passes all I7 tests (existing + new hardening tests).                                                   | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-510  | None              | No silent downgrade to zero contribution for unsupported severities.                                                         | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-511  | None              | Tenant/project profile resolution is port-driven and isolated.                                                               | `docs\archive\plans\tdd-testing\I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` |
+| [ ]  | 🟢 P3    | TASK-512  | Env Setup         | All tests still pass                                                                                                         | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-513  | None              | Code coverage maintained                                                                                                     | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-514  | None              | No lint errors                                                                                                               | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-516  | None              | Documentation updated                                                                                                        | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-518  | None              | Coverage above minimum thresholds                                                                                            | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-519  | Env Setup         | No flaky tests                                                                                                               | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-520  | Env Setup         | E2E journey tests passing                                                                                                    | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-521  | Env Setup         | Accessibility tests passing                                                                                                  | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-522  | Env Setup         | Mobile tests passing                                                                                                         | `docs\archive\plans\tdd-testing\TDD_QUICK_REFERENCE.md`                                 |
+| [ ]  | 🟢 P3    | TASK-523  | Env Setup         | WBS API schema validation (15 tests)                                                                                         | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-524  | None              | Error response contracts (validation, 404, 400)                                                                              | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-525  | Env Setup         | Domain entity contracts (10 tests)                                                                                           | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-527  | Env Setup         | WBSTree prop interface (10 tests)                                                                                            | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-528  | None              | WBSItemCard rendering contract                                                                                               | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-529  | None              | Event handler contracts (onSelect, onExpand)                                                                                 | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-530  | None              | State management contracts                                                                                                   | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-531  | Env Setup         | Cross-module navigation patterns (6 tests)                                                                                   | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-532  | Backend API       | API-to-frontend data flow                                                                                                    | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-533  | None              | State synchronization contracts                                                                                              | `docs\archive\plans\tdd-testing\TDD_WEEK1_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-534  | None              | Create WBS item with auto-generated code                                                                                     | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-535  | None              | Create child item inherits parent code                                                                                       | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-536  | None              | Validate maximum depth (level 4)                                                                                             | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-537  | None              | Move item updates code and level                                                                                             | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-538  | None              | Prevent circular references                                                                                                  | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-539  | None              | Delete with cascade removes descendants                                                                                      | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-540  | None              | Delete without cascade fails if has children                                                                                 | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-541  | None              | Filter by completion status                                                                                                  | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-542  | None              | Search by name/code/description                                                                                              | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-543  | None              | Color-code by alert severity                                                                                                 | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-544  | None              | Keyboard navigation (Arrow keys, Tab, Enter)                                                                                 | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-545  | None              | Touch targets minimum 44px                                                                                                   | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-546  | None              | Swipe gestures on mobile                                                                                                     | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-547  | None              | ARIA tree structure                                                                                                          | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-548  | None              | No accessibility violations                                                                                                  | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-549  | None              | Generate code for root item                                                                                                  | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-550  | None              | Generate code for child item                                                                                                 | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-551  | None              | Update item properties                                                                                                       | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-552  | None              | Move item with descendant updates                                                                                            | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-553  | None              | Bulk operations (future)                                                                                                     | `docs\archive\plans\tdd-testing\TDD_WEEK2_TESTS.md`                                     |
+| [ ]  | 🟢 P3    | TASK-554  | Env Setup         | All new endpoints have contract tests                                                                                        | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🟢 P3    | TASK-555  | Env Setup         | All components have unit tests (80%+ coverage)                                                                               | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🟢 P3    | TASK-556  | Env Setup         | All user flows have E2E tests                                                                                                | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🟢 P3    | TASK-557  | None              | Accessibility audit passes (WCAG 2.2 AA)                                                                                     | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🟢 P3    | TASK-559  | Backend API       | Performance budget met (<200KB JS per page)                                                                                  | `docs\archive\plans\ux-implementation\MASTER_PLAN_v1.0.md`                              |
+| [ ]  | 🟢 P3    | TASK-568  | None              | Create `DemoModeProvider` context                                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-569  | None              | Implement toggle: `?demo=true` query param                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-570  | None              | Create mock data structure (Torre Skyline)                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-571  | None              | Set up feature flags by role                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-572  | Env Setup         | Contract tests for all new endpoints                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-573  | None              | Validate OpenAPI spec                                                                                                        | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-574  | None              | `WBSTree` - Recursive tree component                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-575  | None              | `WBSItemCard` - Individual item display                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-576  | None              | `WBSItemDetail` - Detail panel                                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-577  | None              | `WBSCCodeEditor` - Code input with validation                                                                                | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-578  | None              | `WBSCoverageIndicator` - Coverage progress bar                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-579  | None              | `WBSAlertBadge` - Rule violation badges (R11, R12, R13)                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-581  | None              | Tree expand/collapse                                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-582  | None              | Drag & drop (Tenant Admin only)                                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-583  | None              | Create new item (auto-generate code)                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-584  | None              | Edit item properties                                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-585  | None              | Delete item (with cascade warning)                                                                                           | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-586  | Backend API       | View linked clauses                                                                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-587  | None              | Show alerts per item                                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-588  | None              | `BOMTable` - Sortable table with costs                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-589  | None              | `LeadTimeCalculator` - Incoterm calculator widget                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-590  | None              | `LeadTimeCard` - Individual result display                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-593  | None              | `IncotermSelector` - Dropdown with descriptions                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-594  | None              | `ProcurementAlertList` - R14 late order alerts                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-597  | Backend API       | View BOM generated from WBS                                                                                                  | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-598  | None              | Calculate lead times (all 11 incoterms)                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-599  | None              | See customs clearance estimates                                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-600  | Backend API       | View procurement plan timeline                                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-602  | None              | Get late order alerts (R14)                                                                                                  | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-604  | None              | Rich mock dataset (Torre Skyline project)                                                                                    | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-605  | None              | Works offline (no API calls)                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-606  | None              | All features interactive                                                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-607  | None              | Realistic data (47 WBS items, full BOM)                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-608  | None              | Alert scenarios included                                                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-609  | Backend API       | Mobile-optimized views                                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-610  | Backend API       | Remove mock data from Project Overview                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-612  | None              | Add loading states                                                                                                           | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-613  | None              | Add error boundaries                                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-614  | Env Setup         | Mobile responsive check                                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-615  | None              | Accessibility audit (WCAG 2.2)                                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-616  | None              | Performance optimization                                                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-617  | None              | WBS to Excel                                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-618  | None              | WBS to PDF                                                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-619  | None              | BOM to CSV                                                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-620  | None              | Procurement plan to PDF                                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-621  | Backend API       | User guide for WBS                                                                                                           | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-622  | Backend API       | User guide for Procurement                                                                                                   | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-623  | None              | Demo mode documentation                                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-624  | None              | WBSTree renders all 4 levels                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-625  | None              | WBSItemCard displays correct data                                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-626  | None              | Code validation accepts valid codes (1.1.1.1)                                                                                | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-627  | None              | Code validation rejects invalid codes                                                                                        | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-628  | None              | BOMTable sorts correctly                                                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-629  | None              | LeadTimeCalculator computes accurately                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-630  | None              | Create WBS item → appears in tree                                                                                            | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-631  | None              | Move item → updates hierarchy                                                                                                | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-632  | None              | Delete item → removes from tree                                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-633  | None              | Generate BOM → creates items from WBS                                                                                        | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-634  | None              | Calculate lead times → returns results                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-635  | Backend API       | Full flow: Create project → Add WBS → Generate BOM → Calculate LT → View Plan                                                | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-636  | None              | Demo mode works offline                                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-637  | None              | Role-based permissions enforced                                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-638  | None              | Mobile navigation works                                                                                                      | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-640  | None              | Keyboard navigation (Tab, Arrow keys, Enter)                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-641  | None              | Screen reader labels                                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-642  | None              | Color contrast (WCAG AA)                                                                                                     | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-643  | None              | Focus indicators                                                                                                             | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-645  | None              | Demo mode toggle works                                                                                                       | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-646  | Env Setup         | Contract tests pass                                                                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-647  | Backend API       | Final User can view WBS tree                                                                                                 | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-649  | Backend API       | Mobile view is usable                                                                                                        | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-650  | Backend API       | Final User can view procurement data                                                                                         | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-651  | None              | Tenant Admin can manage procurement                                                                                          | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-653  | None              | Demo mode works without backend                                                                                              | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-654  | Backend API       | Project overview shows real data                                                                                             | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-656  | Env Setup         | E2E tests pass                                                                                                               | `docs\archive\plans\ux-implementation\QUICK_REFERENCE.md`                               |
+| [ ]  | 🟢 P3    | TASK-657  | Env Setup         | @qa-agent writes contract tests (TDD_WEEK1_TESTS.md)                                                                         | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-658  | Backend API       | @backend-tdd reviews API contracts                                                                                           | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-659  | Backend API       | @frontend-tdd reviews component specs                                                                                        | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-660  | None              | @backend-tdd implements WBS domain                                                                                           | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-661  | Backend API       | @frontend-tdd implements WBS components                                                                                      | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-662  | Env Setup         | @qa-agent verifies all tests pass                                                                                            | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-663  | None              | @backend-tdd implements Procurement                                                                                          | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-664  | Backend API       | @frontend-tdd implements Procurement UI                                                                                      | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-665  | Env Setup         | @qa-agent runs E2E journeys                                                                                                  | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-666  | None              | All teams refactor code                                                                                                      | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-667  | Env Setup         | @qa-agent runs full regression                                                                                               | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-668  | None              | @docs-agent updates documentation                                                                                            | `docs\archive\plans\ux-implementation\README.md`                                        |
+| [ ]  | 🟢 P3    | TASK-670  | None              | Iniciar CE-S3-001 (Parsers)                                                                                                  | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟢 P3    | TASK-671  | Security Sign-off | Deploy staging actualizado                                                                                                   | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟢 P3    | TASK-672  | None              | Sprint S3 inicio                                                                                                             | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟢 P3    | TASK-673  | None              | ClauseExtractorAgent implementation                                                                                          | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟢 P3    | TASK-674  | None              | Coherence Engine v0.4                                                                                                        | `docs\archive\reports\2026-03\SPRINT_S2_PROGRESS_SUMMARY.md`                            |
+| [ ]  | 🟢 P3    | TASK-675  | Env Setup         | **Layer 4: Repository Filters** - Application-level checks (future enhancement)                                              | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md`                 |
+| [ ]  | 🟢 P3    | TASK-676  | None              | GREEN phase implementation (pending)                                                                                         | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`             |
+| [ ]  | 🟢 P3    | TASK-677  | Env Setup         | Tests passing at 90%+ coverage (pending)                                                                                     | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`             |
+| [ ]  | 🟢 P3    | TASK-678  | None              | Lead Software Architect                                                                                                      | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`             |
+| [ ]  | 🟢 P3    | TASK-680  | None              | QA Lead                                                                                                                      | `docs\archive\reports\2026-03\TS-E2E-SEC-TNT-001_IMPLEMENTATION_SUMMARY.md`             |
+| [ ]  | 🟢 P3    | TASK-681  | None              | User puede registrarse y hacer login con email/password                                                                      | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-682  | None              | JWT válido permite acceso a endpoints protegidos                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-683  | Env Setup         | RLS impide acceso a datos de otros tenants (test con 2 tenants)                                                              | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-684  | None              | Middleware rechaza JWTs inválidos o sin tenant_id                                                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-685  | Env Setup         | Sentry captura errores correctamente (test con error manual)                                                                 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-686  | Env Setup         | CI/CD pipeline corre tests y despliega a staging en cada push a main                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-687  | Env Setup         | Health check endpoint responde 200 OK                                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-688  | None              | PDF de contrato sube correctamente y extrae texto completo                                                                   | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-689  | None              | Excel de cronograma parsea todas las hojas y filas                                                                           | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-690  | None              | BC3 de presupuesto parsea capítulos y partidas correctamente                                                                 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-691  | None              | Archivos se guardan en R2 con estructura: `{tenant_id}/{project_id}/{doc_id}.ext`                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-692  | Backend API       | UI muestra progress bar durante upload                                                                                       | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-693  | None              | Errores de parsing muestran mensaje claro al usuario                                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-694  | Env Setup         | Documentos quedan asociados al proyecto correcto (test multi-tenant)                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-695  | None              | Anonymizer detecta y reemplaza correctamente DNI, emails, teléfonos, IBANs                                                   | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-696  | None              | Claude API extrae cláusulas de contrato de prueba con >80% accuracy                                                          | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-697  | None              | Claude API extrae hitos de cronograma con fechas correctas                                                                   | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-698  | None              | Claude API extrae partidas de BC3 con precios correctos                                                                      | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-699  | Env Setup         | Cost controller bloquea requests cuando tenant alcanza budget (test)                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-700  | Env Setup         | Cache Redis evita llamar a Claude API 2 veces para mismo input (test)                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-701  | None              | Model router usa Haiku para clasificación simple (ahorro >50% coste)                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-702  | None              | WBS se genera automáticamente con 4 niveles de jerarquía (proyecto, fase, entregable, tarea)                                 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-703  | None              | Todos los WBS items están vinculados a actividades del cronograma                                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-704  | None              | Todos los WBS items tienen partidas presupuestarias asignadas                                                                | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-705  | None              | Ruta crítica se identifica correctamente en WBS                                                                              | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-706  | None              | BOM se genera automáticamente por cada WBS item                                                                              | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-707  | None              | BOM incluye lead times calculados para cada material                                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-708  | None              | BOM calcula fecha óptima de pedido (fecha_necesidad - lead_time - buffer)                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-709  | None              | Materiales críticos están marcados en BOM                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-710  | None              | Motor detecta 18+ tipos de incoherencias en dataset de prueba (incluyendo WBS/BOM)                                           | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-711  | None              | Proyecto sin incoherencias obtiene score 100                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-712  | None              | Proyecto con incoherencia crítica obtiene score ≤80                                                                          | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-713  | None              | Alertas incluyen mensaje claro + acción sugerida                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-714  | None              | Análisis se completa en <3 minutos para proyecto típico (3 docs + WBS + BOM)                                                 | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-715  | Backend API       | UI muestra alertas ordenadas por severidad                                                                                   | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-717  | None              | Gauge de Coherence Score es visualmente claro (colores: 0-60=rojo, 61-80=amarillo, 81-100=verde)                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-718  | None              | Filtros de alertas funcionan (severidad, estado)                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-720  | None              | Responsive design funciona en mobile (>360px width)                                                                          | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-721  | Backend API       | Navegación entre páginas es fluida (Next.js prefetch)                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-722  | None              | Variables de entorno configuradas en Railway + Vercel                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-723  | None              | Backups automáticos habilitados en Supabase                                                                                  | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-724  | None              | Sentry configurado con alertas a email                                                                                       | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-725  | None              | UptimeRobot monitoreando API + Web cada 5 min                                                                                | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-726  | None              | DNS configurado (c2pro.app o similar)                                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-727  | None              | SSL/TLS activo (Vercel automático)                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-728  | None              | Rate limiting activo (60 req/min general, 10 req/min AI)                                                                     | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-729  | Env Setup         | Tests de seguridad pasan al 100%                                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-730  | None              | AI accuracy >85% en golden dataset                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-731  | Env Setup         | Load test soporta 100 usuarios concurrentes con <1% error                                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-732  | Security Sign-off | Producción deployada y estable (uptime >99% primera semana)                                                                  | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-733  | None              | 3 pilots onboarded y usando la plataforma                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-734  | None              | Documentación básica de usuario creada                                                                                       | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-735  | Env Setup         | Todos los tests pasan (unit + integration)                                                                                   | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-736  | None              | Coverage >80% en rutas críticas                                                                                              | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-738  | Backend API       | Code review aprobado (si aplica)                                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-739  | None              | Changelog actualizado                                                                                                        | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-740  | None              | Versión bumpeada (semver)                                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-741  | Security Sign-off | Backup manual BD antes de deploy (producción)                                                                                | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-742  | None              | Variables de entorno verificadas                                                                                             | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-743  | Security Sign-off | Deploy backend (Railway)                                                                                                     | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-744  | Env Setup         | Smoke tests backend (health check)                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-745  | Backend API       | Deploy frontend (Vercel)                                                                                                     | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-747  | None              | Verificar Sentry (no errores nuevos)                                                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-748  | None              | Verificar UptimeRobot (uptime OK)                                                                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-749  | None              | Verificar logs (no errores críticos)                                                                                         | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-750  | None              | Comunicar release a usuarios (si cambios mayores)                                                                            | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-751  | Security Sign-off | Monitorear 1h post-deploy                                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.2.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-752  | None              | User puede registrarse y hacer login                                                                                         | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-753  | None              | JWT válido permite acceso a endpoints protegidos                                                                             | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-754  | None              | RLS impide acceso a datos de otros tenants                                                                                   | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-755  | None              | Sentry captura errores correctamente                                                                                         | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-756  | None              | CI/CD pipeline funciona                                                                                                      | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-757  | Env Setup         | Health check responde 200 OK                                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-758  | None              | PDF de contrato sube y extrae texto completo                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-759  | None              | Excel de cronograma parsea todas las hojas                                                                                   | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-760  | None              | BC3 de presupuesto parsea capítulos y partidas                                                                               | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-761  | None              | Archivos se guardan en R2 con estructura correcta                                                                            | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-762  | Backend API       | UI muestra progress bar durante upload                                                                                       | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-763  | None              | Documentos asociados al proyecto correcto                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-764  | None              | Anonymizer detecta DNI, emails, teléfonos, IBANs                                                                             | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-765  | None              | Claude extrae cláusulas con >80% accuracy                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-766  | None              | Cost controller bloquea cuando excede budget                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-767  | None              | Cache evita llamadas duplicadas                                                                                              | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-768  | None              | Model router usa Haiku para clasificación simple                                                                             | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-769  | None              | WBS se genera con 4 niveles de jerarquía                                                                                     | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-770  | None              | WBS items vinculados a actividades del cronograma                                                                            | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-771  | None              | WBS items tienen partidas presupuestarias asignadas                                                                          | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-772  | None              | Ruta crítica identificada correctamente                                                                                      | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-773  | None              | BOM generado por cada WBS item con materiales                                                                                | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-774  | None              | BOM incluye lead times calculados                                                                                            | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-775  | None              | BOM calcula fecha óptima de pedido                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-776  | None              | Motor detecta 20+ tipos de incoherencias                                                                                     | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-777  | None              | Score 100 para proyecto sin incoherencias                                                                                    | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-778  | None              | **NUEVO: Stakeholders extraídos de contrato (nombres, roles, departamentos)**                                                | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-779  | None              | **NUEVO: Stakeholders clasificados en cuadrante poder/interés**                                                              | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-781  | None              | Gauge de Score con colores (0-60 rojo, 61-80 amarillo, 81-100 verde)                                                         | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-782  | None              | Filtros de alertas funcionan                                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-784  | None              | Responsive funciona en mobile                                                                                                | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-785  | None              | **NUEVO: Lista de stakeholders visible en proyecto**                                                                         | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-786  | None              | **NUEVO: Matriz poder/interés interactiva**                                                                                  | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-787  | Env Setup         | Tests de seguridad pasan al 100%                                                                                             | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-788  | None              | AI accuracy >85% en golden dataset                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-789  | Env Setup         | Load test soporta 100 usuarios con <1% error                                                                                 | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-790  | None              | Producción estable (uptime >99%)                                                                                             | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-791  | None              | 3 pilots onboarded                                                                                                           | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-792  | None              | Documentación básica creada                                                                                                  | `docs\archive\roadmaps\ROADMAP_v2.3.0.md`                                               |
+| [ ]  | 🟢 P3    | TASK-793  | None              | Módulo de upload de archivos                                                                                                 | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-794  | None              | Parser de PDF (contratos)                                                                                                    | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-795  | None              | Parser de Excel (presupuestos)                                                                                               | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-796  | None              | Parser de BC3 (presupuestos)                                                                                                 | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-797  | None              | Almacenamiento en Cloudflare R2                                                                                              | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-798  | None              | Queue para procesamiento asíncrono                                                                                           | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-799  | None              | Extracción de stakeholders con Claude                                                                                        | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-800  | None              | Extracción de WBS desde cronograma                                                                                           | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-801  | None              | Extracción de BOM desde presupuesto                                                                                          | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-802  | None              | Graph database para relaciones                                                                                               | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-803  | None              | Motor de coherencia con Graph RAG                                                                                            | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-804  | None              | Detección de incoherencias                                                                                                   | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-805  | None              | Generación de alertas                                                                                                        | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-807  | None              | Cambiar `JWT_SECRET_KEY` a un valor fuerte                                                                                   | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-808  | None              | Configurar `CORS_ORIGINS` con dominios específicos                                                                           | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-810  | None              | Configurar Sentry para error tracking                                                                                        | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-811  | None              | Configurar rate limiting con Redis                                                                                           | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-812  | None              | SSL/TLS en todas las conexiones                                                                                              | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-813  | None              | Secrets en variables de entorno (no en .env)                                                                                 | `docs\archive\sprints\SPRINT_1_COMPLETED.md`                                            |
+| [ ]  | 🟢 P3    | TASK-814  | Env Setup         | Gate 2 tests (1-1.5 hours)                                                                                                   | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-815  | Env Setup         | Gate 3 tests (15 minutes - reuse existing)                                                                                   | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-816  | Env Setup         | Gate 4 tests (1-1.5 hours)                                                                                                   | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-817  | None              | Execute `generate_cto_gates_evidence.py`                                                                                     | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-818  | Backend API       | Review generated evidence package                                                                                            | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-819  | None              | Verify all gates passing                                                                                                     | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-820  | Backend API       | Review executive summary                                                                                                     | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-821  | None              | Prepare key metrics                                                                                                          | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-822  | Backend API       | Schedule CTO review meeting                                                                                                  | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-823  | Security Sign-off | Obtain production deployment sign-off                                                                                        | `docs\archive\tasks\CE-P0-05_TASK_SUMMARY.md`                                           |
+| [ ]  | 🟢 P3    | TASK-824  | None              | `.env.staging` or `.env` file configured                                                                                     | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-825  | None              | DATABASE_URL set correctly                                                                                                   | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-826  | None              | Database credentials valid                                                                                                   | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-829  | Env Setup         | pytest installed                                                                                                             | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-830  | Backend API       | All requirements installed                                                                                                   | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-831  | None              | Can connect to staging database                                                                                              | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-832  | Backend API       | User has required permissions                                                                                                | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-833  | None              | Sufficient disk space for backups                                                                                            | `docs\archive\tasks\CE-P0-06_IMPLEMENTATION_COMPLETE.md`                                |
+| [ ]  | 🟢 P3    | TASK-834  | None              | Team availability confirmed                                                                                                  | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-835  | None              | Maintenance window scheduled                                                                                                 | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-837  | None              | Slack channel created: #staging-migration                                                                                    | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-838  | None              | Backup strategy verified                                                                                                     | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-839  | None              | CE-20 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-840  | None              | CE-21 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-841  | None              | CE-22 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-842  | None              | CE-23 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-843  | None              | CE-24 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-844  | None              | CE-25 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-845  | None              | CE-26 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-846  | None              | CE-27 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-847  | None              | CE-28 completed                                                                                                              | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-848  | Env Setup         | All tests passed                                                                                                             | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-849  | None              | Evidence package created                                                                                                     | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-850  | None              | Readiness report generated                                                                                                   | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-851  | Security Sign-off | CTO sign-off obtained                                                                                                        | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-852  | Security Sign-off | Production migration scheduled                                                                                               | `docs\archive\tasks\CE-P0-06_QUICK_START.md`                                            |
+| [ ]  | 🟢 P3    | TASK-853  | None              | Database connection successful                                                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-854  | None              | Environment variables validated                                                                                              | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-855  | None              | Pre-migration backup created and verified (file size > 0)                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-856  | None              | Current state documented (table count, policy count, FK count)                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-857  | Env Setup         | Backup restoration tested in isolated environment                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-858  | None              | All migration files have valid SQL syntax                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-859  | Env Setup         | Dry-run completes without errors                                                                                             | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-860  | None              | Migration order validated (no circular dependencies)                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-861  | Env Setup         | Local staging mirror test successful                                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-862  | None              | Estimated execution time documented                                                                                          | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-863  | None              | Migration script executes without errors (exit code 0)                                                                       | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-864  | Env Setup         | Schema version updated to latest (005)                                                                                       | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-865  | None              | All expected tables created                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-866  | None              | No connection interruptions during migration                                                                                 | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-867  | None              | Post-migration backup created                                                                                                | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-868  | None              | Migration logs captured                                                                                                      | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-869  | None              | 14/14 tables have RLS enabled                                                                                                | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-870  | None              | All tables have at least 1 RLS policy                                                                                        | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-872  | Env Setup         | Gate 1 automated tests pass (7/7)                                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-873  | Env Setup         | Manual cross-tenant isolation test successful (0 rows returned)                                                              | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-874  | None              | All expected FK constraints exist                                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-875  | None              | No orphaned records found (all counts = 0)                                                                                   | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-876  | Env Setup         | FK cascade behavior tested and documented                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-877  | None              | Indexes exist on all FK columns                                                                                              | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-878  | None              | FK constraint count matches expected (minimum 15)                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-879  | None              | Clause table structure correct                                                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-880  | Env Setup         | Test data insertion successful                                                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-881  | None              | All alerts linked to valid analyses                                                                                          | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-882  | None              | No NULL tenant_id values                                                                                                     | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-883  | None              | No future timestamps                                                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-884  | Backend API       | Smoke test suite passes 100%                                                                                                 | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-885  | None              | All indexes being utilized (idx_scan > 0)                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-886  | None              | Query execution times within acceptable ranges                                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-887  | None              | No significant performance regression (< 10% slower)                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-888  | None              | Connection pool healthy (no leaks)                                                                                           | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-889  | None              | Table sizes reasonable                                                                                                       | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-890  | None              | Schema version matches target                                                                                                | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-891  | None              | All expected tables present                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-892  | None              | RLS policies intact                                                                                                          | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-893  | None              | Foreign keys functional                                                                                                      | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-894  | None              | Sample queries successful                                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-895  | None              | No data loss                                                                                                                 | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-896  | None              | Application can connect                                                                                                      | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-897  | Env Setup         | Rollback script created and tested                                                                                           | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-898  | None              | Rollback successful in isolated environment                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-899  | None              | Rollback procedure documented                                                                                                | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-900  | Env Setup         | Verification checklist created                                                                                               | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-901  | Env Setup         | Full rollback cycle tested                                                                                                   | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-902  | Env Setup         | No data loss during rollback test                                                                                            | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-903  | Security Sign-off | Production backup completed                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-904  | None              | Maintenance mode enabled                                                                                                     | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-905  | None              | Traffic redirected                                                                                                           | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-906  | None              | Migration team on standby                                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-908  | Env Setup         | All smoke tests pass                                                                                                         | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-911  | Security Sign-off | CTO sign-off obtained                                                                                                        | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-912  | Env Setup         | All test results aggregated                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-913  | None              | Executive summary generated                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-915  | None              | Risk assessment completed                                                                                                    | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-916  | Env Setup         | Go/No-Go checklist prepared                                                                                                  | `docs\archive\tasks\CE-P0-06_STAGING_MIGRATIONS_PLAN.md`                                |
+| [ ]  | 🟢 P3    | TASK-917  | None              | Database connection verified                                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-918  | None              | Environment variables validated                                                                                              | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-919  | None              | Pre-migration backup created (file size > 0)                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-920  | None              | Current state documented                                                                                                     | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-921  | Env Setup         | Backup restoration tested                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-922  | None              | `backups/staging_pre_migration_YYYYMMDD_HHMMSS.dump`                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-923  | None              | `docs/staging_pre_migration_state.md`                                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-924  | None              | `logs/ce20_validation_results.log`                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-925  | None              | All migration files have valid SQL syntax                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-926  | Env Setup         | Dry-run completes without errors                                                                                             | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-927  | None              | Migration order validated (no circular dependencies)                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-928  | Env Setup         | Local staging mirror test successful                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-929  | None              | Estimated execution time documented                                                                                          | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-930  | None              | `logs/syntax_validation.log`                                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-931  | Env Setup         | `logs/dry_run_output.log`                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-932  | None              | `docs/migration_dependency_graph.md`                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-933  | None              | `docs/migration_execution_plan.md`                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-934  | None              | Migration script executes without errors (exit code 0)                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-935  | Env Setup         | Schema version updated to latest (005)                                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-936  | None              | All expected tables created                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-937  | None              | No connection interruptions during migration                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-938  | None              | Post-migration backup created                                                                                                | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-939  | None              | Migration logs captured                                                                                                      | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-940  | None              | `logs/ce22_migration_execution.log`                                                                                          | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-941  | None              | `logs/ce22_migration_console.log`                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-942  | None              | `backups/staging_post_migration_YYYYMMDD_HHMMSS.dump`                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-943  | None              | `docs/staging_post_migration_state.md`                                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-944  | None              | 14/14 tables have RLS enabled                                                                                                | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-945  | None              | All tables have at least 1 RLS policy                                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-947  | Env Setup         | Gate 1 automated tests pass (7/7)                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-948  | Env Setup         | Manual cross-tenant isolation test successful (0 rows returned)                                                              | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-949  | Env Setup         | `logs/ce23_rls_tests.log`                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-950  | None              | `docs/ce23_rls_verification_report.md`                                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-951  | None              | All expected FK constraints exist                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-952  | None              | No orphaned records found (all counts = 0)                                                                                   | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-953  | Env Setup         | FK cascade behavior tested and documented                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-954  | None              | Indexes exist on all FK columns                                                                                              | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-955  | None              | FK constraint count matches expected (minimum 15)                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-956  | None              | `docs/ce24_foreign_key_report.md`                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-957  | None              | `logs/ce24_fk_verification.sql`                                                                                              | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-958  | None              | Clause table structure correct                                                                                               | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-959  | Env Setup         | Test data insertion successful                                                                                               | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-960  | None              | All alerts linked to valid analyses                                                                                          | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-961  | None              | No NULL tenant_id values                                                                                                     | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-962  | None              | No future timestamps                                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-963  | Backend API       | Smoke test suite passes 100%                                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-964  | Env Setup         | `logs/ce25_smoke_tests.log`                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-965  | None              | `docs/ce25_data_integrity_report.md`                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-966  | None              | All indexes being utilized (idx_scan > 0)                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-967  | None              | Query execution times within acceptable ranges                                                                               | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-968  | None              | No significant performance regression (< 10% slower)                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-969  | None              | Connection pool healthy (no leaks)                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-970  | None              | Table sizes reasonable                                                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-971  | None              | `logs/ce26_performance_analysis.sql`                                                                                         | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-973  | None              | `docs/ce26_performance_report.md`                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-974  | Env Setup         | Rollback script created and tested                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-975  | None              | Rollback successful in isolated environment                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-976  | None              | Rollback procedure documented                                                                                                | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-977  | Env Setup         | Verification checklist created                                                                                               | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-978  | Env Setup         | Full rollback cycle tested                                                                                                   | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-979  | Env Setup         | No data loss during rollback test                                                                                            | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-980  | None              | `infrastructure/supabase/rollback_migrations.py`                                                                             | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-981  | None              | `docs/ROLLBACK_PROCEDURE.md`                                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-982  | Env Setup         | `docs/ROLLBACK_VERIFICATION_CHECKLIST.md`                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-983  | Env Setup         | `logs/ce27_rollback_test_results.log`                                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-984  | Env Setup         | All test results aggregated                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-985  | None              | Executive summary generated                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-987  | None              | Risk assessment completed                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-988  | Env Setup         | Go/No-Go checklist prepared                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-989  | None              | `docs/STAGING_MIGRATION_READINESS_REPORT.md`                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-990  | Security Sign-off | `docs/PRODUCTION_MIGRATION_GO_NO_GO.md`                                                                                      | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-991  | None              | `evidence/staging_migration_YYYYMMDD/` (complete package)                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-992  | Env Setup         | Dry-run passed without errors                                                                                                | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-993  | Env Setup         | Local test successful                                                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-994  | None              | Team availability confirmed                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-995  | None              | Migration execution failed with errors                                                                                       | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-996  | Env Setup         | > 5% of RLS tests fail (CE-23)                                                                                               | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-997  | None              | Data corruption detected (CE-25)                                                                                             | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-998  | None              | Performance degradation > 30% (CE-26)                                                                                        | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1000 | None              | All 9 tasks completed successfully                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1001 | Env Setup         | All tests passed (100%)                                                                                                      | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1002 | None              | Performance acceptable (< 10% degradation)                                                                                   | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1003 | Env Setup         | Rollback procedure tested                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1004 | None              | Evidence package complete                                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1005 | None              | T-24h: Migration scheduled notification sent                                                                                 | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1006 | None              | T-2h: Final go/no-go decision communicated                                                                                   | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1007 | None              | T-30m: Maintenance window starting                                                                                           | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1008 | None              | T+0h: Migration started                                                                                                      | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1009 | None              | T+1h: Migration completed / status update                                                                                    | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1010 | None              | T+4h: Verification complete                                                                                                  | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1011 | None              | T+24h: Final report sent                                                                                                     | `docs\archive\tasks\CE-P0-06_TASK_TRACKER.md`                                           |
+| [ ]  | 🟢 P3    | TASK-1012 | None              | All 4 gates verified PASSING                                                                                                 | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1013 | Backend API       | Evidence package reviewed by CTO                                                                                             | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1015 | Security Sign-off | Compliance team sign-off obtained                                                                                            | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1016 | None              | Monitoring & alerting configured                                                                                             | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1017 | None              | Incident response plan documented                                                                                            | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1019 | Env Setup         | Add more test classes for refresh tokens, RBAC, etc.                                                                         | `docs\archive\tasks\CTO_GATES_QUICKSTART.md`                                            |
+| [ ]  | 🟢 P3    | TASK-1020 | Backend API       | All MCP endpoints require valid JWT                                                                                          | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1021 | None              | Prompt injection patterns are blocked                                                                                        | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1022 | None              | Rate limiting: X requests per minute                                                                                         | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1023 | None              | Input validation using Pydantic schemas                                                                                      | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1024 | None              | Error messages are sanitized                                                                                                 | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1025 | Security Sign-off | No stack traces in production responses                                                                                      | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1026 | None              | Tenant isolation enforced in MCP context                                                                                     | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1027 | Env Setup         | Create verification test directory                                                                                           | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1028 | Env Setup         | Implement Gate 1 RLS tests                                                                                                   | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1029 | Env Setup         | Implement Gate 2 Identity tests                                                                                              | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1031 | Env Setup         | Implement Gate 4 Traceability tests                                                                                          | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1032 | None              | CTO Approval                                                                                                                 | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1034 | Backend API       | Compliance Team Review                                                                                                       | `docs\archive\tasks\CTO_GATES_VERIFICATION_PLAN.md`                                     |
+| [ ]  | 🟢 P3    | TASK-1036 | None              | Extender type safety a más componentes                                                                                       | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md`                                  |
+| [ ]  | 🟢 P3    | TASK-1037 | None              | Implementar generación automática de tipos desde backend                                                                     | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md`                                  |
+| [ ]  | 🟢 P3    | TASK-1038 | Env Setup         | Agregar tests unitarios para componentes críticos                                                                            | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md`                                  |
+| [ ]  | 🟢 P3    | TASK-1039 | Backend API       | Implementar Storybook para componentes UI                                                                                    | `docs\archive\tasks\FRONTEND_TYPE_SAFETY_CE-S2-011.md`                                  |
+| [ ]  | 🟢 P3    | TASK-1044 | None              | ⏳ Migraciones aplicadas                                                                                                     | `docs\archive\tasks\TEST_RESULTS_2026-01-06.md`                                         |
+| [ ]  | 🟢 P3    | TASK-1263 | None              | Stakeholder network graph (relationships)                                                                                    | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1264 | None              | Influence mapping (who influences whom)                                                                                      | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1265 | None              | Historical tracking (power/interest over time)                                                                               | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1266 | None              | Sentiment analysis (from communications)                                                                                     | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1267 | None              | Meeting scheduler integration                                                                                                | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1269 | None              | Stakeholder engagement score                                                                                                 | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1270 | None              | Conflict identification                                                                                                      | `docs\wireframes\05-stakeholders.md`                                                    |
+| [ ]  | 🟢 P3    | TASK-1271 | None              | Succession planning (backup contacts)                                                                                        | `docs\wireframes\05-stakeholders.md`                                                    |
 
 ## 4. Archive Registry (Clean)
+
 - `FRONTEND_TESTING_PLAN_archived_20260210.md`
 - `OLDAgents.md`
 - `SECURITY_AUDIT_GOLDEN_DATASET.md`
