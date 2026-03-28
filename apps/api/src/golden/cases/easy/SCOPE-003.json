@@ -1,0 +1,74 @@
+{
+  "case_id": "SCOPE-003",
+  "name": "Scope signal for P-SE Jeddah",
+  "dimensions": [
+    "Scope"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/contracto firmado Schneider y addendum.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/IN 20131006 Respuesta Ijaz con schedule.pdf",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/OUT 20130701 Reclamación Ijaz aceptación oferta.pdf",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/SE REPLIES ON SPAREPARTS COMMENT.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/Schneider MOM on 28 May 20130001.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "scope_extractor",
+      "scope_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": [
+        "scope_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-003",
+      "dimension": "Scope",
+      "severity": "medium",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-SE Jeddah",
+    "sector": "Substation",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

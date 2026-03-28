@@ -1,0 +1,165 @@
+{
+  "case_id": "MULTI-307",
+  "name": "Nightly full coherence audit for O-011139 Salt River Project SRP Energy Storage System",
+  "dimensions": [
+    "Legal",
+    "Quality",
+    "Scope",
+    "Schedule",
+    "Cost",
+    "Technical"
+  ],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Tesla Motor/Ofertas/Oferta 20150908/Tesla Energy Storage Proposal - Abengoa_DesertProject.pdf",
+    "schedule_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/OUT 20150817 Correo con actualización de la situación de la oferta.pdf",
+    "budget_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/BYD/Ofertas/Oferta 20150810/Price_Quotation_BESS_Dessert.pdf",
+    "specifications_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Info para RFQ/BESS Desert Project_Tech Specification for ESS Supply_ESS_00.pdf",
+    "drawings_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/IN 20151016 Correo con estado de las ofertas.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "scope_extractor",
+      "schedule_extractor",
+      "cost_extractor",
+      "quality_extractor",
+      "technical_extractor",
+      "cross_reference_validator",
+      "dependency_mapper",
+      "risk_aggregator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator",
+      "mitigation_planner"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 8
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path",
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "aggregate_risks",
+      "required_args": [
+        "all_issues"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 3
+    },
+    {
+      "path": "coherence_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_score",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-307",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    },
+    {
+      "rule_id": "QUAL-307",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    },
+    {
+      "rule_id": "SCOPE-307",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    },
+    {
+      "rule_id": "SCHED-307",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-307",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget"
+    },
+    {
+      "rule_id": "TECH-307",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-011139 Salt River Project SRP Energy Storage System",
+    "sector": "Energy Storage",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "full_dimensional_coverage": 6
+  }
+}

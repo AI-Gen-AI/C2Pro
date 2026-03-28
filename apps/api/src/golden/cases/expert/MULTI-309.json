@@ -1,0 +1,165 @@
+{
+  "case_id": "MULTI-309",
+  "name": "Nightly full coherence audit for P-Delaney-Colorado River 500 KV AC Transmission Line",
+  "dimensions": [
+    "Legal",
+    "Quality",
+    "Scope",
+    "Schedule",
+    "Cost",
+    "Technical"
+  ],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Documentación proyecto/Doc. de O&C IISA/4. Peticiones/4. Peticiones/Cotizaciones Abengoa T&I/RFQ Subcontractors/v-guyed chukar scheme.pdf",
+    "schedule_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Documentación proyecto/Doc. original fase oferta/39. (Int Prod)- DCR Transmission/2. Offer/6. Schedules/EPC OHL Schedule.mpp",
+    "budget_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/1.- Steel Towers A572-50/1.- Comensa/Budgetary Proposal Delaney-Colorado River 500kV-Abengoa T&I-12-11-14.pdf",
+    "specifications_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/5.- Porcelain Insulators/RfQ Docs/T-9d Attachment 1. Porcelain Insulator Spec Sheet.pdf",
+    "drawings_path": "docs/assets/samples/USA/P-Delaney-Colorado River 500 KV AC Transmission Line/Compras/2.- Conductor ACSR Chukar/3.- Emta/Cross_Sectional_Drawing_ACSR_Chukar.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "scope_extractor",
+      "schedule_extractor",
+      "cost_extractor",
+      "quality_extractor",
+      "technical_extractor",
+      "cross_reference_validator",
+      "dependency_mapper",
+      "risk_aggregator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator",
+      "mitigation_planner"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 8
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path",
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "aggregate_risks",
+      "required_args": [
+        "all_issues"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 3
+    },
+    {
+      "path": "coherence_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_score",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-309",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    },
+    {
+      "rule_id": "QUAL-309",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    },
+    {
+      "rule_id": "SCOPE-309",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    },
+    {
+      "rule_id": "SCHED-309",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-309",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget"
+    },
+    {
+      "rule_id": "TECH-309",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-Delaney-Colorado River 500 KV AC Transmission Line",
+    "sector": "Transmission",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "full_dimensional_coverage": 6
+  }
+}

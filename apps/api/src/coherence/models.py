@@ -6,6 +6,98 @@ from pydantic import BaseModel, Field
 # Define valid alert categories as a type
 AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality", "general"]
 
+# Severity levels for continuous scoring
+SeverityLevel = Literal["critical", "high", "medium", "low"]
+
+# Source of finding (deterministic rules vs LLM semantic analysis)
+FindingSource = Literal["deterministic", "llm"]
+
+# The 6 coherence categories + cross-dimensional
+CoherenceCategory = Literal["BUDGET", "TIME", "LEGAL", "SCOPE", "TECHNICAL", "QUALITY", "CROSS"]
+
+
+def impact_to_severity(impact: float) -> SeverityLevel:
+    """
+    Convert continuous impact score (0.0-1.0) to categorical severity.
+
+    Thresholds:
+        >= 0.85 → critical
+        >= 0.60 → high
+        >= 0.35 → medium
+        <  0.35 → low
+    """
+    if impact >= 0.85:
+        return "critical"
+    elif impact >= 0.60:
+        return "high"
+    elif impact >= 0.35:
+        return "medium"
+    else:
+        return "low"
+
+
+class FindingSignal(BaseModel):
+    """
+    Unified signal format for the Scoring Arbiter (Agent C).
+
+    Replaces binary rule_violated with continuous impact_score (0.0-1.0).
+    Used by both deterministic evaluators (Agent A) and LLM evaluators (Agent B).
+
+    Attributes:
+        rule_id: Identifier of the rule that generated this signal (e.g., DET-BUD-OVERRUN)
+        clause_id: ID of the clause that was evaluated
+        source: Whether this came from deterministic rules or LLM analysis
+        impact_score: Continuous severity from 0.0 (no issue) to 1.0 (catastrophic)
+        confidence: How certain the evaluator is (1.0 for deterministic, 0.0-1.0 for LLM)
+        severity: Categorical severity for backward compatibility
+        category: Which of the 6 coherence categories this belongs to
+        evidence_summary: One-sentence explanation of the finding
+        quote: Exact text from the clause that triggered the rule
+        raw_data: Structured data relevant to the finding (for diagnostics)
+    """
+
+    rule_id: str = Field(..., description="Rule identifier (e.g., DET-BUD-OVERRUN)")
+    clause_id: str = Field(..., description="ID of the evaluated clause")
+    source: FindingSource = Field(default="deterministic", description="deterministic or llm")
+
+    # Continuous scoring (the key v0.3 improvement)
+    impact_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Continuous severity: 0.0 = no issue, 1.0 = catastrophic"
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Evaluator confidence: 1.0 = certain, 0.5 = borderline"
+    )
+
+    # Categorical (backward compat)
+    severity: SeverityLevel = Field(
+        default="medium",
+        description="Categorical severity for backward compatibility"
+    )
+    category: CoherenceCategory = Field(
+        default="SCOPE",
+        description="One of the 6 coherence categories"
+    )
+
+    # Evidence
+    evidence_summary: str = Field(
+        default="",
+        description="One-sentence explanation of the finding"
+    )
+    quote: str = Field(
+        default="",
+        description="Exact text from clause that triggered the rule"
+    )
+    raw_data: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured data for diagnostics"
+    )
+
 
 class Clause(BaseModel):
     """
@@ -104,4 +196,71 @@ class CoherenceResult(BaseModel):
     calculated_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp when the score was calculated."
+    )
+
+
+class EnrichedCoherenceResult(BaseModel):
+    """
+    Extended coherence result with diagnostic fields for v0.3 scoring.
+
+    CoherenceResult remains the public API shape; this adds internal diagnostics
+    for debugging, dashboards, and score curve validation.
+    """
+
+    # Core result (same as CoherenceResult)
+    overall_score: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="The granular coherence score (5.0-97.0 typical range)"
+    )
+    alerts: list[Alert] = Field(
+        default_factory=list,
+        description="List of alerts (backward compat)"
+    )
+    category_breakdown: list[CategoryBreakdown] = Field(
+        default_factory=list,
+        description="Breakdown by alert category"
+    )
+    calculated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of calculation"
+    )
+
+    # v0.3 diagnostic fields
+    finding_signals: list[FindingSignal] = Field(
+        default_factory=list,
+        description="Raw signals from all evaluators (det + llm)"
+    )
+    deterministic_findings_count: int = Field(
+        default=0,
+        description="Number of findings from deterministic rules"
+    )
+    llm_findings_count: int = Field(
+        default=0,
+        description="Number of findings from LLM analysis"
+    )
+    scope_factor: float = Field(
+        default=1.0,
+        description="Scope normalization factor used in scoring"
+    )
+    penalty_density: float = Field(
+        default=0.0,
+        description="Raw weighted penalty density before decay"
+    )
+    avg_impact: float = Field(
+        default=0.0,
+        description="Average impact_score across all findings"
+    )
+    avg_confidence: float = Field(
+        default=0.0,
+        description="Average confidence across all findings"
+    )
+    llm_cost_usd: float = Field(
+        default=0.0,
+        description="Total LLM cost for this evaluation"
+    )
+    evaluation_mode: str = Field(
+        default="standard",
+        description="low_budget_mode or standard"
     )

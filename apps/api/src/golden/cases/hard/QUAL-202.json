@@ -1,0 +1,79 @@
+{
+  "case_id": "QUAL-202",
+  "name": "Quality cascading review for O-011139 Salt River Project SRP Energy Storage System",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Tesla Motor/Ofertas/Oferta 20150908/Tesla Energy Storage Proposal - Abengoa_DesertProject.pdf",
+    "schedule_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/OUT 20150817 Correo con actualización de la situación de la oferta.pdf",
+    "budget_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/BYD/Ofertas/Oferta 20150810/Price_Quotation_BESS_Dessert.pdf",
+    "specifications_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Info para RFQ/BESS Desert Project_Tech Specification for ESS Supply_ESS_00.pdf",
+    "drawings_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/IN 20151016 Correo con estado de las ofertas.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "dependency_mapper",
+      "context_builder",
+      "quality_analyzer",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-202",
+      "dimension": "Quality",
+      "severity": "high",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-011139 Salt River Project SRP Energy Storage System",
+    "sector": "Energy Storage",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

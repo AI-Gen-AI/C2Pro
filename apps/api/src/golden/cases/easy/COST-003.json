@@ -1,0 +1,74 @@
+{
+  "case_id": "COST-003",
+  "name": "Cost signal for O-011139 Salt River Project SRP Energy Storage System",
+  "dimensions": [
+    "Cost"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Tesla Motor/Ofertas/Oferta 20150908/Tesla Energy Storage Proposal - Abengoa_DesertProject.pdf",
+    "schedule_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/OUT 20150817 Correo con actualización de la situación de la oferta.pdf",
+    "budget_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/BYD/Ofertas/Oferta 20150810/Price_Quotation_BESS_Dessert.pdf",
+    "specifications_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/Compras/Baterias/Info para RFQ/BESS Desert Project_Tech Specification for ESS Supply_ESS_00.pdf",
+    "drawings_path": "docs/assets/samples/USA/O-011139 Salt River Project SRP Energy Storage System/IN 20151016 Correo con estado de las ofertas.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "cost_extractor",
+      "cost_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_budget_totals",
+      "required_args": [
+        "cost_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Cost"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-003",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "budget"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-011139 Salt River Project SRP Energy Storage System",
+    "sector": "Energy Storage",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

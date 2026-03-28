@@ -1,0 +1,76 @@
+{
+  "case_id": "COST-103",
+  "name": "Cost variance analysis for O-010160 Hospital Averroes",
+  "dimensions": [
+    "Cost"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/Especificaciones/HAC-PROY-OBRA-Doc-2-Acuerdo-contractual-v0.pdf",
+    "schedule_path": "docs/assets/samples/España/O-010160 Hospital Averroes/OUT 20140925 BCP Re_ Participación en oferta Hospital Averroes  Córdoba.pdf",
+    "budget_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/Especificaciones/HAC-PROY-OBRA-Doc-1c-Bases-Esquema-presupuesto-v0.pdf",
+    "specifications_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/Especificaciones/IN 20141006 BCP Pliegos y Documentacion HAC.pdf",
+    "drawings_path": "docs/assets/samples/España/O-010160 Hospital Averroes/Documentacion Proyecto/IN 20141009 BCP Borrador Carta de Intenciones Inversión  HAC  Rev 01.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "cost_extractor",
+      "context_builder",
+      "cost_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_budget_totals",
+      "required_args": [
+        "cost_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Cost"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-103",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "budget"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-010160 Hospital Averroes",
+    "sector": "Healthcare",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

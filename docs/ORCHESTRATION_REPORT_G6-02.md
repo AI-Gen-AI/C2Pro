@@ -168,7 +168,7 @@ tests/golden/test_golden_schema_validation.py .......................... [92%]
 7. [ ] Integrate with CI/CD pipeline
 
 ### Long-term
-8. [ ] Create Core-100 dataset for nightly runs
+8. [x] Create Core-100 dataset for nightly runs
 9. [ ] Build Extended-300 dataset for calibration
 10. [ ] Add LLM judge evaluator with rate limiting
 

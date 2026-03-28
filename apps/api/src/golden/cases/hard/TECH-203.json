@@ -1,0 +1,79 @@
+{
+  "case_id": "TECH-203",
+  "name": "Technical cascading review for P-APM Jeddah",
+  "dimensions": [
+    "Technical"
+  ],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/OUT 20140305 ABAA Rm_ APM Project  communications section  - Purchase Administration.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Power cable/Anixter revisión/Cables Summary-V3(anixter).xls",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Panels/Alseteen/BOQ.pdf",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/Purchases and Subcontracts/Heliax and radiax cable/IN 20140221 JMFC Rm_ Cables Commscope.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-APM Jeddah/OUT 20140218 DMG Re_ APM  AC.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "technical_extractor",
+      "dependency_mapper",
+      "context_builder",
+      "technical_analyzer",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "analyze_technical_conflicts",
+      "required_args": [
+        "technical_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Technical"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "TECH-203",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-APM Jeddah",
+    "sector": "Port Infrastructure",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

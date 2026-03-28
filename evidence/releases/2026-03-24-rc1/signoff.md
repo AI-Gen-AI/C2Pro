@@ -20,6 +20,15 @@
 - Swagger workbook evidence: `docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md`
 - Swagger verification report: `evidence/releases/2026-03-24-rc1/swagger-verification.md`
 - Required suite matrix: `.github/workflows/tests.yml`, `.github/workflows/frontend-ci.yml`, `.github/workflows/e2e-security-tests.yml`, `.github/workflows/evaluation-regression.yml`, `.github/workflows/i13-real-e2e-scheduled.yml`
+- UAT/manual QA evidence: `docs/UAT_CHECKLIST.md` (release-time execution record still pending)
+- Performance/capacity evidence: `docs/SLA_TARGETS.md` + `evidence/releases/2026-03-24-rc1/performance.md`
+
+## Performance Signoff Reference
+
+- Gate item: `G7-04`
+- Target source: `docs/SLA_TARGETS.md`
+- Completed evidence: `evidence/releases/2026-03-24-rc1/performance.md`
+- Status: `Referenced in final signoff bundle`
 
 ## Blocking Items
 

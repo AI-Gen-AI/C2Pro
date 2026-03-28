@@ -53,7 +53,7 @@ Rule:
 
 ### 🏗️ Team Alpha: Sentinel (Security & Infra)
 
-_Primary Goal: Harden the environment and finalize the migration authority._
+_Primary Goal: Harden the environment and finadlize the migration authority._
 
 | ID       | Task                                                                                                                         | Priority | Dependency | Source Ref                   | Status |
 | :------- | :--------------------------------------------------------------------------------------------------------------------------- | :------- | :--------- | :--------------------------- | :----- |
@@ -83,14 +83,14 @@ _Primary Goal: Replace synthetic metrics with real data and verify the AI pipeli
 | **B-2**  | **Eliminate `_fake_alerts`:** Ensure alert mutations survive process restarts via persistence.                                                             | **P0**   | A-2        | `REM-CHECK-3`                   | [x]    |
 | **B-3**  | **LangGraph Checkpointer:** Verify Postgres persistence for analysis state transitions.                                                                    | **P1**   | A-1        | `AUDIT-TASK-3.1`                | [x]    |
 | **B-4**  | **Real Coherence Dashboard:** Derive scores from `analyses` and `coherence_results` tables.                                                                | **P1**   | B-1        | `REM-CHECK-4`                   | [x]    |
-| **B-5**  | **Golden Dataset Baseline:** Curate high-quality contracts (aiming for >10) for automated accuracy regression tests using real-world Spanish project data. | **P2**   | None       | `AUDIT-TASK-3.3`                | [ ]    |
+| **B-5**  | **Golden Dataset Baseline:** Curate high-quality contracts (aiming for >10) for automated accuracy regression tests using real-world Spanish project data. | **P2**   | None       | `AUDIT-TASK-3.3`                | [x]    |
 | **B-6**  | **Real MCP Execution:** Replace synthetic completions in `mcp/router.py` with DB calls.                                                                    | **P1**   | A-2        | `REM-CHECK-5`                   | [x]    |
 | **B-7**  | **ORM Relationship Cleanup:** Re-enable deferred FK/model imports across analysis/documents/stakeholders/procurement.                                      | **P1**   | A-1        | `CODE-TODO-DB-MODELS`           | [x]    |
 | **B-8**  | **Coherence Alert Deduping:** Group repeated coherence findings into summary alerts where appropriate.                                                     | **P2**   | B-4        | `CODE-TODO-COHERENCE-ALERTS`    | [x]    |
 | **B-9**  | **LLM Pricing Source of Truth:** Replace hardcoded cost math in `llm_client.py` with `model_router` pricing.                                               | **P2**   | None       | `CODE-TODO-LLM-PRICING`         | [x]    |
 | **B-10** | **Alert Mutation AuthZ:** Add `current_user` wiring and admin enforcement to analysis alert update/delete routes.                                          | **P1**   | A-2        | `CODE-TODO-ALERTS-AUTH`         | [x]    |
 | **B-11** | **Swagger Endpoint Verification Sweep:** Execute and complete the active backend endpoint workbook against real APIs.                                      | **P2**   | B-1        | `SWAGGER-WB-01`                 | [x]    |
-| **B-12** | **Retire Legacy Document Adapters:** Replace/remove transitional legacy extraction and RAG ingestion adapters.                                             | **P2**   | B-1        | `CODE-TODO-LEGACY-DOC-ADAPTERS` | [x]    |
+| **B-12** | **Review Document Adapter Retirement Assumption:** Verify whether document adapters are truly legacy before scheduling any removal work.                     | **P2**   | B-1        | `CODE-TODO-LEGACY-DOC-ADAPTERS` | [x]    |
 
 ### 🎨 Team Charlie: Prism (Frontend & API Client)
 
@@ -121,6 +121,7 @@ _These tasks were discovered during repo-wide intake across active docs, code TO
 | **Charlie** | Finish remaining real-data remediation acceptance criteria and close the manual-QA validation gaps. | **P1**   | `REM-CHECK-COMPLETION`        | [x]    |
 | **Alpha**   | Define release promotion, rollback, and environment signoff workflow for production releases.       | **P1**   | `LEAD-GAP-RELEASE-GOVERNANCE` | [x]    |
 | **Alpha**   | Define operational ownership, escalation, and on-call expectations for production operations.       | **P1**   | `LEAD-GAP-OPS-READINESS`      | [x]    |
+| **Bravo**   | Harden active `src/documents/adapters/*` with higher coverage and reconcile test expectations with real adapter contracts before any migration work.        | **P1**   | `DOC-ADAPTER-COVERAGE-001`, `TEST-COVERAGE-ISSUES-2026-03-27` | [ ]    |
 
 ---
 
@@ -137,6 +138,8 @@ _These tasks were discovered during repo-wide intake across active docs, code TO
 - `WIREFRAME-*`: active implementation notes in `docs/wireframes/*.md`
 - `LEAD-GAP-RELEASE-GOVERNANCE`: `docs/runbooks/ci-cd-setup.md`
 - `LEAD-GAP-OPS-READINESS`: `docs/runbooks/incident-response.md`
+- `DOC-ADAPTER-COVERAGE-001`: `docs/TASK_DOC_ADAPTER_COVERAGE.md`
+- `TEST-COVERAGE-ISSUES-2026-03-27`: `docs/TEST_COVERAGE_ISSUES_REPORT.md`
 
 ---
 

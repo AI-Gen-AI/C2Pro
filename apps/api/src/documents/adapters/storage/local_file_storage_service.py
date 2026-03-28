@@ -51,3 +51,18 @@ class LocalFileStorageService(IStorageService):
         if path.exists():
             path.unlink()
             logger.info("file_deleted", path=str(path))
+
+    async def get_file_path(self, file_name_in_storage: str) -> Path:
+        """
+        Gets the full path to a file in storage.
+        
+        Args:
+            file_name_in_storage: The name/path of the file in storage.
+            
+        Returns:
+            Full Path to the file.
+        """
+        path = Path(file_name_in_storage)
+        if path.exists():
+            return path
+        return self._base_dir / file_name_in_storage

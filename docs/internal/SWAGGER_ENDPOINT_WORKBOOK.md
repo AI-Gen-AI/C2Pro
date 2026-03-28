@@ -10,7 +10,7 @@ Use it to understand what each area does and to track functional validation.
 - OpenAPI reference: `http://localhost:8000/api/v1/openapi.json`.
 - Active release evidence: `evidence/releases/2026-03-24-rc1/`.
 - Purpose: Development support, QA walk-throughs, and regression tracking.
-- Status: Updated 2026-03-20.
+- Status: Updated 2026-03-27 - **G7-01 Complete**
 
 ## Quick Reading Guide
 
@@ -171,6 +171,30 @@ Use this workbook as the Swagger evidence source for Gate 7 release certificatio
 - An unchecked item MUST be listed in the release bundle `manifest.yaml` under `swagger_workbook.unchecked_items`.
 - A release candidate MUST NOT claim complete Swagger verification while any release-critical endpoint remains unchecked without an approved waiver.
 - Non-release-critical unchecked items MAY remain open only if the waiver records owner, risk, mitigation, and expiration date.
+
+## Live Runtime Verification (2026-03-27)
+
+### Verified Endpoints
+
+| Endpoint                      | Method             | Status | Verification                     |
+| ----------------------------- | ------------------ | ------ | -------------------------------- |
+| POST /auth/register           | Register           | ✅     | Created tenant & user            |
+| POST /auth/login              | Login              | ✅     | Returns tokens                   |
+| GET /auth/me                  | Get Current User   | ✅     | Returns user profile             |
+| GET /health/live              | Liveness           | ✅     | Returns {"status":"ok"}          |
+| GET /health/ready             | Readiness          | ✅     | DB/Redis up, circuit breakers OK |
+| POST /projects                | Create Project     | ✅     | Created project with ID          |
+| GET /projects                 | List Projects      | ✅     | Returns tenant projects          |
+| GET /projects/stats           | Project Stats      | ✅     | Returns aggregate stats          |
+| GET /coherence/dashboard/{id} | Dashboard          | ✅     | Returns coherence data           |
+| GET /hitl/queue               | HITL Queue         | ✅     | Returns empty queue              |
+| GET /wbs                      | WBS Tree           | ✅     | Returns WBS structure            |
+| GET /mcp/views                | MCP Views          | ✅     | Returns 8 whitelisted views      |
+| GET /mcp/functions            | MCP Functions      | ✅     | Returns 5 whitelisted functions  |
+| POST /stakeholders            | Create Stakeholder | ✅     | Created stakeholder              |
+| GET /stakeholders             | List Stakeholders  | ✅     | Returns project stakeholders     |
+| POST /alerts                  | Create Alert       | ✅     | Created alert with validation    |
+| GET /observability/status     | System Status      | ✅     | Returns API/DB status            |
 
 ### Health
 

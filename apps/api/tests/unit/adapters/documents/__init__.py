@@ -1,0 +1,3 @@
+"""
+Documents adapter tests package.
+"""

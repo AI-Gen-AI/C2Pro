@@ -174,8 +174,8 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
     # Model selection
     ai_model_default: str = "claude-sonnet-4-20250514"  # Sonnet 4 por defecto
-    ai_model_fast: str = "claude-haiku-4-20250514"  # Haiku 4 para tareas rápidas
-    ai_model_powerful: str = "claude-opus-4-20250514"  # Opus 4 para tareas complejas (Fase 2+)
+    ai_model_fast: str = "claude-haiku-4-5"  # Haiku 4.5 for fast tasks (replaces haiku-4-20250514)
+    ai_model_powerful: str = "claude-opus-4-20250514"  # Opus 4 for complex tasks (Phase 2+)
 
     # Budget control
     ai_budget_monthly_default: float = Field(default=50.0, ge=0)  # USD por tenant

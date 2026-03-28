@@ -1,1 +1,0 @@
-{"case_id": "SCHED-001", "name": "Test schedule case", "dimensions": ["Schedule"], "difficulty": "Easy", "input_documents": {"contract_path": "/test/contract.pdf", "schedule_path": "/test/schedule.pdf"}, "trajectory": {"required_nodes": ["analyze", "report"]}, "expected_issues": [{"rule_id": "SCHED-001", "dimension": "Schedule", "severity": "high"}]}

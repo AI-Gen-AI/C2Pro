@@ -1,0 +1,71 @@
+{
+  "case_id": "LEG-004",
+  "name": "Legal signal for O-009984 4P 400 kV OHTL Subiya Power Station-Al Zour SS",
+  "dimensions": [
+    "Legal"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/O-009984 4P 400 kV OHTL Subiya Power Station-Al Zour SS/Purchases/Towers/OUT 20140925 MS RFQ MEW_25_2013_2014_400 kv Kuwait. AIC.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/O-009984 4P 400 kV OHTL Subiya Power Station-Al Zour SS/Purchases/Towers/IN 20140925 LFRB RFQ MEW_25_2013_2014_400 kv Kuwait. AIC.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "legal_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "analyze_legal_terms",
+      "required_args": [
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Legal"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-004",
+      "dimension": "Legal",
+      "severity": "medium",
+      "description_contains": "contractual"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-009984 4P 400 kV OHTL Subiya Power Station-Al Zour SS",
+    "sector": "Transmission",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

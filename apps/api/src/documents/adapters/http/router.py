@@ -285,7 +285,27 @@ async def get_document_endpoint(
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> DocumentDetailResponse:
     document = await use_case.execute(document_id)
-    return DocumentDetailResponse.model_validate(document)
+    response_data = DocumentResponse.model_validate(document).model_dump()
+    response_data["clauses"] = [
+        {
+            "id": clause.id,
+            "project_id": clause.project_id,
+            "document_id": clause.document_id,
+            "clause_code": clause.clause_code,
+            "clause_type": clause.clause_type.value if clause.clause_type else None,
+            "title": clause.title,
+            "full_text": clause.full_text,
+            "text_start_offset": clause.text_start_offset,
+            "text_end_offset": clause.text_end_offset,
+            "extracted_entities": clause.extracted_entities,
+            "extraction_confidence": clause.extraction_confidence,
+            "extraction_model": clause.extraction_model,
+            "manually_verified": clause.manually_verified,
+            "verified_at": clause.verified_at,
+        }
+        for clause in document.clauses
+    ]
+    return DocumentDetailResponse.model_validate(response_data)
 
 
 @router.get(

@@ -1,0 +1,76 @@
+{
+  "case_id": "SCHED-103",
+  "name": "Schedule variance analysis for P-Mount Solar Signal PV",
+  "dimensions": [
+    "Schedule"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-014 Hydroscientific/OUT 20130702 DC Re_ HYDROSCIENTIFIC;  Terms of Payment and contract.pdf",
+    "schedule_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-012 Payne Crest/2013-012.xlsx",
+    "budget_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-009 MSITEC/IN 20130621 JLGB RE_ Request for Support for Moxa products and pricing.pdf",
+    "specifications_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-007 Optellios/IN 20130708 FMFA Rm_ Inabensa Technical team - Optellios system for MSS Plant.pdf",
+    "drawings_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/OUT 20131007 JMVM Listado de Gestiones del día 06_10_2013.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "schedule_extractor",
+      "context_builder",
+      "schedule_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_schedules",
+      "required_args": [
+        "schedule_data"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Schedule"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-103",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "milestone"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-Mount Solar Signal PV",
+    "sector": "Solar PV",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

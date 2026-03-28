@@ -26,19 +26,39 @@ def upgrade() -> None:
 
     op.execute(
         """
-        ALTER TABLE procurement_wbs_items
-        ADD CONSTRAINT uq_procurement_wbs_project_code UNIQUE (project_id, code)
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'uq_procurement_wbs_project_code'
+            ) THEN
+                ALTER TABLE procurement_wbs_items
+                ADD CONSTRAINT uq_procurement_wbs_project_code UNIQUE (project_id, code);
+            END IF;
+        END
+        $$;
         """
     )
 
     op.execute(
         """
-        ALTER TABLE procurement_wbs_items
-        ADD CONSTRAINT fk_wbs_parent_per_project
-        FOREIGN KEY (project_id, parent_code)
-        REFERENCES procurement_wbs_items(project_id, code)
-        ON DELETE CASCADE
-        DEFERRABLE INITIALLY DEFERRED
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_wbs_parent_per_project'
+            ) THEN
+                ALTER TABLE procurement_wbs_items
+                ADD CONSTRAINT fk_wbs_parent_per_project
+                FOREIGN KEY (project_id, parent_code)
+                REFERENCES procurement_wbs_items(project_id, code)
+                ON DELETE CASCADE
+                DEFERRABLE INITIALLY DEFERRED;
+            END IF;
+        END
+        $$;
         """
     )
 
@@ -51,17 +71,37 @@ def downgrade() -> None:
 
     op.execute(
         """
-        ALTER TABLE procurement_wbs_items
-        ADD CONSTRAINT procurement_wbs_items_code_key UNIQUE (code)
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'procurement_wbs_items_code_key'
+            ) THEN
+                ALTER TABLE procurement_wbs_items
+                ADD CONSTRAINT procurement_wbs_items_code_key UNIQUE (code);
+            END IF;
+        END
+        $$;
         """
     )
 
     op.execute(
         """
-        ALTER TABLE procurement_wbs_items
-        ADD CONSTRAINT fk_wbs_parent
-        FOREIGN KEY (parent_code)
-        REFERENCES procurement_wbs_items(code)
-        ON DELETE SET NULL
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_wbs_parent'
+            ) THEN
+                ALTER TABLE procurement_wbs_items
+                ADD CONSTRAINT fk_wbs_parent
+                FOREIGN KEY (parent_code)
+                REFERENCES procurement_wbs_items(code)
+                ON DELETE SET NULL;
+            END IF;
+        END
+        $$;
         """
     )

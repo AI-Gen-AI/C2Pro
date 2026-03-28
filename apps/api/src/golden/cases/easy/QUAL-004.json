@@ -1,0 +1,74 @@
+{
+  "case_id": "QUAL-004",
+  "name": "Quality signal for P-00XXXX RA-212 project - Combined Group l",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/P-00XXXX RA-212 project - Combined Group l/Documentos proyecto/IN 20160808 JFL_Planning y oferta presentada.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/P-00XXXX RA-212 project - Combined Group l/Planning proyecto/Planning Kuwait Combined Group 132kV_v6.pdf",
+    "budget_path": "docs/assets/samples/Kuwait/P-00XXXX RA-212 project - Combined Group l/Documentos proyecto/BOQ/IN 20161004 FVG-M_BOQ presentada al Cliente y aprobada.pdf",
+    "specifications_path": "docs/assets/samples/Kuwait/P-00XXXX RA-212 project - Combined Group l/Compras/Aisladores/Sediver/Doc tecnica para ofertar/1. General Specification.pdf",
+    "drawings_path": "docs/assets/samples/Kuwait/P-00XXXX RA-212 project - Combined Group l/Compras/Herrajes/Mosdorfer/DrawingsANG16-02031-1.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "quality_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-004",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-00XXXX RA-212 project - Combined Group l",
+    "sector": "Industrial Infrastructure",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

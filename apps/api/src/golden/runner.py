@@ -9,6 +9,13 @@ Usage:
     python -m golden.runner --dimension Schedule     # Run Schedule dimension
     python -m golden.runner --output json            # JSON output
     python -m golden.runner --case SCHED-001         # Run specific case
+    python -m golden.runner --rate-limit 10          # Max 10 cases/minute
+
+Security:
+    Rate limiting is enforced to prevent:
+    - Excessive LLM API calls and costs
+    - Resource exhaustion on the server
+    - Abuse of the evaluation system
 """
 
 import argparse

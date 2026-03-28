@@ -441,7 +441,7 @@ cd apps/api
 python -m pytest tests/golden/test_golden_schema_validation.py -v
 ```
 
-### Run Core-25 Validation
+### Run Core-100 Nightly Validation
 ```bash
 python -m pytest tests/golden/test_core25_validation.py -v
 ```
@@ -505,10 +505,11 @@ python -m golden.benchmark --threshold 80
 | Loader Implementation | `apps/api/src/golden/loader.py` |
 | Runner Implementation | `apps/api/src/golden/runner.py` |
 | Benchmark Runner | `apps/api/src/golden/benchmark.py` |
-| Core-25 Cases | `apps/api/src/golden/cases/` |
+| Core-100 Nightly Cases | `apps/api/src/golden/cases/` |
 | Validation Tests | `apps/api/tests/golden/` |
 | Security Audit | `SECURITY_AUDIT_GOLDEN_DATASET.md` |
 | Orchestration Report | `docs/ORCHESTRATION_REPORT_G6-02_CORE25.md` |
+| Core-100 Expansion Report | `docs/ORCHESTRATION_REPORT_G6-02_CORE100.md` |
 
 ---
 

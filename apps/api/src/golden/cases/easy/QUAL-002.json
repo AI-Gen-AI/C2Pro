@@ -1,0 +1,74 @@
+{
+  "case_id": "QUAL-002",
+  "name": "Quality signal for P-008247 4P 132kV OHTL Shagaya",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Easy",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/P-008247 4P 132kV OHTL Shagaya/Compras/OUT 20140820 MS Rm_ Kuwait - Shegaya project contracts.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/P-008247 4P 132kV OHTL Shagaya/Project schedule/Planning Kuwait 132kV Shagaya_Rev.0_20140610.pdf",
+    "budget_path": "docs/assets/samples/Kuwait/P-008247 4P 132kV OHTL Shagaya/IN 20150825 JCG_Nuevos costes de imputacion proyecto.pdf",
+    "specifications_path": "docs/assets/samples/Kuwait/P-008247 4P 132kV OHTL Shagaya/Compras/9. Revestimiento de silicona para aisladores/RfQ/Re_ RV_ Technical Visit to Kuwait - J Wozinski.pdf",
+    "drawings_path": "docs/assets/samples/Kuwait/P-008247 4P 132kV OHTL Shagaya/Compras/4. Aisladores/Seves/6. Mosdorfer String Drawings Underrib.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "quality_analyzer",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "cross_reference_validator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 2
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-002",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-008247 4P 132kV OHTL Shagaya",
+    "sector": "Transmission",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

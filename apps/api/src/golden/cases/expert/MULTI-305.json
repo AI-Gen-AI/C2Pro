@@ -1,0 +1,165 @@
+{
+  "case_id": "MULTI-305",
+  "name": "Nightly full coherence audit for P-009604 LAV Monforte-Murcia",
+  "dimensions": [
+    "Legal",
+    "Quality",
+    "Scope",
+    "Schedule",
+    "Cost",
+    "Technical"
+  ],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Subcontratas/102.Pilotaje/1-Agreement/PC0903009604 - Cordobesa de Pilotaje - Contrato Firmado.pdf",
+    "schedule_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Follow-up PO/Seguimiento pedidos Monforte Murcia 20140728.xlsx",
+    "budget_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Subcontratas/106.Topografia/Diedro/Presupuesto topo_ ina2014-007.pdf",
+    "specifications_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Compras/Cimentaciones/IN 20141014 MTGF _  Recuentos actualizados _ Cimentaciones especiales Elche.pdf",
+    "drawings_path": "docs/assets/samples/España/P-009604 LAV Monforte-Murcia/Planos/S-15E-ESP.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "scope_extractor",
+      "schedule_extractor",
+      "cost_extractor",
+      "quality_extractor",
+      "technical_extractor",
+      "cross_reference_validator",
+      "dependency_mapper",
+      "risk_aggregator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator",
+      "mitigation_planner"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 8
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path",
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "aggregate_risks",
+      "required_args": [
+        "all_issues"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 3
+    },
+    {
+      "path": "coherence_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_score",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-305",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    },
+    {
+      "rule_id": "QUAL-305",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    },
+    {
+      "rule_id": "SCOPE-305",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    },
+    {
+      "rule_id": "SCHED-305",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-305",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget"
+    },
+    {
+      "rule_id": "TECH-305",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-009604 LAV Monforte-Murcia",
+    "sector": "High-Speed Rail",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "full_dimensional_coverage": 6
+  }
+}

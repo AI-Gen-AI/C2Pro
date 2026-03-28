@@ -1,0 +1,94 @@
+{
+  "case_id": "MULTI-102",
+  "name": "Cross-dimensional variance review for P-SE Jeddah",
+  "dimensions": [
+    "Schedule",
+    "Cost",
+    "Scope"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/contracto firmado Schneider y addendum.pdf",
+    "schedule_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/IN 20131006 Respuesta Ijaz con schedule.pdf",
+    "budget_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/OUT 20130701 Reclamación Ijaz aceptación oferta.pdf",
+    "specifications_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/SE REPLIES ON SPAREPARTS COMMENT.pdf",
+    "drawings_path": "docs/assets/samples/Arabia Saudi/P-SE Jeddah/Schneider/Schneider MOM on 28 May 20130001.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "schedule_extractor",
+      "cost_extractor",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "scope_extractor",
+      "technical_extractor"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 4
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "validate_cross_references",
+      "required_args": [
+        "dimensional_data"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "cross_dimensional_issues",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-102",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-102",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "budget"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-SE Jeddah",
+    "sector": "Substation",
+    "country": "Saudi Arabia",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "cross_dimensional": true
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "case_id": "QUAL-203",
+  "name": "Quality cascading review for O-XXXXXX BESS Guam project",
+  "dimensions": [
+    "Quality"
+  ],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/O-XXXXXX BESS Guam project/Compras/PCS/Norther Power/Ofertas/Oferta 20151127/TechnicalProposal_AbengoaGuam40MWPCS_20151123.pdf",
+    "schedule_path": "docs/assets/samples/USA/O-XXXXXX BESS Guam project/Compras/PCS/Ingeteam/Oferta 20151126/Ingeteam PCS_Guam_Technical Specification_PCS_00_Appendix_Rev0.xlsx",
+    "budget_path": "docs/assets/samples/USA/O-XXXXXX BESS Guam project/Compras/BS/Leclanché/Ofertas/Oferta 20151127/LSA_Technical Specification_Price_breakdown_final.xlsx",
+    "specifications_path": "docs/assets/samples/USA/O-XXXXXX BESS Guam project/Compras/ESC/Northern Power/Ofertas/Oferta 20151126/TechnicalProposal_AbengoaGuamESC_20151124.pdf",
+    "drawings_path": "docs/assets/samples/USA/O-XXXXXX BESS Guam project/Información del proyecto/IN 20151109 Correo con info.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "quality_extractor",
+      "dependency_mapper",
+      "context_builder",
+      "quality_analyzer",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_quality_standards",
+      "required_args": [
+        "quality_requirements"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Quality"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-203",
+      "dimension": "Quality",
+      "severity": "high",
+      "description_contains": "quality"
+    }
+  ],
+  "metadata": {
+    "source_project": "O-XXXXXX BESS Guam project",
+    "sector": "Battery Energy Storage",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

@@ -182,7 +182,7 @@ Cases with explicit risk/ADR documentation from source projects:
 6. ✅ Document case creation guidelines
 
 ### Long-term
-7. [ ] Expand to Core-100 dataset
+7. [x] Expand to Core-100 dataset
 8. [ ] Add LLM judge evaluator integration
 9. [ ] Create Extended-300 for calibration
 
@@ -207,6 +207,9 @@ Cases with explicit risk/ADR documentation from source projects:
 ## Conclusion
 
 The Core-25 golden dataset successfully provides a comprehensive benchmark for LangGraph multi-agent coherence analysis. All 25 cases have been validated against the schema with 129 tests passing. The dataset covers all 6 coherence dimensions across 4 difficulty levels, using real Spanish EPC project documentation as source material.
+
+Update 2026-03-28:
+The baseline dataset has now been expanded into a Core-100 nightly regression set spanning Spain, USA, Kuwait, and Saudi Arabia. See `docs/ORCHESTRATION_REPORT_G6-02_CORE100.md`.
 
 **Total Implementation Time**: ~30 minutes (orchestrated)
 **Files Created**: 26 (25 JSON cases + 1 test file)

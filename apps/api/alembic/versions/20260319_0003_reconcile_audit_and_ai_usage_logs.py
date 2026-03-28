@@ -56,6 +56,19 @@ def upgrade() -> None:
         );
         """
     )
+    op.execute(
+        """
+        ALTER TABLE audit_logs
+            ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT 'unknown',
+            ADD COLUMN IF NOT EXISTS resource_type VARCHAR(50) NOT NULL DEFAULT 'unknown',
+            ADD COLUMN IF NOT EXISTS resource_id UUID,
+            ADD COLUMN IF NOT EXISTS changes JSONB DEFAULT '{}',
+            ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45),
+            ADD COLUMN IF NOT EXISTS user_agent TEXT,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+        """
+    )
 
     op.execute(
         """

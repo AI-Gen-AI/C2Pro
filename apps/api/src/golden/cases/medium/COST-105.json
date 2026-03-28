@@ -1,0 +1,76 @@
+{
+  "case_id": "COST-105",
+  "name": "Cost variance analysis for P-006328 Fasa Renault -Sevilla",
+  "dimensions": [
+    "Cost"
+  ],
+  "difficulty": "Medium",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Eldu/OUT ARC-CAC 28.08.2015  - Solicitando el envío del Contrato de Alquiler.pdf",
+    "schedule_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN JJGL 09.11.2015 - Suministro de Tapcon y Programación de los Equipos.pdf",
+    "budget_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/IN CAC 04.11.2015  - Aceptación Presupuesto con Condiciones.pdf",
+    "specifications_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Transformadores/Alkargo/In Jesús Juan Giles Llima  -Cambios Especificación Técnica Trafos Alkargo.pdf",
+    "drawings_path": "docs/assets/samples/España/P-006328 Fasa Renault -Sevilla/Compras/Out Carlos Arenas ARC - Solicitando Informaciónn para comparativa.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "cost_extractor",
+      "context_builder",
+      "cost_analyzer",
+      "cross_reference_validator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "risk_ranker"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 3
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_budget_totals",
+      "required_args": [
+        "cost_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Cost"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-105",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "budget"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-006328 Fasa Renault -Sevilla",
+    "sector": "Industrial",
+    "country": "Spain",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}

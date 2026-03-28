@@ -1,0 +1,165 @@
+{
+  "case_id": "MULTI-310",
+  "name": "Nightly full coherence audit for P-Mount Solar Signal PV",
+  "dimensions": [
+    "Legal",
+    "Quality",
+    "Scope",
+    "Schedule",
+    "Cost",
+    "Technical"
+  ],
+  "difficulty": "Expert",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-014 Hydroscientific/OUT 20130702 DC Re_ HYDROSCIENTIFIC;  Terms of Payment and contract.pdf",
+    "schedule_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-012 Payne Crest/2013-012.xlsx",
+    "budget_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-009 MSITEC/IN 20130621 JLGB RE_ Request for Support for Moxa products and pricing.pdf",
+    "specifications_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/MSS Project/PO 2013-007 Optellios/IN 20130708 FMFA Rm_ Inabensa Technical team - Optellios system for MSS Plant.pdf",
+    "drawings_path": "docs/assets/samples/USA/P-Mount Solar Signal PV/OUT 20131007 JMVM Listado de Gestiones del día 06_10_2013.pdf"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "legal_extractor",
+      "scope_extractor",
+      "schedule_extractor",
+      "cost_extractor",
+      "quality_extractor",
+      "technical_extractor",
+      "cross_reference_validator",
+      "dependency_mapper",
+      "risk_aggregator",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator",
+      "mitigation_planner"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 8
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_clauses",
+      "required_args": [
+        "doc_path",
+        "clause_type"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_dates",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_amounts",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "extract_quality_requirements",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "extract_specifications",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 1,
+      "max_calls": 3
+    },
+    {
+      "tool_name": "aggregate_risks",
+      "required_args": [
+        "all_issues"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "greater_than",
+      "expected_value": 3
+    },
+    {
+      "path": "coherence_matrix",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "risk_score",
+      "operator": "exists",
+      "expected_value": true
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-310",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "contractual"
+    },
+    {
+      "rule_id": "QUAL-310",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "quality"
+    },
+    {
+      "rule_id": "SCOPE-310",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    },
+    {
+      "rule_id": "SCHED-310",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "milestone"
+    },
+    {
+      "rule_id": "COST-310",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "budget"
+    },
+    {
+      "rule_id": "TECH-310",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "technical"
+    }
+  ],
+  "metadata": {
+    "source_project": "P-Mount Solar Signal PV",
+    "sector": "Solar PV",
+    "country": "USA",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28",
+    "full_dimensional_coverage": 6
+  }
+}

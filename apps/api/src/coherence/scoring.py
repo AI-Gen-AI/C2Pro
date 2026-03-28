@@ -1,31 +1,360 @@
+"""
+scoring.py — Coherence Score Calculator v0.3
+
+Implements exponential decay scoring with scope normalization.
+Replaces the linear deduction model with a curve that:
+  - Never reaches exactly 0 (floor = 5.0)
+  - Never reaches 100 when findings exist (ceiling = 97.0)
+  - Absorbs findings better in larger projects (scope normalization)
+  - Weights deterministic findings higher than LLM findings
+
+The scoring formula is:
+    score = 100 × e^(-λ × penalty_density)
+
+Where:
+    penalty_density = weighted_penalty_sum / scope_factor
+    weighted_penalty_sum = Σ(impact × confidence × category_weight × source_weight)
+
+Location: apps/api/src/coherence/scoring.py
+"""
+
+from __future__ import annotations
+
+import math
 import os
 import sys
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 # Temporarily add the parent directory to sys.path to allow relative imports when run directly
-# This is a common pattern for testing modules within a package structure
 script_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(
     os.path.join(script_dir, "../../../../../")
-)  # Go up from coherence to modules, src, api, apps, then c2pro
+)
 sys.path.insert(0, project_root)
-
-from typing import Dict, List
-from collections import defaultdict
 
 from src.coherence.config import (
     DECAY_FACTOR,
     RULE_WEIGHT_OVERRIDES,
     SEVERITY_WEIGHTS,
+    ScoringConfig,
+    DEFAULT_SCORING_CONFIG,
 )
-from src.coherence.models import Alert, Evidence, CategoryBreakdown, SeverityCount
+from src.coherence.models import (
+    Alert,
+    Evidence,
+    CategoryBreakdown,
+    SeverityCount,
+    FindingSignal,
+    SeverityLevel,
+)
+
+
+# =============================================================================
+# SCORING RESULT DATACLASS
+# =============================================================================
+
+
+@dataclass
+class ScoringDiagnostics:
+    """
+    Detailed breakdown of how the score was calculated.
+
+    Useful for debugging, dashboards, and score curve validation.
+    """
+    score: float
+    total_findings: int
+    deterministic_findings: int
+    llm_findings: int
+    severity_distribution: dict[str, int]
+    avg_impact: float
+    avg_confidence: float
+    scope_factor: float
+    penalty_density: float
+    raw_penalty_sum: float
+    category_contributions: dict[str, float]
+
+
+# =============================================================================
+# SCORING SERVICE V0.3
+# =============================================================================
 
 
 class ScoringService:
     """
-    Service responsible for computing a coherence score based on a list of alerts.
-    Implements an advanced model with rule-specific weights and diminishing returns.
-    Now supports category-based breakdown for detailed analysis.
+    Service responsible for computing a coherence score based on findings.
+
+    v0.3 implements exponential decay with scope normalization:
+        score = 100 × e^(-λ × penalty_density)
+
+    The score represents: "What percentage of this project's coherence is intact?"
+
+        100   = No issues detected
+        80+   = Minor issues, project is well-structured
+        60-80 = Moderate issues requiring attention
+        40-60 = Significant coherence problems
+        20-40 = Severe issues, high risk
+        <20   = Critical incoherence across the project
+
+    Backward compatible: compute_score() still works with Alert objects.
+    New API: calculate_from_signals() accepts FindingSignal objects.
     """
+
+    def __init__(self, config: Optional[ScoringConfig] = None):
+        """
+        Initialize the scoring service.
+
+        Args:
+            config: ScoringConfig for tuning decay, bounds, and weights.
+                    If None, uses DEFAULT_SCORING_CONFIG.
+        """
+        self.config = config or DEFAULT_SCORING_CONFIG
+        self._normalized_weights: Optional[dict[str, float]] = None
+
+    @property
+    def normalized_weights(self) -> dict[str, float]:
+        """Lazily compute normalized category weights."""
+        if self._normalized_weights is None:
+            self._normalized_weights = self.config.get_normalized_weights()
+        return self._normalized_weights
+
+    # =========================================================================
+    # V0.3 API — FindingSignal-based scoring
+    # =========================================================================
+
+    def calculate_from_signals(
+        self,
+        signals: list[FindingSignal],
+        num_clauses: int = 1,
+        num_rules: int = 5,
+    ) -> float:
+        """
+        Calculate coherence score from FindingSignal objects.
+
+        This is the primary v0.3 method that Agent C (Scoring Arbiter) calls.
+        Uses exponential decay with scope normalization.
+
+        Args:
+            signals: List of FindingSignal objects from evaluators
+            num_clauses: Number of clauses in the project context
+            num_rules: Number of rules evaluated (for diagnostics)
+
+        Returns:
+            float: Score between config.min_score and 100.0
+        """
+        if not signals:
+            return 100.0
+
+        # Step 1: Calculate raw weighted penalty sum
+        raw_penalty = 0.0
+        for signal in signals:
+            contribution = self._compute_signal_contribution(signal)
+            raw_penalty += contribution
+
+        # Step 2: Scope normalization
+        scope_factor = self.config.compute_scope_factor(num_clauses)
+        penalty_density = raw_penalty / scope_factor
+
+        # Step 3: Exponential decay
+        # score = 100 × e^(-λ × density)
+        raw_score = 100.0 * math.exp(-self.config.decay_lambda * penalty_density)
+
+        # Step 4: Apply ceiling (when findings exist, score cannot reach 100)
+        raw_score = min(raw_score, self.config.max_score)
+
+        # Step 5: Apply floor (score cannot go below min_score)
+        score = max(raw_score, self.config.min_score)
+
+        # Round to 1 decimal for clean API output
+        return round(score, 1)
+
+    def calculate_detailed(
+        self,
+        signals: list[FindingSignal],
+        num_clauses: int = 1,
+        num_rules: int = 5,
+    ) -> ScoringDiagnostics:
+        """
+        Calculate score with full diagnostic breakdown.
+
+        Returns detailed information about how the score was computed,
+        useful for debugging and dashboard display.
+
+        Args:
+            signals: List of FindingSignal objects from evaluators
+            num_clauses: Number of clauses in the project context
+            num_rules: Number of rules evaluated
+
+        Returns:
+            ScoringDiagnostics with score and breakdown
+        """
+        if not signals:
+            return ScoringDiagnostics(
+                score=100.0,
+                total_findings=0,
+                deterministic_findings=0,
+                llm_findings=0,
+                severity_distribution={"critical": 0, "high": 0, "medium": 0, "low": 0},
+                avg_impact=0.0,
+                avg_confidence=0.0,
+                scope_factor=1.0,
+                penalty_density=0.0,
+                raw_penalty_sum=0.0,
+                category_contributions={},
+            )
+
+        # Compute raw penalty and track category contributions
+        raw_penalty = 0.0
+        category_contributions: dict[str, float] = defaultdict(float)
+
+        for signal in signals:
+            contribution = self._compute_signal_contribution(signal)
+            raw_penalty += contribution
+            category_contributions[signal.category] += contribution
+
+        # Scope factor and penalty density
+        scope_factor = self.config.compute_scope_factor(num_clauses)
+        penalty_density = raw_penalty / scope_factor
+
+        # Final score calculation
+        raw_score = 100.0 * math.exp(-self.config.decay_lambda * penalty_density)
+        raw_score = min(raw_score, self.config.max_score)
+        score = max(raw_score, self.config.min_score)
+
+        # Compute aggregates
+        det_signals = [s for s in signals if s.source == "deterministic"]
+        llm_signals = [s for s in signals if s.source == "llm"]
+        avg_impact = sum(s.impact_score for s in signals) / len(signals)
+        avg_confidence = sum(s.confidence for s in signals) / len(signals)
+
+        return ScoringDiagnostics(
+            score=round(score, 1),
+            total_findings=len(signals),
+            deterministic_findings=len(det_signals),
+            llm_findings=len(llm_signals),
+            severity_distribution=self._severity_distribution_signals(signals),
+            avg_impact=round(avg_impact, 3),
+            avg_confidence=round(avg_confidence, 3),
+            scope_factor=round(scope_factor, 3),
+            penalty_density=round(penalty_density, 3),
+            raw_penalty_sum=round(raw_penalty, 3),
+            category_contributions=dict(category_contributions),
+        )
+
+    def _compute_signal_contribution(self, signal: FindingSignal) -> float:
+        """
+        Compute the penalty contribution of a single FindingSignal.
+
+        Formula (from design doc):
+            contribution = impact_score × confidence × severity_weight × source_weight
+
+        The impact_score already encodes the "how bad" aspect (0.0-1.0),
+        while severity_weight scales it by categorical importance.
+        """
+        # Severity weight (critical=1.0, high=0.7, medium=0.4, low=0.15)
+        severity_weight = self.config.severity_weights.get(signal.severity, 0.4)
+
+        # Source weight (deterministic = 1.0, LLM = config.llm_weight_factor)
+        if signal.source == "llm":
+            source_weight = self.config.llm_weight_factor
+            # Skip LLM findings below confidence threshold
+            if signal.confidence < self.config.llm_confidence_threshold:
+                return 0.0
+        else:
+            source_weight = 1.0
+
+        return signal.impact_score * signal.confidence * severity_weight * source_weight
+
+    @staticmethod
+    def _severity_distribution_signals(signals: list[FindingSignal]) -> dict[str, int]:
+        """Count findings by severity level."""
+        dist = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for s in signals:
+            if s.severity in dist:
+                dist[s.severity] += 1
+        return dist
+
+    # =========================================================================
+    # BACKWARD-COMPAT API — Alert-based scoring with v0.3 formula
+    # =========================================================================
+
+    def calculate(
+        self,
+        alerts: list[Alert],
+        num_clauses: int = 1,
+        num_rules: int = 5,
+    ) -> float:
+        """
+        Backward-compatible scoring from Alert objects using v0.3 formula.
+
+        Converts alerts to FindingSignals and delegates to calculate_from_signals().
+
+        Args:
+            alerts: List of Alert objects
+            num_clauses: Number of clauses in the project
+            num_rules: Number of rules evaluated
+
+        Returns:
+            float: Score between config.min_score and 100.0
+        """
+        if not alerts:
+            return 100.0
+
+        signals = [self._alert_to_signal(alert) for alert in alerts]
+        return self.calculate_from_signals(signals, num_clauses, num_rules)
+
+    def _alert_to_signal(self, alert: Alert) -> FindingSignal:
+        """Convert a legacy Alert to a FindingSignal."""
+        # Map severity to impact_score
+        impact = self._severity_to_impact(alert.severity)
+
+        # Infer source from rule_id pattern
+        source = "llm" if alert.rule_id.startswith("R-") else "deterministic"
+
+        # Map category
+        category = self._alert_category_to_coherence_category(alert.category)
+
+        return FindingSignal(
+            rule_id=alert.rule_id,
+            clause_id=alert.evidence.source_clause_id if alert.evidence else "unknown",
+            source=source,
+            impact_score=impact,
+            confidence=1.0,  # Legacy alerts assumed high confidence
+            severity=alert.severity.lower(),
+            category=category,
+            evidence_summary=alert.message,
+            quote=alert.evidence.quote if alert.evidence else "",
+        )
+
+    @staticmethod
+    def _severity_to_impact(severity: str) -> float:
+        """Map categorical severity to default continuous impact score."""
+        mapping = {
+            "critical": 0.95,
+            "high": 0.75,
+            "medium": 0.50,
+            "low": 0.25,
+        }
+        return mapping.get(severity.lower(), 0.50)
+
+    @staticmethod
+    def _alert_category_to_coherence_category(category: str) -> str:
+        """Map legacy alert categories to v0.3 coherence categories."""
+        mapping = {
+            "financial": "BUDGET",
+            "legal": "LEGAL",
+            "technical": "TECHNICAL",
+            "schedule": "TIME",
+            "scope": "SCOPE",
+            "quality": "QUALITY",
+            "general": "SCOPE",
+        }
+        return mapping.get(category.lower(), "SCOPE")
+
+    # =========================================================================
+    # V0.2 LEGACY API — Linear deduction (kept for backward compatibility)
+    # =========================================================================
 
     def compute_score(self, alerts: list[Alert]) -> float:
         """

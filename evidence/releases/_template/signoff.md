@@ -19,5 +19,7 @@
 
 - Required suite matrix: `<workflow runs or artifacts>`
 - Swagger workbook evidence: `<links or notes>`
+- UAT/manual QA evidence: `docs/UAT_CHECKLIST.md` + release-time completed checklist notes
+- Performance/capacity evidence: `docs/SLA_TARGETS.md` + `evidence/releases/<release-id>/performance.md`
 - Rollback owner: `<name>`
 - Incident reference, if any: `<id or none>`

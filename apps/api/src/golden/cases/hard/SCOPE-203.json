@@ -1,0 +1,76 @@
+{
+  "case_id": "SCOPE-203",
+  "name": "Scope cascading review for Importacion en Kuwait",
+  "dimensions": [
+    "Scope"
+  ],
+  "difficulty": "Hard",
+  "input_documents": {
+    "contract_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IN 20180214 FGC_Info importacion Kuwait.pdf",
+    "schedule_path": "docs/assets/samples/Kuwait/Importacion en Kuwait/IMPORTACIÓN KUWAIT.PDF"
+  },
+  "trajectory": {
+    "required_nodes": [
+      "document_loader",
+      "scope_extractor",
+      "dependency_mapper",
+      "context_builder",
+      "scope_analyzer",
+      "cross_reference_validator",
+      "risk_ranker",
+      "issue_reporter"
+    ],
+    "optional_nodes": [
+      "conflict_resolver",
+      "impact_estimator"
+    ],
+    "forbidden_nodes": [],
+    "max_loops": 5
+  },
+  "tool_calls": [
+    {
+      "tool_name": "extract_scope_items",
+      "required_args": [
+        "doc_path"
+      ],
+      "min_calls": 2,
+      "max_calls": 4
+    },
+    {
+      "tool_name": "compare_scope",
+      "required_args": [
+        "scope_register"
+      ],
+      "min_calls": 1,
+      "max_calls": 2
+    }
+  ],
+  "state_assertions": [
+    {
+      "path": "issues",
+      "operator": "exists",
+      "expected_value": true
+    },
+    {
+      "path": "issues.0.dimension",
+      "operator": "equals",
+      "expected_value": "Scope"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-203",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "scope"
+    }
+  ],
+  "metadata": {
+    "source_project": "Importacion en Kuwait",
+    "sector": "Logistics",
+    "country": "Kuwait",
+    "dataset_tier": "Core-100",
+    "nightly_candidate": true,
+    "created_date": "2026-03-28"
+  }
+}
