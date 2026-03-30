@@ -53,8 +53,8 @@ import {
   useResolveAlertApiV1AlertsAlertIdResolvePost,
   useReviewAlertApiV1AlertsAlertIdReviewPost,
 } from "@/lib/api/generated/alerts/alerts";
-import type { AlertResponse } from "@/lib/api/generated/models/alertResponse";
 import { cn } from "@/lib/utils";
+import type { AlertResponse as BackendAlertResponse } from "@/types/backend";
 import type { Alert as ProjectAlert } from "@/types/project";
 
 type EvidenceTemplate = {
@@ -421,7 +421,7 @@ export default function EvidencePage() {
       });
       setAlertsState((prev) =>
         prev.map((alert) =>
-          alert.id === alertId ? (updatedAlert as AlertResponse) : alert,
+          alert.id === alertId ? (updatedAlert as BackendAlertResponse) : alert,
         ),
       );
     },
@@ -440,7 +440,7 @@ export default function EvidencePage() {
     });
     setAlertsState((prev) =>
       prev.map((alert) =>
-        alert.id === alertId ? (updatedAlert as AlertResponse) : alert,
+        alert.id === alertId ? (updatedAlert as BackendAlertResponse) : alert,
       ),
     );
   }, [resolveProjectAlert]);
