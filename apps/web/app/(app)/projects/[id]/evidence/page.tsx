@@ -54,7 +54,7 @@ import {
   useReviewAlertApiV1AlertsAlertIdReviewPost,
 } from "@/lib/api/generated/alerts/alerts";
 import { cn } from "@/lib/utils";
-import type { Alert } from "@/types/project";
+import type { Alert as ProjectAlert } from "@/types/project";
 
 type EvidenceTemplate = {
   id: string;
@@ -1037,7 +1037,7 @@ function mapEntityTypeToApprovalResourceType(
   }
 }
 
-function extractAlertEvidenceLocation(alert: Alert): {
+function extractAlertEvidenceLocation(alert: ProjectAlert): {
   page_number: number;
   bbox: [number, number, number, number];
   normalized?: boolean;
@@ -1064,7 +1064,7 @@ function extractAlertEvidenceLocation(alert: Alert): {
 }
 
 function mapAlertSeverityToPdfSeverity(
-  severity: Alert["severity"],
+  severity: ProjectAlert["severity"],
 ): PdfHighlight["severity"] {
   switch (String(severity).toLowerCase()) {
     case "critical":
