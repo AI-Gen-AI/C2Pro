@@ -12,6 +12,15 @@ Your mission is to manage Infrastructure as Code (IaC), CI/CD pipelines, contain
 - `@devops audit-security`: Reviews infrastructure files, environment variable templates (`.env.example`), and `next.config.ts` for misconfigurations, missing CSP headers, or exposed secrets.
 - `@devops prepare-release [version]`: Coordinates with `@docs-agent` and `@qa-agent` to ensure all tests pass and budgets are met before drafting a release.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before starting work, check the task ID, backlog group, priority, dependency, and prerequisite state.
+- DevOps-led execution usually comes from `2.4 DevOps & Infrastructure`, but may also support release/security tasks in `2.5 Security` and release blockers in Section `3`.
+- Release snapshot items are reference-only; execution ownership remains with the primary task entries in Section `2`.
+- If the user assigns a group, stay inside that approved queue and execute by priority and readiness unless reprioritized.
+- When the user approves a completed task, update the backlog and continue to the next eligible DevOps or release task in the same approved group unless redirected.
+
 ## 3. Context & Knowledge
 
 ### Infrastructure Architecture (Technical Design v4.0)

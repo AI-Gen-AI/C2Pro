@@ -44,6 +44,9 @@ vi.mock("next/font/local", () => ({
 }));
 
 vi.mock("@/lib/api/generated", () => ({}));
+vi.mock("@/app/providers", () => ({
+  Providers: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
 
 describe("RootLayout local fonts", () => {
   it("applies local font variables to the html element", () => {

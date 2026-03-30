@@ -390,7 +390,7 @@ Reemplazar placeholders con implementación real usando los fixtures.
 
 ### Fixtures de Autenticación
 - [ ] `create_test_token()` - Genera JWT custom
-- [ ] `get_auth_headers()` - Headers con JWT válido
+- [x] `get_auth_headers()` - Headers con JWT válido
 - [ ] `create_expired_token()` - Token expirado
 - [ ] `create_invalid_signature_token()` - Firma inválida
 
@@ -423,7 +423,7 @@ Reemplazar placeholders con implementación real usando los fixtures.
 ### Sprint 1 (1-2 días)
 **Objetivo:** Fixtures base y autenticación
 
-- [ ] Configurar BD de test (PostgreSQL test)
+- [x] Configurar BD de test (PostgreSQL test)
 - [ ] Implementar fixtures base (client, db_session)
 - [ ] Implementar helpers de autenticación
 - [ ] Ejecutar migraciones en BD de test

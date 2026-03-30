@@ -1,7 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createHighlightsFromAlerts, createHighlightsFromEntities, type ProcessedEntity } from "./index";
 import type { Alert } from "@/types/project";
 import type { AlertResponse } from "@/types/backend";
+
+vi.mock("./client", () => ({
+  apiClient: {
+    get: vi.fn(),
+    delete: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    put: vi.fn(),
+  },
+  handleAuthErrorStatus: vi.fn(),
+}));
+
+vi.mock("@/lib/api/generated/approvals/approvals", () => ({
+  reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch: vi.fn(),
+}));
+
+vi.mock("./config", () => ({}));
 
 describe("Highlight Mapping API Utilities", () => {
   describe("createHighlightsFromAlerts", () => {

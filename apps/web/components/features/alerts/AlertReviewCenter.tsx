@@ -17,12 +17,15 @@ export interface ReviewAlert {
   clauseId: string;
   assignee: string;
   rejectionReason?: string;
+  resolutionNotes?: string;
+  rootCause?: string;
 }
 
 type ModalState =
   | { kind: "none" }
   | { kind: "approve"; alertId: string }
   | { kind: "reject"; alertId: string }
+  | { kind: "resolve"; alertId: string }
   | { kind: "edit"; alertId: string }
   | { kind: "delete"; alertId: string }
   | { kind: "create" };
@@ -41,6 +44,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [approveConfirmed, setApproveConfirmed] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [resolutionNotes, setResolutionNotes] = useState("");
+  const [rootCause, setRootCause] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editSeverity, setEditSeverity] = useState<AlertSeverity>("medium");
   const [createTitle, setCreateTitle] = useState("");
@@ -57,6 +62,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     setModal({ kind: "none" });
     setApproveConfirmed(false);
     setRejectReason("");
+    setResolutionNotes("");
+    setRootCause("");
     triggerRef.current?.focus();
   };
 
@@ -70,6 +77,13 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     triggerRef.current = trigger;
     setRejectReason("");
     setModal({ kind: "reject", alertId });
+  };
+
+  const openResolve = (alertId: string, trigger: HTMLButtonElement) => {
+    triggerRef.current = trigger;
+    setResolutionNotes("");
+    setRootCause("");
+    setModal({ kind: "resolve", alertId });
   };
 
   const openEdit = (alertId: string, trigger: HTMLButtonElement) => {
@@ -109,6 +123,32 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
       prev.map((item) =>
         item.id === modal.alertId
           ? { ...item, status: "rejected", rejectionReason: rejectReason.trim() }
+          : item,
+      ),
+    );
+    closeModal();
+  };
+
+  const requiresRootCause = (severity: AlertSeverity): boolean =>
+    severity === "critical" || severity === "high";
+
+  const saveResolve = () => {
+    if (modal.kind !== "resolve" || !activeAlert) return;
+    if (resolutionNotes.trim().length === 0) return;
+    if (requiresRootCause(activeAlert.severity) && rootCause.trim().length === 0) {
+      return;
+    }
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === modal.alertId
+          ? {
+              ...item,
+              status: "approved",
+              resolutionNotes: resolutionNotes.trim(),
+              rootCause: requiresRootCause(item.severity) ? rootCause : undefined,
+              rejectionReason: undefined,
+            }
           : item,
       ),
     );
@@ -194,6 +234,12 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
                 </button>
                 <button
                   type="button"
+                  onClick={(event) => openResolve(alert.id, event.currentTarget)}
+                >
+                  Resolve {alert.id}
+                </button>
+                <button
+                  type="button"
                   onClick={(event) => openEdit(alert.id, event.currentTarget)}
                 >
                   Edit {alert.id}
@@ -252,6 +298,55 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
           />
           <button type="button" onClick={saveReject} disabled={rejectReason.trim().length === 0}>
             Confirm Reject
+          </button>
+        </div>
+      ) : null}
+
+      {modal.kind === "resolve" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Resolve Alert"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") closeModal();
+          }}
+        >
+          <p data-testid="alert-modal-context">{activeAlert?.title ?? "Unknown alert"}</p>
+          <label htmlFor="resolution-notes">Resolution notes</label>
+          <textarea
+            id="resolution-notes"
+            value={resolutionNotes}
+            onChange={(event) => setResolutionNotes(event.target.value)}
+          />
+          {activeAlert && requiresRootCause(activeAlert.severity) ? (
+            <>
+              <label htmlFor="root-cause">Root cause</label>
+              <select
+                id="root-cause"
+                value={rootCause}
+                onChange={(event) => setRootCause(event.target.value)}
+              >
+                <option value="">Select root cause</option>
+                <option value="schedule_delay">Schedule Delay</option>
+                <option value="resource_constraint">Resource Constraint</option>
+                <option value="scope_change">Scope Change</option>
+                <option value="external_dependency">External Dependency</option>
+                <option value="technical_issue">Technical Issue</option>
+                <option value="budget_overrun">Budget Overrun</option>
+                <option value="quality_issue">Quality Issue</option>
+                <option value="other">Other</option>
+              </select>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={saveResolve}
+            disabled={
+              resolutionNotes.trim().length === 0 ||
+              (activeAlert ? requiresRootCause(activeAlert.severity) && rootCause.trim().length === 0 : false)
+            }
+          >
+            Confirm Resolve
           </button>
         </div>
       ) : null}

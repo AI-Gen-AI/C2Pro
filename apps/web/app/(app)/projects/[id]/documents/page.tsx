@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
-import { deleteDocument } from '@/lib/api';
+import { useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete } from '@/lib/api/generated/documents/documents';
 import { formatFileSize } from '@/types/document';
 import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
 
@@ -78,6 +78,7 @@ export default function ProjectDocumentsPage() {
   const router = useRouter();
   const projectId = params.id as string;
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
+  const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -101,7 +102,7 @@ export default function ProjectDocumentsPage() {
     if (!documentToDelete) return;
     setIsDeleting(true);
     try {
-      await deleteDocument(documentToDelete.id);
+      await deleteDocument.mutateAsync({ documentId: documentToDelete.id });
       setDeleteDialogOpen(false);
       setDocumentToDelete(null);
       refetch();

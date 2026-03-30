@@ -12,6 +12,15 @@ You treat test files as immutable contracts. You are the builder; the tests are 
 - `@backend-tdd refactor [module]`: Improves the internal structure of existing `src/` code (e.g., applying design patterns, reducing complexity) while ensuring all existing tests remain green.
 - `@backend-tdd debug [test_name]`: Investigates a specific failing test, explains the architectural reason it is failing, and proposes the exact code fix in the `src/` folder.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before implementation, check the task ID, backlog group, priority, dependency, and prerequisite state.
+- If the user assigns a backlog group, work within that group in backlog order unless reprioritized by the user.
+- For backend work, primary groups are typically `2.1 Backend`, `2.3 AI & Intelligence`, `2.5 Security`, and backend-linked items in `2.6 Testing & Quality`.
+- Do not start a task whose prerequisite or dependency is still open unless the current job is to complete that prerequisite.
+- When you complete a task, update `C2PRO_MASTER_BACKLOG.md` and, if the user has approved continuing, move to the next eligible backend task in the same approved group.
+
 ## 3. Context & Knowledge
 
 ### Architecture Rules (C2Pro v2.1)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,15 +15,115 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, Bell, Shield, Database } from 'lucide-react';
+import {
+  useGetMeApiV1AuthMeGet,
+  useUpdateMeApiV1AuthMePut,
+} from '@/lib/api/generated/authentication/authentication';
 
+/**
+ * Test Suite ID: TASK-1347
+ * Route Coverage: Settings page uses generated auth profile endpoints.
+ */
 export default function SettingsPage() {
+  const { data, isLoading, error } = useGetMeApiV1AuthMeGet();
+  const updateMe = useUpdateMeApiV1AuthMePut();
+  const profile = ((data as { user?: {
+    email?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    phone?: string | null;
+    role?: string | null;
+  }; tenant?: { name?: string | null } } | undefined)?.user
+    ? (data as {
+        user?: {
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          phone?: string | null;
+          role?: string | null;
+        };
+        tenant?: { name?: string | null };
+      })
+    : (data as { data?: {
+        user?: {
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          phone?: string | null;
+          role?: string | null;
+        };
+        tenant?: { name?: string | null };
+      } } | undefined)?.data) ?? { user: undefined, tenant: undefined };
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [criticalAlerts, setCriticalAlerts] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(false);
+  const [language, setLanguage] = useState('en');
+  const [timezone, setTimezone] = useState('utc');
+  const [dateFormat, setDateFormat] = useState('mdy');
+  const [phone, setPhone] = useState('');
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileErrors, setProfileErrors] = useState<{
+    firstName?: string;
+    phone?: string;
+  }>({});
+
+  useEffect(() => {
+    if (!profile.user) {
+      return;
+    }
+
+    setFirstName(profile.user.first_name ?? '');
+    setLastName(profile.user.last_name ?? '');
+    setPhone(profile.user.phone ?? '');
+  }, [profile.user?.first_name, profile.user?.last_name, profile.user?.phone]);
+
+  const validateProfile = () => {
+    const nextErrors: {
+      firstName?: string;
+      phone?: string;
+    } = {};
+
+    if (!firstName.trim()) {
+      nextErrors.firstName = 'First name is required';
+    }
+
+    if (phone.trim() && !/^[+\d\s()-]{7,}$/.test(phone.trim())) {
+      nextErrors.phone = 'Enter a valid phone number';
+    }
+
+    setProfileErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileSaved(false);
+    if (!validateProfile()) {
+      return;
+    }
+
+    await updateMe.mutateAsync({
+      data: {
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        phone: phone.trim() || null,
+        preferences: {
+          email_notifications: emailNotifications,
+          critical_alerts: criticalAlerts,
+          weekly_reports: weeklyReports,
+          language,
+          timezone,
+          date_format: dateFormat,
+        },
+      },
+    });
+    setProfileSaved(true);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -51,46 +151,92 @@ export default function SettingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
           <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">Profile Information</h2>
-            <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" placeholder="John Doe" />
+            <h2 className="mb-4 text-lg font-semibold">Profile Information</h2>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading profile...</p>
+            ) : error ? (
+              <p className="text-sm text-destructive">
+                {error instanceof Error ? error.message : 'Failed to load profile'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="first-name">First Name</Label>
+                  <Input
+                    id="first-name"
+                    value={firstName}
+                    onChange={(event) => {
+                      setFirstName(event.target.value);
+                      setProfileErrors((current) => ({ ...current, firstName: undefined }));
+                    }}
+                    placeholder="John"
+                  />
+                  {profileErrors.firstName ? (
+                    <p className="text-sm text-destructive">{profileErrors.firstName}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="last-name">Last Name</Label>
+                  <Input
+                    id="last-name"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    placeholder="Doe"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    value={profile.user?.email ?? ''}
+                    readOnly
+                    type="email"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      setProfileErrors((current) => ({ ...current, phone: undefined }));
+                    }}
+                    placeholder="+1 555 000 000"
+                  />
+                  {profileErrors.phone ? (
+                    <p className="text-sm text-destructive">{profileErrors.phone}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Input id="role" value={profile.user?.role ?? ''} readOnly />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="company">Company</Label>
+                  <Input
+                    id="company"
+                    value={profile.tenant?.name ?? ''}
+                    readOnly
+                    placeholder="Acme Corp"
+                  />
+                </div>
+                <Button onClick={handleSaveProfile} disabled={updateMe.isPending}>
+                  Save Profile Changes
+                </Button>
+                {profileSaved ? (
+                  <p className="text-sm text-muted-foreground">Profile saved.</p>
+                ) : null}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="john@example.com" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="role">Role</Label>
-                <Select defaultValue="manager">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Administrator</SelectItem>
-                    <SelectItem value="manager">Project Manager</SelectItem>
-                    <SelectItem value="analyst">Analyst</SelectItem>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="company">Company</Label>
-                <Input id="company" placeholder="Acme Corp" />
-              </div>
-              <Button>Save Changes</Button>
-            </div>
+            )}
           </div>
         </TabsContent>
 
-        {/* Notifications Tab */}
         <TabsContent value="notifications" className="space-y-6">
           <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">
+            <h2 className="mb-4 text-lg font-semibold">
               Notification Preferences
             </h2>
             <div className="space-y-6">
@@ -136,10 +282,9 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* Security Tab */}
         <TabsContent value="security" className="space-y-6">
           <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">Security Settings</h2>
+            <h2 className="mb-4 text-lg font-semibold">Security Settings</h2>
             <div className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="current-password">Current Password</Label>
@@ -158,24 +303,23 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">
+            <h2 className="mb-4 text-lg font-semibold">
               Two-Factor Authentication
             </h2>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="mb-4 text-sm text-muted-foreground">
               Add an extra layer of security to your account
             </p>
             <Button variant="outline">Enable 2FA</Button>
           </div>
         </TabsContent>
 
-        {/* System Tab */}
         <TabsContent value="system" className="space-y-6">
           <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">System Preferences</h2>
+            <h2 className="mb-4 text-lg font-semibold">System Preferences</h2>
             <div className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="language">Language</Label>
-                <Select defaultValue="en">
+                <Select value={language} onValueChange={setLanguage}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -188,7 +332,7 @@ export default function SettingsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="timezone">Timezone</Label>
-                <Select defaultValue="utc">
+                <Select value={timezone} onValueChange={setTimezone}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -202,7 +346,7 @@ export default function SettingsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="date-format">Date Format</Label>
-                <Select defaultValue="mdy">
+                <Select value={dateFormat} onValueChange={setDateFormat}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -213,7 +357,9 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button>Save Preferences</Button>
+              <Button onClick={handleSaveProfile} disabled={updateMe.isPending}>
+                Save Preferences
+              </Button>
             </div>
           </div>
         </TabsContent>

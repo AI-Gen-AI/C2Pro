@@ -191,6 +191,8 @@ async def verify_clerk_token(token: str) -> dict[str, Any]:
     except jwt.InvalidTokenError as e:
         logger.warning("clerk_token_invalid", error=str(e))
         raise ClerkTokenVerificationError(f"Invalid token: {str(e)}")
+    except ClerkTokenVerificationError:
+        raise
     except Exception as e:
         logger.error("clerk_token_verification_error", error=str(e))
         raise ClerkTokenVerificationError(

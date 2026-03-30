@@ -247,12 +247,14 @@ export async function resolveAlert(
   alertId: string,
   resolution: string,
   resolvedBy: string,
+  rootCause?: string,
 ): Promise<AlertResponse> {
   const response = await apiClient.post<AlertResponse>(
     `/alerts/${alertId}/resolve`,
     {
       resolution,
       resolved_by: resolvedBy,
+      root_cause: rootCause,
     },
   );
   return response.data;

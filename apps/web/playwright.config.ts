@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
+const useManagedWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 
 export default defineConfig({
   testDir: "./src/tests/e2e",
@@ -11,11 +12,34 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  // webServer disabled - using existing dev server on port 3000
+  webServer: useManagedWebServer
+    ? {
+        command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+        url: `${baseURL}/demo/evidence`,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      }
+    : undefined,
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "visual-regression",
+      testMatch: /core-pages\.visual\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 1200 },
+        colorScheme: "light",
+        locale: "en-US",
+        timezoneId: "UTC",
+      },
+      metadata: {
+        task: "TASK-021",
+        type: "visual-regression",
+        scope: "core-pages",
+      },
     },
     {
       name: "e2e-j2-weekly-review",

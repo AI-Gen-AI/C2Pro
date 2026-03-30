@@ -7,14 +7,59 @@ function TestClerkProvider({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function AllProviders({ children }: { children: ReactNode }) {
-  const queryClient = new QueryClient({
+export function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
       },
     },
   });
+}
+
+type TestWrapperOptions = {
+  queryClient?: QueryClient;
+};
+
+export function createTestWrapper(options: TestWrapperOptions = {}) {
+  const queryClient = options.queryClient ?? createTestQueryClient();
+
+  return function TestWrapper({ children }: { children: ReactNode }) {
+    return (
+      <TestClerkProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+            {children}
+          </ThemeProvider>
+        </QueryClientProvider>
+      </TestClerkProvider>
+    );
+  };
+}
+
+type SearchParamValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+
+export function createMockSearchParams(
+  values: Record<string, SearchParamValue> = {},
+) {
+  const params = new URLSearchParams();
+
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      params.set(key, String(value));
+    }
+  });
+
+  return params;
+}
+
+function AllProviders({ children }: { children: ReactNode }) {
+  const queryClient = createTestQueryClient();
 
   return (
     <TestClerkProvider>

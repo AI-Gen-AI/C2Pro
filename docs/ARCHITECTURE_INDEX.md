@@ -1,11 +1,39 @@
 # C2Pro Architecture Documentation Index
 
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 > **Created:** 2026-03-22
+> **Last Updated:** 2026-03-29
 > **Status:** Current
 > **Purpose:** Single entry point for all architecture documentation
 
 This index provides a consolidated view of all canonical architecture documents for C2Pro.
+
+---
+
+## Current Governance Baseline
+
+Architecture decisions for C2Pro should be read in this order:
+
+1. `C2PRO_MASTER_BACKLOG.md`
+   - Delivery and production-readiness source of truth.
+2. `docs/MASTER_DEVELOPMENT_STATUS.md`
+   - Compatibility pointer only.
+3. `docs/architecture/decisions/006-post-reorganization-architecture.md`
+   - Canonical repo-structure baseline after the February reorganization.
+4. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
+   - Canonical platform-wide technical design.
+5. `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md`
+   - Supporting frontend implementation baseline.
+6. `docs/architecture/FLOW_DIAGRAMS.md` and `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
+   - System and product flow references.
+7. `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md` and `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
+   - TDD execution and test-traceability baseline.
+
+Current executive view as of 2026-03-29:
+
+- C2Pro is an API-first, multi-tenant SaaS platform with `apps/api` and `apps/web`.
+- `C2PRO_MASTER_BACKLOG.md` is the canonical task register.
+- Remaining production blockers are concentrated in release evidence, governance, and final security hardening rather than foundational architecture creation.
 
 ---
 
@@ -15,10 +43,12 @@ This index provides a consolidated view of all canonical architecture documents 
 
 | Document                | Path                                                        | Updated    | Purpose                                    |
 | ----------------------- | ----------------------------------------------------------- | ---------- | ------------------------------------------ |
-| Technical Design v4.0   | `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` | 2026-02-10 | Master technical spec (Phase 1-3 verified) |
+| Technical Design v4.1   | `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` | 2026-03-29 | Canonical platform-wide technical design |
+| Technical Design v4.0   | `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` | 2026-03-29 | Supporting frontend implementation baseline plus governance notes |
 | Flow Diagrams           | `docs/architecture/FLOW_DIAGRAMS.md`                        | 2026-02-10 | System flows and Mermaid diagrams          |
 | LangGraph Checkpointing | `docs/architecture/LANGGRAPH_CHECKPOINTING.md`              | 2026-03-21 | AI state persistence                       |
 | Architecture README     | `docs/architecture/README.md`                               | -          | Architecture section index                 |
+| ADR-006 Post-Reorg      | `docs/architecture/decisions/006-post-reorganization-architecture.md` | 2026-02-24 | Canonical repo architecture after restructuring |
 
 ### Planning & Roadmaps
 
@@ -29,6 +59,8 @@ This index provides a consolidated view of all canonical architecture documents 
 | Production Readiness Gate | `docs/planning/PRODUCTION_READINESS_GATE_2026-03-19.md` | 2026-03-19 | Go/no-go criteria         |
 | LangGraph Audit Report    | `docs/planning/LANGGRAPH_AUDIT_REPORT_2026-03-21.md`    | 2026-03-21 | AI orchestration audit    |
 | Coherence Score Plan      | `docs/planning/COHERENCE_SCORE_IMPLEMENTATION_PLAN.md`  | -          | Coherence engine roadmap  |
+| Master Backlog           | `C2PRO_MASTER_BACKLOG.md`                               | 2026-03-29 | Canonical open-task and readiness register |
+| Legacy Status Pointer    | `docs/MASTER_DEVELOPMENT_STATUS.md`                     | 2026-03-29 | Compatibility pointer to the canonical backlog |
 | Planning README           | `docs/planning/README.md`                               | -          | Planning section index    |
 
 ### Testing
@@ -83,4 +115,5 @@ This index provides a consolidated view of all canonical architecture documents 
 
 | Version | Date       | Changes                                                                                                                                     | Author       |
 | ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1.1.0   | 2026-03-29 | Added governance baseline, promoted `C2PRO_MASTER_BACKLOG.md` as the canonical task register, introduced the v4.1 platform technical design, and clarified the role of the v4.0 technical design. | CIO review |
 | 1.0.0   | 2026-03-22 | Initial creation. Consolidated architecture documentation, created decision log, deleted experimental duplicates, updated agent references. | SDD Pipeline |

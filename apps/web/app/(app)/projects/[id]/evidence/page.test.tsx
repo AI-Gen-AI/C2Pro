@@ -5,21 +5,12 @@ const useSearchParamsMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
 const useDocumentEntitiesMock = vi.fn();
 const useDocumentAlertsMock = vi.fn();
-const getDocumentDownloadUrlMock = vi.fn();
-const createHighlightsFromAlertsMock = vi.fn();
-const reviewApprovalResourceMock = vi.fn();
-const reviewAlertMock = vi.fn();
-const resolveAlertMock = vi.fn();
-
-vi.mock("react", async () => {
-  const actual = await vi.importActual<typeof import("react")>("react");
-  return {
-    ...actual,
-    use: <T,>(value: Promise<T> | T) => value,
-  };
-});
+const reviewApprovalMutateAsyncMock = vi.fn();
+const reviewAlertMutateAsyncMock = vi.fn();
+const resolveAlertMutateAsyncMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
+  useParams: () => ({ id: "proj-1" }),
   useSearchParams: () => useSearchParamsMock(),
 }));
 
@@ -35,15 +26,19 @@ vi.mock("@/hooks/useDocumentAlerts", () => ({
   useDocumentAlerts: (...args: unknown[]) => useDocumentAlertsMock(...args),
 }));
 
-vi.mock("@/lib/api", () => ({
-  getDocumentDownloadUrl: (...args: unknown[]) =>
-    getDocumentDownloadUrlMock(...args),
-  createHighlightsFromAlerts: (...args: unknown[]) =>
-    createHighlightsFromAlertsMock(...args),
-  reviewApprovalResource: (...args: unknown[]) =>
-    reviewApprovalResourceMock(...args),
-  reviewAlert: (...args: unknown[]) => reviewAlertMock(...args),
-  resolveAlert: (...args: unknown[]) => resolveAlertMock(...args),
+vi.mock("@/lib/api/generated/approvals/approvals", () => ({
+  useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch: () => ({
+    mutateAsync: (...args: unknown[]) => reviewApprovalMutateAsyncMock(...args),
+  }),
+}));
+
+vi.mock("@/lib/api/generated/alerts/alerts", () => ({
+  useReviewAlertApiV1AlertsAlertIdReviewPost: () => ({
+    mutateAsync: (...args: unknown[]) => reviewAlertMutateAsyncMock(...args),
+  }),
+  useResolveAlertApiV1AlertsAlertIdResolvePost: () => ({
+    mutateAsync: (...args: unknown[]) => resolveAlertMutateAsyncMock(...args),
+  }),
 }));
 
 vi.mock("@/components/features/evidence/PdfEvidenceViewer", () => ({
@@ -123,6 +118,23 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsContent: ({ children }: { children: any }) => <div>{children}</div>,
 }));
 
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children: any }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: any }) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: { children: any }) => <div>{children}</div>,
+  DropdownMenuItem: ({
+    children,
+    onClick,
+  }: {
+    children: any;
+    onClick?: () => void;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+}));
+
 import EvidencePage from "./page";
 
 describe("EvidencePage highlight mapping", () => {
@@ -131,11 +143,9 @@ describe("EvidencePage highlight mapping", () => {
     useProjectDocumentsMock.mockReset();
     useDocumentEntitiesMock.mockReset();
     useDocumentAlertsMock.mockReset();
-    getDocumentDownloadUrlMock.mockReset();
-    createHighlightsFromAlertsMock.mockReset();
-    reviewApprovalResourceMock.mockReset();
-    reviewAlertMock.mockReset();
-    resolveAlertMock.mockReset();
+    reviewApprovalMutateAsyncMock.mockReset();
+    reviewAlertMutateAsyncMock.mockReset();
+    resolveAlertMutateAsyncMock.mockReset();
 
     useSearchParamsMock.mockReturnValue({
       get: vi.fn().mockReturnValue(null),
@@ -184,17 +194,15 @@ describe("EvidencePage highlight mapping", () => {
       error: null,
       refetch: vi.fn(),
     });
-    getDocumentDownloadUrlMock.mockReturnValue("/api/documents/doc-1/download");
-    createHighlightsFromAlertsMock.mockReturnValue([]);
-    reviewApprovalResourceMock.mockResolvedValue({ status: "APPROVED" });
-    reviewAlertMock.mockResolvedValue({
+    reviewApprovalMutateAsyncMock.mockResolvedValue({ status: "APPROVED" });
+    reviewAlertMutateAsyncMock.mockResolvedValue({
       id: "alert-1",
       title: "Delay issue",
       description: "Needs review",
       severity: "high",
       status: "in_progress",
     });
-    resolveAlertMock.mockResolvedValue({
+    resolveAlertMutateAsyncMock.mockResolvedValue({
       id: "alert-1",
       title: "Delay issue",
       description: "Needs review",
@@ -204,7 +212,7 @@ describe("EvidencePage highlight mapping", () => {
   });
 
   it("maps entity selection to the generated highlight id", () => {
-    render(<EvidencePage params={{ id: "proj-1" } as never} />);
+    render(<EvidencePage />);
 
     fireEvent.click(screen.getByRole("button", { name: /^entity clause-1$/i }));
 
@@ -214,7 +222,7 @@ describe("EvidencePage highlight mapping", () => {
   });
 
   it("maps viewer highlight clicks back to the entity id", () => {
-    render(<EvidencePage params={{ id: "proj-1" } as never} />);
+    render(<EvidencePage />);
 
     fireEvent.click(
       screen.getByRole("button", { name: /trigger viewer highlight/i }),
@@ -226,50 +234,74 @@ describe("EvidencePage highlight mapping", () => {
   });
 
   it("wires entity approval to the backend approval endpoint", async () => {
-    render(<EvidencePage params={{ id: "proj-1" } as never} />);
+    render(<EvidencePage />);
 
     fireEvent.click(
       screen.getByRole("button", { name: /approve entity clause-1/i }),
     );
 
     await waitFor(() => {
-      expect(reviewApprovalResourceMock).toHaveBeenCalledWith(
-        "stakeholders",
-        "clause-1",
-        "APPROVED",
-      );
+      expect(reviewApprovalMutateAsyncMock).toHaveBeenCalledWith({
+        resourceType: "stakeholders",
+        resourceId: "clause-1",
+        data: {
+          status: "APPROVED",
+          correction_data: undefined,
+          feedback_comment: null,
+        },
+      });
     });
   });
 
   it("wires alert resolution actions to backend endpoints", async () => {
-    render(<EvidencePage params={{ id: "proj-1" } as never} />);
+    render(<EvidencePage />);
 
     fireEvent.click(screen.getByRole("button", { name: /approve alert/i }));
     fireEvent.click(screen.getByRole("button", { name: /resolve alert/i }));
 
     await waitFor(() => {
-      expect(reviewAlertMock).toHaveBeenCalledWith("alert-1", "approve");
-      expect(resolveAlertMock).toHaveBeenCalledWith(
-        "alert-1",
-        "Resolved from evidence viewer",
-        "web-evidence-viewer",
-      );
+      expect(reviewAlertMutateAsyncMock).toHaveBeenCalledWith({
+        alertId: "alert-1",
+        data: {
+          decision: "approve",
+          comment: "",
+        },
+      });
+      expect(resolveAlertMutateAsyncMock).toHaveBeenCalledWith({
+        alertId: "alert-1",
+        data: {
+          resolution: "Resolved from evidence viewer",
+          resolved_by: "web-evidence-viewer",
+          root_cause: "other",
+        },
+      });
     });
   });
 
   it("searches highlights and focuses the selected match", () => {
-    createHighlightsFromAlertsMock.mockReturnValue([
-      {
-        id: "highlight-alert-1",
-        entityId: "alert-1",
-        page: 2,
-        color: "red",
-        label: "Delay issue",
-        rects: [],
-      },
-    ]);
+    useDocumentAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "alert-1",
+          title: "Delay issue",
+          description: "Needs review",
+          severity: "critical",
+          status: "open",
+          evidence_json: {
+            evidence_location: {
+              page_number: 2,
+              bbox: [0.1, 0.2, 0.3, 0.4],
+              normalized: true,
+            },
+          },
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
 
-    render(<EvidencePage params={{ id: "proj-1" } as never} />);
+    render(<EvidencePage />);
 
     fireEvent.change(
       screen.getByPlaceholderText(/search highlights in this document/i),
@@ -284,5 +316,100 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
       "highlight-alert-1",
     );
+  });
+
+  it("renders an interactive relationship graph and focuses linked evidence from graph nodes", () => {
+    useDocumentAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "alert-1",
+          title: "Delay issue",
+          description: "Needs review",
+          severity: "critical",
+          status: "open",
+          evidence_json: {
+            evidence_location: {
+              page_number: 2,
+              bbox: [0.1, 0.2, 0.3, 0.4],
+              normalized: true,
+            },
+          },
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    expect(screen.getByText(/relationship graph/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /graph node clause-1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /graph node alert-1/i })).toBeInTheDocument();
+    expect(screen.getByText(/1 linked alert/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /graph node clause-1/i }));
+
+    expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
+      "highlight-clause-1",
+    );
+  });
+
+  it("opens evidence templates and previews the selected review template", () => {
+    render(<EvidencePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /evidence templates/i }));
+
+    expect(screen.getByText(/start from an evidence template/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /claims review/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /technical audit/i }));
+
+    expect(screen.getByText(/technical audit focus/i)).toBeInTheDocument();
+    expect(screen.getByText(/specification compliance/i)).toBeInTheDocument();
+    expect(screen.getByText(/design-change evidence/i)).toBeInTheDocument();
+  });
+
+  it("exports the active evidence view to JSON, CSV, and PDF", async () => {
+    const popupDocument = {
+      write: vi.fn(),
+      close: vi.fn(),
+    };
+    const popupWindow = {
+      document: popupDocument,
+      focus: vi.fn(),
+      print: vi.fn(),
+    };
+    const openSpy = vi
+      .spyOn(window, "open")
+      .mockReturnValue(popupWindow as unknown as Window);
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:evidence-export");
+    const revokeObjectUrlSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+    const appendSpy = vi.spyOn(document.body, "appendChild");
+    const removeSpy = vi.spyOn(document.body, "removeChild");
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    render(<EvidencePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /export json/i }));
+    fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    fireEvent.click(screen.getByRole("button", { name: /export pdf/i }));
+
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(2);
+    expect(anchorClickSpy).toHaveBeenCalledTimes(2);
+    expect(appendSpy).toHaveBeenCalled();
+    expect(removeSpy).toHaveBeenCalled();
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith("blob:evidence-export");
+    expect(openSpy).toHaveBeenCalled();
+    expect(popupDocument.write).toHaveBeenCalledWith(
+      expect.stringContaining("Contract.pdf"),
+    );
+    expect(popupWindow.print).toHaveBeenCalled();
   });
 });

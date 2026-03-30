@@ -90,8 +90,11 @@ const StakeholderCard = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 rounded-xl border border-border bg-white px-3 py-2 shadow-sm transition ${
-        isDragging ? "opacity-60 shadow-lg" : "opacity-100"
+      role="button"
+      tabIndex={0}
+      aria-label={`Move ${stakeholder.name} from ${quadrantConfig.find((item) => item.id === quadrant)?.title ?? quadrant}`}
+      className={`flex cursor-grab items-center gap-3 rounded-xl border border-border bg-white px-3 py-2 shadow-sm transition ${
+        isDragging ? "opacity-60 shadow-lg cursor-grabbing" : "opacity-100"
       }`}
       {...listeners}
       {...attributes}
@@ -136,6 +139,7 @@ const QuadrantDropZone = ({
   return (
     <div
       ref={setNodeRef}
+      aria-label={`Drop stakeholders into ${title}`}
       className={`rounded-2xl border border-border p-4 transition ${
         isOver ? "ring-2 ring-foreground/30" : ""
       } ${gradient}`}

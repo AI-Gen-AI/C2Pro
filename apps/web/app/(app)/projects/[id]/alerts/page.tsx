@@ -1,24 +1,59 @@
 /**
- * Test Suite ID: S3-04
- * Roadmap Reference: S3-04 Alert Review Center + approve/reject modal
+ * Test Suite ID: TASK-1347
+ * Route Coverage: Project alerts page uses generated backend alerts client
  */
 "use client";
 
-import { use } from "react";
-import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
-import { useProjectAlerts } from "@/hooks/useProjectAlerts";
+import { useParams } from "next/navigation";
+import { AlertReviewCenter, type ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
+import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 
-interface AlertsPageProps {
-  params: Promise<{
-    id: string;
-  }>;
+const SEVERITY_MAP: Record<string, ReviewAlert["severity"]> = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+};
+
+const STATUS_MAP: Record<string, ReviewAlert["status"]> = {
+  open: "pending",
+  resolved: "approved",
+  rejected: "rejected",
+};
+
+const ASSIGNEE_MAP: Record<string, string> = {
+  LEGAL: "legal.reviewer",
+  BUDGET: "finance.analyst",
+  TECHNICAL: "tech.lead",
+  TIME: "scheduler",
+  SCOPE: "project.manager",
+  QUALITY: "qa.manager",
+};
+
+function mapAlertToReviewAlert(alert: {
+  id: string;
+  category: string;
+  severity: string;
+  status: string;
+  message: string;
+}): ReviewAlert {
+  return {
+    id: alert.id,
+    title: alert.message,
+    severity: SEVERITY_MAP[alert.severity] ?? "medium",
+    status: STATUS_MAP[alert.status] ?? "pending",
+    clauseId: `clause-${alert.id}`,
+    assignee: ASSIGNEE_MAP[alert.category] ?? "project.manager",
+  };
 }
 
-export default function AlertsPage({ params }: AlertsPageProps) {
-  const { id } = use(params);
-  const { alerts, loading, error } = useProjectAlerts(id);
+export default function AlertsPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+  const { data, isLoading, error } =
+    useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
         Loading alerts…
@@ -29,10 +64,12 @@ export default function AlertsPage({ params }: AlertsPageProps) {
   if (error) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
-        {error.message}
+        {error instanceof Error ? error.message : "Failed to load alerts"}
       </div>
     );
   }
+
+  const alerts = (data?.items ?? []).map(mapAlertToReviewAlert);
 
   return (
     <div className="space-y-6">

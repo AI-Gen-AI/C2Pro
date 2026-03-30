@@ -2,6 +2,11 @@
 
 This section groups the main test planning, inventory, registry, and reporting documents.
 
+## Governance
+
+- `C2PRO_MASTER_BACKLOG.md` owns active task status across the project.
+- Testing documents in this folder provide test scope, suite detail, and evidence, but they do not replace the canonical project backlog.
+
 ## Contents
 
 - [TDD backlog](./C2PRO_TDD_BACKLOG_v1.0.md)

@@ -275,7 +275,7 @@ pytest tests/modules/coherence/application/ \
 
 ### Integration Tests Specific
 
-- [ ] Database migration created
+- [x] Database migration created
 - [ ] Database started
 - [ ] Tests run successfully
 - [ ] Cleanup verified

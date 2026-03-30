@@ -7,6 +7,19 @@
 
 ---
 
+## Governance Note
+
+This report is historical implementation evidence for the Core-25 milestone.
+
+Any remaining or future work derived from this report must be tracked in `C2PRO_MASTER_BACKLOG.md`, not here.
+
+Current related backlog items:
+
+- `G6-02-EX-02`
+- `G6-02-EX-03`
+
+---
+
 ## Executive Summary
 
 Successfully created the Core-25 golden dataset for LangGraph multi-agent evaluation using real Spanish EPC project documentation from Abengoa. The dataset includes 25 test cases across 6 coherence dimensions with varying difficulty levels, all validated against the GoldenCase Pydantic schema.
@@ -170,6 +183,8 @@ Cases with explicit risk/ADR documentation from source projects:
 ---
 
 ## Recommended Next Steps
+
+The checklist below is retained as milestone context only. Active ownership belongs to `C2PRO_MASTER_BACKLOG.md`.
 
 ### Immediate
 1. ✅ Core-25 dataset created and validated

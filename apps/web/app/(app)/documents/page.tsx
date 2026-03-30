@@ -1,7 +1,8 @@
 import type { ProjectDocumentsGroup } from "@/lib/api/contracts";
-import { listProjectDocumentGroups } from "@/lib/api/services/documents";
 import { DocumentsListClient } from "@/components/features/documents/DocumentsListClient";
 import { Button } from "@/components/ui/button";
+import { listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet } from "@/lib/api/generated/documents/documents";
+import { listProjectsApiV1ProjectsGet } from "@/lib/api/generated/projects/projects";
 import { Upload } from "lucide-react";
 
 export default async function DocumentsPage() {
@@ -9,7 +10,34 @@ export default async function DocumentsPage() {
   let loadError: string | null = null;
 
   try {
-    groups = await listProjectDocumentGroups();
+    const projectsResponse = await listProjectsApiV1ProjectsGet();
+    const projects = projectsResponse.items ?? [];
+
+    const settled = await Promise.allSettled(
+      projects.map(async (project): Promise<ProjectDocumentsGroup> => {
+        const response =
+          await listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet(
+            project.id,
+          );
+
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          documents: (response.items ?? []).map((document) => ({
+            ...document,
+            project_id: project.id,
+          })),
+        };
+      }),
+    );
+
+    groups = settled
+      .filter(
+        (result): result is PromiseFulfilledResult<ProjectDocumentsGroup> =>
+          result.status === "fulfilled",
+      )
+      .map((result) => result.value)
+      .filter((group) => group.documents.length > 0);
   } catch (error) {
     loadError =
       error instanceof Error

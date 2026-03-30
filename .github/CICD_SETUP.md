@@ -26,9 +26,16 @@ This repository uses GitHub Actions for continuous integration and testing. All 
 
 **Test Command**:
 ```bash
-pytest tests/e2e/security/test_multi_tenant_isolation.py \
-  -v -m "e2e and security" \
-  --cov=src/projects --cov=src/core/auth
+pytest \
+  tests/e2e/security/test_multi_tenant_isolation.py \
+  tests/auth/test_auth_service.py \
+  tests/core/auth/test_jwt_validator.py \
+  tests/auth/test_auth_dependencies.py \
+  tests/core/test_middleware.py \
+  tests/core/test_tenants.py \
+  tests/core/test_clerk_auth_and_rate_limiter.py \
+  -v \
+  --cov=src/core/auth --cov=src/core/middleware --cov=src/core/tenants
 ```
 
 ---
@@ -161,8 +168,8 @@ The workflow automatically comments on PRs with:
 
 To merge a PR, all checks must pass:
 - [ ] Unit tests: PASSED
-- [ ] Integration tests: PASSED
-- [ ] E2E security tests: PASSED
+- [x] Integration tests: PASSED
+- [x] E2E security tests: PASSED
 - [ ] Coverage: ≥60% (orange), ≥80% (green)
 
 ---

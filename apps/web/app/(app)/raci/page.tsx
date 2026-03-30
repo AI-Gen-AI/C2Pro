@@ -4,6 +4,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -13,6 +21,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Search, Download } from 'lucide-react';
 import { useRaci } from '@/hooks/useRaci';
+import { useProjects } from '@/hooks/useProjects';
+
+type RaciTemplate = {
+  id: string;
+  name: string;
+  summary: string;
+  governanceFocus: string;
+  defaultActivities: string[];
+  stakeholderTracks: string[];
+};
 
 const raciTypes = {
   R: { label: 'Responsible', color: 'bg-blue-100 text-blue-700' },
@@ -21,10 +39,46 @@ const raciTypes = {
   I: { label: 'Informed', color: 'bg-gray-100 text-gray-700' },
 };
 
+const RACI_TEMPLATES: RaciTemplate[] = [
+  {
+    id: 'epc-megaproject',
+    name: 'EPC Megaproject',
+    summary: 'Coordinate multi-package engineering, procurement, and construction accountability.',
+    governanceFocus: 'Integrated package delivery',
+    defaultActivities: ['Package Award', 'Design Freeze', 'Field Coordination'],
+    stakeholderTracks: ['Commercial Board', 'Delivery PMO', 'Contractor Steering'],
+  },
+  {
+    id: 'industrial-retrofit',
+    name: 'Industrial Retrofit',
+    summary: 'Balance shutdown planning, safety controls, and phased execution ownership.',
+    governanceFocus: 'Shutdown readiness and execution',
+    defaultActivities: ['Turnaround Planning', 'Isolation Review', 'Commissioning Gate'],
+    stakeholderTracks: ['Plant Operations', 'Maintenance Lead', 'Safety Cell'],
+  },
+  {
+    id: 'public-infrastructure',
+    name: 'Public Infrastructure',
+    summary: 'Deploy a governance-ready RACI model for regulated delivery programs.',
+    governanceFocus: 'Public approvals and stakeholder traceability',
+    defaultActivities: ['Permit Control', 'Funding Review', 'Community Review'],
+    stakeholderTracks: ['Owner Representative', 'Regulatory Affairs', 'Public Liaison'],
+  },
+];
+
 export default function RaciPage() {
-  const { data: raciData, loading, error } = useRaci();
-  const [searchQuery, setSearchQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState('all');
+  const { data: raciData, loading, error } = useRaci(
+    projectFilter === 'all' ? undefined : projectFilter,
+  );
+  const { data: projects } = useProjects(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(RACI_TEMPLATES[0]?.id ?? '');
+
+  const selectedTemplate =
+    RACI_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
+    RACI_TEMPLATES[0];
 
   if (loading) {
     return (
@@ -57,6 +111,9 @@ export default function RaciPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
+            RACI Templates
+          </Button>
           <Button variant="outline">
             <Download className="mr-2 h-4 w-4" />
             Export
@@ -84,8 +141,11 @@ export default function RaciPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Projects</SelectItem>
-            <SelectItem value="proj1">Petrochemical Plant EPC</SelectItem>
-            <SelectItem value="proj2">Refinery Modernization</SelectItem>
+            {(projects ?? []).map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -173,6 +233,100 @@ export default function RaciPage() {
           </table>
         </div>
       </div>
+
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>RACI Templates</DialogTitle>
+            <DialogDescription>
+              Start from a project-type responsibility template
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-[1.05fr_1.45fr]">
+            <div className="space-y-2">
+              {RACI_TEMPLATES.map((template) => {
+                const isActive = template.id === selectedTemplate?.id;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => setSelectedTemplateId(template.id)}
+                    className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                      isActive
+                        ? 'border-slate-900 bg-slate-950 text-white'
+                        : 'border-border bg-background hover:bg-muted/70'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">{template.name}</div>
+                    <div
+                      className={`mt-2 text-xs ${
+                        isActive ? 'text-slate-200' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {template.governanceFocus}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedTemplate ? (
+              <section className="rounded-xl border bg-muted/30 p-5">
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {selectedTemplate.name}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedTemplate.summary}
+                </p>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Governance Focus
+                    </div>
+                    <div className="mt-2 text-sm font-medium">
+                      {selectedTemplate.governanceFocus}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Stakeholder Tracks
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedTemplate.stakeholderTracks.map((track) => (
+                        <Badge key={track} variant="secondary">
+                          {track}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Default Activities
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedTemplate.defaultActivities.map((activity) => (
+                      <Badge key={activity} variant="outline">
+                        {activity}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => setTemplateDialogOpen(false)}>
+              Use Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

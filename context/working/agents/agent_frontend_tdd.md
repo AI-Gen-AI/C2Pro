@@ -12,6 +12,16 @@ You treat test files (`*.test.tsx`, `*.spec.ts`) as immutable contracts. You bui
 - `@frontend-tdd refactor [component_path]`: Improves component structure, splits large files, or optimizes re-renders while ensuring the associated tests remain green.
 - `@frontend-tdd debug [test_name]`: Investigates why a specific React Testing Library or Playwright test is failing and provides the exact code fix for the production component.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before implementation, check the task ID, backlog group, priority, dependency, and prerequisite state.
+- If the user assigns a backlog group, work inside that group in backlog order unless the user explicitly changes priority.
+- For frontend work, primary groups are `2.2 Frontend` and frontend-linked items under `2.6 Testing & Quality`.
+- Treat wireframe, mockup, and test-plan items as subordinate to the master backlog, not as independent task queues.
+- Do not start a blocked task; surface the blocker and move to the next eligible task in the same approved group when allowed.
+- When a task is approved as complete, update the backlog and continue proactively to the next eligible frontend task unless the user redirects.
+
 ## 3. Context & Knowledge
 
 ### Architecture Rules (Technical Design v4.0)

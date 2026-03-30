@@ -652,7 +652,7 @@ const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
 - [ ] **Evidence Viewer:** Implementar Dialog de confirmación para Approve/Reject
 - [ ] **Evidence Viewer:** Agregar validación obligatoria para confidence < 90%
 - [ ] **Alerts Center:** Agregar validación dinámica según severity
-- [ ] **Alerts Center:** Implementar campo Root Cause para Critical/High
+- [x] **Alerts Center:** Implementar campo Root Cause para Critical/High
 - [ ] **Evidence Viewer:** Integrar react-pdf para visor real
 
 ### Prioridad Media (Importante)

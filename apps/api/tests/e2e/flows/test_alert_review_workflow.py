@@ -970,6 +970,7 @@ async def test_012_resolve_alert_after_issue_fixed(
     resolve_data = {
         "resolution": "Contract amended to match schedule deadline",
         "resolved_by": str(alert_user.id),
+        "root_cause": "schedule_delay",
     }
 
     response = await client.post(
@@ -981,6 +982,54 @@ async def test_012_resolve_alert_after_issue_fixed(
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "resolved"
+    assert body["root_cause"] == "schedule_delay"
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+async def test_012b_high_severity_resolution_requires_root_cause(
+    client,
+    alert_user: User,
+    alert_tenant: Tenant,
+    alert_project,
+    generate_token,
+):
+    """
+    GIVEN A high severity alert has been approved
+    WHEN User resolves it without root cause
+    THEN API rejects the request with a validation error
+
+    Validates: server-side severity-aware resolution rules
+    """
+    token = generate_token(
+        user_id=alert_user.id,
+        tenant_id=alert_tenant.id,
+        email=alert_user.email,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = await _create_alert(client, headers, alert_project["id"])
+    alert_id = created["id"]
+    approve_response = await client.post(
+        f"/api/v1/alerts/{alert_id}/review",
+        json={"decision": "approve", "comment": "Confirmed issue"},
+        headers=headers,
+    )
+    assert approve_response.status_code == 200
+
+    response = await client.post(
+        f"/api/v1/alerts/{alert_id}/resolve",
+        json={
+            "resolution": "Contract amended to match schedule deadline",
+            "resolved_by": str(alert_user.id),
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "root_cause" in response.json()["detail"]
 
 
 # ===========================================
@@ -1085,6 +1134,7 @@ async def test_014_alert_state_changes_survive_fresh_session_and_client(
         json={
             "resolution": "Persisted resolution",
             "resolved_by": str(alert_user.id),
+            "root_cause": "technical_issue",
         },
         headers=headers,
     )
@@ -1098,6 +1148,7 @@ async def test_014_alert_state_changes_survive_fresh_session_and_client(
         assert persisted.reviewed_by == alert_user.id
         assert persisted.resolved_by == alert_user.id
         assert persisted.resolution_notes == "Persisted resolution"
+        assert (persisted.alert_metadata or {}).get("root_cause") == "technical_issue"
         assert len((persisted.alert_metadata or {}).get("evidence", [])) == 1
         assert len((persisted.alert_metadata or {}).get("history", [])) >= 4
 
