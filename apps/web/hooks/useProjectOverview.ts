@@ -67,7 +67,11 @@ export function useProjectOverview(
         const alerts = alertsRes.data.items;
 
         const openAlerts = alerts.filter((a) => a.status === "open");
-        const budgetScore = dashboard.sub_scores?.BUDGET ?? 0;
+        const subScores =
+          dashboard.sub_scores && typeof dashboard.sub_scores === "object"
+            ? (dashboard.sub_scores as Record<string, number>)
+            : {};
+        const budgetScore = subScores["BUDGET"] ?? 0;
 
         setStats({
           coherenceScore: dashboard.coherence_score,
