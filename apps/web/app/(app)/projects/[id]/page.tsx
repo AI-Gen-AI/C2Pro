@@ -54,16 +54,28 @@ export default function ProjectOverviewPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
-  const budgetScore = dashboard.sub_scores?.BUDGET ?? 0;
+  const coherenceScore =
+    typeof dashboard.coherence_score === 'number'
+      ? dashboard.coherence_score
+      : Number(dashboard.coherence_score ?? 0);
+  const documentCount =
+    typeof dashboard.document_count === 'number'
+      ? dashboard.document_count
+      : Number(dashboard.document_count ?? 0);
+  const subScores =
+    dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
+      ? (dashboard.sub_scores as Record<string, number>)
+      : {};
+  const budgetScore = subScores['BUDGET'] ?? 0;
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
     severity: alert.severity,
     title: alert.message.split(' — ')[0],
   }));
 
   const statCards = [
-    { label: 'Coherence Score', value: String(dashboard.coherence_score), icon: Gauge, color: 'text-primary' },
+    { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
     { label: 'Open Alerts', value: String(openAlerts.length), icon: AlertTriangle, color: 'text-warning' },
-    { label: 'Documents', value: String(dashboard.document_count), icon: FileText, color: 'text-chart-quality' },
+    { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
     { label: 'Budget Used', value: `${100 - budgetScore}%`, icon: DollarSign, color: 'text-chart-budget' },
   ];
 
@@ -105,9 +117,9 @@ export default function ProjectOverviewPage() {
             <Progress value={100 - budgetScore} className="h-1.5" />
             <div className="flex justify-between">
               <span>Coherence Score</span>
-              <span className="font-mono font-medium text-foreground">{dashboard.coherence_score}</span>
+              <span className="font-mono font-medium text-foreground">{coherenceScore}</span>
             </div>
-            <Progress value={dashboard.coherence_score} className="h-1.5" />
+            <Progress value={coherenceScore} className="h-1.5" />
           </CardContent>
         </Card>
 
