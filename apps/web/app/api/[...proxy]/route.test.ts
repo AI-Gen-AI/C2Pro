@@ -48,6 +48,26 @@ describe("API proxy coherence routing", () => {
     expect(url).toBe("http://localhost:8000/api/v1/projects/proj-1");
   });
 
+  it("normalizes generated /api/v1/... proxy paths without duplicating the v1 namespace", () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/v1/projects?limit=20",
+    );
+
+    const url = buildBackendUrl("v1/projects", request);
+
+    expect(url).toBe("http://localhost:8000/api/v1/projects?limit=20");
+  });
+
+  it("normalizes legacy /api/api/v1/... proxy paths from generated clients", () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/api/v1/projects/proj-1",
+    );
+
+    const url = buildBackendUrl("api/v1/projects/proj-1", request);
+
+    expect(url).toBe("http://localhost:8000/api/v1/projects/proj-1");
+  });
+
   it("preserves backend 401 responses for the frontend auth handler", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ detail: "Unauthorized" }), {

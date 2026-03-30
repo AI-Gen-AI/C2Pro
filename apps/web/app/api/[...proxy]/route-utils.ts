@@ -15,17 +15,38 @@ function getBackendBaseUrl(): string {
   return BACKEND_URL.replace(/\/+$/, "");
 }
 
+function normalizeProxyPath(path: string): string {
+  if (path.startsWith("api/v1/")) {
+    return path.replace(/^api\/v1\//, "");
+  }
+
+  if (path === "api/v1") {
+    return "";
+  }
+
+  if (path.startsWith("v1/")) {
+    return path.replace(/^v1\//, "");
+  }
+
+  if (path === "v1") {
+    return "";
+  }
+
+  return path;
+}
+
 export function buildBackendUrl(path: string, request: NextRequest): string {
   const searchParams = request.nextUrl.searchParams.toString();
   const baseUrl = getBackendBaseUrl();
-  const isCoherenceRoot = path.startsWith("coherence/");
-  const isCoherenceApi = path.startsWith("api/coherence/");
+  const normalizedPath = normalizeProxyPath(path);
+  const isCoherenceRoot = normalizedPath.startsWith("coherence/");
+  const isCoherenceApi = normalizedPath.startsWith("api/coherence/");
   const isCoherence = isCoherenceRoot || isCoherenceApi;
   const cleanPath = isCoherenceRoot
-    ? path.replace(/^coherence\//, "")
+    ? normalizedPath.replace(/^coherence\//, "")
     : isCoherenceApi
-      ? path.replace(/^api\/coherence\//, "")
-      : path;
+      ? normalizedPath.replace(/^api\/coherence\//, "")
+      : normalizedPath;
   const prefix = isCoherence ? "/api/v1/coherence" : "/api/v1";
   const normalizedBaseUrl = baseUrl
     .replace(/\/api\/v1\/?$/, "")
