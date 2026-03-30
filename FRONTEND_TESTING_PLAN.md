@@ -877,15 +877,15 @@ Total suite:       < 15 minutes
 - [x] **Deliverable**: Auth flow fully tested
 
 ### Week 3-4: Core Features (🟡 High)
-- [ ] Projects CRUD tests (50 tests)
-- [ ] Dashboard tests (20 tests)
-- [ ] Navigation tests (15 tests)
-- [ ] **Deliverable**: Core app functionality tested
+- [x] Projects CRUD tests (50 tests)
+  - [x] Dashboard tests (20 tests)
+  - [x] Navigation tests (15 tests)
+  - [x] **Deliverable**: Core app functionality tested
 
 ### Week 5-6: Components & Forms (🟢 Medium)
 - [ ] UI component library tests (40 tests)
-- [ ] Form validation tests (25 tests)
-- [ ] Document management tests (20 tests)
+- [x] Form validation tests (25 tests)
+- [x] Document management tests (20 tests)
 - [ ] **Deliverable**: 80% code coverage achieved
 
 ### Week 7-8: Quality & Polish (⚪ Low)

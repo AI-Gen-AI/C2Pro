@@ -4,6 +4,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -15,11 +23,53 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, Check, Search } from 'lucide-react';
 import { useAlerts } from '@/hooks/useAlerts';
 
+type AlertTemplate = {
+  id: string;
+  name: string;
+  summary: string;
+  responseWindow: string;
+  owners: string[];
+  assets: string[];
+};
+
+const ALERT_TEMPLATES: AlertTemplate[] = [
+  {
+    id: 'executive-escalation',
+    name: 'Executive Escalation',
+    summary: 'Escalate critical alert clusters for executive response and decision support.',
+    responseWindow: 'First response in 2 hours',
+    owners: ['Program Director', 'Claims Lead', 'Commercial Control'],
+    assets: ['Board Brief', 'Mitigation Timeline', 'Decision Memo'],
+  },
+  {
+    id: 'compliance-sweep',
+    name: 'Compliance Sweep',
+    summary: 'Prepare a cross-project compliance remediation review.',
+    responseWindow: 'Same-day regulatory checkpoint',
+    owners: ['Compliance Lead', 'Document Control', 'Site Operations'],
+    assets: ['Coverage Audit', 'Regulatory Log', 'Corrective Action Pack'],
+  },
+  {
+    id: 'sla-recovery',
+    name: 'SLA Recovery',
+    summary: 'Coordinate service recovery for operational alerts that threaten delivery commitments.',
+    responseWindow: 'Recovery plan within 4 hours',
+    owners: ['Operations Manager', 'Vendor Lead', 'Customer Success'],
+    assets: ['Recovery Board', 'Escalation Matrix', 'Service Notes'],
+  },
+];
+
 export default function AlertsPage() {
   const { alerts, loading, error } = useAlerts();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('All Severity');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(ALERT_TEMPLATES[0]?.id ?? '');
+
+  const selectedTemplate =
+    ALERT_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
+    ALERT_TEMPLATES[0];
 
   if (loading) {
     return (
@@ -47,6 +97,44 @@ export default function AlertsPage() {
       statusFilter === 'All Status' || alert.status === statusFilter;
     return matchesSearch && matchesSeverity && matchesStatus;
   });
+  const severityCounts = alerts.reduce<Record<string, number>>((acc, alert) => {
+    acc[alert.severity] = (acc[alert.severity] ?? 0) + 1;
+    return acc;
+  }, {});
+  const statusCounts = alerts.reduce<Record<string, number>>((acc, alert) => {
+    acc[alert.status] = (acc[alert.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topProjectEntry = Object.entries(
+    filteredAlerts.reduce<Record<string, number>>((acc, alert) => {
+      acc[alert.project] = (acc[alert.project] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort(([, a], [, b]) => b - a)[0];
+  const openCount =
+    (statusCounts["Open"] ?? 0) + (statusCounts["In Progress"] ?? 0);
+  const analyticsCards = [
+    {
+      title: "Critical",
+      value: `${severityCounts["Critical"] ?? 0} active`,
+      detail: "Highest-severity alerts in current workspace.",
+      tone: "border-red-200 bg-red-50/70 text-red-900",
+    },
+    {
+      title: "Open Alerts",
+      value: `${openCount} currently require action`,
+      detail: "Includes open and in-progress remediation work.",
+      tone: "border-slate-200 bg-slate-50 text-slate-900",
+    },
+    {
+      title: "Top Impacted Project",
+      value: topProjectEntry?.[0] ?? "No alerts in scope",
+      detail: topProjectEntry
+        ? `${topProjectEntry[1]} alerts in current scope`
+        : "Adjust filters to inspect alert concentrations.",
+      tone: "border-amber-200 bg-amber-50/70 text-amber-950",
+    },
+  ];
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -84,9 +172,32 @@ export default function AlertsPage() {
             Monitor and manage all project alerts
           </p>
         </div>
-        <Button>
-          + New Alert
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
+            Alert Templates
+          </Button>
+          <Button>
+            + New Alert
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {analyticsCards.map((card) => (
+          <section
+            key={card.title}
+            className={`rounded-lg border p-4 shadow-sm ${card.tone}`}
+            aria-label={card.title}
+          >
+            <div className="text-xs font-semibold uppercase tracking-[0.18em]">
+              {card.title}
+            </div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight">
+              {card.value}
+            </div>
+            <p className="mt-2 text-sm opacity-80">{card.detail}</p>
+          </section>
+        ))}
       </div>
 
       {/* Filters */}
@@ -202,6 +313,100 @@ export default function AlertsPage() {
           </table>
         </div>
       </div>
+
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Alert Templates</DialogTitle>
+            <DialogDescription>
+              Start from an alert response template
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-[1.1fr_1.4fr]">
+            <div className="space-y-2">
+              {ALERT_TEMPLATES.map((template) => {
+                const isActive = template.id === selectedTemplate?.id;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => setSelectedTemplateId(template.id)}
+                    className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                      isActive
+                        ? 'border-slate-900 bg-slate-950 text-white'
+                        : 'border-border bg-background hover:bg-muted/70'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">{template.name}</div>
+                    <div
+                      className={`mt-2 text-xs ${
+                        isActive ? 'text-slate-200' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {template.responseWindow}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedTemplate ? (
+              <section className="rounded-xl border bg-muted/30 p-5">
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {selectedTemplate.name}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedTemplate.summary}
+                </p>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Response Window
+                    </div>
+                    <div className="mt-2 text-sm font-medium">
+                      {selectedTemplate.responseWindow}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Core Owners
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedTemplate.owners.map((owner) => (
+                        <Badge key={owner} variant="secondary">
+                          {owner}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Template Assets
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedTemplate.assets.map((asset) => (
+                      <Badge key={asset} variant="outline">
+                        {asset}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => setTemplateDialogOpen(false)}>
+              Use Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

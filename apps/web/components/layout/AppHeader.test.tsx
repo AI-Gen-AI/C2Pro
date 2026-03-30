@@ -5,6 +5,7 @@ import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { AppHeader } from "./AppHeader";
 
 const pathnameState = { value: "/dashboard" };
+const appModeState = { mode: "prod" as "demo" | "prod", demoEnvironmentEnabled: false };
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -32,11 +33,21 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+vi.mock("@/stores/app-mode", () => ({
+  useAppModeStore: (selector: (state: typeof appModeState) => unknown) =>
+    selector(appModeState),
+  selectIsDemoMode: (state: typeof appModeState) => state.mode === "demo",
+  isExplicitDemoRoute: (pathname: string | null | undefined) =>
+    pathname === "/demo" || pathname?.startsWith("/demo/") === true,
+}));
+
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("AppHeader", () => {
   it("renders the header banner and default title", () => {
     pathnameState.value = "/dashboard";
+    appModeState.mode = "prod";
+    appModeState.demoEnvironmentEnabled = false;
     renderWithProviders(<AppHeader />);
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
@@ -47,6 +58,8 @@ describe("AppHeader", () => {
 
   it("renders breadcrumb navigation when provided", () => {
     pathnameState.value = "/dashboard";
+    appModeState.mode = "prod";
+    appModeState.demoEnvironmentEnabled = false;
     renderWithProviders(<AppHeader breadcrumb={["Projects", "Alpha"]} />);
 
     const nav = screen.getByRole("navigation", { name: /breadcrumb/i });
@@ -56,6 +69,8 @@ describe("AppHeader", () => {
 
   it("exposes accessible controls for search, notifications, and user menu", async () => {
     pathnameState.value = "/dashboard";
+    appModeState.mode = "prod";
+    appModeState.demoEnvironmentEnabled = false;
     const user = userEvent.setup();
     renderWithProviders(<AppHeader />);
 
@@ -80,6 +95,8 @@ describe("AppHeader", () => {
 
   it("shows explicit demo badges on demo routes", () => {
     pathnameState.value = "/demo/projects";
+    appModeState.mode = "demo";
+    appModeState.demoEnvironmentEnabled = true;
     renderWithProviders(<AppHeader title="Projects" />);
 
     expect(screen.getByText(/demo workspace/i)).toBeInTheDocument();

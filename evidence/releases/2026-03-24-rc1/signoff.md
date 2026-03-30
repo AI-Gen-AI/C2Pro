@@ -11,7 +11,7 @@
 | Area              | Required approver role       | Approved by | Approved at | Decision | Notes                                                                                          |
 | ----------------- | ---------------------------- | ----------- | ----------- | -------- | ---------------------------------------------------------------------------------------------- |
 | Product           | `Product Owner`             | `pending`   | `pending`   | Pending  | Swagger workbook is complete; awaiting release-time suite evidence and formal approval.        |
-| Security          | `Security Lead`             | `pending`   | `pending`   | Pending  | Awaiting required security workflow evidence and formal approval.                              |
+| Security          | `Security Lead`             | `pending`   | `pending`   | Pending  | Required security workflow evidence is refreshed locally; formal approval still pending.       |
 | Operations        | `Operations / SRE Lead`     | `pending`   | `pending`   | Pending  | Performance and DR evidence are refreshed; workflow artifacts and ops approval remain pending. |
 | Release authority | `Engineering Leadership`    | `pending`   | `pending`   | Pending  | Candidate is not certifiable until the suite matrix and approvals are complete.                |
 
@@ -42,6 +42,6 @@ All of the following must be true before manual approval can be recorded:
 
 ## Blocking Items
 
-- [ ] Required suite artifacts remain pending in `manifest.yaml` for `backend`, `frontend`, and `security`.
+- [ ] Required suite artifacts remain pending in `manifest.yaml` for `backend` and `frontend`.
 - [ ] Manual approvals remain pending for product, security, operations, and release authority.
-- [ ] Current `manifest.yaml` still reports failing required suites for `backend`, `frontend`, and `security`, so formal signoff is blocked for this candidate.
+- [ ] Current `manifest.yaml` still reports failing required suites for `backend` and `frontend`, so formal signoff is blocked for this candidate.

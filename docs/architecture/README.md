@@ -4,7 +4,8 @@ This section contains the current technical design, architectural decisions, dia
 
 ## Contents
 
-- [Technical design document](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md)
+- [Platform technical design v4.1](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md)
+- [Frontend technical design baseline v4.0](./C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md)
 - [Flow diagrams overview](./FLOW_DIAGRAMS.md)
 - [Architecture decisions](./decisions/)
 - [Detailed diagrams](./diagrams/)

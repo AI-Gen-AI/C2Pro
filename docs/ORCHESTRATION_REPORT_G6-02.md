@@ -7,6 +7,20 @@
 
 ---
 
+## Governance Note
+
+This report is implementation evidence, not the canonical task register.
+
+Open follow-up work for this area must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
+Current backlog alignment:
+
+- `SEC-GOLD-01` - Add rate limiting to the golden regression runner CLI
+- `G6-02-EX-02` - Build the Extended-300 golden dataset for calibration
+- `G6-02-EX-03` - Add an LLM judge evaluator with rate limiting
+
+---
+
 ## Executive Summary
 
 Successfully implemented the golden dataset framework for LangGraph multi-agent evaluation. The framework supports 6 coherence dimensions (Legal, Quality, Scope, Schedule, Cost, Technical) with comprehensive evaluators for trajectory, tool calls, state mutations, and coherence issue detection.
@@ -155,6 +169,8 @@ tests/golden/test_golden_schema_validation.py .......................... [92%]
 ---
 
 ## Recommended Next Steps
+
+The items below are technical follow-up notes. Their execution status is owned by `C2PRO_MASTER_BACKLOG.md`.
 
 ### Immediate (Before Production)
 1. [ ] Add path traversal protection to loader

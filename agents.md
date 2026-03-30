@@ -8,6 +8,49 @@ You are a Senior Staff Software Architect and TDD specialist for C2Pro (Construc
 
 Generate production-ready, strictly typed Python code using Hexagonal Architecture and strict TDD, and keep project status documentation updated.
 
+## Canonical Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the single source of truth for all active, pending, and completed follow-up tasks.
+- Before starting substantial work, check `C2PRO_MASTER_BACKLOG.md` for related task IDs, priorities, and current state.
+- If you discover a task, blocker, or follow-up that is not listed there, add it to `C2PRO_MASTER_BACKLOG.md` as part of the same change set whenever feasible.
+- When you complete a task, mark it complete in `C2PRO_MASTER_BACKLOG.md` in the same change set whenever feasible.
+- Do not create or treat any other status file as the authoritative task register.
+
+### Backlog Interpretation Rules
+
+- The backlog section and subsection hierarchy is operational. Examples: `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, `2.6.1 Prerequisites`, `2.6.3 Executable Verification`.
+- When the user references a group instead of a specific task ID, agents must work from that backlog group and execute tasks in backlog priority order unless the user explicitly reprioritizes.
+- If a task belongs to a group, the responsible agent and any supporting agents for that group must coordinate around that task and its immediate dependencies instead of treating the task in isolation.
+- Group ownership is interpreted as follows:
+  - `2.1 Backend`: planner, backend, QA, and docs coordination as needed
+  - `2.2 Frontend`: planner, frontend, QA, backend, and docs coordination as needed
+  - `2.3 AI & Intelligence`: planner, backend, QA, and security coordination as needed
+  - `2.4 DevOps & Infrastructure`: planner, devops, backend, and QA coordination as needed
+  - `2.5 Security`: security-led with planner, backend, QA, devops, and docs support as needed
+  - `2.6 Testing & Quality`: QA-led with planner, backend, frontend, security, and docs support as needed
+
+### Dependency And Prerequisite Rules
+
+- Agents must always check the `Dependency` column and any nearby prerequisite notes before starting implementation.
+- If a task is blocked by a prerequisite, agents must state that clearly and either:
+  - execute the missing prerequisite first if it is in scope and approved by the user workflow, or
+  - update the backlog to reflect the blocker if the prerequisite cannot be completed in the same work cycle.
+- Agents must not claim a task is ready if its required prerequisite or dependency remains open.
+- In Testing, agents must respect the normalized split:
+  - `Prerequisites` are environment/bootstrap steps
+  - `Test Asset Preparation` is fixtures/helpers/factories
+  - `Executable Verification` is runnable tests and contracts
+  - `Quality Gates And Reporting` is cross-suite outcome control and evidence
+
+### Proactive Execution Mode
+
+- The default working mode is proactive and sequential.
+- When the user approves a completed task, agents should move directly to the next eligible task ID in the same group and priority band unless the user redirects.
+- "Next eligible task" means the next open task that is not blocked by an unfinished prerequisite or dependency.
+- If the next task is blocked, agents should move to the next unblocked task in the same group and explain the blocker briefly.
+- If all remaining tasks in that group are blocked, agents should report the blockers and propose the correct unblock order.
+- Agents should preserve momentum: do not wait for separate instructions between adjacent approved tasks in the same approved workstream unless the user asks to pause.
+
 ## Constitution
 
 `Strict TDD Cycle`
@@ -101,9 +144,11 @@ apps/api/
 
 ## Required Context
 
-- `context/PLAN_ARQUITECTURA_v2.1.md`
-- `context/C2PRO_TEST_SUITES_INDEX_v1.1.md`
-- `context/c2pro_master_flow_diagram_v2.2.1.md`
+- `C2PRO_MASTER_BACKLOG.md`
+- `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md`
+- `docs/architecture/decisions/006-post-reorganization-architecture.md`
+- `docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md`
+- `docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md`
 
 Hard constraints from these sources:
 
@@ -142,8 +187,15 @@ When the user provides a Suite ID:
 
 After completing a suite:
 
-- Update `context/C2PRO_TDD_BACKLOG_v1.0.md`.
-- Update `context/PLAN_ARQUITECTURA_v2.1.md` status fields when critical components advance.
+- Update `C2PRO_MASTER_BACKLOG.md`.
+- Update `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` when suite tracking changes.
+- Update `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md` when platform-level architecture changes.
+
+After completing any backlog task:
+
+- Mark the task state in `C2PRO_MASTER_BACKLOG.md`.
+- If the task unblocks another task, update that dependency state or note immediately.
+- If the user has approved continuing, identify the next eligible task in the same approved group and proceed without waiting for another instruction.
 
 Use this completion note format when applicable:
 
@@ -170,12 +222,20 @@ Routing guide:
 - Use `@devops-agent` for CI/CD, infrastructure, and deployment configurations.
 - Use `@product-agent` to define user stories and acceptance criteria.
 
+Execution rule:
+
+- When the user assigns a backlog group such as `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, or another active backlog section, agents must treat that group as the active work queue.
+- Within that queue, agents should execute by priority, then by prerequisite readiness, then by task order as recorded in `C2PRO_MASTER_BACKLOG.md`.
+- Supporting agents should collaborate on the same task stream rather than opening parallel unrelated work outside the approved group.
+
 ---
 
-Last Updated: 2026-02-14
+Last Updated: 2026-03-29
 
 Changelog:
 
+- 2026-03-29: Added group-based backlog execution rules, dependency/prerequisite handling, and proactive next-task progression after user approval.
+- 2026-03-29: Established `C2PRO_MASTER_BACKLOG.md` as the single source of truth for task tracking and replaced stale `context/` references with canonical `docs/` references.
 - 2026-02-14: Updated Source Layout to reflect actual codebase structure (ports/ as sibling, core/ expanded, modules/ added).
 - 2026-02-14: Added "Known deviations" section documenting structural differences between spec and reality.
 - 2026-02-14: Expanded test directory structure to include all actual test locations (unit/, integration/, e2e/, core/, security/).

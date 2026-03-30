@@ -1,6 +1,6 @@
 import type { DashboardSummary } from "@/lib/api/contracts";
-import { getDashboardSummary } from "@/lib/api/services/dashboard";
 import { CoherenceClient } from "@/components/coherence/CoherenceClient";
+import { getCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
 import { BarChart3 } from "lucide-react";
 
 export default async function ProjectCoherencePage({
@@ -14,7 +14,25 @@ export default async function ProjectCoherencePage({
   let loadError: string | null = null;
 
   try {
-    summary = await getDashboardSummary(id);
+    const response =
+      await getCoherenceDashboardApiCoherenceDashboardProjectIdGet(id);
+    summary = {
+      project_id: String(response.project_id ?? id),
+      tenant_id: String(response.tenant_id ?? ""),
+      coherence_score: Number(
+        response.coherence_score ?? response.global_score ?? 0,
+      ),
+      global_score: Number(
+        response.global_score ?? response.coherence_score ?? 0,
+      ),
+      sub_scores: normalizeNumberMap(response.sub_scores),
+      weights_used: normalizeNumberMap(response.weights_used),
+      alert_count: Number(response.alert_count ?? 0),
+      document_count: Number(response.document_count ?? 0),
+      methodology_version: String(response.methodology_version ?? "unknown"),
+      last_updated:
+        typeof response.last_updated === "string" ? response.last_updated : null,
+    };
   } catch (error) {
     loadError =
       error instanceof Error
@@ -46,5 +64,15 @@ export default async function ProjectCoherencePage({
 
       {summary ? <CoherenceClient summary={summary} /> : null}
     </div>
+  );
+}
+
+function normalizeNumberMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, Number(entry ?? 0)]),
   );
 }

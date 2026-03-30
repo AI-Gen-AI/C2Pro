@@ -82,6 +82,7 @@ class ResolveAlertRequest(BaseModel):
 
     resolution: str
     resolved_by: UUID
+    root_cause: str | None = None
 
 
 class AlertResponse(BaseModel):
@@ -98,6 +99,7 @@ class AlertResponse(BaseModel):
     affected_entities: dict = Field(default_factory=dict)
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
+    root_cause: str | None = None
     created_at: datetime
 
 
@@ -121,6 +123,7 @@ def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
         affected_entities=alert.affected_entities or {},
         reviewed_by=alert.reviewed_by,
         reviewed_at=alert.reviewed_at,
+        root_cause=(alert.alert_metadata or {}).get("root_cause"),
         created_at=alert.created_at,
     )
 
@@ -165,6 +168,19 @@ def _append_history(alert: Alert, action: str, user_id: UUID, **details: str) ->
             **details,
         }
     )
+
+
+def _set_root_cause(alert: Alert, root_cause: str | None) -> None:
+    metadata = dict(alert.alert_metadata or {})
+    if root_cause:
+        metadata["root_cause"] = root_cause
+    else:
+        metadata.pop("root_cause", None)
+    alert.alert_metadata = metadata
+
+
+def _requires_root_cause(alert: Alert) -> bool:
+    return alert.severity in {AlertSeverity.CRITICAL, AlertSeverity.HIGH}
 
 
 def _apply_review(alert: Alert, decision: str, current_user: User, comment: str) -> None:
@@ -401,8 +417,19 @@ async def resolve_alert(
         if alert is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
+        if _requires_root_cause(alert) and not (request.root_cause or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="root_cause is required for critical and high severity alerts",
+            )
+
         alert.mark_resolved(current_user.id, request.resolution)
-        _append_history(alert, "resolved", current_user.id, resolution=request.resolution)
+        normalized_root_cause = (request.root_cause or "").strip() or None
+        _set_root_cause(alert, normalized_root_cause)
+        history_details = {"resolution": request.resolution}
+        if normalized_root_cause is not None:
+            history_details["root_cause"] = normalized_root_cause
+        _append_history(alert, "resolved", current_user.id, **history_details)
         await session.commit()
         await session.refresh(alert)
         return _serialize_alert(alert, current_user.tenant_id)

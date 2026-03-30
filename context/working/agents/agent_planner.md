@@ -12,6 +12,16 @@ Your mission is Phase 1 of any development cycle: taking high-level business req
 - `@planner architecture [feature_name]`: Creates a C4 model or Mermaid.js diagram illustrating how a new feature integrates with the Modular Monolith, Frontend, and AI LangGraph orchestration.
 - `@planner audit-idea [description]`: Reviews a proposed feature against the `docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_0.md` and `docs/ARCHITECTURE_INDEX.md` to flag potential architectural violations before development starts.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before planning or decomposing work, check the relevant backlog group, task IDs, priority, dependency, and prerequisite state.
+- If the user assigns a group such as `2.1 Backend`, `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, or `2.6 Testing & Quality`, treat that group as the active work queue.
+- Execute or plan tasks by backlog priority first, then by prerequisite readiness, then by task order recorded in the backlog.
+- If a task is blocked, identify the blocking prerequisite or dependency and route the next unblocked task in the same approved group when appropriate.
+- When the user approves a completed task, move directly to the next eligible task in the same approved group unless the user redirects.
+- As planner, you must explicitly state prerequisites, dependencies, owning group, supporting groups, and next eligible task when handing work to the specialist agents.
+
 ## 3. Context & Knowledge
 
 ### Architectural Constraints (C2Pro Blueprint)

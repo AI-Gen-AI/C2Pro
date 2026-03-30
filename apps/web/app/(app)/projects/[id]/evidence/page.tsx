@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle,
@@ -20,6 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -36,22 +44,90 @@ import {
   PdfEvidenceViewer,
   PdfHighlight,
 } from "@/components/features/evidence/PdfEvidenceViewer";
+import { env } from "@/config/env";
 import { useDocumentAlerts } from "@/hooks/useDocumentAlerts";
 import { useDocumentEntities } from "@/hooks/useDocumentEntities";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
+import { useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/api/generated/approvals/approvals";
 import {
-  createHighlightsFromAlerts,
-  getDocumentDownloadUrl,
-  resolveAlert,
-  reviewAlert,
-  reviewApprovalResource,
-} from "@/lib/api";
+  useResolveAlertApiV1AlertsAlertIdResolvePost,
+  useReviewAlertApiV1AlertsAlertIdReviewPost,
+} from "@/lib/api/generated/alerts/alerts";
 import { cn } from "@/lib/utils";
+import type { Alert } from "@/types/project";
 
-interface EvidencePageProps {
-  params: Promise<{
-    id: string;
-  }>;
+type EvidenceTemplate = {
+  id: string;
+  name: string;
+  summary: string;
+  reviewFocus: string[];
+  tags: string[];
+};
+
+const EVIDENCE_TEMPLATES: EvidenceTemplate[] = [
+  {
+    id: "claims-review",
+    name: "Claims Review",
+    summary: "Claims review focus",
+    reviewFocus: [
+      "Delay-event support",
+      "Notice compliance",
+      "Commercial exposure",
+    ],
+    tags: ["claims", "time-impact", "commercial"],
+  },
+  {
+    id: "technical-audit",
+    name: "Technical Audit",
+    summary: "Technical audit focus",
+    reviewFocus: [
+      "Specification compliance",
+      "Design-change evidence",
+      "Quality deviation traceability",
+    ],
+    tags: ["technical", "quality", "design"],
+  },
+  {
+    id: "executive-brief",
+    name: "Executive Brief",
+    summary: "Executive brief focus",
+    reviewFocus: [
+      "Critical findings only",
+      "Decision-ready evidence",
+      "Alert prioritization",
+    ],
+    tags: ["executive", "summary", "risk"],
+  },
+];
+
+function sanitizeFilename(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-z0-9_\-\.]+/gi, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function downloadBlob(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function normalizeConfidence(value: number): number {
@@ -68,8 +144,8 @@ function normalizeEntityType(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export default function EvidencePage({ params }: EvidencePageProps) {
-  const { id } = use(params);
+export default function EvidencePage() {
+  const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
 
@@ -79,6 +155,10 @@ export default function EvidencePage({ params }: EvidencePageProps) {
   );
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null);
   const [highlightSearchQuery, setHighlightSearchQuery] = useState("");
+  const [isTemplateOpen, setIsTemplateOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
+    EVIDENCE_TEMPLATES[0]?.id ?? "",
+  );
 
   const {
     documents,
@@ -129,6 +209,9 @@ export default function EvidencePage({ params }: EvidencePageProps) {
   } = useDocumentAlerts(selectedDocumentId);
   const [alertsState, setAlertsState] = useState(alerts);
   const [actionError, setActionError] = useState<string | null>(null);
+  const reviewResource = useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch();
+  const reviewProjectAlert = useReviewAlertApiV1AlertsAlertIdReviewPost();
+  const resolveProjectAlert = useResolveAlertApiV1AlertsAlertIdResolvePost();
 
   const highlights = useMemo<PdfHighlight[]>(() => {
     const mappedEntityHighlights: PdfHighlight[] = entityHighlights.map(
@@ -147,18 +230,21 @@ export default function EvidencePage({ params }: EvidencePageProps) {
       },
     );
 
-    const alertHighlights: PdfHighlight[] = createHighlightsFromAlerts(
-      alertsState,
-    ).map((highlight) => {
-      const alert = alertsState.find((item) => item.id === highlight.entityId);
+    const alertHighlights: PdfHighlight[] = alertsState.flatMap((alert) => {
+      const evidence = extractAlertEvidenceLocation(alert);
+      if (!evidence) {
+        return [];
+      }
 
-      return {
-        id: highlight.id,
-        clauseId: highlight.entityId,
-        page: highlight.page,
-        text: highlight.label ?? alert?.title ?? highlight.entityId,
-        severity: mapHighlightColorToSeverity(highlight.color),
-      };
+      return [
+        {
+          id: `highlight-${alert.id}`,
+          clauseId: alert.id,
+          page: evidence.page_number,
+          text: alert.title,
+          severity: mapAlertSeverityToPdfSeverity(alert.severity),
+        },
+      ];
     });
 
     return [...mappedEntityHighlights, ...alertHighlights];
@@ -204,6 +290,24 @@ export default function EvidencePage({ params }: EvidencePageProps) {
       })),
     [apiEntities],
   );
+  const relationshipGraph = useMemo(() => {
+    return {
+      entityNodes: mappedEntities.map((entity) => ({
+        id: entity.id,
+        label: entity.text,
+        page: entity.page,
+      })),
+      alertNodes: alertsState.map((alert) => ({
+        id: alert.id,
+        label: alert.title,
+        severity: alert.severity,
+      })),
+      linkedAlertCount: alertsState.length,
+    };
+  }, [alertsState, mappedEntities]);
+  const selectedTemplate =
+    EVIDENCE_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
+    EVIDENCE_TEMPLATES[0];
 
   const [entities, setEntities] = useState<ExtractedEntity[]>([]);
 
@@ -230,11 +334,15 @@ export default function EvidencePage({ params }: EvidencePageProps) {
       }
 
       setActionError(null);
-      await reviewApprovalResource(
-        entity.approvalResourceType,
-        entityId,
-        "APPROVED",
-      );
+      await reviewResource.mutateAsync({
+        resourceType: entity.approvalResourceType,
+        resourceId: entityId,
+        data: {
+          status: "APPROVED",
+          correction_data: undefined,
+          feedback_comment: null,
+        },
+      });
 
       setEntities((prev) =>
         prev.map((item) =>
@@ -262,12 +370,15 @@ export default function EvidencePage({ params }: EvidencePageProps) {
       }
 
       setActionError(null);
-      await reviewApprovalResource(
-        entity.approvalResourceType,
-        entityId,
-        "REJECTED",
-        { feedbackComment: reason },
-      );
+      await reviewResource.mutateAsync({
+        resourceType: entity.approvalResourceType,
+        resourceId: entityId,
+        data: {
+          status: "REJECTED",
+          correction_data: undefined,
+          feedback_comment: reason,
+        },
+      });
 
       setEntities((prev) =>
         prev.map((item) =>
@@ -300,25 +411,164 @@ export default function EvidencePage({ params }: EvidencePageProps) {
   const handleReviewAlert = useCallback(
     async (alertId: string, decision: "approve" | "reject") => {
       setActionError(null);
-      const updatedAlert = await reviewAlert(alertId, decision);
+      const updatedAlert = await reviewProjectAlert.mutateAsync({
+        alertId,
+        data: {
+          decision,
+          comment: "",
+        },
+      });
       setAlertsState((prev) =>
         prev.map((alert) => (alert.id === alertId ? updatedAlert : alert)),
       );
     },
-    [],
+    [reviewProjectAlert],
   );
 
   const handleResolveAlert = useCallback(async (alertId: string) => {
     setActionError(null);
-    const updatedAlert = await resolveAlert(
+    const updatedAlert = await resolveProjectAlert.mutateAsync({
       alertId,
-      "Resolved from evidence viewer",
-      "web-evidence-viewer",
-    );
+      data: {
+        resolution: "Resolved from evidence viewer",
+        resolved_by: "web-evidence-viewer",
+        root_cause: "other",
+      },
+    });
     setAlertsState((prev) =>
       prev.map((alert) => (alert.id === alertId ? updatedAlert : alert)),
     );
-  }, []);
+  }, [resolveProjectAlert]);
+
+  const handleExportJson = useCallback(() => {
+    if (!selectedDocument) {
+      return;
+    }
+
+    downloadBlob(
+      `${sanitizeFilename(selectedDocument.name)}_evidence.json`,
+      JSON.stringify(
+        {
+          projectId: id,
+          documentId: selectedDocument.id,
+          documentName: selectedDocument.name,
+          exportedAt: new Date().toISOString(),
+          entities,
+          alerts: alertsState,
+          highlights,
+        },
+        null,
+        2,
+      ),
+      "application/json",
+    );
+  }, [alertsState, entities, highlights, id, selectedDocument]);
+
+  const handleExportCsv = useCallback(() => {
+    if (!selectedDocument) {
+      return;
+    }
+
+    const rows = [
+      ["Type", "Id", "Label", "Page", "Status"],
+      ...entities.map((entity) => [
+        "entity",
+        entity.id,
+        entity.text,
+        String(entity.page),
+        entity.validationStatus ?? "pending",
+      ]),
+      ...alertsState.map((alert) => [
+        "alert",
+        alert.id,
+        alert.title,
+        String(extractAlertEvidenceLocation(alert)?.page_number ?? ""),
+        String(alert.status ?? ""),
+      ]),
+    ];
+    const csv = rows
+      .map((row) =>
+        row
+          .map((value) => {
+            if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          })
+          .join(","),
+      )
+      .join("\n");
+
+    downloadBlob(
+      `${sanitizeFilename(selectedDocument.name)}_evidence.csv`,
+      csv,
+      "text/csv;charset=utf-8;",
+    );
+  }, [alertsState, entities, selectedDocument]);
+
+  const handleExportPdf = useCallback(() => {
+    if (!selectedDocument) {
+      return;
+    }
+
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+    if (!popup) {
+      return;
+    }
+
+    const entityRows = entities
+      .map(
+        (entity) =>
+          `<tr><td>${escapeXml(entity.type)}</td><td>${escapeXml(
+            entity.text,
+          )}</td><td>${entity.page}</td><td>${escapeXml(
+            entity.validationStatus ?? "pending",
+          )}</td></tr>`,
+      )
+      .join("");
+    const alertRows = alertsState
+      .map(
+        (alert) =>
+          `<tr><td>${escapeXml(alert.title)}</td><td>${escapeXml(
+            String(alert.severity),
+          )}</td><td>${escapeXml(String(alert.status))}</td></tr>`,
+      )
+      .join("");
+
+    popup.document.write(`<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>${escapeXml(selectedDocument.name)} Evidence Export</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 32px; color: #111827; }
+      h1 { margin-bottom: 8px; font-size: 28px; }
+      h2 { margin-top: 28px; font-size: 18px; }
+      p { margin: 0 0 12px; color: #4b5563; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border: 1px solid #d1d5db; padding: 10px 12px; text-align: left; }
+      th { background: #f3f4f6; }
+    </style>
+  </head>
+  <body>
+    <h1>Evidence Export</h1>
+    <p>${escapeXml(selectedDocument.name)}</p>
+    <p>${highlights.length} highlights, ${entities.length} entities, ${alertsState.length} alerts</p>
+    <h2>Entities</h2>
+    <table>
+      <thead><tr><th>Type</th><th>Text</th><th>Page</th><th>Status</th></tr></thead>
+      <tbody>${entityRows}</tbody>
+    </table>
+    <h2>Alerts</h2>
+    <table>
+      <thead><tr><th>Title</th><th>Severity</th><th>Status</th></tr></thead>
+      <tbody>${alertRows}</tbody>
+    </table>
+  </body>
+</html>`);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }, [alertsState, entities, highlights.length, selectedDocument]);
 
   return (
     <div className="space-y-6">
@@ -345,16 +595,27 @@ export default function EvidencePage({ params }: EvidencePageProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJson}>
                 <FileJson className="mr-2 h-4 w-4" />
                 Export JSON
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCsv}>
                 <Database className="mr-2 h-4 w-4" />
                 Export CSV
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPdf}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export PDF
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsTemplateOpen(true)}
+          >
+            Evidence Templates
+          </Button>
           <Button
             variant={splitView ? "default" : "outline"}
             size="sm"
@@ -398,7 +659,7 @@ export default function EvidencePage({ params }: EvidencePageProps) {
             <CardContent className="p-0">
               {selectedDocumentId ? (
                 <PdfEvidenceViewer
-                  fileUrl={getDocumentDownloadUrl(selectedDocumentId)}
+                  fileUrl={buildDocumentDownloadUrl(selectedDocumentId)}
                   highlights={highlights}
                   activeHighlightId={activeHighlightId}
                   onHighlightClick={handleHighlightClick}
@@ -554,10 +815,154 @@ export default function EvidencePage({ params }: EvidencePageProps) {
                   )}
                 </TabsContent>
               </Tabs>
+
+              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Relationship Graph
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {relationshipGraph.linkedAlertCount} linked alert
+                      {relationshipGraph.linkedAlertCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Badge variant="outline">
+                    {relationshipGraph.entityNodes.length} entities / {relationshipGraph.alertNodes.length} alerts
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
+                  <div className="space-y-2">
+                    {relationshipGraph.entityNodes.map((node) => (
+                      <button
+                        key={node.id}
+                        type="button"
+                        aria-label={`Graph node ${node.id}`}
+                        className={cn(
+                          "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                          activeEntityId === node.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50",
+                        )}
+                        onClick={() => setActiveEntityId(node.id)}
+                      >
+                        <div className="text-sm font-medium text-foreground">
+                          {node.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Entity · page {node.page}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="hidden items-center justify-center lg:flex">
+                    <div className="h-full min-h-[120px] w-px bg-border" />
+                  </div>
+
+                  <div className="space-y-2">
+                    {relationshipGraph.alertNodes.map((node) => (
+                      <button
+                        key={node.id}
+                        type="button"
+                        aria-label={`Graph node ${node.id}`}
+                        className={cn(
+                          "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                          activeEntityId === node.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50",
+                        )}
+                        onClick={() => setActiveEntityId(node.id)}
+                      >
+                        <div className="text-sm font-medium text-foreground">
+                          {node.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Alert · {String(node.severity).toLowerCase()}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <Dialog open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Start from an evidence template</DialogTitle>
+            <DialogDescription>
+              Use a guided review lens to focus the current evidence session.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+            <div className="space-y-2">
+              {EVIDENCE_TEMPLATES.map((template) => (
+                <Button
+                  key={template.id}
+                  type="button"
+                  variant={selectedTemplate?.id === template.id ? "default" : "outline"}
+                  className="w-full justify-start"
+                  onClick={() => setSelectedTemplateId(template.id)}
+                >
+                  {template.name}
+                </Button>
+              ))}
+            </div>
+
+            {selectedTemplate ? (
+              <div className="rounded-md border bg-muted/20 p-5">
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Template Summary
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground">
+                    {selectedTemplate.summary}
+                  </h3>
+                </div>
+
+                <div className="mt-5 grid gap-5 md:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Review focus
+                    </div>
+                    <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                      {selectedTemplate.reviewFocus.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-foreground">Tags</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedTemplate.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTemplateOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => setIsTemplateOpen(false)}>Use Template</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -630,4 +1035,49 @@ function mapEntityTypeToApprovalResourceType(
     default:
       return null;
   }
+}
+
+function extractAlertEvidenceLocation(alert: Alert): {
+  page_number: number;
+  bbox: [number, number, number, number];
+  normalized?: boolean;
+} | null {
+  const evidence = (alert.evidence_json as { evidence_location?: {
+    page_number: number;
+    bbox: [number, number, number, number];
+    normalized?: boolean;
+  } } | undefined)?.evidence_location;
+
+  if (!evidence || !Array.isArray(evidence.bbox)) {
+    return null;
+  }
+
+  const normalized =
+    evidence.normalized ??
+    evidence.bbox.every((value) => value >= 0 && value <= 1);
+
+  return {
+    page_number: evidence.page_number,
+    bbox: evidence.bbox,
+    normalized,
+  };
+}
+
+function mapAlertSeverityToPdfSeverity(
+  severity: Alert["severity"],
+): PdfHighlight["severity"] {
+  switch (String(severity).toLowerCase()) {
+    case "critical":
+      return "critical";
+    case "high":
+      return "high";
+    case "medium":
+      return "medium";
+    default:
+      return "low";
+  }
+}
+
+function buildDocumentDownloadUrl(documentId: string): string {
+  return `${env.API_BASE_URL}/documents/${documentId}/download`;
 }

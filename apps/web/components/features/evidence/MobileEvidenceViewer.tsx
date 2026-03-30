@@ -35,6 +35,7 @@ interface MobileEvidenceViewerProps {
 
 const SESSION_KEY = "s3-02-mobile-evidence-state";
 const VIRTUAL_THRESHOLD = 500;
+const VIRTUAL_WINDOW_SIZE = 40;
 
 function readSession(): { tab: ViewerTab; clauseId: string | null } | null {
   try {
@@ -65,9 +66,10 @@ export function MobileEvidenceViewer({
   onSelectAlert,
 }: MobileEvidenceViewerProps) {
   const saved = useMemo(() => readSession(), []);
+  const preferredInitialClauseId = highlights[0]?.clauseId ?? saved?.clauseId ?? null;
   const [activeTab, setActiveTab] = useState<ViewerTab>(saved?.tab ?? "pdf");
   const [activeClauseId, setActiveClauseId] = useState<string | null>(
-    saved?.clauseId ?? null,
+    preferredInitialClauseId,
   );
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 0,
@@ -75,8 +77,27 @@ export function MobileEvidenceViewer({
 
   // --- Virtualization state ---
   const useVirtual = alerts.length >= VIRTUAL_THRESHOLD;
-  const pageSize = useVirtual ? alerts.length - 1 : alerts.length;
-  const [virtualStart, setVirtualStart] = useState(0);
+  const pageSize = useVirtual ? VIRTUAL_WINDOW_SIZE : alerts.length;
+  const initialVirtualStart = useMemo(() => {
+    if (!useVirtual) return 0;
+
+    const preferredClauseId = preferredInitialClauseId;
+    if (!preferredClauseId) return 0;
+
+    const preferredIndex = alerts.findIndex(
+      (alert) => alert.clauseId === preferredClauseId,
+    );
+    if (preferredIndex === -1) return 0;
+
+    return Math.max(
+      0,
+      Math.min(
+        preferredIndex - Math.floor(VIRTUAL_WINDOW_SIZE / 2),
+        Math.max(0, alerts.length - VIRTUAL_WINDOW_SIZE),
+      ),
+    );
+  }, [alerts, preferredInitialClauseId, useVirtual]);
+  const [virtualStart, setVirtualStart] = useState(initialVirtualStart);
   const [activeAlertIndex, setActiveAlertIndex] = useState<number | null>(null);
   const virtualRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -159,6 +180,15 @@ export function MobileEvidenceViewer({
       if (idx >= 0) setActiveAlertIndex(idx);
     }
   };
+
+  useEffect(() => {
+    if (!useVirtual) {
+      setVirtualStart(0);
+      return;
+    }
+
+    setVirtualStart(initialVirtualStart);
+  }, [initialVirtualStart, useVirtual]);
 
   return (
     <section aria-label="Mobile Evidence Viewer" className="text-primary-text">

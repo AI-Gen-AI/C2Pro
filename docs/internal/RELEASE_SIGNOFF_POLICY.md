@@ -4,6 +4,12 @@
 **Effective Date**: 2026-03-26
 **Last Updated**: 2026-03-26
 
+## Governance Note
+
+This document defines release policy and evidence requirements. It does not own task status.
+
+Any open release work, blockers, or follow-up actions derived from this policy must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
 ## Purpose
 
 This document defines the minimum automated test suite requirements for release signoff. A release candidate MUST pass all required suites before promotion to production.
@@ -234,6 +240,11 @@ START
 1. **CI Checks**: All BLOCKING suites are enforced as GitHub required status checks
 2. **Gate 7 Validator**: Validates manifest.yaml against this policy before deploy
 3. **Deploy Workflow**: Reads manifest.yaml and blocks if `status: failure` on required suites
+
+Open execution work related to this policy is currently tracked in:
+
+- `REL-RC1-01`
+- `REL-RC1-02`
 
 ## Revision History
 

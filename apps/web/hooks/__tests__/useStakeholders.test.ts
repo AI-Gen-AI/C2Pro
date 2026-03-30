@@ -1,9 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { waitFor, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createElement, type ReactNode } from "react";
 
 import { useStakeholders } from "@/hooks/use-stakeholders";
+import { createTestWrapper } from "@/src/tests/test-utils";
 
 const { getMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -14,15 +13,6 @@ vi.mock("@/lib/api/client", () => ({
     get: getMock,
   },
 }));
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: queryClient }, children);
-}
 
 describe("useStakeholders contract alignment", () => {
   beforeEach(() => {
@@ -45,7 +35,7 @@ describe("useStakeholders contract alignment", () => {
     });
 
     const { result } = renderHook(() => useStakeholders("proj-1"), {
-      wrapper: createWrapper(),
+      wrapper: createTestWrapper(),
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -66,7 +56,7 @@ describe("useStakeholders contract alignment", () => {
 
   it("returns an empty list when no project id is provided", async () => {
     const { result } = renderHook(() => useStakeholders(undefined), {
-      wrapper: createWrapper(),
+      wrapper: createTestWrapper(),
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

@@ -44,4 +44,5 @@
 export interface ResolveAlertRequest {
   resolution: string;
   resolved_by: string;
+  root_cause?: string | null;
 }

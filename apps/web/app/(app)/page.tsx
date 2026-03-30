@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { DashboardClient } from "@/components/coherence/DashboardClient";
-import { env } from "@/config/env";
 import type { DashboardSummary } from "@/lib/api/contracts";
-import {
-  getDashboardSummary,
-  listProjects,
-} from "@/lib/api/services/dashboard";
+import { getCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
+import { listProjectsApiV1ProjectsGet } from "@/lib/api/generated/projects/projects";
 import { useAuthStore } from "@/stores/auth";
 
 export default function DashboardPage() {
@@ -34,8 +31,8 @@ export default function DashboardPage() {
       setLoadError(null);
 
       try {
-        const projects = await listProjects();
-        const first = projects[0];
+        const projectsResponse = await listProjectsApiV1ProjectsGet();
+        const first = projectsResponse.items?.[0];
 
         if (!first) {
           if (active) {
@@ -48,14 +45,33 @@ export default function DashboardPage() {
           return;
         }
 
-        const summary = await getDashboardSummary(first.id);
+        const summary =
+          await getCoherenceDashboardApiCoherenceDashboardProjectIdGet(first.id);
 
         if (!active) {
           return;
         }
 
         setProjectName(first.name);
-        setData(summary);
+        setData({
+          project_id: String(summary.project_id ?? first.id),
+          tenant_id: String(summary.tenant_id ?? ""),
+          coherence_score: Number(
+            summary.coherence_score ?? summary.global_score ?? 0,
+          ),
+          global_score: Number(
+            summary.global_score ?? summary.coherence_score ?? 0,
+          ),
+          sub_scores: normalizeNumberMap(summary.sub_scores),
+          weights_used: normalizeNumberMap(summary.weights_used),
+          alert_count: Number(summary.alert_count ?? 0),
+          document_count: Number(summary.document_count ?? 0),
+          methodology_version: String(summary.methodology_version ?? "unknown"),
+          last_updated:
+            typeof summary.last_updated === "string"
+              ? summary.last_updated
+              : null,
+        });
       } catch (error) {
         if (!active) {
           return;
@@ -111,15 +127,21 @@ export default function DashboardPage() {
           Coherence Dashboard
         </h1>
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {loadError ?? "No data available."} Verify backend API is running at{" "}
-          <code className="rounded bg-destructive/10 px-1">
-            {env.API_BASE_URL}
-          </code>
-          .
+          {loadError ?? "No data available."} Verify the backend coherence endpoints are available.
         </div>
       </div>
     );
   }
 
   return <DashboardClient data={data} projectName={projectName} />;
+}
+
+function normalizeNumberMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, Number(entry ?? 0)]),
+  );
 }

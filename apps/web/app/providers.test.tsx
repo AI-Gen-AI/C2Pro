@@ -60,6 +60,8 @@ vi.mock("@/lib/api/queryClient", () => ({
   createQueryClient: () => ({ clear: vi.fn() }),
 }));
 
+vi.mock("@/lib/api/config", () => ({}));
+
 vi.mock("@/mocks/browser", () => ({
   worker: {
     start: startMock,

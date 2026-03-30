@@ -7,6 +7,14 @@
 
 ---
 
+## Governance Note
+
+This report is completion evidence for `G6-02-EX-01`.
+
+Open and future work for the golden dataset program is tracked only in `C2PRO_MASTER_BACKLOG.md`.
+
+---
+
 ## Executive Summary
 
 The golden regression corpus has been expanded from the original Spanish-only Core-25 baseline to a Core-100 nightly dataset. The nightly set now includes real source references from **Spain, USA, Kuwait, and Saudi Arabia** and is wired into the existing loader and regression runner without changing the execution contract.
@@ -115,10 +123,9 @@ Observed result:
 
 | Document | Path |
 |----------|------|
-| Master Status | `docs/MASTER_DEVELOPMENT_STATUS.md` |
+| Master Backlog | `C2PRO_MASTER_BACKLOG.md` |
 | Original Core-25 Report | `docs/ORCHESTRATION_REPORT_G6-02_CORE25.md` |
 | Golden Framework Report | `docs/ORCHESTRATION_REPORT_G6-02.md` |
 | Case Creation Guidelines | `docs/CASE_CREATION_GUIDELINES.md` |
 | Validation Tests | `apps/api/tests/golden/test_core25_validation.py` |
 | Loader Tests | `apps/api/tests/golden/test_golden_loader.py` |
-

@@ -254,7 +254,7 @@ coherence_service = CoherenceCalculationService(event_publisher=event_bus)
 - [x] Clean architecture principles
 - [x] Ready for code review
 - [x] Ready for integration
-- [ ] Database migration created (TODO)
+- [x] Database migration created
 - [ ] API endpoints implemented (TODO)
 
 ---

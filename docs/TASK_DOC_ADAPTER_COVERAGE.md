@@ -1,5 +1,7 @@
 # TASK: Improve Document Adapter Test Coverage
 
+> **Governance Note:** This document records the technical scope and evidence for `DOC-ADAPTER-COVERAGE-001`. The canonical execution register is `C2PRO_MASTER_BACKLOG.md`.
+
 ## Overview
 
 **Task ID**: DOC-ADAPTER-COVERAGE-001  
@@ -260,6 +262,8 @@ The implementation is not ready to close. `docs/TEST_COVERAGE_ISSUES_REPORT.md` 
 - reconcile test expectations with the real adapter contracts
 - avoid labeling this task complete until both coverage and contract quality are verified
 
+Any still-open follow-up from this caveat must be represented in `C2PRO_MASTER_BACKLOG.md`. This file is not the authoritative task tracker.
+
 ### New Test Files
 
 ```
@@ -291,4 +295,4 @@ tests/unit/adapters/documents/
 
 **Created**: 2026-03-27  
 **Owner**: Backend Team  
-**Status**: ACTIVE FOLLOW-UP REQUIRED
+**Status**: Completed milestone with follow-up governed by `C2PRO_MASTER_BACKLOG.md`

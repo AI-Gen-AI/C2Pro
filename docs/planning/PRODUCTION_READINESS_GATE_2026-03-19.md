@@ -7,9 +7,17 @@ Purpose: Convert the engineering backlog into an executive-quality release gate 
 
 ---
 
+## Governance Note
+
+This document defines production-readiness gates and approval expectations.
+
+It is not the canonical task register. Any open implementation or follow-up items derived from these gates must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
+---
+
 ## Executive Position
 
-`MASTER_ORCHESTRATION_BACKLOG_2026-03-19.md` is now the primary engineering delivery backlog for known work.
+`C2PRO_MASTER_BACKLOG.md` is now the primary engineering delivery backlog for known work.
 
 It is not, by itself, sufficient evidence that C2Pro is production-ready.
 

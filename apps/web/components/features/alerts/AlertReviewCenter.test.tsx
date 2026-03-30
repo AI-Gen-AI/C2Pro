@@ -170,4 +170,68 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     expect(screen.queryByRole("dialog", { name: /approve alert/i })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("[S3-04-RED-UNIT-07] resolve modal requires root cause for critical alerts before confirm", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj_demo_001"
+        alerts={[
+          {
+            id: "a-6",
+            title: "Missing liquidated damages fallback",
+            severity: "critical",
+            status: "pending",
+            clauseId: "c-606",
+            assignee: "risk.owner",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /resolve a-6/i }));
+
+    const resolveButton = screen.getByRole("button", { name: /confirm resolve/i });
+    expect(screen.getByLabelText(/root cause/i)).toBeInTheDocument();
+    expect(resolveButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/resolution notes/i), {
+      target: { value: "Contract amendment issued and workflow updated." },
+    });
+    expect(resolveButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/root cause/i), {
+      target: { value: "scope_change" },
+    });
+    expect(resolveButton).toBeEnabled();
+  });
+
+  it("[S3-04-RED-UNIT-08] resolve modal omits root cause requirement for medium severity alerts", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj_demo_001"
+        alerts={[
+          {
+            id: "a-7",
+            title: "Clarify payment milestone wording",
+            severity: "medium",
+            status: "pending",
+            clauseId: "c-707",
+            assignee: "finance.analyst",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /resolve a-7/i }));
+
+    expect(screen.queryByLabelText(/root cause/i)).not.toBeInTheDocument();
+    const resolveButton = screen.getByRole("button", { name: /confirm resolve/i });
+    expect(resolveButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/resolution notes/i), {
+      target: { value: "Reviewed with owner and marked resolved." },
+    });
+
+    expect(resolveButton).toBeEnabled();
+  });
 });

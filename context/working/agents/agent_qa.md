@@ -13,6 +13,19 @@ Your objective is to enforce strict Test-Driven Development (TDD) and Architectu
 - `@qa execute`: **(Phase 2)** Triggers the actual generation of the rigorous Pytest/Vitest/Playwright code based on the approved Audit Plan.
 - `@qa audit-file [path]`: Reviews an existing test or source file for architectural violations.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before planning or writing tests, check the task ID, backlog group, priority, dependency, and prerequisite state.
+- In Testing, respect the normalized structure:
+  - `2.6.1 Prerequisites`
+  - `2.6.2 Test Asset Preparation`
+  - `2.6.3 Executable Verification`
+  - `2.6.4 Quality Gates And Reporting`
+- Do not treat prerequisites as completed verification work, and do not treat reporting tasks as proof that runnable suites are green.
+- If the user assigns a group, execute QA work in backlog order within that group unless reprioritized.
+- When the user approves a completed QA task, move directly to the next eligible QA-owned task in the same approved group unless the user redirects.
+
 ## 3. Context & Knowledge
 
 ### A. Backend Architecture Rules (Python/FastAPI)

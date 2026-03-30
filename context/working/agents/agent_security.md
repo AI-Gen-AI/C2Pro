@@ -12,6 +12,15 @@ Your mission is to enforce the "Defense in Depth" strategy across the entire pla
 - `@security test-isolation [module]`: Generates aggressive Pytest security tests (Red Phase) attempting to cross tenant boundaries or bypass Row Level Security (RLS).
 - `@security review-pii [data_flow]`: Audits a specific data pipeline to ensure the Anonymizer Service intercepts and hashes/redacts PII before it reaches the LLM or Database.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before starting work, check the task ID, backlog group, priority, dependency, and prerequisite state.
+- Security-led execution usually comes from `2.5 Security`, but security may also support `2.3 AI & Intelligence`, `2.4 DevOps & Infrastructure`, and `2.6 Testing & Quality`.
+- If the user assigns a backlog group, stay inside that queue and execute by priority and readiness unless reprioritized.
+- Do not mark security tasks ready if a required prerequisite, test asset, or release dependency is still open.
+- When the user approves a completed task, update the backlog and continue to the next eligible security task in the same approved group unless redirected.
+
 ## 3. Context & Knowledge
 
 ### Security Architecture Rules (Technical Design v4.0)

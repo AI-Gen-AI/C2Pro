@@ -7,6 +7,19 @@
 
 ---
 
+## Governance Note
+
+This document defines release thresholds and evidence requirements. It does not own task execution state.
+
+Any open release work derived from this document must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
+Current related backlog items:
+
+- `REL-RC1-01`
+- `REL-RC1-02`
+
+---
+
 ## 1. Executive Summary
 
 This document defines the **minimum automated test suite** required for C2Pro release signoff. It establishes pass/fail thresholds, coverage requirements, and CI/CD integration rules for RC1 and subsequent releases.
@@ -180,6 +193,8 @@ RELEASE APPROVER CHECKLIST:
 □ Documentation updated
 □ evidence/releases/<release-id>/signoff.md completed
 ```
+
+Execution status for the manual release tasks above is canonical only in `C2PRO_MASTER_BACKLOG.md`.
 
 ---
 

@@ -1,5 +1,7 @@
 # Plan to Reach 70% Document Adapter Coverage
 
+> **Governance Note:** This document is a technical planning artifact. Active task ownership and completion state must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
 ## Current Coverage: 37%
 
 ## Gap Analysis
@@ -215,6 +217,11 @@ Add tests for:
 - [ ] Coverage >= 70%
 - [ ] No regression in existing tests
 
+Current backlog rule:
+
+- If any of the success criteria are still open in reality, the corresponding work must exist in `C2PRO_MASTER_BACKLOG.md`.
+- Do not use this file as the authoritative execution tracker.
+
 ## Files to Create
 
 ```
@@ -230,4 +237,4 @@ tests/unit/adapters/documents/
 ---
 
 **Created**: 2026-03-27  
-**Status**: Ready to implement
+**Status**: Historical plan; refer to `C2PRO_MASTER_BACKLOG.md` for active status

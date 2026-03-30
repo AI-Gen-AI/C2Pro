@@ -21,7 +21,28 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Scope WBS code uniqueness to project and enforce parent relation per project."""
 
-    op.execute("ALTER TABLE procurement_wbs_items DROP CONSTRAINT IF EXISTS fk_wbs_parent")
+    op.execute(
+        """
+        DO $$
+        DECLARE
+            parent_fk RECORD;
+        BEGIN
+            FOR parent_fk IN
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'procurement_wbs_items'::regclass
+                  AND confrelid = 'procurement_wbs_items'::regclass
+                  AND contype = 'f'
+            LOOP
+                EXECUTE format(
+                    'ALTER TABLE procurement_wbs_items DROP CONSTRAINT IF EXISTS %I',
+                    parent_fk.conname
+                );
+            END LOOP;
+        END
+        $$;
+        """
+    )
     op.execute("ALTER TABLE procurement_wbs_items DROP CONSTRAINT IF EXISTS procurement_wbs_items_code_key")
 
     op.execute(

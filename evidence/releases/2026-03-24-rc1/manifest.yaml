@@ -40,10 +40,10 @@ required_suites:
 
   security:
     workflow: ".github/workflows/e2e-security-tests.yml"
-    status: failure
-    artifact: "GitHub run 23461179642 - security-release-summary (artifact 6068811167) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179642; local verification: apps/api/test-results-security-workflow.xml, apps/api/coverage-security-workflow.xml, apps/api/.pytest-security-e2e-junit.xml"
-    coverage: 35.76
-    note: "Local rerun on 2026-03-28 now executes the suite successfully (12/12 passing), but the workflow-aligned coverage scope still fails the required 60% threshold, so the security gate remains blocked."
+    status: pass
+    artifact: "GitHub run 23461179642 - security-release-summary (artifact 6068811167) - https://github.com/AI-Gen-AI/C2Pro/actions/runs/23461179642; refreshed local verification: apps/api/test-results-security-workflow.xml, apps/api/coverage-security-workflow.xml, apps/api/.pytest-security-e2e-junit.xml"
+    coverage: 65.35
+    note: "Refreshed on 2026-03-28 with the widened security workflow command: 149 tests passed locally and the auth/middleware/tenants coverage gate now exceeds the required 60% threshold."
 
   evaluation:
     workflow: ".github/workflows/evaluation-regression.yml"

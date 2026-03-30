@@ -16,12 +16,13 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { apiClient } from "@/lib/api";
+import { useCreateProjectApiV1ProjectsPost } from "@/lib/api/generated/projects/projects";
 
 export default function NewProjectPage() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const createProject = useCreateProjectApiV1ProjectsPost();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -41,20 +42,35 @@ export default function NewProjectPage() {
     setCreateError(null);
 
     try {
-      const response = await apiClient.post("/projects", {
-        name: formData.name,
-        code: formData.code || undefined,
-        description: formData.description || undefined,
-        client_name: formData.client || undefined,
-        currency: formData.currency,
+      const project = await createProject.mutateAsync({
+        data: {
+          name: formData.name,
+          code: formData.code || undefined,
+          description: formData.description || undefined,
+          client_name: formData.client || undefined,
+          currency: formData.currency,
+        },
       });
 
-      const project = response.data;
       // Navigate to the new project's documents page to upload contracts
       router.push(`/projects/${project.id}/documents`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to create project:", error);
-      const message = error?.response?.data?.detail || error?.message || "Failed to create project";
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response &&
+        typeof error.response.data === "object" &&
+        error.response.data !== null &&
+        "detail" in error.response.data &&
+        typeof error.response.data.detail === "string"
+          ? error.response.data.detail
+          : error instanceof Error
+            ? error.message
+            : "Failed to create project";
       setCreateError(message);
     } finally {
       setIsCreating(false);
@@ -164,9 +180,9 @@ export default function NewProjectPage() {
               className="flex-1"
               data-testid="create-project-button"
               onClick={handleCreateProject}
-              disabled={isCreating || !formData.name.trim()}
+              disabled={isCreating || createProject.isPending || !formData.name.trim()}
             >
-              {isCreating ? (
+              {isCreating || createProject.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...

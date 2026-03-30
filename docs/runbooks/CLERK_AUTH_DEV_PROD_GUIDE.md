@@ -1,138 +1,371 @@
-# Clerk Auth en C2Pro: guía práctica (Dev vs Producción)
+# Clerk Authentication Runbook: Dev vs Production
 
-Esta guía explica por qué llega correo desde `noreply@accounts.dev` y cómo arrancar C2Pro en modo desarrollo y en modo "usuario final" (producción).
+## Purpose
 
----
+This runbook is the executable procedure for closing:
 
-## 1) Qué significa el correo `noreply@accounts.dev`
+- `TASK-1174` Clerk project configured in production environment
+- `TASK-1175` Production Clerk keys use `pk_live_...` and `sk_live_...`
+- `TASK-1176` Production domain and sign-in/sign-up URLs configured in Clerk
+- `TASK-1177` Production email templates and sender verified in Clerk
+- `TASK-1178` Frontend deployed with production variables
+- `TASK-1179` Backend deployed and reachable from frontend
 
-Si ves correos como:
+Use this document to execute production auth rollout, validate it, and capture closure evidence.
 
-- `[Development] New device signed in to your C2Pro account`
-- remitente `noreply@accounts.dev`
+## Scope
 
-**es normal en Clerk Development**. No es un error de C2Pro: significa que estás autenticando con una instancia de Clerk en entorno de desarrollo.
+This runbook covers:
 
-Señales claras de entorno Dev:
+- Clerk Production configuration
+- Vercel production environment configuration
+- Railway production environment configuration
+- smoke tests for sign-in, sign-up, reset-password, and authenticated API flow
+- evidence required to close the backlog tasks above
 
-- El asunto del correo incluye `[Development]`.
-- El remitente es `accounts.dev`.
-- Estás usando claves de Clerk de tipo `pk_test_...` / `sk_test_...`.
+This runbook does not itself configure Clerk, Vercel, or Railway. It tells the operator what must be configured and how to validate completion.
 
----
+## Security Guardrails
 
-## 2) Arranque recomendado para desarrollo local (lo más simple)
+- Do not commit live credentials to `.env`, `.env.example`, `.env.staging`, or any other tracked file.
+- Do not paste live `pk_live_...` or `sk_live_...` values into issues, PRs, or docs.
+- Store production secrets only in the target secret manager or deployment platform.
+- If any tracked environment file contains real secrets, treat that as a security incident and rotate them.
 
-1. Copia variables de entorno base:
+## Preflight
 
-```bash
-cp .env.example .env
-```
+Before starting, confirm all of the following:
 
-2. Levanta infraestructura:
+- you know the production frontend URL
+- you know the production backend URL
+- you know the Clerk production instance/domain
+- you have operator access to Clerk Production, Vercel production, and Railway production
+- backend migrations succeed from `apps/api`
 
-```bash
-docker compose up -d postgres redis minio minio-setup
-```
-
-3. Backend (terminal 1):
+Local backend bootstrap check:
 
 ```bash
 cd apps/api
-pip install -r requirements.txt
 alembic upgrade head
-python dev.py
 ```
 
-4. Frontend (terminal 2):
+If you run `alembic upgrade head` from repo root, Alembic will fail because `script_location` is resolved from `apps/api/alembic.ini`.
+
+## Environment Matrix
+
+### Local Development
+
+Allowed indicators:
+
+- `pk_test_...`
+- `sk_test_...`
+- `https://<instance>.clerk.accounts.dev`
+- email sender `accounts.dev`
+- subject containing `[Development]`
+
+### Production
+
+Required indicators:
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...`
+- `CLERK_SECRET_KEY=sk_live_...`
+- `CLERK_ISSUER=https://<production-clerk-domain>`
+- `CLERK_JWKS_URL=https://<production-clerk-domain>/.well-known/jwks.json`
+- production sender domain, not `accounts.dev`
+- no `[Development]` markers in auth emails
+
+### Deployment Targets
+
+| System | Required values |
+| ------ | --------------- |
+| Clerk Production | live keys, production domain, allowed redirects, verified sender |
+| Vercel Production | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, production API routing vars, no demo mode |
+| Railway Production | `CLERK_SECRET_KEY`, `CLERK_ISSUER`, `CLERK_JWKS_URL`, database and backend runtime vars |
+
+## Repository Readiness vs Production Completion
+
+Repository wiring already exists, but that is not proof of production completion.
+
+Implemented in repo:
+
+- Clerk frontend provider exists in `apps/web/app/providers.tsx`
+- protected routes exist in `apps/web/middleware.ts`
+- sign-in page exists in `apps/web/app/(auth)/sign-in/[[...sign-in]]/page.tsx`
+- sign-up page exists in `apps/web/app/(auth)/sign-up/[[...sign-up]]/page.tsx`
+- backend Clerk settings exist in `apps/api/src/config.py`
+- production deploy workflows exist in `.github/workflows/deploy-production.yml`
+
+Not proven by repo alone:
+
+- Clerk Production project exists and is active
+- live keys are configured in production environments
+- production domain/redirects are configured in Clerk
+- production sender is verified
+- deployed frontend is using live auth configuration
+- deployed backend accepts production Clerk tokens end-to-end
+
+## Task Closure Matrix
+
+| Task | Definition of done | Required evidence |
+| ---- | ------------------ | ----------------- |
+| `TASK-1175` | live publishable and secret keys are provisioned in production secret stores | operator note or screenshot showing live-key presence without exposing full values |
+| `TASK-1176` | production domain and auth redirect URLs are configured in Clerk | screenshot or operator note from Clerk dashboard |
+| `TASK-1177` | production sender and templates are verified | test emails proving no `accounts.dev` and no `[Development]` |
+| `TASK-1178` | production frontend uses production auth variables | live `/sign-in` and `/sign-up` validation plus deployment confirmation |
+| `TASK-1179` | production backend accepts Clerk-authenticated requests from frontend | backend health check and authenticated frontend-to-backend request evidence |
+| `TASK-1174` | all five subtasks above are complete and evidenced | completed matrix and smoke-test summary |
+
+## Execution Order
+
+Run these sections in order. Do not mark `TASK-1174` complete until all sections pass.
+
+### 1. Complete `TASK-1175`: Provision live Clerk credentials
+
+In Clerk Production:
+
+1. Open the production project.
+2. Retrieve or generate:
+   - publishable key `pk_live_...`
+   - secret key `sk_live_...`
+3. Derive or copy:
+   - `CLERK_ISSUER`
+   - `CLERK_JWKS_URL`
+
+Store them only in deployment platforms:
+
+- Vercel Production:
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- Railway Production:
+  - `CLERK_SECRET_KEY`
+  - `CLERK_ISSUER`
+  - `CLERK_JWKS_URL`
+
+Pass criteria:
+
+- no production deployment uses `pk_test_...`
+- no production deployment uses `sk_test_...`
+
+Evidence:
+
+- operator note with masked key prefixes
+- screenshot of secret presence without exposing full secrets
+
+### 2. Complete `TASK-1176`: Configure production domain and redirects
+
+In Clerk Production:
+
+1. Set the primary production domain.
+2. Configure allowed authentication URLs for:
+   - `/sign-in`
+   - `/sign-up`
+3. Confirm redirects match the application behavior.
+
+Application route references:
+
+- `apps/web/app/(auth)/sign-in/[[...sign-in]]/page.tsx`
+- `apps/web/app/(auth)/sign-up/[[...sign-up]]/page.tsx`
+
+Pass criteria:
+
+- the deployed production domain is registered in Clerk
+- sign-in and sign-up redirects match the deployed frontend routes
+
+Evidence:
+
+- Clerk dashboard screenshot
+- operator note with configured production URLs
+
+### 3. Complete `TASK-1177`: Verify production email sender and templates
+
+In Clerk Production:
+
+1. Configure the sender domain.
+2. Verify required DNS/domain ownership.
+3. Review production templates for:
+   - sign-up verification
+   - sign-in from new device
+   - password reset
+4. Trigger test emails from the deployed production auth flow.
+
+Pass criteria:
+
+- sender is not `accounts.dev`
+- email subject does not contain `[Development]`
+- templates render as production templates
+
+Evidence:
+
+- screenshots of received emails
+- operator note listing which flows were tested
+
+### 4. Complete `TASK-1179`: Deploy and validate backend production auth
+
+Configure Railway production environment:
+
+- `CLERK_SECRET_KEY`
+- `CLERK_ISSUER`
+- `CLERK_JWKS_URL`
+- `DATABASE_URL`
+- other required runtime variables
+
+Deploy backend using the production workflow or standard deployment path.
+
+Health check:
 
 ```bash
-cd apps/web
-npm install
-npm run dev
+curl --fail --silent --show-error "$PRODUCTION_API_URL/api/v1/health"
 ```
 
-5. Abre la app en `http://localhost:3000`.
+Pass criteria:
 
-> En este flujo, si tu auth está conectada a Clerk Dev, seguirás viendo correos `accounts.dev` y es esperado.
+- production backend deploy succeeds
+- health endpoint responds successfully
+- backend accepts a production Clerk-authenticated request
 
----
+Evidence:
 
-## 3) Diferencia real entre "modo dev" y "modo usuario final"
+- deployment log
+- health check result
+- authenticated API request result
 
-En este repo hay **dos ejes distintos** que suelen confundirse:
+### 5. Complete `TASK-1178`: Deploy and validate frontend production auth
 
-1. **Modo de datos de la app web**
-   - `NEXT_PUBLIC_APP_MODE=demo` → frontend con mocks (MSW), sin backend real.
-   - Sin `NEXT_PUBLIC_APP_MODE=demo` → frontend contra API real.
+Configure Vercel production environment:
 
-2. **Entorno de autenticación (Clerk)**
-   - **Development (test keys)** → correos `accounts.dev`, asuntos `[Development]`.
-   - **Production (live keys + dominio/email de producción)** → experiencia de usuario final.
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_API_URL` if used
+- any proxy/backend routing variables required by the deployment model
+- do not set `NEXT_PUBLIC_APP_MODE=demo`
 
-⚠️ Importante: quitar `demo` **no** te convierte automáticamente en producción de auth. Si sigues con claves test de Clerk, seguirás en entorno de desarrollo.
+Relevant runtime behavior:
 
----
+- app auth provider: `apps/web/app/providers.tsx`
+- protected route middleware: `apps/web/middleware.ts`
+- backend proxy routing: `apps/web/app/api/[...proxy]/route-utils.ts`
 
-## 4) Checklist para verlo como usuario final (producción)
+Deploy frontend to production.
 
-Para experiencia "real" de usuario final necesitas **todo** en producción, especialmente auth:
+Pass criteria:
 
-- [ ] Proyecto Clerk en entorno Production.
-- [ ] Variables con claves `pk_live_...` y `sk_live_...` (no test).
-- [ ] Dominio de producción configurado en Clerk (y URLs permitidas de sign-in/sign-up).
-- [ ] Plantillas de correo y remitente de producción verificados en Clerk.
-- [ ] Frontend desplegado con variables de producción.
-- [ ] Backend desplegado y accesible desde frontend.
+- `/sign-in` loads in production
+- `/sign-up` loads in production
+- app is not running demo mode
+- frontend can initiate authenticated flow against production backend
 
-Si falta cualquiera de estos puntos, la experiencia seguirá parcial de desarrollo.
+Evidence:
 
----
+- production deployment log
+- screenshots of live sign-in and sign-up routes
 
-## 5) Cómo comprobar rápido en qué entorno estás
+### 6. Complete `TASK-1174`: Consolidated production auth proof
 
-### Desde el correo
+Run final smoke tests on the deployed production system:
 
-- Si pone `[Development]` y viene de `accounts.dev` → estás en Clerk Dev.
+1. sign up a new user
+2. sign in with that user
+3. request password reset
+4. confirm email sender and subject are production-safe
+5. access an authenticated application page
+6. confirm frontend reaches backend successfully under authenticated session
 
-### Desde variables de entorno
+Pass criteria:
 
-- Si ves claves `*_test_*` → entorno de desarrollo.
-- Si ves claves `*_live_*` → entorno de producción.
+- no dev indicators remain:
+  - no `accounts.dev`
+  - no `[Development]`
+  - no `pk_test_...`
+  - no `sk_test_...`
+- `TASK-1175` through `TASK-1179` all have evidence
 
-### Desde comportamiento de la app
+Evidence bundle:
 
-- Si sale banner/demo data o no requiere backend real → estás en modo demo de frontend.
+- one smoke-test summary
+- one screenshot set
+- one operator note or ticket comment linking all evidence
 
----
+## Smoke Test Checklist
 
-## 6) Problemas típicos y solución
+- [ ] Production `/sign-in` loads
+- [ ] Production `/sign-up` loads
+- [ ] New user registration succeeds
+- [ ] Verification/reset email arrives from production sender
+- [ ] Existing user sign-in succeeds
+- [ ] Authenticated page load succeeds after sign-in
+- [ ] Frontend calls reach backend successfully
+- [ ] Backend health endpoint returns success
+- [ ] No `[Development]` or `accounts.dev` markers appear anywhere
 
-### "Puedo entrar, pero me llegan correos de desarrollo"
+## Fast Failure Checks
 
-No es bug: estás autenticando con Clerk Dev. Migra claves y configuración de Clerk a producción.
+If any of these are true, stop and do not mark production auth complete:
 
-### "Creía que ya estaba como usuario final porque no uso demo"
+- any environment still uses `pk_test_...` or `sk_test_...`
+- Clerk issuer or JWKS points to `clerk.accounts.dev`
+- auth emails still come from `accounts.dev`
+- deployed frontend cannot load `/sign-in` or `/sign-up`
+- backend health check fails
+- authenticated frontend-to-backend flow fails
 
-Sin `demo` solo indica que usas API real; **no** implica que auth sea producción.
+## Troubleshooting
 
-### "No sé si estoy en dev o prod"
+### `FAILED: No 'script_location' key found in configuration.`
 
-Confirma 3 cosas: correo recibido, tipo de claves (`test` vs `live`) y variables cargadas en el entorno donde ejecutas frontend/backend.
+Cause:
 
----
+- Alembic command was run from repo root instead of `apps/api`
 
-## 7) Flujo recomendado para evitar confusión
+Fix:
 
-1. Usa local/dev con claves test para desarrollar.
-2. Antes de validar como usuario final, crea un entorno de staging/producción con claves live.
-3. Verifica login, registro, recuperación de contraseña y correos en ese entorno live.
-4. Solo entonces valida UX final de usuario.
+```bash
+cd apps/api
+alembic upgrade head
+```
 
----
+### I removed demo mode but still get development emails
 
-## 8) Resumen corto
+Cause:
 
-- El correo `noreply@accounts.dev` con `[Development]` es normal en Clerk Dev.
-- "Demo mode" de frontend y "entorno Clerk" son cosas diferentes.
-- Para verse como usuario final necesitas Clerk Production + claves live + dominio/email de producción.
+- frontend demo mode and Clerk environment are different concerns
+
+Fix:
+
+- migrate Clerk to production/live keys and verified sender
+
+### Production frontend works but auth still behaves like development
+
+Cause:
+
+- Vercel or Railway production env still uses test Clerk values
+
+Fix:
+
+- re-check `TASK-1175`, `TASK-1178`, and `TASK-1179`
+
+## Rollback
+
+If production auth rollout fails after deployment:
+
+1. stop marking any auth task complete
+2. revert frontend or backend deployment through Vercel/Railway
+3. restore previous production auth settings if they were known-good
+4. keep collected failure evidence
+5. open a blocker against `TASK-1174`
+
+## Completion Record Template
+
+Use this template when closing the tasks:
+
+```text
+TASK-1175: PASS | live keys configured in production secret stores
+TASK-1176: PASS | production domain and redirect URLs configured in Clerk
+TASK-1177: PASS | production sender/templates verified, no development markers
+TASK-1178: PASS | frontend deployed with production vars, /sign-in and /sign-up validated
+TASK-1179: PASS | backend deployed, health check and authenticated API flow validated
+TASK-1174: PASS | aggregate production auth readiness complete
+
+Evidence:
+- Clerk dashboard screenshots: <location>
+- Deployment logs: <location>
+- Email screenshots: <location>
+- Smoke test summary: <location>
+```

@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:coverage": "node ./scripts/vitest-no-warn.mjs run --coverage",
     "test:e2e": "playwright test",
+    "test:visual": "playwright test --project=visual-regression src/tests/e2e/core-pages.visual.spec.ts",
     "verify:openspec": "npm --prefix ../.. run verify:openspec --"
   },
   "dependencies": {

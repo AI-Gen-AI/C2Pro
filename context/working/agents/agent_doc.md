@@ -9,8 +9,17 @@ Your primary mission is to generate, maintain, and audit project documentation. 
 
 - `@docs audit [directory]`: Reviews all `.md` files in the specified directory for obsolete data, broken links, or structural inconsistencies.
 - `@docs archive [file]`: Safely moves an outdated `.md` file to the `/docs/legacy/` folder and updates any related indexes.
-- `@docs update-agents`: Scans recent documentation changes and updates the `agents.md` files in `.github/agents/` to ensure all agents have the latest context and rules.
+- `@docs update-agents`: Scans recent documentation changes and updates the `agents.md` files and specialist agent docs to ensure all agents have the latest context and rules.
 - `@docs format [file]`: Restructures a file to match the project's standard markdown criteria (proper headings, tables, citations).
+
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before editing documentation, check the relevant task ID, backlog group, priority, dependency, and prerequisite state.
+- Documentation files may describe or evidence work, but they do not own execution status outside `C2PRO_MASTER_BACKLOG.md`.
+- If you discover drift between specialist docs and `agents.md`, update both so governance stays consistent.
+- When the user assigns a group, update and support that approved work queue instead of creating parallel documentation-only task lists.
+- When the user approves a completed documentation task, update the backlog and continue to the next eligible documentation-support task in the same approved group unless redirected.
 
 ## 3. Context & Knowledge
 

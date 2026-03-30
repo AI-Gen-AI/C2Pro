@@ -1,17 +1,41 @@
 
 # C2Pro v4.0 — Technical Design Document (TDD)
 
-> **Document Type:** Engineering Kick-off — Technical Implementation Plan  
+> **Document Type:** Technical Design Baseline with Governance Addendum  
 > **Version:** 4.0  
-> **Date:** 2026-02-10  
-> **Status:** APPROVED — Ready for Sprint Planning  
+> **Original Date:** 2026-02-10  
+> **Last Reviewed:** 2026-03-29  
+> **Status:** ACTIVE REFERENCE — valid with governance caveats below  
 > **Supersedes:** TDD v3.0 (2026-02-08), FRONTEND_TESTING_PLAN.md (deprecated)  
 > **Input:** Frontend Master Plan v1.0 (Phase 1–3 verified), Architecture Plan v2.1  
-> **Audience:** Engineering Team, Tech Leads, DevOps, QA  
+> **Audience:** Engineering Team, Tech Leads, DevOps, QA, Architecture Review Board  
 > **Author:** VP Engineering / Principal Software Architect  
 > **Review:** 12 Expert Agents, 6 Cross-Reviewers, 10 Verifiers — 31 flags resolved
 
 ---
+
+## Governance Addendum — 2026-03-29
+
+This document remains useful, but it is no longer sufficient as the standalone platform specification.
+
+Current interpretation rules:
+
+1. `C2PRO_MASTER_BACKLOG.md` is the delivery and release source of truth.
+2. `docs/architecture/decisions/006-post-reorganization-architecture.md` is the canonical repository-structure baseline.
+3. This document is primarily the frontend implementation baseline and should not override later backend, security, or release-governance documents.
+
+Current project state aligned to the repository:
+
+- C2Pro is a monorepo with `apps/api` and `apps/web`, not a frontend-only program.
+- The backend is the critical production path: multi-tenant FastAPI, PostgreSQL RLS, LangGraph orchestration, golden regression, and release-gate evidence.
+- `C2PRO_MASTER_BACKLOG.md` records the current canonical open work, with remaining blockers concentrated in security hardening and release signoff evidence.
+- Architectural decisions made after 2026-02-10 must be read together with ADR-006, LangGraph checkpointing docs, and the current testing roadmap.
+
+Known limits of this document:
+
+- Large portions of Sections 1 through 5 are frontend-specific and reflect the February planning baseline.
+- Embedded dependency/version examples are illustrative snapshots, not package-management source of truth.
+- For live dependency versions, use `apps/web/package.json` and `apps/api/pyproject.toml`.
 
 ## Changelog v3.0 → v4.0
 
@@ -34,6 +58,14 @@
 | §9 (NEW) Security | CSP, GDPR consent, RBAC gates, watermark pseudonymization | FLAG-14,31 | 🟠+🟡 |
 | §10 (NEW) A11y | WCAG 2.2 AA compliance checklist, contrast audit | FLAG-7,8 | 🟠 HIGH |
 
+## Changelog v4.0 → Governance Review 2026-03-29
+
+| Section | Change | Reason |
+|---------|--------|--------|
+| Header metadata | Added last review date and active-reference status | Clarify that the file is still used but is no longer only a sprint-kickoff artifact |
+| Governance Addendum | Added canonical interpretation order and current project status | Align document usage with March production-readiness baseline |
+| Technology stack guidance | Declared embedded dependency blocks non-authoritative | Prevent drift between document examples and live manifests |
+
 ---
 
 ## Table of Contents
@@ -52,6 +84,16 @@
 ---
 
 ## 1. Definitive Technology Stack (v4.0)
+
+### 1.0 Authoritative Version Sources
+
+Use the following files as authoritative for live dependency versions:
+
+| Surface | Source of Truth | Notes |
+|---------|-----------------|-------|
+| Frontend runtime and tooling | `apps/web/package.json` | Current frontend is on the Next.js 16 / React 19 family, beyond the February snapshot below |
+| Backend runtime and quality gates | `apps/api/pyproject.toml` | Python 3.11+, strict mypy, ruff, pytest baseline |
+| Release and production-readiness status | `C2PRO_MASTER_BACKLOG.md` | Use for go/no-go task status and release blockers, not this section alone |
 
 ### 1.1 Migration Delta: v3.0 → v4.0
 
@@ -180,6 +222,17 @@
 ---
 
 ## 2. Architecture Patterns & Code Blueprints
+
+### 2.0 Scope Clarification
+
+This section remains valid for the frontend application patterns it describes.
+
+For full-platform architecture, pair it with:
+
+- `docs/architecture/decisions/006-post-reorganization-architecture.md`
+- `docs/architecture/LANGGRAPH_CHECKPOINTING.md`
+- `docs/testing/PHASE4_TDD_IMPLEMENTATION_ROADMAP.md`
+- `C2PRO_MASTER_BACKLOG.md`
 
 ### 2.1 Dual Mode Setup — Zero-Conditional-Logic Pattern
 

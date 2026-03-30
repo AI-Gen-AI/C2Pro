@@ -1,5 +1,7 @@
 # Follow-up Ticket: Remove Dormant ORM Fallback Paths
 
+> **Governance Note:** This ticket defines scope and acceptance criteria. Active execution status must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
 ## Ticket
 
 - **ID**: `FOLLOWUP-AUTH-BOOTSTRAP-FALLBACK-REMOVAL`
@@ -32,3 +34,5 @@ Remove ORM fallback branches from auth bootstrap helpers after a stable producti
 ## Notes
 
 This follow-up should be executed as a dedicated SDD change after `harden-auth-bootstrap-fail-closed` is fully verified and promoted.
+
+If this work remains relevant, it should be added to `C2PRO_MASTER_BACKLOG.md` with a stable backlog ID before implementation starts.

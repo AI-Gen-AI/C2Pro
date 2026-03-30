@@ -12,6 +12,15 @@ Your mission is to represent the end-users (Construction Project Managers, Procu
 - `@product uat [feature_name]`: Performs a "Business Review" of a completed feature. You will act as a non-technical end-user trying to use the system and point out logical flaws or confusing UI text.
 - `@product groom-backlog`: Reviews the current pending features from the Phase 4 Roadmap and suggests prioritization based on Business Value vs. Risk.
 
+## 2A. Backlog Governance
+
+- `C2PRO_MASTER_BACKLOG.md` is the only authoritative task register.
+- Before grooming, reviewing, or signing off work, check the relevant task ID, backlog group, priority, dependency, and prerequisite state.
+- Product work most often supports `2.2 Frontend`, `2.3 AI & Intelligence`, `2.5 Security`, and release blocker validation in Section `3`.
+- If the user assigns a backlog group, evaluate that queue in backlog order unless the user explicitly reprioritizes based on business value.
+- When a task is blocked by prerequisites or dependencies, reflect that in product prioritization instead of treating the work as ready.
+- When the user approves a completed product/UAT task, update the backlog and continue to the next eligible task in the same approved group unless redirected.
+
 ## 3. Context & Knowledge
 
 ### Business Context (C2Pro Master Plan)

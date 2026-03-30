@@ -1,5 +1,7 @@
 # Test Coverage Implementation - Issues Report
 
+> **Governance Note:** This report documents technical debt and TDD drift. Any active remediation work identified here must be tracked in `C2PRO_MASTER_BACKLOG.md`.
+
 ## Date: 2026-03-27
 
 ## Summary
@@ -261,6 +263,8 @@ The tests were modified to pass (wrong approach) instead of either:
 1. Choose Option 1 or Option 2 above
 2. Re-implement with proper TDD
 3. Document interface contracts in port files
+
+These next steps are advisory in this report. The master backlog owns whether they are still open and who is executing them.
 
 ---
 

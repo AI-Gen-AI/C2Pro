@@ -46,4 +46,50 @@ describe("ProjectListTable", () => {
       "/projects/proj_demo_002",
     );
   });
+
+  it("renders the empty state when no projects are available", () => {
+    renderWithProviders(<ProjectListTable projects={[]} />);
+
+    expect(screen.getByText(/no projects yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/create your first project to start tracking coherence/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows em dash fallbacks for missing description and code", () => {
+    const projects: ProjectListItem[] = [
+      {
+        id: "proj_demo_003",
+        tenant_id: "tenant-demo",
+        name: "No Metadata Project",
+      },
+    ];
+
+    renderWithProviders(<ProjectListTable projects={projects} />);
+
+    expect(screen.getByRole("link", { name: /no metadata project/i })).toHaveAttribute(
+      "href",
+      "/projects/proj_demo_003",
+    );
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("renders table headers for project, description, and code", () => {
+    const projects: ProjectListItem[] = [
+      {
+        id: "proj_demo_004",
+        tenant_id: "tenant-demo",
+        name: "Header Check",
+        description: "Header coverage",
+        code: "HDR-001",
+      },
+    ];
+
+    renderWithProviders(<ProjectListTable projects={projects} />);
+
+    expect(screen.getByRole("columnheader", { name: /project/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /description/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /code/i })).toBeInTheDocument();
+  });
 });
