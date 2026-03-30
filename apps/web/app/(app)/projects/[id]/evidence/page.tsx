@@ -421,7 +421,9 @@ export default function EvidencePage() {
       });
       setAlertsState((prev) =>
         prev.map((alert) =>
-          alert.id === alertId ? (updatedAlert as BackendAlertResponse) : alert,
+          alert.id === alertId
+            ? (updatedAlert as unknown as BackendAlertResponse)
+            : alert,
         ),
       );
     },
@@ -440,7 +442,9 @@ export default function EvidencePage() {
     });
     setAlertsState((prev) =>
       prev.map((alert) =>
-        alert.id === alertId ? (updatedAlert as BackendAlertResponse) : alert,
+        alert.id === alertId
+          ? (updatedAlert as unknown as BackendAlertResponse)
+          : alert,
       ),
     );
   }, [resolveProjectAlert]);
