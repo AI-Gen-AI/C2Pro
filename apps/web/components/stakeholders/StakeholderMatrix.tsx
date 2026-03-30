@@ -90,8 +90,6 @@ const StakeholderCard = ({
     <div
       ref={setNodeRef}
       style={style}
-      role="button"
-      tabIndex={0}
       aria-label={`Move ${stakeholder.name} from ${quadrantConfig.find((item) => item.id === quadrant)?.title ?? quadrant}`}
       className={`flex cursor-grab items-center gap-3 rounded-xl border border-border bg-white px-3 py-2 shadow-sm transition ${
         isDragging ? "opacity-60 shadow-lg cursor-grabbing" : "opacity-100"

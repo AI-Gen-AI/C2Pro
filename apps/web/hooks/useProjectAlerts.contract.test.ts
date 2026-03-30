@@ -133,9 +133,13 @@ describe("useProjectAlerts project mapping", () => {
       },
     });
 
+    const initialProps: { projectId: string | null } = {
+      projectId: "proj-clear",
+    };
     const { result, rerender } = renderHook(
-      ({ projectId }: { projectId: string | null }) => useProjectAlerts(projectId),
-      { initialProps: { projectId: "proj-clear" } },
+      ({ projectId }: { projectId: string | null }) =>
+        useProjectAlerts(projectId),
+      { initialProps },
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
