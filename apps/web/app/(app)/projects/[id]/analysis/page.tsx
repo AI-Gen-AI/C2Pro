@@ -49,7 +49,11 @@ export default function AnalysisPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === "open");
-  const budgetUsed = 100 - (dashboard.sub_scores?.BUDGET ?? 0);
+  const subScores =
+    dashboard.sub_scores && typeof dashboard.sub_scores === "object"
+      ? (dashboard.sub_scores as Record<string, number>)
+      : {};
+  const budgetUsed = 100 - (subScores["BUDGET"] ?? 0);
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
