@@ -207,6 +207,9 @@ export default function LandingPageContent() {
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="text-sm text-muted-foreground">
             © 2026 C2Pro. All rights reserved.
+            <span className="ml-3 inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              Deploy marker 2026-03-30-a
+            </span>
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <a href="#" className="hover:text-foreground">
