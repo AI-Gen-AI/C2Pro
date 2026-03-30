@@ -49,6 +49,14 @@ export default function AnalysisPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === "open");
+  const coherenceScore =
+    typeof dashboard.coherence_score === "number"
+      ? dashboard.coherence_score
+      : Number(dashboard.coherence_score ?? 0);
+  const documentCount =
+    typeof dashboard.document_count === "number"
+      ? dashboard.document_count
+      : Number(dashboard.document_count ?? 0);
   const subScores =
     dashboard.sub_scores && typeof dashboard.sub_scores === "object"
       ? (dashboard.sub_scores as Record<string, number>)
@@ -62,7 +70,7 @@ export default function AnalysisPage() {
   const statCards = [
     {
       label: "Coherence Score",
-      value: String(dashboard.coherence_score),
+      value: String(coherenceScore),
       icon: Gauge,
       tone: "text-primary",
     },
@@ -74,7 +82,7 @@ export default function AnalysisPage() {
     },
     {
       label: "Documents Analyzed",
-      value: String(dashboard.document_count),
+      value: String(documentCount),
       icon: RadioTower,
       tone: "text-chart-quality",
     },
@@ -140,7 +148,7 @@ export default function AnalysisPage() {
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Current coherence</span>
               <span className="font-mono font-semibold text-foreground">
-                {dashboard.coherence_score}
+                {coherenceScore}
               </span>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
@@ -152,7 +160,7 @@ export default function AnalysisPage() {
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
               <span>Document coverage</span>
               <span className="font-mono font-semibold text-foreground">
-                {dashboard.document_count}
+                {documentCount}
               </span>
             </div>
             <p>
