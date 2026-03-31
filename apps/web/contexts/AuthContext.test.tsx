@@ -170,7 +170,7 @@ describe("AuthContext (Clerk-backed)", () => {
     expect(screen.getByText("no-tenant")).toBeInTheDocument();
     expect(screen.getByText("live")).toBeInTheDocument();
     expect(screen.getByText("free")).toBeInTheDocument();
-    expect(screen.getByText("unauthorized")).toBeInTheDocument();
+    expect(screen.getByText("authorized")).toBeInTheDocument();
   });
 
   it("exposes signed-out state when Clerk has no active session", () => {

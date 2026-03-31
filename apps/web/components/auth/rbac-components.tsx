@@ -178,7 +178,7 @@ interface TenantRequiredProps {
  * </TenantRequired>
  */
 export function TenantRequired({ children }: TenantRequiredProps) {
-  const { tenantId, isLoading, error } = useTenantContext();
+  const { isAuthorized, isLoading, error } = useTenantContext();
 
   if (isLoading) {
     return (
@@ -193,7 +193,7 @@ export function TenantRequired({ children }: TenantRequiredProps) {
     );
   }
 
-  if (!tenantId) {
+  if (!isAuthorized) {
     return (
       <div className="min-h-[400px] flex items-center justify-center">
         <div className="text-center max-w-md">

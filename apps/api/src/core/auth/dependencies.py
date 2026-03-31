@@ -37,6 +37,13 @@ logger = structlog.get_logger()
 security = HTTPBearer()
 
 
+def _build_personal_tenant_name(clerk_user_id: str) -> str:
+    """
+    Build a collision-resistant personal tenant name from the full Clerk user id.
+    """
+    return f"Personal-{clerk_user_id}"
+
+
 async def _try_clerk_jwt(token: str) -> dict[str, Any] | None:
     """
     Try to verify token as a Clerk JWT.
@@ -115,7 +122,7 @@ async def _provision_clerk_user(
             target_tenant_id = tenant_record.tenant_id
     else:
         # No org - create personal tenant based on clerk_user_id
-        personal_tenant_name = f"Personal-{clerk_user_id[:8]}"
+        personal_tenant_name = _build_personal_tenant_name(clerk_user_id)
         tenant_record = await lookup_personal_tenant_by_name(db, personal_tenant_name)
 
         if tenant_record is None:

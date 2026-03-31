@@ -77,8 +77,8 @@ async def test_provision_clerk_user_uses_bootstrap_personal_tenant_lookup(db, mo
     """Should resolve personal tenants via bootstrap lookup before creating users."""
     tenant = Tenant(
         id=uuid4(),
-        name="Personal-user_cler",
-        slug="personal-user-cler",
+        name="Personal-user_clerk_123",
+        slug="personal-user-clerk-123",
         is_active=True,
     )
     db.add(tenant)
@@ -113,9 +113,69 @@ async def test_provision_clerk_user_uses_bootstrap_personal_tenant_lookup(db, mo
         last_name="Member",
     )
 
-    personal_lookup.assert_awaited_once_with(db, "Personal-user_cle")
+    personal_lookup.assert_awaited_once_with(db, "Personal-user_clerk_123")
     user_lookup.assert_awaited_once_with(db, "user_clerk_123")
     assert user.tenant_id == tenant.id
+
+
+@pytest.mark.asyncio
+async def test_provision_clerk_user_does_not_collide_personal_tenants_for_similar_clerk_ids(
+    db, monkeypatch
+):
+    """Should derive unique fallback tenant names for Clerk users that share a prefix."""
+    personal_lookup = AsyncMock(return_value=None)
+    user_lookup = AsyncMock(return_value=None)
+    create_tenant = AsyncMock(
+        side_effect=[
+            BootstrapTenantRecord(
+                tenant_id=uuid4(),
+                is_active=True,
+                tenant_name="Personal-user_3BgY58Wt12J4J5RU0Skakyqdl2w",
+            ),
+            BootstrapTenantRecord(
+                tenant_id=uuid4(),
+                is_active=True,
+                tenant_name="Personal-user_3BgeltNBwogx83fcj2SMFBQFm1D",
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "src.core.auth.dependencies.lookup_personal_tenant_by_name",
+        personal_lookup,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "src.core.auth.dependencies.lookup_user_by_clerk_user_id",
+        user_lookup,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "src.core.auth.dependencies.create_bootstrap_tenant",
+        create_tenant,
+        raising=False,
+    )
+
+    first = await _provision_clerk_user(
+        db=db,
+        clerk_user_id="user_3BgY58Wt12J4J5RU0Skakyqdl2w",
+        clerk_org_id=None,
+        email="first@example.com",
+        first_name="First",
+        last_name="User",
+    )
+    second = await _provision_clerk_user(
+        db=db,
+        clerk_user_id="user_3BgeltNBwogx83fcj2SMFBQFm1D",
+        clerk_org_id=None,
+        email="second@example.com",
+        first_name="Second",
+        last_name="User",
+    )
+
+    assert personal_lookup.await_args_list[0].args[1] == "Personal-user_3BgY58Wt12J4J5RU0Skakyqdl2w"
+    assert personal_lookup.await_args_list[1].args[1] == "Personal-user_3BgeltNBwogx83fcj2SMFBQFm1D"
+    assert first.tenant_id != second.tenant_id
 
 
 @pytest.mark.asyncio

@@ -8,11 +8,13 @@ const clearAuth = vi.fn();
 const handleAuthErrorStatus = vi.fn();
 const clearCache = vi.fn();
 let tenantIdInStore = "tenant-uuid-1";
-let organizationId = "org-1";
-let organizationTenantId = "tenant-uuid-1";
+let organizationId: string | null = "org-1";
+let organizationTenantId: string | null = "tenant-uuid-1";
+let organizationMemberships: Array<{ organization: { id: string } }> = [];
 let isSignedIn = true;
 let isLoaded = true;
 let getTokenMock = vi.fn().mockResolvedValue("token-123");
+const setActiveMock = vi.fn();
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
@@ -27,6 +29,13 @@ vi.mock("@clerk/nextjs", () => ({
           publicMetadata: organizationTenantId ? { tenant_id: organizationTenantId } : {},
         }
       : null,
+  }),
+  useOrganizationList: () => ({
+    isLoaded,
+    setActive: setActiveMock,
+    userMemberships: {
+      data: organizationMemberships,
+    },
   }),
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -66,9 +75,11 @@ describe("AuthSync", () => {
     clearAuth.mockReset();
     clearCache.mockReset();
     handleAuthErrorStatus.mockReset();
+    setActiveMock.mockReset();
     tenantIdInStore = "tenant-uuid-1";
     organizationId = "org-1";
     organizationTenantId = "tenant-uuid-1";
+    organizationMemberships = [{ organization: { id: "org-1" } }];
     isSignedIn = true;
     isLoaded = true;
   });
@@ -166,5 +177,45 @@ describe("AuthSync", () => {
       expect(handleAuthErrorStatus).toHaveBeenCalledWith(401);
     });
     expect(setAuth).not.toHaveBeenCalled();
+  });
+
+  it("auto-activates the only organization membership when no org is active", async () => {
+    organizationId = null;
+    organizationTenantId = null;
+    organizationMemberships = [{ organization: { id: "org-solo" } }];
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(setActiveMock).toHaveBeenCalledWith({ organization: "org-solo" });
+    });
+    expect(setAuth).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-activate when multiple organization memberships are available", async () => {
+    organizationId = null;
+    organizationTenantId = null;
+    organizationMemberships = [
+      { organization: { id: "org-1" } },
+      { organization: { id: "org-2" } },
+    ];
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(setAuth).toHaveBeenCalledWith({
+        token: "token-123",
+        tenantId: null,
+      });
+    });
+    expect(setActiveMock).not.toHaveBeenCalled();
   });
 });
