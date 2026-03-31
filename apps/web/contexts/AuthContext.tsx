@@ -80,12 +80,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ? (rawTier as ServiceTier)
         : "free";
 
-    const hasAccessToken =
-      typeof accessToken === "string" && accessToken.length > 0;
+    const hasAccessToken = typeof accessToken === "string" && accessToken.length > 0;
     const isWaitingForToken = isLoaded && !!isSignedIn && !hasAccessToken;
+    const hasActiveOrganization = !!organization;
 
-    // User is authorized if they have a valid tenant_id
-    const isAuthorized = !!tenantId && hasAccessToken;
+    // Backend resolves Clerk org_id -> tenant. UI should not block on optional metadata.
+    const isAuthorized = hasAccessToken && (hasActiveOrganization || !!tenantId);
 
     return {
       user: user

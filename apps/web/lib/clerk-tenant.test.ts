@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getTenantIdFromOrganizationMetadata,
+  hasOrganizationAccess,
   isDemoOrganization,
 } from "./clerk-tenant";
 
@@ -25,5 +26,10 @@ describe("clerk-tenant helpers", () => {
     expect(
       isDemoOrganization({ publicMetadata: { is_demo: false } } as never),
     ).toBe(false);
+  });
+
+  it("treats an active organization as sufficient authorization context", () => {
+    expect(hasOrganizationAccess({ id: "org_123" } as never)).toBe(true);
+    expect(hasOrganizationAccess(null as never)).toBe(false);
   });
 });

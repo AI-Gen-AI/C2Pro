@@ -29,6 +29,12 @@ export interface TenantContextType {
   isAuthorized: boolean;
 }
 
+export function hasOrganizationAccess(
+  organization: ReturnType<typeof useOrganization>["organization"],
+): boolean {
+  return !!organization;
+}
+
 export type UserRole = "admin" | "member" | null;
 export type ServiceTier = "free" | "pro" | "enterprise";
 
@@ -96,9 +102,7 @@ export function useTenantContext(): TenantContextType {
       setIsDemoMode(isDemoOrg);
 
       if (!clerkTenantId) {
-        setError(
-          `Organization "${organization.name}" has no tenant_id configured.`,
-        );
+        setError(null);
         setTenantId(null);
         setIsLoading(false);
         return;
@@ -123,7 +127,7 @@ export function useTenantContext(): TenantContextType {
     isLoading,
     error,
     isAuthenticated: !!userId,
-    isAuthorized: !!tenantId,
+    isAuthorized: hasOrganizationAccess(organization),
   };
 }
 

@@ -8,10 +8,14 @@ import { useAuthStore } from "@/stores/auth";
 const queryClientClearSpy = vi.fn();
 const getTokenMock = vi.fn<() => Promise<string>>();
 const handleAuthErrorStatus = vi.fn();
+const setActiveMock = vi.fn();
 
 let mockIsSignedIn = true;
 let mockOrgId: string | null = "org-1";
 let mockTenantUuid: string | null = "tenant-uuid-1";
+let mockMemberships: Array<{ organization: { id: string } }> = [
+  { organization: { id: "org-1" } },
+];
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
@@ -26,6 +30,13 @@ vi.mock("@clerk/nextjs", () => ({
           publicMetadata: mockTenantUuid ? { tenant_id: mockTenantUuid } : {},
         }
       : null,
+  }),
+  useOrganizationList: () => ({
+    isLoaded: true,
+    setActive: setActiveMock,
+    userMemberships: {
+      data: mockMemberships,
+    },
   }),
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -55,7 +66,9 @@ describe("AuthSync integration", () => {
     mockIsSignedIn = true;
     mockOrgId = "org-1";
     mockTenantUuid = "tenant-uuid-1";
+    mockMemberships = [{ organization: { id: "org-1" } }];
     getTokenMock.mockResolvedValue("token-123");
+    setActiveMock.mockReset();
     useAuthStore.setState({ token: null, tenantId: null });
   });
 

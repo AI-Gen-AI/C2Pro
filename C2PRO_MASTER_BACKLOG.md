@@ -111,6 +111,7 @@ This section replaces the oversized document registry with the current sources t
 | [x] | P1 | `TASK-1415` | Backend | Fix Alembic WBS uniqueness migration so `upgrade head` drops legacy self-referencing FK dependencies before removing `procurement_wbs_items_code_key` `[x] Implemented (Unit Tests & Domain Logic)` | `apps/api/alembic/versions/20260321_0001_fix_wbs_code_uniqueness_scope.py` |
 | [ ] | P2 | `TASK-1358` | Backend | Support follow-up change creation without path ambiguity | `openspec/changes/openspec-bootstrap/proposal.md` |
 | [ ] | P1 | `AUTH-FOLLOWUP-01` | Security | Remove dormant ORM fallback paths from auth bootstrap helpers after observation window | `docs/planning/FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
+| [x] | P1 | `AUTH-FOLLOWUP-02` | Security | Prevent Clerk personal-tenant fallback collisions and auto-select single-org sessions so org-scoped auth bootstrap works without manual tenant edits `[x] Implemented (Unit Tests & Domain Logic)` | `docs/planning/FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
 | [ ] | P1 | `DOC-ADAPTER-QUAL-01` | Testing | Reconcile remaining document adapter contract quality issues | `docs/TEST_COVERAGE_ISSUES_REPORT.md` |
 
 ### 2.2 Frontend
