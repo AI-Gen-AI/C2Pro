@@ -58,6 +58,7 @@ router = APIRouter(
     response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register new user and company",
+    tags=["Authentication", "Public"],
     description="""
     Registers a new user and creates a new company (tenant).
 
@@ -151,6 +152,7 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_session)):
     "/refresh",
     response_model=TokenResponse,
     summary="Refresh access token",
+    tags=["Authentication", "Public"],
     description="""
     Refreshes the access token using a valid refresh token.
 

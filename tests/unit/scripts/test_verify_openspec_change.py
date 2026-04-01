@@ -14,6 +14,9 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from scripts.verify_openspec_change import (
+    VerifyReport,
+    ScenarioCheckResult,
+    _render_json_report,
     classify_runtime_drift,
     parse_spec_document,
     validate_rules_compliance,
@@ -99,3 +102,35 @@ def test_classify_runtime_drift_detects_non_markdown_runtime_files() -> None:
     )
 
     assert runtime_files == [Path("openspec/changes/sample/src/runtime_guard.py")]
+
+
+def test_render_json_report_emits_dashboard_friendly_contract() -> None:
+    report = VerifyReport(
+        artifact_presence=("PASS openspec/changes/sample/proposal.md",),
+        runtime_scope="PROCESS_ONLY",
+        scenario_coverage=(
+            ScenarioCheckResult(
+                requirement="Process-Only Verify Entry Point",
+                scenario="Docs-only verification executes",
+                check_id="SCN-001-process-only-verify-entry-point-docs-only-verification-executes",
+                status="PASS",
+                evidence="Parsed from openspec/changes/sample/specs/openspec/spec.md",
+            ),
+        ),
+        rules_compliance=("PASS all configured rule checks",),
+        verdict="PASS",
+        runtime_drift_files=(),
+    )
+
+    payload = _render_json_report(report=report, change_name="sample")
+
+    assert payload["change_name"] == "sample"
+    assert payload["verdict"] == "PASS"
+    assert payload["runtime_scope"] == "PROCESS_ONLY"
+    assert payload["summary"] == {
+        "artifact_presence_count": 1,
+        "scenario_coverage_count": 1,
+        "rules_compliance_count": 1,
+        "runtime_drift_file_count": 0,
+    }
+    assert payload["scenario_coverage"][0]["check_id"].startswith("SCN-001-")

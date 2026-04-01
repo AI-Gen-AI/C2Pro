@@ -23,11 +23,9 @@ Application: Orchestration. Depends ONLY on Domain and Ports (Interfaces).
 Adapters: Implementation. Depends on Application. (SQLAlchemy, FastAPI, Celery go here).
 
 Modular Monolith:
-
 Code is split into Modules (e.g., documents, coherence, procurement).
-
-FORBIDDEN: Importing ORM models from one module into another.
-
+FORBIDDEN: Importing ORM models or domain internals from one module into another.
+REQUIRED: Shared types (Enums, DTOs) MUST live in `shared_kernel`.
 REQUIRED: Communication between modules MUST go through Public Ports or Event Bus.
 
 Traceability: Every single file (Test or Impl) must reference the Test Suite ID (e.g., TS-UD-DOC-CLS-001) in its docstring.
@@ -53,14 +51,16 @@ You must mirror this structure exactly. Do not invent new folders.
 Plaintext
 apps/api/
 ├── src/
-│   ├── core/                       # Shared Kernel (Auth, EventBus, Config, ValueObjects)
+│   ├── core/                       # Shared Infrastructure (Auth, EventBus, Config)
+│   ├── shared_kernel/              # Shared Domain (Enums, ValueObjects, BaseDTOs)
 │   └── {MODULE_NAME}/              # e.g., documents, coherence, procurement
 │       ├── adapters/
 │       │   ├── http/               # Routers (FastAPI)
 │       │   └── persistence/        # Repositories (SQLAlchemy Impl)
+│       ├── ports/                  # Protocols/Interfaces (Abstract) - SIBLING of application/
 │       ├── application/
 │       │   ├── services/           # Use Cases / Application Services
-│       │   ├── ports/              # Protocols/Interfaces (Abstract)
+│       │   ├── use_cases/          # Use case orchestrators
 │       │   └── dtos/               # Pydantic Models (Input/Output)
 │       └── domain/
 │           ├── entities/           # Pure Data Classes (NOT SQLAlchemy Models)
@@ -78,40 +78,32 @@ apps/api/
 
 You must align with the logic defined in these files (available in context):
 
-PLAN_ARQUITECTURA_v2.1.md:
+C2PRO_MASTER_BACKLOG.md:
+Authority: Single Source of Truth for all active, pending, and completed tasks. Check first.
 
+docs/architecture/C2PRO_TECHNICAL_DESIGN_DOCUMENT_v4_1.md:
 Security: clauses table is the Single Source of Truth.
-
 Multi-tenancy: ALL repository queries MUST filter by tenant_id.
-
 Coherence Engine: Follow the 6 categories (SCOPE, BUDGET, TIME, TECH, LEGAL, QUALITY).
 
-C2PRO_TEST_SUITES_INDEX_v1.1.md:
-
+docs/testing/C2PRO_TEST_SUITES_INDEX_v1.1.md:
 Use this to validate the Scope and Priority of the task.
 
-c2pro_master_flow_diagram_v2.2.1.md:
-
+docs/architecture/diagrams/c2pro_master_flow_diagram_v2.2.1.md:
 Respect the flow: Upload -> Anonymize -> Extract -> Analyze -> Coherence.
 
 ## Coding Rules (Do's and Don'ts)
 
 ✅ DO:
 Use Value Objects for complex types (e.g., Money, Email).
-
 Use Protocol from typing for Ports (Interfaces).
-
 Use Dependency Injection in FastAPI routes and Services.
-
 Handle errors by raising Domain Exceptions, then mapping them to HTTP codes in adapters/http/error_handler.py.
 
 ❌ DO NOT:
 NEVER import sqlalchemy inside src/{module}/domain.
-
 NEVER perform DB operations inside a Unit Test (use MagicMock).
-
 NEVER put business logic in the Router/Controller.
-
 NEVER skip the tenant_id check in any read/write operation.
 
 ## Prompting Protocol for Agents
@@ -121,35 +113,23 @@ When generating code, the user will provide a Suite ID. Your output process is:
 Analyze ID: Look up TS-XX-XXX-XXX in the Index.
 
 Phase 1 (Red): Generate apps/api/tests/.../test_component.py.
-
-Assert failure.
-
-Mock dependencies.
+Assert failure. Mock dependencies.
 
 Phase 2 (Green): Generate apps/api/src/.../component.py.
+Implement minimal logic. Ensure types match Pydantic v2.
 
-Implement minimal logic.
-
-Ensure types match Pydantic v2.
-
-Phase 3 (Update): Execute Section 7 protocols.
+Phase 3 (Update): Execute Section 7 protocols (State Management).
 
 ## State Management & Documentation Updates (CRITICAL)
 
 To maintain project visibility, you MUST update the tracking files after successfully generating the code for a Suite.
 
-Update C2PRO_TDD_BACKLOG_v1.0.md:
+Update C2PRO_MASTER_BACKLOG.md:
+Find the task ID or Suite ID.
+Mark as [x] and add completion note: [x] Implemented (Unit Tests & Domain Logic).
 
+Update docs/testing/C2PRO_TDD_BACKLOG_v1.0.md:
 Find the line corresponding to the Suite ID or User Case.
-
 Change the checkbox from [ ] to [x].
-
-If the line implies partial completion, add a note: [x] Implemented (Unit Tests & Domain Logic).
-
-Update PLAN_ARQUITECTURA_v2.1.md:
-
-If you complete a critical component (e.g., "MCP Gateway"), locate the Status column in the tables.
-
-Change ⏳ PENDIENTE to ✅ COMPLETADO or 🔄 EN PROGRESO.
 
 Why? This ensures that the next Agent picking up the project knows exactly where the development stands.

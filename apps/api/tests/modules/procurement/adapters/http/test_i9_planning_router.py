@@ -96,3 +96,30 @@ async def test_i9_planning_endpoint_maps_snapshot_failures_to_503() -> None:
         )
 
     assert response.status_code == 503, response.text
+
+
+@pytest.mark.asyncio
+async def test_i9_planning_endpoint_fails_closed_without_real_dependencies() -> None:
+    """
+    I9 HTTP contract: default planning wiring must fail closed instead of returning
+    dummy procurement data when real collaborators are not configured.
+    """
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[get_current_tenant_id] = lambda: UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/api/v1/procurement/planning",
+            json={
+                "project_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "required_on_site": "2026-09-01",
+            },
+            headers={"X-Tenant-Id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},
+        )
+
+    assert response.status_code == 503, response.text
+    assert "unconfigured" in response.json()["detail"].lower()

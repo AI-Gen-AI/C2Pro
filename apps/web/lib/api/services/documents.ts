@@ -1,6 +1,10 @@
-import { listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet } from "@/lib/api/generated/documents/documents";
 import type { ProjectDocumentsGroup } from "@/lib/api/contracts";
+import { fetchApiJson } from "@/lib/api/services/http";
 import { listProjects } from "@/lib/api/services/dashboard";
+
+type DocumentListResponse = {
+  items?: Array<Record<string, unknown>>;
+};
 
 export async function listProjectDocumentGroups(): Promise<
   ProjectDocumentsGroup[]
@@ -9,10 +13,9 @@ export async function listProjectDocumentGroups(): Promise<
 
   const settled = await Promise.allSettled(
     projects.map(async (project): Promise<ProjectDocumentsGroup> => {
-      const response =
-        await listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet(
-          project.id,
-        );
+      const response = await fetchApiJson<DocumentListResponse>(
+        `projects/${project.id}/documents`,
+      );
 
       return {
         projectId: project.id,

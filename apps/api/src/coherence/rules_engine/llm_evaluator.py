@@ -11,7 +11,13 @@ Features:
 - Soporte para diferentes tipos de análisis
 - Caché de evaluaciones para optimizar costos
 
-Version: 1.0.0
+v0.3 Updates (Phase 4):
+- Continuous scoring with impact_score (0.0-1.0)
+- FindingSignal output for scoring engine compatibility
+- Improved JSON parsing with error handling
+- Cost tracking per evaluation
+
+Version: 1.1.0
 Sprint: P2-02
 """
 
@@ -19,17 +25,117 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Optional
+import re
+from dataclasses import dataclass, field
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 import structlog
 
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
-from src.coherence.models import Clause
+from src.coherence.models import Clause, FindingSignal, impact_to_severity, CoherenceCategory
 from src.coherence.rules_engine.base import Finding, RuleEvaluator
+from src.coherence.graph.prompts import (
+    COHERENCE_SYSTEM_PROMPT,
+    build_evaluation_prompt,
+)
 
 logger = structlog.get_logger()
+
+
+# =============================================================================
+# COST TRACKING DATACLASS
+# =============================================================================
+
+
+@dataclass
+class LlmEvaluationMetrics:
+    """
+    Tracks LLM evaluation metrics for cost and performance monitoring.
+
+    Attributes:
+        total_cost_usd: Cumulative cost of all LLM calls
+        llm_calls_count: Number of LLM API calls made
+        cache_hits: Number of cache hits (saved calls)
+        evaluations_count: Total evaluations requested
+        violations_found: Number of violations detected
+        avg_impact_score: Running average of impact scores
+        avg_confidence: Running average of confidence scores
+    """
+    total_cost_usd: float = 0.0
+    llm_calls_count: int = 0
+    cache_hits: int = 0
+    evaluations_count: int = 0
+    violations_found: int = 0
+    parse_errors: int = 0
+    _impact_sum: float = field(default=0.0, repr=False)
+    _confidence_sum: float = field(default=0.0, repr=False)
+
+    @property
+    def avg_impact_score(self) -> float:
+        if self.violations_found == 0:
+            return 0.0
+        return round(self._impact_sum / self.violations_found, 3)
+
+    @property
+    def avg_confidence(self) -> float:
+        if self.violations_found == 0:
+            return 0.0
+        return round(self._confidence_sum / self.violations_found, 3)
+
+    @property
+    def violation_rate(self) -> float:
+        if self.evaluations_count == 0:
+            return 0.0
+        return round(self.violations_found / self.evaluations_count, 3)
+
+    @property
+    def cache_hit_rate(self) -> float:
+        total = self.llm_calls_count + self.cache_hits
+        if total == 0:
+            return 0.0
+        return round(self.cache_hits / total, 3)
+
+    def record_evaluation(
+        self,
+        cost: float,
+        cached: bool,
+        impact_score: float | None,
+        confidence: float | None,
+    ) -> None:
+        """Record metrics for a single evaluation."""
+        self.evaluations_count += 1
+        if cached:
+            self.cache_hits += 1
+        else:
+            self.llm_calls_count += 1
+            self.total_cost_usd += cost
+
+        if impact_score is not None and impact_score > 0:
+            self.violations_found += 1
+            self._impact_sum += impact_score
+            if confidence is not None:
+                self._confidence_sum += confidence
+
+    def record_parse_error(self) -> None:
+        """Record a JSON parse error."""
+        self.parse_errors += 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Export metrics as dictionary."""
+        return {
+            "total_cost_usd": round(self.total_cost_usd, 6),
+            "llm_calls_count": self.llm_calls_count,
+            "cache_hits": self.cache_hits,
+            "cache_hit_rate": self.cache_hit_rate,
+            "evaluations_count": self.evaluations_count,
+            "violations_found": self.violations_found,
+            "violation_rate": self.violation_rate,
+            "avg_impact_score": self.avg_impact_score,
+            "avg_confidence": self.avg_confidence,
+            "parse_errors": self.parse_errors,
+        }
 
 
 # ===========================================
@@ -44,20 +150,36 @@ class LlmRuleEvaluator(RuleEvaluator):
     Utiliza Claude para evaluar reglas cualitativas que requieren
     comprensión del lenguaje natural y razonamiento complejo.
 
+    v0.3 Updates:
+    - evaluate_v3() returns FindingSignal with continuous impact_score
+    - Improved cost tracking via LlmEvaluationMetrics
+    - Better JSON parsing with fallback handling
+
     Example:
         evaluator = LlmRuleEvaluator(
             rule_id="R-SCOPE-01",
             rule_name="Scope Clarity",
             rule_description="El alcance del trabajo debe estar claramente definido",
-            detection_logic="Verifica que el alcance no contenga términos ambiguos como 'según sea necesario', 'cuando corresponda', 'razonable'"
+            detection_logic="Verifica que el alcance no contenga términos ambiguos"
         )
 
-        clause = Clause(id="C1", text="El contratista realizará trabajos adicionales según sea necesario...")
-        finding = await evaluator.evaluate_async(clause)
+        clause = Clause(id="C1", text="El contratista realizará trabajos adicionales...")
+        signal = await evaluator.evaluate_v3_async(clause)
 
-        if finding:
-            print(f"Regla violada: {finding.raw_data}")
+        if signal:
+            print(f"Impact: {signal.impact_score}, Confidence: {signal.confidence}")
     """
+
+    # Map legacy categories to v0.3 CoherenceCategory
+    CATEGORY_MAP: dict[str, CoherenceCategory] = {
+        "general": "SCOPE",
+        "scope": "SCOPE",
+        "financial": "BUDGET",
+        "legal": "LEGAL",
+        "technical": "TECHNICAL",
+        "schedule": "TIME",
+        "quality": "QUALITY",
+    }
 
     def __init__(
         self,
@@ -95,7 +217,10 @@ class LlmRuleEvaluator(RuleEvaluator):
         # Get wrapper
         self.wrapper = get_anthropic_wrapper()
 
-        # Statistics
+        # v0.3: Enhanced metrics tracking
+        self.metrics = LlmEvaluationMetrics()
+
+        # Legacy attributes (for backward compat)
         self.evaluations_count = 0
         self.violations_found = 0
         self.total_cost = 0.0
@@ -106,6 +231,11 @@ class LlmRuleEvaluator(RuleEvaluator):
             rule_name=rule_name,
             category=category,
         )
+
+    @property
+    def coherence_category(self) -> CoherenceCategory:
+        """Map legacy category to v0.3 CoherenceCategory."""
+        return self.CATEGORY_MAP.get(self.category.lower(), "SCOPE")
 
     def evaluate(self, clause: Clause) -> Finding | None:
         """
@@ -125,6 +255,252 @@ class LlmRuleEvaluator(RuleEvaluator):
         except RuntimeError:
             # No hay event loop, crear uno nuevo
             return asyncio.run(self.evaluate_async(clause))
+
+    def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
+        """
+        v0.3 synchronous evaluation returning FindingSignal.
+        Wraps evaluate_v3_async() for sync contexts.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, self.evaluate_v3_async(clause))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.evaluate_v3_async(clause))
+        except RuntimeError:
+            return asyncio.run(self.evaluate_v3_async(clause))
+
+    async def evaluate_v3_async(self, clause: Clause) -> FindingSignal | None:
+        """
+        v0.3 async evaluation returning FindingSignal with continuous scoring.
+
+        Returns a FindingSignal with:
+        - impact_score: 0.0-1.0 continuous severity
+        - confidence: 0.0-1.0 certainty level
+        - severity: Derived from impact_score via impact_to_severity()
+
+        Args:
+            clause: The clause to evaluate
+
+        Returns:
+            FindingSignal if issue detected (impact_score > 0), None otherwise
+        """
+        logger.info(
+            "llm_evaluating_clause_v3",
+            rule_id=self.rule_id,
+            clause_id=clause.id,
+            text_length=len(clause.text),
+        )
+
+        # Build optimized prompt
+        prompt = build_evaluation_prompt(
+            rule_id=self.rule_id,
+            rule_name=self.rule_name,
+            rule_description=self.rule_description,
+            detection_logic=self.detection_logic,
+            category=self.coherence_category,
+            clause_id=clause.id,
+            clause_text=clause.text,
+            clause_data=clause.data if clause.data else None,
+        )
+
+        # Make LLM request
+        request = AIRequest(
+            prompt=prompt,
+            task_type=AITaskType.COHERENCE_CHECK,
+            system_prompt=COHERENCE_SYSTEM_PROMPT,
+            low_budget_mode=self.low_budget_mode,
+            tenant_id=self.tenant_id,
+            use_cache=True,
+            temperature=0.0,
+        )
+
+        try:
+            response = await self.wrapper.generate(request)
+
+            # Parse response with improved error handling
+            result = self._parse_v3_response(response.content)
+
+            # Extract and validate scores
+            impact_score = self._clamp_score(result.get("impact_score", 0.0))
+            confidence = self._clamp_score(result.get("confidence", 0.8))
+
+            # Record metrics
+            self.metrics.record_evaluation(
+                cost=response.cost_usd,
+                cached=response.cached,
+                impact_score=impact_score if impact_score > 0 else None,
+                confidence=confidence if impact_score > 0 else None,
+            )
+
+            # Update legacy counters
+            self.evaluations_count += 1
+            self.total_cost += response.cost_usd
+
+            # No violation if impact_score is 0 or very low
+            if impact_score < 0.05:
+                logger.debug(
+                    "llm_rule_no_violation_v3",
+                    rule_id=self.rule_id,
+                    clause_id=clause.id,
+                    impact_score=impact_score,
+                )
+                return None
+
+            self.violations_found += 1
+
+            # Build FindingSignal
+            evidence = result.get("evidence", {})
+            return FindingSignal(
+                rule_id=self.rule_id,
+                clause_id=clause.id,
+                source="llm",
+                impact_score=impact_score,
+                confidence=confidence,
+                severity=impact_to_severity(impact_score),
+                category=self.coherence_category,
+                evidence_summary=evidence.get("explanation", ""),
+                quote=evidence.get("quote", ""),
+                raw_data={
+                    "rule_name": self.rule_name,
+                    "recommendation": result.get("recommendation", ""),
+                    "model_used": response.model_used,
+                    "cached": response.cached,
+                    "cost_usd": response.cost_usd,
+                },
+            )
+
+        except Exception as e:
+            logger.error(
+                "llm_evaluation_failed_v3",
+                rule_id=self.rule_id,
+                clause_id=clause.id,
+                error=str(e),
+            )
+            # Return None on error (graceful fallback)
+            return None
+
+    @staticmethod
+    def _clamp_score(value: Any) -> float:
+        """Clamp a value to [0.0, 1.0] range with type coercion."""
+        try:
+            score = float(value)
+            return max(0.0, min(1.0, score))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _parse_v3_response(self, content: str) -> dict[str, Any]:
+        """
+        Parse LLM response with improved error handling.
+
+        Handles:
+        - JSON in markdown code blocks
+        - Raw JSON
+        - Partial JSON recovery
+        - Graceful fallback on parse errors
+
+        Returns dict with at minimum: impact_score, confidence, evidence
+        """
+        content = content.strip()
+
+        # Try to extract JSON from various formats
+        json_str = self._extract_json(content)
+
+        try:
+            result = json.loads(json_str)
+
+            # Validate required fields
+            if not isinstance(result, dict):
+                raise ValueError("Response is not a JSON object")
+
+            # Ensure required fields exist with defaults
+            result.setdefault("impact_score", 0.0)
+            result.setdefault("confidence", 0.8)
+            result.setdefault("rule_violated", result.get("impact_score", 0) > 0.05)
+            result.setdefault("evidence", {"quote": "", "explanation": ""})
+            result.setdefault("recommendation", "")
+
+            return result
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(
+                "llm_response_parse_failed_v3",
+                rule_id=self.rule_id,
+                error=str(e),
+                content_preview=content[:200],
+            )
+            self.metrics.record_parse_error()
+
+            # Attempt to recover partial data
+            return self._recover_partial_response(content)
+
+    def _extract_json(self, content: str) -> str:
+        """Extract JSON from content, handling markdown code blocks."""
+        # Try markdown code block with json tag
+        match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+
+        # Try generic code block
+        match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
+        if match:
+            potential_json = match.group(1).strip()
+            if potential_json.startswith('{'):
+                return potential_json
+
+        # Try to find raw JSON object
+        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+        if match:
+            return match.group(0)
+
+        return content
+
+    def _recover_partial_response(self, content: str) -> dict[str, Any]:
+        """
+        Attempt to recover useful data from malformed response.
+
+        Returns a safe default dict if recovery fails.
+        """
+        result = {
+            "impact_score": 0.0,
+            "confidence": 0.5,
+            "rule_violated": False,
+            "evidence": {"quote": "", "explanation": ""},
+            "recommendation": "",
+            "parse_error": True,
+        }
+
+        # Try to extract impact_score
+        match = re.search(r'"impact_score"\s*:\s*([0-9.]+)', content)
+        if match:
+            try:
+                result["impact_score"] = self._clamp_score(match.group(1))
+                result["rule_violated"] = result["impact_score"] > 0.05
+            except ValueError:
+                pass
+
+        # Try to extract confidence
+        match = re.search(r'"confidence"\s*:\s*([0-9.]+)', content)
+        if match:
+            try:
+                result["confidence"] = self._clamp_score(match.group(1))
+            except ValueError:
+                pass
+
+        # Try to extract quote
+        match = re.search(r'"quote"\s*:\s*"([^"]*)"', content)
+        if match:
+            result["evidence"]["quote"] = match.group(1)
+
+        # Try to extract explanation
+        match = re.search(r'"explanation"\s*:\s*"([^"]*)"', content)
+        if match:
+            result["evidence"]["explanation"] = match.group(1)
+
+        return result
 
     async def evaluate_async(self, clause: Clause) -> Finding | None:
         """
@@ -294,21 +670,37 @@ Evalúa si esta cláusula viola la regla y responde en JSON:
             }
 
     def get_statistics(self) -> dict[str, Any]:
-        """Obtiene estadísticas del evaluador."""
-        violation_rate = (
-            self.violations_found / self.evaluations_count
-            if self.evaluations_count > 0
-            else 0
-        )
+        """
+        Obtiene estadísticas del evaluador.
 
-        return {
+        v0.3: Now includes enhanced metrics from LlmEvaluationMetrics.
+        """
+        # Merge legacy and v0.3 metrics
+        stats = {
             "rule_id": self.rule_id,
             "rule_name": self.rule_name,
-            "evaluations_count": self.evaluations_count,
-            "violations_found": self.violations_found,
-            "violation_rate": round(violation_rate, 3),
-            "total_cost_usd": round(self.total_cost, 4),
+            "category": self.coherence_category,
         }
+        stats.update(self.metrics.to_dict())
+
+        return stats
+
+    def reset_metrics(self) -> None:
+        """Reset all metrics counters."""
+        self.metrics = LlmEvaluationMetrics()
+        self.evaluations_count = 0
+        self.violations_found = 0
+        self.total_cost = 0.0
+
+    @property
+    def total_cost_usd(self) -> float:
+        """Total cost in USD (v0.3 API)."""
+        return self.metrics.total_cost_usd
+
+    @property
+    def llm_calls_count(self) -> int:
+        """Total LLM API calls (v0.3 API)."""
+        return self.metrics.llm_calls_count
 
 
 # ===========================================

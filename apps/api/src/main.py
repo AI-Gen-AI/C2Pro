@@ -19,6 +19,7 @@ from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
 from src.core.events import build_event_bus
 from src.core.handlers import register_exception_handlers
+from src.core.frontend_support.router import router as frontend_support_router
 from src.core.middleware import (
     APIContractMiddleware,
     RateLimitMiddleware,
@@ -225,7 +226,7 @@ def create_application() -> FastAPI:
     # ===========================================
 
     # Root
-    @app.get("/", tags=["Root"])
+    @app.get("/", tags=["Public"])
     async def root():
         """
         Root endpoint.
@@ -258,6 +259,7 @@ def create_application() -> FastAPI:
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(bulk_operations_router, prefix=api_v1_prefix)
     app.include_router(observability_router, prefix=api_v1_prefix)
+    app.include_router(frontend_support_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
     app.include_router(wbs_router, prefix=api_v1_prefix)

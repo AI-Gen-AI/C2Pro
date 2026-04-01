@@ -20,7 +20,7 @@ describe("S3-01 RED - evidence bundle budget", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
       pages?: Record<string, string[]>;
     };
-    const evidenceRoute = "/dashboard/projects/[id]/evidence";
+    const evidenceRoute = "/projects/[id]/evidence";
     const evidenceChunks = manifest.pages?.[evidenceRoute] ?? [];
 
     const totalBytes = evidenceChunks.reduce((sum, chunkPath) => {

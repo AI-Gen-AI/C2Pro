@@ -15,7 +15,7 @@ describe("S3-11 RED - onboarding sample project integration", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       projectId: "proj_sample_001",
-      route: "/dashboard/projects/proj_sample_001",
+      route: "/projects/proj_sample_001",
     });
   });
 

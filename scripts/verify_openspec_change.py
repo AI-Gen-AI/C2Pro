@@ -6,6 +6,7 @@ Docs-first verifier for OpenSpec process-only changes.
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -286,6 +287,33 @@ def _render_markdown_report(report: VerifyReport, verify_rules: dict[str, Any], 
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _render_json_report(report: VerifyReport, change_name: str) -> dict[str, Any]:
+    return {
+        "change_name": change_name,
+        "verdict": report.verdict,
+        "runtime_scope": report.runtime_scope,
+        "summary": {
+            "artifact_presence_count": len(report.artifact_presence),
+            "scenario_coverage_count": len(report.scenario_coverage),
+            "rules_compliance_count": len(report.rules_compliance),
+            "runtime_drift_file_count": len(report.runtime_drift_files),
+        },
+        "artifact_presence": list(report.artifact_presence),
+        "scenario_coverage": [
+            {
+                "requirement": row.requirement,
+                "scenario": row.scenario,
+                "check_id": row.check_id,
+                "status": row.status,
+                "evidence": row.evidence,
+            }
+            for row in report.scenario_coverage
+        ],
+        "rules_compliance": list(report.rules_compliance),
+        "runtime_drift_files": [str(path) for path in report.runtime_drift_files],
+    }
+
+
 def verify_change(verify_input: VerifyInput) -> tuple[int, VerifyReport, str]:
     verify_rules = _load_verify_rules(verify_input.repo_root)
     change_path = verify_input.repo_root / "openspec" / "changes" / verify_input.change_name
@@ -363,7 +391,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     report_path = repo_root / "openspec" / "changes" / args.change / "verify-report.md"
+    json_report_path = repo_root / "openspec" / "changes" / args.change / "verify-report.json"
     report_path.write_text(markdown, encoding="utf-8")
+    json_report_path.write_text(
+        json.dumps(_render_json_report(report=_report, change_name=args.change), indent=2),
+        encoding="utf-8",
+    )
     print(f"OpenSpec verification report: {report_path.relative_to(repo_root)}")
     if exit_code == EXIT_RUNTIME_DRIFT:
         print("Runtime drift detected. Full verification gates are required.")

@@ -8,7 +8,7 @@ test("S3-02 RED - mobile evidence tabs and alert-to-highlight continuity", async
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/dashboard/projects/proj_demo_001/evidence");
+  await page.goto("/projects/proj_demo_001/evidence");
 
   await expect(page.getByRole("tab", { name: /alerts/i })).toBeVisible();
   await page.getByRole("tab", { name: /alerts/i }).click();

@@ -239,14 +239,10 @@ async def analyze_document(
 async def stream_project_processing(
     project_id: UUID,
     request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> StreamingResponse:
-    tenant_id = getattr(request.state, "tenant_id", None)
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authenticated SSE session required",
-        )
+    tenant_id = current_user.tenant_id
 
     document_count, global_score, completed_at = await _resolve_processing_summary(
         db,

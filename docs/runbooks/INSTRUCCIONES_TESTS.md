@@ -74,10 +74,10 @@ docker-compose -f docker-compose.test.yml logs -f postgres-test
 
 ```bash
 # Aplicar la migración de security foundation
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 
 # Verificar que se aplicó correctamente
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test -c "\dt"
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "\dt"
 # Deberías ver ~18 tablas
 ```
 
@@ -85,10 +85,10 @@ docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d 
 
 ```bash
 # Crear la base de datos manualmente
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -c "CREATE DATABASE c2pro_test;"
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "CREATE DATABASE c2pro_test;"
 
 # Reintentar la migración
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---
@@ -200,10 +200,10 @@ python -m pytest tests/security/test_mcp_security.py -v
 
 ```bash
 # Crear manualmente
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -c "CREATE DATABASE c2pro_test;"
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -c "CREATE DATABASE c2pro_test;"
 
 # Aplicar migraciones
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---
@@ -216,10 +216,10 @@ docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d 
 
 ```bash
 # Verificar qué tablas existen
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test -c "\dt"
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test -c "\dt"
 
 # Si está vacío, aplicar migraciones nuevamente
-docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U test -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
+docker-compose -f docker-compose.test.yml exec -T postgres-test psql -U postgres -d c2pro_test < infrastructure/supabase/archive/migrations/002_security_foundation_v2.4.0.sql
 ```
 
 ---

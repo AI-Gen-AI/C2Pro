@@ -1,7 +1,8 @@
-import axios, {
+import axios from "axios/dist/browser/axios.cjs";
+import type {
   AxiosError,
-  type AxiosRequestConfig,
-  type InternalAxiosRequestConfig,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
 } from "axios";
 import { env } from "@/config/env";
 import { showToast } from "@/lib/ui/toast";

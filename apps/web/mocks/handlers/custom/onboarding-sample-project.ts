@@ -4,7 +4,7 @@ export const onboardingSampleProjectHandlers = [
   http.post("/api/v1/onboarding/sample-project/start", async () => {
     return HttpResponse.json({
       projectId: "proj_sample_001",
-      route: "/dashboard/projects/proj_sample_001",
+      route: "/projects/proj_sample_001",
       reused: true,
       duplicateCreated: false,
     });

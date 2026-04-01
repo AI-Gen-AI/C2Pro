@@ -26,6 +26,36 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "cross-browser-chromium",
+      testMatch: /cross-browser-smoke\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      metadata: {
+        task: "TASK-024",
+        type: "cross-browser-smoke",
+        browser: "chromium",
+      },
+    },
+    {
+      name: "cross-browser-firefox",
+      testMatch: /cross-browser-smoke\.spec\.ts/,
+      use: { ...devices["Desktop Firefox"] },
+      metadata: {
+        task: "TASK-024",
+        type: "cross-browser-smoke",
+        browser: "firefox",
+      },
+    },
+    {
+      name: "cross-browser-webkit",
+      testMatch: /cross-browser-smoke\.spec\.ts/,
+      use: { ...devices["Desktop Safari"] },
+      metadata: {
+        task: "TASK-024",
+        type: "cross-browser-smoke",
+        browser: "webkit",
+      },
+    },
+    {
       name: "visual-regression",
       testMatch: /core-pages\.visual\.spec\.ts/,
       use: {

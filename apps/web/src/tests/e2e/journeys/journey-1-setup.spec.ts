@@ -24,8 +24,8 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
     await page.fill('[data-testid="password-input"]', "testpassword123");
     await page.click('[data-testid="login-button"]');
 
-    // Wait for dashboard to load
-    await page.waitForURL("**/dashboard");
+    // Wait for canonical app home to load
+    await page.waitForURL((url) => url.pathname === "/");
   });
 
   test("should navigate to project creation from empty dashboard [TEST-01]", async ({
@@ -293,7 +293,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
     ).toBeVisible();
 
     // Wait for creation to complete
-    await page.waitForURL("**/projects/**/dashboard", { timeout: 30000 });
+    await page.waitForURL(/\/projects\/[^/?#]+$/, { timeout: 30000 });
 
     // Should be on project dashboard
     await expect(
@@ -317,7 +317,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
     // Complete project creation first
     await page.goto("http://localhost:3000/projects/new?step=review");
     await page.click('[data-testid="create-project-button"]');
-    await page.waitForURL("**/projects/**/dashboard", { timeout: 30000 });
+    await page.waitForURL(/\/projects\/[^/?#]+$/, { timeout: 30000 });
 
     // Should show onboarding tour modal
     await expect(

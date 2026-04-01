@@ -8,7 +8,7 @@ test("S3-02 RED addendum - mobile reload preserves deep evidence state", async (
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/dashboard/projects/proj_demo_001/evidence");
+  await page.goto("/projects/proj_demo_001/evidence");
 
   await page.getByRole("tab", { name: /alerts/i }).click();
   await page.getByRole("button", { name: /delay penalty alert/i }).click();

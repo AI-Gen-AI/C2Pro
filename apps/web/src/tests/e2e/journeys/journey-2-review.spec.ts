@@ -27,12 +27,12 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
 
     // Submit form by pressing Enter
     await Promise.all([
-      page.waitForURL("**/dashboard"),
+      page.waitForURL((url) => url.pathname === "/"),
       page.getByTestId("password-input").press("Enter"),
     ]);
 
     // Navigate to projects list
-    await page.goto("http://localhost:3000/dashboard/projects");
+    await page.goto("http://localhost:3000/projects");
     await expect(page.getByTestId("projects-list")).toBeVisible();
   });
 
@@ -51,7 +51,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
     await page.click('[data-testid="project-card-1"]');
 
     // Then: Should navigate to project dashboard
-    await page.waitForURL("**/projects/**/dashboard");
+    await page.waitForURL(/\/projects\/[^/?#]+$/);
     await expect(
       page.locator('[data-testid="project-dashboard"]'),
     ).toBeVisible();
@@ -80,7 +80,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      * Expected: Coherence score with category breakdown displayed
      */
     // Navigate to project dashboard
-    await page.goto("http://localhost:3000/dashboard/projects/test-project-id");
+    await page.goto("http://localhost:3000/projects/test-project-id");
 
     // Should show coherence score
     await expect(
@@ -119,7 +119,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to project alerts page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/alerts",
+      "http://localhost:3000/projects/test-project-id/alerts",
     );
 
     // Should show alerts page
@@ -161,7 +161,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to WBS page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/wbs",
+      "http://localhost:3000/projects/test-project-id/wbs",
     );
 
     // Should show WBS tree
@@ -196,7 +196,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to budget page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/budget",
+      "http://localhost:3000/projects/test-project-id/budget",
     );
 
     // Should show budget page
@@ -234,7 +234,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to documents page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/documents",
+      "http://localhost:3000/projects/test-project-id/documents",
     );
 
     // Should show documents page
@@ -268,7 +268,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to WBS page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/wbs",
+      "http://localhost:3000/projects/test-project-id/wbs",
     );
 
     // Find WBS item and click edit
@@ -313,7 +313,7 @@ test.describe("TS-E2E-J2-001: Weekly Project Review Journey", () => {
      */
     // Navigate to alerts page
     await page.goto(
-      "http://localhost:3000/dashboard/projects/test-project-id/alerts",
+      "http://localhost:3000/projects/test-project-id/alerts",
     );
 
     // Find alert and click resolve

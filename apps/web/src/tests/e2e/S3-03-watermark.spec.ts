@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 test("S3-03 RED - evidence route renders pseudonymized watermark without raw PII", async ({
   page,
 }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/evidence");
+  await page.goto("/projects/proj_demo_001/evidence");
 
   await expect(page.getByTestId("evidence-watermark-overlay")).toBeVisible();
   await expect(page.getByTestId("evidence-watermark-overlay")).toContainText(/USR-|ANON-/i);

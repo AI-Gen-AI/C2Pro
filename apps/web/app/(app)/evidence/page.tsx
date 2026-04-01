@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, FileSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useListProjectsApiV1ProjectsGet } from '@/lib/api/generated/projects/projects';
+import type { ProjectListItem } from '@/lib/api/contracts';
+import { listProjects } from '@/lib/api/services/dashboard';
 
 /**
  * Test Suite ID: TASK-1347
@@ -11,8 +13,48 @@ import { useListProjectsApiV1ProjectsGet } from '@/lib/api/generated/projects/pr
  */
 export default function EvidencePage() {
   const router = useRouter();
-  const { data, isLoading, error } = useListProjectsApiV1ProjectsGet();
-  const projects = data?.items ?? [];
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProjects = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const items = await listProjects();
+        if (!active) {
+          return;
+        }
+
+        setProjects(items);
+      } catch (loadError) {
+        if (!active) {
+          return;
+        }
+
+        setProjects([]);
+        setError(
+          loadError instanceof Error
+            ? loadError
+            : new Error('Could not load evidence projects right now.'),
+        );
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadProjects();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-center px-6 py-10">

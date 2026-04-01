@@ -32,7 +32,7 @@ CRITICAL_CIRCUIT_BREAKER_SERVICES = ["anthropic_llm", "openai_embeddings", "r2_s
 
 router = APIRouter(
     prefix="/health",
-    tags=["Health"],
+    tags=["Health", "Public"],
 )
 
 # Timeout for dependency checks in seconds
@@ -66,6 +66,7 @@ async def liveness_check():
 @router.get(
     "/ready",
     summary="Readiness Probe",
+    tags=["Public"],
     description="Checks if the application is ready to accept traffic by verifying connections to dependencies."
 )
 async def readiness_check():

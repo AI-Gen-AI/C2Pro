@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
-from src.wbs.adapters.persistence import get_wbs_repository
+from src.wbs.adapters.persistence import InMemoryWBSRepository, get_wbs_repository
 from src.wbs.application.dtos import (
     CreateWBSItemRequest,
     MoveWBSItemRequest,
@@ -35,6 +35,36 @@ from src.wbs.application.use_cases import (
 )
 
 router = APIRouter(prefix="/projects", tags=["wbs"])
+
+
+def get_wbs_use_case(
+    repository=Depends(get_wbs_repository),
+) -> GetWBSUseCase:
+    return GetWBSUseCase(repository)
+
+
+def get_create_wbs_item_use_case(
+    repository=Depends(get_wbs_repository),
+) -> CreateWBSItemUseCase:
+    return CreateWBSItemUseCase(repository)
+
+
+def get_update_wbs_item_use_case(
+    repository=Depends(get_wbs_repository),
+) -> UpdateWBSItemUseCase:
+    return UpdateWBSItemUseCase(repository)
+
+
+def get_move_wbs_item_use_case(
+    repository=Depends(get_wbs_repository),
+) -> MoveWBSItemUseCase:
+    return MoveWBSItemUseCase(repository)
+
+
+def get_delete_wbs_item_use_case(
+    repository=Depends(get_wbs_repository),
+) -> DeleteWBSItemUseCase:
+    return DeleteWBSItemUseCase(repository)
 
 
 # ===========================================
@@ -280,6 +310,7 @@ def _build_move_request(
 async def get_wbs(
     project_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    use_case: Annotated[GetWBSUseCase, Depends(get_wbs_use_case)],
 ) -> WBSOutput:
     """
     Get WBS items for a project.
@@ -291,9 +322,6 @@ async def get_wbs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
-
-    repository = get_wbs_repository()
-    use_case = GetWBSUseCase(repository)
 
     result = await use_case.execute(project_id, str(current_user.tenant_id))
 
@@ -313,15 +341,13 @@ async def create_wbs_item(
     project_id: str,
     input_data: CreateWBSItemInput,
     current_user: Annotated[User, Depends(get_current_user)],
+    use_case: Annotated[CreateWBSItemUseCase, Depends(get_create_wbs_item_use_case)],
 ) -> WBSItemOutput:
     """
     Create a new WBS item.
 
     Auto-generates code if not provided.
     """
-    repository = get_wbs_repository()
-    use_case = CreateWBSItemUseCase(repository)
-
     try:
         request = _build_create_request(input_data)
         result = await use_case.execute(project_id, str(current_user.tenant_id), request)
@@ -336,6 +362,8 @@ async def update_wbs_item(
     item_id: str,
     input_data: UpdateWBSItemInput,
     current_user: Annotated[User, Depends(get_current_user)],
+    repository: Annotated[InMemoryWBSRepository, Depends(get_wbs_repository)],
+    use_case: Annotated[UpdateWBSItemUseCase, Depends(get_update_wbs_item_use_case)],
 ) -> WBSItemOutput:
     """
     Update a WBS item.
@@ -345,16 +373,12 @@ async def update_wbs_item(
     item_uuid = _parse_uuid(item_id)
     tenant_id = str(current_user.tenant_id)
 
-    repository = get_wbs_repository()
-
     item = await repository.get_by_id(item_uuid, tenant_id)
     if item is None or item.project_id != project_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"WBS item with ID {item_id} not found",
         )
-
-    use_case = UpdateWBSItemUseCase(repository)
 
     try:
         request = _build_update_request(input_data)
@@ -370,6 +394,7 @@ async def move_wbs_item(
     item_id: str,
     input_data: MoveWBSItemInput,
     current_user: Annotated[User, Depends(get_current_user)],
+    use_case: Annotated[MoveWBSItemUseCase, Depends(get_move_wbs_item_use_case)],
 ) -> WBSItemOutput:
     """
     Move a WBS item to a new parent.
@@ -377,9 +402,6 @@ async def move_wbs_item(
     Validates against circular references and maximum depth.
     """
     item_uuid = _parse_uuid(item_id)
-
-    repository = get_wbs_repository()
-    use_case = MoveWBSItemUseCase(repository)
 
     try:
         request = _build_move_request(item_id, input_data)
@@ -397,6 +419,8 @@ async def delete_wbs_item(
     project_id: str,
     item_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    repository: Annotated[InMemoryWBSRepository, Depends(get_wbs_repository)],
+    use_case: Annotated[DeleteWBSItemUseCase, Depends(get_delete_wbs_item_use_case)],
     cascade: bool = Query(False, description="Delete item and all descendants"),
 ) -> None:
     """
@@ -407,16 +431,12 @@ async def delete_wbs_item(
     item_uuid = _parse_uuid(item_id)
     tenant_id = str(current_user.tenant_id)
 
-    repository = get_wbs_repository()
-
     item = await repository.get_by_id(item_uuid, tenant_id)
     if item is None or item.project_id != project_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"WBS item with ID {item_id} not found",
         )
-
-    use_case = DeleteWBSItemUseCase(repository)
 
     try:
         await use_case.execute(item_uuid, tenant_id, cascade)
@@ -429,11 +449,11 @@ async def get_wbs_item(
     project_id: str,
     item_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    repository: Annotated[InMemoryWBSRepository, Depends(get_wbs_repository)],
 ) -> WBSItemOutput:
     """Get a single WBS item by ID."""
     item_uuid = _parse_uuid(item_id)
 
-    repository = get_wbs_repository()
     item = await repository.get_by_id(item_uuid, str(current_user.tenant_id))
 
     if item is None or item.project_id != project_id:

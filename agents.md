@@ -13,6 +13,7 @@ Generate production-ready, strictly typed Python code using Hexagonal Architectu
 - `C2PRO_MASTER_BACKLOG.md` is the single source of truth for all active, pending, and completed follow-up tasks.
 - Before starting substantial work, check `C2PRO_MASTER_BACKLOG.md` for related task IDs, priorities, and current state.
 - If you discover a task, blocker, or follow-up that is not listed there, add it to `C2PRO_MASTER_BACKLOG.md` as part of the same change set whenever feasible.
+- If you discover any additional task, TODO, blocker, follow-up, or verification item in code, docs, runbooks, plans, or execution notes, you MUST add it to `C2PRO_MASTER_BACKLOG.md` in the same change set. This is mandatory and applies even when the source document is historical or informational only.
 - When you complete a task, mark it complete in `C2PRO_MASTER_BACKLOG.md` in the same change set whenever feasible.
 - Do not create or treat any other status file as the authoritative task register.
 
@@ -230,10 +231,11 @@ Execution rule:
 
 ---
 
-Last Updated: 2026-03-29
+Last Updated: 2026-04-01
 
 Changelog:
 
+- 2026-04-01: Added mandatory rule that any newly discovered task, TODO, blocker, follow-up, or verification item must be added to `C2PRO_MASTER_BACKLOG.md`.
 - 2026-03-29: Added group-based backlog execution rules, dependency/prerequisite handling, and proactive next-task progression after user approval.
 - 2026-03-29: Established `C2PRO_MASTER_BACKLOG.md` as the single source of truth for task tracking and replaced stale `context/` references with canonical `docs/` references.
 - 2026-02-14: Updated Source Layout to reflect actual codebase structure (ports/ as sibling, core/ expanded, modules/ added).
