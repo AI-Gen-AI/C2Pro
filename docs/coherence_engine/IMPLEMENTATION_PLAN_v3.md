@@ -249,17 +249,19 @@ See `docs/coherence_engine/PHASE_6_VERIFICATION.md` for detailed verification re
 
 | # | Task | File(s) | Dependencies |
 |---|------|---------|--------------|
-| 7.1 | Update router to use subgraph | `coherence/router.py` | Phase 5 |
-| 7.2 | Add category inference helper | `coherence/router.py` | 7.1 |
-| 7.3 | Ensure backward compat for `POST /v0/coherence/evaluate` | `coherence/router.py` | 7.1-7.2 |
-| 7.4 | Add optional diagnostics endpoint | `coherence/router.py` | 7.1-7.3 |
-| 7.5 | Write E2E API tests | `tests/coherence/test_api_v3.py` | 7.1-7.4 |
+| 7.1 | ✅ Update router to use subgraph | `coherence/router.py` | Phase 5 |
+| 7.2 | ✅ Add category inference helper | `coherence/router.py` | 7.1 |
+| 7.3 | ✅ Ensure backward compat for `POST /v0/coherence/evaluate` | `coherence/router.py` | 7.1-7.2 |
+| 7.4 | ✅ Add optional diagnostics endpoint | `coherence/router.py` | 7.1-7.3 |
+| 7.5 | ✅ Write E2E API tests | `tests/coherence/test_api_v3.py` | 7.1-7.4 |
 
 **Checklist**:
-- [ ] `POST /v0/coherence/evaluate` returns `{"alerts": [...], "score": float}` (unchanged)
-- [ ] Score is now a granular float (not 0/100)
-- [ ] low_budget_mode defaults to True
-- [ ] Diagnostics available via query param or separate endpoint
+- [x] `POST /v0/coherence/evaluate` returns `{"alerts": [...], "score": float}` (unchanged)
+- [x] Score is now a granular float (not 0/100)
+- [x] low_budget_mode defaults to True
+- [x] Diagnostics available via query param or separate endpoint
+
+**Status: ✅ COMPLETE** (2026-04-02)
 
 ---
 

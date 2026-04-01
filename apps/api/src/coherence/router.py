@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,15 @@ from src.analysis.domain.enums import AnalysisStatus
 from src.core.middleware.feature_flags import require_feature
 from src.core.database import get_session, get_session_with_tenant
 from src.core.security import security_scheme
-from src.analysis.adapters.persistence.models import Alert, Analysis
+from src.analysis.adapters.persistence.models import Alert as AlertORM, Analysis
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
-from .engine_v2 import CoherenceEngineV2, EngineConfig
-from .models import CoherenceResult, ProjectContext, Clause
-from .rules import load_rules
+
+# Import v0.3 graph evaluation
+from .graph.graph import evaluate_coherence
+from .graph.state import EvaluationConfig
+from .models import CoherenceResult, EnrichedCoherenceResult, Clause
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 router = APIRouter(
@@ -71,6 +73,14 @@ class CoherenceEvaluateRequest(BaseModel):
         default=50,
         description="Maximum RAG chunks to fetch for clause extraction.",
     )
+    low_budget_mode: bool = Field(
+        default=True,
+        description="Enable low-budget mode (skip LLM evaluators, default: True)",
+    )
+    include_rag_similarity: bool = Field(
+        default=True,
+        description="Enable RAG similarity detection (default: True)",
+    )
 
 
 def _zeroed_sub_scores() -> dict[str, int]:
@@ -89,53 +99,67 @@ def _normalized_sub_scores(raw_scores: dict | None) -> dict[str, int]:
     return normalized
 
 
-# ---- Dependency for the Coherence Engine ----
-def get_coherence_engine():
+def _infer_category_from_clause(clause: Clause) -> str:
     """
-    Dependency to create and provide a CoherenceEngineV2 instance.
-    This loads the rules from the YAML file. In a real application, this
-    would be cached or loaded once at startup.
+    Infer category from clause data or metadata (Task 7.2).
+
+    Categories:
+    - BUDGET: Has budget/cost/amount/price fields
+    - TIME: Has deadline/schedule/date/duration fields
+    - LEGAL: Has contract/legal/warranty/notice fields
+    - TECHNICAL: Has specification/BOM/material fields
+    - QUALITY: Has inspection/standard/quality fields
+    - SCOPE: Default for deliverables/scope fields
     """
-    import structlog
-    # Import here to ensure registry is loaded
-    from .rules_engine.registry import load_qualitative_rules, LLM_RULE_CONFIGS, DETERMINISTIC_EVALUATORS
-    from .rules import Rule
+    data = clause.data
+    text_lower = clause.text.lower()
 
-    # Load qualitative (LLM) rules
-    load_qualitative_rules()
+    # Check data fields first
+    budget_keywords = {"budget", "cost", "amount", "price", "planned", "current", "total", "payment"}
+    time_keywords = {"deadline", "schedule", "date", "duration", "milestone", "end_date", "start_date"}
+    legal_keywords = {"contract", "legal", "warranty", "notice", "penalty", "insurance", "term"}
+    technical_keywords = {"specification", "bom", "material", "lead_time", "spec", "standard"}
+    quality_keywords = {"inspection", "quality", "standard", "testing", "review"}
 
-    logger = structlog.get_logger()
-    logger.info(
-        "coherence_engine_init",
-        deterministic_rules=list(DETERMINISTIC_EVALUATORS.keys()),
-        llm_rules=list(LLM_RULE_CONFIGS.keys()),
+    if any(key in data for key in budget_keywords):
+        return "BUDGET"
+    if any(key in data for key in time_keywords):
+        return "TIME"
+    if any(key in data for key in legal_keywords):
+        return "LEGAL"
+    if any(key in data for key in technical_keywords):
+        return "TECHNICAL"
+    if any(key in data for key in quality_keywords):
+        return "QUALITY"
+
+    # Fallback: check text content
+    if any(keyword in text_lower for keyword in ["budget", "cost", "$", "usd"]):
+        return "BUDGET"
+    if any(keyword in text_lower for keyword in ["deadline", "schedule", "milestone", "date"]):
+        return "TIME"
+    if any(keyword in text_lower for keyword in ["contract", "legal", "warranty"]):
+        return "LEGAL"
+    if any(keyword in text_lower for keyword in ["specification", "material", "bom"]):
+        return "TECHNICAL"
+    if any(keyword in text_lower for keyword in ["quality", "inspection", "standard"]):
+        return "QUALITY"
+
+    # Default to SCOPE
+    return "SCOPE"
+
+
+def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> CoherenceResult:
+    """
+    Convert EnrichedCoherenceResult to CoherenceResult for backward compatibility (Task 7.3).
+
+    This preserves the existing API contract while using the new scoring engine.
+    """
+    return CoherenceResult(
+        overall_score=enriched.overall_score,
+        alerts=enriched.alerts,
+        category_breakdown=enriched.category_breakdown,
+        calculated_at=enriched.calculated_at,
     )
-
-    # Construct the absolute path to the rules file
-    rules_file_path = os.path.join(os.path.dirname(__file__), "initial_rules.yaml")
-
-    if not os.path.exists(rules_file_path):
-        raise RuntimeError(f"Coherence rules file not found at {rules_file_path}")
-
-    # Load deterministic rules from YAML
-    loaded_rules = load_rules(rules_file_path)
-    logger.info("deterministic_rules_loaded", count=len(loaded_rules), rule_ids=[r.id for r in loaded_rules])
-
-    # Add LLM rules to the rules list
-    for rule_id, rule_config in LLM_RULE_CONFIGS.items():
-        llm_rule = Rule(
-            id=rule_id,
-            description=rule_config.get("description", ""),
-            detection_logic=rule_config.get("detection_logic", ""),
-            severity=rule_config.get("severity", "medium"),
-            category=rule_config.get("category", "general"),
-            evaluator_type="llm",
-        )
-        loaded_rules.append(llm_rule)
-    logger.info("all_rules_loaded", count=len(loaded_rules), rule_ids=[r.id for r in loaded_rules])
-
-    config = EngineConfig(enable_llm_rules=True)
-    return CoherenceEngineV2(rules=loaded_rules, config=config)
 
 
 async def get_clauses_from_rag(
@@ -158,17 +182,16 @@ async def get_clauses_from_rag(
     for i, row in enumerate(rows):
         metadata = row[1] or {}
         doc_id = str(row[2]) if row[2] else str(project_id)
-        clauses.append(
-            Clause(
-                id=f"chunk_{i}_{doc_id[:8]}",
-                text=row[0],
-                data={
-                    "document_id": doc_id,
-                    "source": "rag_chunk",
-                    "category": metadata.get("document_type", "unknown"),
-                },
-            )
+        clause = Clause(
+            id=f"chunk_{i}_{doc_id[:8]}",
+            text=row[0],
+            data={
+                "document_id": doc_id,
+                "source": "rag_chunk",
+                "category": metadata.get("document_type", "unknown"),
+            },
         )
+        clauses.append(clause)
     return clauses
 
 
@@ -180,24 +203,34 @@ async def get_clauses_from_rag(
     description="""
     Accepts a project's context and evaluates it against a predefined set of coherence rules.
     Returns a list of alerts and a calculated coherence score.
-    
+
     Can work in two modes:
     1. With project_id: Fetches document clauses from RAG automatically
     2. With explicit clauses: Uses the provided clauses directly
+
+    **v0.3 Features:**
+    - Granular scoring (5-97 range) instead of binary 0/100
+    - 27 deterministic evaluators across 6 categories + CROSS
+    - Optional LLM semantic evaluation (disabled in low_budget_mode)
+    - Optional RAG similarity detection for cross-document analysis
+    - Add ?include_diagnostics=true to get detailed diagnostic information
     """,
 )
 async def evaluate_project_coherence(
     payload: CoherenceEvaluateRequest,
-    engine: CoherenceEngineV2 = Depends(get_coherence_engine),
+    include_diagnostics: bool = Query(
+        default=False,
+        description="Include detailed diagnostics in response",
+    ),
     db: AsyncSession = Depends(get_session),
-) -> CoherenceResult:
+) -> CoherenceResult | EnrichedCoherenceResult:
     """
-    Evaluates the coherence of a project based on its context.
+    Evaluates the coherence of a project based on its context using v0.3 scoring engine.
 
     - **payload**: Contains project_id (to fetch from RAG) OR explicit clauses
-    - **engine**: The coherence engine dependency that performs the evaluation
+    - **include_diagnostics**: If True, returns EnrichedCoherenceResult with diagnostics
 
-    Returns the evaluation result, including alerts and a score.
+    Returns the evaluation result, including alerts and a granular score (5-97 range).
     """
     import structlog
     logger = structlog.get_logger()
@@ -221,22 +254,68 @@ async def evaluate_project_coherence(
     logger.info(
         "coherence_evaluate_start",
         clauses_count=len(clauses),
-        engine_deterministic_rules=len(engine._deterministic_rules),
-        engine_llm_rules=len(engine._llm_rules),
+        low_budget_mode=payload.low_budget_mode,
+        include_rag_similarity=payload.include_rag_similarity,
+        include_diagnostics=include_diagnostics,
     )
 
-    project_context = ProjectContext(
-        id=str(payload.project_id) if payload.project_id else "manual",
-        clauses=clauses,
+    # Create evaluation config
+    config = EvaluationConfig(
+        low_budget_mode=payload.low_budget_mode,
+        include_rag_similarity=payload.include_rag_similarity,
     )
-    result = await engine.evaluate_async(project_context)
+
+    # Evaluate using LangGraph subgraph
+    enriched_result = evaluate_coherence(
+        clauses=clauses,
+        project_id=str(payload.project_id) if payload.project_id else "manual",
+        config=config,
+    )
 
     logger.info(
         "coherence_evaluate_complete",
-        alerts_count=len(result.alerts),
-        overall_score=result.overall_score,
+        alerts_count=len(enriched_result.alerts),
+        overall_score=enriched_result.overall_score,
     )
-    return result
+
+    # Return diagnostics if requested (Task 7.4)
+    if include_diagnostics:
+        return enriched_result
+
+    # Otherwise return backward-compatible response (Task 7.3)
+    return _convert_enriched_to_coherence_result(enriched_result)
+
+
+# Optional diagnostics endpoint (Task 7.4)
+@router.post(
+    "/evaluate/diagnostics",
+    response_model=EnrichedCoherenceResult,
+    summary="Evaluate with Full Diagnostics",
+    description="""
+    Same as /evaluate but always returns full diagnostic information.
+
+    Includes:
+    - finding_signals: All deterministic + LLM signals with impact scores
+    - diagnostics: Detailed breakdown of scoring logic
+    - cross_pairs: RAG-detected cross-document relationships
+    - cost_usd: LLM API cost (if LLM evaluation was enabled)
+    """,
+)
+async def evaluate_with_diagnostics(
+    payload: CoherenceEvaluateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> EnrichedCoherenceResult:
+    """
+    Evaluate project coherence with full diagnostic output.
+
+    This is a convenience endpoint equivalent to POST /evaluate?include_diagnostics=true
+    """
+    # Reuse main endpoint logic with diagnostics forced
+    return await evaluate_project_coherence(
+        payload=payload,
+        include_diagnostics=True,
+        db=db,
+    )
 
 
 # ======================================================================
@@ -291,10 +370,10 @@ async def get_coherence_dashboard(
                 select(func.count()).select_from(DocumentORM).where(DocumentORM.project_id == project_id)
             )
         ).scalar_one()
-        
+
         alert_count = (
             await session.execute(
-                select(func.count()).select_from(Alert).where(Alert.project_id == project_id)
+                select(func.count()).select_from(AlertORM).where(AlertORM.project_id == project_id)
             )
         ).scalar_one()
 
@@ -328,11 +407,11 @@ async def get_coherence_dashboard(
                 .where(DocumentORM.project_id == project_id)
             )
         ).scalar_one()
-        
+
         latest_alert_at = (
             await session.execute(
-                select(func.max(Alert.updated_at))
-                .where(Alert.project_id == project_id)
+                select(func.max(AlertORM.updated_at))
+                .where(AlertORM.project_id == project_id)
             )
         ).scalar_one()
 
@@ -373,6 +452,6 @@ async def get_coherence_dashboard(
         "weights_used": COHERENCE_WEIGHTS,
         "alert_count": alert_count,
         "document_count": document_count,
-        "methodology_version": "2.1",
+        "methodology_version": "3.0",  # Updated to 3.0 for v0.3 engine
         "last_updated": last_updated.isoformat() + "Z" if not last_updated.tzinfo else last_updated.isoformat(),
     }
