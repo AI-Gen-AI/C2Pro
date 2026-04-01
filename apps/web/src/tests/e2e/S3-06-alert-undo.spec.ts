@@ -5,7 +5,7 @@
 import { test, expect } from "@playwright/test";
 
 test("S3-06 RED - approve then undo rolls back coherence metrics", async ({ page }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await page.getByRole("button", { name: /approve/i }).first().click();
   await page.getByRole("checkbox", { name: /i confirm approval/i }).check();
@@ -18,7 +18,7 @@ test("S3-06 RED - approve then undo rolls back coherence metrics", async ({ page
 });
 
 test("S3-06 RED - rapid approve reject undo stays fresh after navigation", async ({ page }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await page.getByRole("button", { name: /approve/i }).first().click();
   await page.getByRole("checkbox", { name: /i confirm approval/i }).check();

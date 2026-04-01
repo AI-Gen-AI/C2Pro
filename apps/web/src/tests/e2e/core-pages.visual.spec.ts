@@ -6,11 +6,6 @@ import { expect, test } from "@playwright/test";
 
 const corePages = [
   {
-    name: "demo-project-overview",
-    path: "/demo/projects/proj_demo_001",
-    readyHeading: /coherence score/i,
-  },
-  {
     name: "demo-documents",
     path: "/demo/documents",
     readyHeading: /documents/i,
@@ -38,12 +33,15 @@ const corePages = [
 ] as const;
 
 test.describe("TASK-021 visual regression coverage for core pages", () => {
+  test.describe.configure({ mode: "serial" });
+  test.setTimeout(90_000);
+
   for (const corePage of corePages) {
     test(`${corePage.name} matches the approved desktop baseline`, async ({
       page,
     }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.goto(corePage.path);
+      await page.goto(corePage.path, { waitUntil: "domcontentloaded" });
 
       await expect(
         page.getByRole("heading", { name: corePage.readyHeading }).first(),

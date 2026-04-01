@@ -74,4 +74,32 @@ describe("AppSidebar", () => {
       "/demo/projects",
     );
   });
+
+  it("routes the dashboard nav item to the canonical root path", () => {
+    pathnameState.value = "/";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("keeps the dashboard nav item active for the legacy /dashboard route during migration", () => {
+    pathnameState.value = "/dashboard";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
 });

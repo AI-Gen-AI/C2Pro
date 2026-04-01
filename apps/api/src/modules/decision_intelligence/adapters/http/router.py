@@ -7,10 +7,8 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 from __future__ import annotations
 
 import base64
-from datetime import datetime, UTC
 from typing import Annotated, Any, Literal
 from uuid import UUID
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -18,12 +16,18 @@ from pydantic import BaseModel, Field
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
-from src.modules.decision_intelligence.application.ports import DecisionOrchestrationService
+from src.modules.decision_intelligence.application.ports import (
+    CoherenceScoringPort,
+    DecisionOrchestrationService,
+    ExtractionPort,
+    HITLPort,
+    IngestionPort,
+    RetrievalPort,
+)
 from src.modules.decision_intelligence.domain.exceptions import FinalizationBlockedError
 
 
 router = APIRouter(prefix="/decision-intelligence", tags=["decision-intelligence"])
-_decision_service: DecisionOrchestrationService | None = None
 
 
 class ReviewDecisionDTO(BaseModel):
@@ -56,76 +60,57 @@ class ExecuteDecisionResponseDTO(BaseModel):
     approved_at: str | None = None
 
 
-class _IngestionAdapter:
-    async def ingest_document(self, doc_bytes: bytes) -> dict[str, Any]:
-        return {"chunks": [{"text": doc_bytes.decode("utf-8", errors="ignore")}]}
+def _get_runtime_port(request: Request, state_key: str) -> Any:
+    service = getattr(request.app.state, state_key, None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Decision Intelligence requires real port implementations. "
+                f"Missing runtime dependency: {state_key}."
+            ),
+        )
+    return service
 
 
-class _ExtractionAdapter:
-    async def extract_clauses(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        text = ""
-        if chunks and isinstance(chunks[0], dict):
-            text = str(chunks[0].get("text", ""))
-        return [
-            {
-                "clause_id": str(uuid4()),
-                "text": text[:256] or "default clause",
-                "confidence": 0.92,
-                "metadata": {"citations": ["clause-1"]},
-            }
-        ]
+def get_ingestion_service(request: Request) -> IngestionPort:
+    return _get_runtime_port(request, "decision_ingestion_service")
 
 
-class _RetrievalAdapter:
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
-        return [{"text": f"evidence:{query}", "score": 0.86}]
+def get_extraction_service(request: Request) -> ExtractionPort:
+    return _get_runtime_port(request, "decision_extraction_service")
 
 
-class _CoherenceScoringAdapter:
-    async def aggregate_coherence_score(
-        self, alerts: list[dict[str, Any]], tenant_id: UUID, project_id: UUID
-    ) -> dict[str, Any]:
-        return {
-            "score": 0.84,
-            "severity": "Medium",
-            "explanation": {},
-            "metadata": {},
-        }
+def get_retrieval_service(request: Request) -> RetrievalPort:
+    return _get_runtime_port(request, "decision_retrieval_service")
 
 
-class _HitlAdapter:
-    async def route_for_review(
-        self,
-        item_id: UUID,
-        item_type: str,
-        confidence: float,
-        impact_level: str,
-        item_data: dict[str, Any],
-    ) -> str:
-        return "PENDING_REVIEW_REQUIRED"
-
-    async def approve_item(self, item_id: UUID, reviewer_id: UUID, reviewer_name: str) -> dict[str, Any]:
-        return {
-            "approved_by": reviewer_name,
-            "approved_at": datetime.now(UTC).isoformat(),
-        }
+def get_coherence_scoring_service(request: Request) -> CoherenceScoringPort:
+    return _get_runtime_port(request, "decision_coherence_scoring_service")
 
 
-def get_decision_orchestration_service() -> DecisionOrchestrationService:
+def get_hitl_service(request: Request) -> HITLPort:
+    return _get_runtime_port(request, "decision_hitl_service")
+
+
+def get_decision_orchestration_service(
+    ingestion_service: IngestionPort = Depends(get_ingestion_service),
+    extraction_service: ExtractionPort = Depends(get_extraction_service),
+    retrieval_service: RetrievalPort = Depends(get_retrieval_service),
+    coherence_scoring_service: CoherenceScoringPort = Depends(get_coherence_scoring_service),
+    hitl_service: HITLPort = Depends(get_hitl_service),
+) -> DecisionOrchestrationService:
     """Refers to Suite ID: TS-I13-E2E-REAL-001.
 
-    Local default wiring for integration/e2e execution.
+    Compose the orchestration service from runtime-wired collaborators.
     """
-    global _decision_service
-    if _decision_service is None:
-        _decision_service = DecisionOrchestrationService(
-            ingestion_service=_IngestionAdapter(),
-            extraction_service=_ExtractionAdapter(),
-            retrieval_service=_RetrievalAdapter(),
-            coherence_scoring_service=_CoherenceScoringAdapter(),
-            hitl_service=_HitlAdapter(),
-        )
-    return _decision_service
+    return DecisionOrchestrationService(
+        ingestion_service=ingestion_service,
+        extraction_service=extraction_service,
+        retrieval_service=retrieval_service,
+        coherence_scoring_service=coherence_scoring_service,
+        hitl_service=hitl_service,
+    )
 
 
 @router.post(

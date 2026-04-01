@@ -1,17 +1,39 @@
-import { getCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
-import { listProjectsApiV1ProjectsGet } from "@/lib/api/generated/projects/projects";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
+import { fetchApiJson } from "@/lib/api/services/http";
 
-export async function listProjects(): Promise<ProjectListItem[]> {
-  const response = await listProjectsApiV1ProjectsGet();
+type ListProjectsResponse = {
+  items?: ProjectListItem[];
+};
+
+type DashboardSummaryResponse = Partial<DashboardSummary> & {
+  global_score?: number | string | null;
+  coherence_score?: number | string | null;
+  sub_scores?: Record<string, unknown> | null;
+  weights_used?: Record<string, unknown> | null;
+  alert_count?: number | string | null;
+  document_count?: number | string | null;
+};
+
+export async function listProjects(options?: {
+  server?: boolean;
+}): Promise<ProjectListItem[]> {
+  const response = await fetchApiJson<ListProjectsResponse>("projects", options);
   return response.items ?? [];
 }
 
 export async function getDashboardSummary(
   projectId: string,
+  options?: {
+    server?: boolean;
+  },
 ): Promise<DashboardSummary> {
-  const summary =
-    await getCoherenceDashboardApiCoherenceDashboardProjectIdGet(projectId);
+  const summary = await fetchApiJson<DashboardSummaryResponse>(
+    `dashboard/${projectId}`,
+    {
+      ...options,
+      scope: "coherence",
+    },
+  );
 
   return {
     project_id: String(summary.project_id ?? projectId),

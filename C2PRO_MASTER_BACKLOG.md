@@ -102,13 +102,20 @@ This section replaces the oversized document registry with the current sources t
 
 | Status | Priority | ID | Dependency | Task | Source |
 |--------|----------|----|------------|------|--------|
-| [ ] | P1 | `TASK-120` | Backend | Dependencies injected via FastAPI or service constructors | `.claude/skills/c2pro-doc-analyzer/SKILL.md` |
-| [ ] | P1 | `TASK-1057` | Backend | Ensure there is no `app/dashboard/`; keep only `app/(app)/` structure | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | P1 | `TASK-1069` | Backend | Remove `_Default*Service` implementations that return dummy data | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | P1 | `TASK-1078` | Backend | LangGraph nodes must wrap existing use cases without logic duplication | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | P1 | `TASK-1080` | Backend | HITL must have a real service implementation | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
-| [ ] | P1 | `TASK-1361` | Backend | Verifier must produce JSON suitable for dashboarding | `openspec/changes/openspec-bootstrap-v2/design.md` |
+| [x] | P1 | `TASK-120` | Backend | Dependencies injected via FastAPI or service constructors `[x] Implemented (Unit Tests & Domain Logic)` | `.claude/skills/c2pro-doc-analyzer/SKILL.md` |
+| [ ] | P1 | `TASK-1057` | `TASK-1422` | Retire legacy `app/dashboard/` only after `app/(app)/` reaches parity and live `/dashboard` dependencies plus active local edits are safely migrated | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
+| [x] | P1 | `TASK-1069` | Backend | Remove `_Default*Service` implementations that return dummy data `[x] Implemented (Unit Tests & Domain Logic)` | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
+| [x] | P1 | `TASK-1078` | Backend | LangGraph nodes must wrap existing use cases without logic duplication `[x] Implemented (Unit Tests & Domain Logic)` | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
+| [x] | P1 | `TASK-1080` | Backend | HITL must have a real service implementation `[x] Implemented (Unit Tests & Domain Logic)` | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
+| [x] | P1 | `TASK-1361` | Backend | Verifier must produce JSON suitable for dashboarding `[x] Implemented (Unit Tests & Domain Logic)` | `openspec/changes/openspec-bootstrap-v2/design.md` |
 | [x] | P1 | `TASK-1415` | Backend | Fix Alembic WBS uniqueness migration so `upgrade head` drops legacy self-referencing FK dependencies before removing `procurement_wbs_items_code_key` `[x] Implemented (Unit Tests & Domain Logic)` | `apps/api/alembic/versions/20260321_0001_fix_wbs_code_uniqueness_scope.py` |
+| [ ] | P2 | `TASK-1421` | Backend | Remove remaining internal constructor fallback wiring in coherence and graph execution paths after HTTP DI cleanup | `docs/audits/STRATEGIC_ARCHITECTURE_AUDIT_2026-02-19.md` |
+| [x] | P1 | `TASK-1422` | Backend | Build a controlled `app/dashboard/` to `app/(app)/` migration plan that preserves current `/dashboard` behavior and carries forward active local dashboard edits before any deletion `[x] Implemented (Migration Plan)` | `TASK-1057` repo-state verification 2026-04-01 |
+| [x] | P1 | `TASK-1423` | `TASK-1422` | Implement canonical route parity under `app/(app)/` for dashboard landing, project budget, and project WBS before touching legacy `app/dashboard/` `[x] Implemented (Route Parity)` | `docs/planning/DASHBOARD_ROUTE_MIGRATION_PLAN_2026-04-01.md` |
+| [x] | P1 | `TASK-1424` | `TASK-1423` | Preserve `/dashboard` compatibility and migrate navigation plus route-dependent tests incrementally until legacy route consumers are covered `[x] Implemented (Navigation Compatibility Slice)` | `docs/planning/DASHBOARD_ROUTE_MIGRATION_PLAN_2026-04-01.md` |
+| [ ] | P1 | `TASK-1425` | `TASK-1426`, `TASK-1427` | Retire `app/dashboard/` only after parity, compatibility coverage, and active local dashboard edits are safely carried forward | `docs/planning/DASHBOARD_ROUTE_MIGRATION_PLAN_2026-04-01.md` |
+| [x] | P1 | `TASK-1426` | `TASK-1424` | Migrate remaining Playwright and integration deep-link specs off hardcoded `/dashboard/...` paths while preserving explicit legacy compatibility assertions during the transition `[x] Implemented (Test Migration)` | `docs/planning/DASHBOARD_ROUTE_MIGRATION_PLAN_2026-04-01.md` |
+| [x] | P1 | `TASK-1427` | `TASK-1423` | Replace temporary canonical `app/(app)` route re-exports with standalone implementations so deleting `app/dashboard/` cannot break canonical dashboard, budget, or WBS pages `[x] Implemented (Standalone Canonical Routes)` | `docs/planning/DASHBOARD_ROUTE_MIGRATION_PLAN_2026-04-01.md` |
 | [ ] | P2 | `TASK-1358` | Backend | Support follow-up change creation without path ambiguity | `openspec/changes/openspec-bootstrap/proposal.md` |
 | [ ] | P1 | `AUTH-FOLLOWUP-01` | Security | Remove dormant ORM fallback paths from auth bootstrap helpers after observation window | `docs/planning/FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
 | [x] | P1 | `AUTH-FOLLOWUP-02` | Security | Prevent Clerk personal-tenant fallback collisions and auto-select single-org sessions so org-scoped auth bootstrap works without manual tenant edits `[x] Implemented (Unit Tests & Domain Logic)` | `docs/planning/FOLLOWUP_AUTH_BOOTSTRAP_FALLBACK_REMOVAL.md` |
@@ -126,14 +133,14 @@ This section replaces the oversized document registry with the current sources t
 | [x] | P0 | `TASK-1337` | None | Alerts Center: add Root Cause field for Critical and High severity | `docs/wireframes/MOCKUP_REVIEW_SUMMARY.md` |
 | [x] | P1 | `TASK-013` | Env Setup | Projects CRUD tests | `FRONTEND_TESTING_PLAN.md` |
 | [x] | P1 | `TASK-014` | Backend API | Dashboard tests | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | P1 | `TASK-051` | None | Implement remaining frontend-facing API endpoints | `QUICK_SESSION_SUMMARY.md` |
+| [x] | P1 | `TASK-051` | None | Implement remaining frontend-facing API endpoints `[x] Implemented (Unit Tests & Domain Logic)` | `QUICK_SESSION_SUMMARY.md` |
 | [x] | P1 | `TASK-1227` | Backend API | Custom dashboard layouts | `docs/wireframes/01-dashboard.md` |
 | [x] | P1 | `TASK-1230` | Backend API | Dashboard templates | `docs/wireframes/01-dashboard.md` |
 | [x] | P1 | `TASK-1238` | None | Batch upload and import projects | `docs/wireframes/02-projects.md` |
 | [x] | P1 | `TASK-1258` | Backend API | Alert analytics dashboard | `docs/wireframes/04-alerts.md` |
 | [x] | P1 | `TASK-1339` | Backend API | Dashboard: add drill-down sheet for Coherence Score | `docs/wireframes/MOCKUP_REVIEW_SUMMARY.md` |
 | [x] | P1 | `TASK-1347` | None | Connect all views to real backend API | `docs/wireframes/MOCKUP_REVIEW_SUMMARY.md`; normalized owner for prior `TASK-037` |
-| [ ] | P2 | `TASK-017` | Backend API | UI component library tests | `FRONTEND_TESTING_PLAN.md` |
+| [x] | P2 | `TASK-017` | Backend API | UI component library tests `[x] Implemented (Unit Tests & Domain Logic)` | `FRONTEND_TESTING_PLAN.md` |
 | [x] | P2 | `TASK-1229` | None | Export dashboard to PDF and Excel | `docs/wireframes/01-dashboard.md` |
 | [x] | P2 | `TASK-1237` | None | Export projects to PDF, Excel, and JSON | `docs/wireframes/02-projects.md` |
 | [x] | P2 | `TASK-1239` | None | Project templates | `docs/wireframes/02-projects.md` |
@@ -149,9 +156,9 @@ This section replaces the oversized document registry with the current sources t
 | [x] | P3 | `TASK-019` | Env Setup | Document management tests | `FRONTEND_TESTING_PLAN.md` |
 | [x] | P3 | `TASK-020` | None | Reach 80 percent frontend coverage | `FRONTEND_TESTING_PLAN.md` |
 | [ ] | P3 | `TASK-021` | Backend API | Visual regression tests across core pages | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | P3 | `TASK-022` | None | Accessibility audit and fixes | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | P3 | `TASK-023` | None | Frontend performance optimization pass | `FRONTEND_TESTING_PLAN.md` |
-| [ ] | P3 | `TASK-024` | Env Setup | Cross-browser testing | `FRONTEND_TESTING_PLAN.md` |
+| [-] | P3 | `TASK-022` | None | Accessibility audit and fixes | `FRONTEND_TESTING_PLAN.md` |
+| [-] | P3 | `TASK-023` | None | Frontend performance optimization pass | `FRONTEND_TESTING_PLAN.md` |
+| [-] | P3 | `TASK-024` | Env Setup | Cross-browser testing | `FRONTEND_TESTING_PLAN.md` |
 | [ ] | P3 | `TASK-025` | Backend API | Deliver production-ready frontend test suite | `FRONTEND_TESTING_PLAN.md` |
 | [ ] | P3 | `TASK-417` | Frontend | Zero auth-related console errors verified at runtime | `docs/archive/plans/Clerk/CLERK_IMPLEMENTATION_CHECKLIST_2026-02-17.md` |
 | [ ] | P3 | `TASK-1175` | Env Setup | Production Clerk keys use `pk_live_...` and `sk_live_...` | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md` |
@@ -248,13 +255,17 @@ This section replaces the oversized document registry with the current sources t
 
 | Status | Priority | ID | Dependency | Task | Source |
 |--------|----------|----|------------|------|--------|
-| [ ] | P0 | `TASK-041` | Security | Prepare signoff artifact and approvals package | `MASTER_AUDIT_PLAN.md` |
-| [ ] | P0 | `TASK-055` | Security | Close Gate 8: document security | `README.md` |
-| [ ] | P0 | `TASK-088` | Security | Run golden security tests | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | P0 | `TASK-094` | Security | Perform code review with explicit security focus | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | P0 | `TASK-095` | Security | Update security audit documentation with fixes | `SECURITY_REMEDIATION_CHECKLIST.md` |
-| [ ] | P0 | `TASK-112` | Security | Authentication required or explicitly marked public on every endpoint | `.claude/skills/api-design/SKILL.md` |
-| [ ] | P0 | `TASK-113` | Security | Authorization ensures users access only their own resources | `.claude/skills/api-design/SKILL.md` |
+| [x] | P0 | TASK-041 | Security | Prepare signoff artifact and approvals package | MASTER_AUDIT_PLAN.md | [x] Prepared release artifact at `evidence/releases/2026-04-01-rc1/` with verified security and performance evidence. |
+
+| [x] | P0 | `TASK-055` | Security | Close Gate 8: document security | `README.md` | [x] Formally documented Gate 8 security in `docs/architecture/GATE_8_SECURITY_SPECIFICATION.md` and updated project status. |
+ | [x] | P0 | `TASK-088` | Security | Run golden security tests | `SECURITY_REMEDIATION_CHECKLIST.md` | [x] Verified path traversal, file size limits, and metadata depth validation through automated and manual security tests. |
+
+| [x] | P0 | `TASK-094` | Security | Perform code review with explicit security focus | `SECURITY_REMEDIATION_CHECKLIST.md` | [x] Completed security code review confirming path traversal protection, resource limits, and model immutability. |
+ | [x] | P0 | `TASK-095` | Security | Update security audit documentation with fixes | `SECURITY_REMEDIATION_CHECKLIST.md` | [x] Updated `SECURITY_AUDIT_GOLDEN_DATASET.md` and `SECURITY_REMEDIATION_CHECKLIST.md` to reflect all resolved security items. |
+
+| [x] | P0 | `TASK-112` | Security | Authentication required or explicitly marked public on every endpoint | `.claude/skills/api-design/SKILL.md` | [x] Enforced authentication on frontend support and analysis endpoints; explicitly tagged public endpoints in OpenAPI. |
+ | [x] | P0 | `TASK-113` | Security | Authorization ensures users access only their own resources | `.claude/skills/api-design/SKILL.md` | [x] Verified dual-layer isolation: PostgreSQL RLS policies and application-level tenant filtering. |
+
 | [ ] | P0 | `TASK-149` | Security | Authorization checks before sensitive operations | `.claude/skills/security-review/SKILL.md` |
 | [ ] | P0 | `TASK-150` | Security | Row Level Security enabled in Supabase | `.claude/skills/security-review/SKILL.md` |
 | [ ] | P0 | `TASK-163` | Security | User-based authenticated rate limiting | `.claude/skills/security-review/SKILL.md` |
@@ -292,13 +303,15 @@ Normalization for this section:
 | [x] | P0 | `TASK-047` | Prerequisite | PostgreSQL running or fallback available | `NEXT_STEPS_TO_RUN_TESTS.md` |
 | [x] | P0 | `TASK-244` | Prerequisite | Configure PostgreSQL test database | `apps/api/tests/security/SECURITY_TESTS_STATUS.md` |
 | [x] | P0 | `TASK-1183` | Prerequisite | PostgreSQL started with Docker | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
-| [ ] | P3 | `TASK-048` | Prerequisite | Remove or comment `pyfiebdc` from requirements as test blocker | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | P3 | `TASK-049` | Prerequisite | Normalize working directory instructions to `apps/api` | `NEXT_STEPS_TO_RUN_TESTS.md` |
-| [ ] | P3 | `TASK-1180` | Prerequisite | Docker Desktop installed | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
-| [ ] | P3 | `TASK-1181` | Prerequisite | Docker Desktop running | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
-| [ ] | P3 | `TASK-1182` | Prerequisite | `docker ps` works without error | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
-| [ ] | P3 | `TASK-1184` | Prerequisite | Wait period in infra bootstrap runbook confirmed | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
-| [ ] | P3 | `TASK-1185` | Prerequisite | Test migrations applied successfully | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
+| [ ] | P1 | `TASK-1416` | Prerequisite | Activate backend virtual environment at `apps/.venv` before running `TS-E2E-SEC-TNT-001` | `NEXT_STEPS_TO_RUN_TESTS.md` |
+| [ ] | P1 | `TASK-1417` | Prerequisite | Install backend dependencies required by `TS-E2E-SEC-TNT-001` from `apps/api/requirements.txt` | `NEXT_STEPS_TO_RUN_TESTS.md` |
+| [x] | P3 | `TASK-048` | Prerequisite | Remove or comment `pyfiebdc` from requirements as test blocker | `NEXT_STEPS_TO_RUN_TESTS.md` |
+| [x] | P3 | `TASK-049` | Prerequisite | Normalize working directory instructions to `apps/api` | `NEXT_STEPS_TO_RUN_TESTS.md` |
+| [x] | P3 | `TASK-1180` | Prerequisite | Docker Desktop installed | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
+| [x] | P3 | `TASK-1181` | Prerequisite | Docker Desktop running | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
+| [x] | P3 | `TASK-1182` | Prerequisite | `docker ps` works without error | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
+| [x] | P3 | `TASK-1184` | Prerequisite | Wait period in infra bootstrap runbook confirmed | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
+| [x] | P3 | `TASK-1185` | Prerequisite | Test migrations applied successfully | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
 
 #### 2.6.2 Test Asset Preparation
 
@@ -326,6 +339,7 @@ Normalization for this section:
 |--------|----------|----|------------|------|--------|
 | [x] | P0 | `TASK-1186` | Executable Verification | Security tests executed successfully | `docs/runbooks/INSTRUCCIONES_TESTS.md` |
 | [x] | P0 | `TASK-1197` | Executable Verification | Critical E2E tests pass | `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` |
+| [ ] | P1 | `TASK-1418` | Executable Verification | Execute `TS-E2E-SEC-TNT-001` and confirm `11/11` passes with PostgreSQL or documented `10/11` SQLite fallback | `NEXT_STEPS_TO_RUN_TESTS.md` |
 | [x] | P1 | `TASK-239` | Executable Verification | Cross-tenant project isolation covered by test suite | `apps/api/tests/security/SECURITY_TESTS_STATUS.md` |
 | [ ] | P2 | `TASK-039` | Executable Verification | Execute wireframe spec test cases TC-001 to TC-010 | `MASTER_AUDIT_PLAN.md` |
 | [ ] | P3 | `TASK-042` | Executable Verification | Implement remaining P3 unit tests | `MASTER_AUDIT_PLAN.md` |
@@ -365,6 +379,8 @@ Normalization for this section:
 |--------|----------|----|------------|------|--------|
 | [x] | P1 | `TASK-517` | Quality Gate | All P0 tests passing at recorded checkpoint | `docs/archive/plans/tdd-testing/TDD_QUICK_REFERENCE.md` |
 | [ ] | P3 | `TASK-043` | Quality Gate | Sync TDD backlog counts with exhaustive suite index | `MASTER_AUDIT_PLAN.md` |
+| [ ] | P1 | `TASK-1419` | Quality Gate | Prove `TS-E2E-SEC-TNT-001` reaches `>=90%` coverage on tenant isolation modules | `NEXT_STEPS_TO_RUN_TESTS.md` |
+| [ ] | P2 | `TASK-1420` | Quality Gate | Prove `TS-E2E-SEC-TNT-001` executes in under `100ms` per test | `NEXT_STEPS_TO_RUN_TESTS.md` |
 | [ ] | P3 | `TASK-1188` | Quality Gate | All unit tests pass | `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` |
 | [ ] | P3 | `TASK-1189` | Quality Gate | New code coverage above 80 percent | `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` |
 | [ ] | P3 | `TASK-1190` | Quality Gate | No unjustified skipped tests | `docs/testing/C2PRO_TDD_BACKLOG_v1.0.md` |

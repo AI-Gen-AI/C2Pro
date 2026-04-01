@@ -11,13 +11,9 @@ vi.mock("@/stores/auth", () => ({
     useAuthStoreMock(selector),
 }));
 
-vi.mock("@/lib/api/generated/projects/projects", () => ({
-  listProjectsApiV1ProjectsGet: (...args: unknown[]) => getProjectsMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/coherence-dashboard/coherence-dashboard", () => ({
-  getCoherenceDashboardApiCoherenceDashboardProjectIdGet: (...args: unknown[]) =>
-    getSummaryMock(...args),
+vi.mock("@/lib/api/services/dashboard", () => ({
+  listProjects: (...args: unknown[]) => getProjectsMock(...args),
+  getDashboardSummary: (...args: unknown[]) => getSummaryMock(...args),
 }));
 
 vi.mock("@/components/coherence/DashboardClient", () => ({
@@ -49,10 +45,9 @@ describe("DashboardPage", () => {
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "token-123" }),
     );
-    getProjectsMock.mockResolvedValue({
-      items: [{ id: "project-1", name: "Alpha Project" }],
-      total: 1,
-    });
+    getProjectsMock.mockResolvedValue([
+      { id: "project-1", name: "Alpha Project" },
+    ]);
     getSummaryMock.mockResolvedValue({
       coherence_score: 91,
       sub_scores: { BUDGET: 88 },
@@ -79,7 +74,7 @@ describe("DashboardPage", () => {
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "token-123" }),
     );
-    getProjectsMock.mockResolvedValue({ items: [], total: 0 });
+    getProjectsMock.mockResolvedValue([]);
 
     renderWithProviders(<DashboardPage />);
 
@@ -130,10 +125,9 @@ describe("DashboardPage", () => {
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token }),
     );
-    getProjectsMock.mockResolvedValue({
-      items: [{ id: "project-1", name: "Alpha Project" }],
-      total: 1,
-    });
+    getProjectsMock.mockResolvedValue([
+      { id: "project-1", name: "Alpha Project" },
+    ]);
     getSummaryMock.mockResolvedValue({
       coherence_score: 91,
       sub_scores: { BUDGET: 88 },

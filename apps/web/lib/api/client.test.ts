@@ -55,9 +55,8 @@ const mockedEnv = vi.hoisted(() => ({
 
 const mockedToast = vi.hoisted(() => vi.fn());
 
-vi.mock("axios", () => ({
+vi.mock("axios/dist/browser/axios.cjs", () => ({
   default: mockedAxiosModule,
-  AxiosError: class AxiosError extends Error {},
 }));
 
 import {

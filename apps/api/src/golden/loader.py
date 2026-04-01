@@ -179,6 +179,11 @@ class GoldenDatasetLoader:
             PathTraversalError: If case file path escapes cases directory
             FileSizeError: If case file exceeds maximum allowed size
         """
+        # Security: reject case_id with path separators early
+        if "/" in case_id or "\\" in case_id or ".." in case_id:
+            logger.warning("Invalid case_id rejected: %s", case_id)
+            return None
+
         if case_id in self._cache:
             return self._cache[case_id]
 

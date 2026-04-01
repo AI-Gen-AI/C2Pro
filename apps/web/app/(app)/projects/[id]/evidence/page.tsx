@@ -41,9 +41,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EntityValidationList, ExtractedEntity } from "@/components/evidence";
 import {
-  PdfEvidenceViewer,
   PdfHighlight,
 } from "@/components/features/evidence/PdfEvidenceViewer";
+import { LazyPdfEvidenceViewer } from "@/components/features/evidence/LazyPdfEvidenceViewer";
 import { env } from "@/config/env";
 import { useDocumentAlerts } from "@/hooks/useDocumentAlerts";
 import { useDocumentEntities } from "@/hooks/useDocumentEntities";
@@ -667,7 +667,7 @@ export default function EvidencePage() {
             </CardHeader>
             <CardContent className="p-0">
               {selectedDocumentId ? (
-                <PdfEvidenceViewer
+                <LazyPdfEvidenceViewer
                   fileUrl={buildDocumentDownloadUrl(selectedDocumentId)}
                   highlights={highlights}
                   activeHighlightId={activeHighlightId}

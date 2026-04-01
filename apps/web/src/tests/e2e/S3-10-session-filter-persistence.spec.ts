@@ -5,7 +5,7 @@
 import { test, expect } from "@playwright/test";
 
 test("S3-10 RED - filter chips/results persist after refresh", async ({ page }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await page.getByRole("button", { name: /severity critical/i }).click();
   await page.getByRole("button", { name: /owner legal/i }).click();
@@ -16,7 +16,7 @@ test("S3-10 RED - filter chips/results persist after refresh", async ({ page }) 
 });
 
 test("S3-10 RED - reset clears persisted filters after refresh", async ({ page }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await page.getByRole("button", { name: /severity critical/i }).click();
   await page.getByRole("button", { name: /reset filters/i }).click();

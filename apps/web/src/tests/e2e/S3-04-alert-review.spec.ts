@@ -5,7 +5,7 @@
 import { test, expect } from "@playwright/test";
 
 test("S3-04 RED - full CRUD review journey on alerts route", async ({ page }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await expect(page.getByRole("heading", { name: /alert review center/i })).toBeVisible();
 
@@ -38,7 +38,7 @@ test("S3-04 RED - full CRUD review journey on alerts route", async ({ page }) =>
 test("S3-04 RED - keyboard-only modal workflow retains focus and no trap regression", async ({
   page,
 }) => {
-  await page.goto("/dashboard/projects/proj_demo_001/alerts");
+  await page.goto("/projects/proj_demo_001/alerts");
 
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");

@@ -29,7 +29,7 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_clerk_org_id,
     lookup_user_by_clerk_user_id,
 )
-from src.core.auth.models import Tenant, User
+from src.core.auth.models import Tenant, User, UserRole
 from src.core.database import get_session
 
 

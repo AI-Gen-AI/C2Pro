@@ -41,8 +41,8 @@ vi.mock("@/lib/api/generated/alerts/alerts", () => ({
   }),
 }));
 
-vi.mock("@/components/features/evidence/PdfEvidenceViewer", () => ({
-  PdfEvidenceViewer: ({
+vi.mock("@/components/features/evidence/LazyPdfEvidenceViewer", () => ({
+  LazyPdfEvidenceViewer: ({
     fileUrl,
     highlights,
     activeHighlightId,

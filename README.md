@@ -259,7 +259,7 @@ Ver `.env.example` para la lista completa. Las críticas son:
 - [ ] **Gate 5**: Coherence Score Formal (en progreso)
 - [ ] **Gate 6**: Human-in-the-loop
 - [ ] **Gate 7**: Observability
-- [ ] **Gate 8**: Document Security
+- [x] **Gate 8**: Document Security ✅
 
 ### Fases del Producto
 

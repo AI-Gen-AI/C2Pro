@@ -1,0 +1,87 @@
+release_id: 2026-04-01-rc1
+commit_sha: "HEAD" # Should be replaced with actual SHA before final
+promotion_workflow: ".github/workflows/deploy-production.yml"
+release_type: standard  # mvr | standard | ga
+
+# Minimum thresholds (from RELEASE_SIGNOFF_POLICY.md)
+thresholds:
+  unit_coverage_min: 70
+  security_coverage_min: 60
+  integration_pass_rate_min: 95
+  frontend_e2e_pass_rate_min: 90
+  golden_pass_rate_min: 90
+  coherence_accuracy_min: 75
+  extraction_f1_min: 75
+  retrieval_mrr_min: 65
+
+required_suites:
+  backend:
+    workflow: ".github/workflows/tests.yml"
+    status: pending
+    artifact: "pending"
+    jobs:
+      secrets_scan: pending
+      unit_tests: pending
+      integration_tests: pending
+      s5_core_ai_gates: pending
+    coverage: null
+    note: "Awaiting final CI run for this RC."
+
+  frontend:
+    workflow: ".github/workflows/frontend-ci.yml"
+    status: pending
+    artifact: "pending"
+    jobs:
+      typecheck: pending
+      lint: pending
+      tests_e2e: pending
+      api_drift_check: pending
+    note: "Awaiting final CI run for this RC."
+
+  security:
+    workflow: ".github/workflows/e2e-security-tests.yml"
+    status: pass
+    artifact: "Local verification: apps/api/.pytest-security-e2e-junit.xml (Verified 2026-03-28)"
+    coverage: 65.35
+    note: "Verified on 2026-03-28: 12/12 security E2E tests passed locally. P95 latency = 8.005s. Coverage exceeds 60% threshold."
+
+  evaluation:
+    workflow: ".github/workflows/evaluation-regression.yml"
+    status: pending
+    artifact: "pending"
+    metrics:
+      coherence_accuracy: null
+      extraction_f1: null
+      retrieval_mrr: null
+      golden_pass_rate: null
+    note: "Awaiting evaluation run."
+
+  reliability:
+    workflow: ".github/workflows/i13-real-e2e-scheduled.yml"
+    status: not_required
+    artifact: "pending"
+    mode: release-dispatch
+    note: "Standard release, i13 not required."
+
+swagger_workbook:
+  status: complete
+  reference: "docs/internal/SWAGGER_ENDPOINT_WORKBOOK.md"
+  report: "swagger-verification.md"
+  unchecked_items: []
+
+manual_signoff:
+  product: pending
+  security: pending
+  operations: pending
+  release_authority: pending
+
+performance:
+  target_set: "docs/performance/baseline.md"
+  result: pass
+  report: "performance.md"
+
+dr_evidence:
+  result: pass
+  report: "disaster-recovery.md"
+
+waivers: []

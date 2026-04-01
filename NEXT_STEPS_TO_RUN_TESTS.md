@@ -48,9 +48,9 @@ The Python virtual environment at `apps/.venv` is missing many dependencies from
 
 **Root Cause:**
 
-- `pyfiebdc==0.8.1` is not available on PyPI (BC3/FIEBDC parser for Spanish construction files)
-- This blocks `pip install -r requirements.txt` from completing
-- Many transitive dependencies are missing
+- The environment reflected here was captured before the repo commented out `pyfiebdc==0.8.1`
+- `apps/api/requirements.txt` now already comments that package because it is not available on PyPI
+- Remaining setup issues depend on local environment readiness and missing packages in the virtual environment
 
 **Installed So Far:**
 
@@ -73,18 +73,18 @@ The Python virtual environment at `apps/.venv` is missing many dependencies from
 
 ## ✅ Immediate Next Steps (Run Tests)
 
-### Option 1: Fix requirements.txt and Install All Dependencies (Recommended)
+### Option 1: Install All Dependencies from the Current Requirements File (Recommended)
 
-**Step 1:** Remove or comment out the problematic package:
+**Step 1:** Move into the backend working directory:
 
 ```bash
 cd apps/api
 ```
 
-Edit `requirements.txt` and comment out:
+`requirements.txt` already contains:
 
 ```
-# pyfiebdc==0.8.1    # Not available on PyPI - BC3/FIEBDC parser
+# pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
 ```
 
 **Step 2:** Install all dependencies:
@@ -97,7 +97,7 @@ python -m pip install -r requirements.txt
 
 ```bash
 # Option A: With PostgreSQL test database running
-docker-compose -f docker-compose.test.yml up -d
+docker-compose -f ..\..\docker-compose.test.yml up -d
 alembic upgrade head
 
 # Option B: Tests will create tables automatically in SQLite (1 test skipped)
@@ -174,8 +174,8 @@ Then rerun the tests.
 **Solution:** Start the test database:
 
 ```bash
-# From project root
-docker-compose -f docker-compose.test.yml up -d
+# From apps/api
+docker-compose -f ..\..\docker-compose.test.yml up -d
 
 # Verify it's running
 docker ps | grep c2pro_test
@@ -255,7 +255,7 @@ tests/e2e/security/test_multi_tenant_isolation.py ... [90% passed, 1 skipped]
 
 ⚠️  PostgreSQL no disponible, usando SQLite en memoria
    Para ejecutar TODOS los tests, inicia PostgreSQL con:
-   docker-compose -f docker-compose.test.yml up -d
+   docker-compose -f ..\..\docker-compose.test.yml up -d
 
 =================== 10 passed, 1 skipped in 3.12s ===================
 ```
@@ -284,7 +284,7 @@ tests/e2e/security/test_multi_tenant_isolation.py ... [90% passed, 1 skipped]
 
 ### Configuration
 
-- **Requirements:** `apps/api/requirements.txt` (⚠️ needs pyfiebdc fix)
+- **Requirements:** `apps/api/requirements.txt` (`pyfiebdc` already commented out)
 - **Alembic:** `apps/api/alembic.ini`
 - **Test Env:** `apps/api/tests/conftest.py` (lines 59-88)
 
@@ -328,7 +328,7 @@ Before running tests, ensure:
 - [ ] Virtual environment activated (`apps/.venv`)
 - [ ] Dependencies installed (Option 1 or 2 above)
 - [ ] PostgreSQL running (optional - SQLite fallback available)
-- [ ] `pyfiebdc` removed/commented from `requirements.txt`
+- [x] `pyfiebdc` removed/commented from `requirements.txt`
 - [ ] Working directory: `apps/api`
 
 Then run:

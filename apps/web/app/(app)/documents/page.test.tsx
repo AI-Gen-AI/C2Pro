@@ -1,21 +1,16 @@
 /**
- * Test Suite ID: TASK-1347
- * Route Coverage: Top-level documents page uses generated backend clients
+ * Test Suite ID: TASK-021
+ * Route Coverage: top-level documents page uses fetch-safe service loaders
  */
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import DocumentsPage from "./page";
 
-const listProjectsMock = vi.fn();
-const listDocumentsForProjectMock = vi.fn();
+const listProjectDocumentGroupsMock = vi.fn();
 
-vi.mock("@/lib/api/generated/projects/projects", () => ({
-  listProjectsApiV1ProjectsGet: (...args: unknown[]) => listProjectsMock(...args),
-}));
-
-vi.mock("@/lib/api/generated/documents/documents", () => ({
-  listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet: (...args: unknown[]) =>
-    listDocumentsForProjectMock(...args),
+vi.mock("@/lib/api/services/documents", () => ({
+  listProjectDocumentGroups: (...args: unknown[]) =>
+    listProjectDocumentGroupsMock(...args),
 }));
 
 vi.mock("@/components/features/documents/DocumentsListClient", () => ({
@@ -28,47 +23,26 @@ vi.mock("@/components/features/documents/DocumentsListClient", () => ({
 
 describe("DocumentsPage backend aggregation", () => {
   beforeEach(() => {
-    listProjectsMock.mockReset();
-    listDocumentsForProjectMock.mockReset();
+    listProjectDocumentGroupsMock.mockReset();
   });
 
-  it("aggregates project document groups through generated backend clients", async () => {
-    listProjectsMock.mockResolvedValue({
-      items: [
-        { id: "proj-1", name: "Hospital Central" },
-        { id: "proj-2", name: "Port Expansion" },
-      ],
-      total: 2,
-    });
-
-    listDocumentsForProjectMock.mockImplementation((projectId: string) =>
-      Promise.resolve({
-        items:
-          projectId === "proj-1"
-            ? [
-                {
-                  id: "doc-1",
-                  filename: "Contract.pdf",
-                  status: "parsed",
-                },
-              ]
-            : [],
-        total_count: projectId === "proj-1" ? 1 : 0,
-        skip: 0,
-        limit: 50,
-      }),
-    );
+  it("aggregates project document groups through the documents service", async () => {
+    listProjectDocumentGroupsMock.mockResolvedValue([
+      {
+        projectId: "proj-1",
+        projectName: "Hospital Central",
+        documents: [{ id: "doc-1" }],
+      },
+    ]);
 
     renderWithProviders(await DocumentsPage());
 
-    expect(listProjectsMock).toHaveBeenCalledTimes(1);
-    expect(listDocumentsForProjectMock).toHaveBeenCalledWith("proj-1");
-    expect(listDocumentsForProjectMock).toHaveBeenCalledWith("proj-2");
+    expect(listProjectDocumentGroupsMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/documents groups: hospital central/i)).toBeInTheDocument();
   });
 
   it("shows the backend error banner when project aggregation fails", async () => {
-    listProjectsMock.mockRejectedValue(new Error("documents offline"));
+    listProjectDocumentGroupsMock.mockRejectedValue(new Error("documents offline"));
 
     renderWithProviders(await DocumentsPage());
 

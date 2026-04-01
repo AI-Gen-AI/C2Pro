@@ -110,3 +110,36 @@ The verifier MUST detect runtime drift.
     assert pass_result.returncode == 0
     assert fail_result.returncode == 1
     assert drift_result.returncode == 2
+
+
+def test_verify_command_writes_json_report_for_dashboarding(tmp_path: Path) -> None:
+    local_repo = tmp_path
+    (local_repo / "openspec").mkdir()
+    _write_config(local_repo / "openspec" / "config.yaml")
+
+    change_name = "json-case"
+    change_root = local_repo / "openspec" / "changes" / change_name
+    _write_base_change(
+        change_root,
+        """# OpenSpec Specification
+
+### Requirement: Process-Only Verify Entry Point
+The verifier MUST support docs-only checks.
+
+#### Scenario: Docs-only verification executes
+- GIVEN docs-only files exist
+- WHEN the verifier runs
+- THEN verification SHALL pass
+""",
+    )
+
+    result = _run_command(local_repo=local_repo, change_name=change_name)
+
+    markdown_report = change_root / "verify-report.md"
+    json_report = change_root / "verify-report.json"
+
+    assert result.returncode == 0
+    assert markdown_report.exists()
+    assert json_report.exists()
+    assert '"change_name": "json-case"' in json_report.read_text(encoding="utf-8")
+    assert '"verdict": "PASS"' in json_report.read_text(encoding="utf-8")

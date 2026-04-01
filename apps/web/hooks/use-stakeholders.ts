@@ -89,7 +89,7 @@ const fetchStakeholders = async (projectId?: string) => {
 };
 
 export const useStakeholders = (projectId?: string) =>
-  useQuery({
+  useQuery<Stakeholder[]>({
     queryKey: ["stakeholders", projectId],
     queryFn: () => fetchStakeholders(projectId),
   });

@@ -132,22 +132,26 @@ See `docs/coherence_engine/PHASE_2_VERIFICATION.md` for detailed verification re
 
 | # | Task | File(s) | Dependencies |
 |---|------|---------|--------------|
-| 3.1 | Implement `ScoringService.calculate_from_signals()` | `coherence/scoring.py` | Phase 1 |
-| 3.2 | Implement exponential decay formula | `coherence/scoring.py` | 3.1 |
-| 3.3 | Add scope normalization logic | `coherence/scoring.py` | 3.2 |
-| 3.4 | Add floor/ceiling bounds (5.0 / 97.0) | `coherence/scoring.py` | 3.3 |
-| 3.5 | Implement `calculate_detailed()` with diagnostics | `coherence/scoring.py` | 3.1-3.4 |
-| 3.6 | Update `calculate()` for backward compat with alerts | `coherence/scoring.py` | 3.1-3.5 |
-| 3.7 | Write scoring curve validation tests | `tests/coherence/test_scoring_v3.py` | 3.1-3.6 |
+| 3.1 | ✅ Implement `ScoringService.calculate_from_signals()` | `coherence/scoring.py` | Phase 1 |
+| 3.2 | ✅ Implement exponential decay formula | `coherence/scoring.py` | 3.1 |
+| 3.3 | ✅ Add scope normalization logic | `coherence/scoring.py` | 3.2 |
+| 3.4 | ✅ Add floor/ceiling bounds (5.0 / 97.0) | `coherence/scoring.py` | 3.3 |
+| 3.5 | ✅ Implement `calculate_detailed()` with diagnostics | `coherence/scoring.py` | 3.1-3.4 |
+| 3.6 | ✅ Update `calculate()` for backward compat with alerts | `coherence/scoring.py` | 3.1-3.5 |
+| 3.7 | ✅ Write scoring curve validation tests | `tests/coherence/test_scoring_v3.py` | 3.1-3.6 |
 
 **Checklist**:
-- [ ] Formula: `score = 100 × e^(-λ × penalty_density)`
-- [ ] Score never reaches 0 (floor = 5.0)
-- [ ] Score with findings never reaches 100 (ceiling = 97.0)
-- [ ] Larger scope (more clauses) absorbs findings better
-- [ ] Low confidence findings have reduced impact
-- [ ] Deterministic signals weighted higher than LLM
-- [ ] Diagnostic output includes: penalty density, scope factor, severity distribution
+- [x] Formula: `score = 100 × e^(-λ × penalty_density)`
+- [x] Score never reaches 0 (floor = 5.0)
+- [x] Score with findings never reaches 100 (ceiling = 97.0)
+- [x] Larger scope (more clauses) absorbs findings better
+- [x] Low confidence findings have reduced impact
+- [x] Deterministic signals weighted higher than LLM
+- [x] Diagnostic output includes: penalty density, scope factor, severity distribution
+
+**Status: ✅ COMPLETE** (2026-04-01)
+
+See `apps/api/tests/coherence/test_scoring_v3.py` for 39 scoring curve validation tests.
 
 ---
 
@@ -156,23 +160,27 @@ See `docs/coherence_engine/PHASE_2_VERIFICATION.md` for detailed verification re
 
 | # | Task | File(s) | Dependencies |
 |---|------|---------|--------------|
-| 4.1 | Update `LlmRuleEvaluator` for continuous scoring | `coherence/rules_engine/llm_evaluator.py` | Phase 1 |
-| 4.2 | Create optimized prompt templates | `coherence/graph/prompts.py` | None |
+| 4.1 | ✅ Update `LlmRuleEvaluator` for continuous scoring | `coherence/rules_engine/llm_evaluator.py` | Phase 1 |
+| 4.2 | ✅ Create optimized prompt templates | `coherence/graph/prompts.py` | None |
 | | - `COHERENCE_SYSTEM_PROMPT` | | |
 | | - `RULE_EVALUATION_PROMPT` | | |
 | | - `BATCH_EVALUATION_PROMPT` | | |
 | | - `CROSS_CLAUSE_PROMPT` | | |
-| 4.3 | Add few-shot examples for calibration | `coherence/graph/prompts.py` | 4.2 |
-| 4.4 | Implement JSON parsing with error handling | `coherence/rules_engine/llm_evaluator.py` | 4.1 |
-| 4.5 | Add cost tracking (`total_cost_usd`, `llm_calls_count`) | `coherence/rules_engine/llm_evaluator.py` | 4.1 |
-| 4.6 | Write tests for LLM response parsing | `tests/coherence/test_llm_evaluator_v3.py` | 4.1-4.5 |
+| 4.3 | ✅ Add few-shot examples for calibration | `coherence/graph/prompts.py` | 4.2 |
+| 4.4 | ✅ Implement JSON parsing with error handling | `coherence/rules_engine/llm_evaluator.py` | 4.1 |
+| 4.5 | ✅ Add cost tracking (`total_cost_usd`, `llm_calls_count`) | `coherence/rules_engine/llm_evaluator.py` | 4.1 |
+| 4.6 | ✅ Write tests for LLM response parsing | `tests/coherence/test_llm_evaluator_v3.py` | 4.1-4.5 |
 
 **Checklist**:
-- [ ] LLM returns `impact_score` and `confidence` floats
-- [ ] Responses are validated and clamped to [0.0, 1.0]
-- [ ] Batch prompt reduces token usage
-- [ ] Cost tracking per evaluation
-- [ ] Graceful fallback on parse errors
+- [x] LLM returns `impact_score` and `confidence` floats
+- [x] Responses are validated and clamped to [0.0, 1.0]
+- [x] Batch prompt reduces token usage
+- [x] Cost tracking per evaluation
+- [x] Graceful fallback on parse errors
+
+**Status: ✅ COMPLETE** (2026-04-01)
+
+See `apps/api/tests/coherence/test_llm_evaluator_v3.py` for 36 LLM evaluator tests.
 
 ---
 
@@ -395,4 +403,5 @@ apps/api/tests/coherence/
 ---
 
 *Document created: 2026-03-28*
-*Status: DRAFT — Awaiting implementation start*
+*Last updated: 2026-04-01*
+*Status: IN PROGRESS — Phases 1-4 complete, Phase 5 next*

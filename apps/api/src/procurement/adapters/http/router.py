@@ -47,6 +47,20 @@ from src.procurement.application.planning_service import (
     ProcurementDecisionRepository,
     ProcurementUnitOfWork,
 )
+from src.procurement.application.dependencies import (
+    get_bom_item_use_case,
+    get_create_bom_item_use_case,
+    get_create_wbs_item_use_case,
+    get_delete_bom_item_use_case,
+    get_delete_wbs_item_use_case,
+    get_list_bom_items_use_case,
+    get_list_wbs_items_use_case,
+    get_update_bom_item_use_case,
+    get_update_bom_status_use_case,
+    get_update_wbs_item_use_case,
+    get_wbs_item_use_case,
+    get_wbs_tree_use_case,
+)
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
 
@@ -56,35 +70,48 @@ router = APIRouter(prefix="/procurement", tags=["procurement"])
 # ==========================================
 
 
-class DefaultSnapshotRepo:
+class UnconfiguredSnapshotRepo:
     async def get_snapshot_items(self, project_id, tenant_id, required_on_site):
-        from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
-        from datetime import timedelta
-        return [
-            ProcurementPlanItem(
-                bom_item_id=UUID("11111111-1111-1111-1111-111111111111"),
-                item_name="Primary Switchgear",
-                quantity=1,
-                total_cost=150000,
-                required_on_site_date=required_on_site,
-                optimal_order_date=required_on_site - timedelta(days=10),
-                priority=ProcurementPriority.MEDIUM,
-            )
-        ]
+        raise RuntimeError("Unconfigured procurement snapshot repository")
 
-class NoopDecisionRepo:
-    async def save_plan_items(self, project_id, tenant_id, items): pass
-    async def save_conflicts(self, project_id, tenant_id, conflicts): pass
 
-class NoopUoW:
-    async def commit(self): pass
-    async def rollback(self): pass
+class UnconfiguredDecisionRepo:
+    async def save_plan_items(self, project_id, tenant_id, items):
+        raise RuntimeError("Unconfigured procurement decision repository")
 
-def get_planning_service() -> ProcurementPlanningService:
+    async def save_conflicts(self, project_id, tenant_id, conflicts):
+        raise RuntimeError("Unconfigured procurement decision repository")
+
+
+class UnconfiguredUoW:
+    async def commit(self):
+        raise RuntimeError("Unconfigured procurement unit of work")
+
+    async def rollback(self):
+        raise RuntimeError("Unconfigured procurement unit of work")
+
+
+def get_snapshot_repository() -> ProcurementSnapshotRepository:
+    return UnconfiguredSnapshotRepo()
+
+
+def get_decision_repository() -> ProcurementDecisionRepository:
+    return UnconfiguredDecisionRepo()
+
+
+def get_procurement_uow() -> ProcurementUnitOfWork:
+    return UnconfiguredUoW()
+
+
+def get_planning_service(
+    repository: ProcurementSnapshotRepository = Depends(get_snapshot_repository),
+    decision_repository: ProcurementDecisionRepository = Depends(get_decision_repository),
+    uow: ProcurementUnitOfWork = Depends(get_procurement_uow),
+) -> ProcurementPlanningService:
     return ProcurementPlanningService(
-        repository=DefaultSnapshotRepo(),
-        decision_repository=NoopDecisionRepo(),
-        uow=NoopUoW(),
+        repository=repository,
+        decision_repository=decision_repository,
+        uow=uow,
     )
 
 
@@ -123,15 +150,12 @@ async def build_procurement_plan(
 @router.post("/wbs", response_model=WBSItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_wbs_item(
     wbs_create: WBSItemCreate,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: CreateWBSItemUseCase = Depends(get_create_wbs_item_use_case),
 ):
     """
     Create a new WBS item.
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = CreateWBSItemUseCase(repository)
-
     try:
         wbs_item = await use_case.execute(wbs_create, tenant_id)
         return WBSItemResponse.model_validate(wbs_item)
@@ -145,15 +169,12 @@ async def create_wbs_item(
 @router.get("/wbs/project/{project_id}", response_model=List[WBSItemResponse])
 async def list_wbs_items(
     project_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: ListWBSItemsUseCase = Depends(get_list_wbs_items_use_case),
 ):
     """
     List all WBS items for a project.
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = ListWBSItemsUseCase(repository)
-
     wbs_items = await use_case.execute(project_id, tenant_id)
     return [WBSItemResponse.model_validate(item) for item in wbs_items]
 
@@ -161,15 +182,12 @@ async def list_wbs_items(
 @router.get("/wbs/project/{project_id}/tree", response_model=List[WBSItemResponse])
 async def get_wbs_tree(
     project_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: GetWBSTreeUseCase = Depends(get_wbs_tree_use_case),
 ):
     """
     Get the complete WBS tree for a project with hierarchy.
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = GetWBSTreeUseCase(repository)
-
     wbs_tree = await use_case.execute(project_id, tenant_id)
     return [WBSItemResponse.model_validate(item) for item in wbs_tree]
 
@@ -177,15 +195,12 @@ async def get_wbs_tree(
 @router.get("/wbs/{wbs_id}", response_model=WBSItemResponse)
 async def get_wbs_item(
     wbs_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: GetWBSItemUseCase = Depends(get_wbs_item_use_case),
 ):
     """
     Get a specific WBS item by ID.
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = GetWBSItemUseCase(repository)
-
     wbs_item = await use_case.execute(wbs_id, tenant_id)
     if not wbs_item:
         raise HTTPException(
@@ -200,15 +215,12 @@ async def get_wbs_item(
 async def update_wbs_item(
     wbs_id: UUID,
     wbs_update: WBSItemUpdate,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: UpdateWBSItemUseCase = Depends(get_update_wbs_item_use_case),
 ):
     """
     Update a WBS item.
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = UpdateWBSItemUseCase(repository)
-
     wbs_item = await use_case.execute(wbs_id, wbs_update, tenant_id)
     if not wbs_item:
         raise HTTPException(
@@ -222,15 +234,12 @@ async def update_wbs_item(
 @router.delete("/wbs/{wbs_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_wbs_item(
     wbs_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: DeleteWBSItemUseCase = Depends(get_delete_wbs_item_use_case),
 ):
     """
     Delete a WBS item and its children (cascade).
     """
-    repository = SQLAlchemyWBSRepository(session)
-    use_case = DeleteWBSItemUseCase(repository)
-
     deleted = await use_case.execute(wbs_id, tenant_id)
     if not deleted:
         raise HTTPException(
@@ -249,15 +258,12 @@ async def delete_wbs_item(
 @router.post("/bom", response_model=BOMItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_bom_item(
     bom_create: BOMItemCreate,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: CreateBOMItemUseCase = Depends(get_create_bom_item_use_case),
 ):
     """
     Create a new BOM item.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = CreateBOMItemUseCase(repository)
-
     try:
         bom_item = await use_case.execute(bom_create, tenant_id)
         return BOMItemResponse.model_validate(bom_item)
@@ -271,15 +277,12 @@ async def create_bom_item(
 @router.get("/bom/project/{project_id}", response_model=List[BOMItemResponse])
 async def list_bom_items(
     project_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: ListBOMItemsUseCase = Depends(get_list_bom_items_use_case),
 ):
     """
     List all BOM items for a project.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = ListBOMItemsUseCase(repository)
-
     bom_items = await use_case.execute(project_id, tenant_id)
     return [BOMItemResponse.model_validate(item) for item in bom_items]
 
@@ -287,15 +290,12 @@ async def list_bom_items(
 @router.get("/bom/{bom_id}", response_model=BOMItemResponse)
 async def get_bom_item(
     bom_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: GetBOMItemUseCase = Depends(get_bom_item_use_case),
 ):
     """
     Get a specific BOM item by ID.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = GetBOMItemUseCase(repository)
-
     bom_item = await use_case.execute(bom_id, tenant_id)
     if not bom_item:
         raise HTTPException(
@@ -310,15 +310,12 @@ async def get_bom_item(
 async def update_bom_item(
     bom_id: UUID,
     bom_update: BOMItemUpdate,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: UpdateBOMItemUseCase = Depends(get_update_bom_item_use_case),
 ):
     """
     Update a BOM item.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = UpdateBOMItemUseCase(repository)
-
     bom_item = await use_case.execute(bom_id, bom_update, tenant_id)
     if not bom_item:
         raise HTTPException(
@@ -333,15 +330,12 @@ async def update_bom_item(
 async def update_bom_status(
     bom_id: UUID,
     status: ProcurementStatus,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: UpdateBOMStatusUseCase = Depends(get_update_bom_status_use_case),
 ):
     """
     Update the procurement status of a BOM item.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = UpdateBOMStatusUseCase(repository)
-
     bom_item = await use_case.execute(bom_id, status, tenant_id)
     if not bom_item:
         raise HTTPException(
@@ -355,15 +349,12 @@ async def update_bom_status(
 @router.delete("/bom/{bom_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_bom_item(
     bom_id: UUID,
-    session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(CurrentTenantId),
+    tenant_id: CurrentTenantId,
+    use_case: DeleteBOMItemUseCase = Depends(get_delete_bom_item_use_case),
 ):
     """
     Delete a BOM item.
     """
-    repository = SQLAlchemyBOMRepository(session)
-    use_case = DeleteBOMItemUseCase(repository)
-
     deleted = await use_case.execute(bom_id, tenant_id)
     if not deleted:
         raise HTTPException(
