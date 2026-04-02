@@ -1,10 +1,10 @@
 /**
  * Test Suite ID: TASK-1423
- * Route Coverage: canonical app shell dashboard landing page parity
+ * Route Coverage: canonical dashboard route parity
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, waitFor } from "@/src/tests/test-utils";
-import AppHomePage from "./page";
+import AppDashboardPage from "./page";
 
 const getProjectsMock = vi.fn();
 const getSummaryMock = vi.fn();
@@ -26,12 +26,12 @@ vi.mock("@/components/coherence/DashboardClient", () => ({
   ),
 }));
 
-describe("AppHomePage", () => {
+describe("AppDashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("loads the canonical dashboard landing page through the shared dashboard service", async () => {
+  it("loads the canonical dashboard route through the shared dashboard service", async () => {
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "token-123" }),
@@ -48,7 +48,7 @@ describe("AppHomePage", () => {
       last_updated: null,
     });
 
-    renderWithProviders(<AppHomePage />);
+    renderWithProviders(<AppDashboardPage />);
 
     await waitFor(() => {
       expect(getProjectsMock).toHaveBeenCalledTimes(1);
