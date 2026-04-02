@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ProjectTabs } from "@/components/layout/ProjectTabs";
+import { ProjectHeaderCard } from "@/components/layout/ProjectHeaderCard";
 
 export default async function ProjectLayout({
   children,
@@ -12,13 +12,7 @@ export default async function ProjectLayout({
 
   return (
     <section className="space-y-5">
-      <div className="rounded-md border bg-card p-4">
-        <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-          Project
-        </div>
-        <h2 className="text-lg font-semibold">{id}</h2>
-        <ProjectTabs projectId={id} />
-      </div>
+      <ProjectHeaderCard projectId={id} />
       {children}
     </section>
   );

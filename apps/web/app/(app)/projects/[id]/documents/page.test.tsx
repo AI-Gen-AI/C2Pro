@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
 
 const pushMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
+const useProjectMock = vi.fn();
 const mutateAsyncMock = vi.fn();
 const useDeleteDocumentMock = vi.fn();
 
@@ -15,6 +16,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/useProjectDocuments", () => ({
   useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
+}));
+
+vi.mock("@/hooks/useProject", () => ({
+  useProject: (...args: unknown[]) => useProjectMock(...args),
 }));
 
 vi.mock("@/lib/api/generated/documents/documents", () => ({
@@ -43,11 +48,34 @@ describe("ProjectDocumentsPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     useProjectDocumentsMock.mockReset();
+    useProjectMock.mockReset();
     mutateAsyncMock.mockReset();
     useDeleteDocumentMock.mockReset();
+    useProjectMock.mockReturnValue({
+      data: {
+        id: "proj_real_001",
+        name: "Atlas Ridge",
+      },
+    });
     useDeleteDocumentMock.mockReturnValue({
       mutateAsync: (...args: unknown[]) => mutateAsyncMock(...args),
     });
+  });
+
+  it("shows the fetched project name instead of the raw route id in the page subtitle", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByText("Project: Atlas Ridge")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Project: proj_real_001"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an empty state when the backend returns no documents", () => {

@@ -3,6 +3,9 @@
  * Purpose: build-safe fetch helpers for frontend page data loading.
  */
 
+import { handleAuthErrorStatus } from "@/lib/api/client";
+import { useAuthStore } from "@/stores/auth";
+
 type ApiScope = "default" | "coherence";
 
 type ApiRequestOptions = RequestInit & {
@@ -46,6 +49,21 @@ function buildApiUrl(
   return `${backendBaseUrl}${backendPrefix}/${normalizedPath}`;
 }
 
+function buildBrowserAuthHeaders(headersInit: HeadersInit | undefined): HeadersInit | undefined {
+  const { token, tenantId } = useAuthStore.getState();
+  const headers = new Headers(headersInit);
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  if (tenantId) {
+    headers.set("X-Tenant-ID", tenantId);
+  }
+
+  return headers.entries().next().done ? undefined : Object.fromEntries(headers.entries());
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: string; error?: string };
@@ -66,10 +84,24 @@ export async function fetchApiJson<T>(
   path: string,
   options?: ApiRequestOptions,
 ): Promise<T> {
-  const { server, scope, ...init } = options ?? {};
-  const response = await fetch(buildApiUrl(path, { server, scope }), init);
+  const { server, scope, headers, ...init } = options ?? {};
+  const requestInit: RequestInit = { ...init };
+
+  if (!server) {
+    const mergedHeaders = buildBrowserAuthHeaders(headers);
+    if (mergedHeaders) {
+      requestInit.headers = mergedHeaders;
+    }
+  } else if (headers) {
+    requestInit.headers = headers;
+  }
+
+  const response = await fetch(buildApiUrl(path, { server, scope }), requestInit);
 
   if (!response.ok) {
+    if (!server) {
+      handleAuthErrorStatus(response.status);
+    }
     throw new Error(await parseError(response));
   }
 
