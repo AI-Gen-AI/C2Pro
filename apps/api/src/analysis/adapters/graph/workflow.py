@@ -224,7 +224,8 @@ def _build_checkpointer():
                 open=False,
                 kwargs={
                     "autocommit": True,
-                    "prepare_threshold": 0,
+                    # Disable prepared statements entirely for PgBouncer/Railway pooler compatibility.
+                    "prepare_threshold": None,
                     "row_factory": dict_row,
                 },
             )

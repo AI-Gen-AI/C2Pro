@@ -14,6 +14,8 @@ Test Scenarios:
 """
 
 import asyncio
+import sys
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -38,6 +40,48 @@ class TestLangGraphCheckpointer:
         assert checkpointer is not None
         assert "MemorySaver" not in str(type(checkpointer))
         assert "PostgresSaver" in str(type(checkpointer))
+
+    async def test_checkpointer_pool_disables_prepared_statements_for_poolers(self, monkeypatch):
+        """Verify psycopg pool config disables prepared statements for PgBouncer-compatible deployments."""
+        workflow_module._checkpointer_pool = None
+
+        captured: dict[str, object] = {}
+        sentinel_row_factory = object()
+
+        class FakePool:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.closed = False
+
+        class FakeSaver:
+            def __init__(self, conn):
+                self.conn = conn
+
+        monkeypatch.setitem(
+            sys.modules,
+            "langgraph.checkpoint.postgres.aio",
+            SimpleNamespace(AsyncPostgresSaver=FakeSaver),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "psycopg.rows",
+            SimpleNamespace(dict_row=sentinel_row_factory),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "psycopg_pool",
+            SimpleNamespace(AsyncConnectionPool=FakePool),
+        )
+
+        checkpointer = _build_checkpointer()
+
+        assert isinstance(checkpointer, FakeSaver)
+        assert captured["open"] is False
+        assert captured["kwargs"] == {
+            "autocommit": True,
+            "prepare_threshold": None,
+            "row_factory": sentinel_row_factory,
+        }
 
     async def test_checkpoint_table_exists(self, db_session):
         """Verify checkpoints table exists in database."""
