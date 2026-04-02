@@ -1,0 +1,11 @@
+schema: spec-driven
+rules:
+  verify:
+    required_report_sections:
+      - artifact presence
+      - scenario coverage
+      - rules compliance
+      - overall verdict
+    runtime_drift:
+      exit_code: 2
+      escalation_message: Runtime changes detected. Run full verification gates.

@@ -106,8 +106,6 @@ export function DocumentTabs({
       ? documents.slice(0, maxVisibleTabs - 1)
       : documents;
 
-  const activeDoc = documents.find((doc) => doc.id === activeDocumentId);
-
   return (
     <div className={cn('flex items-center gap-1', className)}>
       {/* Left Scroll Button */}

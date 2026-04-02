@@ -1,5 +1,20 @@
-import "@testing-library/jest-dom";
-import "./src/tests/setup";
+import { ReadableStream, TransformStream, WritableStream } from "node:stream/web";
+import "@testing-library/jest-dom/vitest";
+
+if (!globalThis.ReadableStream) {
+  globalThis.ReadableStream =
+    ReadableStream as unknown as typeof globalThis.ReadableStream;
+}
+
+if (!globalThis.WritableStream) {
+  globalThis.WritableStream =
+    WritableStream as unknown as typeof globalThis.WritableStream;
+}
+
+if (!globalThis.TransformStream) {
+  globalThis.TransformStream =
+    TransformStream as unknown as typeof globalThis.TransformStream;
+}
 
 const originalWarn = console.warn.bind(console);
 console.warn = (...args: unknown[]) => {

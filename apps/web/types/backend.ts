@@ -47,9 +47,7 @@ export interface AlertResponse extends Alert {
 /**
  * Project API response
  */
-export interface ProjectResponse extends Project {
-  // Additional fields that might come from the backend
-}
+export type ProjectResponse = Project;
 
 /**
  * Error response from the backend

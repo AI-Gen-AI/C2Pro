@@ -1,0 +1,21 @@
+
+> c2pro-web@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3110
+
+▲ Next.js 16.2.1 (Turbopack)
+- Local:         http://127.0.0.1:3110
+- Network:       http://127.0.0.1:3110
+- Environments: .env.local
+✓ Ready in 3.2s
+Creating turbopack project {
+  dir: 'C:\\Users\\esus_\\Documents\\AI\\ZTWQ\\c2pro\\apps\\web',
+  testMode: true
+}
+
+ GET /demo/documents 404 in 6.3s (next.js: -1448942µs, proxy.ts: 4.9s, application-code: 2.8s)
+ GET /demo/alerts 404 in 970ms (next.js: -149345µs, proxy.ts: 826ms, application-code: 293ms)
+○ Compiling /_not-found/page ...
+ GET /demo/stakeholders 404 in 1159ms (next.js: -58502µs, proxy.ts: 1069ms, application-code: 149ms)
+ GET /demo/raci 404 in 535ms (next.js: -45035µs, proxy.ts: 430ms, application-code: 150ms)
+ GET /demo/evidence 404 in 859ms (next.js: -234818µs, proxy.ts: 634ms, application-code: 460ms)
+[?25h

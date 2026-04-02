@@ -36,9 +36,9 @@ class RecalculateOnAlertUseCase:
 
     def __init__(
         self,
-        calculate_use_case: CalculateCoherenceUseCase | None = None,
+        calculate_use_case: CalculateCoherenceUseCase,
     ) -> None:
-        self.calculate_use_case = calculate_use_case or CalculateCoherenceUseCase()
+        self.calculate_use_case = calculate_use_case
 
     def execute(
         self, command: RecalculateOnAlertCommand

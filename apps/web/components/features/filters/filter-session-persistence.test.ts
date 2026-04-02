@@ -18,7 +18,7 @@ describe("S3-10 RED - filter session persistence", () => {
     });
 
     const raw = sessionStorage.getItem("filters:alerts:proj_demo_001");
-    expect(raw).toContain(`\"version\":\"${FILTER_STORAGE_VERSION}\"`);
+    expect(raw).toContain(`"version":"${FILTER_STORAGE_VERSION}"`);
     expect(raw).toContain("\"severity\":[\"critical\"]");
     expect(raw).toContain("\"owner\":\"legal\"");
   });

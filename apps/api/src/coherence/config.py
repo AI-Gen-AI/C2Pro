@@ -58,9 +58,12 @@ class ScoringConfig:
     """
 
     # Exponential decay constant (controls curve steepness)
-    # Calibrated for good spread: 0.5 gives scores from ~20 to ~97 across scenarios
-    # 2 high findings in 5 clauses → ~58, 5 critical in 3 clauses → ~15
-    decay_lambda: float = 0.5
+    # Calibrated λ=1.5 for target score curve:
+    #   - Perfect project (0 findings): ~97
+    #   - Moderate issues (penalty_density ~0.2-0.3): 50-80
+    #   - Severe issues (penalty_density ~0.8-1.2): 10-35
+    # Formula: score = 100 × e^(-λ × penalty_density)
+    decay_lambda: float = 1.5
 
     # Severity weights (relative importance of each severity level)
     severity_weights: dict[str, float] = field(default_factory=lambda: {

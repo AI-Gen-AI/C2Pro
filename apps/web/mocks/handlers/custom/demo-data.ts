@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "@/mocks/msw";
 import { db, DEMO_TENANT_ID, DEMO_USER_ID } from "../../data";
 
 export const demoDataHandlers = [

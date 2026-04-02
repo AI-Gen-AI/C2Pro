@@ -43,8 +43,8 @@ export function CategoryDetail({
         <div>
           <h3 className="text-base font-semibold">{meta.label} Analysis</h3>
           <span className="text-xs text-muted-foreground">
-            Weight: {Math.round(weight * 100)}% &middot; {alertCount} alert
-            {alertCount !== 1 ? 's' : ''}
+            Score: {score}/100 &middot; Weight: {Math.round(weight * 100)}%
+            {" \u00b7 "}{alertCount} alert{alertCount !== 1 ? 's' : ''}
           </span>
         </div>
         <Button variant="outline" size="sm" onClick={onClose}>

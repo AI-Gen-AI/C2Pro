@@ -112,6 +112,45 @@ class DocumentDetailResponse(DocumentResponse):
     clauses: list[dict] | None = None
 
 
+class EvidenceHistoryEventResponse(BaseModel):
+    """A persisted evidence-history event for a document timeline."""
+
+    id: str
+    title: str
+    detail: str
+    occurred_at: datetime
+    source_type: str | None = None
+    source_id: str | None = None
+
+
+class DocumentHistoryResponse(BaseModel):
+    """Ordered history events for a single document."""
+
+    document_id: UUID
+    items: list[EvidenceHistoryEventResponse]
+
+
+class RelationshipExplanationCitationResponse(BaseModel):
+    """Citation payload for a relationship explanation."""
+
+    clause_id: UUID
+    clause_code: str
+    label: str
+    page: int | None = None
+    reason: str
+
+
+class DocumentRelationshipExplanationResponse(BaseModel):
+    """Structured relationship explanation payload for a document."""
+
+    document_id: UUID
+    summary: str
+    strongest_cluster: str
+    review_priority: str
+    latest_signal: str
+    citations: list[RelationshipExplanationCitationResponse]
+
+
 class RagQuestionRequest(BaseModel):
     """Request for RAG questions."""
     question: str

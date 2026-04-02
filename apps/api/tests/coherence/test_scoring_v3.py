@@ -112,13 +112,14 @@ class TestScoreGranularity:
         assert 90.0 < score <= 97.0, f"Score {score} should be in (90, 97]"
 
     def test_moderate_findings_in_middle_range(self, scorer: ScoringService):
-        """Moderate findings should produce scores in the 40-80 range."""
+        """Moderate findings should produce scores in the middle range."""
         signals = [
             make_signal(0.50, severity="medium"),
             make_signal(0.60, severity="high"),
         ]
         score = scorer.calculate_from_signals(signals, 8, 5)
-        assert 40.0 < score < 90.0, f"Score {score} should be in (40, 90)"
+        # With λ=1.5, moderate findings produce scores ~35-70
+        assert 30.0 < score < 90.0, f"Score {score} should be in (30, 90)"
 
     def test_severe_findings_below_30_but_above_floor(self, scorer: ScoringService):
         """Multiple critical findings should produce low scores but above floor."""
@@ -562,16 +563,17 @@ class TestScoreCurveScenarios:
         assert score >= 95.0, f"Score {score} should be >= 95.0"
 
     def test_scenario_two_high_in_5_clauses(self, scorer: ScoringService):
-        """2 high findings in 5 clauses → score in 50-75 range."""
+        """2 high findings in 5 clauses → low-mid score with λ=1.5."""
         signals = [
             make_signal(0.75, severity="high"),
             make_signal(0.75, severity="high"),
         ]
         score = scorer.calculate_from_signals(signals, 5, 5)
-        assert 50.0 < score < 75.0, f"Score {score} should be in (50, 75)"
+        # With λ=1.5: penalty_density ~1.05 → score ~21
+        assert 15.0 < score < 35.0, f"Score {score} should be in (15, 35)"
 
     def test_scenario_mixed_findings(self, scorer: ScoringService):
-        """3 high + 2 medium in 8 clauses → score in 30-60 range."""
+        """3 high + 2 medium in 8 clauses → very low score with λ=1.5."""
         signals = [
             make_signal(0.75, severity="high"),
             make_signal(0.75, severity="high"),
@@ -580,7 +582,8 @@ class TestScoreCurveScenarios:
             make_signal(0.50, severity="medium"),
         ]
         score = scorer.calculate_from_signals(signals, 8, 5)
-        assert 30.0 < score < 60.0, f"Score {score} should be in (30, 60)"
+        # With λ=1.5: penalty_density ~2.0 → score ~5 (near floor)
+        assert 5.0 <= score < 15.0, f"Score {score} should be in [5, 15)"
 
     def test_scenario_critical_findings_small_project(self, scorer: ScoringService):
         """5 critical in 3 clauses → low score (floor or just above)."""

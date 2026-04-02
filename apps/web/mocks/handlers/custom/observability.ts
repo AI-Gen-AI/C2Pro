@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "@/mocks/msw";
 import { db } from "../../data";
 
 export const observabilityHandlers = [

@@ -11,12 +11,16 @@ from uuid import uuid4
 
 import pytest
 
+from src.coherence.application.dependencies import (
+    build_coherence_calculation_service,
+)
 from src.coherence.application.dtos import (
     AlertAction,
     CalculateCoherenceCommand,
     CategoryScoreDetail,
     RecalculateOnAlertResult,
 )
+from src.coherence.application.use_cases import CalculateCoherenceUseCase
 from src.coherence.application.services import CoherenceCalculationService
 from src.coherence.domain.category_weights import CoherenceCategory
 
@@ -35,10 +39,21 @@ class MockEventPublisher:
 class TestCoherenceCalculationService:
     """Refers to Suite ID: TS-UA-SVC-COH-001"""
 
+    @staticmethod
+    def _build_service(
+        event_publisher: MockEventPublisher | None = None,
+    ) -> CoherenceCalculationService:
+        return build_coherence_calculation_service(event_publisher=event_publisher)
+
+    def test_000_requires_explicit_dependency_wiring(self) -> None:
+        """Service constructor must not hide fallback use-case creation."""
+        with pytest.raises(TypeError):
+            CoherenceCalculationService()
+
     def test_001_calculate_coherence_returns_result(self) -> None:
         """Calculate coherence for single project returns valid result."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         result = service.calculate_coherence(
             project_id=project_id,
@@ -53,7 +68,7 @@ class TestCoherenceCalculationService:
     def test_002_calculate_with_cache_stores_result(self) -> None:
         """Using cache stores result for subsequent calls."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # First call with cache
         result1 = service.calculate_coherence(
@@ -70,7 +85,7 @@ class TestCoherenceCalculationService:
     def test_003_calculate_without_cache_does_not_store(self) -> None:
         """Without use_cache flag, result is not cached."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # Call without cache
         service.calculate_coherence(
@@ -90,7 +105,7 @@ class TestCoherenceCalculationService:
             CalculateCoherenceCommand(project_id=uuid4(), legal_compliant=False),
         ]
 
-        service = CoherenceCalculationService()
+        service = self._build_service()
         results = service.calculate_batch(commands)
 
         assert len(results) == 3
@@ -105,7 +120,7 @@ class TestCoherenceCalculationService:
             CalculateCoherenceCommand(project_id=uuid4()),
         ]
 
-        service = CoherenceCalculationService()
+        service = self._build_service()
         results = service.calculate_batch(commands)
 
         # All should be cached
@@ -117,7 +132,7 @@ class TestCoherenceCalculationService:
     def test_006_recalculate_on_alert_returns_delta(self) -> None:
         """Recalculate on alert returns score delta."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         result = service.recalculate_on_alert(
             project_id=project_id,
@@ -133,7 +148,7 @@ class TestCoherenceCalculationService:
     def test_007_recalculate_invalidates_cache(self) -> None:
         """Recalculation invalidates cached result when triggered."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # Cache initial result
         service.calculate_coherence(project_id=project_id, use_cache=True)
@@ -153,7 +168,7 @@ class TestCoherenceCalculationService:
         """Clear cache removes only specified project."""
         project_id1 = uuid4()
         project_id2 = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # Cache two projects
         service.calculate_coherence(project_id=project_id1, use_cache=True)
@@ -169,7 +184,7 @@ class TestCoherenceCalculationService:
         """Clear cache without project_id clears all."""
         project_id1 = uuid4()
         project_id2 = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # Cache two projects
         service.calculate_coherence(project_id=project_id1, use_cache=True)
@@ -185,7 +200,7 @@ class TestCoherenceCalculationService:
         """Low coherence score publishes event."""
         project_id = uuid4()
         publisher = MockEventPublisher()
-        service = CoherenceCalculationService(event_publisher=publisher)
+        service = self._build_service(event_publisher=publisher)
 
         # Create low score scenario (need budget violation for score 0)
         result = service.calculate_coherence(
@@ -210,7 +225,7 @@ class TestCoherenceCalculationService:
         """Gaming detection publishes event."""
         project_id = uuid4()
         publisher = MockEventPublisher()
-        service = CoherenceCalculationService(event_publisher=publisher)
+        service = self._build_service(event_publisher=publisher)
 
         # Create gaming scenario (high score, few docs)
         service.calculate_coherence(
@@ -228,7 +243,7 @@ class TestCoherenceCalculationService:
         """Significant score delta publishes recalculation event."""
         project_id = uuid4()
         publisher = MockEventPublisher()
-        service = CoherenceCalculationService(event_publisher=publisher)
+        service = self._build_service(event_publisher=publisher)
 
         # Recalculate with significant change scenario
         service.recalculate_on_alert(
@@ -252,7 +267,7 @@ class TestCoherenceCalculationService:
     def test_013_custom_weights_preserved_in_service_call(self) -> None:
         """Custom weights passed to service are used in calculation."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         custom_weights = {
             CoherenceCategory.SCOPE: 0.50,
@@ -275,7 +290,7 @@ class TestCoherenceCalculationService:
     def test_014_no_event_publisher_does_not_raise_error(self) -> None:
         """Service works without event publisher."""
         project_id = uuid4()
-        service = CoherenceCalculationService(event_publisher=None)
+        service = self._build_service(event_publisher=None)
 
         # Should not raise error with gaming detection
         result = service.calculate_coherence(
@@ -301,7 +316,7 @@ class TestCoherenceCalculationService:
     def test_015_cached_result_returned_on_second_call(self) -> None:
         """Second call with use_cache returns cached result."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # First call
         result1 = service.calculate_coherence(
@@ -323,7 +338,7 @@ class TestCoherenceCalculationService:
         """Recalculation event not published when score delta < 10."""
         project_id = uuid4()
         publisher = MockEventPublisher()
-        service = CoherenceCalculationService(event_publisher=publisher)
+        service = self._build_service(event_publisher=publisher)
 
         # Small change (single violation with score 70)
         service.recalculate_on_alert(
@@ -344,7 +359,7 @@ class TestCoherenceCalculationService:
         """High score with sufficient documents does not publish event."""
         project_id = uuid4()
         publisher = MockEventPublisher()
-        service = CoherenceCalculationService(event_publisher=publisher)
+        service = self._build_service(event_publisher=publisher)
 
         # High score with many documents (no gaming)
         service.calculate_coherence(
@@ -358,7 +373,7 @@ class TestCoherenceCalculationService:
     def test_018_recalculation_without_trigger_does_not_invalidate_cache(self) -> None:
         """Recalculation that doesn't trigger does not invalidate cache."""
         project_id = uuid4()
-        service = CoherenceCalculationService()
+        service = self._build_service()
 
         # Cache initial result
         service.calculate_coherence(project_id=project_id, use_cache=True)
@@ -399,6 +414,7 @@ class TestCoherenceCalculationService:
         mock_recalc_use_case.execute.return_value = mock_recalc_result
 
         service = CoherenceCalculationService(
+            calculate_use_case=CalculateCoherenceUseCase(),
             recalculate_use_case=mock_recalc_use_case,
             event_publisher=publisher,
         )
@@ -445,6 +461,7 @@ class TestCoherenceCalculationService:
         mock_recalc_use_case.execute.return_value = mock_recalc_result
 
         service = CoherenceCalculationService(
+            calculate_use_case=CalculateCoherenceUseCase(),
             recalculate_use_case=mock_recalc_use_case,
             event_publisher=None,  # No publisher
         )

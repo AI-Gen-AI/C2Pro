@@ -152,7 +152,7 @@ function escapeCsvValue(value: string): string {
  */
 function sanitizeFilename(filename: string): string {
   return filename
-    .replace(/[^a-z0-9_\-\.]/gi, '_')
+    .replace(/[^a-z0-9_.-]/gi, '_')
     .replace(/_{2,}/g, '_')
     .substring(0, 200); // Limit length
 }

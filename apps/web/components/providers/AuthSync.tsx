@@ -8,24 +8,29 @@ import { handleAuthErrorStatus } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { getTenantIdFromOrganizationMetadata } from "@/lib/clerk-tenant";
 
-export function AuthSync({ children }: { children: React.ReactNode }) {
-  const { getToken, isSignedIn, isLoaded } = useAuth();
-  // Only use organization when signed in to avoid Clerk warnings
-  const { organization } = useOrganization();
+interface SignedInOrganizationEffectsProps {
+  getToken: () => Promise<string | null>;
+  isLoaded: boolean;
+  organization: ReturnType<typeof useOrganization>["organization"];
+  setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
+}
+
+function SignedInOrganizationEffects({
+  getToken,
+  isLoaded,
+  organization,
+  setAuth,
+}: SignedInOrganizationEffectsProps) {
   const { isLoaded: orgListLoaded, setActive, userMemberships } =
     useOrganizationList({
       userMemberships: {
         infinite: true,
       },
     });
-  const queryClient = useQueryClient();
-  const setAuth = useAuthStore((s) => s.setAuth);
-  const clearAuth = useAuthStore((s) => s.clear);
-  const prevOrgId = useAuthStore((s) => s.tenantId);
   const organizationMemberships = userMemberships.data ?? [];
 
   useEffect(() => {
-    if (!isLoaded || !orgListLoaded || !isSignedIn || organization) {
+    if (!isLoaded || !orgListLoaded || organization) {
       return;
     }
 
@@ -35,23 +40,10 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
 
     const [membership] = organizationMemberships;
     void setActive?.({ organization: membership.organization.id });
-  }, [
-    isLoaded,
-    orgListLoaded,
-    isSignedIn,
-    organization,
-    organizationMemberships,
-    setActive,
-  ]);
+  }, [isLoaded, orgListLoaded, organization, organizationMemberships, setActive]);
 
   useEffect(() => {
-    // Wait for Clerk to load before doing anything
     if (!isLoaded) return;
-
-    if (!isSignedIn) {
-      clearAuth();
-      return;
-    }
 
     if (!organization && organizationMemberships.length === 1) {
       return;
@@ -77,13 +69,31 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [
     isLoaded,
-    isSignedIn,
     organization,
     organizationMemberships.length,
     getToken,
     setAuth,
-    clearAuth,
   ]);
+
+  return null;
+}
+
+interface SignedInAuthSyncProps {
+  getToken: () => Promise<string | null>;
+  isLoaded: boolean;
+  queryClient: ReturnType<typeof useQueryClient>;
+  setAuth: (auth: { token: string | null; tenantId: string | null }) => void;
+  prevOrgId: string | null;
+}
+
+function SignedInAuthSync({
+  getToken,
+  isLoaded,
+  queryClient,
+  setAuth,
+  prevOrgId,
+}: SignedInAuthSyncProps) {
+  const { organization } = useOrganization();
 
   useEffect(() => {
     const tenantId = getTenantIdFromOrganizationMetadata(organization);
@@ -93,5 +103,45 @@ export function AuthSync({ children }: { children: React.ReactNode }) {
     }
   }, [organization, prevOrgId, queryClient]);
 
-  return <>{children}</>;
+  return (
+    <SignedInOrganizationEffects
+      getToken={getToken}
+      isLoaded={isLoaded}
+      organization={organization}
+      setAuth={setAuth}
+    />
+  );
+}
+ 
+export function AuthSync({ children }: { children: React.ReactNode }) {
+  const { getToken, isSignedIn, isLoaded } = useAuth();
+  const queryClient = useQueryClient();
+  const setAuth = useAuthStore((s) => s.setAuth);
+  const clearAuth = useAuthStore((s) => s.clear);
+  const prevOrgId = useAuthStore((s) => s.tenantId);
+
+  useEffect(() => {
+    // Wait for Clerk to load before doing anything
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      clearAuth();
+      return;
+    }
+  }, [isLoaded, isSignedIn, clearAuth]);
+
+  return (
+    <>
+      {isSignedIn ? (
+        <SignedInAuthSync
+          getToken={getToken}
+          isLoaded={isLoaded}
+          queryClient={queryClient}
+          setAuth={setAuth}
+          prevOrgId={prevOrgId}
+        />
+      ) : null}
+      {children}
+    </>
+  );
 }

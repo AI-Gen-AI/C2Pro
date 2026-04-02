@@ -1,0 +1,73 @@
+⨯ TypeError: adapterFn is not a function
+    at ignore-listed frames
+⨯ Error: Failed to load external module @swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default: Error: Cannot find module '@swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default'
+Require stack:
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[turbopack]_runtime.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_document.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\require.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\load-components.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\build\utils.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-utils\setup-dev-bundler.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-server.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\start-server.js
+    at module evaluation (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js:16:35)
+    at Object.<anonymous> (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_app.js:3:3)
+⨯ TypeError: adapterFn is not a function
+    at ignore-listed frames
+⨯ Error: Failed to load external module @swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default: Error: Cannot find module '@swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default'
+Require stack:
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[turbopack]_runtime.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_document.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\require.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\load-components.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\build\utils.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-utils\setup-dev-bundler.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-server.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\start-server.js
+    at module evaluation (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js:16:35)
+    at Object.<anonymous> (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_app.js:3:3)
+⨯ TypeError: adapterFn is not a function
+    at ignore-listed frames
+⨯ SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+⨯ TypeError: adapterFn is not a function
+    at ignore-listed frames
+⨯ Error: Failed to load external module @swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default: Error: Cannot find module '@swc/helpers-80ebf69e3a3cdc04/_/_interop_require_default'
+Require stack:
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[turbopack]_runtime.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_document.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\require.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\load-components.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\build\utils.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-utils\setup-dev-bundler.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\router-server.js
+- C:\Users\esus_\Documents\AI\ZTWQ\c2pro\node_modules\.pnpm\next@16.2.1_@babel+core@7.2_9a848487a85b0661a0837441fc9970f8\node_modules\next\dist\server\lib\start-server.js
+    at module evaluation (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\chunks\ssr\[root-of-the-server]__0~w0wp_._.js:16:35)
+    at Object.<anonymous> (C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web\.next\dev\server\pages\_app.js:3:3)
+⨯ TypeError: adapterFn is not a function
+    at ignore-listed frames
+
+[2m[4917.06ms][22m [@tailwindcss/postcss] app\globals.css
+[2m[   0.58ms][22m  [2m ↳ [22mQuick bail check
+[2m[ 219.28ms][22m  [2m ↳ [22mSetup compiler
+[2m[   4.55ms][22m    [2m ↳ [22mPostCSS AST -> Tailwind CSS AST
+[2m[ 214.59ms][22m    [2m ↳ [22mCreate compiler
+[2m[   1.90ms][22m  [2m ↳ [22mRegister full rebuild paths
+[2m[  21.00ms][22m  [2m ↳ [22mSetup scanner
+[2m[1025.81ms][22m  [2m ↳ [22mScan for candidates
+[2m[2469.90ms][22m  [2m ↳ [22mRegister dependency messages
+[2m[ 918.33ms][22m  [2m ↳ [22mBuild utilities
+[2m[ 165.15ms][22m  [2m ↳ [22mTransform Tailwind CSS AST into PostCSS AST
+[2m[  92.92ms][22m  [2m ↳ [22mUpdate PostCSS AST
+
+
+[2m[1.23ms][22m [@tailwindcss/postcss] app\jetbrains_b6b42ee4.module.css
+[2m[1.13ms][22m  [2m ↳ [22mQuick bail check
+
+
+[2m[0.10ms][22m [@tailwindcss/postcss] app\inter_b292b09e.module.css
+[2m[0.05ms][22m  [2m ↳ [22mQuick bail check
+

@@ -1,9 +1,12 @@
-import type { ProjectDocumentsGroup } from "@/lib/api/contracts";
+import type {
+  ProjectDocumentListItem,
+  ProjectDocumentsGroup,
+} from "@/lib/api/contracts";
 import { fetchApiJson } from "@/lib/api/services/http";
 import { listProjects } from "@/lib/api/services/dashboard";
 
 type DocumentListResponse = {
-  items?: Array<Record<string, unknown>>;
+  items?: Array<Omit<ProjectDocumentListItem, "project_id">>;
 };
 
 export async function listProjectDocumentGroups(): Promise<

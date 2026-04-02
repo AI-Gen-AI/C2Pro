@@ -1,0 +1,30 @@
+{
+  "change_name": "fail-case",
+  "verdict": "FAIL",
+  "runtime_scope": "PROCESS_ONLY",
+  "summary": {
+    "artifact_presence_count": 4,
+    "scenario_coverage_count": 1,
+    "rules_compliance_count": 1,
+    "runtime_drift_file_count": 0
+  },
+  "artifact_presence": [
+    "PASS openspec\\changes\\fail-case\\proposal.md",
+    "PASS openspec\\changes\\fail-case\\design.md",
+    "PASS openspec\\changes\\fail-case\\tasks.md",
+    "PASS openspec\\changes\\fail-case\\specs\\openspec\\spec.md"
+  ],
+  "scenario_coverage": [
+    {
+      "requirement": "OpenSpec Rules Compliance Validation",
+      "scenario": "Rule violation is reported with evidence",
+      "check_id": "SCN-001-openspec-rules-compliance-validation-rule-violation-is-reported-with-evidence",
+      "status": "PASS",
+      "evidence": "Parsed from openspec\\changes\\fail-case\\specs\\openspec\\spec.md"
+    }
+  ],
+  "rules_compliance": [
+    "FAIL RFC 2119 violation in openspec\\changes\\fail-case\\specs\\openspec\\spec.md: requirement 'OpenSpec Rules Compliance Validation' must include MUST/SHALL/SHOULD/MAY"
+  ],
+  "runtime_drift_files": []
+}

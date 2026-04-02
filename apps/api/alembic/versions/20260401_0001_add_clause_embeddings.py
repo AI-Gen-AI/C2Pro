@@ -1,8 +1,10 @@
 """Add clause_embeddings table for Coherence Engine RAG
 
 Revision ID: 20260401_0001
-Revises: 20260315_0001
+Revises: 20260321_0002
 Create Date: 2026-04-01 10:00:00.000000
+
+Suite ID: TS-DB-MIG-REC-008
 
 """
 
@@ -15,7 +17,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260401_0001"
-down_revision: str = "20260315_0001"
+down_revision: str = "20260321_0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

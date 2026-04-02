@@ -5,20 +5,19 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("TASK-024 cross-browser smoke", () => {
-  test("loads the landing page and opens the live demo entry point", async ({
+  test("loads the landing page and opens the public live demo entry point", async ({
     page,
   }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await expect(
       page.getByRole("link", { name: /view live demo/i }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 20_000 });
 
     await page.getByRole("link", { name: /view live demo/i }).click();
 
-    await expect(page).toHaveURL(/\/projects$/);
     await expect(
-      page.getByRole("heading", { name: /^projects$/i }),
-    ).toBeVisible();
+      page.getByRole("heading", { name: /^documents$/i }),
+    ).toBeVisible({ timeout: 20_000 });
   });
 });

@@ -64,6 +64,9 @@ describe("alerts hooks contract alignment", () => {
               severity: "high",
               status: "open",
               message: "Missing permit",
+              created_at: "2026-04-01T08:30:00Z",
+              sla_due_at: "2026-04-02T08:30:00Z",
+              sla_policy_name: "High severity: response in 24 hours",
             },
           ],
           total: 1,
@@ -89,6 +92,9 @@ describe("alerts hooks contract alignment", () => {
         description: "Missing permit",
         project: "Project One",
         status: "Open",
+        created_at: "2026-04-01T08:30:00Z",
+        sla_due_at: "2026-04-02T08:30:00Z",
+        sla_policy_name: "High severity: response in 24 hours",
       },
     ]);
   });

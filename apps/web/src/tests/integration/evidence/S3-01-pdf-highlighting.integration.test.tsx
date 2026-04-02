@@ -2,9 +2,13 @@
  * Test Suite ID: S3-01
  * Roadmap Reference: S3-01 PDF renderer (lazy) + clause highlighting
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@/src/tests/test-utils";
 import { PdfEvidenceViewer } from "@/components/features/evidence/PdfEvidenceViewer";
+
+vi.mock("@/components/evidence/pdf/PDFViewer", () => ({
+  PDFViewer: () => <div data-testid="react-pdf-viewer-proxy" />,
+}));
 
 describe("S3-01 RED - evidence integration", () => {
   it("[S3-01-RED-INT-01] clicking an alert focuses matching clause highlight", async () => {

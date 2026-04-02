@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
+from sentry_sdk.utils import BadDsn
 
 from src.main import create_application, lifespan
 from src.main import settings as main_settings
@@ -105,6 +106,40 @@ async def test_lifespan_skips_sentry_when_dsn_missing() -> None:
 
     mock_sentry_init.assert_not_called()
     mock_sentry_flush.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_skips_invalid_sentry_dsn_without_failing_startup() -> None:
+    """
+    Refers to Suite ID: TS-CORE-MCP-STARTUP-001.
+
+    Startup should keep the API bootable when a placeholder or malformed Sentry
+    DSN is configured locally.
+    """
+    app = FastAPI()
+    event_bus = SimpleNamespace(close=AsyncMock())
+
+    with (
+        patch("src.main.init_db", new=AsyncMock()),
+        patch("src.main.init_cache", new=AsyncMock()),
+        patch("src.main.close_db", new=AsyncMock()),
+        patch("src.main.close_cache", new=AsyncMock()),
+        patch("src.main.build_event_bus", return_value=event_bus),
+        patch("src.main.get_mcp_server", create=True),
+        patch("src.main.sentry_sdk.init", side_effect=BadDsn("invalid project")),
+        patch("src.main.sentry_sdk.flush") as mock_sentry_flush,
+        patch("src.main.logger", new=MagicMock()) as mock_logger,
+        patch.object(main_settings, "sentry_dsn", "https://xxx@xxx.ingest.sentry.io/xxx"),
+    ):
+        async with lifespan(app):
+            pass
+
+    mock_sentry_flush.assert_not_called()
+    warning_calls = [
+        call for call in mock_logger.warning.call_args_list
+        if call[0] and call[0][0] == "sentry_initialization_skipped"
+    ]
+    assert warning_calls, "Invalid Sentry DSN should be logged and skipped"
 
 
 def test_create_application_skips_mcp_router_when_import_fails() -> None:

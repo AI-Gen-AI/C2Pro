@@ -51,6 +51,186 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 describe("RaciPage backend project integration", () => {
+  it("switches to a gantt-style timeline view using API-backed sequence and schedule dates", () => {
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useRaciMock.mockReturnValue({
+      data: [
+        {
+          activity: "Review baseline scope",
+          projectManager: "A",
+          technicalLead: "R",
+          stakeholder: "C",
+          contractor: "I",
+          sequenceIndex: 2,
+          taskCode: "1.2",
+          plannedStart: "2026-04-07T00:00:00Z",
+          plannedEnd: "2026-04-11T00:00:00Z",
+        },
+        {
+          activity: "Approve marine schedule",
+          projectManager: "R",
+          technicalLead: "A",
+          stakeholder: "C",
+          contractor: "I",
+          sequenceIndex: 1,
+          taskCode: "1.1",
+          plannedStart: "2026-04-02T00:00:00Z",
+          plannedEnd: "2026-04-05T00:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<RaciPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Timeline View" }));
+
+    expect(screen.getByText("Gantt Timeline View")).toBeInTheDocument();
+    expect(screen.getByText("Review baseline scope")).toBeInTheDocument();
+    expect(screen.getByText("Approve marine schedule")).toBeInTheDocument();
+    expect(screen.getByText("Sequence 2 · 1.2")).toBeInTheDocument();
+    expect(screen.getByText("Sequence 1 · 1.1")).toBeInTheDocument();
+    expect(screen.getByText("2026-04-07 to 2026-04-11")).toBeInTheDocument();
+    expect(screen.getByText("2026-04-02 to 2026-04-05")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Matrix View" }));
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("switches to a mobile-optimized list view that groups assignments by activity", () => {
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useRaciMock.mockReturnValue({
+      data: [
+        {
+          activity: "Review baseline scope",
+          projectManager: "A",
+          technicalLead: "R",
+          stakeholder: "C",
+          contractor: "I",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<RaciPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "List View" }));
+
+    expect(screen.getByText("Mobile List View")).toBeInTheDocument();
+    expect(screen.getByText("Review baseline scope")).toBeInTheDocument();
+    expect(screen.getByText("Project Manager · A")).toBeInTheDocument();
+    expect(screen.getByText("Technical Lead · R")).toBeInTheDocument();
+    expect(screen.getByText("Stakeholder · C")).toBeInTheDocument();
+    expect(screen.getByText("Contractor · I")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Matrix View" }));
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("detects overloaded stakeholder lanes from the workload analysis", () => {
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useRaciMock.mockReturnValue({
+      data: [
+        {
+          activity: "Review baseline scope",
+          projectManager: "A",
+          technicalLead: "R",
+          stakeholder: "C",
+          contractor: "I",
+        },
+        {
+          activity: "Approve marine schedule",
+          projectManager: "R",
+          technicalLead: "A",
+          stakeholder: "I",
+          contractor: "C",
+        },
+        {
+          activity: "Issue permit package",
+          projectManager: "C",
+          technicalLead: "R",
+          stakeholder: "A",
+          contractor: "",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<RaciPage />);
+
+    expect(screen.getByText("Conflict Detection")).toBeInTheDocument();
+    expect(screen.getByText("1 overloaded stakeholder lane")).toBeInTheDocument();
+    expect(
+      screen.getByText("Technical Lead exceeds the safe workload threshold with load 10."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Focus the next rebalance on Technical Lead assignments.")).toBeInTheDocument();
+  });
+
+  it("renders stakeholder workload analysis from the live RACI matrix rows", () => {
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useRaciMock.mockReturnValue({
+      data: [
+        {
+          activity: "Review baseline scope",
+          projectManager: "A",
+          technicalLead: "R",
+          stakeholder: "C",
+          contractor: "I",
+        },
+        {
+          activity: "Approve marine schedule",
+          projectManager: "R",
+          technicalLead: "A",
+          stakeholder: "I",
+          contractor: "C",
+        },
+        {
+          activity: "Issue permit package",
+          projectManager: "C",
+          technicalLead: "R",
+          stakeholder: "A",
+          contractor: "",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<RaciPage />);
+
+    expect(screen.getByText("Workload Analysis")).toBeInTheDocument();
+    expect(screen.getByText("Busiest lane: Technical Lead")).toBeInTheDocument();
+    expect(screen.getByText("3 assignments · load 8")).toBeInTheDocument();
+    expect(screen.getByText("3 assignments · load 10")).toBeInTheDocument();
+    expect(screen.getByText("3 assignments · load 6")).toBeInTheDocument();
+    expect(screen.getByText("2 assignments · load 2")).toBeInTheDocument();
+  });
+
   it("loads project filter options from the backend and refetches the matrix for the selected project", () => {
     useProjectsMock.mockReturnValue({
       data: [

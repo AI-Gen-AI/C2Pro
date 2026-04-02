@@ -1,6 +1,7 @@
 import axios from "axios/dist/browser/axios.cjs";
 import type {
   AxiosError,
+  AxiosResponse,
   AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from "axios";
@@ -12,6 +13,22 @@ import { useAuthStore } from "@/stores/auth";
 export const apiClient = axios.create({
   baseURL: env.API_BASE_URL,
 });
+
+interface BrowserLocationAdapter {
+  getPathname(): string;
+  redirectToSignIn(): void;
+}
+
+const defaultBrowserLocationAdapter: BrowserLocationAdapter = {
+  getPathname() {
+    return window.location.pathname ?? "/";
+  },
+  redirectToSignIn() {
+    window.location.assign("/sign-in");
+  },
+};
+
+let browserLocationAdapter: BrowserLocationAdapter = defaultBrowserLocationAdapter;
 
 export async function orvalApiClient<T>(
   config: AxiosRequestConfig,
@@ -44,7 +61,7 @@ const handleAuthFailure = () => {
 
   if (typeof window === "undefined") return;
 
-  const pathname = window.location.pathname ?? "/";
+  const pathname = browserLocationAdapter.getPathname();
   const isAuthPage =
     pathname.startsWith("/sign-in") ||
     pathname.startsWith("/sign-up") ||
@@ -63,11 +80,17 @@ const handleAuthFailure = () => {
 
   authRedirectInFlight = true;
   showToast("Sesión expirada o inválida");
-  window.location.href = "/sign-in";
+  browserLocationAdapter.redirectToSignIn();
 };
 
 export const resetAuthFailureStateForTests = () => {
   authRedirectInFlight = false;
+};
+
+export const setBrowserLocationAdapterForTests = (
+  adapter: BrowserLocationAdapter | null,
+) => {
+  browserLocationAdapter = adapter ?? defaultBrowserLocationAdapter;
 };
 
 export const handleAuthErrorStatus = (status: number | undefined) => {
@@ -83,7 +106,7 @@ export const handleAuthErrorStatus = (status: number | undefined) => {
 apiClient.interceptors.request.use(attachAuthToken);
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response: AxiosResponse) => response,
   (error: AxiosError) => {
     handleAuthErrorStatus(error.response?.status);
 

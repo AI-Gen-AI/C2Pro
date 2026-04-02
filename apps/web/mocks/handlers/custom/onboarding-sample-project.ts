@@ -1,4 +1,4 @@
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http } from "@/mocks/msw";
 
 export const onboardingSampleProjectHandlers = [
   http.post("/api/v1/onboarding/sample-project/start", async () => {

@@ -15,6 +15,8 @@ let isSignedIn = true;
 let isLoaded = true;
 let getTokenMock = vi.fn().mockResolvedValue("token-123");
 const setActiveMock = vi.fn();
+const useOrganizationListMock = vi.fn();
+const useOrganizationMock = vi.fn();
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
@@ -22,21 +24,23 @@ vi.mock("@clerk/nextjs", () => ({
     isLoaded,
     getToken: getTokenMock,
   }),
-  useOrganization: () => ({
-    organization: organizationId
-      ? {
-          id: organizationId,
-          publicMetadata: organizationTenantId ? { tenant_id: organizationTenantId } : {},
-        }
-      : null,
-  }),
-  useOrganizationList: () => ({
-    isLoaded,
-    setActive: setActiveMock,
-    userMemberships: {
-      data: organizationMemberships,
+  useOrganization: () =>
+    useOrganizationMock() ?? {
+      organization: organizationId
+        ? {
+            id: organizationId,
+            publicMetadata: organizationTenantId ? { tenant_id: organizationTenantId } : {},
+          }
+        : null,
     },
-  }),
+  useOrganizationList: (...args: unknown[]) =>
+    useOrganizationListMock(...args) ?? {
+      isLoaded,
+      setActive: setActiveMock,
+      userMemberships: {
+        data: organizationMemberships,
+      },
+    },
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
@@ -76,6 +80,23 @@ describe("AuthSync", () => {
     clearCache.mockReset();
     handleAuthErrorStatus.mockReset();
     setActiveMock.mockReset();
+    useOrganizationListMock.mockReset();
+    useOrganizationMock.mockReset();
+    useOrganizationMock.mockImplementation(() => ({
+      organization: organizationId
+        ? {
+            id: organizationId,
+            publicMetadata: organizationTenantId ? { tenant_id: organizationTenantId } : {},
+          }
+        : null,
+    }));
+    useOrganizationListMock.mockImplementation(() => ({
+      isLoaded,
+      setActive: setActiveMock,
+      userMemberships: {
+        data: organizationMemberships,
+      },
+    }));
     tenantIdInStore = "tenant-uuid-1";
     organizationId = "org-1";
     organizationTenantId = "tenant-uuid-1";
@@ -217,5 +238,21 @@ describe("AuthSync", () => {
       });
     });
     expect(setActiveMock).not.toHaveBeenCalled();
+  });
+
+  it("does not subscribe to organization memberships when the user is signed out", async () => {
+    isSignedIn = false;
+
+    renderWithProviders(
+      <AuthSync>
+        <div>Child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(clearAuth).toHaveBeenCalled();
+    });
+    expect(useOrganizationMock).not.toHaveBeenCalled();
+    expect(useOrganizationListMock).not.toHaveBeenCalled();
   });
 });

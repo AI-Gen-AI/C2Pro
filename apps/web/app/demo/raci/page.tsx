@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Grid3X3, Download, Filter } from "lucide-react";
+import { Download, Filter } from "lucide-react";
 import { SAMPLE_DATA } from "@/contexts/demo-mode";
 
 // Sample RACI data

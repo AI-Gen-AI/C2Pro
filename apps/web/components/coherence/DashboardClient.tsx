@@ -88,7 +88,7 @@ const TEMPLATE_OPTIONS: Array<{
 function sanitizeFilename(value: string): string {
   return value
     .trim()
-    .replace(/[^a-z0-9_\-\.]+/gi, "_")
+    .replace(/[^a-z0-9_.-]+/gi, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .toLowerCase();

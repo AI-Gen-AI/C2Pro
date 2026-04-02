@@ -49,5 +49,5 @@ If bootstrap introduces friction, revert the `openspec/changes/openspec-bootstra
 ## Success Criteria
 
 - [ ] Bootstrap change includes complete proposal/design/spec/task artifacts in OpenSpec format.
-- [ ] At least one follow-up change can be created using the new structure without path or template ambiguity.
+- [x] At least one follow-up change can be created using the new structure without path or template ambiguity.
 - [ ] Reviewers can validate artifacts directly against `openspec/config.yaml` rules.

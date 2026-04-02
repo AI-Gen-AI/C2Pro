@@ -5,6 +5,7 @@ This defines the contract that any persistence adapter must fulfill.
 Following the Dependency Inversion Principle, the domain/application layers
 depend on this abstraction, not on concrete implementations.
 """
+from datetime import datetime
 from abc import ABC, abstractmethod
 from uuid import UUID
 
@@ -69,6 +70,8 @@ class ProjectRepository(ABC):
         search: str | None = None,
         status: ProjectStatus | None = None,
         project_type: ProjectType | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> tuple[list[Project], int]:
         """
         List projects with pagination and filters.
@@ -80,6 +83,8 @@ class ProjectRepository(ABC):
             search: Search term for name/code
             status: Filter by project status
             project_type: Filter by project type
+            created_after: Filter for projects created at or after this instant
+            created_before: Filter for projects created at or before this instant
 
         Returns:
             Tuple of (list of projects, total count)

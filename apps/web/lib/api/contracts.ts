@@ -17,7 +17,7 @@ export interface DashboardSummary {
   last_updated: string | null;
 }
 
-export interface ProjectListItem extends ProjectResponse {}
+export type ProjectListItem = ProjectResponse;
 
 export interface ProjectDocumentListItem extends DocumentListItem {
   project_id: string;

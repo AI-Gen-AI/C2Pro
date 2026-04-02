@@ -7,6 +7,7 @@ Refers to Suite ID: TS-E2E-PER-LRG-001.
 
 import asyncio
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -321,9 +322,12 @@ async def get_project(
 async def list_projects(
     current_user: Annotated[User, Depends(get_current_user)],
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     status: str | None = None,
     search: str | None = None,
+    project_type: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
 ) -> ProjectListResponse:
     """
     List all projects for the current tenant.
@@ -338,6 +342,9 @@ async def list_projects(
         if status is not None:
             query = query.where(ProjectORM.status == status)
 
+        if project_type is not None:
+            query = query.where(ProjectORM.project_type == project_type)
+
         # Apply search filter
         if search:
             needle = f"%{search.lower()}%"
@@ -346,6 +353,12 @@ async def list_projects(
                 | (func.lower(ProjectORM.description).like(needle))
                 | (func.lower(ProjectORM.code).like(needle))
             )
+
+        if created_after is not None:
+            query = query.where(ProjectORM.created_at >= created_after)
+
+        if created_before is not None:
+            query = query.where(ProjectORM.created_at <= created_before)
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())

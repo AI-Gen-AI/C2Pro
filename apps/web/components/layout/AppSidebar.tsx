@@ -5,11 +5,8 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FolderKanban,
-  FileText,
   AlertTriangle,
   Users,
-  ShoppingCart,
-  Settings,
   ChevronLeft,
   ChevronRight,
   Gauge,
@@ -54,6 +51,7 @@ export function AppSidebar() {
 
   return (
     <aside
+      aria-label="Application sidebar"
       className={cn(
         'flex h-full flex-col bg-sidebar transition-all duration-300 shrink-0',
         collapsed ? 'w-14' : 'w-[210px]'
@@ -86,7 +84,11 @@ export function AppSidebar() {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-0" aria-label="Primary">
+      <nav
+        id="primary-navigation"
+        className="flex-1 space-y-0.5 px-0"
+        aria-label="Primary"
+      >
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
@@ -136,6 +138,8 @@ export function AppSidebar() {
           className="mt-1 flex w-full items-center justify-center rounded-md py-1.5 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-controls="primary-navigation"
+          aria-expanded={collapsed ? "false" : "true"}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />

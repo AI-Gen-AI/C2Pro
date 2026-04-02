@@ -51,14 +51,12 @@ class CoherenceCalculationService:
 
     def __init__(
         self,
-        calculate_use_case: CalculateCoherenceUseCase | None = None,
-        recalculate_use_case: RecalculateOnAlertUseCase | None = None,
+        calculate_use_case: CalculateCoherenceUseCase,
+        recalculate_use_case: RecalculateOnAlertUseCase,
         event_publisher: EventPublisher | None = None,
     ) -> None:
-        self.calculate_use_case = calculate_use_case or CalculateCoherenceUseCase()
-        self.recalculate_use_case = (
-            recalculate_use_case or RecalculateOnAlertUseCase()
-        )
+        self.calculate_use_case = calculate_use_case
+        self.recalculate_use_case = recalculate_use_case
         self.event_publisher = event_publisher
         self._cache: dict[UUID, CoherenceCalculationResult] = {}
 

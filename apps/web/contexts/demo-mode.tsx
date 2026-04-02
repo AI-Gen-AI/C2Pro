@@ -10,7 +10,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useOrganization } from "@clerk/nextjs";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 
 // =============================================================================
 // Types
@@ -98,7 +98,11 @@ const DemoModeContext = createContext<DemoModeContextType | undefined>(
 // Provider
 // =============================================================================
 
-export function DemoModeProvider({ children }: { children: React.ReactNode }) {
+function SignedInDemoModeProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { organization } = useOrganization();
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,6 +142,38 @@ export function DemoModeProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
     </DemoModeContext.Provider>
+  );
+}
+
+function SignedOutDemoModeProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <DemoModeContext.Provider
+      value={{
+        isDemoMode: false,
+        demoOrganizationId: "demo-workspace",
+        productionOrganizationId: null,
+        toggleDemoMode: () => undefined,
+        setDemoMode: () => undefined,
+        demoData: SAMPLE_DATA,
+        isLoading: false,
+      }}
+    >
+      {children}
+    </DemoModeContext.Provider>
+  );
+}
+
+export function DemoModeProvider({ children }: { children: React.ReactNode }) {
+  const { isSignedIn } = useAuth();
+
+  return isSignedIn ? (
+    <SignedInDemoModeProvider>{children}</SignedInDemoModeProvider>
+  ) : (
+    <SignedOutDemoModeProvider>{children}</SignedOutDemoModeProvider>
   );
 }
 

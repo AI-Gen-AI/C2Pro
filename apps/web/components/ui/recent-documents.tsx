@@ -3,7 +3,7 @@
  * Displays a list of recently accessed documents with quick navigation
  */
 
-import { Clock, FileText, X } from 'lucide-react';
+import { Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';

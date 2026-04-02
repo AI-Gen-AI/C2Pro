@@ -13,6 +13,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { SAMPLE_DATA } from "@/contexts/demo-mode";
+import { formatDemoDate } from "../date-format";
 
 function formatFileSize(bytes: number) {
   if (bytes === 0) return "0 Bytes";
@@ -109,7 +110,7 @@ export default function DemoDocumentsPage() {
                     <span>{formatFileSize(doc.size)}</span>
                     <span>{doc.clause_count} clauses extracted</span>
                     <span>
-                      Uploaded {new Date(doc.created_at).toLocaleDateString()}
+                      Uploaded {formatDemoDate(doc.created_at)}
                     </span>
                   </div>
 
@@ -180,7 +181,7 @@ export default function DemoDocumentsPage() {
                   </span>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(clause.extracted_at).toLocaleDateString()}
+                  {formatDemoDate(clause.extracted_at)}
                 </span>
               </div>
               <p className="text-sm text-foreground">{clause.text}</p>

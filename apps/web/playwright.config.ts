@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
 const useManagedWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 
 export default defineConfig({
@@ -14,9 +14,9 @@ export default defineConfig({
   },
   webServer: useManagedWebServer
     ? {
-        command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
-        url: `${baseURL}/demo/evidence`,
-        reuseExistingServer: true,
+        command: "npm run dev -- --hostname localhost --port 3100 --webpack",
+        url: baseURL,
+        reuseExistingServer: false,
         timeout: 120_000,
       }
     : undefined,

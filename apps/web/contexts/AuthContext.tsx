@@ -50,10 +50,10 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const { isLoaded, isSignedIn, signOut } = useClerkAuth();
+function SignedInAuthProvider({ children }: AuthProviderProps) {
   const { user } = useUser();
   const { organization } = useOrganization();
+  const { isLoaded, isSignedIn, signOut } = useClerkAuth();
   const accessToken = useAuthStore((s) => s.token);
 
   const value = useMemo<AuthContextType>(() => {
@@ -122,6 +122,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [accessToken, isLoaded, isSignedIn, organization, signOut, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function SignedOutAuthProvider({ children }: AuthProviderProps) {
+  const { isLoaded, signOut } = useClerkAuth();
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user: null,
+      tenant: null,
+      tenantId: null,
+      isDemoMode: false,
+      serviceTier: "free",
+      isAuthorized: false,
+      accessToken: null,
+      isAuthenticated: false,
+      isLoading: !isLoaded,
+      userRole: null,
+      logout: () => signOut(),
+      login: async () => {
+        throw new Error("Use Clerk SignIn component for login.");
+      },
+      register: async () => {
+        throw new Error("Use Clerk SignUp component for registration.");
+      },
+    }),
+    [isLoaded, signOut],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const { isSignedIn } = useClerkAuth();
+
+  return isSignedIn ? (
+    <SignedInAuthProvider>{children}</SignedInAuthProvider>
+  ) : (
+    <SignedOutAuthProvider>{children}</SignedOutAuthProvider>
+  );
 }
 
 export function useAuth() {

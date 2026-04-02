@@ -9,6 +9,7 @@ const queryClientClearSpy = vi.fn();
 const getTokenMock = vi.fn<() => Promise<string>>();
 const handleAuthErrorStatus = vi.fn();
 const setActiveMock = vi.fn();
+const useOrganizationListMock = vi.fn();
 
 let mockIsSignedIn = true;
 let mockOrgId: string | null = "org-1";
@@ -16,6 +17,7 @@ let mockTenantUuid: string | null = "tenant-uuid-1";
 let mockMemberships: Array<{ organization: { id: string } }> = [
   { organization: { id: "org-1" } },
 ];
+const useOrganizationMock = vi.fn();
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
@@ -23,21 +25,23 @@ vi.mock("@clerk/nextjs", () => ({
     isLoaded: true,
     getToken: getTokenMock,
   }),
-  useOrganization: () => ({
-    organization: mockOrgId
-      ? {
-          id: mockOrgId,
-          publicMetadata: mockTenantUuid ? { tenant_id: mockTenantUuid } : {},
-        }
-      : null,
-  }),
-  useOrganizationList: () => ({
-    isLoaded: true,
-    setActive: setActiveMock,
-    userMemberships: {
-      data: mockMemberships,
+  useOrganization: () =>
+    useOrganizationMock() ?? {
+      organization: mockOrgId
+        ? {
+            id: mockOrgId,
+            publicMetadata: mockTenantUuid ? { tenant_id: mockTenantUuid } : {},
+          }
+        : null,
     },
-  }),
+  useOrganizationList: (...args: unknown[]) =>
+    useOrganizationListMock(...args) ?? {
+      isLoaded: true,
+      setActive: setActiveMock,
+      userMemberships: {
+        data: mockMemberships,
+      },
+    },
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
@@ -69,6 +73,23 @@ describe("AuthSync integration", () => {
     mockMemberships = [{ organization: { id: "org-1" } }];
     getTokenMock.mockResolvedValue("token-123");
     setActiveMock.mockReset();
+    useOrganizationListMock.mockReset();
+    useOrganizationMock.mockReset();
+    useOrganizationMock.mockImplementation(() => ({
+      organization: mockOrgId
+        ? {
+            id: mockOrgId,
+            publicMetadata: mockTenantUuid ? { tenant_id: mockTenantUuid } : {},
+          }
+        : null,
+    }));
+    useOrganizationListMock.mockImplementation(() => ({
+      isLoaded: true,
+      setActive: setActiveMock,
+      userMemberships: {
+        data: mockMemberships,
+      },
+    }));
     useAuthStore.setState({ token: null, tenantId: null });
   });
 
@@ -210,5 +231,24 @@ describe("AuthSync integration", () => {
       });
     });
     expect(handleAuthErrorStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not query Clerk organization memberships when there is no signed-in user", async () => {
+    mockIsSignedIn = false;
+
+    render(
+      <AuthSync>
+        <div>auth-child</div>
+      </AuthSync>,
+    );
+
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        token: null,
+        tenantId: null,
+      });
+    });
+    expect(useOrganizationMock).not.toHaveBeenCalled();
+    expect(useOrganizationListMock).not.toHaveBeenCalled();
   });
 });

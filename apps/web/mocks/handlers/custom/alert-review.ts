@@ -1,4 +1,4 @@
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http } from "@/mocks/msw";
 
 type ReviewState = {
   status: "pending" | "approved" | "rejected";

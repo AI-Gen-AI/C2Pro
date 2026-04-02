@@ -14,6 +14,9 @@ export interface AlertListItem {
   description: string;
   project: string;
   status: string;
+  created_at?: string;
+  sla_due_at?: string | null;
+  sla_policy_name?: string | null;
 }
 
 interface AlertResponse {
@@ -23,6 +26,9 @@ interface AlertResponse {
   severity: string;
   status: string;
   message: string;
+  created_at?: string;
+  sla_due_at?: string | null;
+  sla_policy_name?: string | null;
 }
 
 interface AlertListResponse {
@@ -76,10 +82,10 @@ export function useAlerts(): UseAlertsResult {
         if (!active) return;
 
         const projectMap = new Map(
-          projectsRes.data.items.map((p) => [p.id, p.name]),
+          projectsRes.data.items.map((p: ProjectResponse) => [p.id, p.name]),
         );
 
-        const mapped = alertsRes.data.items.map((a) => ({
+        const mapped = alertsRes.data.items.map((a: AlertResponse) => ({
           id: a.id,
           severity: capitalize(a.severity),
           type: capitalize(a.category),
@@ -87,6 +93,9 @@ export function useAlerts(): UseAlertsResult {
           description: a.message.split(" — ")[1] ?? a.message,
           project: projectMap.get(a.project_id) ?? a.project_id,
           status: STATUS_MAP[a.status] ?? capitalize(a.status),
+          created_at: a.created_at,
+          sla_due_at: a.sla_due_at ?? null,
+          sla_policy_name: a.sla_policy_name ?? null,
         }));
 
         setAlerts(mapped);

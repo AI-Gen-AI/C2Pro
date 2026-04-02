@@ -24,7 +24,65 @@ export interface ProcessedEntity {
   text: string;
   page: number;
   confidence: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EvidenceHistoryEvent {
+  id: string;
+  title: string;
+  detail: string;
+  occurredAt: string;
+  sourceType?: string | null;
+  sourceId?: string | null;
+}
+
+export interface RelationshipExplanationCitation {
+  clauseId: string;
+  clauseCode: string;
+  label: string;
+  page: number | null;
+  reason: string;
+}
+
+export interface DocumentRelationshipExplanation {
+  summary: string;
+  strongestCluster: string;
+  reviewPriority: string;
+  latestSignal: string;
+  citations: RelationshipExplanationCitation[];
+}
+
+export interface AlertRuleConfig {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  threshold: number;
+  severity: "Critical" | "High" | "Medium";
+}
+
+export interface AlertSubscriptionConfig {
+  emailEnabled: boolean;
+  emailAddress: string;
+  slackEnabled: boolean;
+  slackChannel: string;
+}
+
+export interface AlertWorkspaceSettings {
+  rules: AlertRuleConfig[];
+  subscriptions: AlertSubscriptionConfig | null;
+}
+
+export interface BulkResolveAlertsRequest {
+  alertIds: string[];
+  resolution: string;
+  rootCause?: string | null;
+}
+
+export interface BulkResolveAlertsResponse {
+  processedCount: number;
+  status: string;
+  alertIds: string[];
 }
 
 /**
@@ -73,7 +131,6 @@ export function createHighlightsFromAlerts(alerts: Alert[]): Highlight[] {
  */
 export async function getDocumentEntities(
   documentId: string,
-  _pageHeight?: number,
 ): Promise<ProcessedEntity[]> {
   const response = await apiClient.get<ProcessedEntity[]>(
     `/documents/${documentId}/entities`,
@@ -260,6 +317,129 @@ export async function resolveAlert(
   return response.data;
 }
 
+export async function getDocumentHistory(
+  documentId: string,
+): Promise<EvidenceHistoryEvent[]> {
+  type DocumentHistoryApiResponse = {
+    document_id: string;
+    items: {
+      id: string;
+      title: string;
+      detail: string;
+      occurred_at: string;
+      source_type?: string | null;
+      source_id?: string | null;
+    }[];
+  };
+
+  const response = await apiClient.get<DocumentHistoryApiResponse>(
+    `/documents/${documentId}/history`,
+  );
+
+  return response.data.items.map((item: DocumentHistoryApiResponse["items"][number]) => ({
+    id: item.id,
+    title: item.title,
+    detail: item.detail,
+    occurredAt: item.occurred_at,
+    sourceType: item.source_type ?? null,
+    sourceId: item.source_id ?? null,
+  }));
+}
+
+export async function getDocumentRelationshipExplanation(
+  documentId: string,
+): Promise<DocumentRelationshipExplanation> {
+  type DocumentRelationshipExplanationApiResponse = {
+    document_id: string;
+    summary: string;
+    strongest_cluster: string;
+    review_priority: string;
+    latest_signal: string;
+    citations: {
+      clause_id: string;
+      clause_code: string;
+      label: string;
+      page?: number | null;
+      reason: string;
+    }[];
+  };
+  type DocumentRelationshipExplanationCitationApi =
+    DocumentRelationshipExplanationApiResponse["citations"][number];
+
+  const response = await apiClient.get<DocumentRelationshipExplanationApiResponse>(
+    `/documents/${documentId}/relationship-explanation`,
+  );
+
+  return {
+    summary: response.data.summary,
+    strongestCluster: response.data.strongest_cluster,
+    reviewPriority: response.data.review_priority,
+    latestSignal: response.data.latest_signal,
+    citations: response.data.citations.map((citation: DocumentRelationshipExplanationCitationApi) => ({
+      clauseId: citation.clause_id,
+      clauseCode: citation.clause_code,
+      label: citation.label,
+      page: citation.page ?? null,
+      reason: citation.reason,
+    })),
+  };
+}
+
+export async function getAlertWorkspaceSettings(): Promise<AlertWorkspaceSettings | null> {
+  type AlertWorkspaceSettingsApiResponse = {
+    rules: AlertRuleConfig[];
+    subscriptions: AlertSubscriptionConfig | null;
+  };
+
+  const response = await apiClient.get<AlertWorkspaceSettingsApiResponse>(
+    "/alerts/workspace-settings",
+  );
+
+  return {
+    rules: response.data.rules ?? [],
+    subscriptions: response.data.subscriptions ?? null,
+  };
+}
+
+export async function saveAlertWorkspaceSettings(
+  payload: AlertWorkspaceSettings,
+): Promise<AlertWorkspaceSettings> {
+  const response = await apiClient.put<AlertWorkspaceSettings>(
+    "/alerts/workspace-settings",
+    payload,
+  );
+
+  return {
+    rules: response.data.rules ?? [],
+    subscriptions: response.data.subscriptions ?? null,
+  };
+}
+
+export async function bulkResolveAlerts(
+  payload: BulkResolveAlertsRequest,
+): Promise<BulkResolveAlertsResponse> {
+  type BulkResolveAlertsApiResponse = {
+    processed_count: number;
+    status: string;
+    alert_ids: string[];
+  };
+
+  const response = await apiClient.post<BulkResolveAlertsApiResponse>(
+    "/alerts/bulk-resolve",
+    {
+      alert_ids: payload.alertIds,
+      resolution: payload.resolution,
+      root_cause: payload.rootCause ?? null,
+    },
+  );
+
+  return {
+    processedCount: response.data.processed_count,
+    status: response.data.status,
+    alertIds: response.data.alert_ids,
+  };
+}
+
 /**
  * Update a stakeholder's details
  */
@@ -272,10 +452,10 @@ export async function updateStakeholder(
     email?: string;
     power_score?: number;
     interest_score?: number;
-    stakeholder_metadata?: Record<string, any>;
+    stakeholder_metadata?: Record<string, unknown>;
   },
-): Promise<any> {
-  const response = await apiClient.patch(
+): Promise<unknown> {
+  const response = await apiClient.patch<unknown>(
     `/stakeholders/${stakeholderId}`,
     data,
   );
@@ -294,8 +474,8 @@ export async function updateWBSItem(
     planned_end?: string;
     status?: string;
   },
-): Promise<any> {
-  const response = await apiClient.put(`/procurement/wbs/${wbsId}`, data);
+): Promise<unknown> {
+  const response = await apiClient.put<unknown>(`/procurement/wbs/${wbsId}`, data);
   return response.data;
 }
 
@@ -311,8 +491,8 @@ export async function updateBOMItem(
     unit_price?: number;
     status?: string;
   },
-): Promise<any> {
-  const response = await apiClient.put(`/procurement/bom/${bomId}`, data);
+): Promise<unknown> {
+  const response = await apiClient.put<unknown>(`/procurement/bom/${bomId}`, data);
   return response.data;
 }
 

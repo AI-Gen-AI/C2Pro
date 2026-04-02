@@ -55,6 +55,10 @@ const mockedEnv = vi.hoisted(() => ({
 
 const mockedToast = vi.hoisted(() => vi.fn());
 
+vi.mock("axios", () => ({
+  default: mockedAxiosModule,
+}));
+
 vi.mock("axios/dist/browser/axios.cjs", () => ({
   default: mockedAxiosModule,
 }));
@@ -63,6 +67,7 @@ import {
   apiClient,
   orvalApiClient,
   resetAuthFailureStateForTests,
+  setBrowserLocationAdapterForTests,
 } from "./client";
 
 mockedStore.getState.mockReturnValue({
@@ -86,14 +91,24 @@ vi.mock("@/lib/ui/toast", () => ({
 }));
 
 describe("apiClient auth interceptor", () => {
+  let redirectSpy: () => void;
+  let currentPathname = "/";
+
   afterEach(() => {
     mockedStore.clear.mockClear();
     mockedToast.mockClear();
+    setBrowserLocationAdapterForTests(null);
   });
 
   beforeEach(() => {
     mockedEnv.APP_MODE = "production";
     resetAuthFailureStateForTests();
+    currentPathname = "/";
+    redirectSpy = vi.fn();
+    setBrowserLocationAdapterForTests({
+      getPathname: () => currentPathname,
+      redirectToSignIn: redirectSpy,
+    });
   });
 
   const getRejectedHandler = () => {
@@ -155,12 +170,7 @@ describe("apiClient auth interceptor", () => {
   });
 
   it("clears auth state and redirects to the canonical sign-in route on 401", async () => {
-    const locationMock = { href: "/projects", pathname: "/projects" };
-    Object.defineProperty(window, "location", {
-      value: locationMock,
-      writable: true,
-      configurable: true,
-    });
+    currentPathname = "/projects";
 
     const rejected = getRejectedHandler();
 
@@ -170,21 +180,12 @@ describe("apiClient auth interceptor", () => {
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
     expect(mockedToast).toHaveBeenCalledWith("Sesión expirada o inválida");
-    expect(window.location.href).toBe("/sign-in");
+    expect(redirectSpy).toHaveBeenCalledTimes(1);
   });
 
   it("still redirects real workspace requests even when the demo environment is enabled", async () => {
     mockedEnv.APP_MODE = "demo";
-
-    const locationMock = {
-      href: "/projects/project-123",
-      pathname: "/projects/project-123",
-    };
-    Object.defineProperty(window, "location", {
-      value: locationMock,
-      writable: true,
-      configurable: true,
-    });
+    currentPathname = "/projects/project-123";
 
     const rejected = getRejectedHandler();
 
@@ -194,21 +195,12 @@ describe("apiClient auth interceptor", () => {
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
     expect(mockedToast).toHaveBeenCalledWith("Sesión expirada o inválida");
-    expect(window.location.href).toBe("/sign-in");
+    expect(redirectSpy).toHaveBeenCalledTimes(1);
   });
 
   it("does not redirect explicit demo routes on 401", async () => {
     mockedEnv.APP_MODE = "demo";
-
-    const locationMock = {
-      href: "/demo/projects/demo-001",
-      pathname: "/demo/projects/demo-001",
-    };
-    Object.defineProperty(window, "location", {
-      value: locationMock,
-      writable: true,
-      configurable: true,
-    });
+    currentPathname = "/demo/projects/demo-001";
 
     const rejected = getRejectedHandler();
 
@@ -218,16 +210,11 @@ describe("apiClient auth interceptor", () => {
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
     expect(mockedToast).not.toHaveBeenCalled();
-    expect(window.location.href).toBe("/demo/projects/demo-001");
+    expect(redirectSpy).not.toHaveBeenCalled();
   });
 
   it("suppresses duplicate toasts and redirects when multiple 401s land together", async () => {
-    const locationMock = { href: "/projects", pathname: "/projects" };
-    Object.defineProperty(window, "location", {
-      value: locationMock,
-      writable: true,
-      configurable: true,
-    });
+    currentPathname = "/projects";
 
     const rejected = getRejectedHandler();
 
@@ -240,16 +227,11 @@ describe("apiClient auth interceptor", () => {
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(2);
     expect(mockedToast).toHaveBeenCalledTimes(1);
-    expect(window.location.href).toBe("/sign-in");
+    expect(redirectSpy).toHaveBeenCalledTimes(1);
   });
 
   it("treats legacy auth aliases as auth pages and avoids redirect loops", async () => {
-    const locationMock = { href: "/login", pathname: "/login" };
-    Object.defineProperty(window, "location", {
-      value: locationMock,
-      writable: true,
-      configurable: true,
-    });
+    currentPathname = "/login";
 
     const rejected = getRejectedHandler();
 
@@ -259,6 +241,6 @@ describe("apiClient auth interceptor", () => {
 
     expect(mockedStore.clear).toHaveBeenCalledTimes(1);
     expect(mockedToast).not.toHaveBeenCalled();
-    expect(window.location.href).toBe("/login");
+    expect(redirectSpy).not.toHaveBeenCalled();
   });
 });

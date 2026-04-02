@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, AlertCircle, Info, CheckCircle } from "lucide-react";
 import { SAMPLE_DATA } from "@/contexts/demo-mode";
+import { formatDemoDate } from "../date-format";
 
 function getSeverityConfig(severity: string) {
   switch (severity) {
@@ -124,7 +125,7 @@ export default function DemoAlertsPage() {
                   <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                     <span>Affected: {alert.affected_entity}</span>
                     <span>
-                      {new Date(alert.created_at).toLocaleDateString()}
+                      {formatDemoDate(alert.created_at)}
                     </span>
                   </div>
                 </div>

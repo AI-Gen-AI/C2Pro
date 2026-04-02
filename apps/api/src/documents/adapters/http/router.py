@@ -4,17 +4,20 @@ HTTP adapter (FastAPI router) for the Documents module.
 from __future__ import annotations
 
 import pathlib
+from datetime import datetime
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
+from src.analysis.adapters.persistence.models import Alert
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
@@ -22,6 +25,7 @@ from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
+from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
@@ -37,6 +41,7 @@ from src.documents.adapters.storage.local_file_storage_service import (
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
+from src.projects.adapters.persistence.models import ProjectORM
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
@@ -54,10 +59,17 @@ from src.documents.application.list_project_documents_use_case import (
 from src.documents.application.parse_document_use_case import ParseDocumentUseCase
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
+from src.documents.application.services.relationship_explanation_service import (
+    EvidenceRelationshipExplanationService,
+    ExplanationAlertInput,
+)
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.application.dtos import (
     DocumentEntityResponse,
     DocumentDetailResponse,
+    DocumentHistoryResponse,
+    DocumentRelationshipExplanationResponse,
+    EvidenceHistoryEventResponse,
     DocumentListItem,
     DocumentListResponse,
     DocumentPollingStatus,
@@ -66,6 +78,7 @@ from src.documents.application.dtos import (
     DocumentUploadResponse,
     RagAnswerResponse,
     RagQuestionRequest,
+    RelationshipExplanationCitationResponse,
 )
 
 logger = structlog.get_logger()
@@ -82,6 +95,32 @@ router = APIRouter(
 )
 
 ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".bc3"}
+
+
+def _format_history_action_title(action: str) -> str:
+    words = action.replace("_", " ").split()
+    return " ".join(word.capitalize() for word in words)
+
+
+def _build_alert_history_detail(alert: Alert, history_item: dict) -> str:
+    title = alert.title
+    details: list[str] = [title]
+    for key in ("decision", "resolution", "root_cause", "evidence_type", "rule_code"):
+        value = history_item.get(key)
+        if value:
+            details.append(str(value))
+    return " · ".join(details)
+
+
+def _parse_history_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+
+    normalized = value.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
 
 
 def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPollingStatus:
@@ -320,6 +359,180 @@ async def get_document_endpoint(
         for clause in document.clauses
     ]
     return DocumentDetailResponse.model_validate(response_data)
+
+
+@router.get(
+    "/documents/{document_id}/history",
+    response_model=DocumentHistoryResponse,
+    summary="Get persisted evidence history for a document",
+)
+async def get_document_history_endpoint(
+    document_id: UUID,
+    tenant_id: CurrentTenantId,
+    db: AsyncSession = Depends(get_session),
+) -> DocumentHistoryResponse:
+    document_result = await db.execute(
+        select(DocumentORM, func.count(ClauseORM.id))
+        .join(ProjectORM, ProjectORM.id == DocumentORM.project_id)
+        .outerjoin(ClauseORM, ClauseORM.document_id == DocumentORM.id)
+        .where(
+            DocumentORM.id == document_id,
+            ProjectORM.tenant_id == tenant_id,
+        )
+        .group_by(DocumentORM.id, ProjectORM.id)
+    )
+    document_row = document_result.one_or_none()
+    if document_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    document, clause_count = document_row
+    clause_total = int(clause_count or 0)
+
+    events: list[EvidenceHistoryEventResponse] = [
+        EvidenceHistoryEventResponse(
+            id=f"document-uploaded-{document.id}",
+            title="Document uploaded",
+            detail=document.filename,
+            occurred_at=document.created_at,
+            source_type="document",
+            source_id=str(document.id),
+        )
+    ]
+
+    if document.parsed_at is not None:
+        clause_label = "clause" if clause_total == 1 else "clauses"
+        events.append(
+            EvidenceHistoryEventResponse(
+                id=f"document-parsed-{document.id}",
+                title="Document parsed",
+                detail=f"{clause_total} {clause_label} extracted",
+                occurred_at=document.parsed_at,
+                source_type="document",
+                source_id=str(document.id),
+            )
+        )
+
+    alert_result = await db.execute(
+        select(Alert)
+        .join(ProjectORM, ProjectORM.id == Alert.project_id)
+        .join(ClauseORM, ClauseORM.id == Alert.source_clause_id)
+        .where(
+            ProjectORM.tenant_id == tenant_id,
+            ClauseORM.document_id == document_id,
+        )
+        .order_by(Alert.created_at.asc())
+    )
+    alerts = list(alert_result.scalars().all())
+
+    for alert in alerts:
+        history_items = list((alert.alert_metadata or {}).get("history", []))
+        created_recorded = False
+
+        for index, history_item in enumerate(history_items):
+            action = str(history_item.get("action") or "").strip()
+            occurred_at = _parse_history_timestamp(history_item.get("timestamp"))
+            if not action or occurred_at is None:
+                continue
+
+            if action == "created":
+                created_recorded = True
+
+            events.append(
+                EvidenceHistoryEventResponse(
+                    id=f"alert-history-{alert.id}-{index}",
+                    title=f"Alert {_format_history_action_title(action)}",
+                    detail=_build_alert_history_detail(alert, history_item),
+                    occurred_at=occurred_at,
+                    source_type="alert",
+                    source_id=str(alert.id),
+                )
+            )
+
+        if not created_recorded:
+            events.append(
+                EvidenceHistoryEventResponse(
+                    id=f"alert-created-{alert.id}",
+                    title="Alert created",
+                    detail=alert.title,
+                    occurred_at=alert.created_at,
+                    source_type="alert",
+                    source_id=str(alert.id),
+                )
+            )
+
+    events.sort(key=lambda event: event.occurred_at)
+
+    return DocumentHistoryResponse(
+        document_id=document.id,
+        items=events,
+    )
+
+
+@router.get(
+    "/documents/{document_id}/relationship-explanation",
+    response_model=DocumentRelationshipExplanationResponse,
+    summary="Get a grounded relationship explanation for a document",
+)
+async def get_document_relationship_explanation_endpoint(
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    db: AsyncSession = Depends(get_session),
+    use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
+) -> DocumentRelationshipExplanationResponse:
+    document = await use_case.execute(document_id)
+
+    alert_result = await db.execute(
+        select(Alert)
+        .join(ProjectORM, ProjectORM.id == Alert.project_id)
+        .join(ClauseORM, ClauseORM.id == Alert.source_clause_id)
+        .where(
+            ProjectORM.tenant_id == tenant_id,
+            ClauseORM.document_id == document_id,
+        )
+        .order_by(Alert.created_at.asc())
+    )
+    alerts = list(alert_result.scalars().all())
+
+    filtered_alerts: list[ExplanationAlertInput] = []
+    clause_ids = {clause.id for clause in document.clauses}
+    for alert in alerts:
+        if alert.source_clause_id is not None and alert.source_clause_id not in clause_ids:
+            continue
+        filtered_alerts.append(
+            ExplanationAlertInput(
+                id=alert.id,
+                title=alert.title,
+                severity=alert.severity,
+                status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
+                created_at=alert.created_at,
+                updated_at=alert.updated_at,
+                source_clause_id=alert.source_clause_id,
+            )
+        )
+
+    explanation = EvidenceRelationshipExplanationService().build(
+        document=document,
+        alerts=filtered_alerts,
+    )
+
+    return DocumentRelationshipExplanationResponse(
+        document_id=document.id,
+        summary=explanation.summary,
+        strongest_cluster=explanation.strongest_cluster,
+        review_priority=explanation.review_priority,
+        latest_signal=explanation.latest_signal,
+        citations=[
+            RelationshipExplanationCitationResponse(
+                clause_id=citation.clause_id,
+                clause_code=citation.clause_code,
+                label=citation.label,
+                page=citation.page,
+                reason=citation.reason,
+            )
+            for citation in explanation.citations
+        ],
+    )
 
 
 @router.get(

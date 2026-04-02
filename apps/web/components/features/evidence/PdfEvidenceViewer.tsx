@@ -10,6 +10,7 @@ import { resolveHighlightStyle } from "@/components/features/evidence/highlight-
 import { createWatermarkToken } from "@/components/features/evidence/watermark-token";
 import { sanitizeWatermarkPayload } from "@/components/features/evidence/watermark-sanitize";
 import { EvidenceWatermarkOverlay } from "@/components/features/evidence/EvidenceWatermarkOverlay";
+import { PDFViewer } from "@/components/evidence/pdf/PDFViewer";
 
 export interface PdfHighlight {
   id: string;
@@ -45,18 +46,6 @@ function readStoredDemoWatermark() {
   } catch {
     return null;
   }
-}
-
-function createDemoWatermark() {
-  return sanitizeWatermarkPayload({
-    pseudonymId: createWatermarkToken({
-      tenantId: "tenant-demo",
-      userSeed: "anonymous-user",
-      sessionNonce: "evidence-viewer",
-    }),
-    environment: "local",
-    timestampIso: new Date("2026-02-14T00:00:00.000Z").toISOString(),
-  });
 }
 
 export function PdfEvidenceViewer({
@@ -187,11 +176,14 @@ export function PdfEvidenceViewer({
       <EvidenceWatermarkOverlay watermark={watermark} />
       {!isPdfReady ? <p>Loading PDF viewer...</p> : null}
       {isPdfReady ? (
-        <iframe
-          data-testid="pdf-page-canvas"
-          title="PDF document viewer"
-          src={currentFileUrl}
-          className="h-[70vh] w-full border-0"
+        <PDFViewer
+          key={currentFileUrl}
+          file={currentFileUrl}
+          initialPage={statePage}
+          activeHighlightId={null}
+          highlights={[]}
+          onPageChange={setStatePage}
+          className="h-[70vh]"
         />
       ) : null}
 

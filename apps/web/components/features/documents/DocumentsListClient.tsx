@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/accordion";
 import {
   FileText,
-  Upload,
   Search,
   Download,
   Eye,
@@ -32,7 +31,6 @@ import {
   Loader2,
   FolderOpen,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type {
   DocumentPollingStatus,
   ProjectDocumentsGroup,

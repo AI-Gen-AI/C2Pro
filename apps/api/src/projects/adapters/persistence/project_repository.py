@@ -121,6 +121,8 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         search: str | None = None,
         status: ProjectStatus | None = None,
         project_type: ProjectType | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> tuple[list[Project], int]:
         """List projects with pagination and filters."""
         # Build base query
@@ -139,6 +141,12 @@ class SQLAlchemyProjectRepository(ProjectRepository):
 
         if project_type:
             query = query.where(ProjectORM.project_type == project_type.value)
+
+        if created_after:
+            query = query.where(ProjectORM.created_at >= created_after)
+
+        if created_before:
+            query = query.where(ProjectORM.created_at <= created_before)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

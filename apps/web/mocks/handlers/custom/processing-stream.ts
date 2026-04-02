@@ -2,7 +2,7 @@
  * Test Suite ID: S2-10
  * Roadmap Reference: S2-10 SSE processing stepper + withCredentials (FLAG-3)
  */
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "@/mocks/msw";
 
 export const processingStreamHandler = http.get(
   "/api/v1/projects/:projectId/process/stream",

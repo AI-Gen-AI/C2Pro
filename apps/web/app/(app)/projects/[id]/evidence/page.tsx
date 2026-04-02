@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +49,8 @@ import { LazyPdfEvidenceViewer } from "@/components/features/evidence/LazyPdfEvi
 import { env } from "@/config/env";
 import { useDocumentAlerts } from "@/hooks/useDocumentAlerts";
 import { useDocumentEntities } from "@/hooks/useDocumentEntities";
+import { useDocumentHistory } from "@/hooks/useDocumentHistory";
+import { useDocumentRelationshipExplanation } from "@/hooks/useDocumentRelationshipExplanation";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/api/generated/approvals/approvals";
 import {
@@ -64,6 +68,26 @@ type EvidenceTemplate = {
   reviewFocus: string[];
   tags: string[];
 };
+
+type PendingEvidenceAction =
+  | {
+      kind: "entity-approve";
+      entityId: string;
+      label: string;
+      confidence: number;
+    }
+  | {
+      kind: "entity-reject";
+      entityId: string;
+      label: string;
+      reason: string;
+    }
+  | {
+      kind: "alert-review";
+      alertId: string;
+      label: string;
+      decision: "approve" | "reject";
+    };
 
 const EVIDENCE_TEMPLATES: EvidenceTemplate[] = [
   {
@@ -104,7 +128,7 @@ const EVIDENCE_TEMPLATES: EvidenceTemplate[] = [
 function sanitizeFilename(value: string): string {
   return value
     .trim()
-    .replace(/[^a-z0-9_\-\.]+/gi, "_")
+    .replace(/[^a-z0-9_.-]+/gi, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .toLowerCase();
@@ -145,6 +169,15 @@ function normalizeEntityType(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function formatEvidenceTimelineDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -160,6 +193,12 @@ export default function EvidencePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     EVIDENCE_TEMPLATES[0]?.id ?? "",
   );
+  const [relationshipViewMode, setRelationshipViewMode] = useState<
+    "graph" | "3d"
+  >("graph");
+  const [pendingAction, setPendingAction] =
+    useState<PendingEvidenceAction | null>(null);
+  const [validationNote, setValidationNote] = useState("");
 
   const {
     documents,
@@ -208,6 +247,12 @@ export default function EvidencePage() {
     error: alertsError,
     refetch: refetchAlerts,
   } = useDocumentAlerts(selectedDocumentId);
+  const {
+    items: evidenceTimeline,
+  } = useDocumentHistory(selectedDocumentId);
+  const {
+    explanation: relationshipExplanation,
+  } = useDocumentRelationshipExplanation(selectedDocumentId);
   const [alertsState, setAlertsState] = useState(alerts);
   const [actionError, setActionError] = useState<string | null>(null);
   const reviewResource = useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch();
@@ -309,7 +354,6 @@ export default function EvidencePage() {
   const selectedTemplate =
     EVIDENCE_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
     EVIDENCE_TEMPLATES[0];
-
   const [entities, setEntities] = useState<ExtractedEntity[]>([]);
 
   useEffect(() => {
@@ -321,7 +365,7 @@ export default function EvidencePage() {
   }, [alerts]);
 
   const handleApproveEntity = useCallback(
-    async (entityId: string) => {
+    async (entityId: string, note?: string) => {
       const entity = entities.find((item) => item.id === entityId);
       if (!entity) {
         return;
@@ -341,7 +385,7 @@ export default function EvidencePage() {
         data: {
           status: "APPROVED",
           correction_data: undefined,
-          feedback_comment: null,
+          feedback_comment: note?.trim() || null,
         },
       });
 
@@ -448,6 +492,102 @@ export default function EvidencePage() {
       ),
     );
   }, [resolveProjectAlert]);
+
+  const requestApproveEntity = useCallback(
+    async (entityId: string) => {
+      const entity = entities.find((item) => item.id === entityId);
+      if (!entity) {
+        return;
+      }
+
+      setPendingAction({
+        kind: "entity-approve",
+        entityId,
+        label: entity.text,
+        confidence: entity.confidence,
+      });
+    },
+    [entities],
+  );
+
+  const requestRejectEntity = useCallback(
+    async (entityId: string, reason: string) => {
+      const entity = entities.find((item) => item.id === entityId);
+      if (!entity) {
+        return;
+      }
+
+      setPendingAction({
+        kind: "entity-reject",
+        entityId,
+        label: entity.text,
+        reason,
+      });
+    },
+    [entities],
+  );
+
+  const requestReviewAlert = useCallback(
+    (alertId: string, decision: "approve" | "reject") => {
+      const alert = alertsState.find((item) => item.id === alertId);
+      if (!alert) {
+        return;
+      }
+
+      setPendingAction({
+        kind: "alert-review",
+        alertId,
+        label: alert.id,
+        decision,
+      });
+    },
+    [alertsState],
+  );
+
+  const confirmPendingAction = useCallback(async () => {
+    if (!pendingAction) {
+      return;
+    }
+
+    if (pendingAction.kind === "entity-approve") {
+      await handleApproveEntity(pendingAction.entityId, validationNote);
+    } else if (pendingAction.kind === "entity-reject") {
+      await handleRejectEntity(pendingAction.entityId, pendingAction.reason);
+    } else {
+      await handleReviewAlert(pendingAction.alertId, pendingAction.decision);
+    }
+
+    setPendingAction(null);
+    setValidationNote("");
+  }, [
+    handleApproveEntity,
+    handleRejectEntity,
+    handleReviewAlert,
+    pendingAction,
+  ]);
+
+  const requiresValidationNote = useMemo(
+    () =>
+      pendingAction?.kind === "entity-approve" &&
+      pendingAction.confidence < 90,
+    [pendingAction],
+  );
+
+  const pendingActionDescription = useMemo(() => {
+    if (!pendingAction) {
+      return "";
+    }
+
+    if (pendingAction.kind === "entity-approve") {
+      return `You are about to approve ${pendingAction.label}.`;
+    }
+
+    if (pendingAction.kind === "entity-reject") {
+      return `You are about to reject ${pendingAction.label}.`;
+    }
+
+    return `You are about to ${pendingAction.decision} ${pendingAction.label}.`;
+  }, [pendingAction]);
 
   const handleExportJson = useCallback(() => {
     if (!selectedDocument) {
@@ -716,8 +856,8 @@ export default function EvidencePage() {
                   ) : (
                     <EntityValidationList
                       entities={entities}
-                      onApprove={handleApproveEntity}
-                      onReject={handleRejectEntity}
+                      onApprove={requestApproveEntity}
+                      onReject={requestRejectEntity}
                       onEntityClick={handleEntityClick}
                       activeEntityId={activeEntityId}
                       isLoading={entitiesLoading}
@@ -755,7 +895,7 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               onClick={() =>
-                                void handleReviewAlert(alert.id, "approve")
+                                requestReviewAlert(alert.id, "approve")
                               }
                             >
                               Approve Alert
@@ -764,7 +904,7 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               onClick={() =>
-                                void handleReviewAlert(alert.id, "reject")
+                                requestReviewAlert(alert.id, "reject")
                               }
                             >
                               Reject Alert
@@ -829,70 +969,304 @@ export default function EvidencePage() {
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
-                      Relationship Graph
+                      {relationshipViewMode === "3d"
+                        ? "3D Relationship Viewer"
+                        : "Relationship Graph"}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      {relationshipGraph.linkedAlertCount} linked alert
-                      {relationshipGraph.linkedAlertCount === 1 ? "" : "s"}
+                      {relationshipViewMode === "3d"
+                        ? "Depth layers"
+                        : `${relationshipGraph.linkedAlertCount} linked alert${
+                            relationshipGraph.linkedAlertCount === 1 ? "" : "s"
+                          }`}
                     </p>
                   </div>
-                  <Badge variant="outline">
-                    {relationshipGraph.entityNodes.length} entities / {relationshipGraph.alertNodes.length} alerts
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        relationshipViewMode === "graph"
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setRelationshipViewMode("graph")}
+                    >
+                      Graph View
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        relationshipViewMode === "3d" ? "default" : "outline"
+                      }
+                      onClick={() => setRelationshipViewMode("3d")}
+                    >
+                      3D Relationship View
+                    </Button>
+                    <Badge variant="outline">
+                      {relationshipGraph.entityNodes.length} entities /{" "}
+                      {relationshipGraph.alertNodes.length} alerts
+                    </Badge>
+                  </div>
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
-                  <div className="space-y-2">
-                    {relationshipGraph.entityNodes.map((node) => (
-                      <button
-                        key={node.id}
-                        type="button"
-                        aria-label={`Graph node ${node.id}`}
-                        className={cn(
-                          "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
-                          activeEntityId === node.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50",
-                        )}
-                        onClick={() => setActiveEntityId(node.id)}
+                {relationshipViewMode === "3d" ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-4 lg:grid-cols-3" style={{ perspective: "1200px" }}>
+                      <div
+                        className="rounded-md border bg-background/90 p-4 shadow-sm"
+                        style={{ transform: "rotateY(18deg) translateZ(24px)" }}
                       >
-                        <div className="text-sm font-medium text-foreground">
-                          {node.label}
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Layer 1 · Entities
+                        </p>
+                        <div className="space-y-2">
+                          {relationshipGraph.entityNodes.map((node) => (
+                            <button
+                              key={node.id}
+                              type="button"
+                              aria-label={`Graph node ${node.id}`}
+                              className={cn(
+                                "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                                activeEntityId === node.id
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50",
+                              )}
+                              onClick={() => setActiveEntityId(node.id)}
+                            >
+                              <div className="text-sm font-medium text-foreground">
+                                {node.label}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Entity · page {node.page}
+                              </div>
+                            </button>
+                          ))}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          Entity · page {node.page}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                      </div>
 
-                  <div className="hidden items-center justify-center lg:flex">
-                    <div className="h-full min-h-[120px] w-px bg-border" />
-                  </div>
-
-                  <div className="space-y-2">
-                    {relationshipGraph.alertNodes.map((node) => (
-                      <button
-                        key={node.id}
-                        type="button"
-                        aria-label={`Graph node ${node.id}`}
-                        className={cn(
-                          "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
-                          activeEntityId === node.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50",
-                        )}
-                        onClick={() => setActiveEntityId(node.id)}
+                      <div
+                        className="rounded-md border border-dashed bg-muted/30 p-4 shadow-sm"
+                        style={{ transform: "translateZ(48px)" }}
                       >
-                        <div className="text-sm font-medium text-foreground">
-                          {node.label}
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Layer 2 · Relationship Depth
+                        </p>
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          <p>Contract entities project forward into active alerts.</p>
+                          <p>
+                            Click any node to focus the linked highlight in the
+                            evidence viewer.
+                          </p>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          Alert · {String(node.severity).toLowerCase()}
+                      </div>
+
+                      <div
+                        className="rounded-md border bg-background/90 p-4 shadow-sm"
+                        style={{ transform: "rotateY(-18deg) translateZ(24px)" }}
+                      >
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Layer 3 · Alerts
+                        </p>
+                        <div className="space-y-2">
+                          {relationshipGraph.alertNodes.map((node) => (
+                            <button
+                              key={node.id}
+                              type="button"
+                              aria-label={`Graph node ${node.id}`}
+                              className={cn(
+                                "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                                activeEntityId === node.id
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50",
+                              )}
+                              onClick={() => setActiveEntityId(node.id)}
+                            >
+                              <div className="text-sm font-medium text-foreground">
+                                {node.label}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Alert · {String(node.severity).toLowerCase()}
+                              </div>
+                            </button>
+                          ))}
                         </div>
-                      </button>
-                    ))}
+                      </div>
+                    </div>
                   </div>
+                ) : (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
+                    <div className="space-y-2">
+                      {relationshipGraph.entityNodes.map((node) => (
+                        <button
+                          key={node.id}
+                          type="button"
+                          aria-label={`Graph node ${node.id}`}
+                          className={cn(
+                            "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                            activeEntityId === node.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50",
+                          )}
+                          onClick={() => setActiveEntityId(node.id)}
+                        >
+                          <div className="text-sm font-medium text-foreground">
+                            {node.label}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Entity · page {node.page}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="hidden items-center justify-center lg:flex">
+                      <div className="h-full min-h-[120px] w-px bg-border" />
+                    </div>
+
+                    <div className="space-y-2">
+                      {relationshipGraph.alertNodes.map((node) => (
+                        <button
+                          key={node.id}
+                          type="button"
+                          aria-label={`Graph node ${node.id}`}
+                          className={cn(
+                            "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                            activeEntityId === node.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50",
+                          )}
+                          onClick={() => setActiveEntityId(node.id)}
+                        >
+                          <div className="text-sm font-medium text-foreground">
+                            {node.label}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Alert · {String(node.severity).toLowerCase()}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      AI Relationship Explanation
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Backend-generated explanation grounded in evidence graph citations
+                    </p>
+                  </div>
+                  <Badge variant="outline">Model-backed</Badge>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {relationshipExplanation ? (
+                    <>
+                      <p className="text-sm text-foreground">
+                        {relationshipExplanation.summary}
+                      </p>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-md border bg-background p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Strongest Cluster
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {relationshipExplanation.strongestCluster}
+                          </p>
+                        </div>
+                        <div className="rounded-md border bg-background p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Review Priority
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {relationshipExplanation.reviewPriority}
+                          </p>
+                        </div>
+                        <div className="rounded-md border bg-background p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Latest Signal
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {relationshipExplanation.latestSignal}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-md border bg-background p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Evidence Citations
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {relationshipExplanation.citations.map((citation) => (
+                            <div
+                              key={`${citation.clauseId}-${citation.clauseCode}`}
+                              className="rounded border border-border/70 bg-muted/20 p-2"
+                            >
+                              <p className="text-sm font-medium text-foreground">
+                                {citation.clauseCode} · {citation.label}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {citation.page ? `Page ${citation.page}` : "Page N/A"} · {citation.reason}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        No relationship explanation is available until entities or alerts are present.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Evidence Evolution Timeline
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Persisted document lifecycle and alert history events
+                    </p>
+                  </div>
+                  <Badge variant="outline">{evidenceTimeline.length} events</Badge>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {evidenceTimeline.length > 0 ? (
+                    evidenceTimeline.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex items-start gap-3 rounded-md border bg-background p-3"
+                      >
+                        <div className="mt-1 h-2.5 w-2.5 rounded-full bg-primary" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{event.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatEvidenceTimelineDate(event.occurredAt)}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {event.detail}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        No evidence history is available for the current document.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1016,6 +1390,58 @@ export default function EvidencePage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingAction(null);
+            setValidationNote("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm evidence action</DialogTitle>
+            <DialogDescription>{pendingActionDescription}</DialogDescription>
+          </DialogHeader>
+          {requiresValidationNote ? (
+            <div className="space-y-2">
+              <p className="text-sm text-amber-700">
+                Confidence below 90% requires a validation note before
+                approval.
+              </p>
+              <Label htmlFor="evidence-validation-note">Validation note</Label>
+              <Textarea
+                id="evidence-validation-note"
+                value={validationNote}
+                onChange={(event) => setValidationNote(event.target.value)}
+                placeholder="Document why this low-confidence extraction is still acceptable."
+                rows={3}
+              />
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPendingAction(null);
+                setValidationNote("");
+              }}
+            >
+              Cancel Action
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmPendingAction()}
+              disabled={requiresValidationNote && !validationNote.trim()}
+            >
+              Confirm Action
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

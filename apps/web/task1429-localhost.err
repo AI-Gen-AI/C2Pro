@@ -1,0 +1,14 @@
+
+[2m[1305.14ms][22m [@tailwindcss/postcss] app\globals.css
+[2m[   0.21ms][22m  [2m ↳ [22mQuick bail check
+[2m[ 391.59ms][22m  [2m ↳ [22mSetup compiler
+[2m[   1.52ms][22m    [2m ↳ [22mPostCSS AST -> Tailwind CSS AST
+[2m[ 389.99ms][22m    [2m ↳ [22mCreate compiler
+[2m[   0.38ms][22m  [2m ↳ [22mRegister full rebuild paths
+[2m[  21.23ms][22m  [2m ↳ [22mSetup scanner
+[2m[ 303.04ms][22m  [2m ↳ [22mScan for candidates
+[2m[ 439.20ms][22m  [2m ↳ [22mRegister dependency messages
+[2m[ 123.25ms][22m  [2m ↳ [22mBuild utilities
+[2m[  14.92ms][22m  [2m ↳ [22mTransform Tailwind CSS AST into PostCSS AST
+[2m[  10.27ms][22m  [2m ↳ [22mUpdate PostCSS AST
+

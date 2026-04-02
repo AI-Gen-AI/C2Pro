@@ -12,6 +12,10 @@ export interface RaciRow {
   technicalLead: string;
   stakeholder: string;
   contractor: string;
+  sequenceIndex?: number;
+  taskCode?: string;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
   projectId?: string;
 }
 
@@ -24,7 +28,11 @@ interface RaciAssignment {
 
 interface RaciTaskRow {
   task_id: string;
+  task_code: string;
   task_name: string;
+  sequence_index: number;
+  planned_start?: string | null;
+  planned_end?: string | null;
   assignments: RaciAssignment[];
 }
 
@@ -54,6 +62,10 @@ function _transformMatrixToRows(
       technicalLead: byRole["ACCOUNTABLE"] ?? "",
       stakeholder: byRole["CONSULTED"] ?? "",
       contractor: byRole["INFORMED"] ?? "",
+      sequenceIndex: row.sequence_index,
+      taskCode: row.task_code,
+      plannedStart: row.planned_start ?? null,
+      plannedEnd: row.planned_end ?? null,
       projectId,
     };
   });

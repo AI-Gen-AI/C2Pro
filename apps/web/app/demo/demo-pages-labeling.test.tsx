@@ -77,4 +77,21 @@ describe("Demo page labeling", () => {
       view.unmount();
     }
   });
+
+  it("renders deterministic demo dates for documents and alerts", () => {
+    const alertsView = renderWithProviders(<DemoAlertsPage />);
+
+    expect(screen.getByText("2026-02-15")).toBeInTheDocument();
+    expect(screen.getByText("2026-02-11")).toBeInTheDocument();
+
+    alertsView.unmount();
+
+    const documentsView = renderWithProviders(<DemoDocumentsPage />);
+
+    expect(screen.getByText("Uploaded 2026-01-01")).toBeInTheDocument();
+    expect(screen.getByText("Uploaded 2026-01-08")).toBeInTheDocument();
+    expect(screen.getAllByText("2026-01-02").length).toBeGreaterThan(0);
+
+    documentsView.unmount();
+  });
 });

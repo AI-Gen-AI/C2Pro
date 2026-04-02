@@ -13,7 +13,6 @@ import "@/lib/api/config";
 import { SentryInit } from "@/components/providers/SentryInit";
 import {
   useAppModeStore,
-  selectIsDemoMode,
   isExplicitDemoRoute,
 } from "@/stores/app-mode";
 
@@ -27,7 +26,6 @@ export function Providers({ children }: ProvidersProps) {
   const demoEnvironmentEnabled = useAppModeStore(
     (state) => state.demoEnvironmentEnabled,
   );
-  const isDemoMode = useAppModeStore(selectIsDemoMode);
   const [client] = useState(() => createQueryClient());
   const shouldUseDemoMode =
     demoEnvironmentEnabled && isExplicitDemoRoute(pathname);
