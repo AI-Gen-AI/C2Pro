@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
 
 const useSearchParamsMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
+const useProjectMock = vi.fn();
 const useDocumentEntitiesMock = vi.fn();
 const useDocumentAlertsMock = vi.fn();
 const useDocumentHistoryMock = vi.fn();
@@ -18,6 +19,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/useProjectDocuments", () => ({
   useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
+}));
+
+vi.mock("@/hooks/useProject", () => ({
+  useProject: (...args: unknown[]) => useProjectMock(...args),
 }));
 
 vi.mock("@/hooks/useDocumentEntities", () => ({
@@ -152,6 +157,7 @@ describe("EvidencePage highlight mapping", () => {
   beforeEach(() => {
     useSearchParamsMock.mockReset();
     useProjectDocumentsMock.mockReset();
+    useProjectMock.mockReset();
     useDocumentEntitiesMock.mockReset();
     useDocumentAlertsMock.mockReset();
     useDocumentHistoryMock.mockReset();
@@ -159,6 +165,12 @@ describe("EvidencePage highlight mapping", () => {
     reviewApprovalMutateAsyncMock.mockReset();
     reviewAlertMutateAsyncMock.mockReset();
     resolveAlertMutateAsyncMock.mockReset();
+    useProjectMock.mockReturnValue({
+      data: {
+        id: "proj-1",
+        name: "Atlas Ridge",
+      },
+    });
 
     useSearchParamsMock.mockReturnValue({
       get: vi.fn().mockReturnValue(null),
@@ -289,6 +301,13 @@ describe("EvidencePage highlight mapping", () => {
         },
       });
     });
+  });
+
+  it("shows the fetched project name instead of the raw route id in the evidence subtitle", () => {
+    render(<EvidencePage />);
+
+    expect(screen.getByText("Project: Atlas Ridge")).toBeInTheDocument();
+    expect(screen.queryByText("Project: proj-1")).not.toBeInTheDocument();
   });
 
   it("requires a validation note before approving entities below 90 percent confidence", async () => {

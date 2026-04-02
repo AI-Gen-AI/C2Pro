@@ -51,6 +51,7 @@ import { useDocumentAlerts } from "@/hooks/useDocumentAlerts";
 import { useDocumentEntities } from "@/hooks/useDocumentEntities";
 import { useDocumentHistory } from "@/hooks/useDocumentHistory";
 import { useDocumentRelationshipExplanation } from "@/hooks/useDocumentRelationshipExplanation";
+import { useProject } from "@/hooks/useProject";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/api/generated/approvals/approvals";
 import {
@@ -182,6 +183,8 @@ export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
+  const { data: project } = useProject(id);
+  const projectName = project?.name?.trim() || id;
 
   const [splitView, setSplitView] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
@@ -721,11 +724,11 @@ export default function EvidencePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
-          <p className="text-muted-foreground">Project: {id}</p>
-        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
+            <p className="text-muted-foreground">Project: {projectName}</p>
+          </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

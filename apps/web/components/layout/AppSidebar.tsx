@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useOrganization } from '@clerk/nextjs';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -27,15 +28,17 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { organization } = useOrganization();
   const [collapsed, setCollapsed] = useState(false);
 
   // Check if we're in demo mode based on the current path
   const isDemoMode = pathname.startsWith('/demo');
   const basePrefix = isDemoMode ? '/demo' : '';
+  const workspaceLabel = isDemoMode ? 'Demo Workspace' : organization?.name ?? 'Workspace';
 
   const getHref = (href: string) => {
     if (href === '/dashboard') {
-      return isDemoMode ? '/demo' : '/dashboard';
+      return isDemoMode ? '/demo' : '/';
     }
     return `${basePrefix}${href}`;
   };
@@ -45,7 +48,7 @@ export function AppSidebar() {
     if (href === '/dashboard') {
       return isDemoMode
         ? pathname === '/demo'
-        : pathname === '/dashboard';
+        : pathname === '/' || pathname === '/dashboard';
     }
     return pathname.startsWith(fullHref);
   };
@@ -74,7 +77,7 @@ export function AppSidebar() {
       {!collapsed && (
         <div className="px-4 pb-3">
           <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-            {isDemoMode ? 'Demo Workspace' : 'Torre Skyline'}
+            {workspaceLabel}
           </span>
           {isDemoMode ? (
             <p className="mt-1 text-[11px] font-medium text-warning">
@@ -103,7 +106,7 @@ export function AppSidebar() {
                 'flex items-center gap-2 px-4 py-2 text-[13px] transition-all duration-150',
                 'border-l-[3px]',
                 active
-                  ? 'border-sidebar-primary bg-sidebar-accent font-medium text-white'
+                  ? 'border-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-foreground'
                   : 'border-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >

@@ -5,9 +5,17 @@ import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { AppSidebar } from "./AppSidebar";
 
 const pathnameState = { value: "/projects" };
+const organizationState = {
+  value: {
+    organization: {
+      name: "Atlas Ridge",
+    },
+  },
+};
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useOrganization: () => organizationState.value,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -56,6 +64,8 @@ describe("AppSidebar", () => {
     pathnameState.value = "/projects";
     renderWithProviders(<AppSidebar />);
 
+    expect(screen.getByText("Atlas Ridge")).toBeInTheDocument();
+    expect(screen.queryByText(/torre skyline/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /projects/i })).toHaveAttribute(
       "href",
       "/projects",
@@ -103,6 +113,15 @@ describe("AppSidebar", () => {
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
       "aria-current",
       "page",
+    );
+  });
+
+  it("keeps the active projects item readable against the sidebar accent background", () => {
+    pathnameState.value = "/projects";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /projects/i })).not.toHaveClass(
+      "text-white",
     );
   });
 });

@@ -26,6 +26,7 @@ import { useProjectDocuments } from '@/hooks/useProjectDocuments';
 import { useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete } from '@/lib/api/generated/documents/documents';
 import { formatFileSize } from '@/types/document';
 import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
+import { useProject } from '@/hooks/useProject';
 
 type DocumentStatus = 'Analyzed' | 'Processing' | 'Uploaded' | 'Error';
 
@@ -77,8 +78,10 @@ export default function ProjectDocumentsPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { data: project } = useProject(projectId);
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
   const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
+  const projectName = project?.name?.trim() || projectId;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -161,7 +164,7 @@ export default function ProjectDocumentsPage() {
             Back to Project
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-          <p className="text-muted-foreground">Project: {projectId}</p>
+          <p className="text-muted-foreground">Project: {projectName}</p>
         </div>
         <Button onClick={() => setUploadDialogOpen(true)}>
           <Upload className="mr-2 h-4 w-4" />
