@@ -92,6 +92,7 @@ Skills/
 
 # Local sample assets (never commit to main)
 docs/assets/samples/
+everything-claude-code/
 
 # Build/cache artifacts
 apps/web/tsconfig.tsbuildinfo

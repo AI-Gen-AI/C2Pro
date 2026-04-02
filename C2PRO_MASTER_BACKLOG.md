@@ -279,6 +279,7 @@ This section replaces the oversized document registry with the current sources t
 | [x] | P3 | `TASK-195` | Env Setup | Integration tests CI job passing | `.github/CICD_SETUP.md` |
 | [ ] | P3 | `TASK-197` | None | Coverage gates defined as `>=60%` orange and `>=80%` green | `.github/CICD_SETUP.md` |
 | [x] | P1 | `TASK-1459` | DevOps | Keep local API startup and `docker compose up` healthchecks from failing on placeholder Sentry values by skipping invalid DSNs instead of crashing the FastAPI lifespan `[x] Implemented (Startup Regression Test + Invalid DSN Guard)` | `apps/api/src/main.py`; `apps/api/tests/core/test_mcp_startup.py`; local compose failure analysis 2026-04-02 |
+| [x] | P2 | `TASK-1463` | DevOps | Remove non-core `everything-claude-code` agent-management workspace from the monorepo index so it never appears as a tracked submodule/gitlink on `main`; keep it ignored as local-only tooling `[x] Implemented (Gitlink Removed + Ignore Rule Added)` | Repo hygiene follow-up 2026-04-02 |
 | [ ] | P3 | `TASK-456` | DevOps | Monitor auth failures in Sentry | `docs/archive/plans/Clerk/IMPLEMENTATION_GUIDE.md` |
 | [ ] | P3 | `TASK-515` | DevOps | Define and run performance benchmarks | `docs/archive/plans/tdd-testing/TDD_QUICK_REFERENCE.md` |
 
