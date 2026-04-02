@@ -27,6 +27,12 @@ export interface ProcessedEntity {
   metadata?: Record<string, unknown>;
 }
 
+interface EvidenceLocation {
+  bbox: [number, number, number, number];
+  normalized?: boolean;
+  page_number?: number;
+}
+
 export interface EvidenceHistoryEvent {
   id: string;
   title: string;
@@ -146,8 +152,8 @@ export function createHighlightsFromEntities(
   entities: ProcessedEntity[],
 ): Highlight[] {
   return entities.flatMap((entity) => {
-    const evidence = entity.metadata?.evidence_location;
-    if (!evidence || !Array.isArray(evidence.bbox)) return [];
+    const evidence = parseEvidenceLocation(entity.metadata?.evidence_location);
+    if (!evidence) return [];
 
     const rect: Rectangle = {
       left: evidence.bbox[0],
@@ -515,6 +521,37 @@ function extractEvidenceLocation(alert: Alert): {
     page_number: candidate.page_number,
     bbox: candidate.bbox,
     normalized,
+  };
+}
+
+function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    bbox?: unknown;
+    normalized?: unknown;
+    page_number?: unknown;
+  };
+
+  if (
+    !Array.isArray(candidate.bbox) ||
+    candidate.bbox.length !== 4 ||
+    !candidate.bbox.every((point): point is number => typeof point === "number")
+  ) {
+    return null;
+  }
+
+  return {
+    bbox: [
+      candidate.bbox[0],
+      candidate.bbox[1],
+      candidate.bbox[2],
+      candidate.bbox[3],
+    ],
+    normalized: typeof candidate.normalized === "boolean" ? candidate.normalized : undefined,
+    page_number: typeof candidate.page_number === "number" ? candidate.page_number : undefined,
   };
 }
 
