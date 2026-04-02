@@ -1,0 +1,8 @@
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3110
+- PID:          5144
+- Dir:          C:\Users\esus_\Documents\AI\ZTWQ\c2pro\apps\web
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 5144 /F to stop it.

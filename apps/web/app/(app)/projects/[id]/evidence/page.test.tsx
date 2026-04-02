@@ -5,6 +5,8 @@ const useSearchParamsMock = vi.fn();
 const useProjectDocumentsMock = vi.fn();
 const useDocumentEntitiesMock = vi.fn();
 const useDocumentAlertsMock = vi.fn();
+const useDocumentHistoryMock = vi.fn();
+const useDocumentRelationshipExplanationMock = vi.fn();
 const reviewApprovalMutateAsyncMock = vi.fn();
 const reviewAlertMutateAsyncMock = vi.fn();
 const resolveAlertMutateAsyncMock = vi.fn();
@@ -24,6 +26,15 @@ vi.mock("@/hooks/useDocumentEntities", () => ({
 
 vi.mock("@/hooks/useDocumentAlerts", () => ({
   useDocumentAlerts: (...args: unknown[]) => useDocumentAlertsMock(...args),
+}));
+
+vi.mock("@/hooks/useDocumentHistory", () => ({
+  useDocumentHistory: (...args: unknown[]) => useDocumentHistoryMock(...args),
+}));
+
+vi.mock("@/hooks/useDocumentRelationshipExplanation", () => ({
+  useDocumentRelationshipExplanation: (...args: unknown[]) =>
+    useDocumentRelationshipExplanationMock(...args),
 }));
 
 vi.mock("@/lib/api/generated/approvals/approvals", () => ({
@@ -143,6 +154,8 @@ describe("EvidencePage highlight mapping", () => {
     useProjectDocumentsMock.mockReset();
     useDocumentEntitiesMock.mockReset();
     useDocumentAlertsMock.mockReset();
+    useDocumentHistoryMock.mockReset();
+    useDocumentRelationshipExplanationMock.mockReset();
     reviewApprovalMutateAsyncMock.mockReset();
     reviewAlertMutateAsyncMock.mockReset();
     resolveAlertMutateAsyncMock.mockReset();
@@ -151,7 +164,15 @@ describe("EvidencePage highlight mapping", () => {
       get: vi.fn().mockReturnValue(null),
     });
     useProjectDocumentsMock.mockReturnValue({
-      documents: [{ id: "doc-1", name: "Contract.pdf", type: "contract" }],
+      documents: [
+        {
+          id: "doc-1",
+          name: "Contract.pdf",
+          type: "contract",
+          created_at: "2026-01-20T09:00:00Z",
+          updated_at: "2026-01-21T09:00:00Z",
+        },
+      ],
       loading: false,
       error: null,
       refetch: vi.fn(),
@@ -188,8 +209,22 @@ describe("EvidencePage highlight mapping", () => {
           description: "Needs review",
           severity: "high",
           status: "open",
+          created_at: "2026-01-21T14:23:00Z",
+          updated_at: "2026-01-21T16:30:00Z",
         },
       ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    useDocumentHistoryMock.mockReturnValue({
+      items: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    useDocumentRelationshipExplanationMock.mockReturnValue({
+      explanation: null,
       loading: false,
       error: null,
       refetch: vi.fn(),
@@ -240,6 +275,9 @@ describe("EvidencePage highlight mapping", () => {
       screen.getByRole("button", { name: /approve entity clause-1/i }),
     );
 
+    expect(screen.getByText("Confirm evidence action")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /confirm action/i }));
+
     await waitFor(() => {
       expect(reviewApprovalMutateAsyncMock).toHaveBeenCalledWith({
         resourceType: "stakeholders",
@@ -253,10 +291,106 @@ describe("EvidencePage highlight mapping", () => {
     });
   });
 
+  it("requires a validation note before approving entities below 90 percent confidence", async () => {
+    useDocumentEntitiesMock.mockReturnValue({
+      entities: [
+        {
+          id: "clause-2",
+          type: "stakeholder",
+          text: "Unverified scope note",
+          confidence: 88,
+          page: 4,
+        },
+      ],
+      highlights: [
+        {
+          id: "highlight-clause-2",
+          entityId: "clause-2",
+          page: 4,
+          color: "yellow",
+          label: "Unverified scope note",
+          rects: [],
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /approve entity clause-2/i }),
+    );
+
+    expect(screen.getByText("Confirm evidence action")).toBeInTheDocument();
+    expect(
+      screen.getByText(/confidence below 90% requires a validation note/i),
+    ).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", {
+      name: /confirm action/i,
+    });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/validation note/i), {
+      target: { value: "Reviewed against source context and accepted." },
+    });
+
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(reviewApprovalMutateAsyncMock).toHaveBeenCalledWith({
+        resourceType: "stakeholders",
+        resourceId: "clause-2",
+        data: {
+          status: "APPROVED",
+          correction_data: undefined,
+          feedback_comment: "Reviewed against source context and accepted.",
+        },
+      });
+    });
+  });
+
+  it("requires confirmation before approving or rejecting alerts", async () => {
+    render(<EvidencePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /approve alert/i }));
+
+    expect(screen.getByText("Confirm evidence action")).toBeInTheDocument();
+    expect(screen.getByText(/approve alert-1/i)).toBeInTheDocument();
+    expect(reviewAlertMutateAsyncMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm action/i }));
+
+    await waitFor(() => {
+      expect(reviewAlertMutateAsyncMock).toHaveBeenCalledWith({
+        alertId: "alert-1",
+        data: {
+          decision: "approve",
+          comment: "",
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /reject alert/i }));
+    expect(screen.getByText(/reject alert-1/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /cancel action/i }));
+
+    expect(reviewAlertMutateAsyncMock).toHaveBeenCalledTimes(1);
+  });
+
   it("wires alert resolution actions to backend endpoints", async () => {
     render(<EvidencePage />);
 
     fireEvent.click(screen.getByRole("button", { name: /approve alert/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm action/i }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Confirm evidence action"),
+      ).not.toBeInTheDocument();
+    });
     fireEvent.click(screen.getByRole("button", { name: /resolve alert/i }));
 
     await waitFor(() => {
@@ -353,6 +487,162 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
       "highlight-clause-1",
     );
+  });
+
+  it("toggles the relationship section into a 3D viewer mode and keeps graph-node focus wiring", () => {
+    useDocumentAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "alert-1",
+          title: "Delay issue",
+          description: "Needs review",
+          severity: "critical",
+          status: "open",
+          evidence_json: {
+            evidence_location: {
+              page_number: 2,
+              bbox: [0.1, 0.2, 0.3, 0.4],
+              normalized: true,
+            },
+          },
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /3d relationship view/i }));
+
+    expect(screen.getByText(/3d relationship viewer/i)).toBeInTheDocument();
+    expect(screen.getByText(/depth layers/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /graph node clause-1/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /graph node clause-1/i }));
+
+    expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
+      "highlight-clause-1",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /graph view/i }));
+
+    expect(screen.getByText(/relationship graph/i)).toBeInTheDocument();
+  });
+
+  it("renders an evidence evolution timeline from persisted evidence history events", () => {
+    useDocumentAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "alert-1",
+          title: "Delay issue",
+          description: "Needs review",
+          severity: "critical",
+          status: "open",
+          created_at: "2026-01-21T14:23:00Z",
+          updated_at: "2026-01-21T16:30:00Z",
+          evidence_json: {
+            evidence_location: {
+              page_number: 2,
+              bbox: [0.1, 0.2, 0.3, 0.4],
+              normalized: true,
+            },
+          },
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    useDocumentHistoryMock.mockReturnValue({
+      items: [
+        {
+          id: "document-uploaded-doc-1",
+          title: "Document uploaded",
+          detail: "Contract.pdf",
+          occurredAt: "2026-01-20T09:00:00Z",
+        },
+        {
+          id: "document-parsed-doc-1",
+          title: "Document parsed",
+          detail: "12 clauses extracted",
+          occurredAt: "2026-01-21T09:15:00Z",
+        },
+        {
+          id: "alert-history-alert-1-reviewed",
+          title: "Alert reviewed",
+          detail: "Delay issue",
+          occurredAt: "2026-01-21T15:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    const timelineHeading = screen.getByText(/evidence evolution timeline/i);
+    expect(timelineHeading).toBeInTheDocument();
+    expect(screen.getByText(/document uploaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/document parsed/i)).toBeInTheDocument();
+    expect(screen.getByText(/alert reviewed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/2026-01-21/i).length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(/current snapshot derived from document and alert timestamps/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders an AI explanation of the current evidence relationships from the live graph data", () => {
+    useDocumentRelationshipExplanationMock.mockReturnValue({
+      explanation: {
+        summary: "This document connects 2 extracted clauses to 2 active alerts.",
+        strongestCluster:
+          "The strongest relationship cluster centers on delay penalty.",
+        reviewPriority:
+          "Review priority is elevated because 1 alert is critical.",
+        latestSignal: "Most recent signal: notice gap.",
+        citations: [
+          {
+            clauseId: "clause-1",
+            clauseCode: "CL-001",
+            label: "Delay penalty",
+            page: 3,
+            reason: "Linked to active alert",
+          },
+          {
+            clauseId: "clause-2",
+            clauseCode: "CL-002",
+            label: "Notice requirements",
+            page: 5,
+            reason: "Linked to active alert",
+          },
+        ],
+      },
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    expect(screen.getByText(/ai relationship explanation/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/this document connects 2 extracted clauses to 2 active alerts/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/the strongest relationship cluster centers on delay penalty/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/review priority is elevated because 1 alert is critical/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/most recent signal: notice gap/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/backend-generated explanation grounded in evidence graph citations/i)).toBeInTheDocument();
+    expect(screen.getByText(/cl-001 · delay penalty/i)).toBeInTheDocument();
+    expect(screen.getByText(/page 3 · linked to active alert/i)).toBeInTheDocument();
   });
 
   it("opens evidence templates and previews the selected review template", () => {

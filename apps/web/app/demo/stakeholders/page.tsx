@@ -8,7 +8,6 @@ import {
   UserPlus,
   Building2,
   Briefcase,
-  TrendingUp,
   Target,
 } from "lucide-react";
 import { SAMPLE_DATA } from "@/contexts/demo-mode";

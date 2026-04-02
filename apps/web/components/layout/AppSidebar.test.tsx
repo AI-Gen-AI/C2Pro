@@ -42,11 +42,14 @@ describe("AppSidebar", () => {
     const collapseButton = screen.getByRole("button", {
       name: /collapse sidebar/i,
     });
+    expect(collapseButton).toHaveAttribute("aria-expanded", "true");
+    expect(collapseButton).toHaveAttribute("aria-controls", "primary-navigation");
     await user.click(collapseButton);
 
-    expect(
-      screen.getByRole("button", { name: /expand sidebar/i }),
-    ).toBeInTheDocument();
+    const expandButton = screen.getByRole("button", { name: /expand sidebar/i });
+    expect(expandButton).toBeInTheDocument();
+    expect(expandButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("complementary", { name: /application sidebar/i })).toBeInTheDocument();
   });
 
   it("keeps real workspace navigation out of the /demo route space", () => {

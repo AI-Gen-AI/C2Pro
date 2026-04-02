@@ -10,13 +10,10 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { redirect } from "next/navigation";
 import {
   useTenantContext,
   useServiceTier,
   useUserRole,
-  TIER_FEATURES,
   ServiceTier,
 } from "@/lib/clerk-tenant";
 import { Loader2, Lock, Sparkles, Building2 } from "lucide-react";

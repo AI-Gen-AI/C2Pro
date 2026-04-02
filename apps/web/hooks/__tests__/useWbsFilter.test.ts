@@ -24,14 +24,10 @@ const mockWBSItems = [
 ];
 
 describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
-  // Store original implementations
-  let originalLocation: Location;
-  let originalLocalStorage: Storage;
   let mockLocalStorage: Storage;
 
   beforeEach(() => {
-    // Save original location
-    originalLocation = window.location;
+    window.history.replaceState({}, "", "/projects/123/wbs");
 
     // Mock localStorage
     const store: Record<string, string> = {};
@@ -50,7 +46,6 @@ describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
       key: vi.fn(() => null),
     } as unknown as Storage;
 
-    originalLocalStorage = window.localStorage;
     Object.defineProperty(window, "localStorage", {
       value: mockLocalStorage,
       writable: true,
@@ -59,11 +54,7 @@ describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    // Restore original location
-    Object.defineProperty(window, "location", {
-      value: originalLocation,
-      writable: true,
-    });
+    window.history.replaceState({}, "", "/projects/123/wbs");
   });
 
   describe("Filter by Completion Status", () => {
@@ -126,18 +117,7 @@ describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
 
   describe("URL Query Parameter Synchronization", () => {
     it("should update URL query params when filter changes", () => {
-      // Mock window.location with URLSearchParams
-      const mockSearchParams = new URLSearchParams();
-      const mockLocation = {
-        ...window.location,
-        search: "",
-        pathname: "/projects/123/wbs",
-      };
-
-      Object.defineProperty(window, "location", {
-        value: mockLocation,
-        writable: true,
-      });
+      window.history.replaceState({}, "", "/projects/123/wbs");
 
       const replaceStateSpy = vi.spyOn(window.history, "replaceState");
 
@@ -155,17 +135,11 @@ describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
     });
 
     it("should read filter from URL on mount", () => {
-      // Set up URL with query param
-      const mockLocation = {
-        ...window.location,
-        search: "?filter=complete",
-        pathname: "/projects/123/wbs",
-      };
-
-      Object.defineProperty(window, "location", {
-        value: mockLocation,
-        writable: true,
-      });
+      window.history.replaceState(
+        {},
+        "",
+        "/projects/123/wbs?filter=complete",
+      );
 
       const { result } = renderHook(() => useWbsFilter(mockWBSItems));
 
@@ -196,17 +170,7 @@ describe("useWbsFilter (TS-UAD-WBS-FILTER-001)", () => {
       (mockLocalStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(
         "complete",
       );
-
-      const mockLocation = {
-        ...window.location,
-        search: "",
-        pathname: "/projects/123/wbs",
-      };
-
-      Object.defineProperty(window, "location", {
-        value: mockLocation,
-        writable: true,
-      });
+      window.history.replaceState({}, "", "/projects/123/wbs");
 
       const { result } = renderHook(() => useWbsFilter(mockWBSItems));
 

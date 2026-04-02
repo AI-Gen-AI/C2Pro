@@ -258,20 +258,6 @@ const renderTreeItems = (
 };
 
 /**
- * Get all item IDs recursively for default expansion
- */
-const getAllItemIds = (items: WBSItem[]): string[] => {
-  const ids: string[] = [];
-  items.forEach((item) => {
-    ids.push(item.id);
-    if (item.children?.length) {
-      ids.push(...getAllItemIds(item.children));
-    }
-  });
-  return ids;
-};
-
-/**
  * WBSTree Component - GREEN Phase Implementation
  */
 export const WBSTree: React.FC<WBSTreeProps> = ({

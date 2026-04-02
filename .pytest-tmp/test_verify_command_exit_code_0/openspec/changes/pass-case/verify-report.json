@@ -1,0 +1,30 @@
+{
+  "change_name": "pass-case",
+  "verdict": "PASS",
+  "runtime_scope": "PROCESS_ONLY",
+  "summary": {
+    "artifact_presence_count": 4,
+    "scenario_coverage_count": 1,
+    "rules_compliance_count": 1,
+    "runtime_drift_file_count": 0
+  },
+  "artifact_presence": [
+    "PASS openspec\\changes\\pass-case\\proposal.md",
+    "PASS openspec\\changes\\pass-case\\design.md",
+    "PASS openspec\\changes\\pass-case\\tasks.md",
+    "PASS openspec\\changes\\pass-case\\specs\\openspec\\spec.md"
+  ],
+  "scenario_coverage": [
+    {
+      "requirement": "Process-Only Verify Entry Point",
+      "scenario": "Docs-only verification executes",
+      "check_id": "SCN-001-process-only-verify-entry-point-docs-only-verification-executes",
+      "status": "PASS",
+      "evidence": "Parsed from openspec\\changes\\pass-case\\specs\\openspec\\spec.md"
+    }
+  ],
+  "rules_compliance": [
+    "PASS all configured rule checks"
+  ],
+  "runtime_drift_files": []
+}

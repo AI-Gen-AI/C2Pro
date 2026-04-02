@@ -27,9 +27,11 @@ function getBackendOrigin(apiBaseUrl: string): string {
 }
 
 function getCoherenceBaseUrl(
-  _apiBaseUrl: string,
-  _backendOrigin: string,
+  apiBaseUrl: string,
+  backendOrigin: string,
 ): string {
+  void apiBaseUrl;
+  void backendOrigin;
   return "/coherence";
 }
 

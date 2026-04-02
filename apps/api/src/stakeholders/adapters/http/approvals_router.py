@@ -90,7 +90,13 @@ async def review_resource(
     else:
         raise HTTPException(status_code=400, detail="Unsupported resource type")
 
-    if payload.status in {ApprovalStatus.REJECTED, ApprovalStatus.CORRECTED}:
+    should_record_feedback_audit = (
+        payload.status in {ApprovalStatus.REJECTED, ApprovalStatus.CORRECTED}
+        or bool(payload.feedback_comment)
+        or bool(payload.correction_data)
+    )
+
+    if should_record_feedback_audit:
         logger.info(
             "ai_feedback_recorded",
             resource_type=resource_type,

@@ -116,7 +116,7 @@ const NODES: AnalysisNode[] = [
 
 interface AnalysisProgressTrackerProps {
   projectId: string;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
   onError?: (error: string) => void;
 }
 

@@ -60,13 +60,26 @@ class GetRaciMatrixUseCase:
                 )
             )
 
+        ordered_wbs_items = sorted(
+            wbs_items,
+            key=lambda item: (
+                item.planned_start or item.planned_end or item.actual_start or item.actual_end,
+                item.code,
+                item.name,
+            ),
+        )
+
         matrix = [
             RaciMatrixTaskRow(
                 task_id=item.id,
+                task_code=item.code,
                 task_name=item.name,
+                sequence_index=index + 1,
+                planned_start=item.planned_start,
+                planned_end=item.planned_end,
                 assignments=assignments_by_task.get(item.id, []),
             )
-            for item in wbs_items
+            for index, item in enumerate(ordered_wbs_items)
         ]
 
         return RaciMatrixViewResponse(matrix=matrix)

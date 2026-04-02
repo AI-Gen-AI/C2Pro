@@ -1,0 +1,13 @@
+
+> c2pro-web@0.1.0 dev
+> next dev --hostname localhost --port 3100 --webpack
+
+▲ Next.js 16.2.1 (webpack)
+- Local:         http://localhost:3100
+- Network:       http://localhost:3100
+- Environments: .env.local
+✓ Ready in 1080ms
+
+○ Compiling / ...
+ GET / 200 in 30.3s (next.js: 28.9s, proxy.ts: 421ms, application-code: 935ms)
+[?25h

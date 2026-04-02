@@ -5,8 +5,14 @@ from typing import Any, Literal
 from uuid import UUID
 
 from langchain_core.messages import AIMessage
+from langgraph.types import Interrupt
 
+from src.analysis.adapters.graph.dependencies import (
+    get_ai_service,
+    get_hitl_service_for_graph,
+)
 from src.analysis.adapters.graph.schema import ProjectState
+from src.core.database import get_session_with_tenant
 
 DOC_TYPES: tuple[str, ...] = ("contract", "technical_spec", "budget")
 
@@ -51,9 +57,7 @@ def _augment_document(text: str, critique_notes: str, human_feedback: str) -> st
 
 
 async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
-    from src.analysis.adapters.ai.anthropic_client import AIService
-
-    service = AIService(tenant_id=tenant_id)
+    service = get_ai_service(tenant_id)
     try:
         payload = await service.run_extraction(ROUTER_SYSTEM_PROMPT, text)
         if isinstance(payload, dict):
@@ -71,9 +75,7 @@ async def _critique_extraction(
     doc_type: str,
     tenant_id: str | None,
 ) -> dict[str, str]:
-    from src.analysis.adapters.ai.anthropic_client import AIService
-
-    service = AIService(tenant_id=tenant_id)
+    service = get_ai_service(tenant_id)
     try:
         payload = await service.run_extraction(
             CRITIQUE_SYSTEM_PROMPT,
@@ -173,24 +175,12 @@ async def critique_node(state: ProjectState) -> ProjectState:
 
 
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
-    from langgraph.types import interrupt
-
     from src.modules.hitl.domain.entities import ImpactLevel
 
     # Route item through the real HITL service when a tenant is available.
     tenant_id = state.get("tenant_id")
     if tenant_id:
         try:
-            from src.core.database import get_session_with_tenant
-            from src.modules.hitl.adapters.persistence.repository import (
-                SqlAlchemyReviewQueueRepository,
-            )
-            from src.modules.hitl.adapters.notifications.log_notification_service import (
-                LogNotificationService,
-            )
-            from src.modules.hitl.application.ports import HumanInTheLoopService
-            from src.modules.hitl.domain.services import ConfidenceRouter
-
             impact = (
                 ImpactLevel.HIGH
                 if state.get("confidence_score", 0) < 0.5
@@ -198,11 +188,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             )
 
             async with get_session_with_tenant(UUID(tenant_id)) as session:
-                repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=UUID(tenant_id))
-                service = HumanInTheLoopService(
-                    review_queue_repo=repo,
-                    notification_service=LogNotificationService(),
-                    confidence_router=ConfidenceRouter(),
+                service = get_hitl_service_for_graph(
+                    session=session,
+                    tenant_id=UUID(tenant_id),
                 )
                 await service.route_for_review(
                     item_id=UUID(state["document_id"]),
@@ -226,7 +214,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             )
 
     # Always fire the LangGraph interrupt so the workflow pauses.
-    interrupt(
+    raise Interrupt(
         {
             "reason": "approval_required",
             "project_id": state["project_id"],

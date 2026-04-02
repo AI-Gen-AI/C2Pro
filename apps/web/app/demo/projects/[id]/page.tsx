@@ -41,7 +41,6 @@ export default function DemoProjectDetailPage() {
     (a) => a.project_id === projectId
   );
   const documents = SAMPLE_DATA.documents;
-  const stakeholders = SAMPLE_DATA.stakeholders;
   const clauses = SAMPLE_DATA.clauses;
 
   if (!project) {

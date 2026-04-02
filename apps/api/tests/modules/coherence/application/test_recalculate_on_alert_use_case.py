@@ -10,6 +10,9 @@ from uuid import uuid4
 
 import pytest
 
+from src.coherence.application.dependencies import (
+    build_recalculate_on_alert_use_case,
+)
 from src.coherence.application.dtos import (
     AlertAction,
     RecalculateOnAlertCommand,
@@ -21,6 +24,15 @@ from src.coherence.domain.category_weights import CoherenceCategory
 class TestRecalculateOnAlertUseCase:
     """Refers to Suite ID: TS-UA-COH-UC-002"""
 
+    @staticmethod
+    def _build_use_case() -> RecalculateOnAlertUseCase:
+        return build_recalculate_on_alert_use_case()
+
+    def test_000_requires_explicit_dependency_wiring(self) -> None:
+        """Use case constructor must not hide an internal fallback dependency."""
+        with pytest.raises(TypeError):
+            RecalculateOnAlertUseCase()
+
     def test_001_execute_resolved_action_triggers_recalculation(self) -> None:
         """RESOLVED action with alert_ids triggers recalculation."""
         command = RecalculateOnAlertCommand(
@@ -29,7 +41,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.RESOLVED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.recalculation_triggered is True
@@ -44,7 +56,7 @@ class TestRecalculateOnAlertUseCase:
             scope_defined=False,  # Creates violation
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         # Score delta is new - previous
@@ -59,7 +71,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.RESOLVED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.previous_global_score >= 0
@@ -74,7 +86,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.RESOLVED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.new_global_score >= 0
@@ -89,7 +101,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.ACKNOWLEDGED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.recalculation_triggered is False
@@ -102,7 +114,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.DISMISSED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.recalculation_triggered is True
@@ -116,7 +128,7 @@ class TestRecalculateOnAlertUseCase:
             scope_defined=False,  # Creates R11 violation
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         # R11 should be in resolved_alert_ids
@@ -133,7 +145,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.RESOLVED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         assert result.recalculation_triggered is False
@@ -156,7 +168,7 @@ class TestRecalculateOnAlertUseCase:
             },
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         # With 50% weight on SCOPE (70) and 50% on others (100), score should be ~85
@@ -171,7 +183,7 @@ class TestRecalculateOnAlertUseCase:
             document_count=3,  # Few documents
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         # Perfect score with few docs triggers gaming detection
@@ -187,7 +199,7 @@ class TestRecalculateOnAlertUseCase:
             alert_action=AlertAction.ACKNOWLEDGED,
         )
 
-        use_case = RecalculateOnAlertUseCase()
+        use_case = self._build_use_case()
         result = use_case.execute(command)
 
         # Acknowledged alerts are not resolved

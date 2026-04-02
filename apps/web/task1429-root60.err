@@ -1,0 +1,8 @@
+Failed to proxy http://localhost:3100/ Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}

@@ -10,10 +10,10 @@
     "generate:api:check": "orval && git diff --exit-code -- lib/api/generated schema/api.json",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node ./scripts/vitest-no-warn.mjs run src/tests/integration",
+    "test": "node ./scripts/vitest-no-warn.mjs run src/tests/integration --config vitest.integration.config.ts",
     "test:nowarn": "node ./scripts/vitest-no-warn.mjs",
-    "test:all": "node ./scripts/vitest-no-warn.mjs run",
-    "test:watch": "vitest",
+    "test:all": "node ./scripts/vitest-run-all.mjs",
+    "test:watch": "vitest --configLoader native",
     "test:coverage": "node ./scripts/vitest-no-warn.mjs run --coverage",
     "test:e2e": "playwright test",
     "test:visual": "playwright test --project=visual-regression src/tests/e2e/core-pages.visual.spec.ts",
@@ -63,7 +63,6 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@mswjs/data": "^0.16.2",
     "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
@@ -83,6 +82,7 @@
     "orval": "^8.5.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
+    "typescript-eslint": "^8.55.0",
     "typescript": "5.3.3",
     "vitest": "^4.1.2"
   },

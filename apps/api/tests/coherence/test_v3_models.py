@@ -267,7 +267,8 @@ class TestScoringConfig:
         """Test that DEFAULT_SCORING_CONFIG has expected values."""
         config = DEFAULT_SCORING_CONFIG
 
-        assert config.decay_lambda == 0.5
+        # λ=1.5 calibrated for target score curve (CE-27)
+        assert config.decay_lambda == 1.5
         assert config.min_score == 5.0
         assert config.max_score == 97.0
         assert config.scope_normalization_enabled is True
@@ -332,18 +333,23 @@ class TestScoringConfig:
 
     def test_compute_scope_factor_small_project(self):
         """Test scope factor for small projects."""
-        config = ScoringConfig(scope_baseline_clauses=50)
-        # Small project (less than baseline) should get factor ~1.0
-        factor = config.compute_scope_factor(25)
-        assert factor >= 1.0
+        # Default scope_normalization_k=0.12
+        # scope_factor = max(1.0, clauses * k)
+        config = ScoringConfig()
+        # Small project (8 clauses * 0.12 = 0.96 < 1.0) → factor = 1.0
+        factor = config.compute_scope_factor(8)
+        assert factor == 1.0
 
     def test_compute_scope_factor_large_project(self):
         """Test scope factor for large projects."""
-        config = ScoringConfig(scope_baseline_clauses=50)
-        # Large project should get higher factor (more absorptive)
+        # Default scope_normalization_k=0.12
+        config = ScoringConfig()
+        # Large project: 100 * 0.12 = 12.0
         factor_100 = config.compute_scope_factor(100)
+        # Very large: 200 * 0.12 = 24.0
         factor_200 = config.compute_scope_factor(200)
-        assert factor_100 > 1.0
+        assert factor_100 == 12.0
+        assert factor_200 == 24.0
         assert factor_200 > factor_100
 
     def test_compute_scope_factor_zero_clauses(self):

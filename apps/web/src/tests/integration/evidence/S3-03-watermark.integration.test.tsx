@@ -5,6 +5,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
 
+vi.mock("@/components/evidence/pdf/PDFViewer", () => ({
+  PDFViewer: () => <div data-testid="react-pdf-viewer-proxy" />,
+}));
+
 async function renderViewer(
   props: React.ComponentProps<
     typeof import("@/components/features/evidence/PdfEvidenceViewer").PdfEvidenceViewer

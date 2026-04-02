@@ -13,16 +13,16 @@ Endpoints:
 
 from typing import Annotated, Literal
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.core.auth.dependencies import get_current_user
-from src.core.auth.models import User
+from src.core.auth.models import Tenant, User
 from src.core.approval import ApprovalStatus
 from src.core.database import get_session_with_tenant
 from src.documents.adapters.persistence.models import ClauseORM
@@ -85,6 +85,14 @@ class ResolveAlertRequest(BaseModel):
     root_cause: str | None = None
 
 
+class BulkResolveRequest(BaseModel):
+    """Request to bulk resolve alerts."""
+
+    alert_ids: list[str]
+    resolution: str
+    root_cause: str | None = None
+
+
 class AlertResponse(BaseModel):
     """Alert response model."""
 
@@ -100,6 +108,8 @@ class AlertResponse(BaseModel):
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     root_cause: str | None = None
+    sla_policy_name: str | None = None
+    sla_due_at: datetime | None = None
     created_at: datetime
 
 
@@ -110,7 +120,70 @@ class AlertListResponse(BaseModel):
     total: int
 
 
+class AlertRuleConfigPayload(BaseModel):
+    """Tenant-scoped alert rule configuration."""
+
+    id: str
+    name: str
+    description: str
+    enabled: bool
+    threshold: int
+    severity: Literal["Critical", "High", "Medium"]
+
+
+class AlertSubscriptionConfigPayload(BaseModel):
+    """Tenant-scoped alert subscription configuration."""
+
+    emailEnabled: bool = False
+    emailAddress: str = ""
+    slackEnabled: bool = False
+    slackChannel: str = ""
+
+    @field_validator("emailAddress", "slackChannel", mode="before")
+    @classmethod
+    def _strip_string_values(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def validate_delivery_targets(self) -> "AlertSubscriptionConfigPayload":
+        if self.emailEnabled:
+            local_part, separator, domain_part = self.emailAddress.partition("@")
+            if not separator or not local_part or "." not in domain_part:
+                raise ValueError("emailAddress must be a valid email when email notifications are enabled")
+
+        if self.slackEnabled:
+            if not self.slackChannel.startswith("#") or len(self.slackChannel) < 2:
+                raise ValueError("slackChannel must start with # when Slack notifications are enabled")
+
+        return self
+
+
+class AlertWorkspaceSettingsPayload(BaseModel):
+    """Workspace alert settings persisted per tenant."""
+
+    rules: list[AlertRuleConfigPayload] = Field(default_factory=list)
+    subscriptions: AlertSubscriptionConfigPayload | None = None
+
+
+def _get_sla_policy(alert: Alert) -> tuple[str | None, datetime | None]:
+    policy_by_severity = {
+        AlertSeverity.CRITICAL: ("Critical severity: first response in 2 hours", 2),
+        AlertSeverity.HIGH: ("High severity: response in 24 hours", 24),
+        AlertSeverity.MEDIUM: ("Medium severity: response in 72 hours", 72),
+        AlertSeverity.LOW: ("Low severity: response in 120 hours", 120),
+    }
+    policy = policy_by_severity.get(alert.severity)
+    if policy is None or alert.created_at is None:
+        return None, None
+
+    policy_name, hours = policy
+    return policy_name, alert.created_at + timedelta(hours=hours)
+
+
 def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
+    sla_policy_name, sla_due_at = _get_sla_policy(alert)
     return AlertResponse(
         id=alert.id,
         project_id=alert.project_id,
@@ -124,6 +197,8 @@ def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
         reviewed_by=alert.reviewed_by,
         reviewed_at=alert.reviewed_at,
         root_cause=(alert.alert_metadata or {}).get("root_cause"),
+        sla_policy_name=sla_policy_name,
+        sla_due_at=sla_due_at,
         created_at=alert.created_at,
     )
 
@@ -183,6 +258,39 @@ def _requires_root_cause(alert: Alert) -> bool:
     return alert.severity in {AlertSeverity.CRITICAL, AlertSeverity.HIGH}
 
 
+def _validate_resolution_input(alert: Alert, resolution: str, root_cause: str | None) -> None:
+    min_length_by_severity = {
+        AlertSeverity.CRITICAL: 50,
+        AlertSeverity.HIGH: 20,
+        AlertSeverity.MEDIUM: 10,
+    }
+    minimum_length = min_length_by_severity.get(alert.severity, 0)
+    if len(resolution.strip()) < minimum_length:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Resolution notes must be at least {minimum_length} characters for {alert.severity.value} alerts",
+        )
+
+    if _requires_root_cause(alert) and not root_cause:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Root cause is required for high or critical alerts",
+        )
+
+
+def _apply_resolution(alert: Alert, current_user: User, resolution: str, root_cause: str | None) -> None:
+    _validate_resolution_input(alert, resolution, root_cause)
+    normalized_root_cause = (root_cause or "").strip() or None
+    if hasattr(alert, "mark_resolved"):
+        alert.mark_resolved(current_user.id, resolution)
+    else:
+        alert.status = AlertStatus.RESOLVED
+        alert.resolved_at = datetime.utcnow()
+        alert.resolved_by = current_user.id
+        alert.resolution_notes = resolution
+    _set_root_cause(alert, normalized_root_cause)
+
+
 def _apply_review(alert: Alert, decision: str, current_user: User, comment: str) -> None:
     alert.reviewed_by = current_user.id
     alert.reviewed_at = datetime.utcnow()
@@ -209,9 +317,56 @@ def _apply_status_filter(query, raw_status: str):
     return query.where(Alert.status == AlertStatus(normalized))
 
 
+async def _get_tenant(session, tenant_id: UUID) -> Tenant | None:
+    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+    return result.scalar_one_or_none()
+
+
+def _get_workspace_settings_payload(tenant: Tenant) -> AlertWorkspaceSettingsPayload:
+    settings = dict(tenant.settings or {})
+    workspace_settings = settings.get("alerts_workspace", {})
+    return AlertWorkspaceSettingsPayload.model_validate(
+        {
+            "rules": workspace_settings.get("rules", []),
+            "subscriptions": workspace_settings.get("subscriptions"),
+        }
+    )
+
+
 # ===========================================
 # ENDPOINTS
 # ===========================================
+
+
+@router.get("/alerts/workspace-settings", response_model=AlertWorkspaceSettingsPayload)
+async def get_alert_workspace_settings(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> AlertWorkspaceSettingsPayload:
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        tenant = await _get_tenant(session, current_user.tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        return _get_workspace_settings_payload(tenant)
+
+
+@router.put("/alerts/workspace-settings", response_model=AlertWorkspaceSettingsPayload)
+async def put_alert_workspace_settings(
+    payload: AlertWorkspaceSettingsPayload,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> AlertWorkspaceSettingsPayload:
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        tenant = await _get_tenant(session, current_user.tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        settings = dict(tenant.settings or {})
+        settings["alerts_workspace"] = payload.model_dump(mode="json")
+        tenant.settings = settings
+        await session.commit()
+        await session.refresh(tenant)
+
+        return _get_workspace_settings_payload(tenant)
 
 
 @router.post("/alerts", status_code=201, response_model=AlertResponse)
@@ -417,15 +572,9 @@ async def resolve_alert(
         if alert is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
-        if _requires_root_cause(alert) and not (request.root_cause or "").strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="root_cause is required for critical and high severity alerts",
-            )
-
-        alert.mark_resolved(current_user.id, request.resolution)
+        _apply_resolution(alert, current_user, request.resolution, request.root_cause)
+        alert.resolved_by = request.resolved_by
         normalized_root_cause = (request.root_cause or "").strip() or None
-        _set_root_cause(alert, normalized_root_cause)
         history_details = {"resolution": request.resolution}
         if normalized_root_cause is not None:
             history_details["root_cause"] = normalized_root_cause
@@ -433,6 +582,37 @@ async def resolve_alert(
         await session.commit()
         await session.refresh(alert)
         return _serialize_alert(alert, current_user.tenant_id)
+
+
+@router.post("/alerts/bulk-resolve")
+async def bulk_resolve_alerts(
+    request: BulkResolveRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    alert_ids = [UUID(alert_id) for alert_id in request.alert_ids]
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        result = await session.execute(
+            select(Alert)
+            .join(ProjectORM, ProjectORM.id == Alert.project_id)
+            .where(
+                Alert.id.in_(alert_ids),
+                ProjectORM.tenant_id == current_user.tenant_id,
+            )
+        )
+        alerts = list(result.scalars().all())
+        normalized_root_cause = (request.root_cause or "").strip() or None
+        for alert in alerts:
+            _apply_resolution(alert, current_user, request.resolution, normalized_root_cause)
+            history_details = {"resolution": request.resolution}
+            if normalized_root_cause is not None:
+                history_details["root_cause"] = normalized_root_cause
+            _append_history(alert, "bulk_resolved", current_user.id, **history_details)
+        await session.commit()
+        return {
+            "processed_count": len(alerts),
+            "status": "resolved",
+            "alert_ids": [str(alert.id) for alert in alerts],
+        }
 
 
 @router.get("/alerts/{alert_id}/history")

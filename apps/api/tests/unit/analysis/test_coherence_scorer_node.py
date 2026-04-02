@@ -29,7 +29,7 @@ def base_state():
 def mock_coherence_service():
     """Mock the CoherenceCalculationService."""
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -48,7 +48,7 @@ async def test_coherence_scorer_with_no_risks_and_wbs_returns_high_score(base_st
     base_state["extracted_wbs"] = [{"code": "1.0", "name": "Task 1", "confidence": 0.9}]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -86,7 +86,7 @@ async def test_coherence_scorer_with_legal_high_risk_sets_legal_false(base_state
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -117,7 +117,7 @@ async def test_coherence_scorer_with_schedule_high_risk_sets_schedule_false(base
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -143,7 +143,7 @@ async def test_coherence_scorer_with_time_critical_risk_sets_schedule_false(base
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -169,7 +169,7 @@ async def test_coherence_scorer_with_technical_high_risk_sets_technical_false(ba
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -195,7 +195,7 @@ async def test_coherence_scorer_with_quality_high_risk_sets_quality_false(base_s
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -221,7 +221,7 @@ async def test_coherence_scorer_with_scope_high_risk_sets_scope_false(base_state
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -250,7 +250,7 @@ async def test_coherence_scorer_with_budget_high_risk_marks_bom_unassigned(base_
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -277,7 +277,7 @@ async def test_coherence_scorer_no_wbs_no_risks_sets_scope_false(base_state):
     base_state["extracted_risks"] = []
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -305,7 +305,7 @@ async def test_coherence_scorer_multiple_high_risks(base_state):
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -336,7 +336,7 @@ async def test_coherence_scorer_medium_risk_does_not_trigger(base_state):
     ]
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -375,7 +375,7 @@ async def test_coherence_scorer_low_confidence_sets_scope_false(base_state):
     base_state["document_text"] = "This is a real document with enough content to pass length check but low confidence."
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -401,7 +401,7 @@ async def test_coherence_scorer_short_document_sets_scope_false(base_state):
     base_state["document_text"] = "string"  # Too short (< 100 chars)
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -431,7 +431,7 @@ async def test_coherence_scorer_low_wbs_confidence_sets_scope_false(base_state):
     base_state["document_text"] = "This is a proper document with enough content to analyze properly for the coherence scoring system."
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -460,7 +460,7 @@ async def test_coherence_scorer_good_quality_passes(base_state):
     base_state["document_text"] = "This is a proper contract document with all the necessary clauses and specifications required for a comprehensive analysis."
 
     with patch(
-        "src.coherence.application.services.coherence_calculation_service.CoherenceCalculationService"
+        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()

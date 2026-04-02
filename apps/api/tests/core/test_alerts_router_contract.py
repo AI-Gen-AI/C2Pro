@@ -167,3 +167,56 @@ async def test_list_alerts_can_filter_by_document_id(
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["message"] == "Document alert"
+
+
+@pytest.mark.asyncio
+async def test_alert_workspace_settings_round_trip_is_tenant_scoped(
+    client,
+    db,
+    test_tenant,
+    test_user,
+    test_tenant_2,
+    test_user_2,
+    get_auth_headers,
+) -> None:
+    payload = {
+        "rules": [
+            {
+                "id": "schedule-drift",
+                "name": "Schedule Drift",
+                "description": "Flag delivery plans that move beyond the accepted response window.",
+                "enabled": False,
+                "threshold": 5,
+                "severity": "Critical",
+            }
+        ],
+        "subscriptions": {
+            "emailEnabled": True,
+            "emailAddress": "pm@tenant-a.test",
+            "slackEnabled": False,
+            "slackChannel": "",
+        },
+    }
+
+    save_response = await client.put(
+        "/api/v1/alerts/workspace-settings",
+        json=payload,
+        headers=get_auth_headers(user=test_user, tenant=test_tenant),
+    )
+
+    assert save_response.status_code == 200
+    assert save_response.json() == payload
+
+    tenant_a_response = await client.get(
+        "/api/v1/alerts/workspace-settings",
+        headers=get_auth_headers(user=test_user, tenant=test_tenant),
+    )
+    tenant_b_response = await client.get(
+        "/api/v1/alerts/workspace-settings",
+        headers=get_auth_headers(user=test_user_2, tenant=test_tenant_2),
+    )
+
+    assert tenant_a_response.status_code == 200
+    assert tenant_a_response.json() == payload
+    assert tenant_b_response.status_code == 200
+    assert tenant_b_response.json() == {"rules": [], "subscriptions": None}

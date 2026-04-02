@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
 const vitestPath = resolve("node_modules", "vitest", "vitest.mjs");
-const args = process.argv.slice(2);
+const originalArgs = process.argv.slice(2);
+const hasConfigLoader = originalArgs.some((arg) => arg.startsWith("--configLoader"));
+const args = hasConfigLoader
+  ? originalArgs
+  : ["--configLoader", "native", ...originalArgs];
 const suppress = "The CJS build of Vite's Node API is deprecated";
 
 const child = spawn(process.execPath, ["--no-warnings", vitestPath, ...args], {

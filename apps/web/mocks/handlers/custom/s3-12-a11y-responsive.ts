@@ -1,4 +1,4 @@
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http } from "@/mocks/msw";
 
 export const s312A11yResponsiveHandlers = [
   http.get("/api/v1/a11y/axe-scan", () => {

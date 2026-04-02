@@ -49,17 +49,17 @@ export default function LandingPageContent() {
           Quality, Technical, Legal, and Time.
         </p>
         <div className="flex justify-center gap-4">
-          <Link href="/login">
-            <Button size="lg" className="bg-primary hover:bg-primary/90">
+          <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+            <Link href="/login">
               Access Real Workspace
               <span className="ml-2">→</span>
-            </Button>
-          </Link>
-          <Link href="/projects">
-            <Button size="lg" variant="outline">
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link href="/demo/documents">
               View Live Demo
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </section>
 
@@ -188,16 +188,16 @@ export default function LandingPageContent() {
             Join enterprise teams detecting millions in savings with C2Pro.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <Link href="/login" className="inline-block">
-              <Button size="lg" className="bg-primary hover:bg-primary/90">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+              <Link href="/login" className="inline-block">
                 Go to Real Platform
-              </Button>
-            </Link>
-            <Link href="/projects" className="inline-block">
-              <Button size="lg" variant="outline">
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href="/demo/documents" className="inline-block">
                 Try Demo First
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

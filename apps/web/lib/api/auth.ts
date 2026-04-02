@@ -93,7 +93,9 @@ class AuthApiClient {
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, "Registration failed"));
+      throw new Error(this.getErrorMessage(error, "Registration failed"), {
+        cause: error,
+      });
     }
   }
 
@@ -108,7 +110,9 @@ class AuthApiClient {
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, "Login failed"));
+      throw new Error(this.getErrorMessage(error, "Login failed"), {
+        cause: error,
+      });
     }
   }
 
@@ -123,7 +127,9 @@ class AuthApiClient {
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, "Token refresh failed"));
+      throw new Error(this.getErrorMessage(error, "Token refresh failed"), {
+        cause: error,
+      });
     }
   }
 
@@ -142,7 +148,9 @@ class AuthApiClient {
       );
       return response.data;
     } catch (error) {
-      throw new Error(this.getErrorMessage(error, "Failed to get user info"));
+      throw new Error(this.getErrorMessage(error, "Failed to get user info"), {
+        cause: error,
+      });
     }
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -66,8 +66,84 @@ const RACI_TEMPLATES: RaciTemplate[] = [
   },
 ];
 
+function formatTimelineDate(value?: string | null): string {
+  if (!value) {
+    return 'Unscheduled';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unscheduled';
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildTimelineRows(
+  rows: ReturnType<typeof useRaci>['data'],
+): Array<{
+  activity: string;
+  phaseLabel: string;
+  scheduleLabel: string;
+  offset: number;
+  width: number;
+}> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const normalized = rows.map((row, index) => ({
+    activity: row.activity,
+    sequenceIndex: row.sequenceIndex ?? index + 1,
+    taskCode: row.taskCode ?? `T-${index + 1}`,
+    plannedStart: row.plannedStart ?? null,
+    plannedEnd: row.plannedEnd ?? null,
+  }));
+
+  const datedRows = normalized.filter((row) => row.plannedStart && row.plannedEnd);
+  const anchorMs =
+    datedRows.length > 0
+      ? Math.min(...datedRows.map((row) => new Date(row.plannedStart as string).getTime()))
+      : null;
+  const maxEndMs =
+    datedRows.length > 0
+      ? Math.max(...datedRows.map((row) => new Date(row.plannedEnd as string).getTime()))
+      : null;
+  const totalDurationMs =
+    anchorMs !== null && maxEndMs !== null ? Math.max(maxEndMs - anchorMs, 24 * 60 * 60 * 1000) : null;
+
+  return normalized.map((row, index) => {
+    const startMs = row.plannedStart ? new Date(row.plannedStart).getTime() : null;
+    const endMs = row.plannedEnd ? new Date(row.plannedEnd).getTime() : null;
+    const hasSchedule =
+      startMs !== null &&
+      endMs !== null &&
+      !Number.isNaN(startMs) &&
+      !Number.isNaN(endMs) &&
+      anchorMs !== null &&
+      totalDurationMs !== null;
+
+    const offset = hasSchedule ? ((startMs - anchorMs) / totalDurationMs) * 100 : index * 18;
+    const width = hasSchedule
+      ? Math.max(((endMs - startMs) / totalDurationMs) * 100, 12)
+      : 32 + (index % 3) * 12;
+
+    return {
+      activity: row.activity,
+      phaseLabel: `Sequence ${row.sequenceIndex} · ${row.taskCode}`,
+      scheduleLabel: `${formatTimelineDate(row.plannedStart)} to ${formatTimelineDate(row.plannedEnd)}`,
+      offset,
+      width,
+    };
+  });
+}
+
 export default function RaciPage() {
   const [projectFilter, setProjectFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'matrix' | 'list' | 'timeline'>('matrix');
   const { data: raciData, loading, error } = useRaci(
     projectFilter === 'all' ? undefined : projectFilter,
   );
@@ -99,6 +175,68 @@ export default function RaciPage() {
   const filteredData = raciData.filter((row) =>
     row.activity.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const workloadAnalysis = useMemo(() => {
+    const stakeholderColumns = [
+      { key: 'projectManager', label: 'Project Manager' },
+      { key: 'technicalLead', label: 'Technical Lead' },
+      { key: 'stakeholder', label: 'Stakeholder' },
+      { key: 'contractor', label: 'Contractor' },
+    ] as const;
+    const loadWeights: Record<string, number> = {
+      A: 4,
+      R: 3,
+      C: 1,
+      I: 1,
+    };
+
+    const rows = filteredData.map((row) => ({
+      activity: row.activity,
+      projectManager: row.projectManager,
+      technicalLead: row.technicalLead,
+      stakeholder: row.stakeholder,
+      contractor: row.contractor,
+    }));
+
+    const metrics = stakeholderColumns.map(({ key, label }) => {
+      let assignments = 0;
+      let load = 0;
+
+      rows.forEach((row) => {
+        const role = String(row[key] ?? '').trim();
+        if (!role) {
+          return;
+        }
+
+        assignments += 1;
+        load += loadWeights[role] ?? 0;
+      });
+
+      return { label, assignments, load };
+    });
+
+    const busiestLane = [...metrics].sort((left, right) => right.load - left.load)[0];
+
+    return {
+      metrics,
+      busiestLane: busiestLane?.label ?? 'No active workload',
+    };
+  }, [filteredData]);
+  const overloadConflicts = useMemo(() => {
+    const overloaded = workloadAnalysis.metrics.filter((metric) => metric.load >= 9);
+
+    return {
+      overloaded,
+      summary:
+        overloaded.length === 1
+          ? '1 overloaded stakeholder lane'
+          : `${overloaded.length} overloaded stakeholder lanes`,
+      recommendation:
+        overloaded.length > 0
+          ? `Focus the next rebalance on ${overloaded[0]?.label ?? 'overloaded'} assignments.`
+          : 'No overloaded stakeholder lanes detected in the current scope.',
+    };
+  }, [workloadAnalysis.metrics]);
+  const timelineRows = useMemo(() => buildTimelineRows(filteredData), [filteredData]);
 
   return (
     <div className="space-y-6">
@@ -148,6 +286,29 @@ export default function RaciPage() {
             ))}
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={viewMode === 'matrix' ? 'default' : 'outline'}
+            onClick={() => setViewMode('matrix')}
+          >
+            Matrix View
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            onClick={() => setViewMode('list')}
+          >
+            List View
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === 'timeline' ? 'default' : 'outline'}
+            onClick={() => setViewMode('timeline')}
+          >
+            Timeline View
+          </Button>
+        </div>
       </div>
 
       {/* Legend */}
@@ -161,78 +322,203 @@ export default function RaciPage() {
         ))}
       </div>
 
-      {/* RACI Matrix Table */}
-      <div className="rounded-lg border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">
-                  Activity
-                </th>
-                <th className="px-4 py-3 text-center text-sm font-medium">
-                  Project Manager
-                </th>
-                <th className="px-4 py-3 text-center text-sm font-medium">
-                  Technical Lead
-                </th>
-                <th className="px-4 py-3 text-center text-sm font-medium">
-                  Stakeholder
-                </th>
-                <th className="px-4 py-3 text-center text-sm font-medium">
-                  Contractor
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredData.map((row, index) => (
-                <tr key={index} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-3 font-medium">{row.activity}</td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge
-                      className={
-                        raciTypes[row.projectManager as keyof typeof raciTypes]
-                          ?.color
-                      }
-                    >
-                      {row.projectManager}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge
-                      className={
-                        raciTypes[row.technicalLead as keyof typeof raciTypes]
-                          ?.color
-                      }
-                    >
-                      {row.technicalLead}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge
-                      className={
-                        raciTypes[row.stakeholder as keyof typeof raciTypes]
-                          ?.color
-                      }
-                    >
-                      {row.stakeholder}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge
-                      className={
-                        raciTypes[row.contractor as keyof typeof raciTypes]?.color
-                      }
-                    >
-                      {row.contractor}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Workload Analysis</h2>
+            <p className="text-sm text-muted-foreground">
+              Busiest lane: {workloadAnalysis.busiestLane}
+            </p>
+          </div>
+          <Badge variant="outline">{filteredData.length} activities in scope</Badge>
         </div>
-      </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {workloadAnalysis.metrics.map((metric) => (
+            <div key={metric.label} className="rounded-lg border bg-muted/20 p-4">
+              <div className="text-sm font-semibold text-foreground">{metric.label}</div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {metric.assignments} assignments · load {metric.load}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Conflict Detection</h2>
+            <p className="text-sm text-muted-foreground">{overloadConflicts.summary}</p>
+          </div>
+          <Badge variant={overloadConflicts.overloaded.length > 0 ? 'destructive' : 'outline'}>
+            {overloadConflicts.overloaded.length > 0 ? 'Needs rebalance' : 'Balanced'}
+          </Badge>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {overloadConflicts.overloaded.length > 0 ? (
+            <>
+              {overloadConflicts.overloaded.map((metric) => (
+                <div key={metric.label} className="rounded-lg border bg-red-50/60 p-4">
+                  <div className="text-sm font-semibold text-red-900">{metric.label}</div>
+                  <div className="mt-1 text-sm text-red-800">
+                    {metric.label} exceeds the safe workload threshold with load {metric.load}.
+                  </div>
+                </div>
+              ))}
+              <p className="text-sm text-muted-foreground">
+                {overloadConflicts.recommendation}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {overloadConflicts.recommendation}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {viewMode === 'timeline' ? (
+        <section className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Gantt Timeline View</h2>
+              <p className="text-sm text-muted-foreground">
+                Sequenced activity lanes grounded in API schedule dates and task ordering.
+              </p>
+            </div>
+            <Badge variant="outline">{timelineRows.length} timeline lanes</Badge>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {timelineRows.map((row) => (
+              <div key={row.activity} className="grid gap-2 md:grid-cols-[220px_1fr] md:items-center">
+                <div>
+                  <div className="font-medium text-foreground">{row.activity}</div>
+                  <div className="text-sm text-muted-foreground">{row.phaseLabel}</div>
+                  <div className="text-xs text-muted-foreground">{row.scheduleLabel}</div>
+                </div>
+                <div className="relative h-10 rounded-full bg-muted/50">
+                  <div
+                    className="absolute top-2 h-6 rounded-full bg-slate-900"
+                    style={{
+                      left: `${row.offset}%`,
+                      width: `${Math.min(row.width, 90 - row.offset)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : viewMode === 'list' ? (
+        <section className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Mobile List View</h2>
+              <p className="text-sm text-muted-foreground">
+                Activity cards optimized for narrow-screen review.
+              </p>
+            </div>
+            <Badge variant="outline">{filteredData.length} activity cards</Badge>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {filteredData.map((row, index) => (
+              <div key={`${row.activity}-${index}`} className="rounded-lg border bg-muted/20 p-4">
+                <div className="font-semibold text-foreground">{row.activity}</div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="text-sm text-muted-foreground">
+                    Project Manager · {row.projectManager || '-'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Technical Lead · {row.technicalLead || '-'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Stakeholder · {row.stakeholder || '-'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Contractor · {row.contractor || '-'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <div className="rounded-lg border bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b bg-muted/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Activity
+                  </th>
+                  <th className="px-4 py-3 text-center text-sm font-medium">
+                    Project Manager
+                  </th>
+                  <th className="px-4 py-3 text-center text-sm font-medium">
+                    Technical Lead
+                  </th>
+                  <th className="px-4 py-3 text-center text-sm font-medium">
+                    Stakeholder
+                  </th>
+                  <th className="px-4 py-3 text-center text-sm font-medium">
+                    Contractor
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredData.map((row, index) => (
+                  <tr key={index} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-4 py-3 font-medium">{row.activity}</td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge
+                        className={
+                          raciTypes[row.projectManager as keyof typeof raciTypes]
+                            ?.color
+                        }
+                      >
+                        {row.projectManager}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge
+                        className={
+                          raciTypes[row.technicalLead as keyof typeof raciTypes]
+                            ?.color
+                        }
+                      >
+                        {row.technicalLead}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge
+                        className={
+                          raciTypes[row.stakeholder as keyof typeof raciTypes]
+                            ?.color
+                        }
+                      >
+                        {row.stakeholder}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge
+                        className={
+                          raciTypes[row.contractor as keyof typeof raciTypes]?.color
+                        }
+                      >
+                        {row.contractor}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent className="sm:max-w-3xl">

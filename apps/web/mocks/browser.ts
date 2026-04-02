@@ -1,4 +1,4 @@
-import { setupWorker } from "msw/browser";
+import { setupWorker } from "@/mocks/msw-browser";
 import { browserHandlers } from "./handlers";
 import { seedDemoData } from "./data";
 

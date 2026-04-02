@@ -13,6 +13,7 @@ import structlog
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.utils import BadDsn
 
 from src.config import settings
 from src.core.cache import close_cache, init_cache
@@ -101,12 +102,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     sentry_enabled = bool(settings.sentry_dsn)
     app.state.sentry_enabled = sentry_enabled
     if sentry_enabled:
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            environment=settings.sentry_environment or settings.environment,
-            traces_sample_rate=settings.sentry_traces_sample_rate,
-        )
-        logger.info("sentry_initialized")
+        try:
+            sentry_sdk.init(
+                dsn=settings.sentry_dsn,
+                environment=settings.sentry_environment or settings.environment,
+                traces_sample_rate=settings.sentry_traces_sample_rate,
+            )
+            logger.info("sentry_initialized")
+        except BadDsn:
+            app.state.sentry_enabled = False
+            logger.warning(
+                "sentry_initialization_skipped",
+                reason="invalid_dsn",
+            )
 
     logger.info("application_started")
 

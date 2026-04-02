@@ -365,7 +365,11 @@ class RaciMatrixTaskRow(BaseModel):
     """Matrix row for a task with its stakeholder assignments."""
 
     task_id: UUID = Field(..., description="Task (WBS item) ID")
+    task_code: str = Field(..., description="Task code")
     task_name: str = Field(..., description="Task name")
+    sequence_index: int = Field(..., description="Timeline sequence index for the task")
+    planned_start: datetime | None = Field(None, description="Planned start date")
+    planned_end: datetime | None = Field(None, description="Planned end date")
     assignments: list[RaciMatrixAssignment] = Field(
         default_factory=list, description="Assignments for this task"
     )

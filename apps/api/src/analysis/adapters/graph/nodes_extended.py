@@ -16,7 +16,15 @@ from uuid import UUID
 import structlog
 from langchain_core.messages import AIMessage
 
+from src.analysis.adapters.graph.dependencies import (
+    get_ai_service,
+    get_anonymization_service,
+    get_pii_detector_service,
+)
 from src.analysis.adapters.graph.schema import ProjectState
+from src.coherence.application.dependencies import (
+    build_coherence_calculation_service,
+)
 
 logger = structlog.get_logger()
 
@@ -87,17 +95,15 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     Wraps: ``anonymizer.application.anonymization_service.AnonymizationService``
     and ``anonymizer.domain.pii_detector_service.PiiDetectorService``.
     """
-    from src.anonymizer.domain.pii_detector_service import PiiDetectorService
     from src.anonymizer.application.anonymization_service import (
         AnonymizationConfig,
-        AnonymizationService,
         AnonymizationStrategy,
         PiiType,
     )
 
     text = state["document_text"]
-    detector = PiiDetectorService()
-    service = AnonymizationService(pii_detector=detector)
+    detector = get_pii_detector_service()
+    service = get_anonymization_service(detector)
 
     # Default: redact all PII types
     config = AnonymizationConfig(
@@ -205,8 +211,6 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
-        from src.analysis.adapters.ai.anthropic_client import AIService
-
         raci_prompt = (
             "Dada la siguiente lista de stakeholders y actividades WBS, "
             "genera una matriz RACI.\n"
@@ -215,7 +219,7 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
             f"Stakeholders: {stakeholders}\n\n"
             f"WBS Items: {wbs_items}"
         )
-        service = AIService(tenant_id=state.get("tenant_id"))
+        service = get_ai_service(state.get("tenant_id"))
         payload = await service.run_extraction(raci_prompt, "")
         if isinstance(payload, list):
             matrix = payload
@@ -342,11 +346,7 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
             for item in bom_items
         )
 
-        from src.coherence.application.services.coherence_calculation_service import (
-            CoherenceCalculationService,
-        )
-
-        service = CoherenceCalculationService()
+        service = build_coherence_calculation_service()
         result = service.calculate_coherence(
             project_id=UUID(project_id),
             contract_price=contract_price,
@@ -420,8 +420,6 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
     Wraps: ``procurement.application.bom_builder_service.BOMBuilderService``
     Falls back to basic extraction when WBS items are missing.
     """
-    from src.analysis.adapters.ai.anthropic_client import AIService
-
     text = state.get("anonymized_text") or state["document_text"]
     tenant_id = state.get("tenant_id")
 
@@ -434,7 +432,7 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
 
     bom_items: list[dict[str, Any]] = []
     try:
-        service = AIService(tenant_id=tenant_id)
+        service = get_ai_service(tenant_id)
         payload = await service.run_extraction(budget_prompt, text)
         if isinstance(payload, dict):
             raw_items = payload.get("items", [])

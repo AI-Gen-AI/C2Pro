@@ -14,6 +14,7 @@ let organizationMetadata: Record<string, unknown> = {
   is_demo: true,
   tier: "enterprise",
 };
+const useOrganizationMock = vi.hoisted(() => vi.fn());
 let userData: {
   id: string;
   firstName: string;
@@ -44,13 +45,14 @@ vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({
     user: userData,
   }),
-  useOrganization: () => ({
-    organization: {
-      id: "org_1",
-      name: "C2Pro",
-      publicMetadata: organizationMetadata,
+  useOrganization: () =>
+    useOrganizationMock() ?? {
+      organization: {
+        id: "org_1",
+        name: "C2Pro",
+        publicMetadata: organizationMetadata,
+      },
     },
-  }),
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
@@ -110,6 +112,14 @@ describe("AuthContext (Clerk-backed)", () => {
   beforeEach(() => {
     authStoreState.token = "token-123";
     signOutMock.mockReset();
+    useOrganizationMock.mockReset();
+    useOrganizationMock.mockImplementation(() => ({
+      organization: {
+        id: "org_1",
+        name: "C2Pro",
+        publicMetadata: organizationMetadata,
+      },
+    }));
     isLoaded = true;
     isSignedIn = true;
     organizationMetadata = {
@@ -186,6 +196,7 @@ describe("AuthContext (Clerk-backed)", () => {
     expect(screen.getByText("ready")).toBeInTheDocument();
     expect(screen.getByText("signed-out")).toBeInTheDocument();
     expect(screen.getByText("no-user")).toBeInTheDocument();
+    expect(useOrganizationMock).not.toHaveBeenCalled();
   });
 
   it("delegates logout to Clerk signOut", async () => {

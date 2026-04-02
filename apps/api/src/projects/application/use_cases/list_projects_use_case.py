@@ -3,6 +3,7 @@ List Projects Use Case.
 
 Retrieves a paginated list of projects with optional filters.
 """
+from datetime import datetime
 from uuid import UUID
 
 import structlog
@@ -34,6 +35,8 @@ class ListProjectsUseCase:
         search: str | None = None,
         status: ProjectStatus | None = None,
         project_type: ProjectType | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> tuple[list[Project], int]:
         """
         List projects with pagination and filters.
@@ -45,6 +48,8 @@ class ListProjectsUseCase:
             search: Optional search term for name/code/description
             status: Optional status filter
             project_type: Optional project type filter
+            created_after: Optional lower bound for project creation time
+            created_before: Optional upper bound for project creation time
 
         Returns:
             Tuple of (list of projects, total count)
@@ -67,6 +72,8 @@ class ListProjectsUseCase:
             search=search,
             status=status,
             project_type=project_type,
+            created_after=created_after,
+            created_before=created_before,
         )
 
         logger.info(
@@ -79,6 +86,8 @@ class ListProjectsUseCase:
                 "search": search,
                 "status": status.value if status else None,
                 "project_type": project_type.value if project_type else None,
+                "created_after": created_after.isoformat() if created_after else None,
+                "created_before": created_before.isoformat() if created_before else None,
             },
         )
 

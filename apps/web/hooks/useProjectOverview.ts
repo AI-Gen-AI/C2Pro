@@ -66,7 +66,9 @@ export function useProjectOverview(
         const dashboard = dashboardRes.data;
         const alerts = alertsRes.data.items;
 
-        const openAlerts = alerts.filter((a) => a.status === "open");
+        const openAlerts: AlertResponse[] = alerts.filter(
+          (a: AlertResponse) => a.status === "open",
+        );
         const subScores =
           dashboard.sub_scores && typeof dashboard.sub_scores === "object"
             ? (dashboard.sub_scores as Record<string, number>)
@@ -78,7 +80,7 @@ export function useProjectOverview(
           openAlerts: openAlerts.length,
           documentCount: dashboard.document_count,
           budgetUsed: 100 - budgetScore,
-          recentAlerts: openAlerts.slice(0, 3).map((a) => ({
+          recentAlerts: openAlerts.slice(0, 3).map((a: AlertResponse) => ({
             severity: a.severity,
             title: a.message.split(" — ")[0],
           })),

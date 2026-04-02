@@ -28,6 +28,8 @@ This runbook does not itself configure Clerk, Vercel, or Railway. It tells the o
 ## Security Guardrails
 
 - Do not commit live credentials to `.env`, `.env.example`, `.env.staging`, or any other tracked file.
+- Keep app-local developer credentials only in ignored files such as `apps/web/.env.local`.
+- Use `apps/web/.env.example` as the sanitized bootstrap template for local web setup.
 - Do not paste live `pk_live_...` or `sk_live_...` values into issues, PRs, or docs.
 - Store production secrets only in the target secret manager or deployment platform.
 - If any tracked environment file contains real secrets, treat that as a security incident and rotate them.

@@ -4,6 +4,7 @@
  */
 import fs from "fs";
 import path from "path";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@/src/tests/test-utils";
 
@@ -11,7 +12,7 @@ vi.mock("next/dynamic", () => ({
   default: (
     _loader: unknown,
     options?: {
-      loading?: () => JSX.Element;
+      loading?: () => ReactElement;
     },
   ) => {
     return function DynamicProxy() {

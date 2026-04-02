@@ -294,6 +294,65 @@ class TestListProjectsEndpoint:
             assert project["status"] == "active"
 
     @pytest.mark.asyncio
+    async def test_list_projects_filter_by_project_type(self, client, test_project, test_project_2, auth_headers):
+        """Should filter projects by project type."""
+        response = await client.get(
+            f"{API_PREFIX}/projects?project_type=engineering",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["total"] >= 1
+        assert all(project["project_type"] == "engineering" for project in data["items"])
+        returned_ids = {project["id"] for project in data["items"]}
+        assert str(test_project_2.id) in returned_ids
+        assert str(test_project.id) not in returned_ids
+
+    @pytest.mark.asyncio
+    async def test_list_projects_filter_by_created_date_range(self, client, db, test_tenant, auth_headers):
+        """Should filter projects by created_at date range."""
+        older_project = ProjectORM(
+            id=uuid4(),
+            tenant_id=test_tenant.id,
+            name="Older Project",
+            code="DATE-001",
+            description="Created outside the requested range",
+            project_type=ProjectType.CONSTRUCTION.value,
+            status=ProjectStatus.DRAFT.value,
+            metadata_json={"version": 1},
+        )
+        newer_project = ProjectORM(
+            id=uuid4(),
+            tenant_id=test_tenant.id,
+            name="Newer Project",
+            code="DATE-002",
+            description="Created inside the requested range",
+            project_type=ProjectType.CONSTRUCTION.value,
+            status=ProjectStatus.DRAFT.value,
+            metadata_json={"version": 1},
+        )
+        db.add_all([older_project, newer_project])
+        await db.flush()
+
+        older_project.created_at = older_project.created_at.replace(year=2026, month=1, day=10, hour=9, minute=0, second=0, microsecond=0)
+        newer_project.created_at = newer_project.created_at.replace(year=2026, month=3, day=10, hour=9, minute=0, second=0, microsecond=0)
+        await db.commit()
+
+        response = await client.get(
+            f"{API_PREFIX}/projects?created_after=2026-02-01T00:00:00Z&created_before=2026-03-31T23:59:59Z",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        returned_ids = {project["id"] for project in data["items"]}
+        assert str(newer_project.id) in returned_ids
+        assert str(older_project.id) not in returned_ids
+
+    @pytest.mark.asyncio
     async def test_list_projects_search(self, client, test_project, auth_headers):
         """Should search projects by name/description/code."""
         # Act

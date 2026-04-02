@@ -5,6 +5,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@/src/tests/test-utils";
 
+vi.mock("@/components/evidence/pdf/PDFViewer", () => ({
+  PDFViewer: ({
+    file,
+    initialPage,
+    activeHighlightId,
+  }: {
+    file: string;
+    initialPage?: number;
+    activeHighlightId?: string | null;
+  }) => (
+    <div
+      data-testid="react-pdf-viewer-proxy"
+      data-file={file}
+      data-page={String(initialPage ?? 1)}
+      data-active-highlight={activeHighlightId ?? "none"}
+    />
+  ),
+}));
+
 async function loadPdfEvidenceViewer() {
   const module =
     await import("@/components/features/evidence/PdfEvidenceViewer");
@@ -61,8 +80,8 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
       />,
     );
 
-    const frame = await screen.findByTestId("pdf-page-canvas");
-    expect(frame).toHaveAttribute("src", "/api/documents/doc-1/download");
+    const viewer = await screen.findByTestId("react-pdf-viewer-proxy");
+    expect(viewer).toHaveAttribute("data-file", "/api/documents/doc-1/download");
   });
 
   it("[S3-01-RED-UNIT-04] ignores demo watermark session state on production viewer paths", async () => {
@@ -109,5 +128,26 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
     await waitFor(() => {
       expect(window.sessionStorage.getItem("s3-03-watermark-state")).toBeNull();
     });
+  });
+
+  it("[S3-01-RED-UNIT-06] delegates document rendering to the shared react-pdf viewer", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+
+    render(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-2/download"
+        highlights={[]}
+        activeHighlightId={"active-h-1"}
+        onHighlightClick={() => {}}
+      />,
+    );
+
+    const viewerProxy = await screen.findByTestId("react-pdf-viewer-proxy");
+    expect(viewerProxy).toHaveAttribute(
+      "data-file",
+      "/api/documents/doc-2/download",
+    );
+    expect(viewerProxy).toHaveAttribute("data-active-highlight", "none");
+    expect(screen.queryByTitle(/pdf document viewer/i)).not.toBeInTheDocument();
   });
 });

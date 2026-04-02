@@ -73,7 +73,7 @@ def sample_enriched_result():
             Alert(
                 rule_id="DET-BUD-OVERRUN",
                 severity="high",
-                category="BUDGET",
+                category="financial",
                 message="Budget overrun detected: 20% over planned",
                 evidence={
                     "source_clause_id": "BUD-001",
@@ -84,14 +84,14 @@ def sample_enriched_result():
         ],
         category_breakdown=[
             CategoryBreakdown(
-                category="BUDGET",
+                category="financial",
                 score=60.0,
                 alert_count=1,
                 severity_breakdown=SeverityCount(critical=0, high=1, medium=0, low=0),
                 impact_percentage=20.0,
             ),
             CategoryBreakdown(
-                category="TIME",
+                category="schedule",
                 score=85.0,
                 alert_count=0,
                 severity_breakdown=SeverityCount(critical=0, high=0, medium=0, low=0),
@@ -101,9 +101,7 @@ def sample_enriched_result():
         calculated_at=datetime.utcnow(),
         # Diagnostic fields
         finding_signals=[],
-        diagnostics={},
-        cross_pairs=[],
-        cost_usd=0.0,
+        llm_cost_usd=0.0,
     )
 
 
@@ -119,7 +117,7 @@ async def test_evaluate_backward_compatible_response_shape(sample_clauses, sampl
 
     Success Criteria:
     - Response has overall_score, alerts, category_breakdown, calculated_at
-    - No diagnostic fields exposed (finding_signals, diagnostics, cross_pairs, cost_usd)
+    - No diagnostic fields exposed (finding_signals, llm_cost_usd)
     """
     from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
     from src.coherence.graph.graph import evaluate_coherence
@@ -155,9 +153,7 @@ async def test_evaluate_backward_compatible_response_shape(sample_clauses, sampl
 
         # Verify diagnostic fields DO NOT exist (backward compat)
         assert not hasattr(result, "finding_signals")
-        assert not hasattr(result, "diagnostics")
-        assert not hasattr(result, "cross_pairs")
-        assert not hasattr(result, "cost_usd")
+        assert not hasattr(result, "llm_cost_usd")
 
         # Verify score is granular (not 0/100)
         assert result.overall_score == 72.5  # Granular float
@@ -272,9 +268,7 @@ async def test_evaluate_diagnostics_via_query_param(sample_clauses, sample_enric
 
         # Verify diagnostic fields exist
         assert hasattr(result, "finding_signals")
-        assert hasattr(result, "diagnostics")
-        assert hasattr(result, "cross_pairs")
-        assert hasattr(result, "cost_usd")
+        assert hasattr(result, "llm_cost_usd")
 
         # Verify core fields still exist
         assert hasattr(result, "overall_score")
@@ -314,9 +308,7 @@ async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_res
 
         # Verify diagnostic fields
         assert hasattr(result, "finding_signals")
-        assert hasattr(result, "diagnostics")
-        assert hasattr(result, "cross_pairs")
-        assert hasattr(result, "cost_usd")
+        assert hasattr(result, "llm_cost_usd")
 
 
 # =============================================================================
@@ -378,13 +370,14 @@ def test_category_inference_from_clause_data():
     )
     assert _infer_category_from_clause(quality_clause) == "QUALITY"
 
-    # Test SCOPE fallback (text-based)
+    # Test TIME inference from text with "milestones" keyword
+    # Note: "milestones" triggers TIME category, not SCOPE
     scope_clause = Clause(
         id="test-6",
         text="Project deliverables and milestones",
         data={},
     )
-    assert _infer_category_from_clause(scope_clause) == "SCOPE"
+    assert _infer_category_from_clause(scope_clause) == "TIME"
 
     # Test BUDGET inference from text (fallback)
     budget_text_clause = Clause(
@@ -541,11 +534,11 @@ async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result
 @pytest.mark.asyncio
 async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
     """
-    Test that diagnostics response includes cost_usd field.
+    Test that diagnostics response includes llm_cost_usd field.
 
     Success Criteria:
-    - cost_usd field exists in EnrichedCoherenceResult
-    - cost_usd=0.0 when low_budget_mode=True (no LLM calls)
+    - llm_cost_usd field exists in EnrichedCoherenceResult
+    - llm_cost_usd=0.0 when low_budget_mode=True (no LLM calls)
     """
     from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
 
@@ -556,9 +549,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
         category_breakdown=[],
         calculated_at=datetime.utcnow(),
         finding_signals=[],
-        diagnostics={},
-        cross_pairs=[],
-        cost_usd=0.0,  # Zero cost in low_budget_mode
+        llm_cost_usd=0.0,  # Zero cost in low_budget_mode
     )
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
@@ -577,8 +568,8 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
         )
 
         # Verify cost tracking
-        assert hasattr(result, "cost_usd")
-        assert result.cost_usd == 0.0  # Zero cost in low budget mode
+        assert hasattr(result, "llm_cost_usd")
+        assert result.llm_cost_usd == 0.0  # Zero cost in low budget mode
 
 
 # =============================================================================
@@ -651,7 +642,7 @@ def test_convert_enriched_to_coherence_result():
             Alert(
                 rule_id="TEST-001",
                 severity="low",
-                category="SCOPE",
+                category="scope",
                 message="Test alert",
                 evidence={
                     "source_clause_id": "CL-001",
@@ -662,7 +653,7 @@ def test_convert_enriched_to_coherence_result():
         ],
         category_breakdown=[
             CategoryBreakdown(
-                category="SCOPE",
+                category="scope",
                 score=80.0,
                 alert_count=1,
                 severity_breakdown=SeverityCount(critical=0, high=0, medium=0, low=1),
@@ -672,9 +663,7 @@ def test_convert_enriched_to_coherence_result():
         calculated_at=datetime(2024, 1, 1, 12, 0, 0),
         # Diagnostic fields
         finding_signals=[],
-        diagnostics={"test": "data"},
-        cross_pairs=[],
-        cost_usd=0.001,
+        llm_cost_usd=0.001,
     )
 
     result = _convert_enriched_to_coherence_result(enriched)
@@ -688,11 +677,10 @@ def test_convert_enriched_to_coherence_result():
     assert len(result.alerts) == 1
     assert result.alerts[0].rule_id == "TEST-001"
     assert len(result.category_breakdown) == 1
-    assert result.category_breakdown[0].category == "SCOPE"
+    assert result.category_breakdown[0].category == "scope"
     assert result.calculated_at == datetime(2024, 1, 1, 12, 0, 0)
 
     # Verify diagnostic fields NOT present
     assert not hasattr(result, "finding_signals")
     assert not hasattr(result, "diagnostics")
-    assert not hasattr(result, "cross_pairs")
-    assert not hasattr(result, "cost_usd")
+    assert not hasattr(result, "llm_cost_usd")

@@ -3,6 +3,8 @@
  * Based on backend Pydantic schemas
  */
 
+type JsonRecord = Record<string, unknown>;
+
 export type ProjectStatus = 'draft' | 'active' | 'completed' | 'archived' | 'on_hold';
 
 export type ProjectType =
@@ -33,7 +35,7 @@ export interface Alert {
   description: string;
   source_clause_id?: string;
   affected_entity_ids?: string[];
-  evidence_json?: Record<string, any>;
+  evidence_json?: JsonRecord;
   created_at: string;
   updated_at: string;
   resolved_at?: string;
@@ -54,7 +56,7 @@ export interface Project {
   open_alerts?: number;
   critical_alerts?: number;
   budget_used?: number;
-  metadata?: Record<string, any>;
+  metadata?: JsonRecord;
   created_at: string;
   updated_at: string;
 }
@@ -67,7 +69,7 @@ export interface ProjectCreate {
   status?: ProjectStatus;
   estimated_budget?: number;
   currency?: string;
-  metadata?: Record<string, any>;
+  metadata?: JsonRecord;
 }
 
 export interface ProjectUpdate {
@@ -78,7 +80,7 @@ export interface ProjectUpdate {
   status?: ProjectStatus;
   estimated_budget?: number;
   currency?: string;
-  metadata?: Record<string, any>;
+  metadata?: JsonRecord;
 }
 
 export interface ProjectStats {
@@ -106,7 +108,7 @@ export interface Activity {
   user_id?: string;
   user_name?: string;
   description: string;
-  metadata?: Record<string, any>;
+  metadata?: JsonRecord;
   timestamp?: string; // Alias for created_at
   created_at?: string;
 }
