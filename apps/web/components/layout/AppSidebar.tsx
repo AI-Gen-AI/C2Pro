@@ -35,7 +35,7 @@ export function AppSidebar() {
 
   const getHref = (href: string) => {
     if (href === '/dashboard') {
-      return isDemoMode ? '/demo' : '/';
+      return isDemoMode ? '/demo' : '/dashboard';
     }
     return `${basePrefix}${href}`;
   };
@@ -45,7 +45,7 @@ export function AppSidebar() {
     if (href === '/dashboard') {
       return isDemoMode
         ? pathname === '/demo'
-        : pathname === '/' || pathname === '/dashboard';
+        : pathname === '/dashboard';
     }
     return pathname.startsWith(fullHref);
   };

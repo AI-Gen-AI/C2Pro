@@ -1,6 +1,6 @@
 /**
  * Test Suite ID: TASK-1427
- * Route Coverage: canonical app shell dashboard landing page standalone implementation
+ * Route Coverage: canonical dashboard route standalone implementation
  */
 "use client";
 
@@ -11,7 +11,7 @@ import type { DashboardSummary } from "@/lib/api/contracts";
 import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
 
-export default function AppHomePage() {
+export default function AppDashboardPage() {
   const token = useAuthStore((state) => state.token);
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [projectName, setProjectName] = useState("");
