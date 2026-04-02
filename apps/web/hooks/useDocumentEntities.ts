@@ -24,7 +24,7 @@ interface UseDocumentEntitiesResult {
  */
 export function useDocumentEntities(
   documentId: string | null,
-  pageHeight?: number
+  _pageHeight?: number
 ): UseDocumentEntitiesResult {
   const [entities, setEntities] = useState<ProcessedEntity[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -42,7 +42,7 @@ export function useDocumentEntities(
     setError(null);
 
     try {
-      const fetchedEntities = await getDocumentEntities(documentId, pageHeight);
+      const fetchedEntities = await getDocumentEntities(documentId);
       setEntities(fetchedEntities);
 
       const generatedHighlights = createHighlightsFromEntities(fetchedEntities);
@@ -58,7 +58,7 @@ export function useDocumentEntities(
 
   useEffect(() => {
     fetchEntities();
-  }, [documentId, pageHeight]);
+  }, [documentId]);
 
   return {
     entities,
