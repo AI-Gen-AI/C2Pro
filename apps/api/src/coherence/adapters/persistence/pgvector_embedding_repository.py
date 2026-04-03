@@ -17,7 +17,7 @@ import time
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text, delete, select, func
+from sqlalchemy import text as sql_text, delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -120,7 +120,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         meta = metadata or {}
 
         # Upsert using INSERT ... ON CONFLICT DO UPDATE
-        stmt = insert(text(
+        stmt = sql_text(
             """INSERT INTO clause_embeddings
             (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
             VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
@@ -135,10 +135,10 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
                 metadata = EXCLUDED.metadata,
                 created_at = now()
             RETURNING id, created_at"""
-        ))
+        )
 
         result = await self.session.execute(
-            text(
+            sql_text(
                 """INSERT INTO clause_embeddings
                 (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
                 VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
@@ -234,7 +234,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         # Execute batch insert with ON CONFLICT DO NOTHING
         # (we could also use DO UPDATE for full upsert)
-        stmt = text(
+        stmt = sql_text(
             """INSERT INTO clause_embeddings
             (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
             VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
@@ -287,7 +287,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         embedding_str = f"[{','.join(map(str, embedding))}]"
 
         # Call the find_similar_clauses function
-        stmt = text(
+        stmt = sql_text(
             """SELECT * FROM find_similar_clauses(
                 :project_id::uuid,
                 :embedding::vector,
@@ -365,7 +365,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         start_time = time.time()
 
         # Call the find_cross_document_pairs function
-        stmt = text(
+        stmt = sql_text(
             """SELECT * FROM find_cross_document_pairs(
                 :project_id::uuid,
                 :similarity_threshold,
@@ -426,7 +426,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Returns:
             EmbeddingRecord or None if not found
         """
-        stmt = text(
+        stmt = sql_text(
             """SELECT clause_id, project_id, document_id, document_type, text,
                       category, metadata, created_at
                FROM clause_embeddings
@@ -472,7 +472,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Returns:
             Number of embeddings deleted
         """
-        stmt = text(
+        stmt = sql_text(
             """DELETE FROM clause_embeddings WHERE project_id = :project_id"""
         )
 
@@ -502,7 +502,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Returns:
             Number of stored embeddings
         """
-        stmt = text(
+        stmt = sql_text(
             """SELECT COUNT(*) FROM clause_embeddings WHERE project_id = :project_id"""
         )
 

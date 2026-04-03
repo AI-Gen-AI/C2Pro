@@ -124,4 +124,11 @@ describe("AppSidebar", () => {
       "text-white",
     );
   });
+
+  it("does not show a legacy alerts badge in the real workspace when no live count is wired", () => {
+    pathnameState.value = "/projects";
+    renderWithProviders(<AppSidebar />);
+
+    expect(screen.queryByText(/^7$/)).not.toBeInTheDocument();
+  });
 });

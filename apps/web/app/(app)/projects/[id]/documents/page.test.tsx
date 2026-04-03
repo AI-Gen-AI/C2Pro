@@ -197,11 +197,13 @@ describe("ProjectDocumentsPage", () => {
 
     render(<ProjectDocumentsPage />);
 
-    expect(screen.getByText("Total Documents")).toBeInTheDocument();
+    expect(screen.getByLabelText("Total Documents")).toHaveTextContent("3");
+    expect(screen.getByLabelText("Analyzed")).toHaveTextContent("1");
+    expect(screen.getByLabelText("Processing")).toHaveTextContent("1");
     expect(screen.getByText("Showing 3 of 3 documents")).toBeInTheDocument();
     expect(screen.getAllByText("Analyzed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Processing").length).toBeGreaterThan(0);
-    expect(screen.getByText("Errors")).toBeInTheDocument();
+    expect(screen.getByLabelText("Queued Or Errors")).toHaveTextContent("1");
   });
 
   it("links each document row to the project evidence view with the selected document id", () => {
@@ -284,7 +286,9 @@ describe("ProjectDocumentsPage", () => {
     render(<ProjectDocumentsPage />);
 
     fireEvent.click(screen.getByRole("button", { name: /upload document/i }));
-    expect(screen.getByText("Upload Documents")).toBeInTheDocument();
+    const uploadDialog = screen.getByRole("dialog", { name: /upload documents/i });
+    expect(uploadDialog).toHaveClass("bg-background/95");
+    expect(uploadDialog).toHaveClass("shadow-2xl");
 
     fireEvent.click(screen.getByRole("button", { name: /finish upload/i }));
 
@@ -313,9 +317,11 @@ describe("ProjectDocumentsPage", () => {
 
     render(<ProjectDocumentsPage />);
 
-    fireEvent.click(screen.getAllByRole("button")[2]);
+    fireEvent.click(screen.getByRole("button", { name: /delete contract\.pdf/i }));
 
-    expect(screen.getByText("Delete Document")).toBeInTheDocument();
+    const deleteDialog = screen.getByRole("dialog", { name: /delete document/i });
+    expect(deleteDialog).toHaveClass("bg-background/95");
+    expect(deleteDialog).toHaveClass("shadow-2xl");
     expect(
       screen.getByText(/are you sure you want to delete "Contract\.pdf"\?/i),
     ).toBeInTheDocument();
@@ -340,7 +346,7 @@ describe("ProjectDocumentsPage", () => {
 
     render(<ProjectDocumentsPage />);
 
-    fireEvent.click(screen.getAllByRole("button")[2]);
+    fireEvent.click(screen.getByRole("button", { name: /delete contract\.pdf/i }));
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
     await waitFor(() =>
@@ -370,7 +376,7 @@ describe("ProjectDocumentsPage", () => {
 
     render(<ProjectDocumentsPage />);
 
-    fireEvent.click(screen.getAllByRole("button")[2]);
+    fireEvent.click(screen.getByRole("button", { name: /delete contract\.pdf/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
     await waitFor(() =>
@@ -400,7 +406,7 @@ describe("ProjectDocumentsPage", () => {
 
     render(<ProjectDocumentsPage />);
 
-    fireEvent.click(screen.getAllByRole("button")[2]);
+    fireEvent.click(screen.getByRole("button", { name: /delete contract\.pdf/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
     await waitFor(() =>

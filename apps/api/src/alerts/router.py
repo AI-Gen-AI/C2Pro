@@ -182,8 +182,24 @@ def _get_sla_policy(alert: Alert) -> tuple[str | None, datetime | None]:
     return policy_name, alert.created_at + timedelta(hours=hours)
 
 
+def _normalize_affected_entities(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        return {"items": value}
+    return {}
+
+
+def _normalize_alert_metadata(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
 def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
     sla_policy_name, sla_due_at = _get_sla_policy(alert)
+    affected_entities = _normalize_affected_entities(alert.affected_entities)
+    alert_metadata = _normalize_alert_metadata(alert.alert_metadata)
     return AlertResponse(
         id=alert.id,
         project_id=alert.project_id,
@@ -193,10 +209,10 @@ def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
         severity=alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
         message=alert.title,
         status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
-        affected_entities=alert.affected_entities or {},
+        affected_entities=affected_entities,
         reviewed_by=alert.reviewed_by,
         reviewed_at=alert.reviewed_at,
-        root_cause=(alert.alert_metadata or {}).get("root_cause"),
+        root_cause=alert_metadata.get("root_cause"),
         sla_policy_name=sla_policy_name,
         sla_due_at=sla_due_at,
         created_at=alert.created_at,

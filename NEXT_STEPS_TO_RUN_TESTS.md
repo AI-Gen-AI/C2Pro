@@ -75,7 +75,23 @@ The Python virtual environment at `apps/.venv` is missing many dependencies from
 
 ### Option 1: Install All Dependencies from the Current Requirements File (Recommended)
 
-**Step 1:** Move into the backend working directory:
+**Step 1:** Activate the shared backend virtual environment at `apps/.venv`:
+
+```powershell
+# From repo root
+.\apps\.venv\Scripts\Activate.ps1
+
+# Or without shell activation
+.\apps\.venv\Scripts\python.exe --version
+```
+
+Verified locally on 2026-04-02:
+
+```text
+Python 3.13.5
+```
+
+**Step 2:** Move into the backend working directory:
 
 ```bash
 cd apps/api
@@ -87,30 +103,30 @@ cd apps/api
 # pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
 ```
 
-**Step 2:** Install all dependencies:
+**Step 3:** Install all dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+..\.\venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-**Step 3:** Apply RLS migration:
+**Step 4:** Apply RLS migration:
 
 ```bash
 # Option A: With PostgreSQL test database running
 docker-compose -f ..\..\docker-compose.test.yml up -d
-alembic upgrade head
+..\.\venv\Scripts\alembic.exe upgrade head
 
 # Option B: Tests will create tables automatically in SQLite (1 test skipped)
 # No migration needed for SQLite fallback
 ```
 
-**Step 4:** Run the tests:
+**Step 5:** Run the tests:
 
 ```bash
-pytest tests/e2e/security/test_multi_tenant_isolation.py -v
+..\.\venv\Scripts\pytest.exe tests/e2e/security/test_multi_tenant_isolation.py -v
 
 # With coverage:
-pytest tests/e2e/security/test_multi_tenant_isolation.py \
+..\.\venv\Scripts\pytest.exe tests/e2e/security/test_multi_tenant_isolation.py \
   --cov=src.core.middleware.tenant_isolation \
   --cov=src.core.database \
   --cov=src.core.security.tenant_context \
@@ -133,7 +149,7 @@ If you don't need all features and just want to run the multi-tenant tests:
 cd apps/api
 
 # Install only dependencies needed for the tenant isolation tests
-python -m pip install \
+..\.\venv\Scripts\python.exe -m pip install \
   fastapi uvicorn pydantic pydantic-settings \
   sqlalchemy asyncpg aiosqlite \
   pytest pytest-asyncio httpx \
@@ -142,7 +158,7 @@ python -m pip install \
   email-validator python-multipart
 
 # Run tests (will use SQLite fallback)
-pytest tests/e2e/security/test_multi_tenant_isolation.py -v
+..\.\venv\Scripts\pytest.exe tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 **Limitations:**
@@ -160,7 +176,7 @@ pytest tests/e2e/security/test_multi_tenant_isolation.py -v
 **Solution:** Install the missing module:
 
 ```bash
-python -m pip install <module_name>
+..\apps\.venv\Scripts\python.exe -m pip install <module_name>
 ```
 
 Then rerun the tests.
@@ -196,7 +212,7 @@ cd apps/api
 
 # With PostgreSQL
 DATABASE_URL="postgresql://nonsuperuser:test@localhost:5433/c2pro_test" \
-  alembic upgrade head
+  ..\.\venv\Scripts\alembic.exe upgrade head
 
 # With SQLite (tests create tables automatically)
 # No action needed
@@ -314,8 +330,8 @@ If you encounter issues:
    - `docs/TS-E2E-SEC-TNT-001_GREEN_PHASE_STATUS.md`
 3. **Verify setup:**
    ```bash
-   python --version  # Should be 3.11+
-   pip list | grep -E "(pytest|fastapi|sqlalchemy)"  # Check installed packages
+   .\apps\.venv\Scripts\python.exe --version  # Should be 3.11+
+   .\apps\.venv\Scripts\python.exe -m pip list  # Check installed packages
    ```
 
 ---
@@ -325,7 +341,7 @@ If you encounter issues:
 Before running tests, ensure:
 
 - [ ] Python 3.11+ installed
-- [ ] Virtual environment activated (`apps/.venv`)
+- [x] Virtual environment activated (`apps/.venv`) and verified on 2026-04-02
 - [ ] Dependencies installed (Option 1 or 2 above)
 - [ ] PostgreSQL running (optional - SQLite fallback available)
 - [x] `pyfiebdc` removed/commented from `requirements.txt`
@@ -334,7 +350,7 @@ Before running tests, ensure:
 Then run:
 
 ```bash
-pytest tests/e2e/security/test_multi_tenant_isolation.py -v
+..\.\venv\Scripts\pytest.exe tests/e2e/security/test_multi_tenant_isolation.py -v
 ```
 
 ---

@@ -48,6 +48,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
 
   const userName = user?.fullName || user?.emailAddresses?.[0]?.emailAddress || 'User';
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || '';
+  const notificationCount = isDemoMode ? 3 : 0;
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card px-6">
@@ -116,37 +117,73 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
               aria-label="Notifications"
             >
               <Bell className="h-5 w-5" />
-              <Badge
-                variant="destructive"
-                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-xs animate-pulse-critical"
-              >
-                3
-              </Badge>
+              {notificationCount > 0 ? (
+                <Badge
+                  variant="destructive"
+                  className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-xs animate-pulse-critical"
+                >
+                  {notificationCount}
+                </Badge>
+              ) : null}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="destructive" className="text-xs">Critical</Badge>
-                <span className="text-sm font-medium">New alert raised</span>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="w-80 rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
+          >
+            <DropdownMenuLabel className="rounded-xl border bg-muted/40 px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <span className="font-semibold text-foreground">Notifications</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {isDemoMode
+                      ? 'Sample workspace activity feed'
+                      : 'Workspace alerts and events will appear here'}
+                  </span>
+                </div>
+                {notificationCount > 0 ? (
+                  <Badge variant="destructive" className="rounded-full px-2 py-0.5 text-[11px]">
+                    {notificationCount} new
+                  </Badge>
+                ) : null}
               </div>
-              <span className="text-xs text-muted-foreground">
-                Contract Penalty Clause Violation Risk - 2 hours ago
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">Update</Badge>
-                <span className="text-sm font-medium">Score changed</span>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                PROJ-001 coherence score: 76 → 78 - 1 day ago
-              </span>
-            </DropdownMenuItem>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center text-sm text-primary">
+            {isDemoMode ? (
+              <>
+                <DropdownMenuItem className="flex flex-col items-start gap-1 rounded-xl px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="destructive" className="text-xs">Critical</Badge>
+                    <span className="text-sm font-medium">New alert raised</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Contract Penalty Clause Violation Risk - 2 hours ago
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1 rounded-xl px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">Update</Badge>
+                    <span className="text-sm font-medium">Score changed</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    PROJ-001 coherence score: 76 → 78 - 1 day ago
+                  </span>
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <DropdownMenuItem
+                disabled
+                className="flex flex-col items-start gap-1 rounded-xl border bg-muted/30 px-3 py-3 opacity-100"
+              >
+                <span className="text-sm font-medium">No new notifications</span>
+                <span className="text-xs text-muted-foreground">
+                  Live workspace notifications will appear here once alerts and events are generated.
+                </span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="justify-center rounded-xl px-3 py-2.5 text-sm text-primary">
               View all notifications
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -169,21 +206,30 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="flex flex-col">
-              <span>{userName}</span>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="w-64 rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
+          >
+            <DropdownMenuLabel className="flex flex-col rounded-xl border bg-muted/40 px-3 py-3">
+              <span className="font-semibold text-foreground">{userName}</span>
               <span className="text-xs font-normal text-muted-foreground">
                 {userEmail}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem className="rounded-xl px-3 py-2.5">
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem className="rounded-xl px-3 py-2.5">
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
+            <DropdownMenuItem
+              className="rounded-xl px-3 py-2.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
+              onClick={handleSignOut}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>

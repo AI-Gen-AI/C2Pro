@@ -14,8 +14,10 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
+from src.analysis.adapters.persistence.models import Alert
+from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
@@ -59,6 +61,34 @@ class ProjectListResponse(BaseModel):
     page: int = 1
     page_size: int = 20
     total_pages: int = 1
+
+
+class ProjectQuickViewAlertResponse(BaseModel):
+    """Compact alert payload for the project quick-view sheet."""
+
+    id: UUID
+    title: str
+    severity: str
+    status: str
+    created_at: datetime
+
+
+class ProjectQuickViewSummaryResponse(BaseModel):
+    """Project quick-view summary used by the frontend sheet."""
+
+    project_id: UUID
+    tenant_id: UUID
+    name: str
+    code: str | None = None
+    description: str | None = None
+    project_type: str
+    status: str
+    coherence_score: float | None = None
+    client_name: str | None = None
+    open_alert_count: int = 0
+    critical_alert_count: int = 0
+    top_alerts: list[ProjectQuickViewAlertResponse] = Field(default_factory=list)
+    updated_at: datetime
 
 
 class ProjectCreateRequest(BaseModel):
@@ -135,6 +165,69 @@ def _project_orm_to_dict(project: ProjectORM) -> dict:
         "currency": project.currency or "EUR",
         "version": int(version),
     }
+
+
+def _severity_rank_expression():
+    return case(
+        (Alert.severity == AlertSeverity.CRITICAL, 0),
+        (Alert.severity == AlertSeverity.HIGH, 1),
+        (Alert.severity == AlertSeverity.MEDIUM, 2),
+        (Alert.severity == AlertSeverity.LOW, 3),
+        else_=4,
+    )
+
+
+def _severity_rank_value(severity: AlertSeverity | str) -> int:
+    normalized = severity.value if hasattr(severity, "value") else str(severity).lower()
+    return {
+        "critical": 0,
+        "high": 1,
+        "medium": 2,
+        "low": 3,
+    }.get(normalized, 4)
+
+
+def _build_project_quick_view_summary(
+    *,
+    project: ProjectORM,
+    alerts: Sequence[Alert],
+) -> ProjectQuickViewSummaryResponse:
+    project_data = _project_orm_to_dict(project)
+    open_alerts = sorted(
+        (alert for alert in alerts if alert.status == AlertStatus.OPEN),
+        key=lambda alert: (
+            _severity_rank_value(alert.severity),
+            -alert.created_at.timestamp(),
+        ),
+    )
+    critical_alert_count = sum(
+        1 for alert in open_alerts if alert.severity == AlertSeverity.CRITICAL
+    )
+
+    return ProjectQuickViewSummaryResponse(
+        project_id=project.id,
+        tenant_id=project.tenant_id,
+        name=project.name,
+        code=project.code,
+        description=project.description,
+        project_type=project.project_type,
+        status=project.status,
+        coherence_score=project.coherence_score,
+        client_name=project_data.get("client_name"),
+        open_alert_count=len(open_alerts),
+        critical_alert_count=critical_alert_count,
+        top_alerts=[
+            ProjectQuickViewAlertResponse(
+                id=alert.id,
+                title=alert.title,
+                severity=alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
+                status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
+                created_at=alert.created_at,
+            )
+            for alert in open_alerts[:5]
+        ],
+        updated_at=project.updated_at,
+    )
 
 
 def _apply_project_update(project: ProjectORM, updates: dict) -> None:
@@ -316,6 +409,33 @@ async def get_project(
 
     response.headers["ETag"] = f'"v{project_data["version"]}"'
     return _project_to_response(project_data)
+
+
+@router.get("/{project_id}/summary", response_model=ProjectQuickViewSummaryResponse)
+async def get_project_summary(
+    project_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ProjectQuickViewSummaryResponse:
+    """Return a compact tenant-scoped project summary for the frontend quick-view sheet."""
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+
+        alerts_result = await session.execute(
+            select(Alert)
+            .where(
+                Alert.project_id == project_id,
+                Alert.status == AlertStatus.OPEN,
+            )
+            .order_by(_severity_rank_expression(), Alert.created_at.desc())
+        )
+        alerts = list(alerts_result.scalars().all())
+
+    return _build_project_quick_view_summary(project=project, alerts=alerts)
 
 
 @router.get("", response_model=ProjectListResponse)

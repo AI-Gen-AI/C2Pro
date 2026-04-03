@@ -44,22 +44,31 @@ class TestImpactToSeverity:
     @pytest.mark.parametrize(
         "impact,expected_severity",
         [
+            # Critical: >= 0.85
             (1.0, "critical"),
             (0.95, "critical"),
             (0.85, "critical"),
+            # High: >= 0.60
             (0.84, "high"),
             (0.70, "high"),
             (0.60, "high"),
+            # Medium: >= 0.35
             (0.59, "medium"),
             (0.45, "medium"),
             (0.35, "medium"),
+            # Low: >= 0.15
             (0.34, "low"),
             (0.20, "low"),
-            (0.0, "low"),
+            (0.15, "low"),
+            # Info: < 0.15 (TASK-504: 5-level taxonomy)
+            (0.14, "info"),
+            (0.10, "info"),
+            (0.05, "info"),
+            (0.0, "info"),
         ],
     )
     def test_severity_thresholds(self, impact: float, expected_severity: str):
-        """Test that impact scores map to correct severity levels."""
+        """Test that impact scores map to correct severity levels (TASK-504: 5-level taxonomy)."""
         result = impact_to_severity(impact)
         assert result == expected_severity
 
@@ -77,6 +86,22 @@ class TestImpactToSeverity:
         """Test boundary at medium threshold (0.35)."""
         assert impact_to_severity(0.35) == "medium"
         assert impact_to_severity(0.3499) == "low"
+
+    def test_boundary_low(self):
+        """Test boundary at low threshold (0.15) - TASK-504: 5-level taxonomy."""
+        assert impact_to_severity(0.15) == "low"
+        assert impact_to_severity(0.1499) == "info"
+
+    def test_all_severity_levels_covered(self):
+        """Ensure all 5 severity levels are represented (TASK-504)."""
+        severities = {
+            impact_to_severity(0.90),  # critical
+            impact_to_severity(0.70),  # high
+            impact_to_severity(0.45),  # medium
+            impact_to_severity(0.25),  # low
+            impact_to_severity(0.05),  # info
+        }
+        assert severities == {"critical", "high", "medium", "low", "info"}
 
 
 # ===========================================
@@ -277,12 +302,19 @@ class TestScoringConfig:
         assert config.llm_confidence_threshold == 0.60
 
     def test_severity_weights_values(self):
-        """Test that default severity weights have expected values."""
+        """Test that default severity weights have expected values (TASK-504: 5-level taxonomy)."""
         config = DEFAULT_SCORING_CONFIG
         assert config.severity_weights["critical"] == 1.0
         assert config.severity_weights["high"] == 0.7
         assert config.severity_weights["medium"] == 0.4
         assert config.severity_weights["low"] == 0.15
+        assert config.severity_weights["info"] == 0.05
+
+    def test_all_severity_levels_have_weights(self):
+        """Test that all 5 severity levels have weights defined (TASK-504)."""
+        config = DEFAULT_SCORING_CONFIG
+        expected_severities = {"critical", "high", "medium", "low", "info"}
+        assert set(config.severity_weights.keys()) == expected_severities
 
     def test_all_categories_have_weights(self):
         """Test that all 7 categories have weights defined."""

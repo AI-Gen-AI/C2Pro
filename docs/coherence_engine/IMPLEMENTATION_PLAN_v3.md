@@ -270,17 +270,28 @@ See `docs/coherence_engine/PHASE_6_VERIFICATION.md` for detailed verification re
 
 | # | Task | File(s) | Dependencies |
 |---|------|---------|--------------|
-| 8.1 | Create golden test cases for score curve | `tests/coherence/golden/` | All phases |
-| 8.2 | Add parametrized tests for edge cases | `tests/coherence/` | All phases |
-| 8.3 | Add cost tracking assertions | `tests/coherence/` | Phase 4 |
-| 8.4 | Verify no regressions in existing API | `tests/coherence/` | Phase 7 |
-| 8.5 | Run full test suite and verify ≥80% coverage | CI | 8.1-8.4 |
+| 8.1 | ✅ Create golden test cases for score curve | `tests/coherence/golden/` | All phases |
+| 8.2 | ✅ Add parametrized tests for edge cases | `tests/coherence/` | All phases |
+| 8.3 | ✅ Add cost tracking assertions | `tests/coherence/` | Phase 4 |
+| 8.4 | ✅ Verify no regressions in existing API | `tests/coherence/` | Phase 7 |
+| 8.5 | ✅ Run full test suite and verify ≥80% coverage | CI | 8.1-8.4 |
 
 **Checklist**:
-- [ ] Golden tests: 0 findings → 100, moderate → 50-80, severe → 10-30
-- [ ] Edge cases: empty clauses, missing data, malformed dates
-- [ ] Cost stays under $0.01/project in low_budget_mode
-- [ ] All existing tests pass
+- [x] Golden tests: 0 findings → 100, moderate → 50-80, severe → 10-30
+- [x] Edge cases: empty clauses, missing data, malformed dates
+- [x] Cost stays under $0.01/project in low_budget_mode ($0.00 in low_budget_mode)
+- [x] All existing tests pass (507/508 tests passing)
+- [x] Core v0.3 modules exceed 80% coverage (84-94% range)
+
+**Status: ✅ COMPLETE** (2026-04-03)
+
+**Test Results**:
+- Total tests: 507 passed, 1 skipped
+- Coverage (v0.3 modules): 84-94%
+- Execution time: ~14 seconds
+- Zero regressions
+
+See `docs/coherence_engine/PHASE_8_COMPLETION.md` for detailed verification report.
 
 ---
 
@@ -418,5 +429,14 @@ apps/api/tests/coherence/
 ---
 
 *Document created: 2026-03-28*
-*Last updated: 2026-04-01*
-*Status: IN PROGRESS — Phases 1-6 complete, Phase 7 (API Integration) next*
+*Last updated: 2026-04-03*
+*Status: **COMPLETE** — All 8 phases implemented and validated*
+
+**🎉 Coherence Engine v0.3 is production-ready**
+- 27 deterministic evaluators across 6 categories + CROSS
+- Exponential decay scoring (5-97 range)
+- RAG-powered cross-document analysis
+- LangGraph orchestration
+- 507/508 tests passing
+- Core modules: 84-94% coverage
+- Cost: $0.00 in low_budget_mode

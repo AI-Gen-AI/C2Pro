@@ -81,15 +81,22 @@ describe("AppHeader", () => {
     const notifications = screen.getByRole("button", {
       name: /notifications/i,
     });
+    expect(screen.queryByText(/^3$/)).not.toBeInTheDocument();
     await user.click(notifications);
+    expect(screen.getByRole("menu")).toHaveClass("rounded-2xl");
+    expect(screen.getByRole("menu")).toHaveClass("shadow-2xl");
     expect(
       screen.getByRole("menuitem", { name: /view all notifications/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/no new notifications/i)).toBeInTheDocument();
+    expect(screen.getByText(/workspace alerts and events will appear here/i)).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
     const userMenu = screen.getByRole("button", { name: /user menu/i });
     await user.click(userMenu);
+    expect(screen.getByRole("menu")).toHaveClass("rounded-2xl");
+    expect(screen.getByRole("menu")).toHaveClass("shadow-2xl");
     expect(screen.getByRole("menuitem", { name: /profile/i })).toBeInTheDocument();
   });
 
@@ -101,5 +108,17 @@ describe("AppHeader", () => {
 
     expect(screen.getByText(/demo workspace/i)).toBeInTheDocument();
     expect(screen.getByText(/sample data/i)).toBeInTheDocument();
+  });
+
+  it("shows the sample notification badge only on demo routes", async () => {
+    pathnameState.value = "/demo/projects";
+    appModeState.mode = "demo";
+    appModeState.demoEnvironmentEnabled = true;
+    const user = userEvent.setup();
+    renderWithProviders(<AppHeader title="Projects" />);
+
+    expect(screen.getByText(/^3$/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /notifications/i }));
+    expect(screen.getByText(/new alert raised/i)).toBeInTheDocument();
   });
 });

@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useProjects } from "@/hooks/useProjects";
+import { useProjectQuickViewSummary } from "@/hooks/useProjectQuickViewSummary";
 import { useUpdateProject } from "@/hooks/useUpdateProject";
+import { useCreateProjectApiV1ProjectsPost } from "@/lib/api/generated/projects/projects";
 import {
   LazyProjectBatchImportDialog,
   LazyProjectTemplatesDialog,
@@ -25,6 +28,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -76,6 +86,21 @@ type ProjectTypeFilter =
   | "municipal"
   | "oil_gas"
   | "mining";
+
+type CreateProjectStep = 0 | 1 | 2;
+
+type CreateProjectDraft = {
+  name: string;
+  code: string;
+  projectType: string;
+  clientName: string;
+  description: string;
+  currency: string;
+};
+
+type SavePresetDraft = {
+  name: string;
+};
 
 const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
@@ -133,6 +158,19 @@ const PROJECT_TYPE_FILTER_OPTIONS: Array<{
   { value: "oil_gas", label: "Oil & Gas" },
   { value: "mining", label: "Mining" },
 ];
+
+const DEFAULT_CREATE_PROJECT_DRAFT: CreateProjectDraft = {
+  name: "",
+  code: "",
+  projectType: "",
+  clientName: "",
+  description: "",
+  currency: "EUR",
+};
+
+const DEFAULT_SAVE_PRESET_DRAFT: SavePresetDraft = {
+  name: "",
+};
 
 function parseBatchImportRows(value: string): BatchImportRow[] {
   return value
@@ -241,8 +279,10 @@ function persistProjectFilterPresets(presets: ProjectFilterPreset[]) {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const token = useAuthStore((s) => s.token);
   const { data, isLoading, error } = useProjects(!!token);
+  const createProject = useCreateProjectApiV1ProjectsPost();
   const {
     mutateAsync: updateProject,
     isPending: isSavingProject,
@@ -264,6 +304,17 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<ProjectTypeFilter>("all");
+  const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false);
+  const [createProjectStep, setCreateProjectStep] = useState<CreateProjectStep>(0);
+  const [createProjectDraft, setCreateProjectDraft] = useState<CreateProjectDraft>(
+    DEFAULT_CREATE_PROJECT_DRAFT,
+  );
+  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
+  const [isSavePresetOpen, setIsSavePresetOpen] = useState(false);
+  const [savePresetDraft, setSavePresetDraft] = useState<SavePresetDraft>(
+    DEFAULT_SAVE_PRESET_DRAFT,
+  );
+  const [savePresetError, setSavePresetError] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
     name: "",
     description: "",
@@ -309,6 +360,12 @@ export default function ProjectsPage() {
     () => parseBatchImportRows(importDraft),
     [importDraft],
   );
+  const canAdvanceCreateProjectStep = createProjectDraft.name.trim().length > 0;
+  const {
+    data: quickViewSummary,
+    isLoading: isQuickViewLoading,
+    error: quickViewError,
+  } = useProjectQuickViewSummary(quickViewProject?.id ?? null);
   const selectedTemplate =
     PROJECT_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
     PROJECT_TEMPLATES[0];
@@ -419,14 +476,21 @@ export default function ProjectsPage() {
     setVisibleColumns(preset.visibleColumns);
   }
 
-  function saveCurrentPreset() {
-    const presetName = window.prompt("Preset name");
-    if (!presetName) {
-      return;
-    }
+  function openSavePresetDialog() {
+    setSavePresetDraft({
+      name:
+        searchQuery.trim().length > 0
+          ? `${searchQuery.trim()} preset`
+          : "",
+    });
+    setSavePresetError(null);
+    setIsSavePresetOpen(true);
+  }
 
-    const trimmedName = presetName.trim();
+  function saveCurrentPreset() {
+    const trimmedName = savePresetDraft.name.trim();
     if (!trimmedName) {
+      setSavePresetError("Preset name is required.");
       return;
     }
 
@@ -445,6 +509,9 @@ export default function ProjectsPage() {
       persistProjectFilterPresets(nextPresets);
       return nextPresets;
     });
+    setIsSavePresetOpen(false);
+    setSavePresetDraft(DEFAULT_SAVE_PRESET_DRAFT);
+    setSavePresetError(null);
   }
 
   function startEditingProject(project: ProjectListItem) {
@@ -476,6 +543,54 @@ export default function ProjectsPage() {
     setSearchQuery("");
     setStatusFilter("all");
     setTypeFilter("all");
+  }
+
+  function openCreateProjectWizard() {
+    setCreateProjectDraft(DEFAULT_CREATE_PROJECT_DRAFT);
+    setCreateProjectStep(0);
+    setCreateProjectError(null);
+    setIsCreateWizardOpen(true);
+  }
+
+  function updateCreateProjectDraft(
+    field: keyof CreateProjectDraft,
+    value: string,
+  ) {
+    setCreateProjectDraft((currentDraft) => ({
+      ...currentDraft,
+      [field]: value,
+    }));
+  }
+
+  async function submitCreateProjectWizard() {
+    const trimmedName = createProjectDraft.name.trim();
+    if (!trimmedName) {
+      setCreateProjectError("Project name is required.");
+      return;
+    }
+
+    try {
+      setCreateProjectError(null);
+      const project = await createProject.mutateAsync({
+        data: {
+          name: trimmedName,
+          code: createProjectDraft.code.trim() || undefined,
+          description: createProjectDraft.description.trim() || undefined,
+          client_name: createProjectDraft.clientName.trim() || undefined,
+          currency: createProjectDraft.currency,
+          project_type: createProjectDraft.projectType || undefined,
+        },
+      });
+
+      setIsCreateWizardOpen(false);
+      router.push(`/projects/${project.id}/documents`);
+    } catch (mutationError) {
+      const message =
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Project creation failed.";
+      setCreateProjectError(message);
+    }
   }
 
   async function saveProjectEdits() {
@@ -533,33 +648,50 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Projects
           </h1>
           <p className="text-sm text-muted-foreground">
             Manage and monitor all your projects
           </p>
         </div>
-        <div className="flex flex-1 flex-col gap-3 xl:items-end">
-          <div className="w-full max-w-md">
-            <Input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search projects..."
-              aria-label="Search projects"
-            />
-          </div>
-          <div className="flex w-full flex-wrap items-end gap-3 xl:justify-end">
+        <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+          <Button variant="outline" onClick={() => setIsTemplatesOpen(true)}>
+            Project Templates
+          </Button>
+          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Batch Import
+          </Button>
+          <Button type="button" onClick={openCreateProjectWizard}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <div className="w-full max-w-sm">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search projects..."
+                aria-label="Search projects"
+                className="h-11 rounded-xl"
+              />
+            </div>
             <label className="flex flex-col gap-1 text-sm text-foreground">
-              <span>Status Filter</span>
+              <span className="sr-only">Status Filter</span>
               <select
                 aria-label="Status filter"
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="h-11 min-w-[150px] rounded-xl border border-input bg-background px-3 py-2 text-sm"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as ProjectStatusFilter)
@@ -573,10 +705,10 @@ export default function ProjectsPage() {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm text-foreground">
-              <span>Type Filter</span>
+              <span className="sr-only">Type Filter</span>
               <select
                 aria-label="Type filter"
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="h-11 min-w-[150px] rounded-xl border border-input bg-background px-3 py-2 text-sm"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as ProjectTypeFilter)
@@ -593,52 +725,17 @@ export default function ProjectsPage() {
               type="button"
               variant="outline"
               onClick={resetFilters}
+              className="h-11 rounded-xl"
             >
               Reset Filters
             </Button>
           </div>
-          {statusFilter !== "all" || typeFilter !== "all" ? (
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {statusFilter !== "all" ? (
-                <span className="rounded-full border bg-muted px-3 py-1 text-xs text-foreground">
-                  Status: {statusFilter}
-                </span>
-              ) : null}
-              {typeFilter !== "all" ? (
-                <span className="rounded-full border bg-muted px-3 py-1 text-xs text-foreground">
-                  Type: {typeFilter}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          {savedPresets.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {savedPresets.map((preset) => (
-                <Button
-                  key={preset.id}
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => applyFilterPreset(preset)}
-                >
-                  {preset.name}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-4">
-          <span className="text-xs text-muted-foreground">
-            {isLoading
-              ? "Loading..."
-              : searchQuery.trim().length > 0
-                ? `${filteredProjects.length} of ${projectRows.length} projects`
-                : `${projectRows.length} projects`}
-          </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant={viewMode === "table" ? "default" : "outline"}
               onClick={() => setViewMode("table")}
+              className="h-11 rounded-xl"
             >
               Table View
             </Button>
@@ -646,77 +743,117 @@ export default function ProjectsPage() {
               type="button"
               variant={viewMode === "kanban" ? "default" : "outline"}
               onClick={() => setViewMode("kanban")}
+              className="h-11 rounded-xl"
             >
               Kanban View
             </Button>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Visible Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {PROJECT_TABLE_OPTIONAL_COLUMNS.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column}
-                  checked={visibleColumns.includes(column)}
-                  onCheckedChange={(checked) =>
-                    updateVisibleColumn(column, checked === true)
-                  }
-                >
-                  {PROJECT_COLUMN_LABELS[column]}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            variant="outline"
-            onClick={exportProjectsPdf}
-            disabled={projectRows.length === 0 || isLoading}
-          >
-            Export PDF
-          </Button>
-          <Button
-            variant="outline"
-            onClick={exportProjectsExcel}
-            disabled={projectRows.length === 0 || isLoading}
-          >
-            Export Excel
-          </Button>
-          <Button
-            variant="outline"
-            onClick={exportProjectsJson}
-            disabled={projectRows.length === 0 || isLoading}
-          >
-            Export JSON
-          </Button>
-          <Button variant="outline" onClick={() => setIsTemplatesOpen(true)}>
-            Project Templates
-          </Button>
-          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Batch Import
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={saveCurrentPreset}
-          >
-            Save Preset
-          </Button>
-          <Button asChild>
-            <Link href="/projects/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Project
-            </Link>
-          </Button>
         </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {statusFilter !== "all" ? (
+              <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm">
+                Status: {statusFilter}
+              </span>
+            ) : null}
+            {typeFilter !== "all" ? (
+              <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm">
+                Type: {typeFilter}
+              </span>
+            ) : null}
+            {savedPresets.length > 0
+              ? savedPresets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyFilterPreset(preset)}
+                    className="rounded-full border border-border/70 bg-background/95 shadow-sm hover:bg-muted/60"
+                  >
+                    {preset.name}
+                  </Button>
+                ))
+              : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {isLoading
+                ? "Loading..."
+                : searchQuery.trim().length > 0
+                  ? `${filteredProjects.length} of ${projectRows.length} projects`
+                  : `${projectRows.length} projects`}
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-xl">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={10}
+                className="w-64 rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
+              >
+                <DropdownMenuLabel className="rounded-xl border bg-muted/35 px-3 py-3">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-foreground">Visible Columns</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Show or hide optional project metadata.
+                    </span>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {PROJECT_TABLE_OPTIONAL_COLUMNS.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column}
+                    className="rounded-xl px-3 py-2.5"
+                    checked={visibleColumns.includes(column)}
+                    onCheckedChange={(checked) =>
+                      updateVisibleColumn(column, checked === true)
+                    }
+                  >
+                    {PROJECT_COLUMN_LABELS[column]}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="outline"
+              onClick={exportProjectsPdf}
+              disabled={projectRows.length === 0 || isLoading}
+              className="rounded-xl bg-background/95 shadow-sm"
+            >
+              Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={exportProjectsExcel}
+              disabled={projectRows.length === 0 || isLoading}
+              className="rounded-xl bg-background/95 shadow-sm"
+            >
+              Export Excel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={exportProjectsJson}
+              disabled={projectRows.length === 0 || isLoading}
+              className="rounded-xl bg-background/95 shadow-sm"
+            >
+              Export JSON
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openSavePresetDialog}
+              className="rounded-xl bg-background/95 shadow-sm"
+            >
+              Save Preset
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
 
       {loadError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -770,6 +907,296 @@ export default function ProjectsPage() {
       />
 
       <Dialog
+        open={isSavePresetOpen}
+        onOpenChange={(open) => {
+          setIsSavePresetOpen(open);
+          if (!open) {
+            setSavePresetError(null);
+          }
+        }}
+      >
+        <DialogContent
+          aria-describedby="save-preset-description"
+          className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-lg sm:rounded-2xl"
+        >
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
+            <DialogTitle>Save current preset</DialogTitle>
+            <DialogDescription id="save-preset-description">
+              Store the current search and visible column layout for quick reuse.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 rounded-2xl border bg-background/90 p-4 shadow-sm">
+            <label className="grid gap-2 text-sm text-foreground">
+              <span>Preset Name</span>
+              <Input
+                aria-label="Preset name"
+                value={savePresetDraft.name}
+                onChange={(event) =>
+                  setSavePresetDraft({ name: event.target.value })
+                }
+                className="rounded-xl border-border/80 bg-background/95"
+                placeholder="Executive review"
+              />
+            </label>
+            <div className="rounded-xl border bg-muted/25 p-4 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Current selection
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {searchQuery.trim() ? (
+                  <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                    Search: {searchQuery.trim()}
+                  </span>
+                ) : null}
+                <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                  Columns: {visibleColumns.map((column) => PROJECT_COLUMN_LABELS[column]).join(", ")}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {savePresetError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive shadow-sm">
+              {savePresetError}
+            </div>
+          ) : null}
+
+          <DialogFooter className="flex flex-wrap gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setIsSavePresetOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-xl" onClick={saveCurrentPreset}>
+              Save preset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isCreateWizardOpen}
+        onOpenChange={(open) => {
+          setIsCreateWizardOpen(open);
+          if (!open) {
+            setCreateProjectStep(0);
+            setCreateProjectError(null);
+          }
+        }}
+      >
+        <DialogContent
+          aria-describedby="create-project-description"
+          className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-2xl sm:rounded-2xl"
+        >
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
+            <DialogTitle>Create project</DialogTitle>
+            <DialogDescription id="create-project-description">
+              Step {createProjectStep + 1} of 3. Capture the project essentials, then review before creating it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {createProjectStep === 0 ? (
+            <div className="grid gap-4 rounded-2xl border bg-background/90 p-4 shadow-sm">
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Project Name</span>
+                <Input
+                  aria-label="Project name"
+                  value={createProjectDraft.name}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("name", event.target.value)
+                  }
+                  className="rounded-xl border-border/80 bg-background/95"
+                />
+              </label>
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Project Code</span>
+                <Input
+                  aria-label="Project code"
+                  value={createProjectDraft.code}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("code", event.target.value)
+                  }
+                  className="rounded-xl border-border/80 bg-background/95"
+                />
+              </label>
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Project Type</span>
+                <select
+                  aria-label="Project type"
+                  className="h-10 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
+                  value={createProjectDraft.projectType}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("projectType", event.target.value)
+                  }
+                >
+                  <option value="">Select project type</option>
+                  {PROJECT_TYPE_FILTER_OPTIONS.filter((option) => option.value !== "all").map(
+                    (option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          {createProjectStep === 1 ? (
+            <div className="grid gap-4 rounded-2xl border bg-background/90 p-4 shadow-sm">
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Client Name</span>
+                <Input
+                  aria-label="Client name"
+                  value={createProjectDraft.clientName}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("clientName", event.target.value)
+                  }
+                  className="rounded-xl border-border/80 bg-background/95"
+                />
+              </label>
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Project Description</span>
+                <textarea
+                  aria-label="Project description"
+                  className="min-h-28 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
+                  value={createProjectDraft.description}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("description", event.target.value)
+                  }
+                />
+              </label>
+              <label className="grid gap-2 text-sm text-foreground">
+                <span>Currency</span>
+                <select
+                  aria-label="Currency"
+                  className="h-10 rounded-xl border border-border/80 bg-background/95 px-3 py-2 text-sm"
+                  value={createProjectDraft.currency}
+                  onChange={(event) =>
+                    updateCreateProjectDraft("currency", event.target.value)
+                  }
+                >
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          {createProjectStep === 2 ? (
+            <div className="grid gap-4 rounded-2xl border bg-muted/25 p-4 shadow-sm">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Project name
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {createProjectDraft.name || "Not provided"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Project code
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {createProjectDraft.code || "Not provided"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Project type
+                </div>
+                <div className="mt-1 text-sm font-medium uppercase">
+                  {createProjectDraft.projectType || "Not provided"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Client name
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {createProjectDraft.clientName || "Not provided"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Description
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {createProjectDraft.description || "Not provided"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Currency
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {createProjectDraft.currency}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {createProjectError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive shadow-sm">
+              {createProjectError}
+            </div>
+          ) : null}
+
+          <DialogFooter className="flex flex-wrap gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() =>
+                createProjectStep === 0
+                  ? setIsCreateWizardOpen(false)
+                  : setCreateProjectStep((currentStep) =>
+                      Math.max(0, currentStep - 1) as CreateProjectStep,
+                    )
+              }
+            >
+              {createProjectStep === 0 ? "Cancel" : "Previous step"}
+            </Button>
+            {createProjectStep < 2 ? (
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={() =>
+                  setCreateProjectStep((currentStep) =>
+                    Math.min(2, currentStep + 1) as CreateProjectStep,
+                  )
+                }
+                disabled={createProjectStep === 0 && !canAdvanceCreateProjectStep}
+              >
+                {createProjectStep === 1 ? "Review project" : "Next step"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={submitCreateProjectWizard}
+                disabled={createProject.isPending}
+              >
+                {createProject.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create project"
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Sheet
         open={quickViewProject !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -777,59 +1204,159 @@ export default function ProjectsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-3xl sm:translate-x-[18%]">
-          <DialogHeader>
-            <DialogTitle>Project quick view</DialogTitle>
-            <DialogDescription>
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto border-l-border/80 bg-background/95 px-5 pb-6 pt-6 shadow-2xl backdrop-blur-md sm:max-w-xl"
+        >
+          <SheetHeader className="rounded-2xl border bg-muted/35 px-4 py-4 text-left">
+            <SheetTitle>Project quick view</SheetTitle>
+            <SheetDescription>
               Review the selected project context without leaving the projects list.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
           {quickViewProject ? (
-            <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-              <section className="space-y-4">
-                <div className="rounded-xl border bg-muted/20 p-5">
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    {quickViewProject.name}
-                  </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {quickViewProject.description ?? "No description available."}
-                  </p>
+            <div className="mt-6 space-y-6">
+              <section className="rounded-2xl border bg-muted/20 p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-tight">
+                      {quickViewSummary?.name ?? quickViewProject.name}
+                    </h2>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {quickViewSummary?.description ??
+                        quickViewProject.description ??
+                        "No description available."}
+                    </p>
+                  </div>
+                  <div className="rounded-full border bg-background/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm">
+                    {(quickViewSummary?.status ?? quickViewProject.status ?? "draft").toString()}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Client
+                    </div>
+                    <div className="mt-2 text-sm font-medium">
+                      {quickViewSummary?.client_name ?? "Not assigned"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Code
+                    </div>
+                    <div className="mt-2 font-mono text-sm">
+                      {quickViewSummary?.code ?? quickViewProject.code ?? "—"}
+                    </div>
+                  </div>
                 </div>
               </section>
 
-              <aside className="rounded-xl border bg-background p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Status
+              {isQuickViewLoading ? (
+                <div className="flex items-center gap-2 rounded-xl border bg-background/90 p-4 text-sm text-muted-foreground shadow-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading project summary...
                 </div>
-                <div className="mt-2 text-sm font-medium capitalize">
-                  {quickViewProject.status ?? "Unknown"}
+              ) : quickViewError ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">
+                  {quickViewError instanceof Error
+                    ? quickViewError.message
+                    : "Failed to load project summary."}
                 </div>
+              ) : (
+                <>
+                  <section className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border bg-background/90 p-5 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Coherence score
+                      </div>
+                      <div className="mt-3 text-4xl font-semibold tracking-tight">
+                        {Math.round(quickViewSummary?.coherence_score ?? 0)}
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Current project health based on the latest backend analysis.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border bg-background/90 p-5 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Alert pressure
+                      </div>
+                      <div className="mt-3 text-sm font-medium text-foreground">
+                        {quickViewSummary?.open_alert_count ?? 0} open alerts
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {quickViewSummary?.critical_alert_count ?? 0} critical alert
+                        {(quickViewSummary?.critical_alert_count ?? 0) === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </section>
 
-                <div className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Type
-                </div>
-                <div className="mt-2 text-sm font-medium uppercase">
-                  {quickViewProject.project_type ?? "N/A"}
-                </div>
+                  <section className="rounded-2xl border bg-background/90 p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Top alerts
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Ranked unresolved issues from the backend summary endpoint.
+                        </p>
+                      </div>
+                    </div>
+                    {quickViewSummary && quickViewSummary.top_alerts.length > 0 ? (
+                      <div className="mt-4 space-y-3">
+                        {quickViewSummary.top_alerts.map((alert) => (
+                          <div
+                            key={alert.id}
+                            className="rounded-xl border bg-muted/20 p-4 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">
+                                  {alert.title}
+                                </p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                                  {alert.severity} severity
+                                </p>
+                              </div>
+                              <span className="rounded-full border bg-background/90 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground shadow-sm">
+                                {alert.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground shadow-sm">
+                        No open alerts in the current quick-view summary.
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
 
-                <div className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Code
-                </div>
-                <div className="mt-2 font-mono text-sm">
-                  {quickViewProject.code ?? "—"}
-                </div>
-              </aside>
+              <section className="space-y-3 rounded-2xl border bg-background/90 p-5 shadow-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Quick actions
+                </h3>
+                <Button asChild className="w-full justify-between">
+                  <Link href={`/projects/${quickViewProject.id}`}>
+                    Open Full View
+                    <span aria-hidden="true">→</span>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full justify-between">
+                  <Link href={`/projects/${quickViewProject.id}/evidence`}>
+                    View Evidence
+                    <span aria-hidden="true">→</span>
+                  </Link>
+                </Button>
+              </section>
             </div>
           ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setQuickViewProject(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -109,7 +109,7 @@ cd apps/web
 npm install
 
 # Start dev server
-npm run dev
+to fi
 ```
 
 The web app will be available at http://localhost:3000.

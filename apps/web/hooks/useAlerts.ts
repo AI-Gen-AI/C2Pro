@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api/client";
 
 export interface AlertListItem {
   id: string;
+  project_id?: string;
   severity: string;
   type: string;
   title: string;
@@ -87,6 +88,7 @@ export function useAlerts(): UseAlertsResult {
 
         const mapped = alertsRes.data.items.map((a: AlertResponse) => ({
           id: a.id,
+          project_id: a.project_id,
           severity: capitalize(a.severity),
           type: capitalize(a.category),
           title: a.message.split(" — ")[0],

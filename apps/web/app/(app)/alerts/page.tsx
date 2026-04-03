@@ -63,6 +63,7 @@ type AlertWithSla = {
 
 type AlertRecord = {
   id: string;
+  project_id?: string;
   severity: string;
   type: string;
   title: string;
@@ -209,6 +210,8 @@ export default function AlertsPage() {
   const { alerts, loading, error } = useAlerts();
   const [alertsState, setAlertsState] = useState<AlertRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [projectFilter, setProjectFilter] = useState('All Projects');
+  const [typeFilter, setTypeFilter] = useState('All Types');
   const [severityFilter, setSeverityFilter] = useState('All Severity');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -262,6 +265,27 @@ export default function AlertsPage() {
         alert,
         sla: getAlertSla(alert as Record<string, unknown>),
       })),
+    [alertsState],
+  );
+  const projectOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          alertsState.map((alert) => [
+            alert.project_id ?? alert.project,
+            {
+              value: alert.project_id ?? alert.project,
+              label: alert.project_id
+                ? `${alert.project} (${alert.project_id})`
+                : alert.project,
+            },
+          ]),
+        ).values(),
+      ),
+    [alertsState],
+  );
+  const typeOptions = useMemo(
+    () => Array.from(new Set(alertsState.map((alert) => alert.type))).sort(),
     [alertsState],
   );
 
@@ -433,12 +457,20 @@ export default function AlertsPage() {
   const filteredAlerts = alertsWithSla.filter(({ alert }) => {
     const matchesSearch =
       alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alert.description.toLowerCase().includes(searchQuery.toLowerCase());
+      alert.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      alert.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (alert.project_id ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesProject =
+      projectFilter === 'All Projects' ||
+      alert.project === projectFilter ||
+      alert.project_id === projectFilter;
+    const matchesType =
+      typeFilter === 'All Types' || alert.type === typeFilter;
     const matchesSeverity =
       severityFilter === 'All Severity' || alert.severity === severityFilter;
     const matchesStatus =
       statusFilter === 'All Status' || alert.status === statusFilter;
-    return matchesSearch && matchesSeverity && matchesStatus;
+    return matchesSearch && matchesProject && matchesType && matchesSeverity && matchesStatus;
   });
   const severityCounts = alertsState.reduce<Record<string, number>>((acc, alert) => {
     acc[alert.severity] = (acc[alert.severity] ?? 0) + 1;
@@ -465,13 +497,13 @@ export default function AlertsPage() {
       title: "Critical",
       value: `${severityCounts["Critical"] ?? 0} active`,
       detail: "Highest-severity alerts in current workspace.",
-      tone: "border-red-200 bg-red-50/70 text-red-900",
+      tone: "border-red-200 bg-red-50/40 text-red-900",
     },
     {
       title: "Open Alerts",
       value: `${openCount} currently require action`,
       detail: "Includes open and in-progress remediation work.",
-      tone: "border-slate-200 bg-slate-50 text-slate-900",
+      tone: "border-slate-200 bg-slate-50/70 text-slate-900",
     },
     {
       title: "Top Impacted Project",
@@ -479,7 +511,7 @@ export default function AlertsPage() {
       detail: topProjectEntry
         ? `${topProjectEntry[1]} alerts in current scope`
         : "Adjust filters to inspect alert concentrations.",
-      tone: "border-amber-200 bg-amber-50/70 text-amber-950",
+      tone: "border-amber-200 bg-amber-50/40 text-amber-950",
     },
     {
       title: "SLA Violations",
@@ -487,7 +519,7 @@ export default function AlertsPage() {
       detail: overdueCount
         ? "Alerts that have exceeded the current severity response window."
         : "No active SLA violations in the current workspace scope.",
-      tone: "border-rose-200 bg-rose-50/70 text-rose-950",
+      tone: "border-rose-200 bg-rose-50/40 text-rose-950",
     },
   ];
 
@@ -520,42 +552,44 @@ export default function AlertsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alerts Center</h1>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Alerts Center</h1>
           <p className="text-sm text-muted-foreground">
             Monitor and manage all project alerts
           </p>
-          <p className="mt-2 text-sm font-medium text-foreground">
-            {activeRuleCount} active rules
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {activeSubscriptionCount > 0
-              ? `${activeSubscriptionCount} active subscriptions`
-              : 'No active subscriptions'}
-          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border bg-background/95 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+              {activeRuleCount} active rules
+            </span>
+            <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+              {activeSubscriptionCount > 0
+                ? `${activeSubscriptionCount} active subscriptions`
+                : 'No active subscriptions'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={openSubscriptionsDialog}>
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={openSubscriptionsDialog}>
             Subscriptions
           </Button>
-          <Button variant="outline" onClick={openRulesDialog}>
+          <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={openRulesDialog}>
             Alert Rules
           </Button>
-          <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
+          <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={() => setTemplateDialogOpen(true)}>
             Alert Templates
           </Button>
-          <Button>
+          <Button className="rounded-xl shadow-sm">
             + New Alert
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 lg:grid-cols-4">
         {analyticsCards.map((card) => (
           <section
             key={card.title}
-            className={`rounded-lg border p-4 shadow-sm ${card.tone}`}
+            className={`rounded-2xl border p-4 shadow-sm backdrop-blur-sm ${card.tone}`}
             aria-label={card.title}
           >
             <div className="text-xs font-semibold uppercase tracking-[0.18em]">
@@ -570,18 +604,45 @@ export default function AlertsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1">
+      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-background/70 p-3 shadow-sm">
+        <div className="relative flex-1 min-w-[260px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search alerts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="h-11 rounded-xl border-border/80 bg-background/95 pl-9"
           />
         </div>
+        <Select value={projectFilter} onValueChange={setProjectFilter}>
+          <SelectTrigger className="h-11 w-[240px] rounded-xl border-border/80 bg-background/95 shadow-sm" aria-label="Project filter">
+            <SelectValue placeholder="All Projects" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All Projects">All Projects</SelectItem>
+            {projectOptions.map((project) => (
+              <SelectItem key={project.value} value={project.value}>
+                {project.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="h-11 w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm" aria-label="Type filter">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All Types">All Types</SelectItem>
+            {typeOptions.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={severityFilter} onValueChange={setSeverityFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="h-11 w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm" aria-label="Severity filter">
             <SelectValue placeholder="All Severity" />
           </SelectTrigger>
           <SelectContent>
@@ -593,7 +654,7 @@ export default function AlertsPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="h-11 w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm" aria-label="Status filter">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
@@ -604,46 +665,47 @@ export default function AlertsPage() {
           </SelectContent>
         </Select>
       </div>
+      </section>
 
       {selectedAlertIds.length > 0 ? (
-        <section className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+        <section className="flex items-center justify-between rounded-2xl border bg-background/85 px-4 py-3 shadow-sm">
           <div className="text-sm font-medium">
             {selectedAlertIds.length} alerts selected
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setSelectedAlertIds([])}>
+            <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={() => setSelectedAlertIds([])}>
               Clear Selection
             </Button>
-            <Button onClick={openBulkResolveDialog}>Bulk Resolve</Button>
+            <Button className="rounded-xl shadow-sm" onClick={openBulkResolveDialog}>Bulk Resolve</Button>
           </div>
         </section>
       ) : null}
 
       {/* Alerts Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b bg-muted/50">
+            <thead className="border-b bg-muted/30">
               <tr>
                 <th className="w-12 p-4">
                   <Checkbox aria-label="Select all alerts" />
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">ID</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">ID</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Severity
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Type</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Title</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Type</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Title</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Project
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   SLA
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Actions
                 </th>
               </tr>
@@ -652,7 +714,7 @@ export default function AlertsPage() {
               {filteredAlerts.map(({ alert, sla }) => (
                 <tr
                   key={alert.id}
-                  className="hover:bg-muted/50 transition-colors"
+                  className="transition-colors hover:bg-muted/20"
                 >
                   <td className="p-4">
                     <Checkbox
@@ -663,35 +725,42 @@ export default function AlertsPage() {
                       }
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                  <td className="px-4 py-4 text-sm text-muted-foreground">
                     {alert.id}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <Badge
                       variant="outline"
-                      className={getSeverityColor(alert.severity)}
+                      className={`rounded-full border px-2.5 py-1 shadow-sm ${getSeverityColor(alert.severity)}`}
                     >
                       {alert.severity}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm">{alert.type}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4 text-sm">{alert.type}</td>
+                  <td className="px-4 py-4">
                     <div className="max-w-md">
-                      <div className="font-medium">{alert.title}</div>
+                      <div className="font-semibold text-foreground">{alert.title}</div>
                       <div className="text-sm text-muted-foreground">
                         {alert.description}
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm">{alert.project}</td>
-                  <td className="px-4 py-3">
-                    <Badge className={getStatusColor(alert.status)}>
+                  <td className="px-4 py-4 text-sm">
+                    <div className="space-y-1">
+                      <div>{alert.project}</div>
+                      {alert.project_id ? (
+                        <div className="text-xs text-muted-foreground">{alert.project_id}</div>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <Badge className={`rounded-full px-2.5 py-1 shadow-sm ${getStatusColor(alert.status)}`}>
                       {alert.status}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <div className="space-y-1">
-                      <Badge className={sla.tone}>{sla.statusLabel}</Badge>
+                      <Badge className={`rounded-full px-2.5 py-1 shadow-sm ${sla.tone}`}>{sla.statusLabel}</Badge>
                         {sla.dueAt ? (
                           <div className="text-xs text-muted-foreground">
                             Due {formatUtcDate(sla.dueAt)}
@@ -703,20 +772,22 @@ export default function AlertsPage() {
                           </div>
                         ) : null}
                       </div>
-                    </td>
-                  <td className="px-4 py-3">
+                  </td>
+                  <td className="px-4 py-4">
                     <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl bg-background/95 shadow-sm"
                         aria-label={`View alert ${alert.id}`}
                         onClick={() => openDetailDialog(alert as AlertRecord)}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl bg-background/95 shadow-sm"
                         aria-label={`Resolve alert ${alert.id}`}
                         onClick={() => openResolveDialog(alert as AlertRecord)}
                       >
@@ -732,15 +803,15 @@ export default function AlertsPage() {
       </div>
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
             <DialogTitle>Alert Templates</DialogTitle>
             <DialogDescription>
               Start from an alert response template
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-[1.1fr_1.4fr]">
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-2xl border bg-background/90 p-3 shadow-sm">
               {ALERT_TEMPLATES.map((template) => {
                 const isActive = template.id === selectedTemplate?.id;
                 return (
@@ -748,10 +819,10 @@ export default function AlertsPage() {
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplateId(template.id)}
-                    className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                    className={`w-full rounded-xl border p-4 text-left transition-colors shadow-sm ${
                       isActive
                         ? 'border-slate-900 bg-slate-950 text-white'
-                        : 'border-border bg-background hover:bg-muted/70'
+                        : 'border-border bg-background/95 hover:bg-muted/70'
                     }`}
                   >
                     <div className="text-sm font-semibold">{template.name}</div>
@@ -768,7 +839,7 @@ export default function AlertsPage() {
             </div>
 
             {selectedTemplate ? (
-              <section className="rounded-xl border bg-muted/30 p-5">
+              <section className="rounded-2xl border bg-muted/25 p-5 shadow-sm">
                 <h2 className="text-lg font-semibold tracking-tight">
                   {selectedTemplate.name}
                 </h2>
@@ -777,7 +848,7 @@ export default function AlertsPage() {
                 </p>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div>
+                  <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Response Window
                     </div>
@@ -785,13 +856,13 @@ export default function AlertsPage() {
                       {selectedTemplate.responseWindow}
                     </div>
                   </div>
-                  <div>
+                  <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Core Owners
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {selectedTemplate.owners.map((owner) => (
-                        <Badge key={owner} variant="secondary">
+                        <Badge key={owner} variant="secondary" className="shadow-sm">
                           {owner}
                         </Badge>
                       ))}
@@ -805,7 +876,7 @@ export default function AlertsPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedTemplate.assets.map((asset) => (
-                      <Badge key={asset} variant="outline">
+                      <Badge key={asset} variant="outline" className="shadow-sm">
                         {asset}
                       </Badge>
                     ))}
@@ -814,11 +885,11 @@ export default function AlertsPage() {
               </section>
             ) : null}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button className="rounded-xl" variant="outline" onClick={() => setTemplateDialogOpen(false)}>
               Close
             </Button>
-            <Button onClick={() => setTemplateDialogOpen(false)}>
+            <Button className="rounded-xl" onClick={() => setTemplateDialogOpen(false)}>
               Use Template
             </Button>
           </DialogFooter>
@@ -834,8 +905,8 @@ export default function AlertsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-3xl sm:translate-x-[18%]">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl sm:translate-x-[18%]">
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
             <DialogTitle>Alert details</DialogTitle>
             <DialogDescription>
               Review the selected alert context without leaving the alerts center.
@@ -845,7 +916,7 @@ export default function AlertsPage() {
           {selectedAlertDetail ? (
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
               <section className="space-y-4">
-                <div className="rounded-xl border bg-muted/20 p-4">
+                <div className="rounded-2xl border bg-muted/25 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-semibold tracking-tight">
@@ -855,14 +926,14 @@ export default function AlertsPage() {
                         {selectedAlertDetail.description}
                       </p>
                     </div>
-                    <Badge className={getSeverityColor(selectedAlertDetail.severity)}>
+                    <Badge className={`shadow-sm ${getSeverityColor(selectedAlertDetail.severity)}`}>
                       {selectedAlertDetail.severity}
                     </Badge>
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <section className="rounded-lg border p-4">
+                  <section className="rounded-xl border bg-background/90 p-4 shadow-sm">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Project
                     </div>
@@ -870,7 +941,7 @@ export default function AlertsPage() {
                       {selectedAlertDetail.project}
                     </div>
                   </section>
-                  <section className="rounded-lg border p-4">
+                  <section className="rounded-xl border bg-background/90 p-4 shadow-sm">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Type
                     </div>
@@ -881,7 +952,7 @@ export default function AlertsPage() {
                 </div>
               </section>
 
-              <aside className="rounded-xl border bg-background p-4">
+              <aside className="rounded-2xl border bg-background/90 p-4 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Status
                 </div>
@@ -914,8 +985,8 @@ export default function AlertsPage() {
             </div>
           ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button className="rounded-xl" variant="outline" onClick={() => setDetailDialogOpen(false)}>
               Close
             </Button>
           </DialogFooter>
@@ -923,8 +994,8 @@ export default function AlertsPage() {
       </Dialog>
 
       <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
             <DialogTitle>Customize alert rules</DialogTitle>
             <DialogDescription>
               Tune the alert triggers used by the current workspace view.
@@ -932,7 +1003,7 @@ export default function AlertsPage() {
           </DialogHeader>
           <div className="space-y-3">
             {draftAlertRules.map((rule, index) => (
-              <section key={rule.id} className="rounded-xl border bg-muted/20 p-4">
+              <section key={rule.id} className="rounded-2xl border bg-muted/25 p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-base font-semibold">{rule.name}</h2>
@@ -941,6 +1012,7 @@ export default function AlertsPage() {
                   <Button
                     type="button"
                     variant={rule.enabled ? 'outline' : 'default'}
+                    className="rounded-xl bg-background/95 shadow-sm"
                     onClick={() =>
                       setDraftAlertRules((current) =>
                         current.map((item, itemIndex) =>
@@ -956,7 +1028,7 @@ export default function AlertsPage() {
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
+                  <div className="space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                     <label
                       htmlFor={`${rule.id}-threshold`}
                       className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
@@ -967,6 +1039,7 @@ export default function AlertsPage() {
                       id={`${rule.id}-threshold`}
                       type="number"
                       min={1}
+                      className="rounded-xl border-border/80 bg-background/95"
                       value={rule.threshold}
                       onChange={(event) =>
                         setDraftAlertRules((current) =>
@@ -983,7 +1056,7 @@ export default function AlertsPage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Default severity
                     </div>
@@ -994,6 +1067,7 @@ export default function AlertsPage() {
                           type="button"
                           size="sm"
                           variant={rule.severity === severity ? 'default' : 'outline'}
+                          className="rounded-xl shadow-sm"
                           onClick={() =>
                             setDraftAlertRules((current) =>
                               current.map((item, itemIndex) =>
@@ -1013,11 +1087,11 @@ export default function AlertsPage() {
               </section>
             ))}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRulesDialogOpen(false)}>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button className="rounded-xl" variant="outline" onClick={() => setRulesDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={saveRules}>Save Rules</Button>
+            <Button className="rounded-xl" onClick={saveRules}>Save Rules</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1026,8 +1100,8 @@ export default function AlertsPage() {
         open={subscriptionsDialogOpen}
         onOpenChange={setSubscriptionsDialogOpen}
       >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-2xl sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
             <DialogTitle>Alert subscriptions</DialogTitle>
             <DialogDescription>
               Choose which channels receive alert notifications for this workspace view.
@@ -1035,7 +1109,7 @@ export default function AlertsPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <section className="rounded-xl border bg-muted/20 p-4">
+            <section className="rounded-2xl border bg-muted/25 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold">Email Notifications</h2>
@@ -1046,6 +1120,7 @@ export default function AlertsPage() {
                 <Button
                   type="button"
                   variant={draftAlertSubscriptions.emailEnabled ? 'outline' : 'default'}
+                  className="rounded-xl bg-background/95 shadow-sm"
                   onClick={() =>
                     setDraftAlertSubscriptions((current) => ({
                       ...current,
@@ -1059,7 +1134,7 @@ export default function AlertsPage() {
                 </Button>
               </div>
 
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                 <label
                   htmlFor="alert-subscription-email"
                   className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
@@ -1069,6 +1144,7 @@ export default function AlertsPage() {
                 <Input
                   id="alert-subscription-email"
                   type="email"
+                  className="rounded-xl border-border/80 bg-background/95"
                   value={draftAlertSubscriptions.emailAddress}
                   onChange={(event) =>
                     setDraftAlertSubscriptions((current) => ({
@@ -1081,7 +1157,7 @@ export default function AlertsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border bg-muted/20 p-4">
+            <section className="rounded-2xl border bg-muted/25 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold">Slack Notifications</h2>
@@ -1092,6 +1168,7 @@ export default function AlertsPage() {
                 <Button
                   type="button"
                   variant={draftAlertSubscriptions.slackEnabled ? 'outline' : 'default'}
+                  className="rounded-xl bg-background/95 shadow-sm"
                   onClick={() =>
                     setDraftAlertSubscriptions((current) => ({
                       ...current,
@@ -1105,7 +1182,7 @@ export default function AlertsPage() {
                 </Button>
               </div>
 
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                 <label
                   htmlFor="alert-subscription-slack"
                   className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
@@ -1114,6 +1191,7 @@ export default function AlertsPage() {
                 </label>
                 <Input
                   id="alert-subscription-slack"
+                  className="rounded-xl border-border/80 bg-background/95"
                   value={draftAlertSubscriptions.slackChannel}
                   onChange={(event) =>
                     setDraftAlertSubscriptions((current) => ({
@@ -1127,14 +1205,15 @@ export default function AlertsPage() {
             </section>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
             <Button
+              className="rounded-xl"
               variant="outline"
               onClick={() => setSubscriptionsDialogOpen(false)}
             >
               Cancel
             </Button>
-            <Button onClick={saveSubscriptions}>Save Subscriptions</Button>
+            <Button className="rounded-xl" onClick={saveSubscriptions}>Save Subscriptions</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1151,8 +1230,8 @@ export default function AlertsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-xl sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
             <DialogTitle>
               {bulkResolveIds.length > 0 ? 'Bulk resolve alerts' : 'Resolve alert'}
             </DialogTitle>
@@ -1168,14 +1247,14 @@ export default function AlertsPage() {
           {selectedAlert ? (
             <div className="space-y-4">
               {bulkResolveIds.length > 0 ? (
-                <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                <div className="rounded-xl border bg-muted/25 p-4 text-sm shadow-sm">
                   <div className="font-medium">{bulkResolveIds.length} selected alerts</div>
                   <div className="mt-2 text-muted-foreground">
                     Highest severity in selection: {selectedAlert.severity}
                   </div>
                 </div>
               ) : null}
-              <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="rounded-xl border bg-muted/25 p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium">{selectedAlert.title}</p>
@@ -1183,13 +1262,13 @@ export default function AlertsPage() {
                       {selectedAlert.project} · {selectedAlert.type}
                     </p>
                   </div>
-                  <Badge className={getSeverityColor(selectedAlert.severity)}>
+                  <Badge className={`shadow-sm ${getSeverityColor(selectedAlert.severity)}`}>
                     {selectedAlert.severity}
                   </Badge>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                 <Label htmlFor="resolution-notes">Resolution notes</Label>
                 <Textarea
                   id="resolution-notes"
@@ -1197,6 +1276,7 @@ export default function AlertsPage() {
                   onChange={(event) => setResolutionNotes(event.target.value)}
                   rows={4}
                   placeholder="Document the evidence review and the applied resolution."
+                  className="rounded-xl border-border/80 bg-background/95"
                 />
                 <p className="text-xs text-muted-foreground">
                   {selectedAlert.severity} alerts require at least{' '}
@@ -1212,12 +1292,13 @@ export default function AlertsPage() {
               </div>
 
               {requiresRootCause(selectedAlert.severity) ? (
-                <div className="space-y-2">
+                <div className="space-y-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                   <Label htmlFor="root-cause-trigger">Root cause</Label>
                   <Select value={rootCause} onValueChange={setRootCause}>
                     <SelectTrigger
                       id="root-cause-trigger"
                       aria-label="Root cause"
+                      className="rounded-xl border-border/80 bg-background/95 shadow-sm"
                     >
                       <SelectValue placeholder="Select root cause category" />
                     </SelectTrigger>
@@ -1236,7 +1317,7 @@ export default function AlertsPage() {
               ) : null}
 
               {requiresCheckbox(selectedAlert.severity) ? (
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-2 rounded-xl border bg-background/90 p-4 shadow-sm">
                   <Checkbox
                     id="resolve-alert-confirmation"
                     checked={confirmChecked}
@@ -1254,8 +1335,9 @@ export default function AlertsPage() {
             </div>
           ) : null}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
             <Button
+              className="rounded-xl"
               variant="outline"
               onClick={() => {
                 setResolveDialogOpen(false);
@@ -1266,6 +1348,7 @@ export default function AlertsPage() {
               Cancel
             </Button>
             <Button
+              className="rounded-xl"
               onClick={handleConfirmResolution}
               disabled={
                 !selectedAlert ||

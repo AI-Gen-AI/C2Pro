@@ -512,7 +512,9 @@ class LlmRuleEvaluator(RuleEvaluator):
         Returns:
             Finding si la regla es violada, None si no hay violación
         """
+        # Update both legacy and v0.3 metrics
         self.evaluations_count += 1
+        self.metrics.evaluations_count += 1
 
         logger.info(
             "llm_evaluating_clause",
@@ -539,12 +541,18 @@ class LlmRuleEvaluator(RuleEvaluator):
         try:
             response = await self.wrapper.generate(request)
             self.total_cost += response.cost_usd
+            self.metrics.total_cost_usd += response.cost_usd
+            self.metrics.llm_calls_count += 1
 
             # Parse response
             result = self._parse_evaluation_response(response.content)
 
             if result.get("rule_violated", False):
                 self.violations_found += 1
+                self.metrics.violations_found += 1
+                # Track impact and confidence for averages
+                self.metrics._impact_sum += result.get("impact_score", 0.0)
+                self.metrics._confidence_sum += result.get("confidence", 1.0)
 
                 logger.info(
                     "llm_rule_violation_detected",

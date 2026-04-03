@@ -90,6 +90,8 @@ type PendingEvidenceAction =
       decision: "approve" | "reject";
     };
 
+type EvidencePanelTab = "entities" | "alerts" | "search";
+
 const EVIDENCE_TEMPLATES: EvidenceTemplate[] = [
   {
     id: "claims-review",
@@ -191,6 +193,8 @@ export default function EvidencePage() {
     null,
   );
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null);
+  const [activePanelTab, setActivePanelTab] =
+    useState<EvidencePanelTab>("entities");
   const [highlightSearchQuery, setHighlightSearchQuery] = useState("");
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
@@ -367,6 +371,21 @@ export default function EvidencePage() {
     setAlertsState(alerts);
   }, [alerts]);
 
+  const syncPanelSelection = useCallback(
+    (targetId: string) => {
+      setActiveEntityId(targetId);
+      if (alertsState.some((alert) => alert.id === targetId)) {
+        setActivePanelTab("alerts");
+        return;
+      }
+
+      if (entities.some((entity) => entity.id === targetId)) {
+        setActivePanelTab("entities");
+      }
+    },
+    [alertsState, entities],
+  );
+
   const handleApproveEntity = useCallback(
     async (entityId: string, note?: string) => {
       const entity = entities.find((item) => item.id === entityId);
@@ -444,13 +463,20 @@ export default function EvidencePage() {
     [entities],
   );
 
-  const handleEntityClick = useCallback((entity: ExtractedEntity) => {
-    setActiveEntityId(entity.id);
-  }, []);
+  const handleEntityClick = useCallback(
+    (entity: ExtractedEntity) => {
+      syncPanelSelection(entity.id);
+    },
+    [syncPanelSelection],
+  );
 
-  const handleHighlightClick = useCallback((id: string) => {
-    setActiveEntityId(id);
-  }, []);
+  const handleHighlightClick = useCallback(
+    (id: string) => {
+      const mappedHighlight = highlights.find((highlight) => highlight.id === id);
+      syncPanelSelection(mappedHighlight?.clauseId ?? id);
+    },
+    [highlights, syncPanelSelection],
+  );
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([refetchDocuments(), refetchEntities(), refetchAlerts()]);
@@ -724,38 +750,64 @@ export default function EvidencePage() {
 
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
-            <p className="text-muted-foreground">Project: {projectName}</p>
+      <section className="rounded-2xl border border-border/70 bg-card/85 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-3">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Evidence Viewer</h1>
+              <p className="text-muted-foreground">Project: {projectName}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                {documents.length} document{documents.length === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                {entities.length} entities
+              </Badge>
+              <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                {alertsState.length} alerts
+              </Badge>
+            </div>
           </div>
-        <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => void handleRefresh()}
+            className="rounded-xl bg-background/95 shadow-sm"
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="rounded-xl bg-background/95 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
                 Export
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportJson}>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
+            >
+              <div className="mb-2 rounded-xl border border-border/70 bg-muted/35 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Export Evidence
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Download the active evidence view.
+                </p>
+              </div>
+              <DropdownMenuItem onClick={handleExportJson} className="rounded-xl">
                 <FileJson className="mr-2 h-4 w-4" />
                 Export JSON
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportCsv}>
+              <DropdownMenuItem onClick={handleExportCsv} className="rounded-xl">
                 <Database className="mr-2 h-4 w-4" />
                 Export CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPdf}>
+              <DropdownMenuItem onClick={handleExportPdf} className="rounded-xl">
                 <FileText className="mr-2 h-4 w-4" />
                 Export PDF
               </DropdownMenuItem>
@@ -765,6 +817,7 @@ export default function EvidencePage() {
             variant="outline"
             size="sm"
             onClick={() => setIsTemplateOpen(true)}
+            className="rounded-xl bg-background/95 shadow-sm"
           >
             Evidence Templates
           </Button>
@@ -772,12 +825,17 @@ export default function EvidencePage() {
             variant={splitView ? "default" : "outline"}
             size="sm"
             onClick={() => setSplitView((value) => !value)}
+            className={cn(
+              "rounded-xl shadow-sm",
+              splitView ? "" : "bg-background/95",
+            )}
           >
             <Columns2 className="mr-2 h-4 w-4" />
             Split View
           </Button>
         </div>
       </div>
+      </section>
 
       {documentsError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -796,15 +854,17 @@ export default function EvidencePage() {
         className="min-h-[calc(100vh-12rem)]"
       >
         <ResizablePanel defaultSize={splitView ? 50 : 70} minSize={30}>
-          <Card className="h-full">
-            <CardHeader>
+          <Card className="h-full rounded-2xl border-border/80 bg-card/85 shadow-sm">
+            <CardHeader className="border-b border-border/70">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
                   {selectedDocument?.name ?? "No document selected"}
                 </CardTitle>
                 {selectedDocument ? (
-                  <Badge variant="outline">{selectedDocument.type}</Badge>
+                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                    {selectedDocument.type}
+                  </Badge>
                 ) : null}
               </div>
             </CardHeader>
@@ -817,8 +877,10 @@ export default function EvidencePage() {
                   onHighlightClick={handleHighlightClick}
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed border-border bg-muted/20 p-8">
-                  <FileText className="h-16 w-16 text-muted-foreground" />
+                <div className="m-6 flex h-full flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/80 bg-background/80 p-10 shadow-inner">
+                  <div className="rounded-2xl border border-border/70 bg-muted/35 p-4 shadow-sm">
+                    <FileText className="h-12 w-12 text-muted-foreground" />
+                  </div>
                   <div className="text-center">
                     <h3 className="text-lg font-semibold">
                       No Document Selected
@@ -836,16 +898,28 @@ export default function EvidencePage() {
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={splitView ? 50 : 30} minSize={20}>
-          <Card className="h-full">
-            <CardHeader>
+          <Card className="h-full rounded-2xl border-border/80 bg-card/85 shadow-sm">
+            <CardHeader className="border-b border-border/70">
               <CardTitle>Extracted Entities</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="entities" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="entities">Entities</TabsTrigger>
-                  <TabsTrigger value="alerts">Alerts</TabsTrigger>
-                  <TabsTrigger value="search">Search</TabsTrigger>
+            <CardContent className="p-5">
+              <Tabs
+                value={activePanelTab}
+                onValueChange={(value) =>
+                  setActivePanelTab(value as EvidencePanelTab)
+                }
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-border/80 bg-muted/35 p-1 shadow-sm">
+                  <TabsTrigger value="entities" className="rounded-xl">
+                    Entities
+                  </TabsTrigger>
+                  <TabsTrigger value="alerts" className="rounded-xl">
+                    Alerts
+                  </TabsTrigger>
+                  <TabsTrigger value="search" className="rounded-xl">
+                    Search
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="entities" className="space-y-4">
@@ -888,15 +962,32 @@ export default function EvidencePage() {
                   ) : (
                     <div className="space-y-2">
                       {alertsState.map((alert) => (
-                        <div key={alert.id} className="rounded-md border p-3">
-                          <p className="font-medium">{alert.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {alert.description}
-                          </p>
+                        <div
+                          key={alert.id}
+                          className={cn(
+                            "rounded-2xl border bg-background/90 p-4 shadow-sm transition-colors",
+                            activeEntityId === alert.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            className="w-full text-left"
+                            aria-pressed={activeEntityId === alert.id}
+                            aria-label={`Focus alert ${alert.title}`}
+                            onClick={() => syncPanelSelection(alert.id)}
+                          >
+                            <p className="font-medium">{alert.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {alert.description}
+                            </p>
+                          </button>
                           <div className="mt-3 flex gap-2">
                             <Button
                               size="sm"
                               variant="outline"
+                              className="rounded-xl bg-background/95 shadow-sm"
                               onClick={() =>
                                 requestReviewAlert(alert.id, "approve")
                               }
@@ -906,6 +997,7 @@ export default function EvidencePage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className="rounded-xl bg-background/95 shadow-sm"
                               onClick={() =>
                                 requestReviewAlert(alert.id, "reject")
                               }
@@ -914,6 +1006,7 @@ export default function EvidencePage() {
                             </Button>
                             <Button
                               size="sm"
+                              className="rounded-xl shadow-sm"
                               onClick={() => void handleResolveAlert(alert.id)}
                             >
                               Resolve Alert
@@ -933,6 +1026,7 @@ export default function EvidencePage() {
                     onChange={(event) =>
                       setHighlightSearchQuery(event.target.value)
                     }
+                    className="rounded-xl border-border/80 bg-background/95 shadow-sm"
                   />
                   <p className="text-sm text-muted-foreground">
                     {filteredHighlightResults.length} matches
@@ -950,12 +1044,12 @@ export default function EvidencePage() {
                           key={highlight.id}
                           type="button"
                           className={cn(
-                            "w-full rounded-md border p-3 text-left transition-colors",
+                            "w-full rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition-colors",
                             activeHighlightId === highlight.id
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50",
                           )}
-                          onClick={() => setActiveEntityId(highlight.clauseId)}
+                          onClick={() => syncPanelSelection(highlight.clauseId)}
                         >
                           <p className="font-medium">{highlight.text}</p>
                           <p className="text-xs text-muted-foreground">
@@ -968,7 +1062,7 @@ export default function EvidencePage() {
                 </TabsContent>
               </Tabs>
 
-              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
@@ -993,6 +1087,10 @@ export default function EvidencePage() {
                           ? "default"
                           : "outline"
                       }
+                      className={cn(
+                        "rounded-xl shadow-sm",
+                        relationshipViewMode === "graph" ? "" : "bg-background/95",
+                      )}
                       onClick={() => setRelationshipViewMode("graph")}
                     >
                       Graph View
@@ -1003,11 +1101,15 @@ export default function EvidencePage() {
                       variant={
                         relationshipViewMode === "3d" ? "default" : "outline"
                       }
+                      className={cn(
+                        "rounded-xl shadow-sm",
+                        relationshipViewMode === "3d" ? "" : "bg-background/95",
+                      )}
                       onClick={() => setRelationshipViewMode("3d")}
                     >
                       3D Relationship View
                     </Button>
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
                       {relationshipGraph.entityNodes.length} entities /{" "}
                       {relationshipGraph.alertNodes.length} alerts
                     </Badge>
@@ -1018,7 +1120,7 @@ export default function EvidencePage() {
                   <div className="mt-4 space-y-4">
                     <div className="grid gap-4 lg:grid-cols-3" style={{ perspective: "1200px" }}>
                       <div
-                        className="rounded-md border bg-background/90 p-4 shadow-sm"
+                        className="rounded-2xl border border-border/80 bg-background/95 p-4 shadow-sm"
                         style={{ transform: "rotateY(18deg) translateZ(24px)" }}
                       >
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1032,11 +1134,12 @@ export default function EvidencePage() {
                               aria-label={`Graph node ${node.id}`}
                               className={cn(
                                 "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                                "shadow-sm",
                                 activeEntityId === node.id
                                   ? "border-primary bg-primary/5"
                                   : "border-border hover:border-primary/50",
                               )}
-                              onClick={() => setActiveEntityId(node.id)}
+                              onClick={() => syncPanelSelection(node.id)}
                             >
                               <div className="text-sm font-medium text-foreground">
                                 {node.label}
@@ -1050,7 +1153,7 @@ export default function EvidencePage() {
                       </div>
 
                       <div
-                        className="rounded-md border border-dashed bg-muted/30 p-4 shadow-sm"
+                        className="rounded-2xl border border-dashed border-border/80 bg-background/80 p-4 shadow-sm"
                         style={{ transform: "translateZ(48px)" }}
                       >
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1066,7 +1169,7 @@ export default function EvidencePage() {
                       </div>
 
                       <div
-                        className="rounded-md border bg-background/90 p-4 shadow-sm"
+                        className="rounded-2xl border border-border/80 bg-background/95 p-4 shadow-sm"
                         style={{ transform: "rotateY(-18deg) translateZ(24px)" }}
                       >
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1079,12 +1182,12 @@ export default function EvidencePage() {
                               type="button"
                               aria-label={`Graph node ${node.id}`}
                               className={cn(
-                                "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                                "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
                                 activeEntityId === node.id
                                   ? "border-primary bg-primary/5"
                                   : "border-border hover:border-primary/50",
                               )}
-                              onClick={() => setActiveEntityId(node.id)}
+                              onClick={() => syncPanelSelection(node.id)}
                             >
                               <div className="text-sm font-medium text-foreground">
                                 {node.label}
@@ -1107,12 +1210,12 @@ export default function EvidencePage() {
                           type="button"
                           aria-label={`Graph node ${node.id}`}
                           className={cn(
-                            "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                            "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
                             activeEntityId === node.id
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50",
                           )}
-                          onClick={() => setActiveEntityId(node.id)}
+                          onClick={() => syncPanelSelection(node.id)}
                         >
                           <div className="text-sm font-medium text-foreground">
                             {node.label}
@@ -1135,12 +1238,12 @@ export default function EvidencePage() {
                           type="button"
                           aria-label={`Graph node ${node.id}`}
                           className={cn(
-                            "w-full rounded-md border bg-background px-3 py-2 text-left transition-colors",
+                            "w-full rounded-xl border bg-background px-3 py-2 text-left shadow-sm transition-colors",
                             activeEntityId === node.id
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50",
                           )}
-                          onClick={() => setActiveEntityId(node.id)}
+                          onClick={() => syncPanelSelection(node.id)}
                         >
                           <div className="text-sm font-medium text-foreground">
                             {node.label}
@@ -1155,7 +1258,7 @@ export default function EvidencePage() {
                 )}
               </div>
 
-              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
@@ -1165,7 +1268,9 @@ export default function EvidencePage() {
                       Backend-generated explanation grounded in evidence graph citations
                     </p>
                   </div>
-                  <Badge variant="outline">Model-backed</Badge>
+                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                    Model-backed
+                  </Badge>
                 </div>
 
                 <div className="mt-4 space-y-3">
@@ -1175,7 +1280,7 @@ export default function EvidencePage() {
                         {relationshipExplanation.summary}
                       </p>
                       <div className="grid gap-3 md:grid-cols-3">
-                        <div className="rounded-md border bg-background p-3">
+                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Strongest Cluster
                           </p>
@@ -1183,7 +1288,7 @@ export default function EvidencePage() {
                             {relationshipExplanation.strongestCluster}
                           </p>
                         </div>
-                        <div className="rounded-md border bg-background p-3">
+                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Review Priority
                           </p>
@@ -1191,7 +1296,7 @@ export default function EvidencePage() {
                             {relationshipExplanation.reviewPriority}
                           </p>
                         </div>
-                        <div className="rounded-md border bg-background p-3">
+                        <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Latest Signal
                           </p>
@@ -1200,7 +1305,7 @@ export default function EvidencePage() {
                           </p>
                         </div>
                       </div>
-                      <div className="rounded-md border bg-background p-3">
+                      <div className="rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Evidence Citations
                         </p>
@@ -1208,7 +1313,7 @@ export default function EvidencePage() {
                           {relationshipExplanation.citations.map((citation) => (
                             <div
                               key={`${citation.clauseId}-${citation.clauseCode}`}
-                              className="rounded border border-border/70 bg-muted/20 p-2"
+                              className="rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm"
                             >
                               <p className="text-sm font-medium text-foreground">
                                 {citation.clauseCode} · {citation.label}
@@ -1231,7 +1336,7 @@ export default function EvidencePage() {
                 </div>
               </div>
 
-              <div className="mt-6 rounded-md border bg-muted/20 p-4">
+              <div className="mt-6 rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
@@ -1241,7 +1346,9 @@ export default function EvidencePage() {
                       Persisted document lifecycle and alert history events
                     </p>
                   </div>
-                  <Badge variant="outline">{evidenceTimeline.length} events</Badge>
+                  <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
+                    {evidenceTimeline.length} events
+                  </Badge>
                 </div>
 
                 <div className="mt-4 space-y-3">
@@ -1249,7 +1356,7 @@ export default function EvidencePage() {
                     evidenceTimeline.map((event) => (
                       <div
                         key={event.id}
-                        className="flex items-start gap-3 rounded-md border bg-background p-3"
+                        className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background/95 p-3 shadow-sm"
                       >
                         <div className="mt-1 h-2.5 w-2.5 rounded-full bg-primary" />
                         <div className="min-w-0">
@@ -1278,8 +1385,8 @@ export default function EvidencePage() {
       </ResizablePanelGroup>
 
       <Dialog open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-4">
             <DialogTitle>Start from an evidence template</DialogTitle>
             <DialogDescription>
               Use a guided review lens to focus the current evidence session.
@@ -1293,7 +1400,10 @@ export default function EvidencePage() {
                   key={template.id}
                   type="button"
                   variant={selectedTemplate?.id === template.id ? "default" : "outline"}
-                  className="w-full justify-start"
+                  className={cn(
+                    "w-full justify-start rounded-xl shadow-sm",
+                    selectedTemplate?.id === template.id ? "" : "bg-background/95",
+                  )}
                   onClick={() => setSelectedTemplateId(template.id)}
                 >
                   {template.name}
@@ -1302,7 +1412,7 @@ export default function EvidencePage() {
             </div>
 
             {selectedTemplate ? (
-              <div className="rounded-md border bg-muted/20 p-5">
+              <div className="rounded-2xl border border-border/80 bg-muted/25 p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Template Summary
@@ -1329,7 +1439,7 @@ export default function EvidencePage() {
                       {selectedTemplate.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground"
+                          className="rounded-full border border-border/80 bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm"
                         >
                           {tag}
                         </span>
@@ -1341,17 +1451,19 @@ export default function EvidencePage() {
             ) : null}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTemplateOpen(false)}>
+          <DialogFooter className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+            <Button variant="outline" className="rounded-xl bg-background/95 shadow-sm" onClick={() => setIsTemplateOpen(false)}>
               Close
             </Button>
-            <Button onClick={() => setIsTemplateOpen(false)}>Use Template</Button>
+            <Button className="rounded-xl shadow-sm" onClick={() => setIsTemplateOpen(false)}>
+              Use Template
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-2xl border-border/80 bg-card/85 shadow-sm">
+        <CardHeader className="border-b border-border/70">
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
             Project Documents
@@ -1373,7 +1485,7 @@ export default function EvidencePage() {
                   key={doc.id}
                   onClick={() => setSelectedDocumentId(doc.id)}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border p-4 text-left transition-colors",
+                    "flex items-center gap-3 rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition-colors",
                     selectedDocumentId === doc.id
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50",
@@ -1403,8 +1515,8 @@ export default function EvidencePage() {
           }
         }}
       >
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-4">
             <DialogTitle>Confirm evidence action</DialogTitle>
             <DialogDescription>{pendingActionDescription}</DialogDescription>
           </DialogHeader>
@@ -1424,10 +1536,11 @@ export default function EvidencePage() {
               />
             </div>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
             <Button
               type="button"
               variant="outline"
+              className="rounded-xl bg-background/95 shadow-sm"
               onClick={() => {
                 setPendingAction(null);
                 setValidationNote("");
@@ -1437,6 +1550,7 @@ export default function EvidencePage() {
             </Button>
             <Button
               type="button"
+              className="rounded-xl shadow-sm"
               onClick={() => void confirmPendingAction()}
               disabled={requiresValidationNote && !validationNote.trim()}
             >

@@ -42,8 +42,8 @@ export function ProjectTemplatesDialog({
 }: ProjectTemplatesDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-3xl sm:rounded-2xl">
+        <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
           <DialogTitle>Start from a project template</DialogTitle>
           <DialogDescription>
             Use a proven project setup pattern before creating the final project record.
@@ -51,13 +51,13 @@ export function ProjectTemplatesDialog({
         </DialogHeader>
 
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-2xl border bg-background/90 p-3 shadow-sm">
             {templates.map((template) => (
               <Button
                 key={template.id}
                 type="button"
                 variant={selectedTemplateId === template.id ? "default" : "outline"}
-                className="w-full justify-start"
+                className="w-full justify-start rounded-xl"
                 onClick={() => onSelectTemplate(template.id)}
               >
                 {template.name}
@@ -66,7 +66,7 @@ export function ProjectTemplatesDialog({
           </div>
 
           {selectedTemplate ? (
-            <div className="rounded-md border bg-muted/20 p-5">
+            <div className="rounded-2xl border bg-muted/25 p-5 shadow-sm">
               <div className="space-y-2">
                 <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Template Summary
@@ -77,7 +77,7 @@ export function ProjectTemplatesDialog({
               </div>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
-                <div>
+                <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
                   <div className="text-sm font-medium text-foreground">
                     Phase focus
                   </div>
@@ -87,13 +87,13 @@ export function ProjectTemplatesDialog({
                     ))}
                   </ul>
                 </div>
-                <div>
+                <div className="rounded-xl border bg-background/90 p-4 shadow-sm">
                   <div className="text-sm font-medium text-foreground">Tags</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedTemplate.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground"
+                        className="rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm"
                       >
                         {tag}
                       </span>
@@ -105,11 +105,11 @@ export function ProjectTemplatesDialog({
           ) : null}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button asChild>
+          <Button asChild className="rounded-xl">
             <Link href="/projects/new">Use Template</Link>
           </Button>
         </DialogFooter>

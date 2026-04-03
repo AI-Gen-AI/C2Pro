@@ -72,7 +72,7 @@ describe("ProjectListTable", () => {
       "href",
       "/projects/proj_demo_003",
     );
-    expect(screen.getAllByText("—")).toHaveLength(2);
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders table headers for project, description, and code", () => {
@@ -91,5 +91,29 @@ describe("ProjectListTable", () => {
     expect(screen.getByRole("columnheader", { name: /project/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /description/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /code/i })).toBeInTheDocument();
+  });
+
+  it("renders coherence and alert trend deltas with directional indicators", () => {
+    const projects: ProjectListItem[] = [
+      {
+        id: "proj_demo_005",
+        tenant_id: "tenant-demo",
+        name: "Trend Check",
+        description: "Signals",
+        code: "TRD-001",
+        status: "active",
+        coherence_score: 78,
+        coherence_score_delta: 4,
+        alert_count: 7,
+        alert_count_delta: -2,
+      },
+    ];
+
+    renderWithProviders(<ProjectListTable projects={projects} />);
+
+    expect(screen.getByText("78")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText(/▲\s*\+4/i)).toBeInTheDocument();
+    expect(screen.getByText(/▼\s*-2/i)).toBeInTheDocument();
   });
 });

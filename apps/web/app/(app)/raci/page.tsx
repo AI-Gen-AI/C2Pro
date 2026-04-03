@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -19,8 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Download } from 'lucide-react';
-import { useRaci } from '@/hooks/useRaci';
+import { Search, Download, Sparkles } from 'lucide-react';
+import { useRaci, type RaciRow } from '@/hooks/useRaci';
 import { useProjects } from '@/hooks/useProjects';
 
 type RaciTemplate = {
@@ -30,6 +30,14 @@ type RaciTemplate = {
   governanceFocus: string;
   defaultActivities: string[];
   stakeholderTracks: string[];
+};
+
+type AutoAssignGoal = 'rebalance' | 'clarify' | 'expedite';
+
+type AutoAssignSuggestion = {
+  activity: string;
+  rationale: string;
+  changes: Partial<RaciRow>;
 };
 
 const raciTypes = {
@@ -141,6 +149,126 @@ function buildTimelineRows(
   });
 }
 
+function areRaciRowsEqual(left: RaciRow[], right: RaciRow[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((row, index) => {
+    const candidate = right[index];
+    return (
+      row.activity === candidate?.activity &&
+      row.projectManager === candidate?.projectManager &&
+      row.technicalLead === candidate?.technicalLead &&
+      row.stakeholder === candidate?.stakeholder &&
+      row.contractor === candidate?.contractor &&
+      row.sequenceIndex === candidate?.sequenceIndex &&
+      row.taskCode === candidate?.taskCode &&
+      row.plannedStart === candidate?.plannedStart &&
+      row.plannedEnd === candidate?.plannedEnd &&
+      row.projectId === candidate?.projectId
+    );
+  });
+}
+
+function getFieldLabel(field: keyof Pick<RaciRow, 'projectManager' | 'technicalLead' | 'stakeholder' | 'contractor'>): string {
+  switch (field) {
+    case 'projectManager':
+      return 'Project Manager';
+    case 'technicalLead':
+      return 'Technical Lead';
+    case 'stakeholder':
+      return 'Stakeholder';
+    case 'contractor':
+      return 'Contractor';
+  }
+}
+
+function buildAutoAssignSuggestions(
+  rows: RaciRow[],
+  goal: AutoAssignGoal,
+  busiestLane: string,
+): AutoAssignSuggestion[] {
+  const overloadedField =
+    busiestLane === 'Project Manager'
+      ? 'projectManager'
+      : busiestLane === 'Technical Lead'
+        ? 'technicalLead'
+        : busiestLane === 'Stakeholder'
+          ? 'stakeholder'
+          : busiestLane === 'Contractor'
+            ? 'contractor'
+            : null;
+
+  if (!overloadedField) {
+    return [];
+  }
+
+  const alternatives: Array<keyof Pick<RaciRow, 'projectManager' | 'technicalLead' | 'stakeholder' | 'contractor'>> =
+    ['projectManager', 'technicalLead', 'stakeholder', 'contractor'].filter(
+      (field) => field !== overloadedField,
+    ) as Array<keyof Pick<RaciRow, 'projectManager' | 'technicalLead' | 'stakeholder' | 'contractor'>>;
+
+  return rows.flatMap((row) => {
+    const currentValue = row[overloadedField];
+
+    if (goal === 'clarify') {
+      const hasAccountable = [row.projectManager, row.technicalLead, row.stakeholder, row.contractor].includes('A');
+      if (!hasAccountable) {
+        return [
+          {
+            activity: row.activity,
+            rationale: `Add a single accountable owner to ${row.activity} for cleaner approval governance.`,
+            changes: { projectManager: 'A' },
+          },
+        ];
+      }
+
+      return [];
+    }
+
+    if (goal === 'expedite') {
+      if (row.contractor === '' || row.contractor === 'I') {
+        return [
+          {
+            activity: row.activity,
+            rationale: `Promote contractor execution ownership on ${row.activity} to reduce handoff lag.`,
+            changes: {
+              contractor: 'R',
+              stakeholder: row.stakeholder === 'R' ? 'C' : row.stakeholder || 'C',
+            },
+          },
+        ];
+      }
+
+      return [];
+    }
+
+    if (currentValue !== 'A' && currentValue !== 'R') {
+      return [];
+    }
+
+    const targetField = alternatives.find((field) => row[field] === '' || row[field] === 'I' || row[field] === 'C');
+    if (!targetField) {
+      return [];
+    }
+
+    const reassignedRole = currentValue;
+    const retainedRole = currentValue === 'A' ? 'C' : 'I';
+
+    return [
+      {
+        activity: row.activity,
+        rationale: `Move ${currentValue === 'A' ? 'accountable' : 'responsible'} ownership for ${row.activity} from ${getFieldLabel(overloadedField)} to ${getFieldLabel(targetField)} to rebalance the busiest lane.`,
+        changes: {
+          [overloadedField]: retainedRole,
+          [targetField]: reassignedRole,
+        },
+      },
+    ];
+  });
+}
+
 export default function RaciPage() {
   const [projectFilter, setProjectFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'matrix' | 'list' | 'timeline'>('matrix');
@@ -151,10 +279,21 @@ export default function RaciPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState(RACI_TEMPLATES[0]?.id ?? '');
+  const [autoAssignDialogOpen, setAutoAssignDialogOpen] = useState(false);
+  const [autoAssignGoal, setAutoAssignGoal] = useState<AutoAssignGoal>('rebalance');
+  const [autoAssignSuggestions, setAutoAssignSuggestions] = useState<AutoAssignSuggestion[]>([]);
+  const [raciRows, setRaciRows] = useState<RaciRow[]>([]);
+  const [autoAssignSummary, setAutoAssignSummary] = useState<string | null>(null);
 
   const selectedTemplate =
     RACI_TEMPLATES.find((template) => template.id === selectedTemplateId) ??
     RACI_TEMPLATES[0];
+
+  useEffect(() => {
+    setRaciRows((currentRows) =>
+      areRaciRowsEqual(currentRows, raciData) ? currentRows : raciData,
+    );
+  }, [raciData]);
 
   if (loading) {
     return (
@@ -172,7 +311,7 @@ export default function RaciPage() {
     );
   }
 
-  const filteredData = raciData.filter((row) =>
+  const filteredData = raciRows.filter((row) =>
     row.activity.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const workloadAnalysis = useMemo(() => {
@@ -247,10 +386,17 @@ export default function RaciPage() {
           <p className="text-muted-foreground">
             Define roles and responsibilities for project activities
           </p>
+          {autoAssignSummary ? (
+            <p className="mt-2 text-sm text-muted-foreground">{autoAssignSummary}</p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
             RACI Templates
+          </Button>
+          <Button variant="outline" onClick={() => setAutoAssignDialogOpen(true)}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Auto-Assign AI
           </Button>
           <Button variant="outline">
             <Download className="mr-2 h-4 w-4" />
@@ -609,6 +755,124 @@ export default function RaciPage() {
             </Button>
             <Button onClick={() => setTemplateDialogOpen(false)}>
               Use Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={autoAssignDialogOpen}
+        onOpenChange={(open) => {
+          setAutoAssignDialogOpen(open);
+          if (!open) {
+            setAutoAssignSuggestions([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>AI Auto-Assign</DialogTitle>
+            <DialogDescription>
+              Generate workload-aware responsibility suggestions from the live RACI matrix.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Activities in scope
+                </div>
+                <div className="mt-2 text-2xl font-semibold">{filteredData.length}</div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Busiest lane
+                </div>
+                <div className="mt-2 text-lg font-semibold">{workloadAnalysis.busiestLane}</div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Conflict state
+                </div>
+                <div className="mt-2 text-sm font-medium">{overloadConflicts.summary}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="auto-assign-goal">
+                Optimization goal
+              </label>
+              <Select
+                value={autoAssignGoal}
+                onValueChange={(value) => setAutoAssignGoal(value as AutoAssignGoal)}
+              >
+                <SelectTrigger id="auto-assign-goal" className="w-full">
+                  <SelectValue placeholder="Choose optimization goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rebalance">Balanced workload reassignment</SelectItem>
+                  <SelectItem value="clarify">Clarify single accountable owners</SelectItem>
+                  <SelectItem value="expedite">Expedite field execution handoffs</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {autoAssignSuggestions.length > 0 ? (
+              <div className="space-y-3">
+                {autoAssignSuggestions.map((suggestion) => (
+                  <div key={suggestion.activity} className="rounded-lg border bg-muted/20 p-4">
+                    <div className="font-semibold text-foreground">{suggestion.activity}</div>
+                    <div className="mt-2 text-sm text-muted-foreground">{suggestion.rationale}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+                {workloadAnalysis.busiestLane} is the current rebalance target. Generate suggestions to preview AI-guided role changes before applying them.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAutoAssignDialogOpen(false)}>
+              Close
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setAutoAssignSuggestions(
+                  buildAutoAssignSuggestions(filteredData, autoAssignGoal, workloadAnalysis.busiestLane),
+                )
+              }
+            >
+              Generate Suggestions
+            </Button>
+            <Button
+              disabled={autoAssignSuggestions.length === 0}
+              onClick={() => {
+                setRaciRows((prev) =>
+                  prev.map((row) => {
+                    const suggestion = autoAssignSuggestions.find(
+                      (item) => item.activity === row.activity,
+                    );
+                    return suggestion ? { ...row, ...suggestion.changes } : row;
+                  }),
+                );
+                setAutoAssignSummary(
+                  `AI suggestions applied to ${autoAssignSuggestions.length} activities. ${
+                    autoAssignGoal === 'rebalance'
+                      ? 'Balanced workload reassignment'
+                      : autoAssignGoal === 'clarify'
+                        ? 'Accountability clarified'
+                        : 'Execution handoffs accelerated'
+                  }`,
+                );
+                setAutoAssignDialogOpen(false);
+                setAutoAssignSuggestions([]);
+              }}
+            >
+              Apply Suggestions
             </Button>
           </DialogFooter>
         </DialogContent>
