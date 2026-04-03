@@ -1,5 +1,6 @@
 import type { ProjectListItem } from "@/lib/api/contracts";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
@@ -44,6 +45,57 @@ export function ProjectListTable({
   const showDescription = visibleColumns.includes("description");
   const showCode = visibleColumns.includes("code");
 
+  function formatStatus(status?: string | null): string {
+    if (!status) {
+      return "Draft";
+    }
+
+    return status
+      .split("_")
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" ");
+  }
+
+  function formatUpdatedAt(value?: string | null): string {
+    if (!value) {
+      return "—";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+
+    return date.toLocaleDateString();
+  }
+
+  function renderTrendDelta(
+    value?: number | null,
+    palette: "score" | "alerts" = "score",
+  ) {
+    if (value == null || value === 0) {
+      return null;
+    }
+
+    const isPositive = value > 0;
+    const arrow = isPositive ? "▲" : "▼";
+    const signedValue = `${isPositive ? "+" : ""}${value}`;
+    const tone =
+      palette === "score"
+        ? isPositive
+          ? "text-emerald-600"
+          : "text-rose-600"
+        : isPositive
+          ? "text-rose-600"
+          : "text-emerald-600";
+
+    return (
+      <span className={`text-xs font-semibold ${tone}`}>
+        {arrow} {signedValue}
+      </span>
+    );
+  }
+
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-16 text-center">
@@ -58,25 +110,40 @@ export function ProjectListTable({
   }
 
   return (
-    <div className="rounded-md border bg-card">
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full" aria-label="Project list">
-          <thead className="border-b bg-muted/50">
+          <thead className="border-b bg-muted/30">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                ID
+              </th>
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Project
               </th>
               {showDescription ? (
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Description
                 </th>
               ) : null}
               {showCode ? (
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Code
                 </th>
               ) : null}
-              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Status
+              </th>
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Coherence Score
+              </th>
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Alerts
+              </th>
+              <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Updated
+              </th>
+              <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Actions
               </th>
             </tr>
@@ -85,9 +152,12 @@ export function ProjectListTable({
             {projects.map((project) => (
               <tr
                 key={project.id}
-                className="transition-colors hover:bg-muted/30"
+                className="transition-colors hover:bg-muted/20"
               >
-                <td className="px-4 py-3">
+                <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
+                  {project.id}
+                </td>
+                <td className="px-4 py-4">
                   {editingProjectId === project.id ? (
                     <Input
                       aria-label="Project name"
@@ -99,14 +169,14 @@ export function ProjectListTable({
                   ) : (
                     <Link
                       href={`/projects/${project.id}`}
-                      className="text-sm font-medium text-primary-text hover:underline"
+                      className="text-sm font-semibold text-foreground hover:text-primary"
                     >
                       {project.name}
                     </Link>
                   )}
                 </td>
                 {showDescription ? (
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                  <td className="px-4 py-4 text-sm text-muted-foreground">
                     {editingProjectId === project.id ? (
                       <Input
                         aria-label="Project description"
@@ -121,7 +191,7 @@ export function ProjectListTable({
                   </td>
                 ) : null}
                 {showCode ? (
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                  <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
                     {editingProjectId === project.id ? (
                       <Input
                         aria-label="Project code"
@@ -135,7 +205,31 @@ export function ProjectListTable({
                     )}
                   </td>
                 ) : null}
-                <td className="px-4 py-3">
+                <td className="px-4 py-4">
+                  <Badge className="rounded-full bg-slate-900 px-2.5 py-1 text-white hover:bg-slate-900">
+                    {formatStatus(project.status)}
+                  </Badge>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      {project.coherence_score ?? "—"}
+                    </span>
+                    {renderTrendDelta(project.coherence_score_delta, "score")}
+                  </div>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      {project.alert_count ?? "—"}
+                    </span>
+                    {renderTrendDelta(project.alert_count_delta, "alerts")}
+                  </div>
+                </td>
+                <td className="px-4 py-4 text-sm text-muted-foreground">
+                  {formatUpdatedAt(project.updated_at)}
+                </td>
+                <td className="px-4 py-4">
                   <div className="flex justify-end gap-2">
                     {editingProjectId === project.id ? (
                       <>

@@ -73,6 +73,7 @@ markers = [
     "ai: AI-related tests (may use API)",
     "auth: Authentication and authorization tests",
     "slow: Slow tests",
+    "performance: Performance tests",
     "security: Security tests (critical)",
     "critical: P0 critical tests",
     "contract: Contract tests (API/frontend alignment)",

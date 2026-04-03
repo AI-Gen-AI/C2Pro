@@ -66,11 +66,13 @@ class ScoringConfig:
     decay_lambda: float = 1.5
 
     # Severity weights (relative importance of each severity level)
+    # TASK-504: Strict 5-level taxonomy (Critical, High, Medium, Low, Info)
     severity_weights: dict[str, float] = field(default_factory=lambda: {
         "critical": 1.0,
         "high": 0.7,
         "medium": 0.4,
         "low": 0.15,
+        "info": 0.05,  # Informational findings have minimal impact on score
     })
 
     # Category weights (optional multiplier per category)
@@ -155,11 +157,13 @@ def get_scoring_config(**overrides) -> ScoringConfig:
 
 # Severity weights used by the ScoringService to calculate the overall project score.
 # These weights are subtracted from a base score (e.g., 100) for each alert.
+# TASK-504: Strict 5-level taxonomy (Critical, High, Medium, Low, Info)
 SEVERITY_WEIGHTS: dict[str, float] = {
     "critical": 35.0,  # Increased
     "high": 20.0,  # Increased
     "medium": 15.0,  # Increased
     "low": 5.0,  # Increased
+    "info": 1.0,  # Minimal penalty for informational findings
 }
 
 # Optional overrides for specific rules. If a rule ID is present here,

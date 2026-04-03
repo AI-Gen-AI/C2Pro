@@ -121,4 +121,13 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     expect(screen.queryByText(/upload complete!/i)).not.toBeInTheDocument();
     expect(onUploadComplete).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the upload surface with high-contrast styling for production readability", () => {
+    render(<DocumentUploadDropzone projectId="proj_demo_001" />);
+
+    const dropzone = screen.getByRole("button", { name: /upload documents/i });
+    expect(dropzone).toHaveClass("bg-background");
+    expect(dropzone).toHaveClass("shadow-sm");
+    expect(dropzone).toHaveClass("text-foreground");
+  });
 });

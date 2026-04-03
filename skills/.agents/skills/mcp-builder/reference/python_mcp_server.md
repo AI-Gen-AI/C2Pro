@@ -32,6 +32,270 @@ async def tool_function(params: InputModel) -> str:
 
 ---
 
+## Complete Workflows vs Endpoint Wrappers
+
+### The Core Principle
+
+**MCP tools MUST enable complete workflows, not just provide thin wrappers around API endpoints.**
+
+This is the most important design principle for MCP servers. When agents use your tools, they pay a context cost for every tool call. Tools that require multiple sequential calls to accomplish a single user intent waste tokens, increase latency, and make workflows fragile.
+
+### Why This Matters
+
+**Bad tool design (endpoint wrappers):**
+- Agent calls `search_users("marketing team")` → gets list of user IDs
+- Agent calls `get_user(id1)` → gets details for user 1
+- Agent calls `get_user(id2)` → gets details for user 2
+- Agent calls `get_user(id3)` → gets details for user 3
+- **Result**: 4 tool calls, 4 context round-trips, brittle multi-step reasoning
+
+**Good tool design (complete workflow):**
+- Agent calls `search_users("marketing team", include_details=True)` → gets complete user details in one call
+- **Result**: 1 tool call, 1 context round-trip, atomic operation
+
+### Design Patterns
+
+#### Pattern 1: Embed Related Data
+
+**❌ BAD - Endpoint wrapper pattern:**
+```python
+# Tool 1: Returns only IDs
+@mcp.tool()
+async def github_list_pull_requests(repo: str) -> str:
+    # Returns: [{"id": 123, "number": 45}, {"id": 124, "number": 46}]
+    pass
+
+# Tool 2: Requires separate call per PR
+@mcp.tool()
+async def github_get_pull_request(pr_id: int) -> str:
+    # Agent must call this 10+ times to get details
+    pass
+```
+
+**✅ GOOD - Complete workflow:**
+```python
+class ListPRsInput(BaseModel):
+    repo: str = Field(..., description="Repository name")
+    state: Literal["open", "closed", "all"] = Field(default="open")
+    include_reviews: bool = Field(default=False, description="Include review data")
+    include_files: bool = Field(default=False, description="Include changed files")
+
+@mcp.tool()
+async def github_list_pull_requests(params: ListPRsInput) -> str:
+    '''Returns complete PR data with reviews and files in single call.
+    Agents can request minimal or full details based on their needs.'''
+    pass
+```
+
+#### Pattern 2: Compose Multi-Step Operations
+
+**❌ BAD - Requires orchestration:**
+```python
+# Tool 1: Create issue
+@mcp.tool()
+async def github_create_issue(title: str, body: str) -> str:
+    pass
+
+# Tool 2: Add labels (separate call)
+@mcp.tool()
+async def github_add_labels(issue_id: int, labels: List[str]) -> str:
+    pass
+
+# Tool 3: Assign user (separate call)
+@mcp.tool()
+async def github_assign_issue(issue_id: int, assignee: str) -> str:
+    pass
+
+# Agent must coordinate 3 sequential calls with error handling between each
+```
+
+**✅ GOOD - Atomic workflow:**
+```python
+class CreateIssueInput(BaseModel):
+    title: str = Field(..., description="Issue title")
+    body: str = Field(..., description="Issue body")
+    labels: Optional[List[str]] = Field(default=None, description="Labels to apply")
+    assignees: Optional[List[str]] = Field(default=None, description="Users to assign")
+    milestone: Optional[int] = Field(default=None, description="Milestone number")
+
+@mcp.tool()
+async def github_create_issue(params: CreateIssueInput) -> str:
+    '''Single atomic operation creates issue with all metadata.
+    If any part fails, entire operation is rolled back.'''
+    pass
+```
+
+#### Pattern 3: Provide Filtering and Aggregation
+
+**❌ BAD - Forces agent-side filtering:**
+```python
+@mcp.tool()
+async def jira_list_all_issues() -> str:
+    '''Returns 1000+ issues, agent must filter in context.'''
+    pass
+```
+
+**✅ GOOD - Server-side filtering:**
+```python
+class SearchIssuesInput(BaseModel):
+    jql: Optional[str] = Field(default=None, description="JQL query string")
+    assignee: Optional[str] = Field(default=None, description="Filter by assignee")
+    status: Optional[List[str]] = Field(default=None, description="Filter by status")
+    labels: Optional[List[str]] = Field(default=None, description="Filter by labels")
+    created_after: Optional[str] = Field(default=None, description="ISO date")
+    limit: int = Field(default=20, description="Maximum results", ge=1, le=100)
+
+@mcp.tool()
+async def jira_search_issues(params: SearchIssuesInput) -> str:
+    '''Agent specifies intent, server filters at source.
+    Returns only relevant issues, not entire dataset.'''
+    pass
+```
+
+#### Pattern 4: Support Common Task Combinations
+
+**❌ BAD - Primitive operations only:**
+```python
+@mcp.tool()
+async def slack_get_channel_id(channel_name: str) -> str:
+    pass
+
+@mcp.tool()
+async def slack_send_message(channel_id: str, text: str) -> str:
+    pass
+
+# Agent must look up channel ID, then send message
+```
+
+**✅ GOOD - Intent-based operation:**
+```python
+class SendMessageInput(BaseModel):
+    channel: str = Field(..., description="Channel name or ID")
+    text: str = Field(..., description="Message text")
+    thread_ts: Optional[str] = Field(default=None, description="Reply to thread")
+    attachments: Optional[List[Dict]] = Field(default=None, description="Rich attachments")
+
+@mcp.tool()
+async def slack_send_message(params: SendMessageInput) -> str:
+    '''Tool resolves channel name to ID internally.
+    Single call accomplishes user intent.'''
+    pass
+```
+
+### When To Split vs Combine
+
+**Split into separate tools when:**
+- Operations have fundamentally different side effects (create vs delete)
+- Operations require different permissions
+- Each operation is commonly used independently
+- Combining would create an overly complex parameter surface
+
+**Combine into single tool when:**
+- Operations are always or commonly used together
+- Intermediate state has no value to the agent
+- Splitting would require sequential calls with error handling
+- The workflow represents a coherent user intent
+
+### Anti-Pattern Examples
+
+#### Anti-Pattern 1: ID-Only Responses
+
+```python
+# ❌ BAD: Returns only IDs, forces follow-up calls
+{
+  "users": [{"id": "U123"}, {"id": "U124"}, {"id": "U125"}]
+}
+
+# ✅ GOOD: Returns complete data
+{
+  "users": [
+    {"id": "U123", "name": "Alice", "email": "alice@example.com", "team": "Engineering"},
+    {"id": "U124", "name": "Bob", "email": "bob@example.com", "team": "Marketing"},
+    {"id": "U125", "name": "Carol", "email": "carol@example.com", "team": "Sales"}
+  ]
+}
+```
+
+#### Anti-Pattern 2: Requiring Multi-Call Sequences
+
+```python
+# ❌ BAD: Requires 3 sequential calls
+# 1. Create draft
+# 2. Upload attachments
+# 3. Send email
+
+# ✅ GOOD: Single atomic operation
+await send_email(SendEmailInput(
+    to=["user@example.com"],
+    subject="Report",
+    body="Please find attached...",
+    attachments=[
+        {"filename": "report.pdf", "content": base64_data}
+    ]
+))
+```
+
+#### Anti-Pattern 3: No Server-Side Filtering
+
+```python
+# ❌ BAD: Returns all data, agent filters
+all_tasks = await list_tasks()  # 500 tasks
+# Agent must filter in context (expensive)
+
+# ✅ GOOD: Server filters before return
+open_tasks = await list_tasks(ListTasksInput(
+    status=["open", "in_progress"],
+    assigned_to="current_user",
+    due_before="2024-12-31"
+))  # Returns only 12 relevant tasks
+```
+
+### Refactoring Checklist
+
+When designing or reviewing MCP tools, ask:
+
+1. **Can this tool return complete data instead of just IDs?**
+   - Include related entities the agent will likely need
+   - Provide options to control detail level
+
+2. **Does this tool require follow-up calls?**
+   - If yes, can those operations be combined into one atomic workflow?
+   - Can the tool accept optional parameters to include related data?
+
+3. **Will agents need to filter, sort, or aggregate this data?**
+   - Move that logic server-side with query parameters
+   - Return only what the agent asked for, not everything
+
+4. **Are there common task sequences involving this tool?**
+   - Identify patterns from user requests
+   - Create workflow tools that combine those sequences
+
+5. **Does this tool map 1:1 to a single API endpoint?**
+   - This is often a red flag (though not always wrong)
+   - Consider whether agents would benefit from a higher-level abstraction
+
+### Implementation Strategy
+
+When building MCP servers:
+
+1. **Start with user intents**, not API endpoints
+   - "Find all open issues assigned to me" (intent)
+   - Not "GET /api/issues" (endpoint)
+
+2. **Map intents to workflows**
+   - One intent = one tool call (when possible)
+   - Compose multiple API calls internally
+
+3. **Provide sensible defaults**
+   - Make common cases easy (minimal parameters)
+   - Make complex cases possible (optional parameters with Field())
+
+4. **Document the workflow**
+   - Tool docstrings should explain the complete workflow
+   - Include examples of common use cases
+
+---
+
 ## MCP Python SDK and FastMCP
 
 The official MCP Python SDK provides FastMCP, a high-level framework for building MCP servers. It provides:

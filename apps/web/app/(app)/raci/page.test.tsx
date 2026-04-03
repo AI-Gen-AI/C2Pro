@@ -322,4 +322,59 @@ describe("RaciPage backend project integration", () => {
     expect(screen.getByText("Permit Control")).toBeInTheDocument();
     expect(screen.getByText("Community Review")).toBeInTheDocument();
   });
+
+  it("opens the AI auto-assign dialog, generates recommendations, and applies them to the matrix", () => {
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useRaciMock.mockReturnValue({
+      data: [
+        {
+          activity: "Review baseline scope",
+          projectManager: "R",
+          technicalLead: "A",
+          stakeholder: "C",
+          contractor: "I",
+        },
+        {
+          activity: "Approve marine schedule",
+          projectManager: "C",
+          technicalLead: "R",
+          stakeholder: "I",
+          contractor: "",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<RaciPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /auto-assign ai/i }));
+
+    expect(
+      screen.getByText(/generate workload-aware responsibility suggestions/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/technical lead is the current rebalance target/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /generate suggestions/i }));
+
+    expect(
+      screen.getByText(/move accountable ownership for review baseline scope/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /apply suggestions/i }));
+
+    expect(
+      screen.getByText(/ai suggestions applied to 2 activities/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/ai suggestions applied to 2 activities\. balanced workload reassignment/i),
+    ).toBeInTheDocument();
+  });
 });

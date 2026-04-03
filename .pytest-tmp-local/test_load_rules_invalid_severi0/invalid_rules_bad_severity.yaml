@@ -1,0 +1,7 @@
+
+- id: test-rule-5
+  description: Rule with bad severity
+  inputs: ["project.data.field3"]
+  detection_logic: "field3 < 0"
+  severity: unknown_severity
+  evidence_fields: ["project.data.field3"]

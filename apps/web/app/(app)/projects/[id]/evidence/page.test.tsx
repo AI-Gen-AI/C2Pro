@@ -82,6 +82,15 @@ vi.mock("@/components/features/evidence/LazyPdfEvidenceViewer", () => ({
       <div data-testid="viewer-highlight-ids">
         {highlights.map((item) => item.id).join(",")}
       </div>
+      {highlights.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => onHighlightClick(item.id)}
+        >
+          Viewer Highlight {item.text}
+        </button>
+      ))}
       <button
         type="button"
         onClick={() => onHighlightClick(highlights[0]?.id ?? "")}
@@ -280,6 +289,43 @@ describe("EvidencePage highlight mapping", () => {
     );
   });
 
+  it("maps viewer alert highlight clicks back to the alerts panel selection", () => {
+    useDocumentAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "alert-1",
+          title: "Delay issue",
+          description: "Needs review",
+          severity: "critical",
+          status: "open",
+          evidence_json: {
+            evidence_location: {
+              page_number: 2,
+              bbox: [0.1, 0.2, 0.3, 0.4],
+              normalized: true,
+            },
+          },
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<EvidencePage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /viewer highlight delay issue/i }),
+    );
+
+    expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
+      "highlight-alert-1",
+    );
+    expect(
+      screen.getByRole("button", { name: /focus alert delay issue/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("wires entity approval to the backend approval endpoint", async () => {
     render(<EvidencePage />);
 
@@ -464,7 +510,9 @@ describe("EvidencePage highlight mapping", () => {
     );
 
     expect(screen.getByText(/2 matches/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /delay issue/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^delay issue alert-1 - page 2$/i }),
+    );
 
     expect(screen.getByTestId("viewer-active-highlight")).toHaveTextContent(
       "highlight-alert-1",
@@ -670,6 +718,9 @@ describe("EvidencePage highlight mapping", () => {
     fireEvent.click(screen.getByRole("button", { name: /evidence templates/i }));
 
     expect(screen.getByText(/start from an evidence template/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/start from an evidence template/i).closest("[role='dialog']"),
+    ).toHaveClass("bg-background/95", "shadow-2xl");
     expect(screen.getByRole("button", { name: /claims review/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /technical audit/i }));
@@ -677,6 +728,25 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.getByText(/technical audit focus/i)).toBeInTheDocument();
     expect(screen.getByText(/specification compliance/i)).toBeInTheDocument();
     expect(screen.getByText(/design-change evidence/i)).toBeInTheDocument();
+  });
+
+  it("uses surfaced toolbar controls and confirmation dialogs", () => {
+    render(<EvidencePage />);
+
+    expect(screen.getByRole("button", { name: /refresh/i })).toHaveClass(
+      "bg-background/95",
+      "shadow-sm",
+    );
+    expect(screen.getByRole("button", { name: /evidence templates/i })).toHaveClass(
+      "bg-background/95",
+      "shadow-sm",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /approve entity clause-1/i }));
+
+    expect(
+      screen.getByText("Confirm evidence action").closest("[role='dialog']"),
+    ).toHaveClass("bg-background/95", "shadow-2xl");
   });
 
   it("exports the active evidence view to JSON, CSV, and PDF", async () => {

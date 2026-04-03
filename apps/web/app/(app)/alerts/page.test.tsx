@@ -122,6 +122,11 @@ describe("AlertsPage analytics dashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Subscriptions" }));
 
+    const subscriptionsDialog = screen.getByRole("dialog", {
+      name: /alert subscriptions/i,
+    });
+    expect(subscriptionsDialog).toHaveClass("bg-background/95");
+    expect(subscriptionsDialog).toHaveClass("shadow-2xl");
     expect(screen.getByText("Alert subscriptions")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/notification email/i), {
       target: { value: "pm@c2pro.test" },
@@ -210,6 +215,11 @@ describe("AlertsPage analytics dashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Alert Rules" }));
 
+    const rulesDialog = screen.getByRole("dialog", {
+      name: /customize alert rules/i,
+    });
+    expect(rulesDialog).toHaveClass("bg-background/95");
+    expect(rulesDialog).toHaveClass("shadow-2xl");
     expect(screen.getByText("Customize alert rules")).toBeInTheDocument();
     expect(screen.getByText("Schedule Drift")).toBeInTheDocument();
     expect(screen.getByDisplayValue("5")).toBeInTheDocument();
@@ -279,6 +289,7 @@ describe("AlertsPage analytics dashboard", () => {
     renderWithProviders(<AlertsPage />);
 
     expect(screen.getByLabelText("Critical")).toHaveTextContent("1 active");
+    expect(screen.getByLabelText("Critical")).toHaveClass("rounded-2xl");
     expect(screen.getByLabelText("Open Alerts")).toHaveTextContent(
       "2 currently require action",
     );
@@ -301,6 +312,11 @@ describe("AlertsPage analytics dashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Alert Templates" }));
 
+    const templatesDialog = screen.getByRole("dialog", {
+      name: /alert templates/i,
+    });
+    expect(templatesDialog).toHaveClass("bg-background/95");
+    expect(templatesDialog).toHaveClass("shadow-2xl");
     expect(
       screen.getByText("Start from an alert response template"),
     ).toBeInTheDocument();
@@ -358,6 +374,11 @@ describe("AlertsPage analytics dashboard", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /resolve alert/i })[0]);
 
+    const resolveDialog = screen.getByRole("dialog", {
+      name: /resolve alert/i,
+    });
+    expect(resolveDialog).toHaveClass("bg-background/95");
+    expect(resolveDialog).toHaveClass("shadow-2xl");
     expect(screen.getByText("Resolve alert")).toBeInTheDocument();
     expect(screen.getByText(/critical alerts require detailed resolution notes/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/root cause/i)).toBeInTheDocument();
@@ -433,6 +454,8 @@ describe("AlertsPage analytics dashboard", () => {
 
     const detailDialog = screen.getByRole("dialog", { name: /alert details/i });
 
+    expect(detailDialog).toHaveClass("bg-background/95");
+    expect(detailDialog).toHaveClass("shadow-2xl");
     expect(within(detailDialog).getByText("Date mismatch")).toBeInTheDocument();
     expect(
       within(detailDialog).getByText("Contract and schedule diverge"),
@@ -487,6 +510,8 @@ describe("AlertsPage analytics dashboard", () => {
       name: /bulk resolve alerts/i,
     });
 
+    expect(bulkResolveDialog).toHaveClass("bg-background/95");
+    expect(bulkResolveDialog).toHaveClass("shadow-2xl");
     expect(
       within(bulkResolveDialog).getByText((_, element) =>
         element?.textContent === "2 selected alerts",
@@ -529,4 +554,60 @@ describe("AlertsPage analytics dashboard", () => {
     expect(screen.queryByText(/2 alerts selected/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Resolved").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("filters alerts by project id or name, type, and severity", async () => {
+    useAlertsMock.mockReturnValue({
+      alerts: [
+        {
+          id: "a-1",
+          project_id: "proj-1",
+          severity: "Critical",
+          type: "Legal",
+          title: "Penalty risk",
+          description: "Clause mismatch",
+          project: "Hospital Central",
+          status: "Open",
+        },
+        {
+          id: "a-2",
+          project_id: "proj-2",
+          severity: "High",
+          type: "Schedule",
+          title: "Delay forecast",
+          description: "Activity slip",
+          project: "Port Expansion",
+          status: "Open",
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderWithProviders(<AlertsPage />);
+
+    expect(screen.getByRole("combobox", { name: /project filter/i })).toHaveClass("rounded-xl");
+    expect(screen.getByRole("button", { name: /view alert a-1/i })).toHaveClass("rounded-xl");
+
+    fireEvent.change(screen.getByPlaceholderText(/search alerts/i), {
+      target: { value: "proj-1" },
+    });
+
+    expect(screen.getByText("Penalty risk")).toBeInTheDocument();
+    expect(screen.queryByText("Delay forecast")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/search alerts/i), {
+      target: { value: "hospital" },
+    });
+
+    expect(screen.getByText("Penalty risk")).toBeInTheDocument();
+    expect(screen.queryByText("Delay forecast")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("combobox", { name: /type filter/i }));
+    fireEvent.click(screen.getByRole("option", { name: /^legal$/i }));
+    fireEvent.click(screen.getByRole("combobox", { name: /severity filter/i }));
+    fireEvent.click(screen.getByRole("option", { name: /^critical$/i }));
+
+    expect(screen.getByText("Penalty risk")).toBeInTheDocument();
+    expect(screen.queryByText("Delay forecast")).not.toBeInTheDocument();
+  }, 10000);
 });

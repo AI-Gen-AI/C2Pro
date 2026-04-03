@@ -16,6 +16,9 @@ from uuid import uuid4
 
 from src.main import app
 from src.core.database import get_session
+from src.core.approval import ApprovalStatus
+from src.analysis.adapters.persistence.models import Alert
+from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.projects.domain.models import ProjectStatus, ProjectType
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -670,6 +673,105 @@ class TestProjectStatsEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestProjectQuickViewSummaryEndpoint:
+    """Tests for GET /projects/{project_id}/summary endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_project_summary_returns_quick_view_payload(
+        self,
+        client,
+        db,
+        test_project,
+        auth_headers,
+    ):
+        """Should return tenant-scoped quick-view summary with ranked open alerts."""
+        medium_alert = Alert(
+            project_id=test_project.id,
+            severity=AlertSeverity.MEDIUM,
+            category="BUDGET",
+            rule_id="R-BUD-001",
+            title="Budget drift detected",
+            description="Budget drift detected",
+            status=AlertStatus.OPEN,
+            approval_status=ApprovalStatus.PENDING,
+            alert_metadata={},
+        )
+        critical_alert = Alert(
+            project_id=test_project.id,
+            severity=AlertSeverity.CRITICAL,
+            category="LEGAL",
+            rule_id="R-LEG-001",
+            title="Permit missing",
+            description="Permit missing",
+            status=AlertStatus.OPEN,
+            approval_status=ApprovalStatus.PENDING,
+            alert_metadata={},
+        )
+        resolved_alert = Alert(
+            project_id=test_project.id,
+            severity=AlertSeverity.HIGH,
+            category="TIME",
+            rule_id="R-TIME-001",
+            title="Recovered schedule conflict",
+            description="Recovered schedule conflict",
+            status=AlertStatus.RESOLVED,
+            approval_status=ApprovalStatus.APPROVED,
+            alert_metadata={},
+        )
+        db.add_all([medium_alert, critical_alert, resolved_alert])
+        await db.commit()
+
+        response = await client.get(
+            f"{API_PREFIX}/projects/{test_project.id}/summary",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.json()
+
+        assert payload["project_id"] == str(test_project.id)
+        assert payload["name"] == test_project.name
+        assert payload["coherence_score"] == pytest.approx(test_project.coherence_score)
+        assert payload["open_alert_count"] == 2
+        assert payload["critical_alert_count"] == 1
+        assert [alert["title"] for alert in payload["top_alerts"]] == [
+            "Permit missing",
+            "Budget drift detected",
+        ]
+        assert [alert["severity"] for alert in payload["top_alerts"]] == [
+            "critical",
+            "medium",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_project_summary_honors_tenant_isolation(
+        self,
+        client,
+        db,
+        test_tenant_2,
+        auth_headers,
+    ):
+        """Should return 404 when the project belongs to another tenant."""
+        foreign_project = ProjectORM(
+            id=uuid4(),
+            tenant_id=test_tenant_2.id,
+            name="Foreign Project",
+            code="FOR-001",
+            project_type=ProjectType.CONSTRUCTION.value,
+            status=ProjectStatus.DRAFT.value,
+            metadata_json={"version": 1},
+        )
+        db.add(foreign_project)
+        await db.commit()
+
+        response = await client.get(
+            f"{API_PREFIX}/projects/{foreign_project.id}/summary",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 # ===========================================

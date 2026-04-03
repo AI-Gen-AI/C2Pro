@@ -107,6 +107,10 @@ from src.main import create_application
 from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
 from src.core.auth.service import hash_password
 from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
+from tests.support.postgres_bootstrap import (
+    reset_public_schema,
+    run_postgres_test_bootstrap,
+)
 
 
 def _iter_metadata_enum_types():
@@ -396,14 +400,10 @@ async def test_engine():
 
         # Test connection and create tables
         _ensure_test_fk_stub_tables()
-        async with engine.begin() as conn:
-            await conn.execute(text("SET LOCAL search_path TO public"))
-            await conn.execute(text("SELECT 1"))
-            try:
-                await conn.run_sync(Base.metadata.drop_all)
-            except Exception:
-                # Best-effort cleanup for stale local schemas before re-creating metadata tables.
-                pass
+        async def _cleanup_bootstrap(conn) -> None:
+            await reset_public_schema(conn)
+
+        async def _prepare_bootstrap(conn) -> None:
             await _reset_metadata_enum_types(conn)
             await _create_metadata_enum_types(conn)
             _set_metadata_enum_create_type(False)
@@ -412,6 +412,15 @@ async def test_engine():
             finally:
                 _set_metadata_enum_create_type(True)
             await _ensure_rls_and_audit_compatibility(conn)
+
+        await run_postgres_test_bootstrap(
+            engine,
+            cleanup_step=_cleanup_bootstrap,
+            prepare_step=_prepare_bootstrap,
+            warning_sink=lambda exc: print(
+                f"\n[WARNING] Bootstrap drop_all skipped before schema reset: {exc}"
+            ),
+        )
 
         yield engine
 

@@ -4,15 +4,30 @@
  */
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, renderWithProviders, screen, within } from "@/src/tests/test-utils";
+import {
+  fireEvent,
+  renderWithProviders,
+  screen,
+  waitFor,
+  within,
+} from "@/src/tests/test-utils";
 import ProjectsPage from "./page";
 
 const useProjectsMock = vi.fn();
 const useUpdateProjectMock = vi.fn();
+const useCreateProjectMock = vi.fn();
+const useProjectQuickViewSummaryMock = vi.fn();
 const useAuthStoreMock = vi.fn();
+const pushMock = vi.fn();
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: pushMock,
+  }),
 }));
 
 vi.mock("next/link", () => ({
@@ -31,6 +46,16 @@ vi.mock("@/hooks/useProjects", () => ({
 
 vi.mock("@/hooks/useUpdateProject", () => ({
   useUpdateProject: (...args: unknown[]) => useUpdateProjectMock(...args),
+}));
+
+vi.mock("@/hooks/useProjectQuickViewSummary", () => ({
+  useProjectQuickViewSummary: (...args: unknown[]) =>
+    useProjectQuickViewSummaryMock(...args),
+}));
+
+vi.mock("@/lib/api/generated/projects/projects", () => ({
+  useCreateProjectApiV1ProjectsPost: (...args: unknown[]) =>
+    useCreateProjectMock(...args),
 }));
 
 vi.mock("@/stores/auth", () => ({
@@ -117,12 +142,24 @@ vi.mock("@/components/ui/dropdown-menu", () => {
     return <>{children}</>;
   }
 
-  function DropdownMenuContent({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+  function DropdownMenuContent({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) {
+    return <div className={className}>{children}</div>;
   }
 
-  function DropdownMenuLabel({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+  function DropdownMenuLabel({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) {
+    return <div className={className}>{children}</div>;
   }
 
   function DropdownMenuSeparator() {
@@ -166,9 +203,20 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  pushMock.mockReset();
   useUpdateProjectMock.mockReturnValue({
     mutateAsync: vi.fn(),
     isPending: false,
+    error: null,
+  });
+  useCreateProjectMock.mockReturnValue({
+    mutateAsync: vi.fn(),
+    isPending: false,
+    error: null,
+  });
+  useProjectQuickViewSummaryMock.mockReturnValue({
+    data: null,
+    isLoading: false,
     error: null,
   });
 });
@@ -231,7 +279,7 @@ describe("ProjectsPage real-data boundary", () => {
     expect(screen.getByRole("heading", { level: 1, name: /^projects$/i })).toBeInTheDocument();
   });
 
-  it("renders project rows returned by the backend and exposes the create link", () => {
+  it("renders project rows returned by the backend and exposes the create action", () => {
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "real-token" }),
@@ -263,10 +311,99 @@ describe("ProjectsPage real-data boundary", () => {
     );
     expect(screen.getByText("Active EPC delivery")).toBeInTheDocument();
     expect(screen.getByText("AIR-002")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /new project/i })).toHaveAttribute(
-      "href",
-      "/projects/new",
+    expect(screen.getByRole("button", { name: /new project/i })).toBeInTheDocument();
+  });
+
+  it("opens a project creation wizard and keeps next disabled until the required name is provided", () => {
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "real-token" }),
     );
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<ProjectsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /new project/i }));
+
+    const wizard = screen.getByRole("dialog", { name: /create project/i });
+    expect(wizard).toHaveClass("bg-background/95");
+    expect(wizard).toHaveClass("shadow-2xl");
+    expect(within(wizard).getByText(/step 1 of 3/i)).toBeInTheDocument();
+    expect(within(wizard).getByRole("button", { name: /next step/i })).toBeDisabled();
+
+    fireEvent.change(within(wizard).getByLabelText(/project name/i), {
+      target: { value: "Atlas Ridge" },
+    });
+
+    expect(within(wizard).getByRole("button", { name: /next step/i })).toBeEnabled();
+  });
+
+  it("creates a project from the wizard review step and redirects to documents upload", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({ id: "proj-500" });
+    useCreateProjectMock.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+      error: null,
+    });
+    useAuthStoreMock.mockImplementation(
+      (selector: (state: { token: string | null }) => unknown) =>
+        selector({ token: "real-token" }),
+    );
+    useProjectsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<ProjectsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /new project/i }));
+
+    const wizard = screen.getByRole("dialog", { name: /create project/i });
+    fireEvent.change(within(wizard).getByLabelText(/project name/i), {
+      target: { value: "Atlas Ridge" },
+    });
+    fireEvent.change(within(wizard).getByLabelText(/project code/i), {
+      target: { value: "ATR-500" },
+    });
+    fireEvent.change(within(wizard).getByLabelText(/project type/i), {
+      target: { value: "epc" },
+    });
+    fireEvent.click(within(wizard).getByRole("button", { name: /next step/i }));
+
+    fireEvent.change(within(wizard).getByLabelText(/client name/i), {
+      target: { value: "Client Corp" },
+    });
+    fireEvent.change(within(wizard).getByLabelText(/project description/i), {
+      target: { value: "Phase one delivery" },
+    });
+    fireEvent.change(within(wizard).getByLabelText(/currency/i), {
+      target: { value: "USD" },
+    });
+    fireEvent.click(within(wizard).getByRole("button", { name: /review project/i }));
+
+    expect(within(wizard).getByText(/step 3 of 3/i)).toBeInTheDocument();
+    expect(within(wizard).getByText(/atlas ridge/i)).toBeInTheDocument();
+    expect(within(wizard).getByText(/client corp/i)).toBeInTheDocument();
+    fireEvent.click(within(wizard).getByRole("button", { name: /create project/i }));
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: {
+        name: "Atlas Ridge",
+        code: "ATR-500",
+        description: "Phase one delivery",
+        client_name: "Client Corp",
+        currency: "USD",
+        project_type: "epc",
+      },
+    });
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/projects/proj-500/documents");
+    });
   });
 
   it("allows users to customize visible columns without hiding the project link", () => {
@@ -289,6 +426,9 @@ describe("ProjectsPage real-data boundary", () => {
 
     renderWithProviders(<ProjectsPage />);
 
+    expect(
+      screen.getByText(/visible columns/i).closest(".rounded-xl"),
+    ).toHaveClass("rounded-xl");
     expect(screen.getByRole("columnheader", { name: /project/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /description/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /code/i })).toBeInTheDocument();
@@ -332,8 +472,6 @@ describe("ProjectsPage real-data boundary", () => {
       isLoading: false,
       error: null,
     });
-    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Airport focus");
-
     const { unmount } = renderWithProviders(<ProjectsPage />);
 
     fireEvent.change(screen.getByPlaceholderText(/search projects/i), {
@@ -341,6 +479,13 @@ describe("ProjectsPage real-data boundary", () => {
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /description/i }));
     fireEvent.click(screen.getByRole("button", { name: /save preset/i }));
+
+    const presetDialog = screen.getByRole("dialog", { name: /save current preset/i });
+    expect(presetDialog).toHaveClass("bg-background/95");
+    fireEvent.change(within(presetDialog).getByLabelText(/preset name/i), {
+      target: { value: "Airport focus" },
+    });
+    fireEvent.click(within(presetDialog).getByRole("button", { name: /^save preset$/i }));
 
     expect(screen.getByRole("button", { name: /airport focus/i })).toBeInTheDocument();
     expect(screen.queryByText(/north sea platform/i)).not.toBeInTheDocument();
@@ -362,7 +507,6 @@ describe("ProjectsPage real-data boundary", () => {
     expect(screen.queryByText(/north sea platform/i)).not.toBeInTheDocument();
     expect(screen.getByText(/airport retrofit/i)).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /description/i })).not.toBeInTheDocument();
-    expect(promptSpy).toHaveBeenCalled();
   });
 
   it("supports inline editing for project name, description, and code", async () => {
@@ -427,7 +571,7 @@ describe("ProjectsPage real-data boundary", () => {
     expect(screen.getByText("NSR-009")).toBeInTheDocument();
   });
 
-  it("opens a project quick-view sheet from the project list", () => {
+  it("opens a backend-backed project quick-view sheet from the project list", () => {
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "real-token" }),
@@ -446,6 +590,43 @@ describe("ProjectsPage real-data boundary", () => {
       isLoading: false,
       error: null,
     });
+    useProjectQuickViewSummaryMock.mockImplementation((projectId: string | null) => ({
+      data:
+        projectId === "proj-1"
+          ? {
+              project_id: "proj-1",
+              tenant_id: "tenant-1",
+              name: "North Sea Platform",
+              code: "NSP-001",
+              description: "Offshore platform upgrade",
+              project_type: "epc",
+              status: "active",
+              coherence_score: 91,
+              client_name: "Harbor Authority",
+              open_alert_count: 3,
+              critical_alert_count: 1,
+              top_alerts: [
+                {
+                  id: "alert-1",
+                  title: "Permit missing",
+                  severity: "critical",
+                  status: "open",
+                  created_at: "2026-04-02T10:00:00Z",
+                },
+                {
+                  id: "alert-2",
+                  title: "Budget drift detected",
+                  severity: "medium",
+                  status: "open",
+                  created_at: "2026-04-02T08:00:00Z",
+                },
+              ],
+              updated_at: "2026-04-02T11:00:00Z",
+            }
+          : null,
+      isLoading: false,
+      error: null,
+    }));
 
     renderWithProviders(<ProjectsPage />);
 
@@ -457,13 +638,22 @@ describe("ProjectsPage real-data boundary", () => {
       name: /project quick view/i,
     });
 
+    expect(quickViewDialog).toHaveClass("bg-background/95");
+    expect(quickViewDialog).toHaveClass("shadow-2xl");
     expect(within(quickViewDialog).getByText("North Sea Platform")).toBeInTheDocument();
-    expect(within(quickViewDialog).getByText(/^active$/i)).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText("Harbor Authority")).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText(/coherence score/i)).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText("91")).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText(/3 open alerts/i)).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText(/1 critical alert/i)).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText("Permit missing")).toBeInTheDocument();
+    expect(within(quickViewDialog).getByText("Budget drift detected")).toBeInTheDocument();
     expect(
-      within(quickViewDialog).getByText("Offshore platform upgrade"),
-    ).toBeInTheDocument();
-    expect(within(quickViewDialog).getByText(/^epc$/i)).toBeInTheDocument();
-    expect(within(quickViewDialog).getByText("NSP-001")).toBeInTheDocument();
+      within(quickViewDialog).getByRole("link", { name: /open full view/i }),
+    ).toHaveAttribute("href", "/projects/proj-1");
+    expect(
+      within(quickViewDialog).getByRole("link", { name: /view evidence/i }),
+    ).toHaveAttribute("href", "/projects/proj-1/evidence");
   });
 
   it("toggles between table and kanban project views", () => {

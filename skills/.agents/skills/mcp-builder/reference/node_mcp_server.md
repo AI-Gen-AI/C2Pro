@@ -47,6 +47,248 @@ server.registerTool(
 
 ---
 
+## Complete Workflows vs Endpoint Wrappers
+
+### The Core Principle
+
+**MCP tools MUST enable complete workflows, not just provide thin wrappers around API endpoints.**
+
+This is the most important design principle for MCP servers. When agents use your tools, they pay a context cost for every tool call. Tools that require multiple sequential calls to accomplish a single user intent waste tokens, increase latency, and make workflows fragile.
+
+### Why This Matters
+
+**Bad tool design (endpoint wrappers):**
+- Agent calls `search_users("marketing team")` → gets list of user IDs
+- Agent calls `get_user(id1)` → gets details for user 1
+- Agent calls `get_user(id2)` → gets details for user 2
+- Agent calls `get_user(id3)` → gets details for user 3
+- **Result**: 4 tool calls, 4 context round-trips, brittle multi-step reasoning
+
+**Good tool design (complete workflow):**
+- Agent calls `search_users("marketing team", include_details: true)` → gets complete user details in one call
+- **Result**: 1 tool call, 1 context round-trip, atomic operation
+
+### Design Patterns
+
+#### Pattern 1: Embed Related Data
+
+**❌ BAD - Endpoint wrapper pattern:**
+```typescript
+// Tool 1: Returns only IDs
+server.registerTool("github_list_pull_requests", ...)
+// Returns: [{"id": 123, "number": 45}, {"id": 124, "number": 46}]
+
+// Tool 2: Requires separate call per PR
+server.registerTool("github_get_pull_request", ...)
+// Agent must call this 10+ times to get details
+```
+
+**✅ GOOD - Complete workflow:**
+```typescript
+server.registerTool("github_list_pull_requests", {
+  inputSchema: z.object({
+    repo: z.string(),
+    state: z.enum(["open", "closed", "all"]).default("open"),
+    include_reviews: z.boolean().default(false),
+    include_files: z.boolean().default(false)
+  })
+})
+// Returns complete PR data with reviews and files in single call
+// Agents can request minimal or full details based on their needs
+```
+
+#### Pattern 2: Compose Multi-Step Operations
+
+**❌ BAD - Requires orchestration:**
+```typescript
+// Tool 1: Create issue
+server.registerTool("github_create_issue", ...)
+
+// Tool 2: Add labels (separate call)
+server.registerTool("github_add_labels", ...)
+
+// Tool 3: Assign user (separate call)
+server.registerTool("github_assign_issue", ...)
+
+// Agent must coordinate 3 sequential calls with error handling between each
+```
+
+**✅ GOOD - Atomic workflow:**
+```typescript
+server.registerTool("github_create_issue", {
+  inputSchema: z.object({
+    title: z.string(),
+    body: z.string(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    milestone: z.number().optional()
+  })
+})
+// Single atomic operation creates issue with all metadata
+// If any part fails, entire operation is rolled back
+```
+
+#### Pattern 3: Provide Filtering and Aggregation
+
+**❌ BAD - Forces agent-side filtering:**
+```typescript
+server.registerTool("jira_list_all_issues", ...)
+// Returns 1000+ issues, agent must filter in context
+```
+
+**✅ GOOD - Server-side filtering:**
+```typescript
+server.registerTool("jira_search_issues", {
+  inputSchema: z.object({
+    jql: z.string().optional(),
+    assignee: z.string().optional(),
+    status: z.array(z.string()).optional(),
+    labels: z.array(z.string()).optional(),
+    created_after: z.string().optional(),
+    limit: z.number().default(20)
+  })
+})
+// Agent specifies intent, server filters at source
+// Returns only relevant issues, not entire dataset
+```
+
+#### Pattern 4: Support Common Task Combinations
+
+**❌ BAD - Primitive operations only:**
+```typescript
+server.registerTool("slack_get_channel_id", ...)
+server.registerTool("slack_send_message", ...)
+// Agent must look up channel ID, then send message
+```
+
+**✅ GOOD - Intent-based operation:**
+```typescript
+server.registerTool("slack_send_message", {
+  inputSchema: z.object({
+    channel: z.string(), // Accepts name or ID
+    text: z.string(),
+    thread_ts: z.string().optional(), // Reply to thread
+    attachments: z.array(z.object({...})).optional()
+  })
+})
+// Tool resolves channel name to ID internally
+// Single call accomplishes user intent
+```
+
+### When To Split vs Combine
+
+**Split into separate tools when:**
+- Operations have fundamentally different side effects (create vs delete)
+- Operations require different permissions
+- Each operation is commonly used independently
+- Combining would create an overly complex parameter surface
+
+**Combine into single tool when:**
+- Operations are always or commonly used together
+- Intermediate state has no value to the agent
+- Splitting would require sequential calls with error handling
+- The workflow represents a coherent user intent
+
+### Anti-Pattern Examples
+
+#### Anti-Pattern 1: ID-Only Responses
+
+```typescript
+// ❌ BAD: Returns only IDs, forces follow-up calls
+{
+  "users": [{"id": "U123"}, {"id": "U124"}, {"id": "U125"}]
+}
+
+// ✅ GOOD: Returns complete data
+{
+  "users": [
+    {"id": "U123", "name": "Alice", "email": "alice@example.com", "team": "Engineering"},
+    {"id": "U124", "name": "Bob", "email": "bob@example.com", "team": "Marketing"},
+    {"id": "U125", "name": "Carol", "email": "carol@example.com", "team": "Sales"}
+  ]
+}
+```
+
+#### Anti-Pattern 2: Requiring Multi-Call Sequences
+
+```typescript
+// ❌ BAD: Requires 3 sequential calls
+// 1. Create draft
+// 2. Upload attachments
+// 3. Send email
+
+// ✅ GOOD: Single atomic operation
+await send_email({
+  to: ["user@example.com"],
+  subject: "Report",
+  body: "Please find attached...",
+  attachments: [
+    {filename: "report.pdf", content: base64Data}
+  ]
+})
+```
+
+#### Anti-Pattern 3: No Server-Side Filtering
+
+```typescript
+// ❌ BAD: Returns all data, agent filters
+const allTasks = await list_tasks(); // 500 tasks
+// Agent must filter in context (expensive)
+
+// ✅ GOOD: Server filters before return
+const openTasks = await list_tasks({
+  status: ["open", "in_progress"],
+  assigned_to: "current_user",
+  due_before: "2024-12-31"
+}); // Returns only 12 relevant tasks
+```
+
+### Refactoring Checklist
+
+When designing or reviewing MCP tools, ask:
+
+1. **Can this tool return complete data instead of just IDs?**
+   - Include related entities the agent will likely need
+   - Provide options to control detail level
+
+2. **Does this tool require follow-up calls?**
+   - If yes, can those operations be combined into one atomic workflow?
+   - Can the tool accept optional parameters to include related data?
+
+3. **Will agents need to filter, sort, or aggregate this data?**
+   - Move that logic server-side with query parameters
+   - Return only what the agent asked for, not everything
+
+4. **Are there common task sequences involving this tool?**
+   - Identify patterns from user requests
+   - Create workflow tools that combine those sequences
+
+5. **Does this tool map 1:1 to a single API endpoint?**
+   - This is often a red flag (though not always wrong)
+   - Consider whether agents would benefit from a higher-level abstraction
+
+### Implementation Strategy
+
+When building MCP servers:
+
+1. **Start with user intents**, not API endpoints
+   - "Find all open issues assigned to me" (intent)
+   - Not "GET /api/issues" (endpoint)
+
+2. **Map intents to workflows**
+   - One intent = one tool call (when possible)
+   - Compose multiple API calls internally
+
+3. **Provide sensible defaults**
+   - Make common cases easy (minimal parameters)
+   - Make complex cases possible (optional parameters)
+
+4. **Document the workflow**
+   - Tool descriptions should explain the complete workflow
+   - Include examples of common use cases
+
+---
+
 ## MCP TypeScript SDK
 
 The official MCP TypeScript SDK provides:
@@ -68,11 +310,91 @@ Node/TypeScript MCP servers must follow this naming pattern:
 - **Format**: `{service}-mcp-server` (lowercase with hyphens)
 - **Examples**: `github-mcp-server`, `jira-mcp-server`, `stripe-mcp-server`
 
-The name should be:
-- General (not tied to specific features)
-- Descriptive of the service/API being integrated
-- Easy to infer from the task description
-- Without version numbers or dates
+### Naming Rules
+
+The server name should be:
+- **General** (not tied to specific features)
+  - ✅ `slack-mcp-server` (good - covers all Slack capabilities)
+  - ❌ `slack-messaging-mcp-server` (bad - too specific)
+- **Descriptive** of the service/API being integrated
+  - ✅ `salesforce-mcp-server` (good - clear what it connects to)
+  - ❌ `crm-mcp-server` (bad - too vague)
+- **Easy to infer** from the task description
+  - If asked "integrate with Stripe", the name should be `stripe-mcp-server`
+- **Without version numbers or dates**
+  - ✅ `notion-mcp-server` (good)
+  - ❌ `notion-v2-mcp-server` (bad)
+  - ❌ `notion-2024-mcp-server` (bad)
+
+### Why This Convention Matters
+
+**Consistency across ecosystems:**
+- Users can predict server names without consulting documentation
+- Package managers (npm) have consistent naming for discovery
+- CLI tools can suggest server names based on service names
+
+**Avoids namespace conflicts:**
+- The `-mcp-server` suffix prevents collisions with other packages
+- Distinguishes MCP servers from client libraries or other integrations
+
+**Enables tooling:**
+- Automated server discovery can filter packages by naming pattern
+- IDE extensions can recognize MCP servers by name
+- Installation scripts can validate server package names
+
+### Anti-Patterns
+
+**❌ Feature-specific names:**
+```typescript
+// BAD - tied to specific feature
+const server = new McpServer({
+  name: "github-issues-mcp-server"
+});
+
+// GOOD - general service name
+const server = new McpServer({
+  name: "github-mcp-server"
+});
+```
+
+**❌ Missing `-server` suffix:**
+```typescript
+// BAD - inconsistent with convention
+const server = new McpServer({
+  name: "jira-mcp"
+});
+
+// GOOD - follows full convention
+const server = new McpServer({
+  name: "jira-mcp-server"
+});
+```
+
+**❌ Abbreviations or acronyms:**
+```typescript
+// BAD - not immediately clear
+const server = new McpServer({
+  name: "gcp-mcp-server"  // Google Cloud Platform?
+});
+
+// GOOD - full service name
+const server = new McpServer({
+  name: "google-cloud-mcp-server"
+});
+```
+
+**❌ CamelCase or PascalCase:**
+```typescript
+// BAD - wrong case
+const server = new McpServer({
+  name: "gitHub-mcp-server"  // or "GitHub-MCP-Server"
+});
+
+// GOOD - lowercase with hyphens
+const server = new McpServer({
+  name: "github-mcp-server"
+});
+```
 
 ## Project Structure
 
@@ -118,7 +440,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 const server = new McpServer({
-  name: "example-mcp",
+  name: "example-mcp-server",
   version: "1.0.0"
 });
 
@@ -678,7 +1000,7 @@ function handleApiError(error: unknown): string {
 
 // Create MCP server instance
 const server = new McpServer({
-  name: "example-mcp",
+  name: "example-mcp-server",
   version: "1.0.0"
 });
 

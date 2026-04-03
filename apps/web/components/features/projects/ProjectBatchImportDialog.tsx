@@ -39,8 +39,8 @@ export function ProjectBatchImportDialog({
 }: ProjectBatchImportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-2xl sm:rounded-2xl">
+        <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
           <DialogTitle>Import projects in bulk</DialogTitle>
           <DialogDescription>
             Paste one CSV-style row per project using the format{" "}
@@ -49,18 +49,18 @@ export function ProjectBatchImportDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-2xl border bg-background/90 p-4 shadow-sm">
             <Label htmlFor="project-import-rows">Project rows</Label>
             <Textarea
               id="project-import-rows"
               value={importDraft}
               onChange={(event) => onImportDraftChange(event.target.value)}
               placeholder="Hospital Central,EPC,HC-001&#10;Port Expansion,Maritime,PE-002"
-              className="min-h-[140px]"
+              className="min-h-[160px] rounded-xl border-border/80 bg-background/95"
             />
           </div>
 
-          <div className="rounded-md border bg-muted/30 p-4">
+          <div className="rounded-2xl border bg-muted/25 p-4 shadow-sm">
             <div className="text-sm font-medium text-foreground">
               {importPreview.length} project row
               {importPreview.length === 1 ? "" : "s"} ready to import
@@ -75,7 +75,7 @@ export function ProjectBatchImportDialog({
                 {importPreview.map((row, index) => (
                   <li
                     key={`${row.name}-${row.code}-${index}`}
-                    className="rounded-md border bg-background px-3 py-2 text-sm"
+                    className="rounded-xl border bg-background/90 px-3 py-3 text-sm shadow-sm"
                   >
                     <div className="font-medium text-foreground">{row.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -92,11 +92,13 @@ export function ProjectBatchImportDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button disabled={importPreview.length === 0}>Queue Import</Button>
+          <Button className="rounded-xl" disabled={importPreview.length === 0}>
+            Queue Import
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

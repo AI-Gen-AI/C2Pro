@@ -112,7 +112,10 @@ export function DocumentUploadDropzone({
   };
 
   return (
-    <section className="rounded-lg border p-4" data-project-id={projectId}>
+    <section
+      className="rounded-xl border bg-background p-5 shadow-sm"
+      data-project-id={projectId}
+    >
       <button
         type="button"
         aria-label={ariaLabel}
@@ -121,15 +124,19 @@ export function DocumentUploadDropzone({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`w-full rounded-md border-2 border-dashed p-8 text-center transition-colors ${
+        className={`w-full rounded-xl border-2 border-dashed bg-background p-10 text-center text-foreground shadow-sm transition-colors ${
           dragState === "active"
             ? "border-primary bg-primary/10 text-primary"
-            : "border-muted-foreground/25 text-muted-foreground hover:border-primary/50"
+            : "border-border hover:border-primary/50 hover:bg-muted/30"
         }`}
       >
-        <Upload className="mx-auto mb-2 h-8 w-8" />
-        <p>Drag and drop files here</p>
-        <p className="mt-1 text-xs">PDF, XLSX, BC3 (max 50MB)</p>
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-foreground">
+          <Upload className="h-7 w-7" />
+        </div>
+        <p className="text-base font-semibold">Drag and drop files here</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          PDF, XLSX, BC3 (max 50MB)
+        </p>
       </button>
 
       <div className="mt-4 flex items-center justify-center gap-3">
@@ -154,10 +161,18 @@ export function DocumentUploadDropzone({
         />
       </div>
 
-      <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-4 text-sm text-muted-foreground"
+      >
         {statusMessage}
       </p>
-      {message ? <p className="mt-2 text-sm text-foreground">{message}</p> : null}
+      {message ? (
+        <div className="mt-3 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-foreground">
+          {message}
+        </div>
+      ) : null}
     </section>
   );
 }

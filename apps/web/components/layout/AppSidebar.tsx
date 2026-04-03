@@ -21,7 +21,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/evidence', label: 'Evidence', icon: Gauge },
-  { href: '/alerts', label: 'Alerts', icon: AlertTriangle, badge: 7 },
+  { href: '/alerts', label: 'Alerts', icon: AlertTriangle },
   { href: '/stakeholders', label: 'Stakeholders', icon: Users },
   { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 },
 ];

@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field
 # Define valid alert categories as a type
 AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality", "general"]
 
-# Severity levels for continuous scoring
-SeverityLevel = Literal["critical", "high", "medium", "low"]
+# Severity levels for continuous scoring (TASK-504: strict 5-level taxonomy)
+SeverityLevel = Literal["critical", "high", "medium", "low", "info"]
 
 # Source of finding (deterministic rules vs LLM semantic analysis)
 FindingSource = Literal["deterministic", "llm"]
@@ -20,11 +20,14 @@ def impact_to_severity(impact: float) -> SeverityLevel:
     """
     Convert continuous impact score (0.0-1.0) to categorical severity.
 
+    TASK-504: Strict 5-level severity taxonomy enforcement.
+
     Thresholds:
         >= 0.85 → critical
         >= 0.60 → high
         >= 0.35 → medium
-        <  0.35 → low
+        >= 0.15 → low
+        <  0.15 → info
     """
     if impact >= 0.85:
         return "critical"
@@ -32,8 +35,10 @@ def impact_to_severity(impact: float) -> SeverityLevel:
         return "high"
     elif impact >= 0.35:
         return "medium"
-    else:
+    elif impact >= 0.15:
         return "low"
+    else:
+        return "info"
 
 
 class FindingSignal(BaseModel):
@@ -158,12 +163,15 @@ class Alert(BaseModel):
 class SeverityCount(BaseModel):
     """
     Represents the count of alerts by severity level.
+
+    TASK-504: Strict 5-level severity taxonomy (Critical, High, Medium, Low, Info).
     """
 
     critical: int = Field(default=0, description="Number of critical alerts.")
     high: int = Field(default=0, description="Number of high severity alerts.")
     medium: int = Field(default=0, description="Number of medium severity alerts.")
     low: int = Field(default=0, description="Number of low severity alerts.")
+    info: int = Field(default=0, description="Number of info severity alerts.")
 
 
 class CategoryBreakdown(BaseModel):
