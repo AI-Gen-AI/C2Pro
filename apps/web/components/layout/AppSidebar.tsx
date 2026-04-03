@@ -101,7 +101,7 @@ export function AppSidebar() {
         className="flex-1 space-y-0.5 px-0"
         aria-label="Primary"
       >
-        {navItems.map((item) => {
+        {navItems.map((item: NavItem) => {
           const active = isActive(item.href);
           const Icon = item.icon;
 
