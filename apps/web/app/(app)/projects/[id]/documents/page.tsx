@@ -183,13 +183,32 @@ export default function ProjectDocumentsPage() {
 
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[640px] sm:rounded-2xl">
-          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
+        <DialogContent
+          className="gap-5 border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[720px] sm:rounded-[28px]"
+          data-testid="documents-upload-dialog-shell"
+        >
+          <DialogHeader className="rounded-[24px] border border-border/70 bg-muted/35 px-5 py-5">
             <DialogTitle>Upload Documents</DialogTitle>
             <DialogDescription>
               Add project files with a clearer upload surface and live status feedback.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-3 rounded-[24px] border border-border/60 bg-background/80 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Project intake</p>
+              <p className="text-sm text-muted-foreground">
+                Files stay scoped to {projectName} and will appear in the document register once queued.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                Supported formats
+              </span>
+              <span className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                Max 50MB each
+              </span>
+            </div>
+          </div>
           <DocumentUploadDropzone
             projectId={projectId}
             maxFileSizeBytes={50 * 1024 * 1024}
@@ -250,44 +269,50 @@ export default function ProjectDocumentsPage() {
       ) : null}
 
       <section className="rounded-2xl border bg-card/80 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-background/70 p-3 shadow-sm">
-        <div className="relative flex-1 min-w-[260px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search documents..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="h-11 rounded-xl border-border/80 bg-background/95 pl-9"
-          />
-        </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-11 w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {typeOptions.map((type) => (
-              <SelectItem key={type} value={type}>
-                {type}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-11 w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Analyzed">Analyzed</SelectItem>
-            <SelectItem value="Processing">Processing</SelectItem>
-            <SelectItem value="Uploaded">Uploaded</SelectItem>
-            <SelectItem value="Error">Error</SelectItem>
-          </SelectContent>
-        </Select>
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-2xl border bg-background/70 p-3 shadow-sm"
+          data-testid="documents-filter-toolbar"
+        >
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="h-11 rounded-xl border-border/80 bg-background/95 pl-9"
+            />
+          </div>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-11 w-full min-w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm sm:w-[200px]">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {typeOptions.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-11 w-full min-w-[180px] rounded-xl border-border/80 bg-background/95 shadow-sm sm:w-[200px]">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="Analyzed">Analyzed</SelectItem>
+              <SelectItem value="Processing">Processing</SelectItem>
+              <SelectItem value="Uploaded">Uploaded</SelectItem>
+              <SelectItem value="Error">Error</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4"
+          data-testid="documents-results-summary"
+        >
           <div className="flex flex-wrap items-center gap-2">
             {typeFilter !== 'all' ? (
               <span className="rounded-full border bg-background/95 px-3 py-1 text-xs text-foreground shadow-sm">
