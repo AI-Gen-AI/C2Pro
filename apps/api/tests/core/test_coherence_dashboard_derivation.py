@@ -136,3 +136,60 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
     assert response["sub_scores"]["TECHNICAL"] == 63
     assert response["alert_count"] == 4
     assert response["last_updated"].startswith(analysis.updated_at.replace(tzinfo=None).isoformat())
+
+
+@pytest.mark.asyncio
+async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
+    db, test_tenant, monkeypatch
+) -> None:
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Dashboard Malformed Analysis Project",
+        description=None,
+        code="COH-MALFORMED",
+        project_type="construction",
+        status="active",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+    )
+    db.add(project)
+    await db.flush()
+
+    analysis = Analysis(
+        id=uuid4(),
+        project_id=project.id,
+        analysis_type=AnalysisType.COHERENCE,
+        status=AnalysisStatus.COMPLETED,
+        result_json={"source": "analysis"},
+        coherence_score=71,
+        coherence_breakdown=["unexpected", "legacy", "list"],
+        alerts_count=2,
+        completed_at=datetime.utcnow(),
+    )
+    db.add(analysis)
+    await db.commit()
+
+    @asynccontextmanager
+    async def _session_with_tenant(_tenant_id):
+        yield db
+
+    monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id))
+
+    assert response["coherence_score"] == 71
+    assert response["alert_count"] == 2
+    assert response["sub_scores"] == {
+        "SCOPE": 0,
+        "BUDGET": 0,
+        "QUALITY": 0,
+        "TECHNICAL": 0,
+        "LEGAL": 0,
+        "TIME": 0,
+    }

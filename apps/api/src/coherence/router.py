@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, text
+from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.domain.enums import AnalysisStatus
@@ -87,15 +87,18 @@ def _zeroed_sub_scores() -> dict[str, int]:
     return {category: 0 for category in COHERENCE_CATEGORIES}
 
 
-def _normalized_sub_scores(raw_scores: dict | None) -> dict[str, int]:
+def _normalized_sub_scores(raw_scores: object) -> dict[str, int]:
     normalized = _zeroed_sub_scores()
-    if not raw_scores:
+    if not raw_scores or not isinstance(raw_scores, dict):
         return normalized
 
     for category, score in raw_scores.items():
         category_key = str(category).upper()
         if category_key in normalized and score is not None:
-            normalized[category_key] = int(score)
+            try:
+                normalized[category_key] = int(score)
+            except (TypeError, ValueError):
+                normalized[category_key] = 0
     return normalized
 
 
@@ -351,12 +354,18 @@ async def get_coherence_dashboard(
 
     async with get_session_with_tenant(tenant_id) as session:
         project_result = await session.execute(
-            select(ProjectORM).where(
+            select(
+                ProjectORM.id,
+                ProjectORM.tenant_id,
+                ProjectORM.coherence_score,
+                ProjectORM.last_analysis_at,
+                ProjectORM.updated_at,
+            ).where(
                 ProjectORM.id == project_id,
                 ProjectORM.tenant_id == tenant_id,
             )
         )
-        project = project_result.scalar_one_or_none()
+        project = project_result.one_or_none()
 
         if project is None:
             raise HTTPException(
@@ -367,51 +376,81 @@ async def get_coherence_dashboard(
         # Get counts
         document_count = (
             await session.execute(
-                select(func.count()).select_from(DocumentORM).where(DocumentORM.project_id == project_id)
+                select(func.count())
+                .select_from(DocumentORM)
+                .join(ProjectORM, ProjectORM.id == DocumentORM.project_id)
+                .where(
+                    DocumentORM.project_id == project_id,
+                    ProjectORM.tenant_id == tenant_id,
+                )
             )
         ).scalar_one()
 
         alert_count = (
             await session.execute(
-                select(func.count()).select_from(AlertORM).where(AlertORM.project_id == project_id)
+                select(func.count())
+                .select_from(AlertORM)
+                .join(ProjectORM, ProjectORM.id == AlertORM.project_id)
+                .where(
+                    AlertORM.project_id == project_id,
+                    ProjectORM.tenant_id == tenant_id,
+                )
             )
         ).scalar_one()
 
-        # Fetch latest completed analysis
+        # Fetch latest completed analysis without loading enum-bound ORM instances.
         latest_analysis = (
             await session.execute(
-                select(Analysis)
+                select(
+                    Analysis.coherence_score,
+                    Analysis.coherence_breakdown,
+                    Analysis.alerts_count,
+                    Analysis.completed_at,
+                    Analysis.updated_at,
+                )
                 .where(
                     Analysis.project_id == project_id,
-                    Analysis.status == AnalysisStatus.COMPLETED,
+                    cast(Analysis.status, String) == AnalysisStatus.COMPLETED.value,
                 )
                 .order_by(Analysis.completed_at.desc().nullslast(), Analysis.created_at.desc())
                 .limit(1)
             )
-        ).scalar_one_or_none()
+        ).one_or_none()
 
         # Fetch latest coherence result (legacy or direct engine output)
         coherence_result = (
             await session.execute(
-                select(CoherenceResultORM)
+                select(
+                    CoherenceResultORM.global_score,
+                    CoherenceResultORM.category_scores,
+                    CoherenceResultORM.calculated_at,
+                )
                 .where(CoherenceResultORM.project_id == project_id)
                 .order_by(CoherenceResultORM.calculated_at.desc())
                 .limit(1)
             )
-        ).scalar_one_or_none()
+        ).one_or_none()
 
         # Fetch latest metadata for last_updated
         latest_doc_at = (
             await session.execute(
                 select(func.max(DocumentORM.updated_at))
-                .where(DocumentORM.project_id == project_id)
+                .join(ProjectORM, ProjectORM.id == DocumentORM.project_id)
+                .where(
+                    DocumentORM.project_id == project_id,
+                    ProjectORM.tenant_id == tenant_id,
+                )
             )
         ).scalar_one()
 
         latest_alert_at = (
             await session.execute(
                 select(func.max(AlertORM.updated_at))
-                .where(AlertORM.project_id == project_id)
+                .join(ProjectORM, ProjectORM.id == AlertORM.project_id)
+                .where(
+                    AlertORM.project_id == project_id,
+                    ProjectORM.tenant_id == tenant_id,
+                )
             )
         ).scalar_one()
 

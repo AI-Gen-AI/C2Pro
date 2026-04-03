@@ -14,10 +14,11 @@ Endpoints:
 from typing import Annotated, Literal
 from uuid import UUID
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator, model_validator
-from sqlalchemy import select
+from sqlalchemy import String, cast, select
 
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.domain.enums import AlertSeverity, AlertStatus
@@ -174,7 +175,13 @@ def _get_sla_policy(alert: Alert) -> tuple[str | None, datetime | None]:
         AlertSeverity.MEDIUM: ("Medium severity: response in 72 hours", 72),
         AlertSeverity.LOW: ("Low severity: response in 120 hours", 120),
     }
-    policy = policy_by_severity.get(alert.severity)
+    raw_severity = alert.severity
+    if isinstance(raw_severity, str):
+        try:
+            raw_severity = AlertSeverity(raw_severity.lower())
+        except ValueError:
+            raw_severity = None
+    policy = policy_by_severity.get(raw_severity)
     if policy is None or alert.created_at is None:
         return None, None
 
@@ -194,6 +201,70 @@ def _normalize_alert_metadata(value: object) -> dict:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _coerce_alert_text(primary: object, fallback: object, default: str) -> str:
+    for candidate in (primary, fallback):
+        if isinstance(candidate, str):
+            stripped = candidate.strip()
+            if stripped:
+                return stripped
+    return default
+
+
+def _coerce_alert_category(value: object) -> str:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return "risk"
+
+
+def _coerce_alert_state(value: object, default: str) -> str:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped.lower()
+    return default
+
+
+def _coerce_alert_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime.utcnow()
+
+
+def _serialize_alert_row(row: object, tenant_id: UUID) -> AlertResponse:
+    severity = _coerce_alert_state(getattr(row, "severity", None), "low")
+    created_at = _coerce_alert_datetime(getattr(row, "created_at", None))
+    sla_policy_name, sla_due_at = _get_sla_policy(
+        SimpleNamespace(
+            severity=severity,
+            created_at=created_at,
+        )
+    )
+    alert_metadata = _normalize_alert_metadata(getattr(row, "alert_metadata", None))
+    return AlertResponse(
+        id=getattr(row, "id"),
+        project_id=getattr(row, "project_id"),
+        tenant_id=tenant_id,
+        rule_code=_coerce_alert_text(getattr(row, "rule_id", None), None, "AI_EXTRACTED"),
+        category=_coerce_alert_category(getattr(row, "category", None)),
+        severity=severity,
+        message=_coerce_alert_text(
+            getattr(row, "title", None),
+            getattr(row, "description", None),
+            "Legacy alert",
+        ),
+        status=_coerce_alert_state(getattr(row, "status", None), "open"),
+        affected_entities=_normalize_affected_entities(getattr(row, "affected_entities", None)),
+        reviewed_by=getattr(row, "reviewed_by", None),
+        reviewed_at=getattr(row, "reviewed_at", None),
+        root_cause=alert_metadata.get("root_cause"),
+        sla_policy_name=sla_policy_name,
+        sla_due_at=sla_due_at,
+        created_at=created_at,
+    )
 
 
 def _serialize_alert(alert: Alert, tenant_id: UUID) -> AlertResponse:
@@ -427,7 +498,21 @@ async def list_alerts(
     """List tenant-scoped alerts with optional project/document filters."""
     async with get_session_with_tenant(current_user.tenant_id) as session:
         query = (
-            select(Alert)
+            select(
+                Alert.id,
+                Alert.project_id,
+                cast(Alert.severity, String).label("severity"),
+                Alert.category,
+                Alert.rule_id,
+                Alert.title,
+                Alert.description,
+                cast(Alert.status, String).label("status"),
+                Alert.affected_entities,
+                Alert.reviewed_by,
+                Alert.reviewed_at,
+                Alert.alert_metadata,
+                Alert.created_at,
+            )
             .join(ProjectORM, ProjectORM.id == Alert.project_id)
             .where(ProjectORM.tenant_id == current_user.tenant_id)
         )
@@ -447,9 +532,9 @@ async def list_alerts(
 
         query = query.order_by(Alert.created_at.desc())
         result = await session.execute(query)
-        db_alerts = result.scalars().all()
+        db_alerts = result.all()
 
-    alerts = [_serialize_alert(alert, current_user.tenant_id) for alert in db_alerts]
+    alerts = [_serialize_alert_row(alert, current_user.tenant_id) for alert in db_alerts]
     return AlertListResponse(items=alerts, total=len(alerts))
 
 
@@ -469,7 +554,21 @@ async def list_project_alerts(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         # Build query
         query = (
-            select(Alert)
+            select(
+                Alert.id,
+                Alert.project_id,
+                cast(Alert.severity, String).label("severity"),
+                Alert.category,
+                Alert.rule_id,
+                Alert.title,
+                Alert.description,
+                cast(Alert.status, String).label("status"),
+                Alert.affected_entities,
+                Alert.reviewed_by,
+                Alert.reviewed_at,
+                Alert.alert_metadata,
+                Alert.created_at,
+            )
             .join(ProjectORM, ProjectORM.id == Alert.project_id)
             .where(
                 Alert.project_id == project_id,
@@ -489,10 +588,10 @@ async def list_project_alerts(
         query = query.order_by(Alert.created_at.desc())
 
         result = await session.execute(query)
-        db_alerts = result.scalars().all()
+        db_alerts = result.all()
 
     # Convert to response format
-    alerts = [_serialize_alert(alert, current_user.tenant_id) for alert in db_alerts]
+    alerts = [_serialize_alert_row(alert, current_user.tenant_id) for alert in db_alerts]
 
     return AlertListResponse(
         items=alerts,

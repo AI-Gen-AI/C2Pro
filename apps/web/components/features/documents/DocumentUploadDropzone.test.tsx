@@ -125,9 +125,16 @@ describe("S2-09 - DocumentUploadDropzone", () => {
   it("renders the upload surface with high-contrast styling for production readability", () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
+    expect(screen.getByTestId("document-upload-surface")).toHaveClass("bg-background");
+    expect(screen.getByTestId("document-upload-surface")).toHaveClass("shadow-sm");
+    expect(screen.getByTestId("document-upload-guidance")).toHaveTextContent(
+      /files stay private to this project workspace/i,
+    );
+
     const dropzone = screen.getByRole("button", { name: /upload documents/i });
     expect(dropzone).toHaveClass("bg-background");
     expect(dropzone).toHaveClass("shadow-sm");
     expect(dropzone).toHaveClass("text-foreground");
+    expect(dropzone).toHaveClass("min-h-[260px]");
   });
 });

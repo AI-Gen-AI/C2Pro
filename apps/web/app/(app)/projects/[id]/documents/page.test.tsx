@@ -289,6 +289,9 @@ describe("ProjectDocumentsPage", () => {
     const uploadDialog = screen.getByRole("dialog", { name: /upload documents/i });
     expect(uploadDialog).toHaveClass("bg-background/95");
     expect(uploadDialog).toHaveClass("shadow-2xl");
+    expect(screen.getByTestId("documents-upload-dialog-shell")).toHaveClass("gap-5");
+    expect(screen.getByText(/supported formats/i)).toBeInTheDocument();
+    expect(screen.getByText(/files stay scoped to atlas ridge/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /finish upload/i }));
 
@@ -414,5 +417,31 @@ describe("ProjectDocumentsPage", () => {
     );
     expect(screen.getByText("Delete Document")).toBeInTheDocument();
     expect(refetch).not.toHaveBeenCalled();
+  });
+
+  it("separates filter controls from the results count to avoid dropdown overlap", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_real_001",
+          name: "Contract.pdf",
+          type: "contract",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-03-18T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.getByTestId("documents-filter-toolbar")).toHaveClass("flex-wrap");
+    expect(screen.getByTestId("documents-results-summary")).toHaveTextContent(
+      "Showing 1 of 1 documents",
+    );
+    expect(screen.getByTestId("documents-results-summary")).toHaveClass("border-t");
   });
 });
