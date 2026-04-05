@@ -17,6 +17,8 @@ class DocumentStatus(str, Enum):
     QUEUED = "queued"
     PARSING = "processing"  # Database uses "processing"
     PARSED = "parsed"
+    PARSED_PENDING_ANALYSIS = "parsed_pending_analysis"  # TASK-BCK-022: Ingestion complete, analysis not yet started
+    ANALYZED = "analyzed"  # TASK-BCK-022: Analysis orchestration completed
     ERROR = "error"
 
 class DocumentType(str, Enum):
