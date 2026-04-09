@@ -5,8 +5,8 @@ This defines the contract that any persistence adapter must fulfill.
 Following the Dependency Inversion Principle, the domain/application layers
 depend on this abstraction, not on concrete implementations.
 """
-from datetime import datetime
 from abc import ABC, abstractmethod
+from datetime import datetime
 from uuid import UUID
 
 from src.projects.domain.models import Project, ProjectStatus, ProjectType

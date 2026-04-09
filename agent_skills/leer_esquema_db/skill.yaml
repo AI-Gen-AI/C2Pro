@@ -1,0 +1,10 @@
+id: leer_esquema_db
+version: 1.0.0
+description: "Lee el esquema de la base de datos desde migraciones y modelos"
+author: "C2Pro Team"
+input:
+  modulo: "string (required) - Nombre del modulo"
+output:
+  tablas: "array de objetos con nombre y columnas"
+dependencies: []
+timeout_ms: 10000

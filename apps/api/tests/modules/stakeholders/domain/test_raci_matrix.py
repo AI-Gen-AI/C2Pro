@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.analysis.domain.graph import GraphNode
 from src.stakeholders.domain.models import (
     InterestLevel,
     PowerLevel,
@@ -18,7 +19,6 @@ from src.stakeholders.domain.models import (
 )
 from src.stakeholders.domain.services.quadrant_assignment import assign_quadrant
 from src.stakeholders.domain.services.raci_validator import validate_raci_row
-from src.analysis.domain.graph import GraphNode
 
 
 class TestPowerInterestQuadrant:

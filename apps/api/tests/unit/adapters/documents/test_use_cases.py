@@ -6,9 +6,10 @@ Priority: P2
 Tests to improve coverage for document use cases.
 """
 
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock, patch
+
+import pytest
 from fastapi import HTTPException
 
 
@@ -116,6 +117,7 @@ class TestListProjectDocumentsUseCase:
         from src.documents.domain.models import Document, DocumentType
 
         mock_repo = MagicMock()
+        mock_project_repo = MagicMock()
 
         project_id = uuid4()
         tenant_id = uuid4()
@@ -131,8 +133,12 @@ class TestListProjectDocumentsUseCase:
         ]
 
         mock_repo.list_for_project = AsyncMock(return_value=(docs, 1))
+        mock_project_repo.get_by_id = AsyncMock(return_value=object())
 
-        use_case = ListProjectDocumentsUseCase(document_repository=mock_repo)
+        use_case = ListProjectDocumentsUseCase(
+            document_repository=mock_repo,
+            project_repository=mock_project_repo,
+        )
         result, count = await use_case.execute(project_id, tenant_id, skip=0, limit=10)
 
         assert len(result) == 1
@@ -145,9 +151,14 @@ class TestListProjectDocumentsUseCase:
         )
 
         mock_repo = MagicMock()
+        mock_project_repo = MagicMock()
         mock_repo.list_for_project = AsyncMock(return_value=([], 0))
+        mock_project_repo.get_by_id = AsyncMock(return_value=object())
 
-        use_case = ListProjectDocumentsUseCase(document_repository=mock_repo)
+        use_case = ListProjectDocumentsUseCase(
+            document_repository=mock_repo,
+            project_repository=mock_project_repo,
+        )
         result, count = await use_case.execute(uuid4(), uuid4())
 
         assert result == []

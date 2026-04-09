@@ -3,8 +3,9 @@ TS-UD-DOC-ENT-002: Money entity extraction domain service.
 """
 
 import re
-from typing import List, NamedTuple, Union, Any
 from enum import Enum, auto
+from typing import NamedTuple
+
 
 # --- DTOs and Enums ---
 class MoneyContextType(Enum):
@@ -33,7 +34,7 @@ class ExtractedPercentage(NamedTuple):
     end: int
 
 # A union type for the return value
-ExtractedEntity = Union[ExtractedMoney, ExtractedPercentage]
+ExtractedEntity = ExtractedMoney | ExtractedPercentage
 
 # --- Domain Service Implementation ---
 class MoneyEntityExtractor:
@@ -99,7 +100,7 @@ class MoneyEntityExtractor:
             (
                 "PERCENT",
                 MoneyContextType.GENERIC,
-                re.compile(rf"(?P<amount>-?\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE),
+                re.compile(r"(?P<amount>-?\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE),
             ),
         ]
 
@@ -137,11 +138,11 @@ class MoneyEntityExtractor:
         cleaned_text = re.sub(r"[^-0-9.]", "", cleaned_text)
         return float(cleaned_text)
 
-    async def extract(self, text: str) -> List[ExtractedEntity]:
+    async def extract(self, text: str) -> list[ExtractedEntity]:
         """
         Extracts all recognizable money and percentage entities from the input text.
         """
-        found_entities: List[ExtractedEntity] = []
+        found_entities: list[ExtractedEntity] = []
 
         for currency, context, pattern in self.patterns:
             for match in pattern.finditer(text):
@@ -178,6 +179,6 @@ class MoneyEntityExtractor:
                 except (ValueError, IndexError):
                     # Ignore if normalization or group extraction fails
                     continue
-        
+
         found_entities.sort(key=lambda e: e.start)
         return found_entities

@@ -9,7 +9,6 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 

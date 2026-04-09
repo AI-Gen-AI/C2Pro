@@ -6,7 +6,7 @@ Test Suite ID: TS-I5-GRAPH-DOM-001
 from typing import Literal
 from uuid import UUID
 
-from src.modules.graph.domain.entities import GraphEdge, GraphNode, NodeProperties, EdgeProperties
+from src.modules.graph.domain.entities import EdgeProperties, GraphEdge, GraphNode, NodeProperties
 
 
 class GraphService:

@@ -3,7 +3,8 @@ Domain enums for Analysis module.
 """
 from enum import Enum
 
-from src.shared_kernel.enums import AlertSeverity, AlertStatus  # noqa: F401 — re-export
+from src.shared_kernel.enums import AlertSeverity, AlertStatus, AlertType  # noqa: F401 — re-export
+
 
 class AnalysisType(str, Enum):
     COHERENCE = "coherence"

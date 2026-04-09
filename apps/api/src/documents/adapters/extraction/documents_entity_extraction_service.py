@@ -6,19 +6,21 @@ Follows the modular monolith principles by going through public use cases.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Callable, Any
+from typing import Any
 from uuid import UUID
 
 import structlog
+
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
+from src.procurement.application.dtos import BOMItemCreate, WBSItemCreate
+from src.procurement.domain.models import WBSItemType
 
 # DTOs and Interfaces from other modules
 from src.stakeholders.application.dtos import StakeholderCreateRequest
-from src.procurement.application.dtos import WBSItemCreate, BOMItemCreate
-from src.procurement.domain.models import WBSItemType
 
 logger = structlog.get_logger()
 
@@ -63,7 +65,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return extraction_summary
 
     async def _extract_stakeholders(
-        self, document: Document, parsed_payload: dict, tenant_id: UUID
+        self, document: Document, parsed_payload: dict, _tenant_id: UUID
     ) -> int:
         text_blocks = parsed_payload.get("text_blocks", [])
         emails = _extract_emails(text_blocks)
@@ -72,9 +74,9 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
 
         use_case = self._stakeholder_use_case_factory()
         count = 0
-        
+
         for email in emails:
-            # Note: The use case handles "existing" check if implemented there, 
+            # Note: The use case handles "existing" check if implemented there,
             # or we might get a uniqueness error from DB which is also fine for a background task.
             # For parity with legacy, we keep it simple.
             payload = StakeholderCreateRequest(
@@ -87,17 +89,18 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 await use_case.execute(
                     project_id=document.project_id,
                     user_id=self._user_id,
-                    payload=payload
+                    payload=payload,
+                    tenant_id=_tenant_id
                 )
                 count += 1
             except Exception as exc:
                 # Likely duplicate email or other validation error
                 logger.debug("stakeholder_extraction_skipped", email=email, error=str(exc))
-        
+
         return count
 
     async def _extract_wbs_items(
-        self, document: Document, parsed_payload: dict, tenant_id: UUID
+        self, document: Document, parsed_payload: dict, _tenant_id: UUID
     ) -> int:
         schedule_data = parsed_payload.get("schedule", [])
         if not schedule_data:
@@ -110,7 +113,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             task_name = task.get("task")
             if not task_name:
                 continue
-            
+
             wbs_code = f"SCH-{index:03d}"
             payload = WBSItemCreate(
                 project_id=document.project_id,
@@ -122,7 +125,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 wbs_metadata={"source_document_id": str(document.id)}
             )
             try:
-                await use_case.execute(payload, tenant_id)
+                await use_case.execute(payload, _tenant_id)
                 count += 1
             except Exception as exc:
                 logger.debug("wbs_extraction_skipped", code=wbs_code, error=str(exc))
@@ -130,7 +133,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         return count
 
     async def _extract_bom_items(
-        self, document: Document, parsed_payload: dict, tenant_id: UUID
+        self, document: Document, parsed_payload: dict, _tenant_id: UUID
     ) -> int:
         budget_payload = parsed_payload.get("budget")
         if not budget_payload:
@@ -171,7 +174,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         for item in items_to_process:
             if not item["name"] or item["quantity"] is None:
                 continue
-            
+
             payload = BOMItemCreate(
                 project_id=document.project_id,
                 item_code=item["code"],
@@ -184,7 +187,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 bom_metadata=item["metadata"]
             )
             try:
-                await use_case.execute(payload, tenant_id)
+                await use_case.execute(payload, _tenant_id)
                 count += 1
             except Exception as exc:
                 logger.debug("bom_extraction_skipped", name=item["name"], error=str(exc))

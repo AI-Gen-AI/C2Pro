@@ -15,9 +15,10 @@ logger = structlog.get_logger()
 
 # OCR imports - optional, will be None if not available
 try:
+    import io
+
     import pytesseract
     from PIL import Image
-    import io
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="budget_alerts.run", bind=True)
-def run_budget_alerts(self) -> dict:
+def run_budget_alerts(self) -> dict:  # noqa: ARG001
     """
     Periodic task to check budget thresholds and send alerts.
 

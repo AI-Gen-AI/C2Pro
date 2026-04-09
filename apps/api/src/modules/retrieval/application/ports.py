@@ -11,11 +11,12 @@ Increment I4: Hybrid RAG Retrieval Correctness
 - RetrievalService: Application service orchestrating hybrid RAG retrieval
 """
 
-import structlog
 from abc import ABC, abstractmethod
-from typing import Optional, Protocol, Any
+from typing import Any, Protocol
 
-from src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
+import structlog
+
+from src.modules.retrieval.domain.entities import QueryIntent, RetrievalResult
 from src.modules.retrieval.domain.services import QueryRouter
 
 logger = structlog.get_logger(__name__)
@@ -158,7 +159,7 @@ class RetrievalService:
         reranker: Reranker,
         query_router: QueryRouter,
         evidence_threshold: float,
-        langsmith_client: Optional[LangSmithClientProtocol] = None,
+        langsmith_client: LangSmithClientProtocol | None = None,
     ):
         """
         Initialize the retrieval service.

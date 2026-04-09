@@ -4,17 +4,17 @@ Test Suite ID: TS-I5-GRAPH-DOM-001
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import pytest
 
 try:
     from src.modules.graph.domain.entities import (
-        GraphNode,
-        GraphEdge,
-        NodeProperties,
         EdgeProperties,
+        GraphEdge,
+        GraphNode,
+        NodeProperties,
     )
     from src.modules.graph.domain.services import GraphService
 except ImportError:
@@ -45,7 +45,7 @@ except ImportError:
             self,
             node_id: UUID,
             node_type: str,
-            properties: Optional[NodeProperties] = None,
+            properties: NodeProperties | None = None,
         ) -> GraphNode:
             node = GraphNode(id=node_id, type=node_type, properties=properties or {})
             self.nodes[node_id] = node
@@ -56,7 +56,7 @@ except ImportError:
             source_node_id: UUID,
             target_node_id: UUID,
             edge_type: str,
-            properties: Optional[EdgeProperties] = None,
+            properties: EdgeProperties | None = None,
             duplicate_policy: Literal["reject", "merge"] = "reject",
         ) -> GraphEdge:
             edge = GraphEdge(

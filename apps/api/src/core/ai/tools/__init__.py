@@ -62,20 +62,6 @@ Usage:
 
 # Core abstractions
 from .base import BaseTool
-from .protocol import Tool
-
-# Metadata and results
-from .metadata import RetryPolicy, ToolMetadata, ToolResult, ToolStatus
-
-# Registry
-from .registry import (
-    ToolRegistry,
-    get_tool,
-    get_tool_registry,
-    list_tools,
-    register_tool,
-    reset_registry,
-)
 
 # Exceptions
 from .exceptions import (
@@ -87,6 +73,19 @@ from .exceptions import (
     ToolValidationError,
 )
 
+# Metadata and results
+from .metadata import RetryPolicy, ToolMetadata, ToolResult, ToolStatus
+from .protocol import Tool
+
+# Registry
+from .registry import (
+    ToolRegistry,
+    get_tool,
+    get_tool_registry,
+    list_tools,
+    register_tool,
+    reset_registry,
+)
 
 __all__ = [
     # Core

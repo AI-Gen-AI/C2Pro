@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -12,11 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.modules.hitl.adapters.http.dependencies import (
     get_hitl_service,
+    get_resume_workflow_use_case,  # TASK-BCK-024
     get_review_queue_repo,
 )
 from src.modules.hitl.adapters.http.schemas import (
     ApproveRequest,
     RejectRequest,
+    ResumeWorkflowRequest,  # TASK-BCK-024
+    ResumeWorkflowResponse,  # TASK-BCK-024
     ReviewItemResponse,
     ReviewQueueResponse,
     RouteForReviewRequest,
@@ -25,6 +28,10 @@ from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
 from src.modules.hitl.application.ports import HumanInTheLoopService
+from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
+    ResumeWorkflowUseCase,
+    WorkflowDecision,
+)
 from src.modules.hitl.domain.entities import ReviewStatus
 
 logger = structlog.get_logger()
@@ -183,7 +190,7 @@ async def reject_item(
     item_id: UUID,
     payload: RejectRequest,
     _tenant_id: CurrentTenantId,
-    user_id: CurrentUserId,
+    _user_id: CurrentUserId,
     service: HumanInTheLoopService = Depends(get_hitl_service),
 ) -> ReviewItemResponse:
     item = await service.review_queue_repo.get_review_item(item_id)
@@ -199,7 +206,7 @@ async def reject_item(
         )
     item.current_status = ReviewStatus.REJECTED
     item.approved_by = payload.reviewer_name
-    item.approved_at = datetime.utcnow()
+    item.approved_at = datetime.now(UTC)
     item.metadata["rejection_reason"] = payload.reason
     await service.review_queue_repo.update_review_item(item)
     logger.info("hitl_item_rejected", item_id=str(item_id), reviewer=payload.reviewer_name)
@@ -268,3 +275,89 @@ async def check_and_escalate(
             for r in results
         ],
     }
+
+
+# TASK-BCK-024: Resume workflow after HITL approval/rejection
+@router.post(
+    "/resume/{review_id}",
+    response_model=ResumeWorkflowResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Resume workflow after HITL approval/rejection",
+    description="""
+    Resume a LangGraph workflow after HITL review decision.
+
+    This endpoint handles both approval and rejection decisions from human reviewers:
+
+    - **Approve**: The workflow resumes from the interrupt point with the approved status.
+      Human feedback is injected into the workflow state and execution continues.
+
+    - **Reject**: The workflow terminates gracefully. The rejection reason is stored
+      for audit purposes but no further workflow steps are executed.
+
+    **Prerequisites**:
+    - Review item must exist and be in `PENDING_REVIEW_REQUIRED` or `PENDING_REVIEW_CONDITIONAL` status
+    - Review item must have a valid `checkpoint_id` and `thread_id` from the interrupted workflow
+
+    **Metrics**: This endpoint emits Prometheus metrics for monitoring:
+    - `c2pro_hitl_resume_total` - Total resume attempts by decision and status
+    - `c2pro_hitl_resume_latency_seconds` - Resume operation latency
+    - `c2pro_hitl_resume_errors_total` - Errors by type
+    """,
+    responses={
+        200: {"description": "Workflow resume operation completed successfully"},
+        400: {"description": "Invalid request - review item not pending or missing checkpoint data"},
+        404: {"description": "Review item not found"},
+        422: {"description": "Validation error - invalid decision value or feedback too long"},
+    },
+    tags=["HITL", "Workflow"],
+)
+async def resume_workflow(
+    review_id: UUID,
+    payload: ResumeWorkflowRequest,
+    _tenant_id: CurrentTenantId,
+    use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
+) -> ResumeWorkflowResponse:
+    """
+    Resume a LangGraph workflow after HITL review decision.
+
+    Handles both approval (resumes workflow) and rejection (terminates workflow).
+    Updates review item status and injects decision into workflow state.
+
+    Args:
+        review_id: ID of the review item to resume
+        payload: Decision (approve/reject) and feedback
+
+    Returns:
+        ResumeWorkflowResponse with status and message
+
+    Raises:
+        HTTPException 404: Review item not found
+        HTTPException 400: Review item not in pending status or missing checkpoint
+    """
+    try:
+        # Convert string decision to enum
+        decision = WorkflowDecision(payload.decision)
+
+        # Create use case request
+        from src.modules.hitl.application.resume_workflow_use_case import (
+            ResumeWorkflowRequest as UseCaseRequest,
+        )
+        request = UseCaseRequest(decision=decision, feedback=payload.feedback)
+
+        # Execute use case
+        result = await use_case.execute(review_id=review_id, request=request)
+
+        logger.info(
+            "workflow_resumed",
+            review_id=str(review_id),
+            decision=payload.decision,
+            status=result.status,
+        )
+
+        return result
+
+    except ValueError as exc:
+        error_msg = str(exc)
+        if "not found" in error_msg:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg)

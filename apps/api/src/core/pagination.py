@@ -1,6 +1,7 @@
-from typing import List, TypeVar, Generic, Optional
 import base64
 import binascii
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
 
 T = TypeVar('T')
@@ -24,11 +25,11 @@ class Page(BaseModel, Generic[T]):
     """
     A generic page model for cursor-based pagination.
     """
-    items: List[T] = Field(
+    items: list[T] = Field(
         ...,
         description="The list of items on the current page."
     )
-    next_cursor: Optional[str] = Field(
+    next_cursor: str | None = Field(
         None,
         description="The cursor to use to get the next page of results."
     )
@@ -40,7 +41,7 @@ class Page(BaseModel, Generic[T]):
 async def paginate(
     query,
     model,
-    cursor: Optional[str],
+    cursor: str | None,
     limit: int,
     order_by: str,
     order_direction: str = "desc",

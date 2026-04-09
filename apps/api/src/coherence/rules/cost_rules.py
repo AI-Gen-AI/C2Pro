@@ -1,12 +1,12 @@
 
-from typing import Any
 from src.coherence.rules_engine.context_rules import CoherenceRule, CoherenceRuleResult
+
 
 class CostVarianceRule(CoherenceRule):
     def check(self) -> CoherenceRuleResult:
         total_budget = sum(item.amount for item in self.project_context.budget_items)
         contract_amount = self.project_context.contract.total_amount
-        
+
         if contract_amount == 0:
             return CoherenceRuleResult(rule_id="R2", is_violated=False)
 
@@ -21,7 +21,7 @@ class CostVarianceRule(CoherenceRule):
         elif variance > 0.05:
             is_violated = True
             severity = "HIGH"
-        
+
         if is_violated:
             evidence = {
                 "total_budget": total_budget,
@@ -35,10 +35,10 @@ class CostVarianceRule(CoherenceRule):
 class UnbudgetedItemsRule(CoherenceRule):
     def check(self) -> CoherenceRuleResult:
         unbudgeted_items = [item for item in self.project_context.bom_items if not item.budget_item_id]
-        
+
         is_violated = len(unbudgeted_items) > 0
         evidence = None
-        
+
         if is_violated:
             evidence = {
                 "unbudgeted_items": [item.item_name for item in unbudgeted_items],

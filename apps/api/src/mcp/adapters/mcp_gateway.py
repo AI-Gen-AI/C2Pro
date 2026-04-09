@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -128,13 +129,35 @@ class MCPGateway:
     ) -> bool:
         """
         Authorizes a tool call. Raises HTTPException 403 for unauthorized operations.
+
+        Checks tenant-specific allowlist first, then falls back to default allowlist.
         """
+        tenant_key = str(tenant_id)
         normalized_op = operation.strip().lower()
-        if normalized_op in _DESTRUCTIVE_OPERATIONS or normalized_op not in _DEFAULT_ALLOWLIST:
+
+        # Block destructive operations unconditionally
+        if normalized_op in _DESTRUCTIVE_OPERATIONS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: destructive operation '{operation}' is not allowed",
+            )
+
+        # Check tenant-specific allowlist if repository is configured
+        if self.allowlist_repo:
+            tenant_allowlist = self.allowlist_repo.get_allowlist_for_tenant(tenant_key)
+            normalized_allowlist = {op.strip().lower() for op in tenant_allowlist}
+            if normalized_op not in normalized_allowlist:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Forbidden: operation '{operation}' is not allowed for tenant",
+                )
+        elif normalized_op not in _DEFAULT_ALLOWLIST:
+            # Only check default allowlist if no tenant-specific allowlist exists
             raise HTTPException(
                 status_code=403,
                 detail=f"Forbidden: operation '{operation}' is not authorized",
             )
+
         return True
 
     async def enforce_query_limits(

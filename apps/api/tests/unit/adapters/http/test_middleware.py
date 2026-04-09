@@ -22,18 +22,17 @@ Testing Approach: Unit tests.  The middleware's settings (jwt_secret_key /
     singleton or any database.
 """
 
-import pytest
-from uuid import UUID, uuid4
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from contextlib import asynccontextmanager
+from uuid import UUID, uuid4
 
+import jwt
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-import jwt
 
 from src.core.middleware.tenant_isolation import TenantIsolationMiddleware
-
 
 # ===========================================
 # CONSTANTS
@@ -128,12 +127,11 @@ def mock_tenant_db():
             return None
         return tenant
 
-    with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
-        with patch(
-            "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
-            new=AsyncMock(side_effect=_lookup_tenant_by_id),
-        ):
-            yield mock_result
+    with patch("src.core.middleware.tenant_isolation.get_raw_session", _session), patch(
+        "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
+        new=AsyncMock(side_effect=_lookup_tenant_by_id),
+    ):
+        yield mock_result
 
 
 @pytest.fixture
@@ -278,12 +276,11 @@ class TestValidAuthentication:
         async def _session():
             yield AsyncMock()
 
-        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
-            with patch(
-                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
-                new=AsyncMock(return_value=record),
-            ) as mock_lookup:
-                tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session), patch(
+            "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+            new=AsyncMock(return_value=record),
+        ) as mock_lookup:
+            tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
 
         assert tenant_id == expected_tenant_id
         mock_lookup.assert_awaited_once()
@@ -306,12 +303,11 @@ class TestValidAuthentication:
         async def _session():
             yield AsyncMock()
 
-        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
-            with patch(
-                "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
-                new=AsyncMock(return_value=record),
-            ) as mock_lookup:
-                is_active = await middleware._validate_tenant_exists(tenant_id)
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session), patch(
+            "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
+            new=AsyncMock(return_value=record),
+        ) as mock_lookup:
+            is_active = await middleware._validate_tenant_exists(tenant_id)
 
         assert is_active is True
         mock_lookup.assert_awaited_once()

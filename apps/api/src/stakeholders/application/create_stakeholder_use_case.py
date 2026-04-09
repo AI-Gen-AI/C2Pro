@@ -3,15 +3,15 @@ Use case for creating a stakeholder.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from src.core.approval import ApprovalStatus
 from src.documents.ports.document_repository import IDocumentRepository
+from src.stakeholders.application.dtos import StakeholderCreateRequest
 from src.stakeholders.application.helpers import derive_levels_and_quadrant
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
-from src.stakeholders.application.dtos import StakeholderCreateRequest
 
 
 class CreateStakeholderUseCase:
@@ -28,6 +28,7 @@ class CreateStakeholderUseCase:
         project_id: UUID,
         user_id: UUID,
         payload: StakeholderCreateRequest,
+        tenant_id: UUID | None = None,
     ) -> Stakeholder:
         if payload.source_clause_id:
             exists = await self.document_repository.clause_exists(payload.source_clause_id)
@@ -48,7 +49,7 @@ class CreateStakeholderUseCase:
         if payload.interest_score is not None:
             metadata["interest_score"] = payload.interest_score
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         stakeholder = Stakeholder(
             id=uuid4(),
             project_id=project_id,
@@ -72,7 +73,7 @@ class CreateStakeholderUseCase:
             updated_at=now,
         )
 
-        await self.repository.add(stakeholder)
+        await self.repository.add(stakeholder, tenant_id=tenant_id)
         await self.repository.commit()
         await self.repository.refresh(stakeholder)
         return stakeholder

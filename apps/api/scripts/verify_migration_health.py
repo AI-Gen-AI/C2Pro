@@ -92,18 +92,17 @@ def validate_linear_chain(nodes: dict[str, str | None]) -> str:
 
 
 def recreate_database(admin_url: str, database_name: str) -> None:
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT pg_terminate_backend(pid)
                 FROM pg_stat_activity
                 WHERE datname = %s AND pid <> pg_backend_pid()
                 """,
-                (database_name,),
-            )
-            cur.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
-            cur.execute(f'CREATE DATABASE "{database_name}"')
+            (database_name,),
+        )
+        cur.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+        cur.execute(f'CREATE DATABASE "{database_name}"')
 
 
 def run_alembic_upgrade(api_dir: Path, database_url: str) -> None:
@@ -114,15 +113,14 @@ def run_alembic_upgrade(api_dir: Path, database_url: str) -> None:
 
 
 def assert_applied_head(database_url: str, expected_head: str) -> None:
-    with psycopg.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT version_num FROM alembic_version")
-            row = cur.fetchone()
-            if not row:
-                raise RuntimeError("No alembic_version row found after upgrade.")
-            applied = row[0]
-            if applied != expected_head:
-                raise RuntimeError(f"Applied head {applied} does not match expected {expected_head}.")
+    with psycopg.connect(database_url) as conn, conn.cursor() as cur:
+        cur.execute("SELECT version_num FROM alembic_version")
+        row = cur.fetchone()
+        if not row:
+            raise RuntimeError("No alembic_version row found after upgrade.")
+        applied = row[0]
+        if applied != expected_head:
+            raise RuntimeError(f"Applied head {applied} does not match expected {expected_head}.")
 
 
 def main() -> int:

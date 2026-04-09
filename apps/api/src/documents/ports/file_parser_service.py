@@ -4,13 +4,14 @@ Defines the contract for parsing various document types.
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
-from src.documents.domain.models import Document, DocumentType
+from src.documents.domain.models import Document
+
 
 class IFileParserService(ABC):
     @abstractmethod
-    async def parse_document_file(self, document: Document, file_path: Path) -> Dict[str, Any]:
+    async def parse_document_file(self, document: Document, file_path: Path) -> dict[str, Any]:
         """
         Parses a document file based on its type and format.
         :param document: The domain Document entity.

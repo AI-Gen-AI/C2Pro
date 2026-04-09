@@ -9,7 +9,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
-from src.procurement.adapters.persistence import SQLAlchemyWBSRepository, SQLAlchemyBOMRepository
+from src.procurement.adapters.persistence import SQLAlchemyBOMRepository, SQLAlchemyWBSRepository
 from src.procurement.application.use_cases import (
     CreateBOMItemUseCase,
     CreateWBSItemUseCase,

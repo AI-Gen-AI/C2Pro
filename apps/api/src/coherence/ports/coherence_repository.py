@@ -3,12 +3,14 @@ Coherence Repository Interface (Port).
 
 Defines the contract for persisting coherence calculation results.
 Refers to Suite ID: TS-INT-DB-COH-001.
+
+IMPORTANT: All implementations MUST implement tenant isolation.
+Tenant ID can be passed at construction time or via session context.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 from uuid import UUID
 
 from src.coherence.application.dtos import CoherenceCalculationResult

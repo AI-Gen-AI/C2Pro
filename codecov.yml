@@ -1,0 +1,14 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 20%
+    patch:
+      default:
+        target: 80%
+  range: 60..100
+
+comment:
+  layout: "reach,diff,flags,tree"
+  require_changes: false

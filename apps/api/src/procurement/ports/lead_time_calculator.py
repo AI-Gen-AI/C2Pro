@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from src.procurement.domain.models import BOMItem
 from src.procurement.domain.lead_time_calculator import LeadTimeResult
+from src.procurement.domain.models import BOMItem
 
 
 class ILeadTimeCalculator(Protocol):

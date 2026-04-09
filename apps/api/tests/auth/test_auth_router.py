@@ -6,18 +6,18 @@ Tests the complete request-response cycle including middleware,
 routing, service layer, and database operations.
 """
 
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from uuid import uuid4
 
-from src.main import app
-from src.core.database import get_session
-from src.core.auth.models import User, Tenant, UserRole, SubscriptionPlan
+from src.core.auth.models import SubscriptionPlan, User, UserRole
 from src.core.auth.service import hash_password
-
+from src.core.database import get_session
+from src.main import app
 
 # ===========================================
 # CONSTANTS

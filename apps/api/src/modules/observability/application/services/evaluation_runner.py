@@ -612,7 +612,7 @@ def load_dataset_from_file(file_path: Path) -> tuple[list[dict], list[dict] | No
     Returns:
         Tuple of (examples, corpus) where corpus is None for non-retrieval datasets
     """
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         data = json.load(f)
 
     examples = data.get("examples", [])

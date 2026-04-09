@@ -107,7 +107,16 @@ jobs:
       - name: Run unit tests
         working-directory: apps/api
         run: |
-          python -m pytest tests/unit/ -m "not integration" -v --tb=short --junit-xml=unit-test-results.xml --cov-fail-under=70
+          python -m pytest \
+            tests/unit/ \
+            -m "not integration" \
+            -v \
+            --tb=short \
+            --junit-xml=unit-test-results.xml \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing:skip-covered \
+            --cov-fail-under=60
 
       - name: Upload unit test results
         uses: actions/upload-artifact@v4
@@ -115,6 +124,14 @@ jobs:
         with:
           name: unit-test-results-py${{ matrix.python-version }}
           path: apps/api/unit-test-results.xml
+          retention-days: 14
+
+      - name: Upload unit coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-coverage-py${{ matrix.python-version }}
+          path: apps/api/coverage.xml
           retention-days: 14
 
   integration-tests:

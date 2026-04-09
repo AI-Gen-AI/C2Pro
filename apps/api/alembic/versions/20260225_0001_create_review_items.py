@@ -7,8 +7,9 @@ Revises: 20260205_0001
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
+
+from alembic import op
 
 revision: str = "20260225_0001"
 down_revision: str | None = "20260205_0001"

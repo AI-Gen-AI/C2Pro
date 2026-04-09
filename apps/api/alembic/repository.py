@@ -6,7 +6,6 @@ Define la interfaz para el repositorio de persistencia de documentos.
 from __future__ import annotations
 
 from typing import Protocol
-from uuid import UUID
 
 from src.documents.domain.models import Document
 

@@ -308,15 +308,151 @@ The official MCP Python SDK provides FastMCP, a high-level framework for buildin
 
 ## Server Naming Convention
 
-Python MCP servers must follow this naming pattern:
-- **Format**: `{service}_mcp` (lowercase with underscores)
-- **Examples**: `github_mcp`, `jira_mcp`, `stripe_mcp`
+### ⚠️ MANDATORY REQUIREMENT
 
-The name should be:
-- General (not tied to specific features)
-- Descriptive of the service/API being integrated
-- Easy to infer from the task description
-- Without version numbers or dates
+**ALL Python MCP servers MUST follow this naming pattern:**
+
+```
+{service}_mcp
+```
+
+**Format Rules**:
+- Lowercase letters only
+- Underscores (`_`) for word separation (Pythonic snake_case)
+- Service name first, `_mcp` suffix last
+- No hyphens, no additional suffixes, no prefixes
+
+### ✅ Correct Examples
+
+```python
+# Good - follows {service}_mcp pattern
+mcp = FastMCP("github_mcp")      # GitHub integration
+mcp = FastMCP("slack_mcp")       # Slack integration
+mcp = FastMCP("postgres_mcp")    # PostgreSQL integration
+mcp = FastMCP("stripe_mcp")      # Stripe payments
+mcp = FastMCP("jira_mcp")        # Jira issue tracker
+mcp = FastMCP("redis_mcp")       # Redis cache
+```
+
+### ❌ Incorrect Examples (Anti-Patterns)
+
+```python
+# WRONG - kebab-case (Node.js convention, not Python)
+mcp = FastMCP("github-mcp")           # ❌ Use github_mcp
+
+# WRONG - redundant 'server' suffix
+mcp = FastMCP("github_mcp_server")    # ❌ Use github_mcp
+
+# WRONG - prefix instead of suffix
+mcp = FastMCP("mcp_github")           # ❌ Use github_mcp
+
+# WRONG - version numbers or dates
+mcp = FastMCP("github_mcp_v1")        # ❌ Use github_mcp
+mcp = FastMCP("github_mcp_2024")      # ❌ Use github_mcp
+
+# WRONG - feature-specific names
+mcp = FastMCP("github_pr_mcp")        # ❌ Use github_mcp (general)
+mcp = FastMCP("slack_messages_mcp")   # ❌ Use slack_mcp (general)
+
+# WRONG - camelCase or PascalCase
+mcp = FastMCP("githubMcp")            # ❌ Use github_mcp
+mcp = FastMCP("GithubMCP")            # ❌ Use github_mcp
+```
+
+### 📚 Rationale: Python vs Node.js Naming
+
+**Python Convention**: `{service}_mcp` (snake_case)
+- Follows PEP 8 module naming guidelines
+- Pythonic: underscores for readability
+- Example: `github_mcp`, `postgres_mcp`
+
+**Node.js Convention**: `{service}-mcp-server` (kebab-case)
+- Follows npm package naming guidelines
+- Hyphens required for npm packages
+- Example: `github-mcp-server`, `postgres-mcp-server`
+
+**Why Different?**
+- Python uses underscores in module names (import system)
+- Node.js uses hyphens in package names (npm registry)
+- MCP servers follow their language's native conventions
+
+### 🔄 Migration Checklist
+
+If you have an existing server with incorrect naming:
+
+1. **Rename Server Initialization**
+   ```python
+   # Before
+   mcp = FastMCP("my-service-mcp-server")
+
+   # After
+   mcp = FastMCP("myservice_mcp")
+   ```
+
+2. **Update Package Name** (if published)
+   - PyPI package: `my-service-mcp` → `myservice-mcp`
+   - Local imports: Update any code importing the server
+
+3. **Update Documentation**
+   - README.md references
+   - Configuration examples
+   - Installation instructions
+
+4. **Update Claude Desktop Config** (`claude_desktop_config.json`)
+   ```json
+   {
+     "mcpServers": {
+       "myservice": {
+         "command": "uv",
+         "args": [
+           "--directory",
+           "/path/to/myservice_mcp",
+           "run",
+           "myservice_mcp"
+         ]
+       }
+     }
+   }
+   ```
+
+5. **Test Integration**
+   - Verify server starts without errors
+   - Confirm tools are discoverable by Claude
+   - Check logging shows correct server name
+
+### 📋 Naming Guidelines
+
+The server name should be:
+- **General**: Not tied to specific features (use `github_mcp`, not `github_pr_mcp`)
+- **Descriptive**: Clear about which service/API is integrated
+- **Inferrable**: Easy to understand from task description
+- **Stable**: No version numbers, dates, or temporary identifiers
+- **Unique**: Avoid conflicts with existing Python packages
+
+### 🚫 Common Mistakes to Avoid
+
+1. **Mixing Conventions**
+   - ❌ `github-mcp` (Node.js style in Python)
+   - ✅ `github_mcp` (Python style)
+
+2. **Over-Specification**
+   - ❌ `github_pull_requests_mcp` (too specific)
+   - ✅ `github_mcp` (general, covers all GitHub operations)
+
+3. **Redundant Suffixes**
+   - ❌ `github_mcp_server` (redundant)
+   - ❌ `github_mcp_integration` (redundant)
+   - ✅ `github_mcp` (sufficient)
+
+4. **Ambiguous Names**
+   - ❌ `api_mcp` (which API?)
+   - ❌ `db_mcp` (which database?)
+   - ✅ `stripe_mcp`, `postgres_mcp` (specific)
+
+5. **Case Sensitivity Errors**
+   - ❌ `GitHub_MCP` (PascalCase)
+   - ❌ `githubMCP` (camelCase)
+   - ✅ `github_mcp` (snake_case)
 
 ## Tool Implementation
 

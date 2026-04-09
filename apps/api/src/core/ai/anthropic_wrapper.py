@@ -19,19 +19,19 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-from anthropic import Anthropic, AsyncAnthropic
+from anthropic import AsyncAnthropic
 from anthropic.types import Message
 
 from src.config import settings
-from src.core.cache import get_cache_service
 from src.core.ai.llm_client import LLMClient, LLMRequest
-from src.core.ai.model_router import AITaskType, ModelConfig, ModelTier, get_model_router
-from src.core.privacy.anonymizer import get_anonymizer as get_pii_anonymizer_service, PiiAnonymizerService
-
+from src.core.ai.model_router import AITaskType, ModelTier, get_model_router
+from src.core.cache import get_cache_service
+from src.core.privacy.anonymizer import PiiAnonymizerService
+from src.core.privacy.anonymizer import get_anonymizer as get_pii_anonymizer_service
 
 logger = structlog.get_logger()
 
@@ -87,19 +87,19 @@ class AIRequest:
     low_budget_mode: bool = False
 
     # Optional parameters
-    system_prompt: Optional[str] = None
-    max_tokens: Optional[int] = None
+    system_prompt: str | None = None
+    max_tokens: int | None = None
     temperature: float = DEFAULT_TEMPERATURE
-    force_model_tier: Optional[ModelTier] = None
+    force_model_tier: ModelTier | None = None
 
     # Tracking
-    tenant_id: Optional[UUID] = None
+    tenant_id: UUID | None = None
     request_id: str = field(default_factory=lambda: str(uuid4()))
 
     # Caching
     use_cache: bool = True
-    cache_ttl: Optional[int] = None
-    
+    cache_ttl: int | None = None
+
     # Security
     bypass_anonymization: bool = False
 
@@ -143,7 +143,7 @@ class AIResponse:
     task_type: str = ""
 
     # Raw response (opcional)
-    raw_response: Optional[Message] = None
+    raw_response: Message | None = None
 
     @property
     def usage(self) -> dict[str, int]:
@@ -209,7 +209,7 @@ class AnthropicWrapper:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         enable_cache: bool = True,
         enable_retry: bool = True,
         max_retries: int = 3,
@@ -276,7 +276,7 @@ class AnthropicWrapper:
         # ===========================================
         # STEP 1: PII Anonymization (GATE 8)
         # ===========================================
-        
+
         deanonymization_map = {}
         safe_prompt = request.prompt
         safe_system_prompt = request.system_prompt
@@ -391,7 +391,7 @@ class AnthropicWrapper:
         # ===========================================
         # STEP 5: De-anonymize (Rehydrate) Response
         # ===========================================
-        
+
         rehydrated_content = llm_response.content
         if deanonymization_map:
             for token, original in deanonymization_map.items():
@@ -477,7 +477,7 @@ class AnthropicWrapper:
         # Prefix with namespace
         return f"llm_response:{hash_hex}"
 
-    async def _get_from_cache(self, cache_key: str) -> Optional[dict[str, Any]]:
+    async def _get_from_cache(self, cache_key: str) -> dict[str, Any] | None:
         """Obtiene respuesta del caché."""
         if not self.cache_service:
             return None
@@ -553,7 +553,7 @@ class AnthropicWrapper:
 # SINGLETON INSTANCE
 # ===========================================
 
-_wrapper: Optional[AnthropicWrapper] = None
+_wrapper: AnthropicWrapper | None = None
 
 
 def get_anthropic_wrapper() -> AnthropicWrapper:

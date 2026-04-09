@@ -4,8 +4,9 @@ LLM Fallback Client - Provides primary/fallback LLM client pattern.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -11,11 +11,12 @@ adapters, or the full database stack.
 from __future__ import annotations
 
 import importlib
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-    from src.analysis.adapters.graph.knowledge_graph import ProjectKnowledgeGraph, GraphPath
+
+    from src.analysis.adapters.graph.knowledge_graph import GraphPath, ProjectKnowledgeGraph
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "ProjectKnowledgeGraph":        ("src.analysis.adapters.graph.knowledge_graph", "ProjectKnowledgeGraph"),

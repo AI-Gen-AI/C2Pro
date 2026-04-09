@@ -9,14 +9,12 @@ Version: 1.0.0
 """
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from src.coherence.models import Clause, ProjectContext
-
 
 # ===========================================
 # CLAUSE FIXTURES

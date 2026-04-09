@@ -6,13 +6,12 @@ Priority: P2
 Additional tests to improve coverage.
 """
 
-import pytest
-from uuid import uuid4
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from uuid import uuid4
 
+import pytest
 
 # ===========================================
 # BC3 PARSER TESTS
@@ -113,10 +112,11 @@ class TestStorageServiceAdvanced:
     @pytest.mark.asyncio
     async def test_delete_file(self):
         """Test file deletion."""
+        from io import BytesIO
+
         from src.documents.adapters.storage.local_file_storage_service import (
             LocalFileStorageService,
         )
-        from io import BytesIO
 
         service = LocalFileStorageService(base_dir=Path(tempfile.mkdtemp()))
 

@@ -6,16 +6,16 @@ Refers to Suite IDs: TS-UA-DTO-ALL-001, TS-UAD-HTTP-ERR-001, TS-INT-EXT-LLM-002.
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from unittest.mock import AsyncMock
 
-from src.core.handlers import register_exception_handlers
 from src.core.exceptions import DomainValidationError
+from src.core.handlers import register_exception_handlers
 
 
 class TestGlobalExceptionHandler:

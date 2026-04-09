@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Security Role Output Schema",
+  "description": "Output schema for security role. Extends base_output.json with security-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "analisis": {
+          "type": "object",
+          "description": "Security analysis performed",
+          "properties": {
+            "tipo_analisis": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["SAST", "DAST", "dependencias", "secrets", "permisos", "autenticacion", "autorizacion", "input_validation"]
+              },
+              "description": "Types of security analysis performed"
+            },
+            "herramientas": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Security tools used (bandit, semgrep, snyk, etc.)"
+            },
+            "archivos_analizados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Files analyzed"
+            }
+          }
+        },
+        "vulnerabilidades": {
+          "type": "object",
+          "description": "Vulnerabilities found",
+          "properties": {
+            "criticas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of critical vulnerabilities"
+            },
+            "altas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of high severity vulnerabilities"
+            },
+            "medias": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of medium severity vulnerabilities"
+            },
+            "bajas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of low severity vulnerabilities"
+            },
+            "detalles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "severidad", "tipo", "descripcion"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Vulnerability ID (CVE, CWE, or internal ID)"
+                  },
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["baja", "media", "alta", "critica"]
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": ["SQL_injection", "XSS", "CSRF", "autenticacion", "autorizacion", "secrets", "dependencia", "configuracion", "otro"]
+                  },
+                  "descripcion": {
+                    "type": "string",
+                    "minLength": 10
+                  },
+                  "archivo": {
+                    "type": "string",
+                    "description": "Affected file"
+                  },
+                  "linea": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Line number"
+                  },
+                  "cve": {
+                    "type": "string",
+                    "pattern": "^CVE-\\d{4}-\\d+$",
+                    "description": "CVE identifier if applicable"
+                  },
+                  "cwe": {
+                    "type": "string",
+                    "pattern": "^CWE-\\d+$",
+                    "description": "CWE identifier if applicable"
+                  },
+                  "remediacion": {
+                    "type": "string",
+                    "description": "Remediation guidance"
+                  },
+                  "estado": {
+                    "type": "string",
+                    "enum": ["abierto", "en_progreso", "resuelto", "aceptado", "falso_positivo"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "compliance": {
+          "type": "object",
+          "description": "Compliance validation",
+          "properties": {
+            "estandares_verificados": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["OWASP_Top_10", "PCI_DSS", "GDPR", "HIPAA", "SOC2", "ISO27001"]
+              },
+              "description": "Security standards checked"
+            },
+            "cumplimiento": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "estandar": {"type": "string"},
+                  "cumple": {"type": "boolean"},
+                  "problemas": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
+        "secrets": {
+          "type": "object",
+          "description": "Secrets scanning results",
+          "properties": {
+            "secrets_encontrados": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of secrets found"
+            },
+            "tipos": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["api_key", "password", "token", "private_key", "certificate", "connection_string"]
+              },
+              "description": "Types of secrets found"
+            },
+            "archivos_afectados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Files containing secrets"
+            }
+          }
+        },
+        "dependencias": {
+          "type": "object",
+          "description": "Dependency vulnerability scan",
+          "properties": {
+            "dependencias_analizadas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of dependencies scanned"
+            },
+            "vulnerables": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of vulnerable dependencies"
+            },
+            "actualizaciones_disponibles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "paquete": {"type": "string"},
+                  "version_actual": {"type": "string"},
+                  "version_segura": {"type": "string"},
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["baja", "media", "alta", "critica"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "recomendaciones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "prioridad": {
+                "type": "string",
+                "enum": ["baja", "media", "alta", "critica"]
+              },
+              "categoria": {
+                "type": "string",
+                "enum": ["codigo", "configuracion", "dependencias", "infraestructura", "proceso"]
+              },
+              "descripcion": {"type": "string"},
+              "accion": {"type": "string"}
+            }
+          },
+          "description": "Security improvement recommendations"
+        }
+      }
+    }
+  ]
+}

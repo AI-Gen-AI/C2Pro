@@ -12,24 +12,24 @@ This was implemented in migration 008_indexes.sql.
 """
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from src.core.database import get_session
-from src.core.pagination import Page
-from src.analysis.domain.enums import AlertStatus, AlertSeverity
 from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.application.alerts_use_cases import (
     DeleteAlertUseCase,
-    GetAlertUseCase,
     GetAlertsStatsUseCase,
+    GetAlertUseCase,
     ListAlertsUseCase,
     UpdateAlertStatusUseCase,
 )
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User, UserRole
+from src.core.database import get_session
+from src.core.pagination import Page
 
 # ===========================================
 # PYDANTIC SCHEMAS
@@ -37,12 +37,12 @@ from src.core.auth.models import User, UserRole
 
 class AlertBase(BaseModel):
     """Base alert schema."""
-    category: Optional[str] = None
+    category: str | None = None
     severity: AlertSeverity
     title: str
     description: str
-    recommendation: Optional[str] = None
-    source_clause_id: Optional[UUID] = None
+    recommendation: str | None = None
+    source_clause_id: UUID | None = None
     affected_entities: dict = Field(default_factory=dict)
     alert_metadata: dict = Field(default_factory=dict)
 
@@ -51,23 +51,24 @@ class AlertRead(BaseModel):
     """Alert read schema."""
     id: UUID
     project_id: UUID
-    analysis_id: Optional[UUID] = None
+    analysis_id: UUID | None = None
     severity: AlertSeverity
-    category: Optional[str] = None
-    rule_id: Optional[str] = None
+    alert_type: AlertType  # TASK-BCK-026: Alert type discriminator
+    category: str | None = None
+    rule_id: str | None = None
     title: str
     description: str
-    recommendation: Optional[str] = None
-    source_clause_id: Optional[UUID] = None
-    related_clause_ids: Optional[List[UUID]] = None
+    recommendation: str | None = None
+    source_clause_id: UUID | None = None
+    related_clause_ids: list[UUID] | None = None
     affected_entities: dict
-    impact_level: Optional[str] = None
+    impact_level: str | None = None
     alert_metadata: dict
     status: AlertStatus
     approval_status: str
-    resolved_at: Optional[datetime] = None
-    resolved_by: Optional[UUID] = None
-    resolution_notes: Optional[str] = None
+    resolved_at: datetime | None = None
+    resolved_by: UUID | None = None
+    resolution_notes: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -78,7 +79,7 @@ class AlertRead(BaseModel):
 class AlertUpdate(BaseModel):
     """Alert update schema."""
     status: AlertStatus
-    resolution_notes: Optional[str] = Field(
+    resolution_notes: str | None = Field(
         None,
         description="Notes when resolving or dismissing an alert."
     )
@@ -155,22 +156,28 @@ def get_delete_alert_use_case(
     "/projects/{project_id}",
     response_model=Page[AlertRead],
     summary="List alerts for project",
-    description="List alerts for a specific project with filtering and pagination."
+    description="List alerts for a specific project with filtering and pagination (TASK-BCK-026: Unified alerts endpoint)."
 )
 async def list_alerts_for_project(
     project_id: UUID,
-    severities: Optional[List[AlertSeverity]] = Query(None),
-    statuses: Optional[List[AlertStatus]] = Query([AlertStatus.OPEN]),
-    category: Optional[str] = Query(None),
-    cursor: Optional[str] = None,
+    alert_type: AlertType | None = Query(None, description="Filter by alert type (risk, coherence, budget, wbs)"),
+    severities: list[AlertSeverity] | None = Query(None),
+    statuses: list[AlertStatus] | None = Query([AlertStatus.OPEN]),
+    category: str | None = Query(None),
+    cursor: str | None = None,
     limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     use_case: ListAlertsUseCase = Depends(get_list_alerts_use_case),
 ):
     """
     List alerts for a specific project with filtering and pagination.
 
+    TASK-BCK-026: Unified alerts endpoint supporting both risk and coherence alerts.
+    TASK-REV-002: Added tenant_id for tenant isolation.
+
     Args:
         project_id: The UUID of the project
+        current_user: Authenticated user with tenant context
         db: Database session
         severities: Optional list of severities to filter by
         statuses: Optional list of statuses to filter by (default: [OPEN])
@@ -183,6 +190,8 @@ async def list_alerts_for_project(
     """
     return await use_case.execute(
         project_id=project_id,
+        tenant_id=current_user.tenant_id,
+        alert_type=alert_type,
         severities=severities,
         statuses=statuses,
         category=category,
@@ -199,19 +208,22 @@ async def list_alerts_for_project(
 )
 async def get_alerts_stats(
     project_id: UUID,
+    current_user: User = Depends(get_current_user),
     use_case: GetAlertsStatsUseCase = Depends(get_alerts_stats_use_case),
 ):
     """
     Get statistics about alerts for a specific project.
 
+    TASK-REV-002: Added tenant_id for tenant isolation.
+
     Args:
         project_id: The UUID of the project
-        db: Database session
+        current_user: Authenticated user with tenant context
 
     Returns:
         Alert statistics
     """
-    stats = await use_case.execute(project_id)
+    stats = await use_case.execute(project_id, tenant_id=current_user.tenant_id)
     return AlertsStats(**stats)
 
 
@@ -223,14 +235,17 @@ async def get_alerts_stats(
 )
 async def get_alert(
     alert_id: UUID,
+    current_user: User = Depends(get_current_user),
     use_case: GetAlertUseCase = Depends(get_get_alert_use_case),
 ):
     """
     Get a single alert by its ID.
 
+    TASK-REV-002: Added tenant_id for tenant isolation.
+
     Args:
         alert_id: The UUID of the alert
-        db: Database session
+        current_user: Authenticated user with tenant context
 
     Returns:
         The alert
@@ -239,7 +254,7 @@ async def get_alert(
         HTTPException: 404 if alert not found
     """
     try:
-        return await use_case.execute(alert_id)
+        return await use_case.execute(alert_id, tenant_id=current_user.tenant_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
@@ -259,10 +274,12 @@ async def update_alert(
     """
     Update an alert's status and add resolution notes.
 
+    TASK-REV-002: Added tenant_id for tenant isolation.
+
     Args:
         alert_id: The UUID of the alert
         alert_update: The update data
-        db: Database session
+        current_user: Authenticated user with tenant context
 
     Returns:
         The updated alert
@@ -275,6 +292,7 @@ async def update_alert(
     try:
         return await use_case.execute(
             alert_id=alert_id,
+            tenant_id=current_user.tenant_id,
             status=alert_update.status,
             resolution_notes=alert_update.resolution_notes,
         )
@@ -310,15 +328,17 @@ async def delete_alert(
     """
     Delete an alert. This should only be used by administrators for cleanup.
 
+    TASK-REV-002: Added tenant_id for tenant isolation.
+
     Args:
         alert_id: The UUID of the alert
-        db: Database session
+        current_user: Authenticated user with tenant context
 
     Raises:
         HTTPException: 404 if alert not found
     """
     _require_admin(current_user)
     try:
-        await use_case.execute(alert_id)
+        await use_case.execute(alert_id, tenant_id=current_user.tenant_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")

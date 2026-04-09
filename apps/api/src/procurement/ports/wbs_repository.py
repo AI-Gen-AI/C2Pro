@@ -2,7 +2,6 @@
 Repository port (interface) for WBS operations.
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional
 from uuid import UUID
 
 from src.procurement.domain.models import WBSItem
@@ -28,7 +27,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> Optional[WBSItem]:
+    async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
         """
         Retrieve a WBS item by ID.
 
@@ -42,7 +41,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """
         Retrieve all WBS items for a project.
 
@@ -56,7 +55,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> Optional[WBSItem]:
+    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> WBSItem | None:
         """
         Retrieve a WBS item by its code within a project.
 
@@ -71,7 +70,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_children(self, parent_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_children(self, parent_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """
         Retrieve all children of a WBS item.
 
@@ -85,7 +84,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_tree(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_tree(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """
         Retrieve the complete WBS tree for a project with hierarchy.
 
@@ -99,7 +98,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> Optional[WBSItem]:
+    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> WBSItem | None:
         """
         Update an existing WBS item.
 
@@ -128,12 +127,13 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def bulk_create(self, wbs_items: List[WBSItem]) -> List[WBSItem]:
+    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
         """
         Create multiple WBS items at once (used for AI generation).
 
         Args:
             wbs_items: List of WBS items to create
+            tenant_id: The tenant ID for isolation
 
         Returns:
             List of created WBS items with IDs

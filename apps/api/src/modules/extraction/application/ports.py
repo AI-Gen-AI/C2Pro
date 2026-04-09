@@ -9,15 +9,17 @@ Increment I3: Clause Extraction + Normalization
 - ClauseExtractionService: Application service for clause extraction orchestration
 """
 
-import structlog
 from abc import ABC, abstractmethod
-from typing import Optional, Protocol, Any
-from uuid import UUID, uuid5, NAMESPACE_DNS
 from datetime import date
+from typing import Any, Protocol
+from uuid import NAMESPACE_DNS, UUID, uuid5
+
+import structlog
+
+from src.modules.extraction.domain.entities import ExtractedClause
 
 # Re-using IngestionChunk from I1
 from src.modules.ingestion.domain.entities import IngestionChunk
-from src.modules.extraction.domain.entities import ExtractedClause
 
 logger = structlog.get_logger(__name__)
 
@@ -104,7 +106,7 @@ class ClauseExtractionService:
     def __init__(
         self,
         llm_adapter: LLMAdapter,
-        langsmith_client: Optional[LangSmithClientProtocol] = None,
+        langsmith_client: LangSmithClientProtocol | None = None,
         low_confidence_threshold: float = 0.5,
     ):
         """
@@ -322,7 +324,7 @@ class ClauseExtractionService:
         """
         return self._manual_validation_reason(clause) is not None
 
-    def _manual_validation_reason(self, clause: ExtractedClause) -> Optional[str]:
+    def _manual_validation_reason(self, clause: ExtractedClause) -> str | None:
         """Return explicit reason code when manual validation is required."""
         is_high_impact = clause.metadata.get("impact") == "high"
         is_ambiguous = clause.ambiguity_flag

@@ -20,7 +20,7 @@ Version: 1.0.0
 Date: 2026-01-13
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -66,7 +66,7 @@ class C2ProException(Exception):
             "status_code": self.status_code,
             "error_code": self.code,
             "message": self.message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Solo incluir details si no está vacío

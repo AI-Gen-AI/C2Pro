@@ -16,9 +16,13 @@ class TestSupabaseRunnerArchival:
     def test_active_supabase_runner_paths_are_removed(self) -> None:
         supabase_dir = self._repo_root() / "infrastructure" / "supabase"
 
-        assert not (supabase_dir / "migrations").exists()
         assert not (supabase_dir / "run_migrations.py").exists()
         assert not (supabase_dir / "rollback_migrations.py").exists()
+
+    def test_active_supabase_supporting_paths_still_exist(self) -> None:
+        supabase_dir = self._repo_root() / "infrastructure" / "supabase"
+
+        assert (supabase_dir / "migrations").exists()
 
     def test_archived_supabase_runner_paths_exist(self) -> None:
         archive_dir = self._repo_root() / "infrastructure" / "supabase" / "archive"

@@ -15,17 +15,16 @@ Test categories:
 """
 
 import math
-import pytest
-from dataclasses import dataclass
 
-from src.coherence.scoring import ScoringService, ScoringDiagnostics
-from src.coherence.config import ScoringConfig, DEFAULT_SCORING_CONFIG
+import pytest
+
+from src.coherence.config import ScoringConfig
 from src.coherence.models import (
-    FindingSignal,
     Alert,
     Evidence,
+    FindingSignal,
 )
-
+from src.coherence.scoring import ScoringService
 
 # =============================================================================
 # FIXTURES
@@ -285,7 +284,7 @@ class TestBounds:
         score = scorer.calculate_from_signals(signals, 5, 5)
 
         assert score >= 5.0, f"Score {score} should be >= floor (5.0)"
-        assert score == 5.0, f"With extreme findings, score should hit floor exactly"
+        assert score == 5.0, "With extreme findings, score should hit floor exactly"
 
     def test_ceiling_bound(self, scorer: ScoringService):
         """Score with findings should never exceed max_score."""

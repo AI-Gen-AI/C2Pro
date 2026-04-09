@@ -83,5 +83,18 @@ export default defineConfig({
         description: "Weekly Project Review Journey",
       },
     },
+    {
+      name: "e2e-document-analysis-pipeline",
+      testMatch: /document-analysis-pipeline\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      metadata: {
+        suite: "TS-E2E-DAP-001",
+        phase: "green",
+        type: "e2e",
+        priority: "p1",
+        task: "TASK-FRT-166",
+        description: "Document Analysis Pipeline Journey",
+      },
+    },
   ],
 });

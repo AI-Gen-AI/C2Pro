@@ -167,9 +167,7 @@ class CoherenceEvaluator:
                     f"'{issue.severity}', expected '{expected.severity}'"
                 )
 
-            # Check description if specified
-            if expected.description_contains:
-                if expected.description_contains.lower() not in issue.description.lower():
+            if expected.description_contains and expected.description_contains.lower() not in issue.description.lower():
                     issue_failures.append(
                         f"Issue '{expected.rule_id}' description does not contain "
                         f"'{expected.description_contains}'"

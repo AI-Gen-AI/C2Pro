@@ -3,14 +3,16 @@ Use case for creating or updating a single RACI assignment.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from src.procurement.ports.wbs_repository import IWBSRepository
-from src.stakeholders.application.dtos import RaciAssignmentUpsertRequest, RaciAssignmentUpsertResponse
-from src.stakeholders.domain.models import RACIRole, RaciAssignment
+from src.stakeholders.application.dtos import (
+    RaciAssignmentUpsertRequest,
+    RaciAssignmentUpsertResponse,
+)
+from src.stakeholders.domain.models import RaciAssignment, RACIRole
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
-
 
 ROLE_VALUES = {
     "R": RACIRole.RESPONSIBLE,
@@ -52,7 +54,10 @@ class UpsertRaciAssignmentUseCase:
             raise ValueError("task_not_found")
         project_id = wbs_item.project_id
 
-        stakeholder = await self.stakeholder_repository.get_by_id(payload.stakeholder_id)
+        stakeholder = await self.stakeholder_repository.get_by_id(
+            payload.stakeholder_id,
+            tenant_id=tenant_id,
+        )
         if stakeholder is None:
             raise ValueError("stakeholder_not_found")
         if stakeholder.project_id != project_id:
@@ -65,6 +70,7 @@ class UpsertRaciAssignmentUseCase:
                 project_id=project_id,
                 wbs_item_id=payload.task_id,
                 exclude_stakeholder_id=payload.stakeholder_id,
+                tenant_id=tenant_id,
             )
             if existing_accountable is not None:
                 raise ValueError("accountable_exists")
@@ -73,16 +79,20 @@ class UpsertRaciAssignmentUseCase:
             project_id=project_id,
             wbs_item_id=payload.task_id,
             stakeholder_id=payload.stakeholder_id,
+            tenant_id=tenant_id,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if existing:
             existing.raci_role = raci_role
             existing.generated_automatically = False
             existing.manually_verified = True
             existing.verified_by = user_id
             existing.verified_at = now
-            await self.stakeholder_repository.update_raci_assignment(existing)
+            await self.stakeholder_repository.update_raci_assignment(
+                existing,
+                tenant_id=tenant_id,
+            )
             assignment = existing
         else:
             assignment = RaciAssignment(
@@ -98,7 +108,10 @@ class UpsertRaciAssignmentUseCase:
                 verified_at=now,
                 created_at=now,
             )
-            await self.stakeholder_repository.add_raci_assignment(assignment)
+            await self.stakeholder_repository.add_raci_assignment(
+                assignment,
+                tenant_id=tenant_id,
+            )
 
         await self.stakeholder_repository.commit()
 

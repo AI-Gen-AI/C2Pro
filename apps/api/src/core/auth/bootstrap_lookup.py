@@ -4,6 +4,10 @@ Bootstrap auth lookup helpers.
 These helpers provide a narrow pre-tenant lookup path for authentication and
 tenant resolution. They are intended to move auth bootstrap reads away from
 direct table access once fail-closed RLS is enabled on `tenants` and `users`.
+
+TASK-BCK-018: Added AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY config for explicit
+emergency override. Normal production uses SQL-only; ORM fallback only when
+AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY=true is explicitly set.
 """
 
 from __future__ import annotations
@@ -30,14 +34,15 @@ class BootstrapFallbackBlockedError(RuntimeError):
 
 
 def is_bootstrap_fallback_allowed() -> bool:
-    """Evaluate whether ORM fallback is allowed for bootstrap auth helpers."""
-    mode = settings.auth_bootstrap_fallback_mode
+    """
+    Evaluate whether ORM fallback is allowed for bootstrap auth helpers.
 
-    if mode == "always":
-        return True
-    if mode == "deny":
-        return False
-    return settings.environment != "production"
+    Returns True ONLY if AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY=true is explicitly set.
+    This is intended for EMERGENCY USE ONLY during outages.
+
+    Normal production operation: Always returns False (SQL-only).
+    """
+    return settings.auth_bootstrap_allow_fallback_emergency
 
 
 def _emit_resolution_event(

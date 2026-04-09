@@ -9,11 +9,11 @@ Services:
 """
 
 from .anonymizer import (
-    PiiAnonymizerService,
-    get_anonymizer,
     AnonymizedResult,
+    PiiAnonymizerService,
     anonymize_text_simple,
     deanonymize_text_simple,
+    get_anonymizer,
 )
 
 __all__ = [

@@ -58,7 +58,7 @@ class TestGenerateBOMUseCase:
             wbs_items=wbs_items,
             budget_items=budget_items,
         )
-        bom_repo.bulk_create.assert_awaited_once_with(generated_items)
+        bom_repo.bulk_create.assert_awaited_once_with(generated_items, tenant_id)
         assert result == generated_items
 
     @pytest.mark.asyncio

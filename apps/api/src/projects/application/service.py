@@ -42,7 +42,7 @@ class ProjectStats:
 
 def _attach_metadata_alias(project: ProjectORM) -> ProjectORM:
     # Backward-compatible alias expected by legacy tests.
-    setattr(project, "project_metadata", project.metadata_json or {})
+    project.project_metadata = project.metadata_json or {}
     return project
 
 

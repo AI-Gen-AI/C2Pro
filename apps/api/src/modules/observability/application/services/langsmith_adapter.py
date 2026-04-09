@@ -128,7 +128,7 @@ def _normalize_metric_map(value: object) -> dict[str, float]:
     for key, metric_value in value.items():
         if not isinstance(key, str):
             return {}
-        if isinstance(metric_value, bool) or not isinstance(metric_value, (int, float)):
+        if isinstance(metric_value, bool) or not isinstance(metric_value, int | float):
             return {}
         normalized[key] = float(metric_value)
     return normalized

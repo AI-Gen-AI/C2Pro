@@ -16,8 +16,8 @@ import pytest
 from src.procurement.application.use_cases.calculate_lead_time_use_case import (
     CalculateLeadTimeUseCase,
 )
-from src.procurement.domain.models import BOMItem, ProcurementStatus
 from src.procurement.domain.lead_time_calculator import LeadTimeResult
+from src.procurement.domain.models import BOMItem, ProcurementStatus
 
 
 class TestCalculateLeadTimeUseCase:

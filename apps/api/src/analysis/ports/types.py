@@ -4,30 +4,31 @@ Protocol types for Analysis ports.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AnalysisStatus, AnalysisType
 
+
 class AlertRecord(Protocol):
     id: UUID
     project_id: UUID
-    analysis_id: Optional[UUID]
+    analysis_id: UUID | None
     severity: AlertSeverity
-    category: Optional[str]
-    rule_id: Optional[str]
+    category: str | None
+    rule_id: str | None
     title: str
     description: str
-    recommendation: Optional[str]
-    source_clause_id: Optional[UUID]
-    related_clause_ids: Optional[list[UUID]]
+    recommendation: str | None
+    source_clause_id: UUID | None
+    related_clause_ids: list[UUID] | None
     affected_entities: dict
-    impact_level: Optional[str]
+    impact_level: str | None
     alert_metadata: dict
     status: AlertStatus
-    resolved_at: Optional[datetime]
-    resolved_by: Optional[UUID]
-    resolution_notes: Optional[str]
+    resolved_at: datetime | None
+    resolved_by: UUID | None
+    resolution_notes: str | None
 
 class AnalysisRecord(Protocol):
     id: UUID
@@ -37,6 +38,6 @@ class AnalysisRecord(Protocol):
     result_json: Any | None
     coherence_score: int | None
     alerts_count: int
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime

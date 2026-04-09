@@ -25,7 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 import redis.asyncio as redis
 import structlog
@@ -122,7 +122,7 @@ class CacheService:
     It logs errors and gracefully degrades to in-memory cache.
     """
 
-    def __init__(self, redis_url: Optional[str] = None, namespace_prefix: str = NAMESPACE_C2PRO) -> None:
+    def __init__(self, redis_url: str | None = None, namespace_prefix: str = NAMESPACE_C2PRO) -> None:
         """
         Initialize cache service.
 
@@ -131,7 +131,7 @@ class CacheService:
                        If None, only in-memory cache will be used.
             namespace_prefix: Default namespace prefix for all keys (default: "c2pro").
         """
-        self._redis: Optional[redis.Redis] = None
+        self._redis: redis.Redis | None = None
         self._memory = InMemoryCache()
         self._enabled = bool(redis_url)
         self._namespace = namespace_prefix
@@ -185,7 +185,7 @@ class CacheService:
         """Check if cache is enabled (Redis available)."""
         return self._enabled
 
-    def _build_key(self, key: str, namespace: Optional[str] = None) -> str:
+    def _build_key(self, key: str, namespace: str | None = None) -> str:
         """
         Build namespaced cache key.
 
@@ -242,9 +242,9 @@ class CacheService:
     async def get(
         self,
         key: str,
-        namespace: Optional[str] = None,
-        default: Optional[Any] = None
-    ) -> Optional[Any]:
+        namespace: str | None = None,
+        default: Any | None = None
+    ) -> Any | None:
         """
         Get value from cache (auto-deserializes JSON).
 
@@ -268,8 +268,8 @@ class CacheService:
         self,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
-        namespace: Optional[str] = None
+        ttl: int | None = None,
+        namespace: str | None = None
     ) -> bool:
         """
         Set value in cache (auto-serializes to JSON).
@@ -295,7 +295,7 @@ class CacheService:
             logger.warning("cache_set_failed", key=full_key, error=str(exc))
             return False
 
-    async def delete(self, key: str, namespace: Optional[str] = None) -> bool:
+    async def delete(self, key: str, namespace: str | None = None) -> bool:
         """
         Delete key from cache.
 
@@ -325,7 +325,7 @@ class CacheService:
 
         return await self._memory.delete(full_key)
 
-    async def exists(self, key: str, namespace: Optional[str] = None) -> bool:
+    async def exists(self, key: str, namespace: str | None = None) -> bool:
         """
         Check if key exists in cache.
 
@@ -367,7 +367,7 @@ class CacheService:
             return True
         return await self._circuit_breaker.can_execute()
 
-    async def _get_bytes(self, key: str) -> Optional[bytes]:
+    async def _get_bytes(self, key: str) -> bytes | None:
         """Internal method to get raw bytes from cache with circuit breaker protection."""
         if await self._can_use_redis():
             try:
@@ -385,7 +385,7 @@ class CacheService:
                 logger.warning("cache_read_failed", key=key, error=str(exc))
         return await self._memory.get(key)
 
-    async def _set_bytes(self, key: str, value: bytes, ttl_seconds: Optional[int]) -> None:
+    async def _set_bytes(self, key: str, value: bytes, ttl_seconds: int | None) -> None:
         """Internal method to set raw bytes in cache with circuit breaker protection."""
         if await self._can_use_redis():
             try:
@@ -403,7 +403,7 @@ class CacheService:
     # JSON Serialization Methods
     # =============================================
 
-    async def get_json(self, key: str) -> Optional[Any]:
+    async def get_json(self, key: str) -> Any | None:
         """
         Get and deserialize JSON value from cache.
 
@@ -422,7 +422,7 @@ class CacheService:
             logger.warning("cache_decode_failed", key=key)
             return None
 
-    async def set_json(self, key: str, value: Any, ttl_seconds: Optional[int]) -> None:
+    async def set_json(self, key: str, value: Any, ttl_seconds: int | None) -> None:
         """
         Serialize and store JSON value in cache.
 
@@ -442,7 +442,7 @@ class CacheService:
         self,
         document_hash: str,
         task_type: str
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get cached document extraction result.
 
@@ -466,7 +466,7 @@ class CacheService:
         document_hash: str,
         task_type: str,
         payload: dict[str, Any],
-        ttl_seconds: Optional[int] = EXTRACTION_TTL_SECONDS,
+        ttl_seconds: int | None = EXTRACTION_TTL_SECONDS,
     ) -> None:
         """
         Cache document extraction result.
@@ -545,7 +545,7 @@ def build_rate_limit_key(user_id: str, endpoint: str) -> str:
 # Singleton Instance (Dependency Injection)
 # =============================================
 
-_cache_service: Optional[CacheService] = None
+_cache_service: CacheService | None = None
 
 
 async def init_cache(namespace_prefix: str = NAMESPACE_C2PRO) -> CacheService:
@@ -574,7 +574,7 @@ async def init_cache(namespace_prefix: str = NAMESPACE_C2PRO) -> CacheService:
     return _cache_service
 
 
-def get_cache_service() -> Optional[CacheService]:
+def get_cache_service() -> CacheService | None:
     """
     Get the cache service singleton instance.
 

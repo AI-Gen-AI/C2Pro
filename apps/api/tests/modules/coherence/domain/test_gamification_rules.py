@@ -1,20 +1,21 @@
 
-import pytest
-from typing import List, NamedTuple, Dict
-from enum import Enum, auto
 from datetime import datetime, timedelta
+from enum import Enum, auto
+from typing import NamedTuple
+
+import pytest
 
 from src.coherence.domain.gamification_rules import (
-    MassChangeRule,
-    ResolveReintroduceRule,
+    GamificationRuleInput,
     HighScoreLowDocsRule,
-    WeightChangeRule,
-    GamificationViolation,
+    MassChangeRule,
     RecommendedAction,
+    ResolveReintroduceRule,
     # Input DTOs
     UserEvent,
-    GamificationRuleInput,
+    WeightChangeRule,
 )
+
 
 # --- Temporary definitions for test development ---
 class TempRecommendedAction(Enum):
@@ -37,7 +38,7 @@ class TempUserEvent(NamedTuple):
 
 class TempGamificationRuleInput(NamedTuple):
     user_id: str
-    events: List[TempUserEvent]
+    events: list[TempUserEvent]
     current_score: float = 0.0
     document_count: int = 0
 
@@ -53,7 +54,7 @@ class TestGamificationRules:
         now = datetime.now()
         events = [UserEvent(timestamp=now - timedelta(minutes=i), type="edit") for i in range(15)]
         input_data = GamificationRuleInput(user_id="u1", events=events)
-        
+
         violations = await rule.evaluate(input_data)
         assert len(violations) == 1
         assert violations[0].recommended_action == RecommendedAction.FLAG_FOR_REVIEW
@@ -63,7 +64,7 @@ class TestGamificationRules:
         now = datetime.now()
         events = [UserEvent(timestamp=now - timedelta(minutes=i*5), type="edit") for i in range(10)]
         input_data = GamificationRuleInput(user_id="u1", events=events)
-        
+
         violations = await rule.evaluate(input_data)
         assert len(violations) == 0
 
@@ -77,7 +78,7 @@ class TestGamificationRules:
             UserEvent(timestamp=now - timedelta(seconds=i*10+70), type="edit") for i in range(6)
         ]
         input_data = GamificationRuleInput(user_id="u1", events=events)
-        
+
         violations = await rule.evaluate(input_data)
         assert len(violations) == 0 # Should only count the 4 recent events
 

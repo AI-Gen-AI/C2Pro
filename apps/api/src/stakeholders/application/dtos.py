@@ -5,14 +5,12 @@ Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 # Import enums from the new domain models
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, StakeholderQuadrant
-
 
 # ---------------------------------------------------------------------------
 # Base Schemas
@@ -23,13 +21,13 @@ class StakeholderBase(BaseModel):
     """Base schema for stakeholder attributes."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Full name of the stakeholder")
-    role: Optional[str] = Field(
+    role: str | None = Field(
         None, max_length=100, description="Role or position of the stakeholder"
     )
-    organization: Optional[str] = Field(
+    organization: str | None = Field(
         None, max_length=255, description="Organization the stakeholder belongs to"
     )
-    department: Optional[str] = Field(
+    department: str | None = Field(
         None, max_length=100, description="Department within the organization"
     )
     power_level: PowerLevel = Field(
@@ -38,9 +36,9 @@ class StakeholderBase(BaseModel):
     interest_level: InterestLevel = Field(
         InterestLevel.MEDIUM, description="Interest level of the stakeholder"
     )
-    quadrant: Optional[StakeholderQuadrant] = Field(None, description="Power/Interest grid quadrant")
-    email: Optional[EmailStr] = Field(None, description="Contact email (validated)")
-    phone: Optional[str] = Field(None, max_length=50, description="Contact phone number")
+    quadrant: StakeholderQuadrant | None = Field(None, description="Power/Interest grid quadrant")
+    email: EmailStr | None = Field(None, description="Contact email (validated)")
+    phone: str | None = Field(None, max_length=50, description="Contact phone number")
     stakeholder_metadata: dict = Field(default_factory=dict, description="Custom metadata")
 
     @field_validator("name")
@@ -60,7 +58,7 @@ class RACIBase(BaseModel):
     raci_role: RACIRole = Field(
         ..., description="RACI role (Responsible, Accountable, Consulted, Informed)"
     )
-    evidence_text: Optional[str] = Field(
+    evidence_text: str | None = Field(
         None, description="Evidence snippet supporting the assignment"
     )
 
@@ -77,14 +75,14 @@ class StakeholderCreate(StakeholderBase):
 
     project_id: UUID = Field(..., description="ID of the project this stakeholder belongs to")
 
-    source_clause_id: Optional[UUID] = Field(
+    source_clause_id: UUID | None = Field(
         None, description="FK to the clause mentioning this stakeholder (required if AI extracted)"
     )
 
-    extraction_confidence: Optional[float] = Field(
+    extraction_confidence: float | None = Field(
         None, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
     )
-    extracted_from_document_id: Optional[UUID] = Field(
+    extracted_from_document_id: UUID | None = Field(
         None, description="FK to the document from which this stakeholder was extracted"
     )
     is_auto_extracted: bool = Field(
@@ -104,23 +102,23 @@ class StakeholderCreate(StakeholderBase):
 class StakeholderUpdate(BaseModel):
     """Schema for updating a stakeholder. All fields are optional."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated name")
-    role: Optional[str] = Field(None, max_length=100, description="Updated role")
-    organization: Optional[str] = Field(None, max_length=255, description="Updated organization")
-    department: Optional[str] = Field(None, max_length=100, description="Updated department")
-    power_level: Optional[PowerLevel] = Field(None, description="Updated power level")
-    interest_level: Optional[InterestLevel] = Field(None, description="Updated interest level")
-    quadrant: Optional[StakeholderQuadrant] = Field(None, description="Updated quadrant")
-    email: Optional[EmailStr] = Field(None, description="Updated email (validated)")
-    phone: Optional[str] = Field(None, max_length=50, description="Updated phone")
-    extraction_confidence: Optional[float] = Field(
+    name: str | None = Field(None, min_length=1, max_length=255, description="Updated name")
+    role: str | None = Field(None, max_length=100, description="Updated role")
+    organization: str | None = Field(None, max_length=255, description="Updated organization")
+    department: str | None = Field(None, max_length=100, description="Updated department")
+    power_level: PowerLevel | None = Field(None, description="Updated power level")
+    interest_level: InterestLevel | None = Field(None, description="Updated interest level")
+    quadrant: StakeholderQuadrant | None = Field(None, description="Updated quadrant")
+    email: EmailStr | None = Field(None, description="Updated email (validated)")
+    phone: str | None = Field(None, max_length=50, description="Updated phone")
+    extraction_confidence: float | None = Field(
         None, ge=0.0, le=1.0, description="Updated confidence score"
     )
-    stakeholder_metadata: Optional[dict] = Field(None, description="Updated metadata")
+    stakeholder_metadata: dict | None = Field(None, description="Updated metadata")
 
     @field_validator("name")
     @classmethod
-    def validate_name_not_empty(cls, v: Optional[str]) -> Optional[str]:
+    def validate_name_not_empty(cls, v: str | None) -> str | None:
         """Validate that name is not empty if provided."""
         if v is not None and (not v or not v.strip()):
             raise ValueError("name cannot be empty or whitespace only")
@@ -136,17 +134,17 @@ class StakeholderUpdate(BaseModel):
 
 class StakeholderCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    role: Optional[str] = Field(None, max_length=100)
-    company: Optional[str] = Field(None, max_length=255)
-    department: Optional[str] = Field(None, max_length=100)
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(None, max_length=50)
-    type: Optional[str] = Field(None, max_length=50)
-    power_score: Optional[int] = Field(None, ge=1, le=10)
-    interest_score: Optional[int] = Field(None, ge=1, le=10)
-    source_clause_id: Optional[UUID] = None
-    stakeholder_metadata: Optional[dict] = None
-    feedback_comment: Optional[str] = Field(None, max_length=500)
+    role: str | None = Field(None, max_length=100)
+    company: str | None = Field(None, max_length=255)
+    department: str | None = Field(None, max_length=100)
+    email: EmailStr | None = None
+    phone: str | None = Field(None, max_length=50)
+    type: str | None = Field(None, max_length=50)
+    power_score: int | None = Field(None, ge=1, le=10)
+    interest_score: int | None = Field(None, ge=1, le=10)
+    source_clause_id: UUID | None = None
+    stakeholder_metadata: dict | None = None
+    feedback_comment: str | None = Field(None, max_length=500)
 
     @field_validator("name")
     @classmethod
@@ -157,22 +155,22 @@ class StakeholderCreateRequest(BaseModel):
 
 
 class StakeholderUpdateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    role: Optional[str] = Field(None, max_length=100)
-    company: Optional[str] = Field(None, max_length=255)
-    department: Optional[str] = Field(None, max_length=100)
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(None, max_length=50)
-    type: Optional[str] = Field(None, max_length=50)
-    power_score: Optional[int] = Field(None, ge=1, le=10)
-    interest_score: Optional[int] = Field(None, ge=1, le=10)
-    source_clause_id: Optional[UUID] = None
-    stakeholder_metadata: Optional[dict] = None
-    feedback_comment: Optional[str] = Field(None, max_length=500)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    role: str | None = Field(None, max_length=100)
+    company: str | None = Field(None, max_length=255)
+    department: str | None = Field(None, max_length=100)
+    email: EmailStr | None = None
+    phone: str | None = Field(None, max_length=50)
+    type: str | None = Field(None, max_length=50)
+    power_score: int | None = Field(None, ge=1, le=10)
+    interest_score: int | None = Field(None, ge=1, le=10)
+    source_clause_id: UUID | None = None
+    stakeholder_metadata: dict | None = None
+    feedback_comment: str | None = Field(None, max_length=500)
 
     @field_validator("name")
     @classmethod
-    def validate_name_not_blank(cls, value: Optional[str]) -> Optional[str]:
+    def validate_name_not_blank(cls, value: str | None) -> str | None:
         if value is None:
             return None
         if not value.strip():
@@ -185,18 +183,18 @@ class StakeholderUpdateRequest(BaseModel):
 class StakeholderResponseOut(BaseModel):
     id: UUID
     project_id: UUID
-    name: Optional[str]
-    role: Optional[str]
-    company: Optional[str]
-    department: Optional[str]
-    email: Optional[EmailStr]
-    phone: Optional[str]
+    name: str | None
+    role: str | None
+    company: str | None
+    department: str | None
+    email: EmailStr | None
+    phone: str | None
     power_score: int
     interest_score: int
     power_level: PowerLevel
     interest_level: InterestLevel
-    quadrant: Optional[StakeholderQuadrant]
-    source_clause_id: Optional[UUID]
+    quadrant: StakeholderQuadrant | None
+    source_clause_id: UUID | None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -209,7 +207,7 @@ class RACICreate(RACIBase):
     project_id: UUID = Field(..., description="Project ID")
 
     # Additional metadata (optional)
-    approval_threshold: Optional[Decimal] = Field(
+    approval_threshold: Decimal | None = Field(
         None,
         gt=Decimal(0),
         description="Financial approval threshold for this stakeholder on this WBS item (optional)",
@@ -220,7 +218,7 @@ class RACICreate(RACIBase):
 
     @field_validator("approval_threshold")
     @classmethod
-    def validate_approval_threshold(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def validate_approval_threshold(cls, v: Decimal | None) -> Decimal | None:
         """Validate that approval_threshold is positive if provided."""
         if v is not None and v <= 0:
             raise ValueError("approval_threshold must be positive")
@@ -230,15 +228,15 @@ class RACICreate(RACIBase):
 class RACIUpdate(BaseModel):
     """Schema for updating a RACI assignment."""
 
-    raci_role: Optional[RACIRole] = Field(None, description="Updated RACI role")
-    approval_threshold: Optional[Decimal] = Field(
+    raci_role: RACIRole | None = Field(None, description="Updated RACI role")
+    approval_threshold: Decimal | None = Field(
         None, gt=Decimal(0), description="Updated approval threshold"
     )
-    requires_review: Optional[bool] = Field(None, description="Updated review requirement")
+    requires_review: bool | None = Field(None, description="Updated review requirement")
 
     @field_validator("approval_threshold")
     @classmethod
-    def validate_approval_threshold(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def validate_approval_threshold(cls, v: Decimal | None) -> Decimal | None:
         """Validate that approval_threshold is positive if provided."""
         if v is not None and v <= 0:
             raise ValueError("approval_threshold must be positive")
@@ -259,15 +257,15 @@ class StakeholderResponse(StakeholderBase):
     project_id: UUID = Field(..., description="ID of the project")
 
     # Legal traceability
-    source_clause_id: Optional[UUID] = Field(
+    source_clause_id: UUID | None = Field(
         None, description="FK to the source clause (legal traceability)"
     )
 
     # AI extraction metadata
-    extraction_confidence: Optional[float] = Field(
+    extraction_confidence: float | None = Field(
         None, description="AI confidence score (0.0-1.0)"
     )
-    extracted_from_document_id: Optional[UUID] = Field(
+    extracted_from_document_id: UUID | None = Field(
         None, description="FK to the document from which this was extracted"
     )
 
@@ -289,14 +287,14 @@ class RACIResponse(RACIBase):
         ..., description="Flag indicating if this was auto-generated by AI"
     )
     manually_verified: bool = Field(..., description="Flag indicating if manually verified")
-    verified_at: Optional[datetime] = Field(None, description="Timestamp of verification")
-    verified_by: Optional[UUID] = Field(None, description="User who verified this assignment")
+    verified_at: datetime | None = Field(None, description="Timestamp of verification")
+    verified_by: UUID | None = Field(None, description="User who verified this assignment")
 
     # Additional fields (if added to model in the future)
-    approval_threshold: Optional[Decimal] = Field(
+    approval_threshold: Decimal | None = Field(
         None, description="Financial approval threshold"
     )
-    requires_review: Optional[bool] = Field(None, description="Review requirement flag")
+    requires_review: bool | None = Field(None, description="Review requirement flag")
 
     # Timestamp
     created_at: datetime = Field(..., description="Timestamp of creation")
@@ -322,15 +320,15 @@ class RaciMatrixItem(BaseModel):
 
     stakeholder_id: UUID = Field(..., description="Stakeholder ID")
     stakeholder_name: str = Field(..., description="Stakeholder name")
-    stakeholder_role: Optional[str] = Field(None, description="Stakeholder role")
-    stakeholder_organization: Optional[str] = Field(None, description="Organization")
+    stakeholder_role: str | None = Field(None, description="Stakeholder role")
+    stakeholder_organization: str | None = Field(None, description="Organization")
 
     wbs_item_id: UUID = Field(..., description="WBS Item ID")
     wbs_code: str = Field(..., description="WBS code (e.g., '1.2.3')")
     wbs_name: str = Field(..., description="WBS item name")
 
     raci_role: RACIRole = Field(..., description="RACI role")
-    approval_threshold: Optional[Decimal] = Field(None, description="Approval threshold")
+    approval_threshold: Decimal | None = Field(None, description="Approval threshold")
 
     # Status flags
     is_verified: bool = Field(False, description="Whether this assignment is manually verified")
@@ -424,23 +422,23 @@ class RaciAssignmentUpsertResponse(BaseModel):
 class RaciWBSItemInput(BaseModel):
     id: UUID
     name: str
-    description: Optional[str] = None
-    clause_text: Optional[str] = None
+    description: str | None = None
+    clause_text: str | None = None
 
 
 class RaciStakeholderInput(BaseModel):
     id: UUID
-    name: Optional[str] = None
-    role: Optional[str] = None
-    company: Optional[str] = None
-    stakeholder_type: Optional[str] = None
+    name: str | None = None
+    role: str | None = None
+    company: str | None = None
+    stakeholder_type: str | None = None
 
 
 class RaciGenerationAssignment(BaseModel):
     wbs_item_id: UUID
     stakeholder_id: UUID
     role: RACIRole
-    evidence_text: Optional[str] = None
+    evidence_text: str | None = None
 
 
 class RaciGenerationResult(BaseModel):

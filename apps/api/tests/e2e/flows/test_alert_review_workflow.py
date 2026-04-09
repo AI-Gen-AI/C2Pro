@@ -29,7 +29,6 @@ Anti-gaming measures (Gate 7):
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -40,15 +39,13 @@ from httpx import ASGITransport, AsyncClient
 from src.analysis.adapters.persistence.models import Alert, Analysis
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
 from src.coherence.adapters.persistence.models import CoherenceResultORM
-from src.documents.adapters.persistence.models import DocumentORM
-from src.documents.domain.models import DocumentStatus, DocumentType
-from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
-from src.core.approval import ApprovalStatus
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
 from src.core.database import get_session
+from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.main import create_application
 from src.projects.adapters.persistence.models import ProjectORM
-
 
 # ===========================================
 # FIXTURES
@@ -578,6 +575,7 @@ async def test_008_track_alert_status_transitions(
         json={
             "resolution": "Contract amended to match schedule deadline",
             "resolved_by": str(alert_user.id),
+            "root_cause": "technical_issue",
         },
         headers=headers,
     )
@@ -696,7 +694,7 @@ async def test_009_dashboard_shows_review_statistics(
     await db.commit()
 
     response = await client.get(
-        f"/api/coherence/dashboard/{project_id}",
+        f"/api/v1/coherence/dashboard/{project_id}",
         headers=headers,
     )
 
@@ -781,7 +779,7 @@ async def test_010_dashboard_values_change_when_analysis_and_documents_change(
     await db.commit()
 
     first_response = await client.get(
-        f"/api/coherence/dashboard/{project_id}",
+        f"/api/v1/coherence/dashboard/{project_id}",
         headers=headers,
     )
     assert first_response.status_code == 200
@@ -825,7 +823,7 @@ async def test_010_dashboard_values_change_when_analysis_and_documents_change(
     await db.commit()
 
     second_response = await client.get(
-        f"/api/coherence/dashboard/{project_id}",
+        f"/api/v1/coherence/dashboard/{project_id}",
         headers=headers,
     )
     assert second_response.status_code == 200
@@ -1029,7 +1027,7 @@ async def test_012b_high_severity_resolution_requires_root_cause(
     )
 
     assert response.status_code == 400
-    assert "root_cause" in response.json()["detail"]
+    assert "root cause" in response.json()["detail"].lower()
 
 
 # ===========================================

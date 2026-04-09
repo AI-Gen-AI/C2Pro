@@ -77,7 +77,7 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
     async def _execute_impl(
         self,
         input_data: WBSExtractionInput,
-        tenant_id: UUID | None,
+        _tenant_id: UUID | None,
         ai_response: AIResponse,
     ) -> list[WBSItemOutput]:
         """Parse AI response and apply domain logic."""

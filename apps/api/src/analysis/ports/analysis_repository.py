@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Iterable
+from collections.abc import Iterable
 from uuid import UUID
 
-from src.analysis.ports.types import AnalysisRecord, AlertRecord
+from src.analysis.ports.types import AlertRecord, AnalysisRecord
 
 
 class IAnalysisRepository(ABC):
     @abstractmethod
-    async def add_analysis(self, analysis: AnalysisRecord) -> None:
+    async def add_analysis(self, analysis: AnalysisRecord, tenant_id: UUID | None = None) -> None:
         ...
 
     @abstractmethod
-    async def add_alerts(self, alerts: Iterable[AlertRecord]) -> None:
+    async def add_alerts(self, alerts: Iterable[AlertRecord], tenant_id: UUID | None = None) -> None:
         ...
 
     @abstractmethod

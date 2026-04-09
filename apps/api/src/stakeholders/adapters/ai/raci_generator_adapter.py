@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from src.analysis.adapters.ai.agents.raci_generator import (
     RaciGeneratorAgent,
+)
+from src.analysis.adapters.ai.agents.raci_generator import (
     StakeholderInput as AgentStakeholderInput,
+)
+from src.analysis.adapters.ai.agents.raci_generator import (
     WBSItemInput as AgentWBSItemInput,
 )
 from src.stakeholders.application.dtos import (

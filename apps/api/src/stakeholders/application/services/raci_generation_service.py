@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
 
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
-from src.stakeholders.application.list_project_stakeholders_use_case import (
-    ListProjectStakeholdersUseCase,
-)
 from src.stakeholders.application.dtos import (
     RaciGenerationAssignment,
     RaciGenerationResult,
     RaciStakeholderInput,
     RaciWBSItemInput,
+)
+from src.stakeholders.application.list_project_stakeholders_use_case import (
+    ListProjectStakeholdersUseCase,
 )
 from src.stakeholders.domain.models import RaciAssignment
 from src.stakeholders.ports.raci_generator import RaciGeneratorPort
@@ -160,7 +161,7 @@ class RaciGenerationService:
                     manually_verified=False,
                     verified_by=None,
                     verified_at=None,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
                 )
             )
 

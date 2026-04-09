@@ -8,7 +8,7 @@ Refers to Suite ID: TS-UA-COH-UC-001.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.coherence.application.dtos import (
     CalculateCoherenceCommand,
@@ -19,7 +19,6 @@ from src.coherence.domain.alert_mapping import CoherenceAlert, CoherenceAlertMap
 from src.coherence.domain.anti_gaming import AlertEvent, AntiGamingDetector
 from src.coherence.domain.category_weights import (
     CoherenceCategory,
-    get_default_category_weights,
     validate_category_weights,
 )
 from src.coherence.domain.global_score_calculator import (
@@ -99,7 +98,7 @@ class CalculateCoherenceUseCase:
             events=gaming_events,
             score=float(global_score),
             document_count=command.document_count,
-            now=datetime.now(timezone.utc),
+            now=datetime.now(UTC),
         )
 
         # Step 9: Build category details

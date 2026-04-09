@@ -15,7 +15,6 @@ from src.stakeholders.application.dtos import (
 from src.stakeholders.domain.models import RACIRole
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
-
 ROLE_LABELS = {
     RACIRole.RESPONSIBLE: "RESPONSIBLE",
     RACIRole.ACCOUNTABLE: "ACCOUNTABLE",
@@ -47,10 +46,16 @@ class GetRaciMatrixUseCase:
         if not wbs_items:
             return RaciMatrixViewResponse(matrix=[])
 
-        assignments = await self.stakeholder_repository.list_raci_assignments(project_id)
+        assignments = await self.stakeholder_repository.list_raci_assignments(
+            project_id,
+            tenant_id=tenant_id,
+        )
         assignments_by_task: dict[UUID, list[RaciMatrixAssignment]] = {}
         for assignment in assignments:
-            stakeholder = await self.stakeholder_repository.get_by_id(assignment.stakeholder_id)
+            stakeholder = await self.stakeholder_repository.get_by_id(
+                assignment.stakeholder_id,
+                tenant_id=tenant_id,
+            )
             assignments_by_task.setdefault(assignment.wbs_item_id, []).append(
                 RaciMatrixAssignment(
                     stakeholder_id=assignment.stakeholder_id,

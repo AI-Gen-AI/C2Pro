@@ -14,18 +14,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text as sql_text, delete, select, func
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import insert
 
 from ...ports.embedding_repository import (
-    IEmbeddingRepository,
-    EmbeddingRecord,
     EmbeddingMatch,
-    EmbeddingSearchResult,
+    EmbeddingRecord,
+    IEmbeddingRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,10 +36,13 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
     All queries use native SQL functions (find_similar_clauses, find_cross_document_pairs)
     for optimal performance.
 
+    IMPORTANT: SEC-009 Fix - All methods now verify tenant ownership via project.
+    Tenant isolation is enforced by joining with projects table to verify tenant_id.
+
     Example usage:
         ```python
         async with get_db_session() as session:
-            repo = PgvectorEmbeddingRepository(session)
+            repo = PgvectorEmbeddingRepository(session, tenant_id=current_tenant_id)
 
             # Store embedding
             record = await repo.store_embedding(
@@ -63,14 +63,32 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         ```
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, tenant_id: UUID | None = None):
         """
-        Initialize repository with a database session.
+        Initialize repository with a database session and optional tenant context.
 
         Args:
             session: SQLAlchemy async session
+            tenant_id: Optional tenant ID for tenant isolation verification.
+                      If provided, all operations will verify project ownership.
         """
         self.session = session
+        self.tenant_id = tenant_id
+
+    async def _verify_project_tenant(self, project_id: UUID) -> bool:
+        """Verify that a project belongs to the current tenant."""
+        from sqlalchemy import select
+
+        from src.projects.adapters.persistence.models import ProjectORM
+
+        stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == project_id)
+        result = await self.session.execute(stmt)
+        project_tenant = result.scalar_one_or_none()
+        if project_tenant is None:
+            return False
+        if self.tenant_id is None:
+            return True
+        return project_tenant == self.tenant_id
 
     async def store_embedding(
         self,
@@ -85,7 +103,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         metadata: dict | None = None,
     ) -> EmbeddingRecord:
         """
-        Store an embedding for a clause.
+        Store an embedding for a clause with tenant verification.
 
         Uses INSERT ... ON CONFLICT DO UPDATE to handle upserts efficiently.
 
@@ -104,7 +122,12 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Raises:
             ValueError: If embedding dimension is invalid
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot store embedding for project outside tenant")
+
         if len(embedding) != 1536:
             raise ValueError(
                 f"Invalid embedding dimension: expected 1536, got {len(embedding)}"
@@ -120,7 +143,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         meta = metadata or {}
 
         # Upsert using INSERT ... ON CONFLICT DO UPDATE
-        stmt = sql_text(
+        sql_text(
             """INSERT INTO clause_embeddings
             (clause_id, project_id, document_id, document_type, text, embedding, category, metadata)
             VALUES (:clause_id, :project_id, :document_id, :document_type, :text,
@@ -192,7 +215,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         records: list[EmbeddingRecord],
     ) -> int:
         """
-        Store multiple embeddings in a single batch operation.
+        Store multiple embeddings in a single batch operation with tenant verification.
 
         More efficient than calling store_embedding() multiple times.
 
@@ -201,9 +224,19 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Returns:
             Number of records successfully stored
+
+        Raises:
+            PermissionError: If any project does not belong to current tenant
         """
         if not records:
             return 0
+
+        if self.tenant_id is not None:
+            for rec in records:
+                if not await self._verify_project_tenant(rec.project_id):
+                    raise PermissionError(
+                        f"Cannot store embedding for project {rec.project_id} outside tenant"
+                    )
 
         # Validate dimensions
         for rec in records:
@@ -261,7 +294,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         filter_document_types: list[str] | None = None,
     ) -> list[EmbeddingMatch]:
         """
-        Find clauses similar to the given embedding.
+        Find clauses similar to the given embedding with tenant verification.
 
         Uses the find_similar_clauses() PostgreSQL function with HNSW index
         for fast cosine similarity search.
@@ -277,7 +310,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Returns:
             List of EmbeddingMatch objects, sorted by similarity (descending)
+
+        Raises:
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot search embeddings for project outside tenant")
+
         if len(embedding) != 1536:
             raise ValueError(
                 f"Invalid embedding dimension: expected 1536, got {len(embedding)}"
@@ -347,7 +387,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         categories_to_compare: list[tuple[str, str]] | None = None,
     ) -> list[EmbeddingMatch]:
         """
-        Find similar clauses across different document types.
+        Find similar clauses across different document types with tenant verification.
 
         Uses the find_cross_document_pairs() PostgreSQL function to efficiently
         find semantically related clauses from different documents.
@@ -361,7 +401,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Returns:
             List of cross-document EmbeddingMatch pairs
+
+        Raises:
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot search embeddings for project outside tenant")
+
         start_time = time.time()
 
         # Call the find_cross_document_pairs function
@@ -417,7 +464,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         project_id: UUID,
     ) -> EmbeddingRecord | None:
         """
-        Get the stored embedding for a specific clause.
+        Get the stored embedding for a specific clause with tenant verification.
 
         Args:
             clause_id: The clause identifier
@@ -425,7 +472,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Returns:
             EmbeddingRecord or None if not found
+
+        Raises:
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot access embedding for project outside tenant")
+
         stmt = sql_text(
             """SELECT clause_id, project_id, document_id, document_type, text,
                       category, metadata, created_at
@@ -462,7 +516,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         project_id: UUID,
     ) -> int:
         """
-        Delete all embeddings for a project.
+        Delete all embeddings for a project with tenant verification.
 
         Used when a project is deleted or embeddings need to be regenerated.
 
@@ -471,7 +525,14 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         Returns:
             Number of embeddings deleted
+
+        Raises:
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot delete embeddings for project outside tenant")
+
         stmt = sql_text(
             """DELETE FROM clause_embeddings WHERE project_id = :project_id"""
         )
@@ -494,14 +555,21 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         project_id: UUID,
     ) -> int:
         """
-        Count the number of stored embeddings for a project.
+        Count the number of stored embeddings for a project with tenant verification.
 
         Args:
             project_id: Project to count embeddings for
 
         Returns:
             Number of stored embeddings
+
+        Raises:
+            PermissionError: If project does not belong to current tenant
         """
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError("Cannot count embeddings for project outside tenant")
+
         stmt = sql_text(
             """SELECT COUNT(*) FROM clause_embeddings WHERE project_id = :project_id"""
         )

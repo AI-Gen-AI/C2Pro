@@ -3,11 +3,9 @@ I8 - WBS/BOM Domain Generation Integrity
 Test Suite ID: TS-I8-WBS-BOM-DOM-001
 """
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-import pytest
-
-from src.modules.wbs_bom.domain.entities import WBSItem, BOMItem
+from src.modules.wbs_bom.domain.entities import BOMItem, WBSItem
 from src.modules.wbs_bom.domain.services import WBSBOMIntegrityService
 
 

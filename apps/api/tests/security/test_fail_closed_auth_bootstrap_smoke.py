@@ -20,7 +20,6 @@ from src.core.auth.dependencies import _provision_clerk_user
 from src.core.auth.schemas import LoginRequest, RegisterRequest
 from src.core.auth.service import AuthService
 
-
 ADMIN_URL = os.getenv(
     "C2PRO_RLS_ADMIN_URL",
     "postgresql://supabase_admin:postgres@localhost:54322/c2pro_migration_check",
@@ -150,7 +149,7 @@ async def test_clerk_bootstrap_policy_denies_fallback_under_fail_closed_policies
     clerk_org_id = f"org_{uuid4().hex[:8]}"
 
     monkeypatch.setattr(settings, "environment", "production")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "deny")
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", False)
     monkeypatch.setattr(
         "src.core.auth.dependencies.lookup_user_by_clerk_user_id",
         AsyncMock(side_effect=BootstrapFallbackBlockedError("Auth bootstrap fallback blocked by policy")),

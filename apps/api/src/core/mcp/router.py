@@ -25,10 +25,9 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import Request as FastAPIRequest
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from pydantic import BaseModel, Field
 
 from src.core.database import get_session
 from src.core.mcp.servers.database_server import (
@@ -719,7 +718,7 @@ async def get_rate_limit_status(
 )
 async def execute_mcp_operation(
     request: MCPExecuteRequest,
-    fastapi_request: FastAPIRequest,
+    _fastapi_request: FastAPIRequest,
     tenant_id: UUID = Depends(get_current_tenant_id),
     user_id: UUID | None = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_session),

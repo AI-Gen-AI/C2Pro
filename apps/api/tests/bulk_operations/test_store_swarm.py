@@ -23,7 +23,6 @@ import pytest
 import src.bulk_operations.store as store_module
 from src.bulk_operations.store import get_job, register_job
 
-
 # ---------------------------------------------------------------------------
 # State-isolation fixture
 # ---------------------------------------------------------------------------

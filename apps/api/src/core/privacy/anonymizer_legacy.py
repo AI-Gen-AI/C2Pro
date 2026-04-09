@@ -11,14 +11,14 @@ It implements a Singleton pattern to ensure the heavy NLP models are loaded only
 import logging
 import os
 import re
-from typing import List, Dict, NamedTuple, Optional, Callable
 from collections import defaultdict
+from collections.abc import Callable
+from typing import NamedTuple, Optional
 
 # Presidio and Spacy imports
-import spacy
-from presidio_analyzer import AnalyzerEngine, RecognizerResult, EntityRecognizer
+from presidio_analyzer import AnalyzerEngine, EntityRecognizer, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpEngineProvider
-from presidio_anonymizer import AnonymizerEngine, OperatorResult
+from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 from presidio_anonymizer.operators import Operator, OperatorType
 
@@ -29,12 +29,12 @@ from src.core.exceptions import SecurityException
 class AnonymizedPayload(NamedTuple):
     """
     Defines the output structure for the anonymization service.
-    
+
     - text: The anonymized text safe to send to third parties.
     - deanonymization_map: A dictionary to restore the original PII.
     """
     text: str
-    deanonymization_map: Dict[str, str]
+    deanonymization_map: dict[str, str]
 
 
 class EsNifRecognizer(EntityRecognizer):
@@ -55,7 +55,7 @@ class EsNifRecognizer(EntityRecognizer):
         """No models to load for this recognizer."""
         pass
 
-    def analyze(self, text: str, entities: List[str], nlp_artifacts) -> List[RecognizerResult]:
+    def analyze(self, text: str, entities: list[str], nlp_artifacts) -> list[RecognizerResult]:  # noqa: ARG002 - Presidio recognizer interface requires these callback parameters
         results = []
         for match in self.NIF_REGEX.finditer(text):
             nif_value = match.group(0).upper()
@@ -74,7 +74,7 @@ class EsNifRecognizer(EntityRecognizer):
         nif = nif.upper()
         if len(nif) != 9:
             return False
-        
+
         letter = nif[-1]
         number_part = nif[:-1]
 
@@ -101,22 +101,22 @@ def create_custom_replace_operator() -> Callable:
     This ensures consistent tokenization within a single `anonymize` call.
     """
     # State for a single anonymization call
-    pii_map: Dict[str, str] = {} # Maps original PII value to its token
-    counters: Dict[str, int] = defaultdict(int)
+    pii_map: dict[str, str] = {} # Maps original PII value to its token
+    counters: dict[str, int] = defaultdict(int)
 
-    def custom_replace(text: str, params: Dict[str, any]) -> str:
+    def custom_replace(text: str, params: dict[str, any]) -> str:
         entity_type = params.get("entity_type")
-        
+
         # If we've seen this exact PII value before, return its token
         if text in pii_map:
             return pii_map[text]
-        
+
         # If it's a new PII value, create a new token
         counters[entity_type] += 1
         new_token = f"<{entity_type}_{counters[entity_type]}>"
         pii_map[text] = new_token
         return new_token
-        
+
     return custom_replace
 
 
@@ -125,18 +125,18 @@ class CustomReplaceOperator(Operator):
     Custom Presidio operator using a stateful callable set per anonymize call.
     """
 
-    _operator_logic: Optional[Callable[[str, Dict[str, any]], str]] = None
+    _operator_logic: Callable[[str, dict[str, any]], str] | None = None
 
     @classmethod
-    def set_operator_logic(cls, logic: Optional[Callable[[str, Dict[str, any]], str]]) -> None:
+    def set_operator_logic(cls, logic: Callable[[str, dict[str, any]], str] | None) -> None:
         cls._operator_logic = logic
 
-    def operate(self, text: str, params: Dict = None) -> str:
+    def operate(self, text: str, params: dict = None) -> str:
         if not self._operator_logic:
             return text
         return self._operator_logic(text, params or {})
 
-    def validate(self, params: Dict = None) -> None:
+    def validate(self, params: dict = None) -> None:  # noqa: ARG002 - Presidio operator interface requires validate(params)
         return None
 
     def operator_name(self) -> str:
@@ -156,7 +156,7 @@ class PiiAnonymizerService:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(PiiAnonymizerService, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._initialize()
         return cls._instance
 
@@ -174,10 +174,10 @@ class PiiAnonymizerService:
             }
             provider = NlpEngineProvider(nlp_configuration=nlp_config)
             nlp_engine = provider.create_engine()
-            
+
             # 2. Add our custom NIF recognizer to the registry
             nif_recognizer = EsNifRecognizer(supported_entities=["ES_NIF"])
-            
+
             # 3. Create the AnalyzerEngine
             self.analyzer = AnalyzerEngine(
                 nlp_engine=nlp_engine,
@@ -193,7 +193,7 @@ class PiiAnonymizerService:
             # 4. Create the AnonymizerEngine and register our custom operator
             self.anonymizer = AnonymizerEngine()
             self.anonymizer.add_anonymizer(CustomReplaceOperator)
-            
+
             logging.info("PiiAnonymizerService initialized successfully.")
 
         except OSError as e:
@@ -226,11 +226,11 @@ class PiiAnonymizerService:
 
             # Create a new stateful operator for this specific call
             custom_operator_logic = create_custom_replace_operator()
-            
+
             anonymizer_config = {
                 "DEFAULT": OperatorConfig("custom_replace")
             }
-            
+
             # Temporarily update the operator logic for this call
             CustomReplaceOperator.set_operator_logic(custom_operator_logic)
 
@@ -242,13 +242,13 @@ class PiiAnonymizerService:
 
             # Build the deanonymization map from the tokens and original values
             deanonymization_map = {}
-            for original_item, anonymized_item in zip(analyzer_results, anonymized_result.items):
+            for original_item, anonymized_item in zip(analyzer_results, anonymized_result.items, strict=False):
                 original_value = text[original_item.start:original_item.end]
                 token = anonymized_item.text
                 # The map should be token -> original_value
                 if token not in deanonymization_map:
                     deanonymization_map[token] = original_value
-            
+
             # Clean up operator logic reference
             CustomReplaceOperator.set_operator_logic(None)
 

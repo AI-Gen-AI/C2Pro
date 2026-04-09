@@ -6,22 +6,22 @@ Tests the complete request-response cycle including middleware,
 routing, service layer, and database operations.
 """
 
+from types import SimpleNamespace
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from types import SimpleNamespace
-from uuid import uuid4
 
-from src.main import app
-from src.core.database import get_session
-from src.core.approval import ApprovalStatus
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.domain.enums import AlertSeverity, AlertStatus
-from src.projects.domain.models import ProjectStatus, ProjectType
+from src.core.approval import ApprovalStatus
+from src.core.database import get_session
+from src.main import app
 from src.projects.adapters.persistence.models import ProjectORM
-
+from src.projects.domain.models import ProjectStatus, ProjectType
 
 # ===========================================
 # CONSTANTS

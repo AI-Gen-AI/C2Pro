@@ -6,9 +6,10 @@ Tests for ExtractedClause entity validation and contract tests.
 Refers to I3.3: Contract test - normalized clause schema.
 """
 
-import pytest
-from uuid import uuid4
 from datetime import date
+from uuid import uuid4
+
+import pytest
 from pydantic import ValidationError
 
 from src.modules.extraction.domain.entities import ExtractedClause

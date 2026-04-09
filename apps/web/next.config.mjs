@@ -20,6 +20,20 @@ const nextConfig = {
     );
     return config;
   },
+  async redirects() {
+    return [
+      {
+        source: "/dashboard",
+        destination: "/",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/:path*",
+        destination: "/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

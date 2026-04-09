@@ -4,18 +4,16 @@ Tests for Token Counter & Cost Estimator.
 P3.1: Validates tiktoken-based pre-execution cost prediction.
 """
 
-import pytest
 
 from src.core.ai.token_counter import (
+    MODEL_PRICING,
+    CostBreakdown,
     TokenCounter,
     TokenEstimate,
-    CostBreakdown,
-    get_token_counter,
     count_tokens,
     estimate_cost,
-    MODEL_PRICING,
+    get_token_counter,
 )
-
 
 # ===========================================
 # TOKEN COUNTER BASIC TESTS

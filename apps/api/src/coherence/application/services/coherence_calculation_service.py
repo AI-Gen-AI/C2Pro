@@ -9,7 +9,7 @@ Refers to Suite ID: TS-UA-SVC-COH-001.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -230,7 +230,7 @@ class CoherenceCalculationService:
             "global_score": result.global_score,
             "is_gaming_detected": result.is_gaming_detected,
             "alert_count": len(result.alerts),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         self.event_publisher.publish(event_type, payload)
 
@@ -246,6 +246,6 @@ class CoherenceCalculationService:
             "new_score": result.new_global_score,
             "score_delta": result.score_delta,
             "resolved_alert_count": len(result.resolved_alert_ids),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         self.event_publisher.publish(event_type, payload)

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -28,12 +28,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
-from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.config import settings
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
 from src.core.database import get_session
-from src.config import settings
 from src.main import create_application
-
 
 # ===========================================
 # ADDITIONAL FIXTURES FOR TENANT ISOLATION
@@ -531,7 +530,7 @@ async def test_007_missing_tenant_id_in_jwt_rejected(
     Security: Ensures tenant_id is mandatory in access tokens.
     """
     # Generate token with missing tenant_id
-    token = generate_token(
+    generate_token(
         user_id=user_a.id,
         tenant_id=None,  # Will be omitted from payload
         email=user_a.email,
@@ -540,6 +539,7 @@ async def test_007_missing_tenant_id_in_jwt_rejected(
 
     # Manually create JWT without tenant_id
     import jwt
+
     from src.config import settings
 
     payload = {

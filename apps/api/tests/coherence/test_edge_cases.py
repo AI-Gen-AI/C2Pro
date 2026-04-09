@@ -12,12 +12,12 @@ Parametrized tests for edge cases:
 Location: apps/api/tests/coherence/test_edge_cases.py
 """
 
+
 import pytest
-from datetime import datetime
-from src.coherence.models import Clause
+
 from src.coherence.graph.graph import evaluate_coherence
 from src.coherence.graph.state import EvaluationConfig
-
+from src.coherence.models import Clause
 
 # =============================================================================
 # EMPTY INPUT TESTS

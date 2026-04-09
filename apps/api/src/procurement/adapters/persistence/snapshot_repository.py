@@ -30,7 +30,7 @@ class SQLAlchemyProcurementSnapshotRepository(ProcurementSnapshotRepository):
     ) -> list[ProcurementPlanItem]:
         # Deterministic, tenant-scoped placeholder while DB mapping is introduced.
         _ = (project_id, tenant_id)
-        
+
         # Handle date/datetime compatibility
         if isinstance(required_on_site, datetime):
             target_date = required_on_site.date()

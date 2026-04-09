@@ -24,10 +24,9 @@ Test Matrix:
 Suite ID: TS-DB-MIG-RLS-002
 """
 
+
 import pytest
 import pytest_asyncio
-from uuid import UUID
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -54,7 +53,7 @@ RLS_TABLES_TASK_1491 = [
 @pytest_asyncio.fixture
 async def raw_engine():
     """Create a raw async engine for testing.
-    
+
     Uses main DB (5432/c2pro) since RLS tests require the full schema.
     """
     db_url = settings.database_url
@@ -250,7 +249,7 @@ class TestRLSPolicyCompleteness:
         )
         policies = result.fetchall()
         assert len(policies) > 0, "No RLS policies found for TASK-1491 tables"
-        
+
         for tablename, policyname, qual in policies:
             assert "NULLIF" in qual.upper(), (
                 f"Policy '{policyname}' on '{tablename}' missing NULLIF fail-closed pattern"

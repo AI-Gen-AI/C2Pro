@@ -6,15 +6,15 @@ Refers to Suite IDs: TS-UAD-HTTP-RTR-001, TS-UAD-HTTP-ERR-001.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, FastAPI, status
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from unittest.mock import MagicMock
 
-from src.core.handlers import register_exception_handlers
 from src.core.exceptions import ResourceNotFoundError
+from src.core.handlers import register_exception_handlers
 
 
 class CreateThingRequest(BaseModel):

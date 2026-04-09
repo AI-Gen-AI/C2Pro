@@ -9,47 +9,50 @@ Refers to Suite ID: TS-CORE-MCP-STARTUP-001.
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-import structlog
 import sentry_sdk
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.utils import BadDsn
 
+# Import AI tools to trigger registration via @register_tool decorators
+import src.analysis.adapters.ai.tools  # noqa: F401
+from src.alerts.adapters.http.router import router as alerts_router
+from src.analysis.adapters.graph.workflow import (
+    close_checkpointer_resources,
+    ensure_checkpointer_ready,
+)
+from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+from src.bulk_operations.router import router as bulk_operations_router
 from src.config import settings
+
+# Import core routers (always enabled)
+from src.core.auth.router import router as auth_router
 from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
 from src.core.events import build_event_bus
-from src.core.handlers import register_exception_handlers
 from src.core.frontend_support.router import router as frontend_support_router
+from src.core.handlers import register_exception_handlers
+from src.core.mcp.servers.database_server import get_mcp_server
 from src.core.middleware import (
     APIContractMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
     TenantIsolationMiddleware,
 )
-from src.core.mcp.servers.database_server import get_mcp_server
-
-# Import core routers (always enabled)
-from src.core.auth.router import router as auth_router
-from src.documents.adapters.http.router import router as documents_router
 from src.core.observability.router import router as observability_router
-from src.projects.adapters.http.router import router as projects_router
+from src.core.routers.health import router as health_router
+from src.core.routers.health import worker_health_check
+from src.documents.adapters.http.router import router as documents_router
 from src.modules.decision_intelligence.adapters.http.router import (
     router as decision_intelligence_router,
 )
-from src.alerts.router import router as alerts_router
-from src.bulk_operations.router import router as bulk_operations_router
-from src.core.routers.health import router as health_router, worker_health_check
-from src.modules.hitl.adapters.http.router import router as hitl_router
-from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
-from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
-from src.analysis.adapters.graph.workflow import (
-    close_checkpointer_resources,
-    ensure_checkpointer_ready,
+from src.modules.hitl.adapters.http.notification_settings_router import (
+    router as notification_settings_router,  # TASK-BCK-025
 )
-
-# Import AI tools to trigger registration via @register_tool decorators
-import src.analysis.adapters.ai.tools  # noqa: F401
+from src.modules.hitl.adapters.http.router import router as hitl_router
+from src.projects.adapters.http.router import router as projects_router
+from src.wbs.adapters.http.router import router as wbs_router  # GREEN phase - TS-CT-WBS-API-001
 
 logger = structlog.get_logger()
 
@@ -270,6 +273,7 @@ def create_application() -> FastAPI:
     app.include_router(frontend_support_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
+    app.include_router(notification_settings_router, prefix=api_v1_prefix)  # TASK-BCK-025
     app.include_router(wbs_router, prefix=api_v1_prefix)
     app.include_router(analysis_router, prefix=api_v1_prefix)  # LangGraph orchestration
 
@@ -293,8 +297,10 @@ def create_application() -> FastAPI:
     # Coherence Analysis (feature_coherence_analysis)
     if settings.feature_coherence_analysis:
         from src.coherence.router import (
-            router as coherence_router,
             dashboard_router as coherence_dashboard_router,
+        )
+        from src.coherence.router import (
+            router as coherence_router,
         )
         app.include_router(coherence_router, prefix=api_v1_prefix)
         app.include_router(coherence_dashboard_router, prefix=api_v1_prefix)
@@ -324,8 +330,10 @@ def create_application() -> FastAPI:
     if settings.feature_raci_generation:
         try:
             from src.stakeholders.adapters.http.raci_router import (
-                router as raci_router,
                 raci_global_router,
+            )
+            from src.stakeholders.adapters.http.raci_router import (
+                router as raci_router,
             )
             app.include_router(raci_global_router, prefix=api_v1_prefix)
             app.include_router(raci_router, prefix=api_v1_prefix)

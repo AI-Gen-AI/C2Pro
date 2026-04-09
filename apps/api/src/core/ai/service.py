@@ -23,11 +23,15 @@ import anthropic
 import structlog
 from anthropic import Anthropic
 from anthropic.types import Message
-from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    RetryError,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from src.config import settings
-from src.core.cache import get_cache_service
-from src.core.exceptions import AIServiceError
 from src.core.ai.model_router import (
     ModelTier,
     TaskType,
@@ -36,6 +40,8 @@ from src.core.ai.model_router import (
 from src.core.ai.prompt_cache import (
     get_prompt_cache_service,
 )
+from src.core.cache import get_cache_service
+from src.core.exceptions import AIServiceError
 
 logger = structlog.get_logger()
 
@@ -291,8 +297,7 @@ class AIService:
             output_tokens=request.max_tokens or 4096,
         )
 
-        if self.budget_remaining_usd is not None:
-            if estimated_cost > self.budget_remaining_usd:
+        if self.budget_remaining_usd is not None and estimated_cost > self.budget_remaining_usd:
                 raise ValueError(
                     f"Insufficient budget: ${self.budget_remaining_usd:.2f} remaining, "
                     f"estimated cost: ${estimated_cost:.4f}"

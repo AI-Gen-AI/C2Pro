@@ -1,7 +1,6 @@
 """
 FastAPI router for the Procurement module (WBS and BOM operations).
 """
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,42 +10,6 @@ from src.core.database import get_session
 from src.core.security import CurrentTenantId
 
 # Repositories
-from src.procurement.adapters.persistence import SQLAlchemyWBSRepository, SQLAlchemyBOMRepository
-
-# Use cases
-from src.procurement.application.use_cases import (
-    CreateWBSItemUseCase,
-    ListWBSItemsUseCase,
-    GetWBSItemUseCase,
-    UpdateWBSItemUseCase,
-    DeleteWBSItemUseCase,
-    GetWBSTreeUseCase,
-    CreateBOMItemUseCase,
-    ListBOMItemsUseCase,
-    GetBOMItemUseCase,
-    UpdateBOMItemUseCase,
-    DeleteBOMItemUseCase,
-    UpdateBOMStatusUseCase,
-)
-
-# DTOs
-from src.procurement.application.dtos import (
-    WBSItemCreate,
-    WBSItemUpdate,
-    WBSItemResponse,
-    BOMItemCreate,
-    BOMItemUpdate,
-    BOMItemResponse,
-    ProcurementPlanningRequest,
-    PlanningDecision,
-)
-from src.procurement.domain.models import ProcurementStatus
-from src.procurement.application.planning_service import (
-    ProcurementPlanningService,
-    ProcurementSnapshotRepository,
-    ProcurementDecisionRepository,
-    ProcurementUnitOfWork,
-)
 from src.procurement.application.dependencies import (
     get_bom_item_use_case,
     get_create_bom_item_use_case,
@@ -62,6 +25,42 @@ from src.procurement.application.dependencies import (
     get_wbs_tree_use_case,
 )
 
+# DTOs
+from src.procurement.application.dtos import (
+    BOMItemCreate,
+    BOMItemResponse,
+    BOMItemUpdate,
+    PlanningDecision,
+    ProcurementPlanningRequest,
+    WBSItemCreate,
+    WBSItemResponse,
+    WBSItemUpdate,
+)
+from src.procurement.application.planning_service import (
+    ProcurementDecisionRepository,
+    ProcurementPlanningService,
+    ProcurementSnapshotRepository,
+    ProcurementUnitOfWork,
+)
+
+# Use cases
+from src.procurement.application.use_cases import (
+    BuildProcurementPlanUseCase,
+    CreateBOMItemUseCase,
+    CreateWBSItemUseCase,
+    DeleteBOMItemUseCase,
+    DeleteWBSItemUseCase,
+    GetBOMItemUseCase,
+    GetWBSItemUseCase,
+    GetWBSTreeUseCase,
+    ListBOMItemsUseCase,
+    ListWBSItemsUseCase,
+    UpdateBOMItemUseCase,
+    UpdateBOMStatusUseCase,
+    UpdateWBSItemUseCase,
+)
+from src.procurement.domain.models import ProcurementStatus
+
 router = APIRouter(prefix="/procurement", tags=["procurement"])
 
 
@@ -71,15 +70,15 @@ router = APIRouter(prefix="/procurement", tags=["procurement"])
 
 
 class UnconfiguredSnapshotRepo:
-    async def get_snapshot_items(self, project_id, tenant_id, required_on_site):
+    async def get_snapshot_items(self, project_id, tenant_id, required_on_site):  # noqa: ARG002 - Placeholder repository keeps the production contract until planning persistence is wired
         raise RuntimeError("Unconfigured procurement snapshot repository")
 
 
 class UnconfiguredDecisionRepo:
-    async def save_plan_items(self, project_id, tenant_id, items):
+    async def save_plan_items(self, project_id, _tenant_id, items):  # noqa: ARG002 - Placeholder repository keeps the production contract until planning persistence is wired
         raise RuntimeError("Unconfigured procurement decision repository")
 
-    async def save_conflicts(self, project_id, tenant_id, conflicts):
+    async def save_conflicts(self, project_id, _tenant_id, conflicts):  # noqa: ARG002 - Placeholder repository keeps the production contract until planning persistence is wired
         raise RuntimeError("Unconfigured procurement decision repository")
 
 
@@ -115,17 +114,23 @@ def get_planning_service(
     )
 
 
+def get_procurement_plan_use_case(
+    planning_service: ProcurementPlanningService = Depends(get_planning_service),
+) -> BuildProcurementPlanUseCase:
+    return BuildProcurementPlanUseCase(planning_service=planning_service)
+
+
 @router.post("/planning", response_model=PlanningDecision)
 async def build_procurement_plan(
     payload: ProcurementPlanningRequest,
     tenant_id: CurrentTenantId,
-    service: ProcurementPlanningService = Depends(get_planning_service),
+    use_case: BuildProcurementPlanUseCase = Depends(get_procurement_plan_use_case),
 ):
     """
     Build a tenant-scoped procurement plan for a project snapshot.
     """
     try:
-        return await service.build_procurement_plan(
+        return await use_case.execute(
             project_id=payload.project_id,
             tenant_id=tenant_id,
             required_on_site=payload.required_on_site,
@@ -166,7 +171,7 @@ async def create_wbs_item(
         )
 
 
-@router.get("/wbs/project/{project_id}", response_model=List[WBSItemResponse])
+@router.get("/wbs/project/{project_id}", response_model=list[WBSItemResponse])
 async def list_wbs_items(
     project_id: UUID,
     tenant_id: CurrentTenantId,
@@ -179,7 +184,7 @@ async def list_wbs_items(
     return [WBSItemResponse.model_validate(item) for item in wbs_items]
 
 
-@router.get("/wbs/project/{project_id}/tree", response_model=List[WBSItemResponse])
+@router.get("/wbs/project/{project_id}/tree", response_model=list[WBSItemResponse])
 async def get_wbs_tree(
     project_id: UUID,
     tenant_id: CurrentTenantId,
@@ -274,7 +279,7 @@ async def create_bom_item(
         )
 
 
-@router.get("/bom/project/{project_id}", response_model=List[BOMItemResponse])
+@router.get("/bom/project/{project_id}", response_model=list[BOMItemResponse])
 async def list_bom_items(
     project_id: UUID,
     tenant_id: CurrentTenantId,
@@ -362,4 +367,94 @@ async def delete_bom_item(
             detail="BOM item not found"
         )
 
+    return None
+
+
+# ===========================================
+# BUDGET ENDPOINTS - TASK-BCK-021
+# ===========================================
+
+from src.procurement.adapters.persistence.budget_repository import (  # noqa: E402
+    SQLAlchemyBudgetRepository,
+)
+from src.procurement.application.budget_use_cases import (  # noqa: E402
+    BudgetItemCreate,
+    BudgetItemResponse,
+    BudgetItemUpdate,
+    BudgetResponse,
+    CreateBudgetItemUseCase,
+    DeleteBudgetItemUseCase,
+    GetBudgetUseCase,
+    UpdateBudgetItemUseCase,
+)
+
+
+def get_budget_repository(session: AsyncSession = Depends(get_session)) -> SQLAlchemyBudgetRepository:
+    return SQLAlchemyBudgetRepository(session)
+
+
+def get_budget_use_case(repository: SQLAlchemyBudgetRepository = Depends(get_budget_repository)) -> GetBudgetUseCase:
+    return GetBudgetUseCase(repository)
+
+
+def get_create_budget_item_use_case(repository: SQLAlchemyBudgetRepository = Depends(get_budget_repository)) -> CreateBudgetItemUseCase:
+    return CreateBudgetItemUseCase(repository)
+
+
+def get_update_budget_item_use_case(repository: SQLAlchemyBudgetRepository = Depends(get_budget_repository)) -> UpdateBudgetItemUseCase:
+    return UpdateBudgetItemUseCase(repository)
+
+
+def get_delete_budget_item_use_case(repository: SQLAlchemyBudgetRepository = Depends(get_budget_repository)) -> DeleteBudgetItemUseCase:
+    return DeleteBudgetItemUseCase(repository)
+
+
+@router.get("/projects/{project_id}/budget", response_model=BudgetResponse)
+async def get_project_budget(
+    project_id: UUID,
+    tenant_id: CurrentTenantId,
+    use_case: GetBudgetUseCase = Depends(get_budget_use_case),
+):
+    """Get budget summary for a project."""
+    return await use_case.execute(project_id, tenant_id)
+
+
+@router.post("/projects/{project_id}/budget/items", response_model=BudgetItemResponse, status_code=status.HTTP_201_CREATED)
+async def create_budget_item(
+    project_id: UUID,
+    item_create: BudgetItemCreate,
+    tenant_id: CurrentTenantId,
+    use_case: CreateBudgetItemUseCase = Depends(get_create_budget_item_use_case),
+):
+    """Create a new budget item for a project."""
+    return await use_case.execute(project_id, tenant_id, item_create)
+
+
+@router.patch("/budget/items/{item_id}", response_model=BudgetItemResponse)
+async def update_budget_item(
+    item_id: UUID,
+    item_update: BudgetItemUpdate,
+    tenant_id: CurrentTenantId,
+    use_case: UpdateBudgetItemUseCase = Depends(get_update_budget_item_use_case),
+):
+    """Update an existing budget item."""
+    try:
+        return await use_case.execute(item_id, tenant_id, item_update)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/budget/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_budget_item(
+    item_id: UUID,
+    tenant_id: CurrentTenantId,
+    use_case: DeleteBudgetItemUseCase = Depends(get_delete_budget_item_use_case),
+):
+    """Delete a budget item."""
+    deleted = await use_case.execute(item_id, tenant_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Budget item not found"
+        )
     return None

@@ -2,10 +2,9 @@
 Repository port (interface) for BOM operations.
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional
 from uuid import UUID
 
-from src.procurement.domain.models import BOMItem, BOMCategory, ProcurementStatus
+from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 
 
 class IBOMRepository(ABC):
@@ -15,12 +14,13 @@ class IBOMRepository(ABC):
     """
 
     @abstractmethod
-    async def create(self, bom_item: BOMItem) -> BOMItem:
+    async def create(self, bom_item: BOMItem, tenant_id: UUID) -> BOMItem:
         """
         Create a new BOM item.
 
         Args:
             bom_item: The BOM item to create
+            tenant_id: The tenant ID for isolation
 
         Returns:
             The created BOM item with ID
@@ -28,7 +28,7 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, bom_id: UUID, tenant_id: UUID) -> Optional[BOMItem]:
+    async def get_by_id(self, bom_id: UUID, tenant_id: UUID) -> BOMItem | None:
         """
         Retrieve a BOM item by ID.
 
@@ -42,7 +42,7 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> List[BOMItem]:
+    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[BOMItem]:
         """
         Retrieve all BOM items for a project.
 
@@ -56,7 +56,7 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_wbs_item(self, wbs_item_id: UUID, tenant_id: UUID) -> List[BOMItem]:
+    async def get_by_wbs_item(self, wbs_item_id: UUID, tenant_id: UUID) -> list[BOMItem]:
         """
         Retrieve all BOM items for a specific WBS item.
 
@@ -72,7 +72,7 @@ class IBOMRepository(ABC):
     @abstractmethod
     async def get_by_category(
         self, project_id: UUID, category: BOMCategory, tenant_id: UUID
-    ) -> List[BOMItem]:
+    ) -> list[BOMItem]:
         """
         Retrieve all BOM items of a specific category in a project.
 
@@ -89,7 +89,7 @@ class IBOMRepository(ABC):
     @abstractmethod
     async def get_by_status(
         self, project_id: UUID, status: ProcurementStatus, tenant_id: UUID
-    ) -> List[BOMItem]:
+    ) -> list[BOMItem]:
         """
         Retrieve all BOM items with a specific procurement status in a project.
 
@@ -104,7 +104,7 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
-    async def update(self, bom_id: UUID, bom_item: BOMItem, tenant_id: UUID) -> Optional[BOMItem]:
+    async def update(self, bom_id: UUID, bom_item: BOMItem, tenant_id: UUID) -> BOMItem | None:
         """
         Update an existing BOM item.
 
@@ -121,7 +121,7 @@ class IBOMRepository(ABC):
     @abstractmethod
     async def update_status(
         self, bom_id: UUID, status: ProcurementStatus, tenant_id: UUID
-    ) -> Optional[BOMItem]:
+    ) -> BOMItem | None:
         """
         Update the procurement status of a BOM item.
 
@@ -150,12 +150,13 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
-    async def bulk_create(self, bom_items: List[BOMItem]) -> List[BOMItem]:
+    async def bulk_create(self, bom_items: list[BOMItem], tenant_id: UUID) -> list[BOMItem]:
         """
         Create multiple BOM items at once (used for AI generation).
 
         Args:
             bom_items: List of BOM items to create
+            tenant_id: The tenant ID for isolation
 
         Returns:
             List of created BOM items with IDs

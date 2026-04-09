@@ -6,7 +6,7 @@ Refers to Suite ID: TS-UD-COH-SCR-003.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .category_weights import (
     CoherenceCategory,

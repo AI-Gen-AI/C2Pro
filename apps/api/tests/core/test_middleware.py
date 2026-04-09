@@ -8,32 +8,30 @@ Comprehensive tests for middleware components including:
 - Security helpers (Permissions, dependency functions)
 """
 
-import pytest
 import time
-from contextlib import asynccontextmanager
-from unittest.mock import Mock, AsyncMock, patch
+from contextlib import asynccontextmanager, suppress
 from types import SimpleNamespace
-from uuid import uuid4, UUID
+from unittest.mock import AsyncMock, Mock, patch
+from uuid import uuid4
 
-from fastapi import FastAPI, Request, Response, HTTPException
+import pytest
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
-from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.core.auth.models import UserRole
+from src.core.auth.service import create_access_token
+from src.core.exceptions import AuthenticationError, TenantNotFoundError
 from src.core.middleware import (
-    TenantIsolationMiddleware,
-    RequestLoggingMiddleware,
     RateLimitMiddleware,
+    RequestLoggingMiddleware,
+    TenantIsolationMiddleware,
 )
 from src.core.security import (
+    Permissions,
     get_current_tenant_id,
     get_current_user_id,
     get_optional_user_id,
-    Permissions,
 )
-from src.core.exceptions import AuthenticationError, TenantNotFoundError
-from src.core.auth.service import create_access_token
-from src.core.auth.models import UserRole
-
 
 # ===========================================
 # TEST FIXTURES
@@ -214,6 +212,7 @@ class TestTenantIsolationMiddleware:
         Note: tenant_id falls back to 'sub' if not present, so both must be missing.
         """
         import jwt
+
         from src.config import settings
 
         middleware = TenantIsolationMiddleware(app=Mock())
@@ -238,6 +237,7 @@ class TestTenantIsolationMiddleware:
         Should return None when token type is not 'access'.
         """
         import jwt
+
         from src.config import settings
 
         middleware = TenantIsolationMiddleware(app=Mock())
@@ -374,12 +374,11 @@ class TestTenantIsolationMiddleware:
         async def _session():
             yield AsyncMock()
 
-        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session):
-            with patch(
-                "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
-                new=AsyncMock(return_value=record),
-            ) as mock_lookup:
-                tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
+        with patch("src.core.middleware.tenant_isolation.get_raw_session", _session), patch(
+            "src.core.middleware.tenant_isolation.lookup_user_by_clerk_user_id",
+            new=AsyncMock(return_value=record),
+        ) as mock_lookup:
+            tenant_id = await middleware._get_tenant_for_clerk_user("clerk_user_123")
 
         assert tenant_id == expected_tenant_id
         mock_lookup.assert_awaited_once()
@@ -831,13 +830,11 @@ class TestPermissions:
         current_tenant_id = uuid4()
 
         with patch('src.core.security.logger.warning') as mock_log:
-            try:
+            with suppress(HTTPException):
                 await Permissions.verify_project_access(
                     project_tenant_id=project_tenant_id,
                     current_tenant_id=current_tenant_id
                 )
-            except HTTPException:
-                pass
 
             # Verify warning was logged
             mock_log.assert_called_once()

@@ -25,7 +25,7 @@ import sys
 import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -431,7 +431,7 @@ class RegressionRunner:
 
         # Group by difficulty
         by_difficulty: dict[str, dict[str, int]] = {}
-        for case, result in zip(cases, case_results):
+        for case, result in zip(cases, case_results, strict=False):
             diff = case.difficulty.value
             if diff not in by_difficulty:
                 by_difficulty[diff] = {"total": 0, "passed": 0, "failed": 0}
@@ -443,7 +443,7 @@ class RegressionRunner:
 
         # Group by dimension
         by_dimension: dict[str, dict[str, int]] = {}
-        for case, result in zip(cases, case_results):
+        for case, result in zip(cases, case_results, strict=False):
             for dim in case.dimensions:
                 dim_name = dim.value
                 if dim_name not in by_dimension:
@@ -471,7 +471,7 @@ class RegressionRunner:
             total_time_ms=total_time_ms,
             by_difficulty=by_difficulty,
             by_dimension=by_dimension,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             case_results=case_results,
         )
 

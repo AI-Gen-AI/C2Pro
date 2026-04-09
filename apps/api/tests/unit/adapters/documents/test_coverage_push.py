@@ -6,10 +6,10 @@ Priority: P2
 Additional tests to push coverage to 70%.
 """
 
-import pytest
-from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
+from uuid import uuid4
+
+import pytest
 
 
 class TestDocumentModelsEdgeCases:
@@ -17,7 +17,7 @@ class TestDocumentModelsEdgeCases:
 
     def test_document_with_minimal_fields(self):
         """Test creating document with only required fields."""
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         doc = Document(
             id=uuid4(),
@@ -33,7 +33,7 @@ class TestDocumentModelsEdgeCases:
 
     def test_document_with_all_optional_fields(self):
         """Test creating document with all optional fields."""
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         doc_id = uuid4()
         created_at = datetime.now()
@@ -63,7 +63,7 @@ class TestDocumentModelsEdgeCases:
 
     def test_document_error_status(self):
         """Test document with error status."""
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         doc = Document(
             id=uuid4(),
@@ -79,7 +79,13 @@ class TestDocumentModelsEdgeCases:
 
     def test_document_clause_operations(self):
         """Test adding and counting clauses."""
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus, Clause, ClauseType
+        from src.documents.domain.models import (
+            Clause,
+            ClauseType,
+            Document,
+            DocumentStatus,
+            DocumentType,
+        )
 
         doc_id = uuid4()
         doc = Document(
@@ -247,9 +253,12 @@ class TestStorageServiceEdgeCases:
     @pytest.mark.asyncio
     async def test_storage_service_initialization(self):
         """Test LocalFileStorageService can be initialized."""
-        from src.documents.adapters.storage.local_file_storage_service import LocalFileStorageService
-        from pathlib import Path
         import tempfile
+        from pathlib import Path
+
+        from src.documents.adapters.storage.local_file_storage_service import (
+            LocalFileStorageService,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             service = LocalFileStorageService(base_dir=Path(tmpdir))
@@ -259,7 +268,9 @@ class TestStorageServiceEdgeCases:
     @pytest.mark.asyncio
     async def test_storage_service_default_base_dir(self):
         """Test LocalFileStorageService with default base directory."""
-        from src.documents.adapters.storage.local_file_storage_service import LocalFileStorageService
+        from src.documents.adapters.storage.local_file_storage_service import (
+            LocalFileStorageService,
+        )
 
         service = LocalFileStorageService()
 
@@ -272,9 +283,10 @@ class TestBC3ParserEdgeCases:
     @pytest.mark.asyncio
     async def test_bc3_parser_empty_content(self):
         """Test BC3 parser handles empty content."""
-        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
         import tempfile
         from pathlib import Path
+
+        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 
         parser = BC3FileParser()
 

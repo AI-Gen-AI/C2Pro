@@ -1,10 +1,12 @@
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 from src.core.database import get_session
 from src.core.observability.schemas import RecentAnalysesResponse, SystemStatusResponse
 from src.core.observability.service import ObservabilityService
-from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
+from src.core.security import CurrentTenantId
 
 router = APIRouter(prefix="/observability", tags=["Observability"])
 
@@ -39,14 +41,16 @@ async def get_system_status(
     "/analyses", response_model=RecentAnalysesResponse, summary="Get recent coherence analyses"
 )
 async def get_recent_analyses(
+    tenant_id: CurrentTenantId,
     limit: int = 10,
     offset: int = 0,
     service: ObservabilityService = Depends(get_observability_service),
 ):
     """
     Retrieves a list of recent coherence analysis runs with their status and key metrics.
+    Results are filtered by tenant.
     """
-    return await service.get_recent_analyses(limit=limit, offset=offset)
+    return await service.get_recent_analyses(limit=limit, offset=offset, tenant_id=tenant_id)
 
 
 @router.get(

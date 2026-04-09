@@ -22,6 +22,14 @@ class AlertStatus(str, Enum):
     DISMISSED = "dismissed"
 
 
+class AlertType(str, Enum):
+    """Alert type discriminator (TASK-BCK-026)."""
+    RISK = "risk"
+    COHERENCE = "coherence"
+    BUDGET = "budget"
+    WBS = "wbs"
+
+
 class RACIRole(str, Enum):
     RESPONSIBLE = "R"
     ACCOUNTABLE = "A"

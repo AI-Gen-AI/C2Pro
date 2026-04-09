@@ -11,8 +11,8 @@ from uuid import uuid4
 
 import pytest
 
-from src.stakeholders.application.generate_raci_use_case import GenerateRaciUseCase
 from src.stakeholders.application.dtos import RaciGenerationAssignment, RaciGenerationResult
+from src.stakeholders.application.generate_raci_use_case import GenerateRaciUseCase
 from src.stakeholders.domain.models import RACIRole
 
 

@@ -1,12 +1,11 @@
 """
 Use cases for BOM operations.
 """
-from typing import List, Optional
 from uuid import UUID
 
-from src.procurement.ports.bom_repository import IBOMRepository
-from src.procurement.domain.models import BOMItem, ProcurementStatus
 from src.procurement.application.dtos import BOMItemCreate, BOMItemUpdate
+from src.procurement.domain.models import BOMItem, ProcurementStatus
+from src.procurement.ports.bom_repository import IBOMRepository
 
 
 class CreateBOMItemUseCase:
@@ -47,7 +46,7 @@ class CreateBOMItemUseCase:
             bom_metadata=bom_create.bom_metadata
         )
 
-        return await self.bom_repository.create(bom_item)
+        return await self.bom_repository.create(bom_item, tenant_id)
 
 
 class ListBOMItemsUseCase:
@@ -56,7 +55,7 @@ class ListBOMItemsUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> List[BOMItem]:
+    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[BOMItem]:
         """
         List all BOM items for a project.
 
@@ -76,7 +75,7 @@ class GetBOMItemUseCase:
     def __init__(self, bom_repository: IBOMRepository):
         self.bom_repository = bom_repository
 
-    async def execute(self, bom_id: UUID, tenant_id: UUID) -> Optional[BOMItem]:
+    async def execute(self, bom_id: UUID, tenant_id: UUID) -> BOMItem | None:
         """
         Get a BOM item by ID.
 
@@ -98,7 +97,7 @@ class UpdateBOMItemUseCase:
 
     async def execute(
         self, bom_id: UUID, bom_update: BOMItemUpdate, tenant_id: UUID
-    ) -> Optional[BOMItem]:
+    ) -> BOMItem | None:
         """
         Update a BOM item.
 
@@ -168,7 +167,7 @@ class UpdateBOMStatusUseCase:
 
     async def execute(
         self, bom_id: UUID, status: ProcurementStatus, tenant_id: UUID
-    ) -> Optional[BOMItem]:
+    ) -> BOMItem | None:
         """
         Update the procurement status of a BOM item.
 

@@ -1,9 +1,11 @@
 """
 C2Pro - Alerts Module
 
-Handles alert creation, review, and management workflow.
+Hexagonal Architecture implementation for Alerts domain.
+Refers to TASK-REV-006.
+
+Structure:
+- domain/         : Pure Python entities, enums, services
+- application/     : Use cases, DTOs, ports (interfaces)
+- adapters/        : HTTP router, persistence implementation
 """
-
-from src.alerts.router import router
-
-__all__ = ["router"]

@@ -7,11 +7,10 @@ Refers to Suite IDs: TS-INT-MOD-DOC-001, TS-INT-MOD-STK-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock
-
 
 # ---------------------------------------------------------------------------
 # DTO Contract (Stakeholders -> RACI)

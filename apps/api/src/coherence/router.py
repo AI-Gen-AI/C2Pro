@@ -1,6 +1,5 @@
 # apps/api/src/coherence/router.py
-import os
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -8,19 +7,22 @@ from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.adapters.persistence.models import Alert as AlertORM
+from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.enums import AnalysisStatus
-from src.core.middleware.feature_flags import require_feature
-from src.core.database import get_session, get_session_with_tenant
-from src.core.security import security_scheme
-from src.analysis.adapters.persistence.models import Alert as AlertORM, Analysis
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User
+from src.core.database import get_session, get_session_with_tenant
+from src.core.middleware.feature_flags import require_feature
+from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
 from .graph.graph import evaluate_coherence
 from .graph.state import EvaluationConfig
-from .models import CoherenceResult, EnrichedCoherenceResult, Clause
+from .models import Clause, CoherenceResult, EnrichedCoherenceResult
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 router = APIRouter(
@@ -168,17 +170,27 @@ def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> 
 async def get_clauses_from_rag(
     db: AsyncSession,
     project_id: UUID,
+    tenant_id: UUID,
     max_chunks: int = 50,
 ) -> list[Clause]:
-    """Fetch document clauses from RAG chunks."""
+    """
+    Fetch document clauses from RAG chunks with tenant isolation.
+
+    TASK-REV-004: Added tenant_id parameter and filtering.
+    """
     stmt = text("""
-        SELECT content, metadata, document_id
-        FROM document_chunks
-        WHERE project_id = CAST(:project_id AS uuid)
-        ORDER BY created_at DESC
+        SELECT dc.content, dc.metadata, dc.document_id
+        FROM document_chunks dc
+        JOIN projects p ON dc.project_id = p.id
+        WHERE dc.project_id = CAST(:project_id AS uuid)
+          AND p.tenant_id = CAST(:tenant_id AS uuid)
+        ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
-    result = await db.execute(stmt, {"project_id": str(project_id), "limit": max_chunks})
+    result = await db.execute(
+        stmt,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": max_chunks}
+    )
     rows = result.fetchall()
 
     clauses = []
@@ -226,9 +238,12 @@ async def evaluate_project_coherence(
         description="Include detailed diagnostics in response",
     ),
     db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> CoherenceResult | EnrichedCoherenceResult:
     """
     Evaluates the coherence of a project based on its context using v0.3 scoring engine.
+
+    TASK-REV-004: Added current_user for tenant isolation.
 
     - **payload**: Contains project_id (to fetch from RAG) OR explicit clauses
     - **include_diagnostics**: If True, returns EnrichedCoherenceResult with diagnostics
@@ -242,7 +257,9 @@ async def evaluate_project_coherence(
     if payload.clauses:
         clauses = payload.clauses
     elif payload.project_id:
-        clauses = await get_clauses_from_rag(db, payload.project_id, payload.max_chunks)
+        clauses = await get_clauses_from_rag(
+            db, payload.project_id, current_user.tenant_id, payload.max_chunks
+        )
         if not clauses:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -480,7 +497,7 @@ async def get_coherence_dashboard(
         latest_alert_at,
         project.updated_at,
     ]
-    last_updated = max((c for c in candidates if c is not None), default=datetime.utcnow())
+    last_updated = max((c for c in candidates if c is not None), default=datetime.now(UTC))
 
     return {
         "project_id": str(project_id),

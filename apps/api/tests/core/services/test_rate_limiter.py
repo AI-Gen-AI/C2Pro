@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.core.services.rate_limiter_service import RateLimiterService
 from src.core.exceptions import RateLimitExceededError
+from src.core.services.rate_limiter_service import RateLimiterService
 
 
 class TestRateLimiterService:

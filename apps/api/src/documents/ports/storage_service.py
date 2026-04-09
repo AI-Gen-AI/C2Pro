@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
+
 class IStorageService(ABC):
     @abstractmethod
     async def upload_file(self, file_content: BinaryIO, file_id: UUID, file_extension: str) -> str:

@@ -97,6 +97,6 @@ class TestTenantAnonymizationConfigService:
         service = TenantAnonymizationConfigService()
         try:
             service.get_config("")
-            assert False, "Expected ValueError for empty tenant_id"
+            raise AssertionError("Expected ValueError for empty tenant_id")
         except ValueError:
             assert True

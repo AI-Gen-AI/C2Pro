@@ -20,7 +20,8 @@ Usage:
 from __future__ import annotations
 
 import functools
-from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import ParamSpec, TypeVar
 
 import structlog
 

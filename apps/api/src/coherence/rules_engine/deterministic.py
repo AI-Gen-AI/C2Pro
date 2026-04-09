@@ -14,13 +14,12 @@ Location: apps/api/src/coherence/rules_engine/deterministic.py
 from __future__ import annotations
 
 import math
-from datetime import datetime, date, timedelta
-from typing import Optional, Any
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from ..models import Clause, FindingSignal, impact_to_severity
 from .base import Finding, RuleEvaluator
-from .config import EvaluatorConfig, DEFAULT_CONFIG
-
+from .config import DEFAULT_CONFIG, EvaluatorConfig
 
 # ═══════════════════════════════════════════════════════════════
 #  CATEGORY: BUDGET (DET-BUD-*)
@@ -629,20 +628,17 @@ class SpecReferenceEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
-        # Only applies to clauses tagged as technical
-        if clause.data.get("category") not in ("TECHNICAL", "TECH", "technical"):
-            # Also check if it has BOM/material content
-            if not any(k in clause.data for k in ("material", "specification", "bom", "item_name")):
-                return None
-        has_spec = any(clause.data.get(k) for k in (
-            "spec_reference", "standard", "norm", "iso", "astm", "en_standard",
-            "specification", "technical_standard",
-        ))
-        if has_spec:
-            return None
-        return _signal(self, clause, 0.45,
-            "Technical clause without specific standard/specification reference",
-            {"missing": "spec_reference or standard or norm"})
+        category = clause.data.get("category")
+        if category in ("TECHNICAL", "TECH", "technical") or any(k in clause.data for k in ("material", "specification", "bom", "item_name")):
+            has_spec = any(clause.data.get(k) for k in (
+                "spec_reference", "standard", "norm", "iso", "astm", "en_standard",
+                "specification", "technical_standard",
+            ))
+            if not has_spec:
+                return _signal(self, clause, 0.45,
+                    "Technical clause without specific standard/specification reference",
+                    {"missing": "spec_reference or standard or norm"})
+        return None
 
 
 class BomBudgetLinkEvaluator(RuleEvaluator):
@@ -1014,10 +1010,10 @@ def get_all_deterministic_evaluators(
 
 def _num(val: Any) -> bool:
     """Check if value is a numeric type (int or float, but not bool)."""
-    return isinstance(val, (int, float)) and not isinstance(val, bool)
+    return isinstance(val, int | float) and not isinstance(val, bool)
 
 
-def _parse_date(val: Any) -> Optional[date]:
+def _parse_date(val: Any) -> date | None:
     """Parse various date formats to a date object."""
     if isinstance(val, date) and not isinstance(val, datetime):
         return val

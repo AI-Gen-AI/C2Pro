@@ -51,27 +51,6 @@ async def test_gate3_summary_evidence():
     This test aggregates all Gate 3 findings from the 23 MCP security tests.
     """
     # Generate evidence
-    evidence = {
-        "gate": "Gate 3 - MCP Security",
-        "status": "PASSED",
-        "mcp_endpoints_secured": 8,
-        "authentication_enforced": True,
-        "input_validation": "COMPREHENSIVE",
-        "rate_limiting": {"enabled": True, "limit": "100 requests/minute"},
-        "security_measures": {
-            "prompt_injection_prevention": "VERIFIED",
-            "sql_injection_prevention": "VERIFIED",
-            "authentication_bypass_prevention": "VERIFIED",
-            "rate_limit_enforcement": "VERIFIED",
-            "error_sanitization": "VERIFIED",
-        },
-        "test_coverage": {
-            "total_tests": 23,
-            "authentication_tests": 8,
-            "injection_tests": 10,
-            "validation_tests": 5,
-        },
-    }
 
     # Log evidence (captured by pytest)
     print(f"\n{'=' * 80}")

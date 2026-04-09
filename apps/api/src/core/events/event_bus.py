@@ -13,7 +13,6 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
-
 Handler = Callable[[dict[str, Any]], Any | Awaitable[Any]]
 
 

@@ -20,7 +20,7 @@ class _FakeClient(IAIClient):
     should_fail: bool = False
     calls: int = 0
 
-    async def extract_json(self, system_prompt: str, user_content: str, task_type: str):
+    async def extract_json(self, _system_prompt: str, _user_content: str, _task_type: str):
         self.calls += 1
         if self.should_fail:
             raise RuntimeError("primary failed")
@@ -39,8 +39,9 @@ class TestLLMFallbackIntegration:
         result = await client.extract_json("system", "user", "risk")
 
         assert result == {"ok": True}
-        assert primary.calls == 1
+        assert primary.calls == client.max_retries + 1
         assert fallback.calls == 1
+        assert client.circuit.state.value == "open"
 
     async def test_primary_used_when_successful(self) -> None:
         primary = _FakeClient(response={"primary": True})

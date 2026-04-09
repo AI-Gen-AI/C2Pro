@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from src.procurement.domain.models import ProcurementPlanItem, ProcurementConflict
+from src.procurement.domain.models import ProcurementConflict, ProcurementPlanItem
 
 
 class ProcurementDecisionRepository(Protocol):

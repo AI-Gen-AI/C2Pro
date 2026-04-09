@@ -14,27 +14,28 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from src.core.security import get_current_tenant_id
 from src.procurement.adapters.http.router import (
     get_create_bom_item_use_case,
     get_create_wbs_item_use_case,
     get_planning_service,
+    get_procurement_plan_use_case,
     router,
 )
-from src.procurement.application.dtos import PlanningDecision
+from src.procurement.application.use_cases import BuildProcurementPlanUseCase
 from src.procurement.domain.models import ProcurementStatus
-from src.core.security import get_current_tenant_id
 
 
 class _FakePlanningSnapshotRepository:
-    async def get_snapshot_items(self, project_id: UUID, tenant_id: UUID, required_on_site: datetime):
+    async def get_snapshot_items(self, _project_id: UUID, _tenant_id: UUID, _required_on_site: datetime):
         raise AssertionError("not used by this test")
 
 
 class _FakePlanningDecisionRepository:
-    async def save_plan_items(self, project_id: UUID, tenant_id: UUID, items):
+    async def save_plan_items(self, _project_id: UUID, _tenant_id: UUID, _items):
         raise AssertionError("not used by this test")
 
-    async def save_conflicts(self, project_id: UUID, tenant_id: UUID, conflicts):
+    async def save_conflicts(self, _project_id: UUID, _tenant_id: UUID, _conflicts):
         raise AssertionError("not used by this test")
 
 
@@ -47,7 +48,7 @@ class _FakePlanningUnitOfWork:
 
 
 class _FakeCreateWBSUseCase:
-    async def execute(self, wbs_create, tenant_id: UUID):
+    async def execute(self, wbs_create, _tenant_id: UUID):
         return SimpleNamespace(
             id=uuid4(),
             project_id=wbs_create.project_id,
@@ -72,7 +73,7 @@ class _FakeCreateWBSUseCase:
 
 
 class _FakeCreateBOMUseCase:
-    async def execute(self, bom_create, tenant_id: UUID):
+    async def execute(self, bom_create, _tenant_id: UUID):
         return SimpleNamespace(
             id=uuid4(),
             project_id=bom_create.project_id,
@@ -112,6 +113,20 @@ def test_i9_planning_service_provider_uses_injected_collaborators() -> None:
     assert service.repository is snapshot_repo
     assert service.decision_repository is decision_repo
     assert service.uow is uow
+
+
+def test_i9_planning_use_case_provider_wraps_the_planning_service() -> None:
+    """TS-I9-PROC-HTTP-001: planning use case provider must wrap the injected planning service."""
+    service = get_planning_service(
+        repository=_FakePlanningSnapshotRepository(),
+        decision_repository=_FakePlanningDecisionRepository(),
+        uow=_FakePlanningUnitOfWork(),
+    )
+
+    use_case = get_procurement_plan_use_case(planning_service=service)
+
+    assert isinstance(use_case, BuildProcurementPlanUseCase)
+    assert use_case.planning_service is service
 
 
 @pytest.mark.asyncio

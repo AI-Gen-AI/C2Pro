@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
@@ -40,7 +40,7 @@ class CostControllerService:
             )
 
         # Reset monthly budget if needed.
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if tenant.ai_spend_last_reset is None or (
             now.year > tenant.ai_spend_last_reset.year
             or now.month > tenant.ai_spend_last_reset.month

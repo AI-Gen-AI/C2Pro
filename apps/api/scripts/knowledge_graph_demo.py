@@ -6,8 +6,8 @@ from uuid import UUID
 
 import networkx as nx
 
-from src.core.database import close_db, get_session_with_tenant, init_db
 from src.analysis.adapters.graph.knowledge_graph import ProjectKnowledgeGraph
+from src.core.database import close_db, get_session_with_tenant, init_db
 
 
 async def _run(project_id: UUID, tenant_id: UUID, source: str, target: str) -> None:
@@ -21,7 +21,7 @@ async def _run(project_id: UUID, tenant_id: UUID, source: str, target: str) -> N
             return
         for idx, path in enumerate(paths, start=1):
             print(f"Path {idx}:")
-            for node, edge in zip(path.nodes, path.edges + ["END"]):
+            for node, edge in zip(path.nodes, path.edges + ["END"], strict=False):
                 print(f"  {node} --[{edge}]-->")
             print("")
     await close_db()
@@ -52,7 +52,7 @@ def main() -> None:
             return
         for idx, path in enumerate(paths, start=1):
             print(f"Path {idx}:")
-            for node, edge in zip(path.nodes, path.edges + ["END"]):
+            for node, edge in zip(path.nodes, path.edges + ["END"], strict=False):
                 print(f"  {node} --[{edge}]-->")
             print("")
         return

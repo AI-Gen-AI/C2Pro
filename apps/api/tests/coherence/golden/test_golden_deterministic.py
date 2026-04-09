@@ -11,11 +11,11 @@ Location: apps/api/tests/coherence/golden/test_golden_deterministic.py
 """
 
 import pytest
-from .golden_deterministic import GOLDEN_TEST_CASES
 
 from src.coherence.graph.graph import evaluate_coherence
 from src.coherence.graph.state import EvaluationConfig
 
+from .golden_deterministic import GOLDEN_TEST_CASES
 
 # =============================================================================
 # GOLDEN TEST RUNNER
@@ -108,8 +108,8 @@ def test_golden_moderate_scores_50_to_80():
     """
     from .golden_deterministic import (
         GOLD_MODERATE_BUDGET_OVERRUN,
-        GOLD_MODERATE_SCHEDULE_DELAY,
         GOLD_MODERATE_MULTIPLE_MEDIUM,
+        GOLD_MODERATE_SCHEDULE_DELAY,
     )
 
     config = EvaluationConfig(low_budget_mode=True, include_rag_similarity=False)
@@ -141,8 +141,8 @@ def test_golden_severe_scores_10_to_30():
     """
     from .golden_deterministic import (
         GOLD_SEVERE_BUDGET_COLLAPSE,
-        GOLD_SEVERE_SCHEDULE_CRISIS,
         GOLD_SEVERE_MULTI_CATEGORY,
+        GOLD_SEVERE_SCHEDULE_CRISIS,
     )
 
     config = EvaluationConfig(low_budget_mode=True, include_rag_similarity=False)

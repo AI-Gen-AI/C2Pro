@@ -3,7 +3,7 @@ I6 - Alert Payload Contract (Domain)
 Test Suite ID: TS-I6-COH-CONTRACT-001
 """
 
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,7 +22,7 @@ except ImportError:
         message: Any
         evidence: Any = {}
         triggered_by_rule: Any
-        doc_id: Optional[Any] = None
+        doc_id: Any | None = None
         metadata: dict[str, Any] = {}
 
 

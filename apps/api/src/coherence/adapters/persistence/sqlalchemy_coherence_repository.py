@@ -3,11 +3,14 @@ SQLAlchemy Coherence Repository Implementation.
 
 Concrete implementation of ICoherenceRepository using SQLAlchemy.
 Refers to Suite ID: TS-INT-DB-COH-001.
+
+IMPORTANT: All methods implement tenant isolation via JOIN with ProjectORM.
+TASK-REV-003: Fixed tenant isolation in all methods.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import desc, func, select
@@ -24,15 +27,33 @@ from src.coherence.ports.coherence_repository import ICoherenceRepository
 from src.projects.adapters.persistence.models import ProjectORM
 
 
-class SqlAlchemyCoherenceRepository(ICoherenceRepository):
-    """SQLAlchemy implementation of coherence repository."""
+def _utcnow_naive() -> datetime:
+    """Return naive UTC for TIMESTAMP WITHOUT TIME ZONE persistence."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
-    def __init__(self, db: AsyncSession) -> None:
+
+class SqlAlchemyCoherenceRepository(ICoherenceRepository):
+    """SQLAlchemy implementation of coherence repository with tenant isolation."""
+
+    def __init__(self, db: AsyncSession, tenant_id: UUID | None = None) -> None:
         self._db = db
+        self._tenant_id = tenant_id
+
+    def _apply_tenant_filter(self, stmt) -> tuple:
+        """Apply tenant filter by joining with ProjectORM."""
+        if self._tenant_id is None:
+            return stmt, False
+        return (
+            stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id)
+            .where(ProjectORM.tenant_id == self._tenant_id)
+        ), True
 
     async def save(self, result: CoherenceCalculationResult) -> UUID:
-        """Save a coherence calculation result."""
-        # Convert domain model to ORM
+        """Save a coherence calculation result with tenant verification."""
+        if self._tenant_id is not None:
+            project_tenant = await self.get_project_tenant_id(result.project_id)
+            if project_tenant is None or project_tenant != self._tenant_id:
+                raise PermissionError("Cannot save coherence result for project outside tenant")
         orm_result = CoherenceResultORM(
             project_id=result.project_id,
             global_score=result.global_score,
@@ -42,7 +63,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             is_gaming_detected=result.is_gaming_detected,
             gaming_violations=result.gaming_violations,
             penalty_points=result.penalty_points,
-            calculated_at=datetime.utcnow(),
+            calculated_at=_utcnow_naive(),
         )
 
         self._db.add(orm_result)
@@ -52,9 +73,12 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         return orm_result.id
 
     async def get_by_id(self, result_id: UUID) -> CoherenceCalculationResult | None:
-        """Get a coherence result by ID."""
-        # Query all tenants (simplified - in production, would need tenant context)
+        """Get a coherence result by ID with tenant isolation."""
         stmt = select(CoherenceResultORM).where(CoherenceResultORM.id == result_id)
+        if self._tenant_id is not None:
+            stmt = stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id).where(
+                ProjectORM.tenant_id == self._tenant_id
+            )
         result = await self._db.execute(stmt)
         orm_result = result.scalar_one_or_none()
 
@@ -66,13 +90,17 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
     async def get_latest_for_project(
         self, project_id: UUID
     ) -> CoherenceCalculationResult | None:
-        """Get the most recent coherence result for a project."""
+        """Get the most recent coherence result for a project with tenant isolation."""
         stmt = (
             select(CoherenceResultORM)
             .where(CoherenceResultORM.project_id == project_id)
             .order_by(desc(CoherenceResultORM.calculated_at))
             .limit(1)
         )
+        if self._tenant_id is not None:
+            stmt = stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id).where(
+                ProjectORM.tenant_id == self._tenant_id
+            )
         result = await self._db.execute(stmt)
         orm_result = result.scalar_one_or_none()
 
@@ -84,24 +112,28 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
     async def list_for_project(
         self, project_id: UUID, skip: int = 0, limit: int = 10
     ) -> tuple[list[CoherenceCalculationResult], int]:
-        """List coherence results for a project with pagination."""
-        # Count query
-        count_stmt = (
-            select(func.count())
-            .select_from(CoherenceResultORM)
-            .where(CoherenceResultORM.project_id == project_id)
-        )
+        """List coherence results for a project with pagination and tenant isolation."""
+        base_filter = CoherenceResultORM.project_id == project_id
+
+        count_stmt = select(func.count()).select_from(CoherenceResultORM).where(base_filter)
+        if self._tenant_id is not None:
+            count_stmt = count_stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id).where(
+                ProjectORM.tenant_id == self._tenant_id
+            )
         count_result = await self._db.execute(count_stmt)
         total = count_result.scalar_one()
 
-        # Data query
         stmt = (
             select(CoherenceResultORM)
-            .where(CoherenceResultORM.project_id == project_id)
+            .where(base_filter)
             .order_by(desc(CoherenceResultORM.calculated_at))
             .offset(skip)
             .limit(limit)
         )
+        if self._tenant_id is not None:
+            stmt = stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id).where(
+                ProjectORM.tenant_id == self._tenant_id
+            )
         result = await self._db.execute(stmt)
         orm_results = list(result.scalars().all())
 
@@ -110,8 +142,12 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         return domain_results, total
 
     async def delete(self, result_id: UUID) -> bool:
-        """Delete a coherence result."""
+        """Delete a coherence result with tenant isolation."""
         stmt = select(CoherenceResultORM).where(CoherenceResultORM.id == result_id)
+        if self._tenant_id is not None:
+            stmt = stmt.join(ProjectORM, ProjectORM.id == CoherenceResultORM.project_id).where(
+                ProjectORM.tenant_id == self._tenant_id
+            )
         result = await self._db.execute(stmt)
         orm_result = result.scalar_one_or_none()
 

@@ -6,9 +6,8 @@ Priority: P1
 Tests the DocumentsEntityExtractionService adapter.
 """
 
-import pytest
+from unittest.mock import MagicMock
 from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock, patch
 
 
 class TestDocumentsEntityExtraction:

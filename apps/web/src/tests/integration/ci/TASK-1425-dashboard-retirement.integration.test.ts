@@ -12,7 +12,7 @@ describe("TASK-1425 dashboard route retirement", () => {
   });
 
   it("keeps legacy /dashboard URLs compatible through next config redirects", () => {
-    const source = readFileSync(resolve(process.cwd(), "next.config.js"), "utf-8");
+    const source = readFileSync(resolve(process.cwd(), "next.config.mjs"), "utf-8");
 
     expect(source).toContain("async redirects()");
     expect(source).toContain("source: \"/dashboard\"");

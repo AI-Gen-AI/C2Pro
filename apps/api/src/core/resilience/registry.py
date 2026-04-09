@@ -196,7 +196,7 @@ class CircuitBreakerRegistry:
 
         Useful for testing and recovery scenarios.
         """
-        for name, cb in cls._breakers.items():
+        for _name, cb in cls._breakers.items():
             cb.reset()
 
         logger.info(

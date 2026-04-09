@@ -12,16 +12,16 @@ Tests the document parser adapters:
 Methodology: Unit tests with mocked dependencies
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-from uuid import uuid4
-import tempfile
 import os
-from datetime import datetime, UTC
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
+
+import pytest
 
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
 
 # ===========================================
 # PDF PARSER TESTS
@@ -80,7 +80,7 @@ class TestPDFParser:
 
     def test_pdf_parser_error_handling(self):
         """Test PDF parser error handling for invalid file."""
-        from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser, PDFParsingError
+        from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 
         parser = PDFFileParser()
 
@@ -378,7 +378,10 @@ class TestExcelParser:
     @pytest.mark.asyncio
     async def test_excel_parser_schedule_requires_headers(self):
         """Test schedule parsing raises on missing headers."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         sheet = MagicMock()
         sheet.__getitem__.return_value = [MagicMock(value="Task"), MagicMock(value="Start Date")]
@@ -392,7 +395,10 @@ class TestExcelParser:
     @pytest.mark.asyncio
     async def test_excel_parser_budget_wraps_file_errors(self):
         """Test budget parsing wraps workbook open failures."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         with patch(
             "src.documents.adapters.parsers.excel_file_parser.openpyxl.load_workbook",
@@ -413,8 +419,8 @@ class TestCompositeParser:
 
     def test_composite_parser_init(self):
         """Test composite parser initialization."""
-        from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
         from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 

@@ -5,7 +5,7 @@ Central registry for AI tools with autodiscovery.
 """
 from __future__ import annotations
 
-from typing import Any, Type
+from typing import Any
 
 import structlog
 
@@ -14,7 +14,6 @@ from src.core.ai.model_router import AITaskType
 from .exceptions import ToolNotFoundError
 from .metadata import ToolMetadata
 from .protocol import Tool
-
 
 logger = structlog.get_logger()
 
@@ -45,7 +44,7 @@ class ToolRegistry:
 
     def __init__(self):
         # name -> version -> Tool class
-        self._tools: dict[str, dict[str, Type[Tool]]] = {}
+        self._tools: dict[str, dict[str, type[Tool]]] = {}
 
         # task_type -> list of (name, version)
         self._task_type_index: dict[AITaskType, list[tuple[str, str]]] = {}
@@ -54,7 +53,7 @@ class ToolRegistry:
 
     def register(
         self,
-        tool_class: Type[Tool],
+        tool_class: type[Tool],
         name: str | None = None,
         version: str | None = None,
     ) -> None:
@@ -136,7 +135,7 @@ class ToolRegistry:
 
     def get_by_task_type(
         self, task_type: AITaskType
-    ) -> list[tuple[str, str, Type[Tool]]]:
+    ) -> list[tuple[str, str, type[Tool]]]:
         """
         Get all tools for a specific task type.
 
@@ -232,7 +231,7 @@ def register_tool(
         auto_register: If True, register immediately on import
     """
 
-    def decorator(cls: Type[Tool]) -> Type[Tool]:
+    def decorator(cls: type[Tool]) -> type[Tool]:
         if auto_register:
             registry = get_tool_registry()
             registry.register(cls, name=name, version=version)

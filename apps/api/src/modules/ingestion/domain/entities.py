@@ -11,10 +11,10 @@ Increment I2: OCR + Table Parsing Reliability
 - TableData: DTO for extracted table data with structure preservation
 """
 
-from pydantic import BaseModel, Field, field_validator
-from uuid import UUID
-from typing import Optional
 import re
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class IngestionChunk(BaseModel):
@@ -132,8 +132,8 @@ class IngestionError(Exception):
     def __init__(
         self,
         message: str,
-        doc_id: Optional[UUID] = None,
-        version_id: Optional[UUID] = None
+        doc_id: UUID | None = None,
+        version_id: UUID | None = None
     ):
         self.message = message
         self.doc_id = doc_id
@@ -188,7 +188,7 @@ class TableData(BaseModel):
         description="Confidence score (0.0-1.0) of the table extraction."
     )
 
-    bbox: Optional[list[float]] = Field(
+    bbox: list[float] | None = Field(
         None,
         min_length=4,
         max_length=4,
@@ -202,7 +202,7 @@ class TableData(BaseModel):
 
     @field_validator("bbox")
     @classmethod
-    def validate_bbox_if_present(cls, v: Optional[list[float]]) -> Optional[list[float]]:
+    def validate_bbox_if_present(cls, v: list[float] | None) -> list[float] | None:
         """Validate that bbox coordinates are normalized between 0 and 1 if provided."""
         if v is not None:
             for coord in v:

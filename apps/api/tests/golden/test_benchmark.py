@@ -1,17 +1,14 @@
 """Tests for golden dataset benchmark runner."""
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 from golden.benchmark import (
     AccuracyBenchmark,
     AccuracyMetrics,
     BaselineComparison,
     BenchmarkHistory,
-    MAX_HISTORY_ENTRIES,
     format_benchmark_report,
 )
 from golden.runner import RunSummary

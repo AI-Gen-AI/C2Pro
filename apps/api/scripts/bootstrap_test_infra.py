@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 import psycopg
-
 from verify_migration_health import parse_migration_graph, recreate_database, validate_linear_chain
 
 
@@ -62,11 +61,10 @@ def start_redis_with_docker_compose(root: Path) -> None:
 
 
 def ensure_database_exists(admin_url: str, database_name: str) -> None:
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database_name,))
-            if cur.fetchone() is None:
-                cur.execute(f'CREATE DATABASE "{database_name}"')
+    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database_name,))
+        if cur.fetchone() is None:
+            cur.execute(f'CREATE DATABASE "{database_name}"')
 
 
 def run_alembic_upgrade(api_dir: Path, database_url: str) -> None:

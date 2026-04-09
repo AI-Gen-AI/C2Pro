@@ -6,13 +6,13 @@ Priority: P1
 Additional tests to improve coverage.
 """
 
-import pytest
-from uuid import uuid4
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
+import pytest
 
 # ===========================================
 # COMPOSITE PARSER TESTS
@@ -39,7 +39,7 @@ class TestCompositeParserAdvanced:
 
         mock_pdf = MagicMock()
         mock_pdf.extract_text_and_offsets = AsyncMock(return_value=[{"text": "test", "bbox": (0,0,100,20)}])
-        
+
         parser = CompositeFileParser(
             bc3_parser=MagicMock(),
             excel_parser=MagicMock(),
@@ -74,7 +74,7 @@ class TestCompositeParserAdvanced:
 
         mock_bc3 = MagicMock()
         mock_bc3.parse = AsyncMock(return_value=[{"item": "Item 1", "quantity": 10}])
-        
+
         parser = CompositeFileParser(
             bc3_parser=mock_bc3,
             excel_parser=MagicMock(),
@@ -274,7 +274,7 @@ class TestRagServicePureFunctions:
 
     def test_format_vector_truncates_long(self):
         """Test _format_vector truncates to EMBEDDING_DIMENSION."""
-        from src.documents.adapters.rag.rag_service import _format_vector, EMBEDDING_DIMENSION
+        from src.documents.adapters.rag.rag_service import EMBEDDING_DIMENSION, _format_vector
 
         long_embedding = [0.1] * 2000
         result = _format_vector(long_embedding)

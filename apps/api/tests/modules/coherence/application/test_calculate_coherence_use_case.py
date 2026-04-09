@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-import pytest
-
 from src.coherence.application.dtos import CalculateCoherenceCommand
 from src.coherence.application.use_cases import CalculateCoherenceUseCase
 from src.coherence.domain.category_weights import CoherenceCategory

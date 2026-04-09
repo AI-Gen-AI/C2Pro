@@ -10,7 +10,6 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-
 TModel = TypeVar("TModel", bound=BaseModel)
 
 

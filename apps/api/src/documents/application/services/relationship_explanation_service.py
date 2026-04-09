@@ -12,7 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity
-from src.documents.domain.models import Clause, Document
+from src.documents.domain.models import Document
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ class EvidenceRelationshipExplanationService:
         document: Document,
         alerts: list[ExplanationAlertInput],
     ) -> RelationshipExplanation:
-        clauses_by_id = {clause.id: clause for clause in document.clauses}
+        {clause.id: clause for clause in document.clauses}
         clause_scores: dict[UUID, int] = {clause.id: 0 for clause in document.clauses}
 
         for alert in alerts:

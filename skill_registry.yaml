@@ -1,0 +1,123 @@
+skills:
+  - id: "analizar_codigo"
+    name: "Analizador de Código"
+    description: "Lee y analiza archivos de un directorio especificado, devolviendo estructura, imports y dependencias."
+    version: "1.0.0"
+    path: "./agent_skills/analizar_codigo/"
+    timeout_ms: 15000
+    retry_policy:
+      max_retries: 1
+    input_schema:
+      type: "object"
+      required: ["directorio"]
+      properties:
+        directorio:
+          type: "string"
+          description: "Ruta relativa del directorio a analizar"
+        profundidad:
+          type: "integer"
+          default: 2
+          description: "Profundidad máxima de recursión"
+    output_schema:
+      type: "object"
+      properties:
+        archivos:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+              path: { type: "string" }
+              size_bytes: { type: "integer" }
+              imports: { type: "array", items: { type: "string" } }
+
+  - id: "ejecutar_pytest"
+    name: "Lanzador de Pytest"
+    description: "Ejecuta la suite de tests pytest y devuelve resultados estructurados con trazas de error."
+    version: "1.0.0"
+    path: "./agent_skills/ejecutar_pytest/"
+    timeout_ms: 120000
+    retry_policy:
+      max_retries: 2
+    input_schema:
+      type: "object"
+      required: ["target"]
+      properties:
+        target:
+          type: "string"
+          description: "Ruta del archivo o directorio de tests a ejecutar"
+        verbose:
+          type: "boolean"
+          default: true
+    output_schema:
+      type: "object"
+      required: ["passed", "failed", "errors"]
+      properties:
+        passed: { type: "integer" }
+        failed: { type: "integer" }
+        errors:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+              test_name: { type: "string" }
+              error_message: { type: "string" }
+              file: { type: "string" }
+              line: { type: "integer" }
+
+  - id: "interacciones_git"
+    name: "Interacciones Git"
+    description: "Ejecuta comandos de control de versiones: status, diff, commit, push de forma segura."
+    version: "1.0.0"
+    path: "./agent_skills/interacciones_git/"
+    timeout_ms: 30000
+    retry_policy:
+      max_retries: 1
+    input_schema:
+      type: "object"
+      required: ["accion"]
+      properties:
+        accion:
+          type: "string"
+          enum: ["status", "diff", "commit", "push"]
+          description: "Acción git a ejecutar"
+        mensaje:
+          type: "string"
+          description: "Mensaje de commit (requerido para accion=commit)"
+        archivos:
+          type: "array"
+          items: { type: "string" }
+          description: "Archivos específicos a incluir"
+    output_schema:
+      type: "object"
+      required: ["success", "output"]
+      properties:
+        success: { type: "boolean" }
+        output: { type: "string" }
+
+  - id: "leer_esquema_db"
+    name: "Lector de Esquema DB"
+    description: "Lee el esquema de la base de datos desde archivos de migración o modelos SQLAlchemy."
+    version: "1.0.0"
+    path: "./agent_skills/leer_esquema_db/"
+    timeout_ms: 10000
+    retry_policy:
+      max_retries: 0
+    input_schema:
+      type: "object"
+      required: ["modulo"]
+      properties:
+        modulo:
+          type: "string"
+          description: "Nombre del módulo cuyo esquema se quiere leer"
+    output_schema:
+      type: "object"
+      properties:
+        tablas:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+              nombre: { type: "string" }
+              columnas:
+                type: "array"
+                items: { type: "string" }

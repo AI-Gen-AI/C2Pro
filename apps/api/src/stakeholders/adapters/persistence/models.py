@@ -1,8 +1,9 @@
-"""
+"""TS-MOD-STK-PERSIST-001
+
 SQLAlchemy ORM models for Stakeholder bounded context, used by the persistence adapter.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -21,15 +22,20 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.core.approval import ApprovalStatus  # Assuming this is a global enum
 from src.core.database import Base
-from src.core.approval import ApprovalStatus # Assuming this is a global enum
 
 # Import enums from our domain models
-from src.stakeholders.domain.models import PowerLevel, InterestLevel, StakeholderQuadrant, RACIRole
+from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, StakeholderQuadrant
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
     from src.core.auth.models import User
+
+
+def _utcnow_naive() -> datetime:
+    """Return naive UTC for legacy TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class StakeholderORM(Base):
@@ -104,9 +110,9 @@ class StakeholderORM(Base):
     stakeholder_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive, nullable=False
     )
 
     # Relationships
@@ -158,7 +164,7 @@ class StakeholderWBSRaciORM(Base):
     )
     wbs_item_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("wbs_items.id", ondelete="CASCADE"),
+        ForeignKey("procurement_wbs_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -178,7 +184,7 @@ class StakeholderWBSRaciORM(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
 
     # Relationships
     stakeholder: Mapped["StakeholderORM"] = relationship(

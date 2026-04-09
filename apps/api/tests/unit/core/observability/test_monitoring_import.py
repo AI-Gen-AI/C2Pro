@@ -7,6 +7,7 @@ Refers to TASK-1476.
 
 import pytest
 
+
 def test_monitoring_module_importable():
     """
     Test that src.core.observability.monitoring can be imported.

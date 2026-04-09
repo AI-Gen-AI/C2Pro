@@ -15,13 +15,10 @@ import argparse
 import json
 import logging
 import sys
-import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from golden.loader import GoldenDatasetLoader
 from golden.runner import (
     MockWorkflowExecutor,
     RegressionRunner,
@@ -695,7 +692,7 @@ Examples:
             return 1
         return 0
 
-    except Exception as e:
+    except Exception:
         logger.exception("Benchmark failed")
         return 2
 

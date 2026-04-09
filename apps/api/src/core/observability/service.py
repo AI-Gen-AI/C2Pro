@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,22 +30,28 @@ class ObservabilityService:
         database_status = "OK"
 
         try:
-            # Attempt a simple database query to check connectivity
             await self.db_session.execute(select(func.now()))
         except Exception as e:
             database_status = f"ERROR: {e}"
-            api_status = "DEGRADED"  # If DB is down, API is degraded
+            api_status = "DEGRADED"
 
         return SystemStatusResponse(
-            api_status=api_status, database_status=database_status, timestamp=datetime.utcnow()
+            api_status=api_status, database_status=database_status, timestamp=datetime.now(UTC)
         )
 
-    async def get_recent_analyses(self, limit: int = 10, offset: int = 0) -> RecentAnalysesResponse:
+    async def get_recent_analyses(
+        self,
+        limit: int = 10,
+        offset: int = 0,
+        tenant_id: UUID | None = None,
+    ) -> RecentAnalysesResponse:
         """
-        Retrieves a list of recent coherence analyses.
+        Retrieves a list of recent coherence analyses with tenant isolation.
         """
-        analyses = await self.analysis_repository.list_recent(limit=limit, offset=offset)
-        total_analyses_count = await self.analysis_repository.count_all()
+        analyses = await self.analysis_repository.list_recent(
+            limit=limit, offset=offset, tenant_id=tenant_id
+        )
+        total_analyses_count = await self.analysis_repository.count_all(tenant_id=tenant_id)
 
         analysis_statuses = [
             AnalysisStatus(

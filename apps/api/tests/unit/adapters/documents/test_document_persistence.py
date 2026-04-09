@@ -6,10 +6,10 @@ Priority: P1
 Tests the SqlAlchemy document and clause repositories.
 """
 
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
+
+import pytest
 
 
 class TestSqlAlchemyDocumentRepository:

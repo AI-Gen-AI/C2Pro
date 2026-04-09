@@ -22,22 +22,19 @@ class ProcurementIntelligenceService:
         current_date: date | datetime,
     ) -> list[ProcurementConflict]:
         conflicts: list[ProcurementConflict] = []
-        
+
         # Ensure current_date is a date for comparison if items use date
-        if isinstance(current_date, datetime):
-            comp_date = current_date.date()
-        else:
-            comp_date = current_date
+        comp_date = current_date.date() if isinstance(current_date, datetime) else current_date
 
         for item in items:
             item_order_date = item.optimal_order_date
             if isinstance(item_order_date, datetime):
                 item_order_date = item_order_date.date()
-                
+
             if comp_date > item_order_date:
                 days_late = (comp_date - item_order_date).days
                 impact = "CRITICAL" if days_late >= 7 else "HIGH"
-                
+
                 required_date = item.required_on_site_date
                 if hasattr(required_date, "isoformat"):
                     required_date_str = required_date.isoformat()
@@ -65,7 +62,7 @@ class ProcurementIntelligenceService:
                 required_date_str = required_date.isoformat()
             else:
                 required_date_str = str(required_date)
-                
+
             order_date = item.optimal_order_date
             if hasattr(order_date, "isoformat"):
                 order_date_str = order_date.isoformat()

@@ -613,6 +613,27 @@ version="1.1"  # → Rollback seguro a v1.1
 
 ## Testing de templates
 
+### Validación estática de templates
+
+```python
+from src.core.ai.validators import PromptTemplateValidator
+
+validator = PromptTemplateValidator()
+
+# Validar un template puntual
+result = validator.validate(
+    template_str="{{ document_text }}",
+    required_vars=["document_text"],
+    allowed_vars=["document_text", "max_clauses"],
+)
+
+assert result["valid"] is True
+
+# Lint del registry actual
+registry_result = validator.lint_registered_templates()
+assert registry_result["valid"] is True
+```
+
 ### Unit test de renderizado
 
 ```python
@@ -668,7 +689,7 @@ async def test_contract_extraction_e2e():
 
 - [ ] **Prompt Analytics Dashboard**: Visualizar métricas por versión
 - [ ] **A/B Testing Framework**: Comparar v1.0 vs v1.1 automáticamente
-- [ ] **Template Validator**: Linter para detectar errores en templates
+- [x] **Template Validator**: Linter para detectar errores en templates
 - [ ] **Prompt Optimization**: Auto-sugerir mejoras basadas en métricas
 - [ ] **Multi-idioma**: Soporte para templates en inglés/español
 

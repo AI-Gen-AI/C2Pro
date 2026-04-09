@@ -6,7 +6,7 @@ Refers to Suite ID: TS-UD-COH-GAM-001.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from src.coherence.domain.anti_gaming import AlertEvent, AntiGamingDetector
@@ -16,7 +16,7 @@ class TestAntiGamingPolicy:
     """Refers to Suite ID: TS-UD-COH-GAM-001"""
 
     def test_001_detect_mass_changes_15_in_30min(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         events = [
             AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
@@ -30,7 +30,7 @@ class TestAntiGamingPolicy:
         assert "mass_changes" in result.violations
 
     def test_002_no_violation_10_in_60min(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         events = [
             AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
@@ -42,7 +42,7 @@ class TestAntiGamingPolicy:
         assert result.is_gaming is False
 
     def test_003_mass_changes_window_sliding(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         events = [
             AlertEvent("updated", user_id, f"sig-old-{i}", now - timedelta(minutes=35 + i))
@@ -55,7 +55,7 @@ class TestAntiGamingPolicy:
         assert result.is_gaming is False
 
     def test_004_mass_changes_flag_for_review(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         events = [
             AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
@@ -67,7 +67,7 @@ class TestAntiGamingPolicy:
         assert any("mass_changes" in log for log in result.audit_logs)
 
     def test_005_detect_resolve_reintroduce_4_times(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         sig = "alert:budget:overrun"
         events = [
@@ -86,7 +86,7 @@ class TestAntiGamingPolicy:
         assert "resolve_reintroduce" in result.violations
 
     def test_006_no_violation_2_times(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         sig = "alert:budget:overrun"
         events = [
@@ -100,7 +100,7 @@ class TestAntiGamingPolicy:
         assert result.is_gaming is False
 
     def test_007_hash_comparison_same_content(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         sig = "alert:scope:same-hash"
         events = [
@@ -117,7 +117,7 @@ class TestAntiGamingPolicy:
         assert "resolve_reintroduce" in result.violations
 
     def test_008_penalty_minus_5_points(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         events = [
             AlertEvent("updated", user_id, f"sig-{i}", now - timedelta(minutes=i))
@@ -133,7 +133,7 @@ class TestAntiGamingPolicy:
             events=[],
             score=95.0,
             document_count=3,
-            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=UTC),
         )
 
         assert result.is_gaming is True
@@ -144,7 +144,7 @@ class TestAntiGamingPolicy:
             events=[],
             score=95.0,
             document_count=50,
-            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=UTC),
         )
 
         assert result.is_gaming is False
@@ -154,7 +154,7 @@ class TestAntiGamingPolicy:
             events=[],
             score=90.0,
             document_count=5,
-            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=UTC),
         )
 
         assert result.is_gaming is True
@@ -165,13 +165,13 @@ class TestAntiGamingPolicy:
             events=[],
             score=95.0,
             document_count=3,
-            now=datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 2, 4, 12, 0, tzinfo=UTC),
         )
 
         assert any("suspicious_high_score" in log for log in result.audit_logs)
 
     def test_013_detect_weight_change_25_percent(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         event = AlertEvent(
             "weight_changed",
             uuid4(),
@@ -186,7 +186,7 @@ class TestAntiGamingPolicy:
         assert "weight_manipulation" in result.violations
 
     def test_014_no_violation_change_15_percent(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         event = AlertEvent(
             "weight_changed",
             uuid4(),
@@ -200,7 +200,7 @@ class TestAntiGamingPolicy:
         assert result.is_gaming is False
 
     def test_015_24h_window_tracking(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         outside_window = AlertEvent(
             "weight_changed",
             uuid4(),
@@ -214,7 +214,7 @@ class TestAntiGamingPolicy:
         assert result.is_gaming is False
 
     def test_016_notify_admin_action(self) -> None:
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         event = AlertEvent(
             "weight_changed",
             uuid4(),
@@ -235,12 +235,12 @@ class TestAntiGamingPolicy:
 
     def test_018_resolve_reference_time_with_explicit_now(self) -> None:
         """When explicit 'now' provided, use it instead of deriving from events."""
-        past_time = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+        past_time = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         event = AlertEvent("created", user_id, "sig", past_time)
 
         # Provide explicit 'now' far in the future
-        explicit_now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        explicit_now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
 
         result = AntiGamingDetector(mass_changes_threshold=0).detect([event], now=explicit_now)
         # Event is outside the window, so no mass_changes violation
@@ -248,7 +248,7 @@ class TestAntiGamingPolicy:
 
     def test_019_resolve_reference_time_from_aware_timestamp(self) -> None:
         """When event has aware timestamp, convert to UTC."""
-        aware_time = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        aware_time = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
         event = AlertEvent("created", user_id, "sig", aware_time)
 
@@ -258,7 +258,7 @@ class TestAntiGamingPolicy:
 
     def test_020_multiple_violations_reason(self) -> None:
         """When multiple violations occur, reason is 'multiple_violations'."""
-        now = datetime(2026, 2, 4, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
         user_id = uuid4()
 
         # Create mass changes

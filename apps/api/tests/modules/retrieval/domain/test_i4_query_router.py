@@ -8,6 +8,7 @@ import pytest
 from src.modules.retrieval.domain.entities import QueryIntent
 from src.modules.retrieval.domain.services import QueryRouter
 
+
 @pytest.fixture
 def query_router():
     return QueryRouter()

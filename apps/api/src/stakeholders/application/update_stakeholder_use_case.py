@@ -3,7 +3,7 @@ Use case for updating a stakeholder.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from src.core.approval import ApprovalStatus
@@ -31,6 +31,7 @@ class UpdateStakeholderUseCase:
         stakeholder_id: UUID,
         user_id: UUID,
         payload: StakeholderUpdateRequest,
+        tenant_id: UUID | None = None,
     ) -> Stakeholder:
         stakeholder = await self.repository.get_by_id(stakeholder_id)
         if stakeholder is None:
@@ -90,12 +91,12 @@ class UpdateStakeholderUseCase:
         if payload.feedback_comment is not None:
             stakeholder.review_comment = payload.feedback_comment
             stakeholder.reviewed_by = user_id
-            stakeholder.reviewed_at = datetime.utcnow()
+            stakeholder.reviewed_at = datetime.now(UTC)
             stakeholder.approval_status = ApprovalStatus.CORRECTED.value
 
-        stakeholder.updated_at = datetime.utcnow()
+        stakeholder.updated_at = datetime.now(UTC)
 
-        await self.repository.update(stakeholder)
+        await self.repository.update(stakeholder, tenant_id=tenant_id)
         await self.repository.commit()
         await self.repository.refresh(stakeholder)
         return stakeholder

@@ -3,10 +3,16 @@ Document Repository Interface (Port).
 Defines the contract for interacting with document persistence.
 """
 from abc import ABC, abstractmethod
-from typing import List, Tuple
 from uuid import UUID
 
-from src.documents.domain.models import Document, DocumentStatus, DocumentType, Clause
+from src.documents.domain.models import (
+    Clause,
+    Document,
+    DocumentAlertSignal,
+    DocumentHistorySnapshot,
+    DocumentStatus,
+)
+
 
 class IDocumentRepository(ABC):
     @abstractmethod
@@ -25,6 +31,16 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_history_snapshot(self, document_id: UUID) -> DocumentHistorySnapshot | None:
+        """Retrieves the normalized persistence projection needed to build a document history timeline."""
+        pass
+
+    @abstractmethod
+    async def list_alert_signals_for_document(self, document_id: UUID) -> list[DocumentAlertSignal]:
+        """Lists alert projections linked to a document for downstream explanation/read models."""
+        pass
+
+    @abstractmethod
     async def update_status(self, document_id: UUID, status: DocumentStatus, parsing_error: str | None = None) -> None:
         """Updates the status and optional parsing error of a document."""
         pass
@@ -35,6 +51,31 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
+    async def update_version(
+        self,
+        document_id: UUID,
+        version: int,
+        file_hash: str,
+        filename: str,
+        status: DocumentStatus,
+    ) -> Document:
+        """
+        Updates document version and related fields for re-upload.
+        Part of TASK-BCK-023.
+
+        Args:
+            document_id: Document to update
+            version: New version number
+            file_hash: New file hash
+            filename: New filename
+            status: New status (usually UPLOADED for re-processing)
+
+        Returns:
+            Updated document
+        """
+        pass
+
+    @abstractmethod
     async def delete(self, document_id: UUID) -> None:
         """Deletes a document from the repository."""
         pass
@@ -42,7 +83,7 @@ class IDocumentRepository(ABC):
     @abstractmethod
     async def list_for_project(
         self, project_id: UUID, skip: int, limit: int
-    ) -> Tuple[List[Document], int]:
+    ) -> tuple[list[Document], int]:
         """Lists documents for a specific project with pagination."""
         pass
 
@@ -62,12 +103,12 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_clause_text_map(self, clause_ids: List[UUID]) -> dict[UUID, str]:
+    async def get_clause_text_map(self, clause_ids: list[UUID]) -> dict[UUID, str]:
         """Returns a map of clause_id to full_text for the given IDs."""
         pass
 
     @abstractmethod
-    async def get_clauses_by_ids(self, clause_ids: List[UUID]) -> List[Clause]:
+    async def get_clauses_by_ids(self, clause_ids: list[UUID]) -> list[Clause]:
         """Returns clauses for the given IDs."""
         pass
 
@@ -79,10 +120,10 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_clauses_for_document(self, document_id: UUID) -> List[Clause]:
+    async def list_clauses_for_document(self, document_id: UUID) -> list[Clause]:
         """Lists all clauses for a document."""
         pass
-    
+
     @abstractmethod
     async def commit(self) -> None:
         """Commits pending changes to the repository."""

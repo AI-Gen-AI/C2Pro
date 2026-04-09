@@ -26,9 +26,8 @@ Coverage:
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -38,7 +37,6 @@ from src.analysis.adapters.ai.llm_fallback_client import (
     FallbackAIClient,
 )
 from src.analysis.ports.ai_client import IAIClient
-
 
 # ---------------------------------------------------------------------------
 # Helpers

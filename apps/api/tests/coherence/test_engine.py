@@ -2,6 +2,7 @@
 # Tests for CoherenceEngineV2 deterministic evaluation (migrated from legacy engine)
 
 import pytest
+
 from src.coherence.engine_v2 import CoherenceEngineV2, EngineConfig
 from src.coherence.models import (
     Alert,

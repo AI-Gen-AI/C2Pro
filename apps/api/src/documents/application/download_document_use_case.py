@@ -1,15 +1,16 @@
 """
 Use Case for downloading a document file.
 """
+from mimetypes import guess_type  # From original service
 from pathlib import Path
 from uuid import UUID
-from mimetypes import guess_type # From original service
 
 from fastapi import HTTPException, status
 
+from src.documents.application.get_document_use_case import GetDocumentUseCase  # Reuse use case
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
-from src.documents.application.get_document_use_case import GetDocumentUseCase # Reuse use case
+
 
 class DownloadDocumentUseCase:
     def __init__(

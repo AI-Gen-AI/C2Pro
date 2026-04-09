@@ -7,13 +7,13 @@ CRITICAL FOR SECURITY:
 - All protected routes MUST pass through this middleware
 """
 
-from collections.abc import Awaitable, Callable
 import json
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
+import jwt
 import structlog
 from fastapi import Request, Response
-import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
@@ -22,7 +22,7 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_id,
     lookup_user_by_clerk_user_id,
 )
-from src.core.auth.token_revocation import is_token_revoked
+from src.core.auth.token_revocation import is_token_revoked_async
 from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
 
@@ -223,7 +223,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                 )
             return None, None, False, None, None
 
-        if is_token_revoked(token):
+        if await is_token_revoked_async(token):
             logger.debug("token_revoked")
             return None, None, False, "Token has been revoked", "token_revoked"
 
@@ -373,8 +373,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                     return False
                 return bool(record.is_active)
         except Exception as e:
-            if settings.environment == "test" and isinstance(e, RuntimeError):
-                if "Database not initialized" in str(e):
+            if settings.environment == "test" and isinstance(e, RuntimeError) and "Database not initialized" in str(e):
                     logger.warning(
                         "tenant_validation_bypassed_for_tests",
                         tenant_id=str(tenant_id),

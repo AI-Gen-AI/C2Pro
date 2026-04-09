@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan Output Schema",
+  "description": "Forces Claude Planner to structure plans with tasks, states, and assignees.",
+  "type": "object",
+  "required": ["tareas", "estado_actual"],
+  "properties": {
+    "tareas": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "tarea_id",
+          "descripcion",
+          "asignado_a",
+          "estado",
+          "criterio_done"
+        ],
+        "properties": {
+          "tarea_id": {
+            "type": "string",
+            "pattern": "^T\\d{3,}$"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "backend",
+              "frontend",
+              "qa",
+              "devops",
+              "security",
+              "docs",
+              "planning"
+            ]
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Clear description of what needs to be done"
+          },
+          "asignado_a": {
+            "type": "string",
+            "enum": ["codex", "gemini", "claude_backend", "claude_frontend"],
+            "description": "Which CLI agent is responsible"
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["pendiente", "en_espera"]
+          },
+          "criterio_done": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Specific criteria to mark task as complete"
+          },
+          "depende_de": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Task IDs this task depends on"
+          },
+          "archivos_afectados": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files expected to be created or modified"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "estado_actual": {
+      "type": "string",
+      "enum": ["planificacion_completada", "en_ejecucion"]
+    },
+    "notas": {
+      "type": "string",
+      "description": "Additional context or architectural notes"
+    }
+  },
+  "additionalProperties": false
+}

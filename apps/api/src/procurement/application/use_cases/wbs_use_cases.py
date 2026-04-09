@@ -1,12 +1,11 @@
 """
 Use cases for WBS operations.
 """
-from typing import List, Optional
 from uuid import UUID
 
-from src.procurement.ports.wbs_repository import IWBSRepository
-from src.procurement.domain.models import WBSItem
 from src.procurement.application.dtos import WBSItemCreate, WBSItemUpdate
+from src.procurement.domain.models import WBSItem
+from src.procurement.ports.wbs_repository import IWBSRepository
 
 
 class CreateWBSItemUseCase:
@@ -60,7 +59,7 @@ class ListWBSItemsUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """
         List all WBS items for a project.
 
@@ -80,7 +79,7 @@ class GetWBSItemUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, wbs_id: UUID, tenant_id: UUID) -> Optional[WBSItem]:
+    async def execute(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
         """
         Get a WBS item by ID.
 
@@ -102,7 +101,7 @@ class UpdateWBSItemUseCase:
 
     async def execute(
         self, wbs_id: UUID, wbs_update: WBSItemUpdate, tenant_id: UUID
-    ) -> Optional[WBSItem]:
+    ) -> WBSItem | None:
         """
         Update a WBS item.
 
@@ -177,7 +176,7 @@ class GetWBSTreeUseCase:
     def __init__(self, wbs_repository: IWBSRepository):
         self.wbs_repository = wbs_repository
 
-    async def execute(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def execute(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """
         Get the complete WBS tree for a project with hierarchy.
 

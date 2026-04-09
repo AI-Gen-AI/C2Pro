@@ -1,17 +1,19 @@
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, call
 import time
-from typing import NamedTuple, List
+from typing import NamedTuple
+from unittest.mock import AsyncMock, MagicMock, call
+
+import pytest
 
 from src.gamification.application.abuse_monitor_service import (
     AbuseMonitorService,
-    GamificationAbuseRepository,
+    AbuseType,
     AlertingService,
     AuditService,
+    GamificationAbuseRepository,
     PenaltyService,
-    AbuseType,
 )
+
 
 # --- Test-specific DTOs for events ---
 class ChangeEvent(NamedTuple):
@@ -50,7 +52,7 @@ def mock_alerting_service() -> MagicMock:
 @pytest.fixture
 def mock_audit_service() -> MagicMock:
     return AsyncMock(spec=AuditService)
-    
+
 @pytest.fixture
 def mock_penalty_service() -> MagicMock:
     return AsyncMock(spec=PenaltyService)
@@ -78,7 +80,7 @@ class TestGamificationAbuseMonitor:
     async def test_001_mass_changes_11_in_hour_detected(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service, mock_audit_service, mock_penalty_service):
         # Repo returns 10 previous events for this user in the last hour
         mock_abuse_repo.get_change_events_in_last_hour.return_value = [time.time() - i for i in range(10)]
-        
+
         event = ChangeEvent(user_id=self.USER_ID, timestamp=time.time())
         await abuse_monitor_service.process_change_event(event)
 
@@ -89,7 +91,7 @@ class TestGamificationAbuseMonitor:
 
     async def test_002_mass_changes_10_in_hour_allowed(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         mock_abuse_repo.get_change_events_in_last_hour.return_value = [time.time() - i for i in range(9)]
-        
+
         event = ChangeEvent(user_id=self.USER_ID, timestamp=time.time())
         await abuse_monitor_service.process_change_event(event)
 
@@ -101,10 +103,10 @@ class TestGamificationAbuseMonitor:
     async def test_004_resolve_reintroduce_3_times_detected(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         issue_hash = "hash_of_issue_content"
         mock_abuse_repo.get_resolution_count_for_hash.return_value = 2
-        
+
         event = ResolutionEvent(user_id=self.USER_ID, issue_hash=issue_hash)
         await abuse_monitor_service.process_issue_resolution_event(event)
-        
+
         mock_alerting_service.trigger_alert.assert_called_once_with(self.USER_ID, AbuseType.RESOLVE_REINTRODUCE, f"Issue with hash {issue_hash} has been re-introduced 3 times.")
 
     async def test_005_resolve_reintroduce_2_times_allowed(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
@@ -115,11 +117,11 @@ class TestGamificationAbuseMonitor:
 
     async def test_006_resolve_reintroduce_different_hash_allowed(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         mock_abuse_repo.get_resolution_count_for_hash.side_effect = [2, 0] # 2 for first hash, 0 for second
-        
+
         event1 = ResolutionEvent(user_id=self.USER_ID, issue_hash="hash1")
         await abuse_monitor_service.process_issue_resolution_event(event1)
         mock_alerting_service.trigger_alert.assert_called_once() # Fails on 3rd time for hash1
-        
+
         mock_alerting_service.reset_mock()
 
         event2 = ResolutionEvent(user_id=self.USER_ID, issue_hash="hash2")
@@ -130,7 +132,7 @@ class TestGamificationAbuseMonitor:
     async def test_007_high_score_few_docs_detected(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         mock_abuse_repo.get_user_document_count.return_value = 4 # Fewer than the threshold of 5
         event = ScoreUpdateEvent(user_id=self.USER_ID, new_score=95.0) # High score
-        
+
         await abuse_monitor_service.process_score_update_event(event)
         mock_alerting_service.trigger_alert.assert_called_once_with(self.USER_ID, AbuseType.HIGH_SCORE_LOW_DOCS, "User has a high score (95.0) with only 4 documents.")
 
@@ -157,7 +159,7 @@ class TestGamificationAbuseMonitor:
     async def test_010_weight_change_25_percent_detected(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         mock_abuse_repo.get_previous_weight_in_last_24h.return_value = 1.0 # Old weight
         event = WeightChangeEvent(user_id=self.USER_ID, component_id="comp1", new_weight=1.25)
-        
+
         await abuse_monitor_service.process_weight_change_event(event)
         mock_alerting_service.trigger_alert.assert_called_once_with(self.USER_ID, AbuseType.LARGE_WEIGHT_CHANGE, "Weight for comp1 changed by 25.0% in 24 hours.")
 
@@ -166,7 +168,7 @@ class TestGamificationAbuseMonitor:
         event = WeightChangeEvent(user_id=self.USER_ID, component_id="comp1", new_weight=1.15)
         await abuse_monitor_service.process_weight_change_event(event)
         mock_alerting_service.trigger_alert.assert_not_called()
-        
+
     # --- Edge Case Tests ---
     async def test_edge_001_multiple_violations_combined(self, abuse_monitor_service, mock_abuse_repo, mock_alerting_service):
         # A single event that triggers two rules:
@@ -174,10 +176,10 @@ class TestGamificationAbuseMonitor:
         # 2. It's a weight change of >25%.
         mock_abuse_repo.get_change_events_in_last_hour.return_value = [time.time() - i for i in range(10)]
         mock_abuse_repo.get_previous_weight_in_last_24h.return_value = 1.0
-        
+
         # We need a single event type that can represent both. Let's assume WeightChangeEvent is a subtype of ChangeEvent.
         event = WeightChangeEvent(user_id=self.USER_ID, component_id="comp1", new_weight=1.30)
-        
+
         # We'll need a method that can process a generic event and check all rules.
         await abuse_monitor_service.process_event(event)
 
@@ -192,8 +194,8 @@ class TestGamificationAbuseMonitor:
         mock_abuse_repo.get_resolution_count_for_hash.return_value = 2
         issue_hash = "audited_and_penalized_hash"
         event = ResolutionEvent(user_id=self.USER_ID, issue_hash=issue_hash)
-        
+
         await abuse_monitor_service.process_issue_resolution_event(event)
-        
+
         mock_audit_service.log_abuse_violation.assert_called_once_with(self.USER_ID, AbuseType.RESOLVE_REINTRODUCE)
         mock_penalty_service.apply_penalty.assert_called_once_with(self.USER_ID, AbuseType.RESOLVE_REINTRODUCE)

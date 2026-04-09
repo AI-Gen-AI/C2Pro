@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Base Role Output Schema",
+  "description": "Base schema for all role outputs. Role-specific schemas extend this.",
+  "type": "object",
+  "required": ["tarea_id", "backlog_id", "tipo", "descripcion", "asignado_a", "estado", "resultado"],
+  "properties": {
+    "tarea_id": {
+      "type": "string",
+      "pattern": "^T\\d{3,}$",
+      "description": "Task identifier matching blackboard.json (e.g., T001)"
+    },
+    "backlog_id": {
+      "type": "string",
+      "pattern": "^TASK-[A-Z0-9-]+$",
+      "description": "MANDATORY reference to backlog task ID (e.g., TASK-1490, TASK-BCK-018)"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": ["planning", "backend", "frontend", "ai", "infra", "qa", "review", "security", "devops"],
+      "description": "Type of work performed"
+    },
+    "descripcion": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Brief description of the task"
+    },
+    "asignado_a": {
+      "type": "string",
+      "enum": ["planner", "backend", "frontend", "ai", "infra", "qa", "reviewer", "security", "devops"],
+      "description": "Role that executed this task"
+    },
+    "estado": {
+      "type": "string",
+      "enum": ["pendiente", "en_progreso", "completado", "fallido"],
+      "description": "Task status after execution"
+    },
+    "criterio_done": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Definition of Done for this task"
+    },
+    "archivos_afectados": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "File paths affected by this task"
+      },
+      "description": "List of files created, modified, or deleted"
+    },
+    "resultado": {
+      "type": "object",
+      "required": ["exitoso", "mensaje"],
+      "properties": {
+        "exitoso": {
+          "type": "boolean",
+          "description": "Whether the task completed successfully"
+        },
+        "mensaje": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Success or failure message"
+        },
+        "cambios_realizados": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of changes made"
+        }
+      },
+      "additionalProperties": true
+    },
+    "timestamps": {
+      "type": "object",
+      "properties": {
+        "inicio": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When task execution started"
+        },
+        "fin": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When task execution finished"
+        },
+        "completado": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When task was marked complete"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

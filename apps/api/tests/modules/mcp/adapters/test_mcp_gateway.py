@@ -8,6 +8,7 @@ import pytest
 
 from src.mcp.adapters.mcp_gateway import MCPGateway, OperationAllowlistRepository
 
+
 # A fixture to create a gateway with a mocked repository for each test
 @pytest.fixture
 def mock_repo():
@@ -57,18 +58,18 @@ class TestMCPGatewayAllowlistValidation:
         """
         # Setup mock: The default tenant has the standard allowlist
         mock_repo.get_allowlist_for_tenant.return_value = self.ALLOWED_OPERATIONS
-        
+
         result = await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, operation)
-        
+
         assert result is True
         mock_repo.get_allowlist_for_tenant.assert_called_once_with(self.DEFAULT_TENANT_ID)
 
     async def test_014_unknown_operation_blocked(self, mcp_gateway, mock_repo):
         """Tests that an operation not in the allowlist is blocked."""
         mock_repo.get_allowlist_for_tenant.return_value = self.ALLOWED_OPERATIONS
-        
+
         result = await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, "unknown_operation_xyz")
-        
+
         assert result is False
 
     @pytest.mark.parametrize("operation", DESTRUCTIVE_OPERATIONS)
@@ -77,9 +78,9 @@ class TestMCPGatewayAllowlistValidation:
         # Even if a repo mistakenly allows it, the gateway should enforce this.
         malicious_allowlist = self.ALLOWED_OPERATIONS + self.DESTRUCTIVE_OPERATIONS
         mock_repo.get_allowlist_for_tenant.return_value = malicious_allowlist
-        
+
         result = await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, operation)
-        
+
         assert result is False
 
     async def test_017_tenant_extended_allowlist_custom_operation(self, mcp_gateway, mock_repo):
@@ -87,7 +88,7 @@ class TestMCPGatewayAllowlistValidation:
         tenant_id = "extended_tenant"
         custom_operation = "custom_view_financials"
         extended_list = self.ALLOWED_OPERATIONS + [custom_operation]
-        
+
         mock_repo.get_allowlist_for_tenant.side_effect = lambda t: extended_list if t == tenant_id else self.ALLOWED_OPERATIONS
 
         # The tenant with the extended list should be allowed
@@ -102,19 +103,19 @@ class TestMCPGatewayAllowlistValidation:
         """Tests a tenant with a more restrictive allowlist."""
         tenant_id = "restricted_tenant"
         restricted_list = ["view_projects_summary", "view_alerts_active"]
-        
+
         mock_repo.get_allowlist_for_tenant.return_value = restricted_list
-        
+
         # This operation is in the standard list but NOT the restricted one
         blocked_operation = "trigger_recalc"
-        
+
         result = await mcp_gateway.is_operation_allowed(tenant_id, blocked_operation)
         assert result is False
 
     async def test_edge_001_empty_operation_name(self, mcp_gateway, mock_repo):
         """Tests that an empty operation name is not allowed."""
         mock_repo.get_allowlist_for_tenant.return_value = self.ALLOWED_OPERATIONS
-        
+
         with pytest.raises(ValueError, match="Operation name cannot be empty or None"):
             await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, "")
 
@@ -126,7 +127,7 @@ class TestMCPGatewayAllowlistValidation:
     async def test_edge_003_case_insensitive_operation(self, mcp_gateway, mock_repo):
         """Tests that operations are matched in a case-insensitive manner."""
         mock_repo.get_allowlist_for_tenant.return_value = self.ALLOWED_OPERATIONS
-        
+
         # Test with uppercase
         result = await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, "VIEW_PROJECTS_SUMMARY")
         assert result is True
@@ -134,6 +135,16 @@ class TestMCPGatewayAllowlistValidation:
     async def test_edge_004_whitespace_in_operation(self, mcp_gateway, mock_repo):
         """Tests that leading/trailing whitespace is handled."""
         mock_repo.get_allowlist_for_tenant.return_value = self.ALLOWED_OPERATIONS
-        
+
         result = await mcp_gateway.is_operation_allowed(self.DEFAULT_TENANT_ID, "  view_projects_summary  ")
         assert result is True
+
+    async def test_authorize_tool_call_uses_tenant_allowlist(self, mcp_gateway, mock_repo):
+        """authorize_tool_call should honor the tenant-specific allowlist repository."""
+        operation = "view_projects_summary"
+        mock_repo.get_allowlist_for_tenant.return_value = [operation]
+
+        result = await mcp_gateway.authorize_tool_call(operation, self.DEFAULT_TENANT_ID)
+
+        assert result is True
+        mock_repo.get_allowlist_for_tenant.assert_called_once_with(self.DEFAULT_TENANT_ID)

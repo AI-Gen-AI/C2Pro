@@ -1,0 +1,82 @@
+# Model Registry — Registro de Modelos CLI Disponibles
+#
+# Este archivo define que modelos/CLI estan disponibles en el sistema
+# y como invocarlos. El supervisor lee este registro para saber que
+# comandos ejecutar cuando un rol necesita ser ejecutado.
+#
+# El usuario puede cambiar las asignaciones en core/session_config.json
+# sin modificar este archivo.
+
+models:
+  claude_code:
+    cli_command: "claude"
+    vendor: "Anthropic"
+    modelo: "claude-sonnet-4-20250514"
+    descripcion: "Claude Code CLI — mejor para planificacion, arquitectura y revision de codigo"
+    fortalezas:
+      - "razonamiento arquitectonico"
+      - "planificacion de tareas"
+      - "revision de codigo profunda"
+      - "seguimiento de instrucciones complejas"
+    debilidades:
+      - "coste por token mas alto"
+      - "puede ser lento en tareas simples"
+    flags_sistema:
+      - "--print"
+      - "--output-format"
+      - "json"
+    soporta_system_prompt: true
+    soporta_prompt_file: true
+    formato_invocacion: '{cli} --print --system-prompt "{profile}" "{prompt}"'
+    timeout_seg: 300
+
+  codex_cli:
+    cli_command: "codex"
+    vendor: "OpenAI"
+    modelo: "o3"
+    descripcion: "Codex CLI — mejor para implementacion de codigo y DevOps"
+    fortalezas:
+      - "generacion de codigo rapida"
+      - "DevOps y scripts"
+      - "refactorizacion"
+    debilidades:
+      - "menos preciso en arquitectura compleja"
+      - "puede ignorar boundaries si no son explicitos"
+    flags_sistema: []
+    soporta_system_prompt: false
+    soporta_prompt_file: false
+    formato_invocacion: '{cli} exec "Context: Read {profile} for role guidelines. Task: {prompt}"'
+    timeout_seg: 300
+
+  gemini_cli:
+    cli_command: "gemini"
+    vendor: "Google"
+    modelo: "gemini-2.5-pro"
+    descripcion: "Gemini CLI — mejor para QA, testing y revision con contexto amplio"
+    fortalezas:
+      - "ventana de contexto grande"
+      - "revision de tests y QA"
+      - "analisis de codigo extenso"
+    debilidades:
+      - "puede ser menos preciso en generacion de codigo"
+      - "a veces ignora instrucciones negativas"
+    flags_sistema: []
+    soporta_system_prompt: true
+    soporta_prompt_file: true
+    formato_invocacion: '{cli} --policy "{profile}" -p "{prompt}"'
+    timeout_seg: 300
+
+  opencode_cli:
+    cli_command: "opencode"
+    vendor: "OpenCode"
+    modelo: "MiniMax M2.5 Free"
+    descripcion: "OpenCode CLI — asistente de codigo local"
+    fortalezas:
+      - "integracion local"
+      - "rapido para tareas simples"
+    debilidades:
+      - "capacidades limitadas vs modelos cloud"
+    flags_sistema: []
+    soporta_system_prompt: true
+    soporta_prompt_file: true
+    formato_invocacion: '{cli} --system-prompt "{profile}" --prompt "{prompt}"'

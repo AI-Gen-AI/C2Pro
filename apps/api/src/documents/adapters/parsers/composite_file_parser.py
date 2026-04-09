@@ -5,13 +5,13 @@ This adapter implements the IFileParserService port, delegating parsing
 to specific parsers based on document type and format.
 """
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from src.documents.domain.models import Document, DocumentType
-from src.documents.ports.file_parser_service import IFileParserService
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser, BC3ParsingError
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser, PDFParsingError
+from src.documents.domain.models import Document, DocumentType
+from src.documents.ports.file_parser_service import IFileParserService
 
 
 class CompositeFileParser(IFileParserService):
@@ -29,7 +29,7 @@ class CompositeFileParser(IFileParserService):
     def create(cls) -> "CompositeFileParser":
         """
         Factory method to create a CompositeFileParser with default parser instances.
-        
+
         Returns:
             CompositeFileParser with BC3, Excel, and PDF parsers initialized.
         """
@@ -39,7 +39,7 @@ class CompositeFileParser(IFileParserService):
             pdf_parser=PDFFileParser(),
         )
 
-    async def parse_document_file(self, document: Document, file_path: Path) -> Dict[str, Any]:
+    async def parse_document_file(self, document: Document, file_path: Path) -> dict[str, Any]:
         """
         Parses a document file based on its type and format by delegating to specific parsers.
         """

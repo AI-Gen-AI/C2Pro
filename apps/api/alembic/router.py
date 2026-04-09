@@ -3,7 +3,6 @@ C2Pro - API Router for Document Ingestion
 
 Suite ID: [TEST-BE-01], [TEST-BE-04], [TEST-BE-05]
 """
-import uuid
 from pathlib import Path
 from uuid import UUID
 

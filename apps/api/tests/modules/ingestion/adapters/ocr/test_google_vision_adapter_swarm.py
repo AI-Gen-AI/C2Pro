@@ -43,7 +43,6 @@ from src.modules.ingestion.adapters.ocr.google_vision_adapter import (  # noqa: 
 )
 from src.modules.ingestion.domain.entities import IngestionError  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

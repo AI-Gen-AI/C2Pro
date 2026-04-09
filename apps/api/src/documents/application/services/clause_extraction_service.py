@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from src.documents.domain.models import Clause, ClauseType
 
+
 class ClauseExtractionService:
     """Refers to Suite ID: TS-UA-SVC-EXT-001."""
 

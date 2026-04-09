@@ -21,8 +21,8 @@ Location: apps/api/tests/coherence/golden/golden_deterministic.py
 """
 
 from datetime import datetime, timedelta
-from src.coherence.models import Clause
 
+from src.coherence.models import Clause
 
 # =============================================================================
 # DATE HELPERS - Generate dates relative to today for reliable testing

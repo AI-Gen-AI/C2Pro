@@ -99,13 +99,13 @@ class RACIInferenceService:
 
         # Implementation depends on port
         # existing_stakeholders = await self.stakeholder_repo.get_all_stakeholders(tenant_id)
-        # Wait, the port says get_all_stakeholders(tenant_id). 
+        # Wait, the port says get_all_stakeholders(tenant_id).
         # But our repository has get_stakeholders_by_project(project_id).
         # We'll need a bridge or adapter.
-        
+
         # For now, let's assume the repository port passed in is compatible.
         existing_stakeholders = await self.stakeholder_repo.get_all_stakeholders(tenant_id)
-        
+
         context_text = "\n".join(
             [c.text if hasattr(c, "text") else str(c.get("text", "")) for c in contract_statements]
         )

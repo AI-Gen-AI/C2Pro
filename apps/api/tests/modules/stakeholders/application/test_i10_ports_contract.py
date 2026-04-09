@@ -84,8 +84,20 @@ def test_i10_port_contract_forbids_concrete_service_in_ports_module_red() -> Non
         / "application"
         / "ports.py"
     )
-    source = legacy_ports_path.read_text(encoding="utf-8")
+    current_port_path = (
+        _repo_root()
+        / "src"
+        / "stakeholders"
+        / "ports"
+        / "raci_inference_service.py"
+    )
 
+    assert not legacy_ports_path.exists(), (
+        "Legacy ports.py module should not exist after the stakeholders hexagonal "
+        "reorganization."
+    )
+
+    source = current_port_path.read_text(encoding="utf-8")
     assert "class RACIInferenceService" not in source, (
         "Ports module must only expose contracts; concrete RACIInferenceService "
         "belongs in a service implementation module."

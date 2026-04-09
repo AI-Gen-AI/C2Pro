@@ -7,19 +7,19 @@ Refers to Suite ID: TS-UAD-HTTP-MDW-001.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
-import pytest
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.testclient import TestClient
 import jwt as pyjwt
+import pytest
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
 
-from src.core.middleware import TenantIsolationMiddleware
 from src.core.auth.jwt_validator import JwtValidator
-from src.core.auth.service import create_access_token
 from src.core.auth.models import UserRole
+from src.core.auth.service import create_access_token
+from src.core.middleware import TenantIsolationMiddleware
 
 
 class TestJwtValidation:
@@ -34,7 +34,7 @@ class TestJwtValidation:
         expired_payload = {
             "sub": str(uuid4()),
             "tenant_id": str(uuid4()),
-            "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
+            "exp": datetime.now(UTC) - timedelta(seconds=1),
             "type": "access",
         }
         token = pyjwt.encode(expired_payload, "test-secret-key", algorithm="HS256")

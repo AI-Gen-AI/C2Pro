@@ -14,8 +14,14 @@ import pytest
 
 from src.procurement.domain.models import WBSItem
 from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixUseCase
-from src.stakeholders.domain.models import RACIRole, RaciAssignment, Stakeholder
-from src.stakeholders.domain.models import InterestLevel, PowerLevel, StakeholderQuadrant
+from src.stakeholders.domain.models import (
+    InterestLevel,
+    PowerLevel,
+    RaciAssignment,
+    RACIRole,
+    Stakeholder,
+    StakeholderQuadrant,
+)
 
 
 @pytest.mark.asyncio
@@ -81,6 +87,8 @@ async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_
 
     response = await use_case.execute(project_id=project_id, tenant_id=tenant_id)
 
+    stakeholder_repo.list_raci_assignments.assert_awaited_once_with(project_id, tenant_id=tenant_id)
+    stakeholder_repo.get_by_id.assert_awaited_once_with(stakeholder_id, tenant_id=tenant_id)
     assert [row.task_name for row in response.matrix] == ["Funding Review", "Permit Control"]
     assert response.matrix[0].sequence_index == 1
     assert response.matrix[0].task_code == "1.1"

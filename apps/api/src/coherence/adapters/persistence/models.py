@@ -1,21 +1,28 @@
 """
-Coherence Result Database Models.
+Coherence Result and Clause Embedding Database Models.
 
-SQLAlchemy models for persisting coherence calculation results.
+SQLAlchemy models for persisting coherence calculation results and clause embeddings.
 Refers to Suite ID: TS-INT-DB-COH-001.
+TASK-IMPL-005: Added ClauseEmbeddingORM model for Gate 4 traceability.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Index, Integer, String
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
+
+
+def _utcnow_naive() -> datetime:
+    """Return naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class CoherenceResultORM(Base):
@@ -67,10 +74,48 @@ class CoherenceResultORM(Base):
 
     # Timestamps
     calculated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False, index=True
+        DateTime, default=_utcnow_naive, nullable=False, index=True
     )
 
     # Indexes for efficient querying
     __table_args__ = (
         Index("ix_coherence_results_project_calculated", "project_id", "calculated_at"),
+    )
+
+
+class ClauseEmbeddingORM(Base):
+    """
+    Clause embedding model for coherence engine RAG.
+
+    Stores vector embeddings of contract clauses for similarity search.
+    TASK-IMPL-005: Created ORM model for Gate 4 traceability.
+    """
+
+    __tablename__ = "clause_embeddings"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    clause_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, index=True
+    )
+    document_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True, index=True
+    )
+    document_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="other"
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    category: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="SCOPE", index=True
+    )
+    embedding_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("clause_id", "project_id", name="uq_clause_embeddings_clause_project"),
     )

@@ -27,7 +27,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Minimal domain-object factories (no real model imports needed)
 # ---------------------------------------------------------------------------
@@ -695,7 +694,9 @@ class TestSingleton:
     def test_reset_sets_module_level_service_to_none(self):
         """reset_coherence_llm_service sets the module-level _service variable to None."""
         import src.coherence.llm_integration as llm_mod  # type: ignore[import]
-        from src.coherence.llm_integration import reset_coherence_llm_service  # type: ignore[import]
+        from src.coherence.llm_integration import (
+            reset_coherence_llm_service,  # type: ignore[import]
+        )
 
         with patch(
             "src.coherence.llm_integration.get_anthropic_wrapper",

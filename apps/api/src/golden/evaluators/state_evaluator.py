@@ -163,7 +163,7 @@ class StateEvaluator:
 
             if isinstance(current, dict):
                 current = current.get(key)
-            elif isinstance(current, (list, tuple)):
+            elif isinstance(current, list | tuple):
                 try:
                     index = int(key)
                     current = current[index] if 0 <= index < len(current) else None
@@ -200,11 +200,7 @@ class StateEvaluator:
             return passed, reason
 
         if operator == "contains":
-            if isinstance(actual, str) and isinstance(expected, str):
-                passed = expected in actual
-            elif isinstance(actual, (list, tuple)):
-                passed = expected in actual
-            elif isinstance(actual, dict):
+            if isinstance(actual, str) and isinstance(expected, str) or isinstance(actual, list | tuple | dict):
                 passed = expected in actual
             else:
                 passed = False

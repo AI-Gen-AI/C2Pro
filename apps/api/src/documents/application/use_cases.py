@@ -7,8 +7,8 @@ business requirements.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import uuid4
-from datetime import datetime
 
 from src.documents.application.dtos import CreateDocumentDTO
 from src.documents.domain.models import Document, DocumentStatus
@@ -39,8 +39,8 @@ class CreateDocumentUseCase:
             document_type=dto.document_type,
             filename=dto.filename,
             upload_status=DocumentStatus.UPLOADED, # Default status on creation
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             file_format=dto.file_format,
             storage_url=dto.storage_url,
             file_size_bytes=dto.file_size_bytes,

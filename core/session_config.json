@@ -1,0 +1,18 @@
+{
+  "roles": {
+    "planner": "claude_code",
+    "backend": "claude_code",
+    "frontend": "opencode_cli",
+    "ai": "claude_code",
+    "infra": "codex_cli",
+    "qa": "gemini_cli",
+    "reviewer": "claude_code",
+    "security": "claude_code",
+    "devops": "codex_cli"
+  },
+  "modo": "interactivo",
+  "auto_aprobar_comandos": false,
+  "notas": "Cambia los valores de 'roles' para asignar cualquier modelo a cualquier rol. Los modelos disponibles estan en models.yaml"
+  }
+
+  

@@ -23,8 +23,7 @@ interface UseDocumentEntitiesResult {
  * Hook to fetch entities for a specific document
  */
 export function useDocumentEntities(
-  documentId: string | null,
-  _pageHeight?: number
+  documentId: string | null
 ): UseDocumentEntitiesResult {
   const [entities, setEntities] = useState<ProcessedEntity[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);

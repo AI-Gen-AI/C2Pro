@@ -17,14 +17,16 @@ Test Coverage:
 Refers to: PHASE4_TDD_IMPLEMENTATION_ROADMAP.md - I1
 """
 
+from typing import Any
+from unittest.mock import MagicMock
+from uuid import UUID, uuid4
+
 import pytest
 from pydantic import ValidationError
-from uuid import UUID, uuid4
-from typing import List, Dict, Any, Optional
-from unittest.mock import MagicMock
 
 # ✅ CORRECTED IMPORTS (pythonpath = ["src"] in pyproject.toml)
 from src.modules.ingestion.domain.entities import IngestionChunk, IngestionError
+
 
 # Mock for LangSmith client (to be defined in conftest.py or locally if simple)
 # For the purpose of this test, we'll create a simple mock
@@ -37,7 +39,7 @@ class MockLangSmithClient:
         self.spans.append(span)
         return span
 
-    def end_span(self, span: Dict[str, Any], outputs: Any = None):
+    def end_span(self, span: dict[str, Any], outputs: Any = None):
         for s in self.spans:
             if s["id"] == span["id"]:
                 s["outputs"] = outputs

@@ -4,7 +4,7 @@ Test Suite ID: TS-I6-COH-RULES-001
 """
 
 from datetime import date, timedelta
-from typing import Optional, Protocol
+from typing import Protocol
 
 from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
 
@@ -14,7 +14,7 @@ class CoherenceRuleProtocol(Protocol):
 
     name: str
 
-    def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+    def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
         ...
 
 
@@ -23,7 +23,7 @@ class ScheduleMismatchRule:
 
     name = "ScheduleMismatchRule"
 
-    def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+    def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
         if not rule_input.schedule_data or not rule_input.actual_dates:
             return None
 
@@ -54,13 +54,13 @@ class BudgetMismatchRule:
 
     name = "BudgetMismatchRule"
 
-    def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+    def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
         if not rule_input.budget_data or not rule_input.actual_costs:
             return None
 
         allocated = rule_input.budget_data.get("allocated")
         actual_spend = rule_input.actual_costs.get("actual_spend")
-        if not isinstance(allocated, (int, float)) or not isinstance(actual_spend, (int, float)):
+        if not isinstance(allocated, int | float) or not isinstance(actual_spend, int | float):
             return None
 
         if allocated > 0 and actual_spend > allocated * 1.1:
@@ -81,7 +81,7 @@ class ScopeProcurementMismatchRule:
 
     name = "ScopeProcurementMismatchRule"
 
-    def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+    def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
         if not rule_input.scope_data or not rule_input.procurement_items:
             return None
 

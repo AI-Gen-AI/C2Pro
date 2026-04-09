@@ -3,16 +3,14 @@ Use Case for Stakeholder Extraction from contract text.
 """
 
 import json
-import re
-from typing import List, Any, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
-# Import domain models
-from src.stakeholders.domain.models import Stakeholder, StakeholderRole, ContactInfo
-
 # Temporary import for AI dependencies. This will be refactored into an adapter later.
-from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+
+# Import domain models
+from src.stakeholders.domain.models import Stakeholder
 
 SYSTEM_PROMPT = """
 Eres un Contract Administrator experto en contratos de construccion.
@@ -63,7 +61,7 @@ class ExtractStakeholdersUseCase:
     def __init__(self, ai_provider: Any) -> None:
         self._ai_provider = ai_provider
 
-    async def execute(self, contract_text: str, tenant_id: Optional[UUID] = None) -> List[Stakeholder]:
+    async def execute(self, contract_text: str, tenant_id: UUID | None = None) -> list[Stakeholder]:
         if not contract_text or not contract_text.strip():
             return []
 

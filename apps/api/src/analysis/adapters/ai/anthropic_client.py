@@ -9,13 +9,19 @@ from uuid import UUID
 import structlog
 from anthropic import APIError, RateLimitError
 from sqlalchemy.ext.asyncio import AsyncSession
-from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    RetryError,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-from src.core.database import get_session_with_tenant
-from src.core.exceptions import AIServiceError
 from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
 from src.core.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+from src.core.database import get_session_with_tenant
+from src.core.exceptions import AIServiceError
 
 logger = structlog.get_logger()
 

@@ -34,7 +34,7 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
         text_content = "\n\n".join(
             block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
         ).strip()
-        
+
         if not text_content:
             return
 

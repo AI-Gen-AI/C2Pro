@@ -4,7 +4,7 @@ Audit trail core domain tests.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -89,17 +89,17 @@ class TestAuditTrailCore:
 
     def test_011_query_by_time_range_filters_events(self) -> None:
         times = [
-            datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
-            datetime(2026, 2, 5, 10, 1, 0, tzinfo=timezone.utc),
-            datetime(2026, 2, 5, 10, 2, 0, tzinfo=timezone.utc),
+            datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
+            datetime(2026, 2, 5, 10, 1, 0, tzinfo=UTC),
+            datetime(2026, 2, 5, 10, 2, 0, tzinfo=UTC),
         ]
         trail = AuditTrail(datetime_provider=lambda: times.pop(0))
         trail.record("tenant_a", "a1", "r", "1")
         trail.record("tenant_a", "a2", "r", "2")
         trail.record("tenant_a", "a3", "r", "3")
         result = trail.query(
-            from_timestamp=datetime(2026, 2, 5, 10, 1, 0, tzinfo=timezone.utc),
-            to_timestamp=datetime(2026, 2, 5, 10, 2, 0, tzinfo=timezone.utc),
+            from_timestamp=datetime(2026, 2, 5, 10, 1, 0, tzinfo=UTC),
+            to_timestamp=datetime(2026, 2, 5, 10, 2, 0, tzinfo=UTC),
         )
         assert [event.action for event in result] == ["a2", "a3"]
 
@@ -112,7 +112,7 @@ class TestAuditTrailCore:
         assert [event.action for event in result] == ["a2", "a3"]
 
     def test_013_events_returned_in_chronological_order(self) -> None:
-        base = datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC)
         step = {"i": 0}
 
         def _clock() -> datetime:

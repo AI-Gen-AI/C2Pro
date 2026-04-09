@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from ..models import Clause, FindingSignal, impact_to_severity, CoherenceCategory
+from ..models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
 
 
 class Finding(BaseModel):

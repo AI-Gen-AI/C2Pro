@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,44 @@ class CreateDocumentDTO:
     file_size_bytes: int | None = None
     created_by: UUID | None = None
     document_metadata: dict | None = None
+
+
+@dataclass(frozen=True)
+class DocumentDTO:
+    """
+    DTO for document use case responses.
+    Part of TASK-BCK-023.
+    """
+    id: UUID
+    project_id: UUID
+    document_type: DocumentType
+    filename: str
+    upload_status: DocumentStatus
+    version: int
+    file_hash: str | None
+    file_format: str | None = None
+    storage_url: str | None = None
+    file_size_bytes: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @staticmethod
+    def from_domain(document: Document) -> "DocumentDTO":
+        """Create DTO from domain model."""
+        return DocumentDTO(
+            id=document.id,
+            project_id=document.project_id,
+            document_type=document.document_type,
+            filename=document.filename,
+            upload_status=document.upload_status,
+            version=document.version,
+            file_hash=document.file_hash,
+            file_format=document.file_format,
+            storage_url=document.storage_url,
+            file_size_bytes=document.file_size_bytes,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+        )
 
 
 @dataclass(frozen=True)
@@ -71,6 +109,8 @@ class DocumentResponse(BaseModel):
     parsing_error: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    version: int = 1  # TASK-BCK-023
+    file_hash: str | None = None  # TASK-BCK-023
 
 
 class DocumentQueuedResponse(DocumentResponse):

@@ -5,10 +5,10 @@ TS-UC-SEC-MCP-004: MCP Gateway audit adapter.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Callable
 
 
 class MCPAuditEventType(str, Enum):
@@ -37,7 +37,7 @@ class MCPAuditLogger:
         self,
         datetime_provider: Callable[[], datetime] | None = None,
     ) -> None:
-        self._datetime_provider = datetime_provider or (lambda: datetime.now(timezone.utc))
+        self._datetime_provider = datetime_provider or (lambda: datetime.now(UTC))
         self._events: list[MCPAuditEvent] = []
         self._lock = asyncio.Lock()
 

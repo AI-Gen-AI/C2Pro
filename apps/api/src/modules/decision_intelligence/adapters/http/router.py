@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -25,7 +25,6 @@ from src.modules.decision_intelligence.application.ports import (
     RetrievalPort,
 )
 from src.modules.decision_intelligence.domain.exceptions import FinalizationBlockedError
-
 
 router = APIRouter(prefix="/decision-intelligence", tags=["decision-intelligence"])
 

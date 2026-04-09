@@ -1,0 +1,16 @@
+id: interacciones_git
+version: 1.0.0
+description: "Ejecuta comandos git de forma segura (status, diff, commit, push)"
+author: "C2Pro Team"
+input:
+  accion: "string (required) - status|diff|commit|push"
+  mensaje: "string (optional) - Mensaje de commit"
+  archivos: "array de strings (optional) - Archivos especificos"
+output:
+  success: "boolean"
+  output: "string"
+dependencies: []
+timeout_ms: 30000
+permisos:
+  - "read:git"
+  - "write:git"

@@ -2,10 +2,10 @@
 
 from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from src.modules.decision_intelligence.application.ports import DecisionOrchestrationService
 from src.modules.decision_intelligence.domain.entities import FinalDecisionPackage

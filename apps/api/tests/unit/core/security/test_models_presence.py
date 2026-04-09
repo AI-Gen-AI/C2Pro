@@ -6,7 +6,9 @@ Refers to TASK-1474 and TASK-1478.
 """
 
 import pytest
+
 from src.core.database import Base
+
 
 def test_audit_log_orm_presence():
     """Verifies that AuditLogORM is defined and registered with Base."""

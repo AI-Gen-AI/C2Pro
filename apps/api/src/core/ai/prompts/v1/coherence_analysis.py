@@ -12,7 +12,6 @@ from typing import Any
 
 from src.core.ai.prompts.registry import PromptRegistry, PromptTemplate
 
-
 # ===========================================
 # SYSTEM PROMPTS
 # ===========================================

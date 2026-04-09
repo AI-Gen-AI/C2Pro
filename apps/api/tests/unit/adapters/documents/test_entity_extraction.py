@@ -6,9 +6,10 @@ Priority: P0
 Additional tests to improve entity extraction coverage.
 """
 
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock
+
+import pytest
 
 
 class TestDocumentsEntityExtractionService:
@@ -66,7 +67,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_use_case = MagicMock()
         mock_stakeholder_use_case.execute = AsyncMock()
@@ -112,7 +113,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_wbs_use_case = MagicMock()
         mock_wbs_use_case.execute = AsyncMock()
@@ -152,7 +153,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_bom_use_case = MagicMock()
         mock_bom_use_case.execute = AsyncMock()
@@ -196,7 +197,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_bom_use_case = MagicMock()
         mock_bom_use_case.execute = AsyncMock()
@@ -247,7 +248,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
         mock_wbs_factory = MagicMock(return_value=MagicMock())
@@ -280,7 +281,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
         mock_use_case.execute = AsyncMock(side_effect=Exception("Duplicate"))
@@ -311,12 +312,53 @@ class TestExtractionServiceIntegration:
         assert result == 0
 
     @pytest.mark.asyncio
+    async def test_extract_stakeholders_passes_tenant_id_to_use_case(self):
+        """Test stakeholder extraction forwards tenant context to the create use case."""
+        from src.documents.adapters.extraction.documents_entity_extraction_service import (
+            DocumentsEntityExtractionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute = AsyncMock()
+
+        mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
+        mock_wbs_factory = MagicMock(return_value=MagicMock())
+        mock_bom_factory = MagicMock(return_value=MagicMock())
+        user_id = uuid4()
+        tenant_id = uuid4()
+
+        service = DocumentsEntityExtractionService(
+            stakeholder_use_case_factory=mock_stakeholder_factory,
+            wbs_use_case_factory=mock_wbs_factory,
+            bom_use_case_factory=mock_bom_factory,
+            user_id=user_id,
+        )
+
+        doc = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            document_type=DocumentType.CONTRACT,
+            filename="contract.pdf",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        parsed_payload = {"text_blocks": [{"text": "tenant.user@example.com"}]}
+
+        result = await service._extract_stakeholders(doc, parsed_payload, tenant_id)
+
+        assert result == 1
+        mock_use_case.execute.assert_awaited_once()
+        assert mock_use_case.execute.await_args.kwargs["tenant_id"] == tenant_id
+        assert mock_use_case.execute.await_args.kwargs["user_id"] == user_id
+
+    @pytest.mark.asyncio
     async def test_extract_wbs_items_no_schedule(self):
         """Test WBS extraction returns 0 when no schedule data."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
         mock_wbs_factory = MagicMock(return_value=MagicMock())
@@ -349,7 +391,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
         mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
@@ -385,7 +427,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
         mock_wbs_factory = MagicMock(return_value=MagicMock())
@@ -418,7 +460,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
         mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
@@ -454,7 +496,7 @@ class TestExtractionServiceIntegration:
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
-        from src.documents.domain.models import Document, DocumentType, DocumentStatus
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
         mock_use_case.execute = AsyncMock()
@@ -546,10 +588,11 @@ class TestParseDatetimeValue:
 
     def test_parse_datetime_from_datetime(self):
         """Test passing datetime returns same."""
+        from datetime import datetime
+
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             _parse_datetime_value,
         )
-        from datetime import datetime
 
         dt = datetime(2024, 1, 15, 10, 30)
         result = _parse_datetime_value(dt)
@@ -593,10 +636,11 @@ class TestParseDecimal:
 
     def test_parse_decimal_from_decimal(self):
         """Test passing Decimal returns same."""
+        from decimal import Decimal
+
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             _parse_decimal,
         )
-        from decimal import Decimal
 
         value = Decimal("100.50")
         result = _parse_decimal(value)
@@ -741,7 +785,13 @@ class TestDocumentDomainModel:
 
     def test_clause_count(self):
         """Test clause_count returns correct count."""
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType, Clause, ClauseType
+        from src.documents.domain.models import (
+            Clause,
+            ClauseType,
+            Document,
+            DocumentStatus,
+            DocumentType,
+        )
 
         doc_id = uuid4()
         clause = Clause(
@@ -766,7 +816,13 @@ class TestDocumentDomainModel:
 
     def test_add_clause_success(self):
         """Test add_clause adds clause to document."""
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType, Clause, ClauseType
+        from src.documents.domain.models import (
+            Clause,
+            ClauseType,
+            Document,
+            DocumentStatus,
+            DocumentType,
+        )
 
         doc_id = uuid4()
         doc = Document(
@@ -792,7 +848,13 @@ class TestDocumentDomainModel:
 
     def test_add_clause_wrong_document_raises(self):
         """Test add_clause raises when clause belongs to different document."""
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType, Clause, ClauseType
+        from src.documents.domain.models import (
+            Clause,
+            ClauseType,
+            Document,
+            DocumentStatus,
+            DocumentType,
+        )
 
         doc = Document(
             id=uuid4(),
@@ -822,8 +884,9 @@ class TestClauseDomainModel:
 
     def test_is_verified_when_verified(self):
         """Test is_verified returns True when manually verified with timestamp."""
-        from src.documents.domain.models import Clause, ClauseType
         from datetime import datetime
+
+        from src.documents.domain.models import Clause, ClauseType
 
         clause = Clause(
             id=uuid4(),

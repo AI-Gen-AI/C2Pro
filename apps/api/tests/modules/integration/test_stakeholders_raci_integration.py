@@ -12,7 +12,11 @@ from uuid import uuid4
 
 import pytest
 
-from src.stakeholders.application.dtos import RaciGenerationResult, RaciStakeholderInput, RaciWBSItemInput
+from src.stakeholders.application.dtos import (
+    RaciGenerationResult,
+    RaciStakeholderInput,
+    RaciWBSItemInput,
+)
 from src.stakeholders.application.handover_stakeholders_to_raci_use_case import (
     HandoverStakeholdersToRaciUseCase,
 )

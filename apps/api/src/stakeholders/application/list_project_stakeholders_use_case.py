@@ -3,7 +3,6 @@ Use case for listing stakeholders in a project.
 """
 from __future__ import annotations
 
-from typing import List, Tuple
 from uuid import UUID
 
 from src.stakeholders.domain.models import Stakeholder
@@ -19,7 +18,7 @@ class ListProjectStakeholdersUseCase:
         project_id: UUID,
         skip: int = 0,
         limit: int = 100,
-    ) -> Tuple[List[Stakeholder], int]:
+    ) -> tuple[list[Stakeholder], int]:
         return await self.repository.get_stakeholders_by_project(
             project_id=project_id, skip=skip, limit=limit
         )

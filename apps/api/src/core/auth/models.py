@@ -2,10 +2,11 @@
 C2Pro - Authentication Models
 
 Modelos SQLAlchemy para usuarios y tenants (multi-tenancy).
+Refers to Test Suite IDs: TS-E2E-SEC-TNT-001, TS-AUTH-CORE-001.
 """
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
@@ -22,11 +23,17 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SQLEnum,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+
+
+def _utcnow_naive() -> datetime:
+    """Return UTC now normalized to a naive timestamp for legacy TIMESTAMP columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class SubscriptionPlan(str, Enum):
@@ -96,9 +103,9 @@ class Tenant(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive, nullable=False
     )
 
     # Relationships
@@ -201,9 +208,9 @@ class User(Base):
     preferences: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive, nullable=False
     )
 
     # Relationships
@@ -255,12 +262,12 @@ class User(Base):
 
     def update_last_login(self) -> None:
         """Actualiza el timestamp de último login."""
-        self.last_login = datetime.utcnow()
+        self.last_login = _utcnow_naive()
         self.login_count += 1
 
     def update_last_activity(self) -> None:
         """Actualiza el timestamp de última actividad."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = _utcnow_naive()
 
 
 # Event listeners
@@ -279,13 +286,17 @@ def _generate_slug_from_name(name: str) -> str:
 
 
 @event.listens_for(Tenant, "before_insert")
-def generate_tenant_slug(mapper, connection, target):
-    """Auto-genera el slug si no se proporciona."""
-    if not target.slug:
-        target.slug = _generate_slug_from_name(target.name)
-    result = connection.execute(
-        text("SELECT 1 FROM tenants WHERE slug = :slug"),
-        {"slug": target.slug},
-    ).first()
+def generate_tenant_slug(mapper, connection, target):  # noqa: ARG001
+    """SQLAlchemy event handler - mapper/connection required by event listener interface."""
+    if target.slug:
+        return
+    target.slug = _generate_slug_from_name(target.name)
+    try:
+        result = connection.execute(
+            text("SELECT 1 FROM tenants WHERE slug = :slug"),
+            {"slug": target.slug},
+        ).first()
+    except SQLAlchemyError:
+        return
     if result:
         target.slug = f"{target.slug}-{uuid4().hex[:8]}"

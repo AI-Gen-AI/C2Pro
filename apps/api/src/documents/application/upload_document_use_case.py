@@ -3,13 +3,12 @@ Use Case for uploading a document.
 Refers to Suite ID: TS-UA-DOC-UC-001.
 """
 import os
-from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
 from src.config import settings  # Keep settings for now, refactor later
-from src.documents.domain.models import Document, DocumentType, DocumentStatus
+from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
@@ -33,7 +32,7 @@ class UploadDocumentUseCase:
         document_type: DocumentType,
         user_id: UUID,
         tenant_id: UUID,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> Document:
         """
         Uploads a file to storage and creates a corresponding Document record in the database.

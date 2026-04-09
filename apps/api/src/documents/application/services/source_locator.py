@@ -7,7 +7,6 @@ fuzzy text matching.
 """
 
 import re
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
@@ -15,7 +14,6 @@ from pydantic import BaseModel, Field
 from rapidfuzz import fuzz, process
 
 from src.documents.ports.document_repository import IDocumentRepository
-
 
 logger = structlog.get_logger()
 
@@ -29,7 +27,7 @@ class SourceLocation(BaseModel):
     page_number: int | None = Field(None, description="The page number where the evidence is found.")
     chunk_text: str = Field(..., description="The actual text of the matched chunk from the document.")
     similarity_score: int = Field(..., description="The confidence score of the match (0-100).")
-    bbox: Optional[List[float]] = Field(None, description="Bounding box for highlighting in a PDF viewer.")
+    bbox: list[float] | None = Field(None, description="Bounding box for highlighting in a PDF viewer.")
 
 
 class SourceLocator:
@@ -91,14 +89,14 @@ class SourceLocator:
 
         # Create a dictionary of clause texts to search against
         choices = {c.id: c.full_text for c in all_clauses if c.full_text}
-        
+
         # Use rapidfuzz to find the best match
         best_match = process.extractOne(query_text, choices, scorer=fuzz.partial_ratio)
 
         if best_match and best_match[1] >= min_similarity_score:
             match_score, match_key = best_match[1], best_match[2]
             matched_clause = next((c for c in all_clauses if c.id == match_key), None)
-            
+
             if matched_clause:
                 logger.info("source_locator_slow_path_success", best_score=match_score)
                 return SourceLocation(

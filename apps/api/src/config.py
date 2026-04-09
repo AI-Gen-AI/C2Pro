@@ -105,6 +105,11 @@ class Settings(BaseSettings):  # type: ignore[misc]
         validation_alias="AUTH_BOOTSTRAP_FALLBACK_MODE",
         description="Controls ORM fallback when auth_bootstrap SQL helpers fail",
     )
+    auth_bootstrap_allow_fallback_emergency: bool = Field(
+        default=False,
+        validation_alias="AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY",
+        description="EMERGENCY ONLY: Allow ORM fallback if SQL bootstrap fails. Set to true only during outages to restore access.",
+    )
     auth_bootstrap_emit_metrics: bool = Field(
         default=True,
         validation_alias="AUTH_BOOTSTRAP_EMIT_METRICS",

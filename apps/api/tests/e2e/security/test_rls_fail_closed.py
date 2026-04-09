@@ -22,16 +22,15 @@ References:
 - Migration: 20260318_0002_fix_rls_policies_fail_closed.py
 """
 
-import pytest
-import pytest_asyncio
 from uuid import UUID, uuid4
 
+import pytest
+import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.config import settings
-
 
 # Test configuration
 TENANT_A_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -125,7 +124,7 @@ class TestRLSFailClosed:
             """
             )
         )
-        count = result.scalar()
+        result.scalar()
 
         # Should only see Tenant A's projects (may be 0 if none exist, but not ALL projects)
         # The key is that it's filtering correctly
@@ -222,7 +221,7 @@ class TestRLSFailClosed:
 
         # Superuser should see all projects
         result = await rls_test_session.execute(text("SELECT COUNT(*) FROM projects"))
-        count = result.scalar()
+        result.scalar()
 
         # We're running as superuser (postgres), so we should see all rows
         # This documents that superuser access is expected to bypass RLS

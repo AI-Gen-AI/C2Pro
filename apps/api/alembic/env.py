@@ -19,8 +19,10 @@ from alembic import context
 
 # --- C2Pro: Import all ORM models for autogenerate ---
 from src.core.database import Base
-from src.projects.adapters.persistence.models import *
+from src.core.dlq.models import *  # TASK-BCK-022: DLQ for analysis trigger failures
 from src.documents.adapters.persistence.models import *
+from src.projects.adapters.persistence.models import *
+
 # Agrega aquí futuros modelos ORM para que Alembic los detecte
 # from src.analysis.adapters.persistence.models import *
 # ----------------------------------------------------

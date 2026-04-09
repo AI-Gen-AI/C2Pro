@@ -8,15 +8,15 @@ Refers to I3.5: Observability hooks (LangSmith).
 Refers to I3.6: Human-in-the-loop checkpoints.
 """
 
-import pytest
-from unittest.mock import AsyncMock
-from typing import Any
-from uuid import UUID, uuid4
 from datetime import date
+from typing import Any
+from unittest.mock import AsyncMock
+from uuid import UUID, uuid4
 
-from src.modules.ingestion.domain.entities import IngestionChunk
-from src.modules.extraction.domain.entities import ExtractedClause
+import pytest
+
 from src.modules.extraction.application.ports import ClauseExtractionService, LLMAdapter
+from src.modules.ingestion.domain.entities import IngestionChunk
 
 
 class MockLangSmithClient:

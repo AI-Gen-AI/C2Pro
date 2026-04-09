@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from enum import Enum
 import json
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -157,10 +157,7 @@ def _coerce_assignment(item: dict[str, Any]) -> RaciAssignment | None:
         return None
 
     evidence = item.get("evidence_text")
-    if isinstance(evidence, str):
-        evidence = evidence.strip() or None
-    else:
-        evidence = None
+    evidence = evidence.strip() or None if isinstance(evidence, str) else None
 
     return RaciAssignment(
         wbs_item_id=wbs_id,

@@ -6,7 +6,7 @@ Legacy compatibility registry for prompt templates.
 Prefer using src.core.ai.prompts.PromptManager.
 """
 
-from src.core.ai.prompts import PromptTemplate, register_template
+from src.core.ai.prompts import PromptTemplate, register_template  # noqa: E402
 
 
 class PromptRegistry:

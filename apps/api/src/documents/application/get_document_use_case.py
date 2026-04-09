@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 
+
 class GetDocumentUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
@@ -24,5 +25,5 @@ class GetDocumentUseCase:
         # In a real scenario, implement authorization logic here:
         # Check if user_id has permission to access this document/project.
         # For now, relying on tenant_id isolation in the repository and project link.
-        
+
         return document

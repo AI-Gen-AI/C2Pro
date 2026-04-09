@@ -15,38 +15,30 @@ Methodology: TDD Strict (Red → Green → Refactor)
 """
 
 import json
-import pytest
-from datetime import datetime, date
+from datetime import datetime
 from decimal import Decimal
-from uuid import UUID, uuid4
-from typing import Optional, List, Dict
+from uuid import uuid4
+
+import pytest
 from pydantic import ValidationError
+
+from src.analysis.application.dtos import (
+    AlertCreate,
+    CoherenceScoreResponse,
+)
+from src.analysis.domain.enums import AlertSeverity
 
 # Import all DTOs for testing
 from src.procurement.application.dtos import (
     WBSItemCreate,
     WBSItemResponse,
-    BOMItemCreate,
-)
-from src.analysis.application.dtos import (
-    CoherenceScoreResponse,
-    AlertCreate,
-)
-from src.stakeholders.application.dtos import (
-    StakeholderCreate,
-    RACICreate,
-)
-from src.projects.application.dtos import (
-    ProjectCreateRequest,
-    ProjectDetailResponse,
 )
 
 # Import domain enums
-from src.procurement.domain.models import BOMCategory, ProcurementStatus, WBSItemType
-from src.analysis.domain.enums import AlertSeverity
-from src.stakeholders.domain.models import PowerLevel, InterestLevel, RACIRole
-from src.projects.domain.models import ProjectStatus, ProjectType
-
+from src.projects.application.dtos import (
+    ProjectCreateRequest,
+)
+from src.projects.domain.models import ProjectType
 
 # ===========================================
 # 🔴 RED PHASE - Decimal Serialization

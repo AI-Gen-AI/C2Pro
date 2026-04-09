@@ -4,15 +4,15 @@ SQLAlchemy implementation of ProjectRepository.
 This adapter implements the repository port using SQLAlchemy ORM.
 It handles mapping between domain entities and ORM models.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.projects.adapters.persistence.models import ProjectORM
 from src.projects.domain.models import Project, ProjectStatus, ProjectType
 from src.projects.ports.project_repository import ProjectRepository
-from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SQLAlchemyProjectRepository(ProjectRepository):
@@ -191,7 +191,7 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         orm.end_date = project.end_date
         orm.coherence_score = project.coherence_score
         orm.last_analysis_at = project.last_analysis_at
-        orm.updated_at = datetime.utcnow()
+        orm.updated_at = datetime.now(UTC)
 
         await self.session.flush()
         await self.session.refresh(orm)

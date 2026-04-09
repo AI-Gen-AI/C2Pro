@@ -4,11 +4,10 @@ Use Case for deleting a document and its associated file.
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import HTTPException, status
-
+from src.documents.application.get_document_use_case import GetDocumentUseCase  # Reuse use case
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
-from src.documents.application.get_document_use_case import GetDocumentUseCase # Reuse use case
+
 
 class DeleteDocumentUseCase:
     def __init__(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.analysis.adapters.persistence.models import Alert, Analysis
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity
+from src.analysis.domain.enums import AlertSeverity, AnalysisStatus, AnalysisType
 from src.analysis.ports.coherence_repository import ICoherenceRepository
 from src.core.database import get_session_with_tenant
 from src.documents.adapters.persistence.models import DocumentORM
@@ -18,11 +18,27 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SqlAlchemyCoherenceRepository(ICoherenceRepository):
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, tenant_id: UUID | None = None) -> None:
         self._db = db
+        self._tenant_id = tenant_id
 
-    async def list_documents_with_clauses(self, project_id: UUID) -> list[DocumentORM]:
-        project = await self._load_project(project_id)
+    async def _load_project(
+        self, project_id: UUID, required_tenant_id: UUID | None = None
+    ) -> ProjectORM | None:
+        """Load project with optional tenant verification."""
+        result = await self._db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
+        project = result.scalar_one_or_none()
+        if project is None:
+            return None
+        if required_tenant_id is not None and project.tenant_id != required_tenant_id:
+            raise PermissionError("Cannot access project outside tenant context")
+        return project
+
+    async def list_documents_with_clauses(
+        self, project_id: UUID, tenant_id: UUID | None = None
+    ) -> list[DocumentORM]:
+        effective_tenant_id = tenant_id or self._tenant_id
+        project = await self._load_project(project_id, effective_tenant_id)
         if not project:
             return []
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
@@ -38,8 +54,10 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         project_id: UUID,
         wbs_items: list[dict],
         bom_items: list[dict],
+        tenant_id: UUID | None = None,
     ) -> tuple[list[WBSItemORM], list[BOMItemORM]]:
-        project = await self._load_project(project_id)
+        effective_tenant_id = tenant_id or self._tenant_id
+        project = await self._load_project(project_id, effective_tenant_id)
         if not project:
             return [], []
 
@@ -110,8 +128,10 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         started_at: datetime,
         coherence_score: float,
         alerts: Iterable[dict],
+        tenant_id: UUID | None = None,
     ) -> None:
-        project = await self._load_project(project_id)
+        effective_tenant_id = tenant_id or self._tenant_id
+        project = await self._load_project(project_id, effective_tenant_id)
         if not project:
             return
 
@@ -124,7 +144,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                 coherence_score=int(coherence_score),
                 alerts_count=len(alert_payloads),
                 started_at=started_at,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(UTC),
                 result_json={
                     "message": f"Coherence analysis completed with score {coherence_score}",
                 },
@@ -178,7 +198,3 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             tenant_db.add(project)
 
             await tenant_db.commit()
-
-    async def _load_project(self, project_id: UUID) -> ProjectORM | None:
-        result = await self._db.execute(select(ProjectORM).where(ProjectORM.id == project_id))
-        return result.scalar_one_or_none()

@@ -1,7 +1,9 @@
 
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class CoherenceRuleResult(BaseModel):
     rule_id: str

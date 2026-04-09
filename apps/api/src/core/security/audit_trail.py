@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
-
 
 _SENSITIVE_KEYS: set[str] = {"password", "token", "query", "secret"}
 
@@ -40,7 +39,7 @@ class AuditTrail:
         self,
         datetime_provider: Callable[[], datetime] | None = None,
     ) -> None:
-        self._datetime_provider = datetime_provider or (lambda: datetime.now(timezone.utc))
+        self._datetime_provider = datetime_provider or (lambda: datetime.now(UTC))
         self._events: list[AuditEvent] = []
 
     def record(

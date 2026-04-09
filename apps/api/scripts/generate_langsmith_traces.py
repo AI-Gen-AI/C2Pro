@@ -35,7 +35,6 @@ print(f"[DEBUG] Loading .env from: {env_path}")
 
 async def generate_simple_trace():
     """Generate a simple trace using LangSmith client directly."""
-    from langsmith import Client
     from langsmith.run_trees import RunTree
 
     project_name = os.getenv("LANGSMITH_PROJECT", "C2Pro")
@@ -89,16 +88,17 @@ async def generate_simple_trace():
     parent_run.post()
 
     print(f"[SUCCESS] Trace completed: {parent_run.id}")
-    print(f"[INFO] View at: https://smith.langchain.com/")
+    print("[INFO] View at: https://smith.langchain.com/")
 
     return parent_run.id
 
 
 async def generate_orchestration_trace():
     """Generate a trace by invoking a simple LangGraph workflow."""
+    from typing import TypedDict
+
     from langgraph.checkpoint.memory import MemorySaver
     from langgraph.graph import END, StateGraph
-    from typing import TypedDict
 
     # Simple state for demonstration
     class SimpleState(TypedDict, total=False):
@@ -137,7 +137,7 @@ async def generate_orchestration_trace():
         config,
     )
 
-    print(f"[SUCCESS] LangGraph trace generated")
+    print("[SUCCESS] LangGraph trace generated")
     print(f"[INFO] Result: {result}")
 
     return thread_id
@@ -189,7 +189,7 @@ async def main():
 
     print("=" * 60)
     print("Trace generation complete!")
-    print(f"View traces at: https://smith.langchain.com/")
+    print("View traces at: https://smith.langchain.com/")
     print("=" * 60)
 
 

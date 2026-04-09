@@ -15,51 +15,51 @@ Location: apps/api/tests/coherence/test_deterministic_evaluators.py
 """
 
 from datetime import date, datetime, timedelta
+
 import pytest
 
 from src.coherence.models import Clause, FindingSignal
-from src.coherence.rules_engine.config import EvaluatorConfig, DEFAULT_CONFIG
+from src.coherence.rules_engine.config import EvaluatorConfig
 from src.coherence.rules_engine.deterministic import (
-    # BUDGET
-    BudgetOverrunEvaluator,
-    BudgetContingencyEvaluator,
-    BudgetLineItemEvaluator,
-    BudgetSumMismatchEvaluator,
-    RetentionRateEvaluator,
     AdvancePaymentEvaluator,
-    # TIME
-    ScheduleStatusEvaluator,
-    DeadlineOverdueEvaluator,
-    MilestoneGapEvaluator,
-    PredecessorOverlapEvaluator,
-    ScheduleDurationEvaluator,
-    # LEGAL
-    ContractReviewOverdueEvaluator,
-    PenaltyCapEvaluator,
-    NoticePeriodEvaluator,
-    WarrantyPeriodEvaluator,
-    PaymentTermEvaluator,
-    InsuranceExpiryEvaluator,
+    BomBudgetLinkEvaluator,
     # TECHNICAL
     BomLeadTimeEvaluator,
-    SpecReferenceEvaluator,
-    BomBudgetLinkEvaluator,
-    # QUALITY
-    QualityStandardEvaluator,
-    InspectionFrequencyEvaluator,
-    # SCOPE
-    MissingRequiredFieldsEvaluator,
-    ScopeDeliverablesEvaluator,
+    BudgetContingencyEvaluator,
+    BudgetLineItemEvaluator,
+    # BUDGET
+    BudgetOverrunEvaluator,
+    BudgetSumMismatchEvaluator,
     # CROSS
     BudgetVsContractTotalEvaluator,
+    # LEGAL
+    ContractReviewOverdueEvaluator,
+    DeadlineOverdueEvaluator,
+    InspectionFrequencyEvaluator,
+    InsuranceExpiryEvaluator,
+    MilestoneGapEvaluator,
+    # SCOPE
+    MissingRequiredFieldsEvaluator,
+    NoticePeriodEvaluator,
+    PaymentTermEvaluator,
+    PenaltyCapEvaluator,
+    PredecessorOverlapEvaluator,
+    # QUALITY
+    QualityStandardEvaluator,
+    RetentionRateEvaluator,
+    ScheduleDurationEvaluator,
+    # TIME
+    ScheduleStatusEvaluator,
     ScheduleVsBomDeliveryEvaluator,
+    ScopeDeliverablesEvaluator,
     ScopeVsBudgetCoverageEvaluator,
-    # Helpers and registry
-    get_all_deterministic_evaluators,
+    SpecReferenceEvaluator,
+    WarrantyPeriodEvaluator,
     _num,
     _parse_date,
+    # Helpers and registry
+    get_all_deterministic_evaluators,
 )
-
 
 # ===========================================
 # HELPER FUNCTION TESTS

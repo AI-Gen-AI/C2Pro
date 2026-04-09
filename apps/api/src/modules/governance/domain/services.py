@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from src.modules.governance.domain.entities import GovernanceDecision, GovernanceInput, RiskLevel
 
-
 MANDATORY_LEGAL_DISCLAIMER = (
     "C2Pro provides assisted analysis and does not replace legal, technical, "
     "or commercial professional judgment."

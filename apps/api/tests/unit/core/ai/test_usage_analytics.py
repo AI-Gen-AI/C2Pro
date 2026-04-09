@@ -4,21 +4,20 @@ Tests for Usage Analytics Service.
 P3.4: Validates real-time LLM usage tracking and cost analytics.
 """
 
+import random
 from datetime import datetime, timedelta
 
 import pytest
-import random
 
 from src.core.ai.usage_analytics import (
+    AlertSeverity,
+    BudgetAlert,
+    TimePeriod,
     UsageAnalyticsService,
     UsageRecord,
     UsageSummary,
-    BudgetAlert,
-    TimePeriod,
-    AlertSeverity,
     get_usage_analytics_service,
 )
-
 
 # ===========================================
 # USAGE RECORD TESTS
@@ -254,7 +253,7 @@ class TestUsageAnalyticsService:
         service = UsageAnalyticsService()
 
         # Add records for two tenants
-        for i in range(5):
+        for _i in range(5):
             service.record_usage(
                 model="claude-sonnet-4-20250514",
                 task_name="test",
@@ -305,7 +304,7 @@ class TestUsageAnalyticsService:
         service = UsageAnalyticsService()
 
         # Add some records
-        for i in range(5):
+        for _i in range(5):
             service.record_usage("claude-sonnet-4-20250514", "test", 100, 50, 0.001, 100, True)
 
         series = service.get_time_series(TimePeriod.DAY)
@@ -314,6 +313,40 @@ class TestUsageAnalyticsService:
         assert all("timestamp" in point for point in series)
         assert all("requests" in point for point in series)
         assert all("cost_usd" in point for point in series)
+
+    def test_get_time_series_respects_explicit_day_granularity(self):
+        """Explicit day granularity should coarsen buckets compared with hour granularity."""
+        service = UsageAnalyticsService()
+
+        now = datetime.now()
+        service._records = [
+            UsageRecord(
+                timestamp=now - timedelta(hours=23),
+                model="claude-sonnet-4-20250514",
+                task_name="test",
+                input_tokens=100,
+                output_tokens=50,
+                cost_usd=0.001,
+                latency_ms=100.0,
+                success=True,
+            ),
+            UsageRecord(
+                timestamp=now - timedelta(hours=1),
+                model="claude-sonnet-4-20250514",
+                task_name="test",
+                input_tokens=120,
+                output_tokens=60,
+                cost_usd=0.002,
+                latency_ms=120.0,
+                success=True,
+            ),
+        ]
+
+        hourly = service.get_time_series(TimePeriod.DAY, granularity="hour")
+        daily = service.get_time_series(TimePeriod.DAY, granularity="day")
+
+        assert len(hourly) > len(daily)
+        assert sum(point["requests"] for point in daily) == 2
 
     def test_check_budget_alerts_under_threshold(self):
         """No alerts when under budget."""
@@ -523,7 +556,7 @@ class TestIntegration:
         tasks = ["contract_extraction", "coherence_check", "stakeholder_classification"]
         models = ["claude-sonnet-4-20250514", "claude-haiku-4-20250514"]
 
-        for i in range(50):
+        for _i in range(50):
             service.record_usage(
                 model=rng.choice(models),
                 task_name=rng.choice(tasks),

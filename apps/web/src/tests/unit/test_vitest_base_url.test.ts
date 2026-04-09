@@ -14,13 +14,7 @@ describe("Vitest Environment Base URL", () => {
 
   it("global fetch should handle relative paths", async () => {
     // This often fails in jsdom/node if not configured
-    try {
-      const response = await fetch("/api/v1/health");
-      expect(response).toBeDefined();
-    } catch (e) {
-      // In RED phase, we expect this to throw "TypeError: Failed to parse URL from /api/v1/health"
-      // or similar if base URL is missing.
-      throw e;
-    }
+    const response = await fetch("/api/v1/health");
+    expect(response).toBeDefined();
   });
 });

@@ -15,7 +15,7 @@ describe("API generation drift safeguards", () => {
   });
 
   it("keeps generated mock code out of production webpack bundles", () => {
-    const nextConfig = readRepoFile("apps", "web", "next.config.js");
+    const nextConfig = readRepoFile("apps", "web", "next.config.mjs");
 
     expect(nextConfig).toContain("IgnorePlugin");
     expect(nextConfig).toContain("/__mocks__/");

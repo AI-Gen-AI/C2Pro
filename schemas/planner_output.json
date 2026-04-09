@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Planner Role Output Schema",
+  "description": "Output schema for planner role. Extends base_output.json with planning-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "object",
+          "description": "Planning details for the task",
+          "properties": {
+            "subtareas": {
+              "type": "array",
+              "description": "Breakdown of subtasks",
+              "items": {
+                "type": "object",
+                "required": ["id", "descripcion", "asignado_a"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Subtask identifier (e.g., T001-1)"
+                  },
+                  "descripcion": {
+                    "type": "string",
+                    "minLength": 10,
+                    "description": "Subtask description"
+                  },
+                  "asignado_a": {
+                    "type": "string",
+                    "enum": ["planner", "backend", "frontend", "ai", "infra", "qa", "reviewer", "security", "devops"],
+                    "description": "Role assigned to this subtask"
+                  },
+                  "dependencias": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "IDs of tasks this subtask depends on"
+                  },
+                  "estimacion_horas": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Estimated hours for this subtask"
+                  }
+                }
+              }
+            },
+            "dependencias": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "External task dependencies (TASK-XXX format)"
+            },
+            "riesgos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["descripcion", "severidad"],
+                "properties": {
+                  "descripcion": {"type": "string"},
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["baja", "media", "alta", "critica"]
+                  },
+                  "mitigacion": {"type": "string"}
+                }
+              },
+              "description": "Identified risks and mitigations"
+            },
+            "fases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["nombre", "tareas"],
+                "properties": {
+                  "nombre": {"type": "string"},
+                  "descripcion": {"type": "string"},
+                  "tareas": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  }
+                }
+              },
+              "description": "Implementation phases"
+            }
+          }
+        },
+        "documentos_generados": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Planning documents created (PRD, architecture diagrams, etc.)"
+        }
+      }
+    }
+  ]
+}

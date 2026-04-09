@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Optional
 from uuid import UUID
 
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.analysis.application.dtos import AlertCreate
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.analysis.ports.types import AlertRecord
 from src.core.pagination import Page
 
@@ -16,10 +15,11 @@ class AlertRepository(ABC):
         self,
         project_id: UUID,
         tenant_id: UUID | None = None,
-        severities: Optional[List[AlertSeverity]] = None,
-        statuses: Optional[List[AlertStatus]] = None,
-        category: Optional[str] = None,
-        cursor: Optional[str] = None,
+        alert_type: AlertType | None = None,  # TASK-BCK-026
+        severities: list[AlertSeverity] | None = None,
+        statuses: list[AlertStatus] | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
         limit: int = 20,
     ) -> Page[AlertRecord]:
         ...

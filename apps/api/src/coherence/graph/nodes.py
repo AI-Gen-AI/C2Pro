@@ -19,36 +19,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
 
 from ..models import (
     Alert,
+    CategoryBreakdown,
     Clause,
+    CoherenceCategory,
+    EnrichedCoherenceResult,
     Evidence,
     FindingSignal,
-    EnrichedCoherenceResult,
-    CategoryBreakdown,
     SeverityCount,
-    CoherenceCategory,
     impact_to_severity,
 )
-from ..scoring import ScoringService, ScoringDiagnostics
-from ..rules_engine.base import RuleEvaluator
-from ..rules_engine.config import EvaluatorConfig, DEFAULT_CONFIG
+from ..rules_engine.config import DEFAULT_CONFIG
 from ..rules_engine.deterministic import get_all_deterministic_evaluators
-
+from ..scoring import ScoringService
 from .state import (
-    CoherenceGraphState,
     ClauseWithEmbedding,
+    CoherenceGraphState,
     CrossClausePair,
     NodeOutput,
 )
-from .prompts import (
-    COHERENCE_SYSTEM_PROMPT,
-    build_cross_clause_prompt,
-)
-
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +169,9 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     if state.config.include_rag_similarity:
         try:
             from uuid import UUID
-            from ...adapters.persistence.pgvector_embedding_repository import (
-                PgvectorEmbeddingRepository,
+
+            from ...adapters.persistence.pgvector_embedding_repository import (  # noqa: F401
+                PgvectorEmbeddingRepository,  # Available for conditional embedding loading
             )
 
             # Note: In production, db session should be injected via dependency
@@ -473,10 +466,10 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
 
     try:
         # Import embedding repository
-        from ...adapters.persistence.pgvector_embedding_repository import (
-            PgvectorEmbeddingRepository,
+        from ...adapters.persistence.pgvector_embedding_repository import (  # noqa: F401
+            PgvectorEmbeddingRepository,  # Available for conditional embedding loading
         )
-        from ...application.dependencies import get_db_session
+        from ...application.dependencies import get_db_session  # noqa: F401
 
         # Get database session (need to handle async context)
         # For now, we'll use a simple approach - in production, this should
@@ -796,7 +789,7 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         overall_score=state.score,
         alerts=alerts,
         category_breakdown=category_breakdown,
-        calculated_at=datetime.utcnow(),
+        calculated_at=datetime.now(UTC),
         finding_signals=state.all_signals,
         deterministic_findings_count=len(state.deterministic_signals),
         llm_findings_count=len(state.llm_signals),

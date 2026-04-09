@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from uuid import uuid4, UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, Index, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ReviewItemORM(Base):
@@ -52,15 +57,63 @@ class ReviewItemORM(Base):
     sla_due_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     item_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     review_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # TASK-BCK-024: Checkpoint tracking for LangGraph workflow resumption
+    checkpoint_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    project_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
+    )
+    document_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
+    )
+    review_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    review_decision: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False,
+        DateTime, default=_utc_now_naive, nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False,
+        DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False,
     )
 
     __table_args__ = (
         Index("ix_review_items_tenant_status", "tenant_id", "current_status"),
         Index("ix_review_items_sla_due", "sla_due_date"),
+        # TASK-BCK-024: Indexes for checkpoint tracking
+        Index("ix_review_items_checkpoint_id", "checkpoint_id"),
+        Index("ix_review_items_thread_id", "thread_id"),
+        Index("ix_review_items_project_status", "project_id", "current_status"),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
+
+
+# TASK-BCK-025: Notification configuration model
+class NotificationConfigModel(Base):
+    """Per-tenant notification configuration."""
+
+    __tablename__ = "notification_configs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, unique=True, index=True
+    )
+    notification_channels: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    email_recipients: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    slack_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_auth_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_headers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utc_now_naive, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
+    )
+
+    __table_args__ = ({"info": {"rls_policy": "tenant_isolation"}},)

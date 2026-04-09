@@ -8,18 +8,19 @@ Tests the document router endpoints with realistic expectations.
 Methodology: Unit tests with acceptance of realistic status codes
 """
 
-import pytest
 from dataclasses import replace
-from datetime import datetime, UTC
-from uuid import uuid4
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from uuid import uuid4
+
+import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
-from src.documents.adapters.http.router import router as documents_router, settings
+from src.documents.adapters.http.router import router as documents_router
+from src.documents.adapters.http.router import settings
 from src.documents.application.dtos import RagAnswer, RetrievedChunk
 from src.documents.domain.models import Clause, ClauseType, Document, DocumentStatus, DocumentType
-
 
 # ===========================================
 # TEST APPLICATION SETUP
@@ -50,10 +51,10 @@ def mock_session():
 @pytest.fixture
 def app(mock_session, tenant_id, user_id):
     """Create a FastAPI app with documents router."""
-    from src.core.database import get_session
-    from src.core.security import get_current_tenant_id, get_current_user_id_with_bearer
     from src.core.auth.dependencies import get_current_user
     from src.core.auth.models import User
+    from src.core.database import get_session
+    from src.core.security import get_current_tenant_id, get_current_user_id_with_bearer
 
     app_obj = FastAPI()
     app_obj.include_router(documents_router)
@@ -747,7 +748,9 @@ class TestRouterHelperFunctions:
     def test_get_storage_service_dependency(self):
         """Test storage service dependency injection."""
         from src.documents.adapters.http.router import get_storage_service
-        from src.documents.adapters.storage.local_file_storage_service import LocalFileStorageService
+        from src.documents.adapters.storage.local_file_storage_service import (
+            LocalFileStorageService,
+        )
 
         service = get_storage_service()
         assert isinstance(service, LocalFileStorageService)
@@ -789,7 +792,6 @@ class TestRouterHelperFunctions:
             get_get_document_use_case,
             get_get_document_with_clauses_use_case,
             get_list_documents_use_case,
-            get_parse_document_use_case,
             get_rag_ingestion_service,
             get_rag_service,
             get_storage_service,

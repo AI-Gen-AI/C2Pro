@@ -13,18 +13,17 @@ Location: apps/api/src/coherence/graph/state.py
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, Sequence
 import operator
+from dataclasses import dataclass, field
+from typing import Annotated, Any, Literal
 
 from ..models import (
-    Clause,
-    FindingSignal,
     Alert,
+    Clause,
     CoherenceCategory,
     EnrichedCoherenceResult,
+    FindingSignal,
 )
-
 
 # =============================================================================
 # CLAUSE WITH EMBEDDING

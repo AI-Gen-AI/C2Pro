@@ -2,8 +2,9 @@
 
 import pytest
 import yaml
-from src.coherence.rules import Rule, load_rules
 from pydantic import ValidationError
+
+from src.coherence.rules import Rule, load_rules
 
 
 @pytest.fixture

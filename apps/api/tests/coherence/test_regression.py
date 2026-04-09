@@ -11,10 +11,10 @@ Location: apps/api/tests/coherence/test_regression.py
 """
 
 import pytest
-from src.coherence.models import Clause
+
 from src.coherence.graph.graph import evaluate_coherence
 from src.coherence.graph.state import EvaluationConfig
-
+from src.coherence.models import Clause
 
 # =============================================================================
 # SMOKE TESTS (Quick validation that core functionality works)

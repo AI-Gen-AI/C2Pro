@@ -9,12 +9,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, TypeVar
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 from src.core.ai.model_router import AITaskType, ModelTier
-
 
 # Generic output type
 T = TypeVar("T")
@@ -86,8 +85,8 @@ class ToolMetadata:
     # Lifecycle
     deprecated: bool = False
     deprecation_message: str | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -134,8 +133,8 @@ class ToolResult(Generic[T]):
     validation_errors: list[str] = field(default_factory=list)
 
     # Timing breakdown
-    started_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Confidence/quality scores (optional)
     confidence_score: float | None = None

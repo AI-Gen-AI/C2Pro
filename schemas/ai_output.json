@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Role Output Schema",
+  "description": "Output schema for AI role. Extends base_output.json with AI-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "modelo": {
+          "type": "object",
+          "description": "AI model details",
+          "properties": {
+            "nombre": {
+              "type": "string",
+              "description": "Model name (e.g., gpt-4, claude-3-sonnet)"
+            },
+            "proveedor": {
+              "type": "string",
+              "description": "Model provider (OpenAI, Anthropic, etc.)"
+            },
+            "version": {
+              "type": "string",
+              "description": "Model version"
+            },
+            "temperatura": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2,
+              "description": "Temperature parameter used"
+            }
+          }
+        },
+        "uso": {
+          "type": "object",
+          "description": "Resource usage metrics",
+          "properties": {
+            "tokens_entrada": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Input tokens consumed"
+            },
+            "tokens_salida": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Output tokens generated"
+            },
+            "tokens_totales": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total tokens used"
+            },
+            "costo_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cost in USD"
+            },
+            "duracion_segundos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Execution duration in seconds"
+            }
+          }
+        },
+        "observabilidad": {
+          "type": "object",
+          "description": "Observability and tracing",
+          "properties": {
+            "langsmith_trace_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "LangSmith trace URL"
+            },
+            "langsmith_run_id": {
+              "type": "string",
+              "description": "LangSmith run ID"
+            },
+            "langsmith_project": {
+              "type": "string",
+              "description": "LangSmith project name"
+            },
+            "evaluacion": {
+              "type": "object",
+              "properties": {
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Evaluation score (0-1)"
+                },
+                "feedback": {
+                  "type": "string",
+                  "description": "Human feedback on output quality"
+                }
+              }
+            }
+          }
+        },
+        "prompt": {
+          "type": "object",
+          "description": "Prompt engineering details",
+          "properties": {
+            "sistema": {
+              "type": "string",
+              "description": "System prompt used"
+            },
+            "usuario": {
+              "type": "string",
+              "description": "User prompt used"
+            },
+            "estrategia": {
+              "type": "string",
+              "enum": ["zero-shot", "few-shot", "chain-of-thought", "react", "reflexion"],
+              "description": "Prompting strategy used"
+            }
+          }
+        },
+        "herramientas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nombre", "llamadas"],
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "description": "Tool name"
+              },
+              "llamadas": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Number of times tool was called"
+              },
+              "exitosas": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Number of successful calls"
+              }
+            }
+          },
+          "description": "Tools/functions used by the model"
+        },
+        "validacion": {
+          "type": "object",
+          "description": "Output validation",
+          "properties": {
+            "esquema_validado": {
+              "type": "boolean",
+              "description": "Whether output passed schema validation"
+            },
+            "errores_validacion": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Validation errors found"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

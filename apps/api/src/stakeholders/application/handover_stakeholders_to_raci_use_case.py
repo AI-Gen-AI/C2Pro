@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from src.stakeholders.application.dtos import RaciStakeholderInput, RaciWBSItemInput, RaciGenerationResult
+from src.stakeholders.application.dtos import (
+    RaciGenerationResult,
+    RaciStakeholderInput,
+    RaciWBSItemInput,
+)
 from src.stakeholders.domain.models import Stakeholder
 from src.stakeholders.ports.raci_generator import RaciGeneratorPort
 

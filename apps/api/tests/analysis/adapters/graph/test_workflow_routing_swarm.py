@@ -28,12 +28,13 @@ from typing import Any
 
 import pytest
 
-from src.analysis.adapters.graph.nodes import (
-    DOC_TYPES,
-    _average_confidence,
-    _next_after_critique,
-)
+from src.analysis.adapters.graph.workflow import _next_after_critique_v2 as _next_after_critique
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+from src.analysis.domain.prompts import DOC_TYPES
 
+# Use domain service for confidence calculation (replaces removed _average_confidence)
+_critique_evaluator = CritiqueEvaluationService()
+_average_confidence = _critique_evaluator.calculate_confidence
 
 # ---------------------------------------------------------------------------
 # State factory
@@ -170,7 +171,7 @@ class TestNextAfterCritique:
             retry_count=1,
             doc_type="contract",
         )
-        assert _next_after_critique(state) == "save_to_db"
+        assert _next_after_critique(state) == "stakeholder_extractor"
 
     @pytest.mark.red_phase
     def test_retry_count_zero_with_notes_returns_save_to_db(self) -> None:
@@ -181,7 +182,7 @@ class TestNextAfterCritique:
             retry_count=0,
             doc_type="contract",
         )
-        assert _next_after_critique(state) == "save_to_db"
+        assert _next_after_critique(state) == "stakeholder_extractor"
 
     @pytest.mark.red_phase
     def test_retry_count_3_returns_save_to_db(self) -> None:
@@ -192,7 +193,7 @@ class TestNextAfterCritique:
             retry_count=3,
             doc_type="contract",
         )
-        assert _next_after_critique(state) == "save_to_db"
+        assert _next_after_critique(state) == "stakeholder_extractor"
 
     @pytest.mark.red_phase
     def test_retry_count_large_returns_save_to_db(self) -> None:
@@ -203,7 +204,7 @@ class TestNextAfterCritique:
             retry_count=100,
             doc_type="budget",
         )
-        assert _next_after_critique(state) == "save_to_db"
+        assert _next_after_critique(state) == "stakeholder_extractor"
 
     @pytest.mark.red_phase
     def test_no_notes_no_retry_returns_save_to_db(self) -> None:
@@ -214,7 +215,7 @@ class TestNextAfterCritique:
             retry_count=0,
             doc_type="contract",
         )
-        assert _next_after_critique(state) == "save_to_db"
+        assert _next_after_critique(state) == "stakeholder_extractor"
 
 
 # ===========================================================================
@@ -323,9 +324,10 @@ class TestDocTypes:
         assert "budget" in DOC_TYPES
 
     @pytest.mark.red_phase
-    def test_doc_types_has_exactly_three_members(self) -> None:
-        """DOC_TYPES has exactly the three expected document type strings."""
-        assert len(DOC_TYPES) == 3
+    def test_doc_types_has_expected_members(self) -> None:
+        """DOC_TYPES has the four expected document type strings."""
+        assert len(DOC_TYPES) == 4
+        assert "schedule" in DOC_TYPES
 
     @pytest.mark.red_phase
     def test_doc_types_is_tuple(self) -> None:

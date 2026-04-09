@@ -26,7 +26,7 @@ def coherence_eval_dataset() -> dict[str, Any]:
     dataset_path = EVAL_DATASETS_PATH / "coherence" / "v1.0.0_coherence_eval.json"
     if not dataset_path.exists():
         pytest.skip(f"Dataset not found: {dataset_path}")
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -36,7 +36,7 @@ def extraction_eval_dataset() -> dict[str, Any]:
     dataset_path = EVAL_DATASETS_PATH / "extraction" / "v1.0.0_extraction_eval.json"
     if not dataset_path.exists():
         pytest.skip(f"Dataset not found: {dataset_path}")
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -46,7 +46,7 @@ def retrieval_eval_dataset() -> dict[str, Any]:
     dataset_path = EVAL_DATASETS_PATH / "retrieval" / "v1.0.0_retrieval_eval.json"
     if not dataset_path.exists():
         pytest.skip(f"Dataset not found: {dataset_path}")
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -61,7 +61,7 @@ def coherence_baseline_metrics() -> dict[str, float]:
             "alert_recall": 0.88,
             "severity_accuracy": 0.82,
         }
-    with open(baseline_path, "r", encoding="utf-8") as f:
+    with open(baseline_path, encoding="utf-8") as f:
         data = json.load(f)
         return data.get("metrics", {})
 
@@ -76,7 +76,7 @@ def extraction_baseline_metrics() -> dict[str, float]:
             "boundary_iou": 0.82,
             "actor_accuracy": 0.90,
         }
-    with open(baseline_path, "r", encoding="utf-8") as f:
+    with open(baseline_path, encoding="utf-8") as f:
         data = json.load(f)
         return data.get("metrics", {})
 
@@ -91,7 +91,7 @@ def retrieval_baseline_metrics() -> dict[str, float]:
             "recall_at_5": 0.85,
             "recall_at_10": 0.92,
         }
-    with open(baseline_path, "r", encoding="utf-8") as f:
+    with open(baseline_path, encoding="utf-8") as f:
         data = json.load(f)
         return data.get("metrics", {})
 

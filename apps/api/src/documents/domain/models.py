@@ -5,10 +5,12 @@ Refers to Suite ID: TS-UD-DOC-CLS-002.
 Refers to Suite ID: TS-UD-DOC-DOC-001.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
+
 
 # Canonical status for a document's lifecycle.
 class DocumentStatus(str, Enum):
@@ -104,10 +106,17 @@ class Document:
     updated_at: datetime | None = None
     document_metadata: dict = field(default_factory=dict)
     clauses: list[Clause] = field(default_factory=list)
+    # TASK-BCK-023: Document versioning
+    version: int = 1
+    file_hash: str | None = None
 
     def is_parsed(self) -> bool:
         """Business rule: Checks if the document was successfully parsed."""
-        return self.upload_status == DocumentStatus.PARSED
+        return self.upload_status in {
+            DocumentStatus.PARSED,
+            DocumentStatus.PARSED_PENDING_ANALYSIS,
+            DocumentStatus.ANALYZED,
+        }
 
     def has_error(self) -> bool:
         """Business rule: Checks if there was an error during parsing."""
@@ -123,7 +132,7 @@ class Document:
             raise ValueError("Clause does not belong to this document.")
         self.clauses.append(clause)
 
-    def transition_to(self, new_status: DocumentStatus) -> "Document":
+    def transition_to(self, new_status: DocumentStatus) -> Document:
         """Refers to Suite ID: TS-UD-DOC-DOC-001."""
         allowed: dict[DocumentStatus, set[DocumentStatus]] = {
             DocumentStatus.UPLOADED: {DocumentStatus.QUEUED, DocumentStatus.ERROR},
@@ -158,3 +167,44 @@ class Document:
             document_metadata=dict(self.document_metadata),
             clauses=list(self.clauses),
         )
+
+
+@dataclass(frozen=True)
+class DocumentAlertHistoryEntry:
+    """TS-UA-DOC-HIST-001: Normalized alert history entry for document evidence timelines."""
+
+    action: str
+    detail: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class DocumentEvidenceAlert:
+    """TS-UA-DOC-HIST-001: Alert projection used to build a document history timeline."""
+
+    id: UUID
+    title: str
+    created_at: datetime
+    history: list[DocumentAlertHistoryEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DocumentHistorySnapshot:
+    """TS-UA-DOC-HIST-001: Document timeline projection read from persistence."""
+
+    document: Document
+    clause_count: int
+    alerts: list[DocumentEvidenceAlert] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DocumentAlertSignal:
+    """TS-UA-DOC-REL-001: Alert projection used for relationship explanation orchestration."""
+
+    id: UUID
+    title: str
+    severity: str
+    status: str
+    created_at: datetime
+    updated_at: datetime | None = None
+    source_clause_id: UUID | None = None

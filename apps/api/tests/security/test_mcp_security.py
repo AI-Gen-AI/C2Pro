@@ -15,10 +15,10 @@ Tests críticos para validar seguridad del MCP Server:
 ESTOS TESTS DEBEN PASAR 100% ANTES DE PRODUCCIÓN.
 """
 
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from unittest.mock import AsyncMock
 
 from src.core.mcp.servers.database_server import (
     DatabaseMCPServer,
@@ -199,7 +199,7 @@ async def test_filter_key_validation():
     assert valid_request.filters is not None
 
     # Clave maliciosa (se validará en runtime, no en construcción)
-    malicious_request = ViewQueryRequest(
+    ViewQueryRequest(
         view_name="v_project_summary",
         filters={
             "status; DROP TABLE projects;--": "active",
@@ -249,13 +249,13 @@ async def test_rate_limiting_per_tenant(mcp_server: DatabaseMCPServer, tenant_id
     # Configurar límite muy bajo para testing
     mcp_server.rate_limits.per_tenant_per_minute = 3
 
-    request = ViewQueryRequest(
+    ViewQueryRequest(
         view_name="v_project_summary",
         limit=10,
     )
 
     # Primera, segunda y tercera request deben funcionar
-    for i in range(3):
+    for _i in range(3):
         await mcp_server._check_rate_limit(tenant_id)
 
     # Cuarta request debe fallar
@@ -359,7 +359,7 @@ async def test_tenant_filter_always_applied():
 
     Todas las queries deben incluir WHERE tenant_id = :tenant_id
     """
-    request = ViewQueryRequest(
+    ViewQueryRequest(
         view_name="v_project_summary",
         limit=10,
     )

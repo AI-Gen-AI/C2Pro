@@ -52,8 +52,8 @@ def _make_state(**overrides) -> ProjectState:
 class TestGraphDependencyProviders:
     @pytest.mark.asyncio
     async def test_doc_type_classification_uses_ai_provider(self, monkeypatch) -> None:
-        from src.analysis.adapters.graph import nodes
         from src.analysis.adapters.ai import anthropic_client
+        from src.analysis.adapters.graph import nodes
 
         class ExplodingAIService:
             def __init__(self, *args, **kwargs) -> None:
@@ -136,30 +136,42 @@ class TestGraphDependencyProviders:
     @pytest.mark.asyncio
     async def test_coherence_scorer_uses_dependency_provider(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes_extended
-        from src.coherence.application.services import coherence_calculation_service
+        from src.analysis.domain import coherence_derivation
+        from src.coherence.application import dependencies
         from src.coherence.domain.category_weights import CoherenceCategory
 
-        class ExplodingService:
-            def __init__(self, *args, **kwargs) -> None:
-                raise AssertionError("direct coherence service construction is not allowed")
+        class FakeDerivationService:
+            def derive(self, input_data):
+                _ = input_data
+                return SimpleNamespace(
+                    contract_price=0.0,
+                    bom_items=[],
+                    scope_defined=True,
+                    schedule_within_contract=True,
+                    technical_consistent=True,
+                    legal_compliant=True,
+                    quality_standard_met=True,
+                    poor_extraction_quality=False,
+                    quality_note="",
+                )
 
         class FakeService:
             def calculate_coherence(self, **kwargs):
+                assert kwargs["scope_defined"] is True
                 return SimpleNamespace(
                     global_score=88,
                     category_scores={category: 88 for category in CoherenceCategory},
                 )
 
         monkeypatch.setattr(
-            coherence_calculation_service,
-            "CoherenceCalculationService",
-            ExplodingService,
+            coherence_derivation,
+            "CoherenceScoringDerivationService",
+            FakeDerivationService,
         )
         monkeypatch.setattr(
-            nodes_extended,
+            dependencies,
             "build_coherence_calculation_service",
             lambda event_publisher=None: FakeService(),
-            raising=False,
         )
 
         result = await nodes_extended.coherence_scorer_node(

@@ -14,51 +14,38 @@ This test suite validates ALL DTOs across the application layer, ensuring:
 Methodology: TDD Strict (Red → Green → Refactor)
 """
 
-import pytest
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
+
+import pytest
 from pydantic import ValidationError
 
-# Import all DTOs to test
-from src.procurement.application.dtos import (
-    WBSItemBase,
-    WBSItemCreate,
-    WBSItemResponse,
-    BOMItemBase,
-    BOMItemCreate,
-    BOMItemResponse,
-)
 from src.analysis.application.dtos import (
-    CoherenceScoreResponse,
-    AlertBase,
     AlertCreate,
-)
-from src.stakeholders.application.dtos import (
-    StakeholderBase,
-    StakeholderCreate,
-    StakeholderResponse,
-    RACIBase,
-    RACICreate,
-    RACIResponse,
-    RaciMatrixItem,
+    CoherenceScoreResponse,
 )
 from src.documents.application.dtos import (
     CreateDocumentDTO,
     DocumentResponse,
 )
-from src.projects.application.dtos import (
-    ProjectCreateRequest,
-    ProjectDetailResponse,
+from src.documents.domain.models import DocumentStatus, DocumentType
+
+# Import all DTOs to test
+from src.procurement.application.dtos import (
+    BOMItemCreate,
+    WBSItemCreate,
+    WBSItemResponse,
 )
 
 # Import domain enums
-from src.procurement.domain.models import BOMCategory, ProcurementStatus, WBSItemType
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
-from src.stakeholders.domain.models import PowerLevel, InterestLevel, RACIRole
-from src.documents.domain.models import DocumentStatus, DocumentType
-from src.projects.domain.models import ProjectStatus, ProjectType
-
+from src.projects.application.dtos import (
+    ProjectCreateRequest,
+)
+from src.stakeholders.application.dtos import (
+    RACICreate,
+    StakeholderCreate,
+)
 
 # ===========================================
 # 🔴 RED PHASE - WBS Item DTO Tests
@@ -199,7 +186,7 @@ class TestCoherenceResultDTO:
         Then: ValidationError should be raised
         """
         # Test score > 100
-        with pytest.raises(ValidationError) as exc_info:
+        with pytest.raises(ValidationError):
             CoherenceScoreResponse(
                 project_id=uuid4(),
                 status="CALCULATED",
@@ -207,7 +194,7 @@ class TestCoherenceResultDTO:
             )
 
         # Test score < 0
-        with pytest.raises(ValidationError) as exc_info:
+        with pytest.raises(ValidationError):
             CoherenceScoreResponse(
                 project_id=uuid4(),
                 status="CALCULATED",

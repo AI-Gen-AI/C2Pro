@@ -4,6 +4,7 @@ Domain models for the Project bounded context.
 Refers to Suite ID: TS-UD-PRJ-PRJ-001.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -44,11 +45,11 @@ class Project:
     currency: str
     start_date: datetime | None
     end_date: datetime | None
-    
+
     # Analysis results are part of the project's state
     coherence_score: int | None
     last_analysis_at: datetime | None
-    
+
     # Timestamps
     created_at: datetime
     updated_at: datetime

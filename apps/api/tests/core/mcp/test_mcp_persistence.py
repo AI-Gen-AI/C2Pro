@@ -5,8 +5,8 @@ TS-UC-SEC-MCP-002, TS-UC-SEC-MCP-004: MCP rate limit and audit persistence tests
 from __future__ import annotations
 
 import json
-from uuid import uuid4
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 

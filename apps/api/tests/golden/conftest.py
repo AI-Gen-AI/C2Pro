@@ -2,11 +2,10 @@
 
 import json
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
 
 import pytest
-
 from golden.evaluators.coherence_evaluator import ActualCoherenceIssue
 from golden.evaluators.tool_call_evaluator import ActualToolCall
 from golden.schemas import (

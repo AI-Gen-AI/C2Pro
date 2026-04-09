@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.stakeholders.domain.models import RACIRole, RaciAssignment
+from src.stakeholders.domain.models import RaciAssignment, RACIRole
 from src.stakeholders.domain.services.raci_matrix_generator import generate_raci_matrix
 
 

@@ -15,7 +15,7 @@ Verifica que todos los errores devuelven el formato unificado:
 import json
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
@@ -24,10 +24,8 @@ from src.core.exceptions import (
     PermissionDeniedException,
     QuotaExceededException,
     ResourceNotFoundError,
-    ValidationError,
 )
 from src.core.handlers import register_exception_handlers
-
 
 # ===========================================
 # TEST FIXTURES

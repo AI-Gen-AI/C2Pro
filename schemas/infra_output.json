@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Infrastructure Role Output Schema",
+  "description": "Output schema for infra role. Extends base_output.json with infrastructure-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "recursos": {
+          "type": "object",
+          "description": "Infrastructure resources provisioned",
+          "properties": {
+            "recursos_creados": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["tipo", "nombre"],
+                "properties": {
+                  "tipo": {
+                    "type": "string",
+                    "description": "Resource type (EC2, RDS, S3, Lambda, etc.)"
+                  },
+                  "nombre": {
+                    "type": "string",
+                    "description": "Resource name/identifier"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Resource ID (ARN, instance ID, etc.)"
+                  },
+                  "region": {
+                    "type": "string",
+                    "description": "AWS/cloud region"
+                  }
+                }
+              },
+              "description": "Resources created"
+            },
+            "recursos_modificados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Existing resources modified"
+            },
+            "recursos_eliminados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Resources deleted"
+            }
+          }
+        },
+        "configuracion": {
+          "type": "object",
+          "description": "Configuration management",
+          "properties": {
+            "archivos_iac": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "IaC files (Terraform, CloudFormation, etc.)"
+            },
+            "herramienta": {
+              "type": "string",
+              "enum": ["terraform", "cloudformation", "pulumi", "cdk", "ansible"],
+              "description": "IaC tool used"
+            },
+            "variables_entorno": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Environment variables configured"
+            },
+            "secretos_configurados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Secrets configured (names only, not values)"
+            }
+          }
+        },
+        "validacion": {
+          "type": "object",
+          "description": "Infrastructure validation",
+          "properties": {
+            "plan_ejecutado": {
+              "type": "boolean",
+              "description": "Whether terraform/IaC plan was executed"
+            },
+            "apply_exitoso": {
+              "type": "boolean",
+              "description": "Whether apply/deployment succeeded"
+            },
+            "tests_infra": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Infrastructure tests run"
+            }
+          }
+        },
+        "costos": {
+          "type": "object",
+          "description": "Cost estimation",
+          "properties": {
+            "estimacion_mensual_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Estimated monthly cost in USD"
+            },
+            "breakdown": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "servicio": {"type": "string"},
+                  "costo_usd": {"type": "number", "minimum": 0}
+                }
+              },
+              "description": "Cost breakdown by service"
+            }
+          }
+        },
+        "monitoreo": {
+          "type": "object",
+          "description": "Monitoring and alerting",
+          "properties": {
+            "dashboards_creados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Monitoring dashboards created"
+            },
+            "alertas_configuradas": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Alerts configured"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

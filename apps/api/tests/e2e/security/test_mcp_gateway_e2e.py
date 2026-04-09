@@ -24,17 +24,14 @@ MCP Gateway Configuration (from PLAN_ARQUITECTURA_v2.1.md):
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 
-from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
 from src.projects.adapters.persistence.models import ProjectORM
-
 
 # ===========================================
 # FIXTURES
@@ -384,7 +381,7 @@ async def test_006_mcp_rate_limit_over_limit_blocked(
 
     # Make 61 requests rapidly
     responses = []
-    for i in range(61):
+    for _i in range(61):
         response = await client.post(
             "/api/v1/mcp/execute",
             headers=headers,

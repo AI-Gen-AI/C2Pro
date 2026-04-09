@@ -12,16 +12,22 @@ from __future__ import annotations
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
-from uuid import UUID
 
 import structlog
 
-from src.core.ai.token_counter import get_token_counter, MODEL_PRICING
+from src.core.ai.token_counter import get_token_counter
 
 logger = structlog.get_logger()
+
+
+def _normalize_timestamp(value: datetime) -> datetime:
+    """Normalize analytics timestamps to UTC-aware datetimes."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 # ===========================================
@@ -156,7 +162,7 @@ class BudgetAlert:
     current_pct: float
     budget_limit: float
     current_spend: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     acknowledged: bool = False
     tenant_id: str | None = None
 
@@ -274,7 +280,7 @@ class UsageAnalyticsService:
             Created UsageRecord
         """
         record = UsageRecord(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             model=model,
             task_name=task_name,
             input_tokens=input_tokens,
@@ -302,7 +308,7 @@ class UsageAnalyticsService:
 
     def _cleanup_old_records(self) -> None:
         """Remove records older than retention period."""
-        cutoff = datetime.utcnow() - timedelta(days=self._retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
         self._records = [r for r in self._records if r.timestamp > cutoff]
 
     def get_summary(
@@ -325,7 +331,7 @@ class UsageAnalyticsService:
             UsageSummary for the period
         """
         # Calculate time range
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if period == TimePeriod.HOUR:
             start_time = now - timedelta(hours=1)
         elif period == TimePeriod.DAY:
@@ -385,37 +391,45 @@ class UsageAnalyticsService:
 
         Args:
             period: Time period to cover
-            granularity: Data point granularity ("hour", "day")
+            granularity: Data point granularity ("minute", "hour", "day")
             tenant_id: Filter by tenant
 
         Returns:
             List of time series data points
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if period == TimePeriod.HOUR:
             start_time = now - timedelta(hours=1)
-            delta = timedelta(minutes=5)
         elif period == TimePeriod.DAY:
             start_time = now - timedelta(days=1)
-            delta = timedelta(hours=1)
         elif period == TimePeriod.WEEK:
             start_time = now - timedelta(weeks=1)
-            delta = timedelta(hours=6)
         else:
             start_time = now - timedelta(days=30)
+
+        # Map granularity string to timedelta, with sensible defaults per period
+        if granularity == "minute":
+            delta = timedelta(minutes=1)
+        elif granularity == "hour":
+            delta = timedelta(minutes=5) if period == TimePeriod.HOUR else timedelta(hours=1)
+        elif granularity == "day":
             delta = timedelta(days=1)
+        else:
+            # Default to hour if invalid granularity
+            delta = timedelta(hours=1)
 
         # Filter records
         records = [
             r for r in self._records
-            if r.timestamp >= start_time
+            if _normalize_timestamp(r.timestamp) >= start_time
             and (tenant_id is None or r.tenant_id == tenant_id)
         ]
 
         # Group by time bucket
         buckets: dict[datetime, list[UsageRecord]] = defaultdict(list)
         for record in records:
-            bucket = start_time + ((record.timestamp - start_time) // delta) * delta
+            record_timestamp = _normalize_timestamp(record.timestamp)
+            bucket = start_time + ((record_timestamp - start_time) // delta) * delta
             buckets[bucket].append(record)
 
         # Build time series
@@ -540,10 +554,10 @@ class UsageAnalyticsService:
         daily_avg_cost = summary.total_cost_usd / days_in_sample
 
         # Project to month (30 days)
-        projected_monthly = daily_avg_cost * 30
+        daily_avg_cost * 30
 
         # Calculate days remaining in month
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         days_elapsed = now.day
         days_remaining = 30 - days_elapsed
 
@@ -660,7 +674,7 @@ class UsageAnalyticsService:
         month_summary = self.get_summary(TimePeriod.MONTH, tenant_id=tenant_id)
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "tenant_id": tenant_id,
             "summaries": {
                 "hour": hour_summary.to_dict(),

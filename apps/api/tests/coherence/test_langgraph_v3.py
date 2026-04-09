@@ -12,33 +12,31 @@ Tests the coherence evaluation subgraph including:
 Location: apps/api/tests/coherence/test_langgraph_v3.py
 """
 
-import pytest
-from datetime import datetime
-from dataclasses import dataclass
 
-from src.coherence.models import Clause, FindingSignal, EnrichedCoherenceResult
-from src.coherence.graph.state import (
-    CoherenceGraphState,
-    ClauseWithEmbedding,
-    CrossClausePair,
-    EvaluationConfig,
+import pytest
+
+from src.coherence.graph.graph import (
+    build_coherence_subgraph,
+    evaluate_coherence,
+    get_coherence_subgraph,
 )
 from src.coherence.graph.nodes import (
-    prepare_context,
-    deterministic_evaluate,
-    llm_semantic_evaluate,
     cross_clause_eval,
-    scoring_arbiter,
+    deterministic_evaluate,
     format_output,
     infer_category,
     infer_document_type,
+    llm_semantic_evaluate,
+    prepare_context,
+    scoring_arbiter,
 )
-from src.coherence.graph.graph import (
-    build_coherence_subgraph,
-    get_coherence_subgraph,
-    evaluate_coherence,
+from src.coherence.graph.state import (
+    ClauseWithEmbedding,
+    CoherenceGraphState,
+    CrossClausePair,
+    EvaluationConfig,
 )
-
+from src.coherence.models import Clause, EnrichedCoherenceResult, FindingSignal
 
 # =============================================================================
 # FIXTURES

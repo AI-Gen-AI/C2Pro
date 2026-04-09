@@ -18,15 +18,17 @@ Test Coverage:
 Refers to: PHASE4_TDD_IMPLEMENTATION_ROADMAP.md - I2
 """
 
-import pytest
+from typing import Any
 from unittest.mock import AsyncMock
-from typing import Dict, Any
 from uuid import uuid4
+
+import pytest
 
 # ✅ CORRECTED IMPORTS (pythonpath = ["src"] in pyproject.toml)
 from src.modules.ingestion.application.ports import OCRAdapter
 from src.modules.ingestion.application.services import OCRProcessingService, TableParserService
 from src.modules.ingestion.domain.entities import TableData
+
 
 # Mock LangSmith Client (copied from I1, or would be in conftest.py)
 class MockLangSmithClient:
@@ -38,7 +40,7 @@ class MockLangSmithClient:
         self.spans.append(span)
         return span
 
-    def end_span(self, span: Dict[str, Any], outputs: Any = None):
+    def end_span(self, span: dict[str, Any], outputs: Any = None):
         for s in self.spans:
             if s["id"] == span["id"]:
                 s["outputs"] = outputs

@@ -4,13 +4,14 @@ TS-UD-DOC-ENT-001: Date entity extraction domain service.
 
 import re
 from datetime import date, timedelta
-from typing import List, NamedTuple, Optional, Callable
 from enum import Enum, auto
+from typing import NamedTuple
 
 # A robust date parsing library is a good choice here.
 # For this implementation, we will simulate its behavior.
 # In a real project, one would use `pip install python-dateutil`.
 from dateutil.parser import parse as dateutil_parse
+
 
 class DateContextType(Enum):
     """Enumerates the context in which a date was found."""
@@ -85,7 +86,7 @@ class DateEntityExtractor:
         return text
 
     # --- Handler Methods ---
-    def _parse_absolute(self, match: re.Match, base_date: date) -> Optional[date]:
+    def _parse_absolute(self, match: re.Match, base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
         date_str = match.group('date') if 'date' in match.groupdict() else match.group(0)
         try:
             # Normalize Spanish months before parsing
@@ -96,7 +97,7 @@ class DateEntityExtractor:
             # If parsing fails, it's not a valid date format, so ignore it.
             return None
 
-    def _parse_relative(self, match: re.Match, base_date: date) -> Optional[date]:
+    def _parse_relative(self, match: re.Match, base_date: date) -> date | None:
         num = int(match.group('num'))
         unit = match.group('unit').lower()
         delta = timedelta(days=0)
@@ -108,7 +109,7 @@ class DateEntityExtractor:
             delta = timedelta(days=num * 365) # Approximate
         return base_date + delta
 
-    def _parse_relative_from(self, match: re.Match, base_date: date) -> Optional[date]:
+    def _parse_relative_from(self, match: re.Match, base_date: date) -> date | None:  # noqa: ARG002 - Handler signature is normalized across all parser callbacks
         num = int(match.group('num'))
         base_date_str = match.group('base_date')
         try:
@@ -117,7 +118,7 @@ class DateEntityExtractor:
         except (ValueError, TypeError):
             return None
 
-    async def extract(self, text: str, base_date: date) -> List[ExtractedDate]:
+    async def extract(self, text: str, base_date: date) -> list[ExtractedDate]:
         """
         Extracts all recognizable date entities from the input text.
 
@@ -128,8 +129,8 @@ class DateEntityExtractor:
         Returns:
             A list of ExtractedDate objects, sorted by their appearance in the text.
         """
-        found_dates: List[ExtractedDate] = []
-        
+        found_dates: list[ExtractedDate] = []
+
         for pattern, context, handler in self.patterns:
             for match in pattern.finditer(text):
                 extracted_date = handler(match, base_date)
@@ -147,7 +148,7 @@ class DateEntityExtractor:
                             start=match.start(),
                             end=match.end()
                         ))
-        
+
         # Sort results by their starting position in the text
         found_dates.sort(key=lambda d: d.start)
         return found_dates

@@ -3,7 +3,7 @@ I6 Coherence Application Service
 Test Suite ID: TS-I6-COH-SVC-001
 """
 
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from src.modules.coherence.domain.entities import CoherenceAlert, RuleInput
 from src.modules.coherence.domain.rules import CoherenceRuleProtocol
@@ -20,7 +20,7 @@ class CoherenceEngineService:
     def __init__(
         self,
         rules: list[CoherenceRuleProtocol],
-        langsmith_client: Optional[LangSmithClientProtocol] = None,
+        langsmith_client: LangSmithClientProtocol | None = None,
     ):
         self.rules = rules
         self.langsmith_client = langsmith_client

@@ -11,21 +11,20 @@ from src.documents.application.dtos import CreateDocumentDTO
 from src.documents.application.use_cases import CreateDocumentUseCase
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
-
 # =================================================================
 # Fixtures
 # =================================================================
 
 def _make_dto(**overrides) -> CreateDocumentDTO:
-    defaults = dict(
-        project_id=uuid4(),
-        filename="contract.pdf",
-        document_type=DocumentType.CONTRACT,
-        file_format="pdf",
-        storage_url="/uploads/contract.pdf",
-        file_size_bytes=1024,
-        created_by=uuid4(),
-    )
+    defaults = {
+        "project_id": uuid4(),
+        "filename": "contract.pdf",
+        "document_type": DocumentType.CONTRACT,
+        "file_format": "pdf",
+        "storage_url": "/uploads/contract.pdf",
+        "file_size_bytes": 1024,
+        "created_by": uuid4(),
+    }
     defaults.update(overrides)
     return CreateDocumentDTO(**defaults)
 

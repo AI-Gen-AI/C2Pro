@@ -6,7 +6,7 @@ using the openpyxl library, encapsulating external library details.
 """
 
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
@@ -53,7 +53,7 @@ class ExcelFileParser:
 
             schedule_data = []
             for row in sheet.iter_rows(min_row=2, values_only=True):
-                row_data = dict(zip(headers, row))
+                row_data = dict(zip(headers, row, strict=False))
                 # Filter out empty rows
                 if any(row_data.values()):
                     schedule_data.append(
@@ -102,7 +102,7 @@ class ExcelFileParser:
 
             budget_data = []
             for row in sheet.iter_rows(min_row=2, values_only=True):
-                row_data = dict(zip(headers, row))
+                row_data = dict(zip(headers, row, strict=False))
                 if any(row_data.values()):
                     budget_data.append(
                         {

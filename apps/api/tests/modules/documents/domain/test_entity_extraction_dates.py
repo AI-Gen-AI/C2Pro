@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
-
 from src.documents.domain.services.entity_extraction import extract_dates
 
 

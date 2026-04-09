@@ -3,18 +3,17 @@ I6 - Coherence Rules (Domain)
 Test Suite ID: TS-I6-COH-RULES-001
 """
 
-from datetime import date, timedelta
-from typing import Any, Optional
+from datetime import date
+from typing import Any
 from uuid import uuid4
 
-import pytest
 from pydantic import BaseModel, Field
 
 try:
     from src.coherence.domain.entities import CoherenceAlert, RuleInput
     from src.coherence.domain.rules import (
-        ScheduleMismatchRule,
         BudgetMismatchRule,
+        ScheduleMismatchRule,
         ScopeProcurementMismatchRule,
     )
 except ImportError:
@@ -25,27 +24,27 @@ except ImportError:
         message: str
         evidence: dict[str, Any] = Field(default_factory=dict)
         triggered_by_rule: str
-        doc_id: Optional[str] = None
+        doc_id: str | None = None
 
     class RuleInput(BaseModel):
         doc_id: str = Field(default_factory=lambda: str(uuid4()))
-        schedule_data: Optional[dict[str, Any]] = None
-        actual_dates: Optional[dict[str, Any]] = None
-        budget_data: Optional[dict[str, Any]] = None
-        actual_costs: Optional[dict[str, Any]] = None
-        scope_data: Optional[dict[str, Any]] = None
-        procurement_items: Optional[dict[str, Any]] = None
+        schedule_data: dict[str, Any] | None = None
+        actual_dates: dict[str, Any] | None = None
+        budget_data: dict[str, Any] | None = None
+        actual_costs: dict[str, Any] | None = None
+        scope_data: dict[str, Any] | None = None
+        procurement_items: dict[str, Any] | None = None
 
     class ScheduleMismatchRule:
-        def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+        def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
             return None
 
     class BudgetMismatchRule:
-        def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+        def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
             return None
 
     class ScopeProcurementMismatchRule:
-        def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+        def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
             return None
 
 

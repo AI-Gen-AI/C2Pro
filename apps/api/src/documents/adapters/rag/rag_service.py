@@ -43,7 +43,7 @@ class RagService:
         chunk_metadata = metadata or {}
 
         rows = []
-        for chunk, embedding in zip(chunks, embeddings):
+        for chunk, embedding in zip(chunks, embeddings, strict=False):
             rows.append(
                 {
                     "id": uuid4(),
