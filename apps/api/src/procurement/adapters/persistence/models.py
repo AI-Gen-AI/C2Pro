@@ -3,24 +3,23 @@ SQLAlchemy ORM models for the Procurement bounded context.
 These models represent the database schema for procurement-related entities.
 """
 
-from datetime import datetime
-from decimal import Decimal
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import (
-    Column,
-    String,
-    Integer,
     DECIMAL,
+    Column,
     DateTime,
-    ForeignKey,
     Enum,
-    Boolean,
-    Text,
+    ForeignKey,
     ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from src.core.database import Base
@@ -37,9 +36,12 @@ class BudgetItemORM(Base):
     __tablename__ = "procurement_budget_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     code = Column(String, nullable=False, unique=True)
     amount = Column(DECIMAL(10, 2), nullable=False)
+
+    project = relationship("ProjectORM", backref="budget_items")
 
     def __repr__(self):
         return f"<BudgetItemORM(id={self.id}, name='{self.name}', amount={self.amount})>"
@@ -145,3 +147,82 @@ class BOMItemORM(Base):
 
     def __repr__(self):
         return f"<BOMItemORM(id={self.id}, item_name='{self.item_name}', quantity={self.quantity})>"
+
+
+class StakeholderAlertORM(Base):
+    """SQLAlchemy model for stakeholder alerts.
+
+    Links stakeholders to alerts for notification tracking.
+    """
+
+    __tablename__ = "stakeholder_alerts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    stakeholder_id = Column(UUID(as_uuid=True), ForeignKey("stakeholders.id", ondelete="CASCADE"), nullable=False)
+    alert_id = Column(UUID(as_uuid=True), ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
+    notification_sent = Column(Integer, default=0, nullable=False)
+    notification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    notification_method = Column(String(50), nullable=True)
+    acknowledged = Column(Integer, default=0, nullable=False)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default="NOW()")
+
+    __table_args__ = (
+        Index("idx_stakeholder_alerts_stakeholder", "stakeholder_id"),
+        Index("idx_stakeholder_alerts_alert", "alert_id"),
+    )
+
+    def __repr__(self):
+        return f"<StakeholderAlertORM(id={self.id}, stakeholder_id={self.stakeholder_id}, alert_id={self.alert_id})>"
+
+
+class BOMRevisionORM(Base):
+    """SQLAlchemy model for BOM item revision history.
+
+    Tracks changes to BOM items over time.
+    """
+
+    __tablename__ = "bom_revisions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    bom_item_id = Column(UUID(as_uuid=True), ForeignKey("procurement_bom_items.id", ondelete="CASCADE"), nullable=False)
+    revision_number = Column(Integer, nullable=False)
+    changes_json = Column(JSONB, nullable=False)
+    changed_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    change_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default="NOW()")
+
+    __table_args__ = (
+        UniqueConstraint("bom_item_id", "revision_number", name="bom_revisions_item_number_unique"),
+        Index("idx_bom_revisions_item", "bom_item_id"),
+        Index("idx_bom_revisions_created", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<BOMRevisionORM(id={self.id}, bom_item_id={self.bom_item_id}, revision_number={self.revision_number})>"
+
+
+class ProcurementPlanSnapshotORM(Base):
+    """SQLAlchemy model for procurement plan snapshots.
+
+    Stores point-in-time snapshots of procurement plans.
+    """
+
+    __tablename__ = "procurement_plan_snapshots"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    snapshot_name = Column(String(255), nullable=False)
+    snapshot_data = Column(JSONB, nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default="NOW()")
+
+    __table_args__ = (
+        Index("idx_procurement_snapshots_project", "project_id"),
+        Index("idx_procurement_snapshots_created", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<ProcurementPlanSnapshotORM(id={self.id}, snapshot_name='{self.snapshot_name}')>"

@@ -10,7 +10,6 @@ Sprint: P3 Optimization
 
 from src.core.ai.prompts import PromptTemplate, register_template
 
-
 # ===========================================
 # ENHANCED SYSTEM PROMPTS WITH COT
 # ===========================================

@@ -3,17 +3,16 @@ SQLAlchemy implementation of the WBS repository.
 
 Refers to Suite ID: TS-INT-DB-WBS-001.
 """
-from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_, inspect
+from sqlalchemy import and_, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import ConflictError
-from src.procurement.ports.wbs_repository import IWBSRepository
-from src.procurement.domain.models import WBSItem
 from src.procurement.adapters.persistence.models import WBSItemORM
+from src.procurement.domain.models import WBSItem
+from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -80,6 +79,16 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             wbs_metadata=wbs_item.wbs_metadata or {}
         )
 
+    async def _ensure_project_in_tenant(self, project_id: UUID, tenant_id: UUID) -> None:
+        """Reject writes for projects outside the caller tenant."""
+        result = await self.session.execute(
+            select(ProjectORM.id)
+            .where(ProjectORM.id == project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
+        if result.scalar_one_or_none() is None:
+            raise PermissionError("Cannot create WBS items for project outside tenant")
+
     async def create(self, wbs_item: WBSItem) -> WBSItem:
         """Create a new WBS item."""
         orm = self._domain_to_orm(wbs_item)
@@ -89,7 +98,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return self._orm_to_domain(orm)
 
-    async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> Optional[WBSItem]:
+    async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
         """Retrieve a WBS item by ID."""
         result = await self.session.execute(
             select(WBSItemORM)
@@ -105,7 +114,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return self._orm_to_domain(orm)
 
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """Retrieve all WBS items for a project."""
         result = await self.session.execute(
             select(WBSItemORM)
@@ -119,7 +128,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return [self._orm_to_domain(orm) for orm in orms]
 
-    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> Optional[WBSItem]:
+    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> WBSItem | None:
         """Retrieve a WBS item by its code within a project."""
         result = await self.session.execute(
             select(WBSItemORM)
@@ -140,7 +149,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return self._orm_to_domain(orm)
 
-    async def get_children(self, parent_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_children(self, parent_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """Retrieve all children of a WBS item."""
         parent_result = await self.session.execute(
             select(WBSItemORM)
@@ -163,14 +172,14 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return [self._orm_to_domain(orm) for orm in orms]
 
-    async def get_tree(self, project_id: UUID, tenant_id: UUID) -> List[WBSItem]:
+    async def get_tree(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
         """Retrieve the complete WBS tree for a project with hierarchy."""
         # Get all WBS items for the project
         result = await self.session.execute(
             select(WBSItemORM)
             .options(selectinload(WBSItemORM.children))
             .where(WBSItemORM.project_id == project_id)
-            .where(WBSItemORM.parent_code == None)  # Only root items
+            .where(WBSItemORM.parent_code.is_(None))  # Only root items
             .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
             .where(ProjectORM.tenant_id == tenant_id)
             .order_by(WBSItemORM.code)
@@ -179,7 +188,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return [self._orm_to_domain(orm, include_children=True) for orm in root_orms]
 
-    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> Optional[WBSItem]:
+    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> WBSItem | None:
         """Update an existing WBS item."""
         result = await self.session.execute(
             select(WBSItemORM)
@@ -234,8 +243,11 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
         return True
 
-    async def bulk_create(self, wbs_items: List[WBSItem]) -> List[WBSItem]:
-        """Create multiple WBS items at once (used for AI generation)."""
+    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
+        """Create multiple WBS items at once with tenant isolation (used for AI generation)."""
+        for project_id in {wbs_item.project_id for wbs_item in wbs_items}:
+            await self._ensure_project_in_tenant(project_id, tenant_id)
+
         # First pass: create all ORMs
         orms_to_add = []
         for wbs_item in wbs_items:
@@ -255,8 +267,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return created_items
 
     async def bulk_create_from_dicts(
-        self, project_id: UUID, items: List[dict],
-    ) -> List[WBSItem]:
+        self, project_id: UUID, items: list[dict], tenant_id: UUID,
+    ) -> list[WBSItem]:
         """Build WBSItem domain objects from raw dicts and persist them.
 
         This is the cross-context entry point: callers outside the procurement
@@ -276,7 +288,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             except Exception:
                 return None
 
-        wbs_items: List[WBSItem] = []
+        wbs_items: list[WBSItem] = []
         for item in items:
             code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
             level = code.count(".") + 1 if code else 1
@@ -301,5 +313,5 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                 )
             )
 
-        return await self.bulk_create(wbs_items)
+        return await self.bulk_create(wbs_items, tenant_id)
 

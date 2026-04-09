@@ -393,27 +393,6 @@ class TestGate2Summary:
         This test aggregates all Gate 2 findings.
         """
         # Generate evidence
-        evidence = {
-            "gate": "Gate 2 - Identity & Authentication",
-            "status": "PASSED",
-            "jwt_security": {
-                "signature_validation": "ENFORCED",
-                "expiration_validation": "ENFORCED",
-                "tenant_validation": "ENFORCED",
-                "token_type_validation": "ENFORCED",
-            },
-            "authentication_flows": {
-                "refresh_token_security": "VERIFIED",
-                "missing_auth_rejection": "VERIFIED",
-                "malformed_token_rejection": "VERIFIED",
-            },
-            "verification": {
-                "jwt_tampering_prevention": "CONFIRMED",
-                "replay_attack_prevention": "CONFIRMED",
-                "token_type_confusion_prevention": "CONFIRMED",
-                "anonymous_access_prevention": "CONFIRMED",
-            },
-        }
 
         # Log evidence (captured by pytest)
         print(f"\n{'=' * 80}")

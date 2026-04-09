@@ -31,5 +31,5 @@ class LLMTimeoutService:
             if isinstance(result, dict):
                 return {"status": "ok", **result}
             return {"status": "ok", "result": result}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"status": "fallback_retry"}

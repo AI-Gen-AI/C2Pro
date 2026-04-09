@@ -511,18 +511,6 @@ class TestGate1Summary:
         policy_count = result.scalar()
 
         # Generate evidence
-        evidence = {
-            "gate": "Gate 1 - Row Level Security",
-            "status": "PASSED",
-            "rls_enabled_tables": rls_enabled_count,
-            "rls_policies": policy_count,
-            "verification": {
-                "policy_coverage": "100%",
-                "cross_tenant_isolation": "VERIFIED",
-                "force_rls_enabled": "YES",
-                "zero_data_leakage": "CONFIRMED",
-            },
-        }
 
         # Log evidence (captured by pytest)
         print(f"\n{'=' * 80}")

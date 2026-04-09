@@ -1,4 +1,5 @@
-"""
+"""TS-E2E-FLW-JRN-001
+
 Test Suite: Document Repository Additional Tests
 Component: Documents Module - Document Repository Adapter
 Priority: P0
@@ -6,9 +7,11 @@ Priority: P0
 Additional tests to improve document repository coverage.
 """
 
-import pytest
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock, patch
+
+import pytest
 
 
 class TestSqlAlchemyDocumentRepository:
@@ -52,7 +55,7 @@ class TestSqlAlchemyDocumentRepository:
 
         mock_session = MagicMock()
         expected_tenant_id = uuid4()
-        
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = str(expected_tenant_id)
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -95,6 +98,30 @@ class TestSqlAlchemyDocumentRepository:
         tenant_id = await repo._get_current_tenant_id()
 
         assert tenant_id is None
+
+    def test_to_orm_document_normalizes_aware_timestamps_to_naive_utc(self):
+        """Aware UTC timestamps should be normalized for naive TIMESTAMP columns."""
+        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+            SqlAlchemyDocumentRepository,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        aware_now = datetime.now(UTC)
+        document = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            document_type=DocumentType.CONTRACT,
+            filename="aware.pdf",
+            upload_status=DocumentStatus.QUEUED,
+            created_at=aware_now,
+            updated_at=aware_now,
+        )
+
+        repo = SqlAlchemyDocumentRepository(session=MagicMock())
+        orm_document = repo._to_orm_document(document)
+
+        assert orm_document.created_at.tzinfo is None
+        assert orm_document.updated_at.tzinfo is None
 
 
 class TestDocumentORM:

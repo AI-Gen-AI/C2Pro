@@ -16,20 +16,19 @@ Testing Approach: Unit tests — minimal FastAPI app with handlers registered;
 """
 
 import uuid
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException, status
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from unittest.mock import MagicMock, patch
 
-from src.core.handlers import register_exception_handlers
 from src.core.exceptions import (
     AuthenticationError,
     BusinessLogicException,
     ResourceNotFoundError,
 )
-
+from src.core.handlers import register_exception_handlers
 
 # ===========================================
 # TEST APPLICATION SETUP

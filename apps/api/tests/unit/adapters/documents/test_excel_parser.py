@@ -6,11 +6,12 @@ Priority: P0
 Additional tests to improve Excel parser coverage.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestExcelParserSchedule:
@@ -51,7 +52,10 @@ class TestExcelParserSchedule:
     @pytest.mark.asyncio
     async def test_parse_schedule_missing_headers(self):
         """Test schedule parsing with missing required headers."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         parser = ExcelFileParser()
 
@@ -76,7 +80,10 @@ class TestExcelParserSchedule:
     @pytest.mark.asyncio
     async def test_parse_schedule_invalid_file(self):
         """Test schedule parsing with invalid file."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         parser = ExcelFileParser()
 
@@ -125,7 +132,10 @@ class TestExcelParserBudget:
     @pytest.mark.asyncio
     async def test_parse_budget_missing_headers(self):
         """Test budget parsing with missing required headers."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         parser = ExcelFileParser()
 
@@ -150,7 +160,10 @@ class TestExcelParserBudget:
     @pytest.mark.asyncio
     async def test_parse_budget_invalid_file(self):
         """Test budget parsing with invalid file."""
-        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
 
         parser = ExcelFileParser()
 

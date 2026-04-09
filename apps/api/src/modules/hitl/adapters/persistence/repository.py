@@ -1,16 +1,19 @@
-"""SQLAlchemy implementation of the ReviewQueueRepository port."""
+"""
+SQLAlchemy implementation of the ReviewQueueRepository port.
+Test Suite ID: TS-I11-HITL-HTTP-002
+"""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.application.ports import ReviewQueueRepository
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
-from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 
 
 class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
@@ -18,10 +21,34 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         self.session = session
         self.tenant_id = tenant_id
 
+    @staticmethod
+    def _normalize_naive_utc(value: datetime | None) -> datetime | None:
+        """Persist naive UTC values for columns declared without timezone support."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
+
     # -- mapper helpers -------------------------------------------------------
 
     @staticmethod
     def _to_domain(orm: ReviewItemORM) -> ReviewItem:
+        # TASK-BCK-024: Include checkpoint tracking fields in metadata
+        metadata = dict(orm.review_metadata or {})
+        if orm.checkpoint_id:
+            metadata["checkpoint_id"] = orm.checkpoint_id
+        if orm.thread_id:
+            metadata["thread_id"] = orm.thread_id
+        if orm.project_id:
+            metadata["project_id"] = str(orm.project_id)
+        if orm.document_id:
+            metadata["document_id"] = str(orm.document_id)
+        if orm.review_type:
+            metadata["review_type"] = orm.review_type
+        if orm.review_decision:
+            metadata["review_decision"] = orm.review_decision
+
         return ReviewItem(
             item_id=orm.item_id,
             item_type=orm.item_type,
@@ -37,10 +64,24 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             approved_by=orm.approved_by,
             approved_at=orm.approved_at,
             item_data=orm.item_data or {},
-            metadata=orm.review_metadata or {},
+            metadata=metadata,
         )
 
     def _to_orm(self, item: ReviewItem) -> ReviewItemORM:
+        # TASK-BCK-024: Extract checkpoint fields from metadata
+        metadata = dict(item.metadata)
+        checkpoint_id = metadata.pop("checkpoint_id", None)
+        thread_id = metadata.pop("thread_id", None)
+        project_id_str = metadata.pop("project_id", None)
+        document_id_str = metadata.pop("document_id", None)
+        review_type = metadata.pop("review_type", None)
+        review_decision = metadata.pop("review_decision", None)
+
+        # Convert string UUIDs back to UUID objects
+        from uuid import UUID as UUIDType
+        project_id = UUIDType(project_id_str) if project_id_str else None
+        document_id = UUIDType(document_id_str) if document_id_str else None
+
         return ReviewItemORM(
             item_id=item.item_id,
             item_type=item.item_type,
@@ -52,7 +93,14 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
             approved_by=item.approved_by,
             approved_at=item.approved_at,
             item_data=item.item_data,
-            review_metadata=item.metadata,
+            review_metadata=metadata,  # Store remaining metadata
+            # TASK-BCK-024: Checkpoint tracking fields
+            checkpoint_id=checkpoint_id,
+            thread_id=thread_id,
+            project_id=project_id,
+            document_id=document_id,
+            review_type=review_type,
+            review_decision=review_decision,
         )
 
     # -- port implementation --------------------------------------------------
@@ -79,18 +127,45 @@ class SqlAlchemyReviewQueueRepository(ReviewQueueRepository):
         orm = result.scalar_one_or_none()
         if orm is None:
             raise ValueError(f"Review item {item.item_id} not found.")
+
+        # TASK-BCK-024: Extract checkpoint fields from metadata before storing
+        metadata = dict(item.metadata)
+        checkpoint_id = metadata.pop("checkpoint_id", None)
+        thread_id = metadata.pop("thread_id", None)
+        project_id_str = metadata.pop("project_id", None)
+        document_id_str = metadata.pop("document_id", None)
+        review_type = metadata.pop("review_type", None)
+        review_decision = metadata.pop("review_decision", None)
+
+        from uuid import UUID as UUIDType
+        project_id = UUIDType(project_id_str) if project_id_str and isinstance(project_id_str, str) else None
+        document_id = UUIDType(document_id_str) if document_id_str and isinstance(document_id_str, str) else None
+
         orm.current_status = item.current_status
         orm.confidence = item.confidence
         orm.impact_level = item.impact_level
         orm.approved_by = item.approved_by
-        orm.approved_at = item.approved_at
+        orm.approved_at = self._normalize_naive_utc(item.approved_at)
         orm.item_data = item.item_data
-        orm.review_metadata = item.metadata
-        orm.updated_at = datetime.utcnow()
+        orm.review_metadata = metadata  # Store remaining metadata
+        # TASK-BCK-024: Update checkpoint tracking fields
+        if checkpoint_id is not None:
+            orm.checkpoint_id = checkpoint_id
+        if thread_id is not None:
+            orm.thread_id = thread_id
+        if project_id is not None:
+            orm.project_id = project_id
+        if document_id is not None:
+            orm.document_id = document_id
+        if review_type is not None:
+            orm.review_type = review_type
+        if review_decision is not None:
+            orm.review_decision = review_decision
+        orm.updated_at = self._normalize_naive_utc(datetime.now(UTC))
         await self.session.flush()
 
     async def get_overdue_items(self) -> list[ReviewItem]:
-        now = datetime.utcnow()
+        now = self._normalize_naive_utc(datetime.now(UTC))
         stmt = (
             select(ReviewItemORM)
             .where(

@@ -6,8 +6,8 @@ Refers to Suite ID: TS-UD-STK-MAP-001.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 from uuid import UUID
 
 from src.stakeholders.domain.models import StakeholderQuadrant

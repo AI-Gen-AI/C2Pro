@@ -13,7 +13,6 @@ Test Scenarios:
 4. Multi-checkpoint state recovery
 """
 
-import asyncio
 import sys
 from types import SimpleNamespace
 from uuid import uuid4
@@ -24,7 +23,6 @@ from sqlalchemy import text
 from src.analysis.adapters.graph import workflow as workflow_module
 from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_workflow
 from src.config import settings
-
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -112,24 +110,22 @@ class TestLangGraphCheckpointer:
     async def test_checkpoint_persistence_basic(self):
         """Test that checkpoints are persisted to database."""
         checkpointer = _build_checkpointer()
-        thread_id = f"test_thread_{uuid4()}"
+        f"test_thread_{uuid4()}"
 
         # Create a simple test state
-        test_state = {
+        {
             "project_id": str(uuid4()),
             "doc_type": "contract",
             "status": "processing",
         }
 
         # Save checkpoint
-        config = {"configurable": {"thread_id": thread_id}}
-        checkpoint_metadata = {"source": "test", "step": 1}
 
         # The checkpointer should save state
         # Note: This is a simplified test - actual workflow execution would handle this
         from langgraph.checkpoint.base import Checkpoint
 
-        checkpoint = Checkpoint(
+        Checkpoint(
             v=1,
             id=str(uuid4()),
             ts="2026-03-20T00:00:00Z",
@@ -206,11 +202,11 @@ class TestLangGraphCheckpointer:
         This test verifies that a workflow can be interrupted and resumed
         using the same thread_id.
         """
-        checkpointer = _build_checkpointer()
-        thread_id = f"recovery_test_{uuid4()}"
+        _build_checkpointer()
+        f"recovery_test_{uuid4()}"
 
         # Simulate workflow state at interruption point
-        initial_state = {
+        {
             "project_id": str(uuid4()),
             "tenant_id": str(uuid4()),
             "doc_type": "contract",
@@ -220,7 +216,6 @@ class TestLangGraphCheckpointer:
             "retry_count": 0,
         }
 
-        config = {"configurable": {"thread_id": thread_id}}
 
         # In production, workflow execution would save checkpoints automatically
         # This test verifies the infrastructure supports recovery
@@ -250,21 +245,17 @@ class TestLangGraphWorkflowPersistence:
         """
         from src.analysis.adapters.graph.workflow import get_graph_app
 
-        app = get_graph_app()
+        get_graph_app()
         thread_id = f"workflow_checkpoint_test_{uuid4()}"
 
         # Create minimal valid state
-        initial_state = {
+        {
             "project_id": str(uuid4()),
             "tenant_id": str(uuid4()),
             "doc_type": "contract",
             "document_bytes": b"test document content",
         }
 
-        config = {
-            "configurable": {"thread_id": thread_id},
-            "run_name": "checkpoint_persistence_test",
-        }
 
         # Note: Full workflow execution would happen here
         # For unit test purposes, we verify the infrastructure exists
@@ -290,7 +281,6 @@ async def db_session():
     from sqlalchemy.ext.asyncio import create_async_engine
 
     from src.analysis.adapters.graph.workflow import ensure_checkpointer_ready
-    from src.config import settings
 
     await ensure_checkpointer_ready()
     engine = create_async_engine(settings.database_url_async, echo=False)

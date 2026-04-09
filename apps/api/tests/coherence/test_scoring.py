@@ -1,5 +1,6 @@
 # apps/api/tests/coherence/test_scoring.py
 import pytest
+
 from src.coherence.config import (
     DECAY_FACTOR,
     RULE_WEIGHT_OVERRIDES,

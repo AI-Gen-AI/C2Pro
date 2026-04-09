@@ -5,6 +5,7 @@ Infraestructura de background tasks: Celery app y task definitions.
 """
 
 from src.core.tasks.celery_app import celery_app
+
 try:
     from src.core.tasks.budget_alerts import run_budget_alerts
 except Exception:  # pragma: no cover - optional runtime dependency graph

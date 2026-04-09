@@ -8,6 +8,7 @@ Refers to Suite ID: TS-E2E-PER-LRG-001.
 import asyncio
 from collections.abc import Sequence
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -22,8 +23,11 @@ from src.bulk_operations.store import register_job
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
+from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
+from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.application.budget_use_cases import GetBudgetUseCase
+from src.procurement.application.use_cases import GetWBSTreeUseCase, ListWBSItemsUseCase
 from src.projects.adapters.persistence.models import ProjectORM
-
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -396,7 +400,6 @@ async def get_project(
 
     Returns 404 if project doesn't exist or belongs to another tenant.
     """
-    from sqlalchemy import select
 
     async with get_session_with_tenant(current_user.tenant_id) as session:
         project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
@@ -562,93 +565,92 @@ async def update_project(
     Returns 404 if project doesn't exist or belongs to another tenant.
     """
     project_lock = _project_locks.setdefault(project_id, asyncio.Lock())
-    async with project_lock:
-        async with get_session_with_tenant(current_user.tenant_id) as session:
-            project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
+    async with project_lock, get_session_with_tenant(current_user.tenant_id) as session:
+        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
 
-            if not project:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Project not found",
-                )
-
-            current_version = int(_extract_project_metadata(project).get(PROJECT_METADATA_VERSION_KEY, 1))
-
-            if_match = request.headers.get("If-Match")
-            update_data = updates.model_dump(exclude_unset=True)
-            expected_version = update_data.get("expected_version")
-            if expected_version is None and if_match is None:
-                raise HTTPException(
-                    status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-                    detail="Missing If-Match or expected_version precondition",
-                )
-
-            idempotency_key = request.headers.get("Idempotency-Key")
-            seen_keys: set[tuple[str, str, str, str]] = getattr(
-                request.app.state,
-                "project_idempotency_seen",
-                set(),
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
             )
-            if not hasattr(request.app.state, "project_idempotency_seen"):
-                request.app.state.project_idempotency_seen = seen_keys
-            key: tuple[str, str, str, str] | None = None
-            if idempotency_key:
-                key = (
-                    str(current_user.tenant_id),
-                    str(project_id),
-                    "PATCH",
-                    idempotency_key,
-                )
-                if key in seen_keys:
-                    return JSONResponse(
-                        status_code=status.HTTP_409_CONFLICT,
-                        content={"detail": {"code": "DUPLICATE_REQUEST"}},
-                    )
 
-            if expected_version is not None and int(expected_version) > current_version:
+        current_version = int(_extract_project_metadata(project).get(PROJECT_METADATA_VERSION_KEY, 1))
+
+        if_match = request.headers.get("If-Match")
+        update_data = updates.model_dump(exclude_unset=True)
+        expected_version = update_data.get("expected_version")
+        if expected_version is None and if_match is None:
+            raise HTTPException(
+                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+                detail="Missing If-Match or expected_version precondition",
+            )
+
+        idempotency_key = request.headers.get("Idempotency-Key")
+        seen_keys: set[tuple[str, str, str, str]] = getattr(
+            request.app.state,
+            "project_idempotency_seen",
+            set(),
+        )
+        if not hasattr(request.app.state, "project_idempotency_seen"):
+            request.app.state.project_idempotency_seen = seen_keys
+        key: tuple[str, str, str, str] | None = None
+        if idempotency_key:
+            key = (
+                str(current_user.tenant_id),
+                str(project_id),
+                "PATCH",
+                idempotency_key,
+            )
+            if key in seen_keys:
                 return JSONResponse(
                     status_code=status.HTTP_409_CONFLICT,
-                    content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
+                    content={"detail": {"code": "DUPLICATE_REQUEST"}},
                 )
 
-            if if_match is not None:
-                current_tag = f'"v{current_version}"'
-                if if_match != current_tag:
-                    raise HTTPException(
-                        status_code=status.HTTP_412_PRECONDITION_FAILED,
-                        detail="Precondition failed",
-                    )
+        if expected_version is not None and int(expected_version) > current_version:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
+            )
 
-            if expected_version is not None and int(expected_version) != current_version:
-                return JSONResponse(
+        if if_match is not None:
+            current_tag = f'"v{current_version}"'
+            if if_match != current_tag:
+                raise HTTPException(
+                    status_code=status.HTTP_412_PRECONDITION_FAILED,
+                    detail="Precondition failed",
+                )
+
+        if expected_version is not None and int(expected_version) != current_version:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
+            )
+
+        if "code" in update_data and update_data["code"]:
+            result = await session.execute(
+                select(ProjectORM).where(
+                    ProjectORM.tenant_id == current_user.tenant_id,
+                    ProjectORM.id != project_id,
+                    func.lower(ProjectORM.code) == str(update_data["code"]).strip().lower(),
+                )
+            )
+            if result.scalar_one_or_none():
+                raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    content={"detail": {"code": "CONCURRENT_MODIFICATION"}},
+                    detail="Project code already exists",
                 )
 
-            if "code" in update_data and update_data["code"]:
-                result = await session.execute(
-                    select(ProjectORM).where(
-                        ProjectORM.tenant_id == current_user.tenant_id,
-                        ProjectORM.id != project_id,
-                        func.lower(ProjectORM.code) == str(update_data["code"]).strip().lower(),
-                    )
-                )
-                if result.scalar_one_or_none():
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Project code already exists",
-                    )
+        _apply_project_update(project, {k: v for k, v in update_data.items() if k != "expected_version"})
+        await session.commit()
+        await session.refresh(project)
 
-            _apply_project_update(project, {k: v for k, v in update_data.items() if k != "expected_version"})
-            await session.commit()
-            await session.refresh(project)
+        if idempotency_key and key is not None:
+            seen_keys.add(key)
 
-            if idempotency_key and key is not None:
-                seen_keys.add(key)
-
-            project_data = _project_orm_to_dict(project)
-            response.headers["ETag"] = f'"v{project_data["version"]}"'
-            return _project_to_response(project_data)
+        project_data = _project_orm_to_dict(project)
+        response.headers["ETag"] = f'"v{project_data["version"]}"'
+        return _project_to_response(project_data)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -818,7 +820,7 @@ async def bulk_create_wbs(
     project_id: UUID,
     request: BulkWBSRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    response: Response,
+    _response: Response,
 ) -> dict[str, object] | JSONResponse:
     """
     Bulk create WBS items.
@@ -862,7 +864,7 @@ async def bulk_create_wbs(
 
     if len(request.items) >= 100 and not errors:
         job_id = str(uuid4())
-        register_job(job_id, _build_bulk_job_payload(total_items=len(request.items)))
+        register_job(job_id, _build_bulk_job_payload(total_items=len(request.items)), tenant_id=str(current_user.tenant_id))
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
             content={
@@ -936,6 +938,7 @@ async def export_project_data(
     register_job(
         export_id,
         _build_bulk_job_payload(total_items=max(len(request.include), 1)),
+        tenant_id=str(current_user.tenant_id),
     )
 
     return {
@@ -975,7 +978,7 @@ async def get_project_budget(
     """
     Get budget data for project.
 
-    GREEN PHASE implementation using "Fake It" pattern.
+    Now uses procurement budget items for real data.
 
     Args:
         project_id: UUID of the project
@@ -997,18 +1000,67 @@ async def get_project_budget(
         )
 
     project_data = _project_orm_to_dict(project)
-    total_budget = project_data.get("budget_planned") or project_data.get("estimated_budget") or 0.0
-    spent_amount = 0.0
-    utilization_percentage = 0.0 if total_budget == 0 else round((spent_amount / total_budget) * 100, 2)
+    project_currency = project_data.get("currency", "EUR")
+
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        budget_repo = SQLAlchemyBudgetRepository(session)
+        budget_use_case = GetBudgetUseCase(budget_repo)
+        budget_response = await budget_use_case.execute(project_id, current_user.tenant_id)
+
+    total_budget = budget_response.total_budget
+    spent_amount = Decimal("0")
+    utilization_percentage = (
+        0.0 if total_budget == 0 else round((float(spent_amount) / float(total_budget)) * 100, 2)
+    )
+
+    variance_status = "on_track"
+    if utilization_percentage > 90:
+        variance_status = "Critical"
+    elif utilization_percentage > 75:
+        variance_status = "Watch"
+    elif utilization_percentage > 50:
+        variance_status = "Caution"
 
     return {
         "project_id": str(project_id),
-        "currency": project_data.get("currency", "EUR"),
+        "currency": project_currency,
         "total_budget": float(total_budget),
-        "spent_amount": spent_amount,
+        "spent_amount": float(spent_amount),
         "remaining_budget": float(total_budget - spent_amount),
         "utilization_percentage": utilization_percentage,
-        "variance_status": "on_track",
+        "variance_status": variance_status,
+    }
+
+
+@router.get(
+    "/{project_id}/wbs",
+    summary="Get Project WBS Tree",
+    description="""
+    Returns WBS (Work Breakdown Structure) tree for a project.
+
+    Uses procurement WBS items for real data.
+
+    Returns:
+    - Hierarchical WBS tree with children
+    """,
+)
+async def get_project_wbs(
+    project_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    """Get WBS tree for project."""
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        wbs_repo = SQLAlchemyWBSRepository(session)
+        wbs_use_case = GetWBSTreeUseCase(wbs_repo)
+        await wbs_use_case.execute(project_id, current_user.tenant_id)
+
+        list_use_case = ListWBSItemsUseCase(wbs_repo)
+        flat_items = await list_use_case.execute(project_id, current_user.tenant_id)
+
+    return {
+        "project_id": str(project_id),
+        "items": flat_items,
+        "total_items": len(flat_items),
     }
 
 

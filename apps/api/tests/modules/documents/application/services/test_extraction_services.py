@@ -18,6 +18,7 @@ from src.documents.application.services.extraction_service import (
     MoneyEntity,
 )
 
+
 class ILLMClientPort:
     """Minimal port interface for mocking."""
 

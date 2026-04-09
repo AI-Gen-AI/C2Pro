@@ -15,10 +15,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+from src.config import settings
 from src.core import database as database_module
 from src.core.database import Base, get_session_with_tenant
-from src.config import settings
-from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
+from src.procurement.adapters.persistence.models import Base as ProcurementBase
+from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM

@@ -12,7 +12,6 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-
 ADMIN_URL = os.getenv(
     "C2PRO_RLS_ADMIN_URL",
     "postgresql://supabase_admin:postgres@localhost:54322/c2pro_migration_check",

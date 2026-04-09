@@ -1,10 +1,16 @@
 /**
+ * WBS Page - Work Breakdown Structure View
+ *
+ * TASK-FRT-164: WBS Tree UI Component
+ * Implements hierarchical tree with drag-drop support via page-level DnD
+ *
  * Test Suite ID: TASK-1427
- * Route Coverage: canonical WBS route standalone implementation
  */
+
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -24,96 +30,57 @@ import {
   Edit2,
   Plus,
   Expand,
+  Loader2,
+  GripVertical,
 } from "lucide-react";
+import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
 
-interface WBSItem {
-  id: string;
-  code: string;
-  name: string;
-  completion: number;
-  children?: WBSItem[];
+interface WBSTreeRowProps {
+  item: WBSTreeItem;
+  level?: number;
+  expandedItems: Set<string>;
+  onToggleExpand: (id: string) => void;
+  onEdit: (item: WBSTreeItem) => void;
+  readOnly?: boolean;
 }
 
-const mockWBS: WBSItem[] = [
-  {
-    id: "1",
-    code: "1",
-    name: "Project Management",
-    completion: 75,
-    children: [
-      {
-        id: "1.1",
-        code: "1.1",
-        name: "Planning",
-        completion: 100,
-      },
-      {
-        id: "1.2",
-        code: "1.2",
-        name: "Monitoring & Control",
-        completion: 50,
-      },
-    ],
-  },
-  {
-    id: "2",
-    code: "2",
-    name: "Construction",
-    completion: 45,
-    children: [
-      {
-        id: "2.1",
-        code: "2.1",
-        name: "Foundation Work",
-        completion: 80,
-      },
-      {
-        id: "2.2",
-        code: "2.2",
-        name: "Structural Work",
-        completion: 20,
-      },
-    ],
-  },
-  {
-    id: "3",
-    code: "3",
-    name: "Finishing",
-    completion: 10,
-    children: [
-      {
-        id: "3.1",
-        code: "3.1",
-        name: "Interior Work",
-        completion: 5,
-      },
-    ],
-  },
-];
-
-function WBSItemRow({
+function WBSTreeRow({
   item,
   level = 0,
   expandedItems,
   onToggleExpand,
   onEdit,
-}: {
-  item: WBSItem;
-  level?: number;
-  expandedItems: Set<string>;
-  onToggleExpand: (id: string) => void;
-  onEdit: (item: WBSItem) => void;
-}) {
+  readOnly = false,
+}: WBSTreeRowProps) {
   const isExpanded = expandedItems.has(item.id);
   const hasChildren = item.children && item.children.length > 0;
+
+  // Determine status color
+  const getStatusColor = (completion: number) => {
+    if (completion >= 100) return "bg-green-500";
+    if (completion >= 50) return "bg-blue-500";
+    if (completion > 0) return "bg-yellow-500";
+    return "bg-gray-400";
+  };
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-2 hover:bg-muted/50"
+        className="group flex items-center gap-2 py-2 hover:bg-muted/50"
         style={{ paddingLeft: `${level * 24}px` }}
         data-testid={`wbs-item-${item.id}`}
+        draggable={!readOnly}
+        onDragStart={(e) => {
+          if (!readOnly) {
+            e.dataTransfer.setData("text/plain", item.id);
+            e.dataTransfer.effectAllowed = "move";
+          }
+        }}
       >
+        {!readOnly && (
+          <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-100" />
+        )}
+
         {hasChildren ? (
           <button
             onClick={() => onToggleExpand(item.id)}
@@ -131,13 +98,22 @@ function WBSItemRow({
         )}
 
         <span
-          className="w-16 font-mono text-sm text-muted-foreground"
+          className="w-20 font-mono text-sm text-muted-foreground"
           data-testid={`wbs-item-code-${item.code}`}
         >
           {item.code}
         </span>
 
-        <span className="flex-1 font-medium">{item.name}</span>
+        <div className="flex flex-1 items-center gap-2">
+          <span className="font-medium">{item.name}</span>
+          {item.status && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-xs font-medium text-white ${getStatusColor(item.completion)}`}
+            >
+              {item.status}
+            </span>
+          )}
+        </div>
 
         <div className="flex w-48 items-center gap-4">
           <Progress value={item.completion} className="h-2 flex-1" />
@@ -162,13 +138,14 @@ function WBSItemRow({
 
       {isExpanded &&
         item.children?.map((child) => (
-          <WBSItemRow
+          <WBSTreeRow
             key={child.id}
             item={child}
             level={level + 1}
             expandedItems={expandedItems}
             onToggleExpand={onToggleExpand}
             onEdit={onEdit}
+            readOnly={readOnly}
           />
         ))}
     </div>
@@ -176,51 +153,107 @@ function WBSItemRow({
 }
 
 export default function ProjectWBSPage() {
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const {
+    items,
+    isLoading,
+    isError,
+    error,
+    updateItem,
+    createItem,
+    deleteItem,
+    moveItem,
+    expandedItems,
+    toggleExpanded,
+    expandAll,
+    collapseAll,
+  } = useWBSTree({ projectId });
+
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<WBSItem | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [selectedEditItem, setSelectedEditItem] = useState<WBSTreeItem | null>(
+    null,
+  );
   const [completionInput, setCompletionInput] = useState("");
   const [completionNote, setCompletionNote] = useState("");
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemCode, setNewItemCode] = useState("");
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
-  const toggleExpand = (id: string) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const expandAll = () => {
-    const allIds = new Set<string>();
-    const collectIds = (items: WBSItem[]) => {
-      items.forEach((item) => {
-        allIds.add(item.id);
-        if (item.children) {
-          collectIds(item.children);
-        }
-      });
-    };
-    collectIds(mockWBS);
-    setExpandedItems(allIds);
-  };
-
-  const handleEdit = (item: WBSItem) => {
-    setSelectedItem(item);
+  const handleEdit = (item: WBSTreeItem) => {
+    setSelectedEditItem(item);
     setCompletionInput(item.completion.toString());
     setCompletionNote("");
     setEditModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (selectedEditItem) {
+      const success = await updateItem(selectedEditItem.id, {
+        completion: parseInt(completionInput, 10),
+      });
+      if (success) {
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3000);
+      }
+    }
     setEditModalOpen(false);
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
   };
+
+  const handleCreate = async () => {
+    if (newItemName && newItemCode) {
+      const success = await createItem({
+        projectId,
+        code: newItemCode,
+        name: newItemName,
+        nodeType: "TASK",
+      });
+      if (success) {
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3000);
+      }
+    }
+    setCreateModalOpen(false);
+    setNewItemName("");
+    setNewItemCode("");
+  };
+
+  const handleDragOver = (e: React.DragEvent, itemId: string) => {
+    e.preventDefault();
+    setDragOverId(itemId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetItem: WBSTreeItem) => {
+    e.preventDefault();
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (draggedId && draggedId !== targetItem.id) {
+      await moveItem(draggedId, targetItem.id);
+    }
+    setDragOverId(null);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <p className="text-red-800">Failed to load WBS: {error?.message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="wbs-tree-view">
@@ -240,7 +273,7 @@ export default function ProjectWBSPage() {
             <Expand className="mr-2 h-4 w-4" />
             Expand All
           </Button>
-          <Button>
+          <Button onClick={() => setCreateModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Item
           </Button>
@@ -252,7 +285,7 @@ export default function ProjectWBSPage() {
           className="rounded-lg bg-green-100 p-4 text-green-800"
           data-testid="success-toast"
         >
-          <p className="font-medium">Progress updated successfully</p>
+          <p className="font-medium">Operation completed successfully</p>
         </div>
       ) : null}
 
@@ -261,24 +294,39 @@ export default function ProjectWBSPage() {
           <CardTitle>Project Structure</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {mockWBS.map((item) => (
-            <WBSItemRow
-              key={item.id}
-              item={item}
-              expandedItems={expandedItems}
-              onToggleExpand={toggleExpand}
-              onEdit={handleEdit}
-            />
-          ))}
+          {items.length > 0 ? (
+            items.map((item) => (
+              <div
+                key={item.id}
+                onDragOver={(e) => handleDragOver(e, item.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, item)}
+                className={dragOverId === item.id ? "bg-blue-50" : ""}
+              >
+                <WBSTreeRow
+                  item={item}
+                  expandedItems={expandedItems}
+                  onToggleExpand={toggleExpanded}
+                  onEdit={handleEdit}
+                />
+              </div>
+            ))
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">
+              No WBS items yet. Click "Add Item" to create one.
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Edit Dialog */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent data-testid="wbs-edit-modal">
           <DialogHeader>
             <DialogTitle>Edit WBS Progress</DialogTitle>
             <DialogDescription>
-              Update completion for {selectedItem?.code} {selectedItem?.name}
+              Update completion for {selectedEditItem?.code}{" "}
+              {selectedEditItem?.name}
             </DialogDescription>
           </DialogHeader>
 
@@ -290,6 +338,9 @@ export default function ProjectWBSPage() {
               <Input
                 id="completion-input"
                 data-testid="completion-input"
+                type="number"
+                min="0"
+                max="100"
                 value={completionInput}
                 onChange={(event) => setCompletionInput(event.target.value)}
               />
@@ -314,6 +365,55 @@ export default function ProjectWBSPage() {
             </Button>
             <Button data-testid="save-wbs-changes" onClick={handleSave}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Dialog */}
+      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent data-testid="wbs-create-modal">
+          <DialogHeader>
+            <DialogTitle>Add WBS Item</DialogTitle>
+            <DialogDescription>
+              Create a new item in the Work Breakdown Structure
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="new-item-code">
+                WBS Code
+              </label>
+              <Input
+                id="new-item-code"
+                data-testid="new-item-code"
+                placeholder="e.g., 1.1.1"
+                value={newItemCode}
+                onChange={(event) => setNewItemCode(event.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="new-item-name">
+                Name
+              </label>
+              <Input
+                id="new-item-name"
+                data-testid="new-item-name"
+                placeholder="Task name"
+                value={newItemName}
+                onChange={(event) => setNewItemName(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button data-testid="create-wbs-item" onClick={handleCreate}>
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>

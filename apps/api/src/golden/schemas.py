@@ -37,7 +37,7 @@ def _check_depth(obj: Any, current_depth: int = 0) -> int:
         if not obj:
             return current_depth
         return max(_check_depth(v, current_depth + 1) for v in obj.values())
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, list | tuple):
         if not obj:
             return current_depth
         return max(_check_depth(item, current_depth + 1) for item in obj)

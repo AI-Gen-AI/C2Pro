@@ -18,19 +18,19 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import structlog
 
+from src.coherence.models import Clause, ProjectContext
 from src.core.ai.anthropic_wrapper import (
     AIRequest,
     AIResponse,
-    get_anthropic_wrapper,
     AnthropicWrapper,
+    get_anthropic_wrapper,
 )
-from src.core.ai.model_router import AITaskType, ModelTier
-from src.coherence.models import Clause, ProjectContext, Alert, Evidence
+from src.core.ai.model_router import AITaskType
 
 logger = structlog.get_logger()
 
@@ -193,7 +193,7 @@ class CoherenceLLMService:
 
     def __init__(
         self,
-        wrapper: Optional[AnthropicWrapper] = None,
+        wrapper: AnthropicWrapper | None = None,
         default_task_type: AITaskType = AITaskType.COHERENCE_ANALYSIS,
         low_budget_mode: bool = False,
     ):
@@ -227,7 +227,7 @@ class CoherenceLLMService:
     async def analyze_clause(
         self,
         clause: Clause,
-        tenant_id: Optional[UUID] = None,
+        tenant_id: UUID | None = None,
         use_cache: bool = True,
     ) -> ClauseAnalysisResult:
         """
@@ -316,7 +316,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         rule_id: str,
         rule_description: str,
         detection_logic: str,
-        tenant_id: Optional[UUID] = None,
+        tenant_id: UUID | None = None,
     ) -> dict[str, Any]:
         """
         Verifica si una cláusula viola una regla de coherencia específica.
@@ -396,7 +396,7 @@ Evalúa si esta cláusula viola la regla especificada."""
     async def analyze_multi_clause_coherence(
         self,
         clauses: list[Clause],
-        tenant_id: Optional[UUID] = None,
+        tenant_id: UUID | None = None,
     ) -> dict[str, Any]:
         """
         Analiza coherencia entre múltiples cláusulas.
@@ -470,7 +470,7 @@ Evalúa si esta cláusula viola la regla especificada."""
     async def analyze_project_context(
         self,
         context: ProjectContext,
-        tenant_id: Optional[UUID] = None,
+        tenant_id: UUID | None = None,
         analyze_individual: bool = True,
         analyze_cross_clause: bool = True,
     ) -> CoherenceAnalysisResult:
@@ -644,7 +644,7 @@ Evalúa si esta cláusula viola la regla especificada."""
         recommendations = []
 
         # Group by type
-        types_found = set(f.get("type") for f in findings if f.get("type"))
+        types_found = {f.get("type") for f in findings if f.get("type")}
 
         if "ambiguity" in types_found:
             recommendations.append(
@@ -708,7 +708,7 @@ Evalúa si esta cláusula viola la regla especificada."""
 # SINGLETON INSTANCE
 # ===========================================
 
-_service: Optional[CoherenceLLMService] = None
+_service: CoherenceLLMService | None = None
 
 
 def get_coherence_llm_service(

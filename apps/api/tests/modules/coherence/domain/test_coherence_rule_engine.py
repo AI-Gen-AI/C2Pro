@@ -1,28 +1,27 @@
 
-import pytest
-from uuid import UUID, uuid4
-from typing import List, NamedTuple, Dict, Optional
-from enum import Enum, auto
 from datetime import date, timedelta
+from typing import NamedTuple
+from uuid import UUID, uuid4
+
+import pytest
 
 from src.coherence.domain.coherence_rule_engine import (
+    Activity,
+    BOMItem,
+    BudgetLine,
+    BudgetTrend,
+    BudgetVsActual,
     CoherenceRuleEngine,
-    ProjectData,
-    CoherenceResult,
     CoherenceSeverity,
     CoherenceStatus,
-    WBSItem,
-    Activity,
-    BudgetLine,
-    ScopeClause,
-    BOMItem, 
-    BudgetVsActual,
-    BudgetTrend,
     # New models for RUL-003
     Contract,
-    Schedule,
     Milestone,
     ProcurementOrder,
+    ProjectData,
+    Schedule,
+    ScopeClause,
+    WBSItem,
 )
 
 
@@ -46,12 +45,12 @@ class BudgetLine(NamedTuple):
 class ScopeClause(NamedTuple):
     id: UUID
     content: str
-    wbs_ids: List[UUID] = []
+    wbs_ids: list[UUID] = []
 
 class BOMItem(NamedTuple):
     id: UUID
     wbs_id: UUID
-    budget_id: Optional[UUID] = None
+    budget_id: UUID | None = None
     client_provided: bool = False
 
 class BudgetVsActual(NamedTuple):
@@ -79,7 +78,7 @@ class Milestone(NamedTuple):
     id: UUID
     name: str
     date: date
-    activity_ids: List[UUID]
+    activity_ids: list[UUID]
 
 class ProcurementOrder(NamedTuple):
     id: UUID
@@ -87,18 +86,18 @@ class ProcurementOrder(NamedTuple):
 
 
 class ProjectData(NamedTuple):
-    wbs_items: List[WBSItem] = []
-    activities: List[Activity] = []
-    budget_lines: List[BudgetLine] = []
-    scope_clauses: List[ScopeClause] = []
-    bom_items: List[BOMItem] = []
-    budget_vs_actual: List[BudgetVsActual] = []
-    budget_trends: List[BudgetTrend] = []
+    wbs_items: list[WBSItem] = []
+    activities: list[Activity] = []
+    budget_lines: list[BudgetLine] = []
+    scope_clauses: list[ScopeClause] = []
+    bom_items: list[BOMItem] = []
+    budget_vs_actual: list[BudgetVsActual] = []
+    budget_trends: list[BudgetTrend] = []
     # New
-    contracts: List[Contract] = []
-    schedules: List[Schedule] = []
-    milestones: List[Milestone] = []
-    procurement_orders: List[ProcurementOrder] = []
+    contracts: list[Contract] = []
+    schedules: list[Schedule] = []
+    milestones: list[Milestone] = []
+    procurement_orders: list[ProcurementOrder] = []
     current_date: date = date.today()
 
 

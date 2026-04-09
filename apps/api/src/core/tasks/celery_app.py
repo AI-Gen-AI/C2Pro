@@ -9,6 +9,7 @@ This is the entry point for Celery workers.
 """
 
 from celery import Celery
+
 from src.config import settings
 
 # --- Celery Application Instance ---

@@ -1,13 +1,16 @@
-"""
-C2Pro - Document & Clause Models (SQLAlchemy ORM)
+"""TS-E2E-SEC-TNT-001
 
-SQLAlchemy models for documents and clauses, used by the persistence adapter.
+C2Pro - Document, Clause & Chunk Models (SQLAlchemy ORM)
+
+SQLAlchemy models for documents, clauses, and document chunks, used by the persistence adapter.
+TASK-IMPL-006: Added DocumentChunkORM model for Gate 4 traceability.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -18,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    func,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -30,12 +34,19 @@ from src.core.database import Base
 
 # TYPE_CHECKING imports need to be adjusted for the new module structure
 if TYPE_CHECKING:
-    from src.core.auth.models import User, Tenant
+    from src.core.auth.models import User
+    from src.core.dlq.models import DLQFailedTask
 
 
 # These enums are defined in domain layer, but ORM needs an Enum as SQLEnum
 # So we import them from our domain models
-from src.documents.domain.models import DocumentStatus, DocumentType, ClauseType
+# Import for SQLAlchemy mapper registration of DocumentORM <-> DLQFailedTask relationship.
+from src.core.dlq.models import DLQFailedTask
+from src.documents.domain.models import ClauseType, DocumentStatus, DocumentType
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain entity
@@ -82,6 +93,10 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     parsing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Versioning (TASK-BCK-023)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # Retention
     retention_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -92,9 +107,9 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     created_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
     )
 
     # Relationships
@@ -104,12 +119,19 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
         "ClauseORM", back_populates="document", lazy="select", cascade="all, delete-orphan"
     )
 
+    # TASK-BCK-022: DLQ relationship for failed analysis triggers
+    dlq_tasks: Mapped[list["DLQFailedTask"]] = relationship(
+        "DLQFailedTask", back_populates="document", lazy="select"
+    )
+
     # Indexes
     __table_args__ = (
         Index("ix_documents_project", "project_id"),
         Index("ix_documents_type", "document_type"),
         Index("ix_documents_status", "upload_status"),
         Index("ix_documents_created", "created_at"),
+        Index("ix_documents_file_hash", "file_hash"),  # TASK-BCK-023
+        Index("ix_documents_id_version", "id", "version"),  # TASK-BCK-023
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 
@@ -175,9 +197,9 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
     )
 
     # Relationships
@@ -187,7 +209,7 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
 
     verifier: Mapped["User"] = relationship("User", foreign_keys=[verified_by], lazy="select")
 
- 
+
 
     # Constraints and Indexes
     __table_args__ = (
@@ -201,3 +223,39 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
 
     def __repr__(self) -> str:
         return f"<ClauseORM(id={self.id}, code='{self.clause_code}', type={self.clause_type})>"
+
+
+class DocumentChunkORM(Base):
+    """
+    SQLAlchemy model for DocumentChunk.
+
+    Stores document chunks for RAG (Retrieval Augmented Generation).
+    TASK-IMPL-006: Created ORM model for Gate 4 traceability.
+    """
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    chunk_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<DocumentChunkORM(id={self.id}, document_id={self.document_id})>"

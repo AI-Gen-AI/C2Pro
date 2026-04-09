@@ -1,5 +1,5 @@
-from typing import Any, Literal
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -202,7 +202,7 @@ class CoherenceResult(BaseModel):
         description="Breakdown of the score by alert category."
     )
     calculated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp when the score was calculated."
     )
 
@@ -231,7 +231,7 @@ class EnrichedCoherenceResult(BaseModel):
         description="Breakdown by alert category"
     )
     calculated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of calculation"
     )
 

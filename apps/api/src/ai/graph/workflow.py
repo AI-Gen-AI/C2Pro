@@ -8,22 +8,14 @@ so that monkeypatching works in tests.
 import sys
 from typing import Literal
 
-from src.analysis.adapters.graph.workflow import *  # noqa: F401, F403
-from src.analysis.adapters.graph.workflow import (
-    compile_workflow as _original_compile_workflow,
-    _persist_graph_diagram,
-)
-from src.analysis.adapters.graph.nodes import (
-    budget_parser_node,
-    human_interrupt_node,
-    risk_extractor_node,
-    router_node,
-    save_to_db_node,
-    wbs_extractor_node,
-)
+from langgraph.graph import END, StateGraph
+
 from src.ai.graph.nodes import critique_node  # noqa: F401 - uses module-level _critique_extraction
 from src.analysis.adapters.graph.schema import ProjectState
-from langgraph.graph import END, StateGraph
+from src.analysis.adapters.graph.workflow import *  # noqa: F401, F403
+from src.analysis.adapters.graph.workflow import (
+    _persist_graph_diagram,
+)
 
 
 def _next_after_critique(state: ProjectState) -> Literal[
@@ -58,13 +50,13 @@ def compile_workflow(checkpointer=None, persist_diagram: bool = True):
     workflow = StateGraph(ProjectState)
 
     # Register nodes from this module's namespace (supports monkeypatching)
-    workflow.add_node("router", getattr(_this, "router_node"))
-    workflow.add_node("risk_extractor", getattr(_this, "risk_extractor_node"))
-    workflow.add_node("wbs_extractor", getattr(_this, "wbs_extractor_node"))
-    workflow.add_node("budget_parser", getattr(_this, "budget_parser_node"))
-    workflow.add_node("critique", getattr(_this, "critique_node"))
-    workflow.add_node("human_interrupt", getattr(_this, "human_interrupt_node"))
-    workflow.add_node("save_to_db", getattr(_this, "save_to_db_node"))
+    workflow.add_node("router", _this.router_node)
+    workflow.add_node("risk_extractor", _this.risk_extractor_node)
+    workflow.add_node("wbs_extractor", _this.wbs_extractor_node)
+    workflow.add_node("budget_parser", _this.budget_parser_node)
+    workflow.add_node("critique", _this.critique_node)
+    workflow.add_node("human_interrupt", _this.human_interrupt_node)
+    workflow.add_node("save_to_db", _this.save_to_db_node)
 
     # Entry point
     workflow.set_entry_point("router")

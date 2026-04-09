@@ -2,17 +2,14 @@
 DTO Registry - Provides a registry of all DTOs for serialization testing.
 """
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel
 
 from src.core.auth.schemas import (
-    LoginRequest,
-    LoginResponse,
-    RegisterRequest,
     TokenResponse,
     UserResponse,
-    TenantResponse,
 )
 
 

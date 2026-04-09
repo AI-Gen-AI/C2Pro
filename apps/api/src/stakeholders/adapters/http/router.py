@@ -18,16 +18,16 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
 )
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
 from src.stakeholders.application.delete_stakeholder_use_case import DeleteStakeholderUseCase
-from src.stakeholders.application.helpers import score_from_metadata
-from src.stakeholders.application.list_project_stakeholders_use_case import (
-    ListProjectStakeholdersUseCase,
-)
-from src.stakeholders.application.update_stakeholder_use_case import UpdateStakeholderUseCase
 from src.stakeholders.application.dtos import (
     StakeholderCreateRequest,
     StakeholderResponseOut,
     StakeholderUpdateRequest,
 )
+from src.stakeholders.application.helpers import score_from_metadata
+from src.stakeholders.application.list_project_stakeholders_use_case import (
+    ListProjectStakeholdersUseCase,
+)
+from src.stakeholders.application.update_stakeholder_use_case import UpdateStakeholderUseCase
 from src.stakeholders.domain.models import Stakeholder
 
 logger = structlog.get_logger()
@@ -109,7 +109,7 @@ async def create_project_stakeholder(
 
     try:
         stakeholder = await create_use_case.execute(
-            project_id=project_id, user_id=user_id, payload=payload
+            project_id=project_id, user_id=user_id, payload=payload, tenant_id=_tenant_id
         )
     except ValueError as exc:
         if str(exc) == "source_clause_id_not_found":
@@ -143,19 +143,15 @@ async def update_stakeholder(
 
     try:
         stakeholder = await update_use_case.execute(
-            stakeholder_id=stakeholder_id, user_id=user_id, payload=payload
+            stakeholder_id=stakeholder_id, user_id=user_id, payload=payload, tenant_id=_tenant_id
         )
     except ValueError as exc:
         reason = str(exc)
         if reason == "source_clause_id_not_found":
             raise HTTPException(status_code=400, detail="source_clause_id not found")
-        elif reason == "stakeholder_not_found":
+        if reason == "stakeholder_not_found":
             raise HTTPException(status_code=404, detail="stakeholder not found")
-            raise HTTPException(status_code=400, detail="source_clause_id not found")
-        elif reason == "stakeholder_not_found":
-            raise HTTPException(status_code=404, detail="Stakeholder not found")
-            raise HTTPException(status_code=400, detail="source_clause_id not found")
-        raise HTTPException(status_code=404, detail="Stakeholder not found")
+        raise
 
     return _to_response(stakeholder)
 

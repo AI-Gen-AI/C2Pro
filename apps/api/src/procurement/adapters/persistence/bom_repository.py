@@ -1,15 +1,14 @@
 """
 SQLAlchemy implementation of the BOM repository.
 """
-from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.procurement.ports.bom_repository import IBOMRepository
-from src.procurement.domain.models import BOMItem, BOMCategory, ProcurementStatus
 from src.procurement.adapters.persistence.models import BOMItemORM
+from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
+from src.procurement.ports.bom_repository import IBOMRepository
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -65,8 +64,19 @@ class SQLAlchemyBOMRepository(IBOMRepository):
             bom_metadata=bom_item.bom_metadata or {}
         )
 
-    async def create(self, bom_item: BOMItem) -> BOMItem:
-        """Create a new BOM item."""
+    async def _ensure_project_in_tenant(self, project_id: UUID, tenant_id: UUID) -> None:
+        """Reject writes for projects outside the caller tenant."""
+        result = await self.session.execute(
+            select(ProjectORM.id)
+            .where(ProjectORM.id == project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
+        if result.scalar_one_or_none() is None:
+            raise PermissionError("Cannot create BOM items for project outside tenant")
+
+    async def create(self, bom_item: BOMItem, tenant_id: UUID) -> BOMItem:
+        """Create a new BOM item with tenant isolation."""
+        await self._ensure_project_in_tenant(bom_item.project_id, tenant_id)
         orm = self._domain_to_orm(bom_item)
         self.session.add(orm)
         await self.session.flush()
@@ -74,7 +84,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
         return self._orm_to_domain(orm)
 
-    async def get_by_id(self, bom_id: UUID, tenant_id: UUID) -> Optional[BOMItem]:
+    async def get_by_id(self, bom_id: UUID, tenant_id: UUID) -> BOMItem | None:
         """Retrieve a BOM item by ID."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -89,7 +99,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
         return self._orm_to_domain(orm)
 
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> List[BOMItem]:
+    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[BOMItem]:
         """Retrieve all BOM items for a project."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -102,7 +112,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
         return [self._orm_to_domain(orm) for orm in orms]
 
-    async def get_by_wbs_item(self, wbs_item_id: UUID, tenant_id: UUID) -> List[BOMItem]:
+    async def get_by_wbs_item(self, wbs_item_id: UUID, tenant_id: UUID) -> list[BOMItem]:
         """Retrieve all BOM items for a specific WBS item."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -117,7 +127,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
     async def get_by_category(
         self, project_id: UUID, category: BOMCategory, tenant_id: UUID
-    ) -> List[BOMItem]:
+    ) -> list[BOMItem]:
         """Retrieve all BOM items of a specific category in a project."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -137,7 +147,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
     async def get_by_status(
         self, project_id: UUID, status: ProcurementStatus, tenant_id: UUID
-    ) -> List[BOMItem]:
+    ) -> list[BOMItem]:
         """Retrieve all BOM items with a specific procurement status in a project."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -155,7 +165,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
         return [self._orm_to_domain(orm) for orm in orms]
 
-    async def update(self, bom_id: UUID, bom_item: BOMItem, tenant_id: UUID) -> Optional[BOMItem]:
+    async def update(self, bom_id: UUID, bom_item: BOMItem, tenant_id: UUID) -> BOMItem | None:
         """Update an existing BOM item."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -191,7 +201,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
     async def update_status(
         self, bom_id: UUID, status: ProcurementStatus, tenant_id: UUID
-    ) -> Optional[BOMItem]:
+    ) -> BOMItem | None:
         """Update the procurement status of a BOM item."""
         result = await self.session.execute(
             select(BOMItemORM)
@@ -229,8 +239,11 @@ class SQLAlchemyBOMRepository(IBOMRepository):
 
         return True
 
-    async def bulk_create(self, bom_items: List[BOMItem]) -> List[BOMItem]:
-        """Create multiple BOM items at once (used for AI generation)."""
+    async def bulk_create(self, bom_items: list[BOMItem], tenant_id: UUID) -> list[BOMItem]:
+        """Create multiple BOM items at once with tenant isolation."""
+        for project_id in {bom_item.project_id for bom_item in bom_items}:
+            await self._ensure_project_in_tenant(project_id, tenant_id)
+
         orms = [self._domain_to_orm(item) for item in bom_items]
 
         self.session.add_all(orms)

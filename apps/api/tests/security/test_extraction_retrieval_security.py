@@ -9,16 +9,16 @@ from uuid import uuid4
 
 import pytest
 
-from src.modules.ingestion.domain.entities import IngestionChunk
 from src.modules.extraction.application.ports import ClauseExtractionService, LLMAdapter
+from src.modules.ingestion.domain.entities import IngestionChunk
 from src.modules.retrieval.application.ports import (
+    KeywordSearch,
+    QueryRouter,
+    Reranker,
     RetrievalService,
     VectorStore,
-    KeywordSearch,
-    Reranker,
-    QueryRouter,
 )
-from src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
+from src.modules.retrieval.domain.entities import QueryIntent, RetrievalResult
 
 
 @pytest.fixture

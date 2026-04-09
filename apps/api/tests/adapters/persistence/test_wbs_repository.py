@@ -5,6 +5,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 """
 
 from __future__ import annotations
+
 from datetime import datetime
 from uuid import uuid4
 
@@ -17,13 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
-from src.core.database import Base
-from src.core.database import get_session_with_tenant
 from src.core import database as core_database
-from src.projects.adapters.persistence.models import ProjectORM
-from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
+from src.core.database import Base, get_session_with_tenant
+from src.procurement.adapters.persistence.models import Base as ProcurementBase
+from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
+from src.projects.adapters.persistence.models import ProjectORM
 
 
 def _ensure_test_fk_stub_tables() -> None:
@@ -64,8 +65,8 @@ async def pg_engine():
         )
         async with engine.begin() as conn:
             _ensure_test_fk_stub_tables()
-            await conn.run_sync(Base.metadata.create_all)
-            await conn.run_sync(ProcurementBase.metadata.create_all)
+            await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            await conn.run_sync(ProcurementBase.metadata.create_all, tables=[WBSItemORM.__table__])
         yield engine
     finally:
         core_database._engine = None
@@ -144,3 +145,42 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         tenant_b_repo = SQLAlchemyWBSRepository(tenant_b_session)
         tree_b = await tenant_b_repo.get_tree(project_id=project_a.id, tenant_id=tenant_b)
         assert tree_b == []
+
+
+@pytest.mark.asyncio
+async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSession):
+    """
+    WBS bulk_create should reject writes when the project is outside the caller tenant.
+    """
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+
+    project_a = ProjectORM(
+        id=uuid4(),
+        tenant_id=tenant_a,
+        name="Tenant A Project",
+        description=None,
+        code="A-2",
+        project_type="construction",
+        status="draft",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(project_a)
+    await session.commit()
+
+    repo = SQLAlchemyWBSRepository(session)
+    items = [
+        WBSItem(project_id=project_a.id, code="1", name="Root", level=1),
+        WBSItem(project_id=project_a.id, code="1.1", name="Child", level=2, parent_code="1"),
+    ]
+
+    with pytest.raises(PermissionError, match="outside tenant"):
+        await repo.bulk_create(items, tenant_b)

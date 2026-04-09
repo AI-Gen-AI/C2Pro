@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Frontend Role Output Schema",
+  "description": "Output schema for frontend role. Extends base_output.json with frontend-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "componentes": {
+          "type": "object",
+          "description": "UI component details",
+          "properties": {
+            "componentes_nuevos": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "New components created"
+            },
+            "componentes_modificados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Existing components modified"
+            },
+            "framework": {
+              "type": "string",
+              "description": "Framework used (React, Vue, Angular, etc.)"
+            }
+          }
+        },
+        "estilos": {
+          "type": "object",
+          "description": "Styling details",
+          "properties": {
+            "archivos_css": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "CSS/SCSS files modified"
+            },
+            "sistema_diseno": {
+              "type": "string",
+              "description": "Design system used (Tailwind, MUI, etc.)"
+            },
+            "responsive": {
+              "type": "boolean",
+              "description": "Whether design is responsive"
+            }
+          }
+        },
+        "accesibilidad": {
+          "type": "object",
+          "description": "Accessibility compliance",
+          "properties": {
+            "nivel_wcag": {
+              "type": "string",
+              "enum": ["A", "AA", "AAA"],
+              "description": "WCAG compliance level"
+            },
+            "aria_labels": {
+              "type": "boolean",
+              "description": "Whether ARIA labels are implemented"
+            },
+            "navegacion_teclado": {
+              "type": "boolean",
+              "description": "Whether keyboard navigation works"
+            }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "description": "Frontend testing results",
+          "properties": {
+            "tests_unitarios": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of unit tests"
+            },
+            "tests_integracion": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of integration tests"
+            },
+            "tests_e2e": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of end-to-end tests"
+            },
+            "cobertura": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Test coverage percentage"
+            }
+          }
+        },
+        "rendimiento": {
+          "type": "object",
+          "description": "Performance metrics",
+          "properties": {
+            "bundle_size_kb": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Bundle size in kilobytes"
+            },
+            "lighthouse_score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Lighthouse performance score"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

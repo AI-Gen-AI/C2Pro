@@ -3,9 +3,10 @@ Unit tests for ToolRegistry.
 """
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from pydantic import BaseModel
-from uuid import UUID
 
 from src.analysis.adapters.graph.schema import ProjectState
 from src.core.ai.anthropic_wrapper import AIResponse
@@ -20,7 +21,6 @@ from src.core.ai.tools import (
     register_tool,
     reset_registry,
 )
-
 
 # Test fixtures
 

@@ -6,7 +6,7 @@ Test Suite ID: TS-SEC-S6-001
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -54,7 +54,7 @@ class _StubHITL:
             "item_id": item_id,
             "current_status": "APPROVED",
             "approved_by": reviewer_name,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": datetime.now(UTC).isoformat(),
         }
 
 

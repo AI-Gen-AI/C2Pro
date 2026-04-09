@@ -4,8 +4,8 @@ Test Suite ID: TS-SEC-ING-001
 """
 
 from typing import Any
-from uuid import uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 

@@ -14,7 +14,6 @@ from src.core.ai.ab_experiment import (
     get_ab_experiment_service,
 )
 
-
 # ===========================================
 # PROMPT METRICS TESTS
 # ===========================================
@@ -207,7 +206,7 @@ class TestABExperiment:
         )
 
         # Add only 10 samples
-        for i in range(5):
+        for _i in range(5):
             exp.record_result("A", True, 100.0, 500, 200, 0.002)
             exp.record_result("B", True, 90.0, 500, 200, 0.0018)
 
@@ -227,9 +226,9 @@ class TestABExperiment:
         )
 
         # Variant B is better (lower cost, same success rate)
-        for i in range(15):
+        for _i in range(15):
             exp.record_result("A", True, 150.0, 500, 200, 0.003)
-        for i in range(15):
+        for _i in range(15):
             exp.record_result("B", True, 100.0, 400, 150, 0.001)  # Better
 
         comparison = exp.get_comparison()

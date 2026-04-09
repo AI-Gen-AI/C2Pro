@@ -25,13 +25,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock
 
 from src.core.events.event_publisher import EventPublisher
-
 
 # ===========================================
 # HELPERS

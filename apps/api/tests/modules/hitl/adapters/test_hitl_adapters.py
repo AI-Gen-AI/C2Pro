@@ -12,32 +12,31 @@ from uuid import uuid4
 
 import pytest
 
-from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
-from src.modules.hitl.domain.services import ConfidenceRouter
+from src.modules.hitl.adapters.notifications.log_notification_service import (
+    LogNotificationService,
+)
 from src.modules.hitl.application.ports import (
     HumanInTheLoopService,
     NotificationService,
     ReviewQueueRepository,
 )
-from src.modules.hitl.adapters.notifications.log_notification_service import (
-    LogNotificationService,
-)
-
+from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+from src.modules.hitl.domain.services import ConfidenceRouter
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
 def _make_review_item(**overrides) -> ReviewItem:
-    defaults = dict(
-        item_id=uuid4(),
-        item_type="risk_extraction",
-        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
-        confidence=0.4,
-        impact_level=ImpactLevel.MEDIUM,
-        created_at=datetime.utcnow(),
-        sla_due_date=datetime.utcnow() + timedelta(days=3),
-        item_data={"project_id": str(uuid4())},
-    )
+    defaults = {
+        "item_id": uuid4(),
+        "item_type": "risk_extraction",
+        "current_status": ReviewStatus.PENDING_REVIEW_REQUIRED,
+        "confidence": 0.4,
+        "impact_level": ImpactLevel.MEDIUM,
+        "created_at": datetime.utcnow(),
+        "sla_due_date": datetime.utcnow() + timedelta(days=3),
+        "item_data": {"project_id": str(uuid4())},
+    }
     defaults.update(overrides)
     return ReviewItem(**defaults)
 
@@ -331,6 +330,7 @@ class TestHTTPSchemas:
 
     def test_route_for_review_request_rejects_invalid_confidence(self):
         from pydantic import ValidationError
+
         from src.modules.hitl.adapters.http.schemas import RouteForReviewRequest
 
         with pytest.raises(ValidationError):

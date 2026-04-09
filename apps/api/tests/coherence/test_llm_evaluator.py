@@ -8,14 +8,12 @@ Uses mocking to ensure deterministic test results.
 Version: 1.0.0
 """
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.coherence.models import Clause
 from src.coherence.rules_engine.base import Finding
-
 
 # ===========================================
 # TEST: LlmRuleEvaluator INITIALIZATION
@@ -45,8 +43,9 @@ class TestLlmRuleEvaluatorInit:
 
     def test_evaluator_initializes_with_all_params(self, patch_anthropic_wrapper):
         """Test that evaluator initializes correctly with all parameters."""
-        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
         from uuid import uuid4
+
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         tenant_id = uuid4()
         evaluator = LlmRuleEvaluator(
@@ -397,8 +396,8 @@ class TestFactoryFunctions:
     def test_get_predefined_llm_evaluators(self, patch_anthropic_wrapper):
         """Test getting predefined evaluators."""
         from src.coherence.rules_engine.llm_evaluator import (
-            get_predefined_llm_evaluators,
             QUALITATIVE_RULES,
+            get_predefined_llm_evaluators,
         )
 
         evaluators = get_predefined_llm_evaluators(low_budget_mode=True)

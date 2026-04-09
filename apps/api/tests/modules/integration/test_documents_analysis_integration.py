@@ -15,7 +15,13 @@ from src.analysis.ports.orchestrator import AnalysisOrchestrator
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
-from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.domain.models import (
+    Document,
+    DocumentAlertSignal,
+    DocumentHistorySnapshot,
+    DocumentStatus,
+    DocumentType,
+)
 from src.documents.ports.document_repository import IDocumentRepository
 
 
@@ -27,10 +33,18 @@ class _FakeDocumentRepository(IDocumentRepository):
     async def add(self, document: Document) -> None:
         raise NotImplementedError
 
-    async def get_by_id(self, document_id: UUID) -> Document | None:
+    async def get_by_id(self, _document_id: UUID) -> Document | None:
         return self.document
 
-    async def get_document_with_clauses(self, document_id: UUID) -> Document | None:
+    async def get_document_with_clauses(self, _document_id: UUID) -> Document | None:
+        raise NotImplementedError
+
+    async def get_history_snapshot(self, _document_id: UUID) -> DocumentHistorySnapshot | None:
+        raise NotImplementedError
+
+    async def list_alert_signals_for_document(
+        self, _document_id: UUID
+    ) -> list[DocumentAlertSignal]:
         raise NotImplementedError
 
     async def update_status(
@@ -41,13 +55,23 @@ class _FakeDocumentRepository(IDocumentRepository):
     async def update_storage_path(self, document_id: UUID, storage_url: str) -> None:
         raise NotImplementedError
 
+    async def update_version(
+        self,
+        document_id: UUID,
+        version: int,
+        file_hash: str,
+        filename: str,
+        status: DocumentStatus,
+    ) -> Document:
+        raise NotImplementedError
+
     async def delete(self, document_id: UUID) -> None:
         raise NotImplementedError
 
     async def list_for_project(self, project_id: UUID, skip: int, limit: int):
         raise NotImplementedError
 
-    async def get_project_tenant_id(self, project_id: UUID) -> UUID | None:
+    async def get_project_tenant_id(self, _project_id: UUID) -> UUID | None:
         return self.tenant_id
 
     async def add_clause(self, clause) -> None:

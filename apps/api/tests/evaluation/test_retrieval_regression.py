@@ -7,16 +7,15 @@ These tests validate that the Hybrid Retrieval service maintains
 accuracy above baseline thresholds across the evaluation dataset.
 """
 
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from src.modules.observability.application.services.evaluation_runner import (
     EvalRunConfig,
     EvaluationRunner,
     ServiceType,
 )
-
-from .conftest import assert_metrics_within_threshold
 
 
 class TestRetrievalRegression:

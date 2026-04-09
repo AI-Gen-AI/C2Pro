@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from src.core.exceptions import RateLimitExceededError, SecurityException
 from src.mcp.adapters.mcp_gateway import MCPGateway
 
+
 # MCPGatewayConfig is a RED-phase stub — defined inline until implementation
 class MCPGatewayConfig:
     def __init__(self, **kwargs):
@@ -132,6 +133,26 @@ class TestMCPGatewaySecurity:
             )
 
         assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_authorize_tool_call_uses_tenant_allowlist(self, mocker):
+        """
+        Tenant-specific allowlists should control authorize_tool_call decisions.
+        """
+        allowlist_repo = mocker.Mock()
+        allowlist_repo.get_allowlist_for_tenant.return_value = ["custom_read"]
+        gateway = MCPGateway(
+            config=MCPGatewayConfig(),
+            audit_logger=mocker.Mock(),
+            allowlist_repo=allowlist_repo,
+        )
+        tenant_id = uuid4()
+
+        assert await gateway.authorize_tool_call(
+            operation="custom_read",
+            tenant_id=tenant_id,
+        ) is True
+        allowlist_repo.get_allowlist_for_tenant.assert_called_once_with(str(tenant_id))
 
     @pytest.mark.asyncio
     async def test_query_limit_blocks_over_row_limit(self, mocker):

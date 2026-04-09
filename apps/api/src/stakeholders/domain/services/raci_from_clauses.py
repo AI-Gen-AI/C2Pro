@@ -6,11 +6,11 @@ Refers to Suite ID: TS-UD-STK-RAC-003.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from src.stakeholders.domain.models import RACIRole, RaciAssignment
+from src.stakeholders.domain.models import RaciAssignment, RACIRole
 
 
 def generate_raci_assignments_from_clauses(
@@ -60,7 +60,7 @@ def generate_raci_assignments_from_clauses(
                     stakeholder_id=stakeholder_id,
                     wbs_item_id=wbs_item_id,
                     raci_role=role,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
                     evidence_text=full_text,
                     generated_automatically=True,
                 )

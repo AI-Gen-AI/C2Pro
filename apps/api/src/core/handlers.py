@@ -26,7 +26,7 @@ Date: 2026-01-13
 
 import traceback
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -71,7 +71,7 @@ def _create_error_response(
         "code": error_code,  # For API contract compliance
         "error_code": error_code,
         "message": message,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "path": path,
     }
 

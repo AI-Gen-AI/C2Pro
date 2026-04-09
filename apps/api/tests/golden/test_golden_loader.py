@@ -1,10 +1,8 @@
 """Tests for golden dataset loader functionality."""
 
-import json
 from pathlib import Path
 
 import pytest
-
 from golden.loader import GoldenDatasetLoader
 from golden.schemas import (
     CoherenceDimension,
@@ -13,6 +11,7 @@ from golden.schemas import (
     InputDocuments,
     TrajectoryConstraint,
 )
+
 from tests.golden.conftest import (
     create_golden_case_json,
     create_golden_case_json_hierarchical,
@@ -24,7 +23,7 @@ class TestGoldenDatasetLoader:
 
     def test_init_creates_cases_directory(self, temp_dataset_dir: Path) -> None:
         """Test that loader creates cases directory if it doesn't exist."""
-        loader = GoldenDatasetLoader(temp_dataset_dir)
+        GoldenDatasetLoader(temp_dataset_dir)
         assert (temp_dataset_dir / "cases").exists()
 
     def test_load_case_returns_none_for_missing(
@@ -629,7 +628,7 @@ class TestSecurityFeatures:
         self, temp_dataset_dir: Path
     ) -> None:
         """Test that files exceeding 50MB are rejected."""
-        from golden.loader import FileSizeError, MAX_FILE_SIZE_BYTES
+        from golden.loader import MAX_FILE_SIZE_BYTES, FileSizeError
 
         loader = GoldenDatasetLoader(temp_dataset_dir)
 

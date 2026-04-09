@@ -5,7 +5,7 @@ TS-UA-DOC-UC-002: Extract Clauses Use Case tests.
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException

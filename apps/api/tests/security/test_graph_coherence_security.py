@@ -9,15 +9,15 @@ from uuid import uuid4
 
 import pytest
 
-from src.modules.extraction.domain.entities import ExtractedClause
-from src.modules.graph.application.ports import GraphBuilderService, GraphRepository
 from src.coherence.application.ports import CoherenceEngineService
 from src.coherence.domain.entities import CoherenceAlert, RuleInput
 from src.coherence.domain.rules import (
-    ScheduleMismatchRule,
     BudgetMismatchRule,
+    ScheduleMismatchRule,
     ScopeProcurementMismatchRule,
 )
+from src.modules.extraction.domain.entities import ExtractedClause
+from src.modules.graph.application.ports import GraphBuilderService, GraphRepository
 
 
 @pytest.fixture

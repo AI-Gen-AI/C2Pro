@@ -6,11 +6,11 @@ Lógica de negocio para autenticación y gestión de usuarios.
 
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-import structlog
 import jwt
+import structlog
 from passlib.context import CryptContext
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,14 +20,11 @@ from src.config import settings
 from src.core.auth.bootstrap_lookup import (
     create_bootstrap_tenant,
     create_bootstrap_user,
+)
+from src.core.auth.bootstrap_lookup import (
     lookup_user_by_email as bootstrap_lookup_user_by_email,
 )
-from src.core.exceptions import (
-    AuthenticationError,
-    ConflictError,
-    NotFoundError,
-)
-from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
+from src.core.auth.models import Tenant, User, UserRole
 from src.core.auth.schemas import (
     LoginRequest,
     LoginResponse,
@@ -37,6 +34,11 @@ from src.core.auth.schemas import (
     TokenPayload,
     TokenResponse,
     UserResponse,
+)
+from src.core.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
 )
 
 logger = structlog.get_logger()
@@ -108,7 +110,7 @@ def create_access_token(
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
 
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(UTC) + expires_delta
 
     payload = {
         "sub": str(user_id),
@@ -116,7 +118,7 @@ def create_access_token(
         "email": email,
         "role": role.value,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(UTC),
         "type": "access",
     }
 
@@ -137,12 +139,12 @@ def create_refresh_token(user_id: UUID, tenant_id: UUID | None = None) -> str:
         Token JWT firmado
     """
     expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(UTC) + expires_delta
 
     payload = {
         "sub": str(user_id),
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(UTC),
         "type": "refresh",
     }
 
@@ -257,7 +259,9 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
         return None
 
     if not settings.database_url.startswith("sqlite"):
-        await db.execute(text(f"SET LOCAL app.current_tenant = '{str(record.tenant_id)}'"))
+        from src.core.database import _validate_uuid_for_sql
+        safe_tenant = _validate_uuid_for_sql(record.tenant_id)
+        await db.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
 
     result = await db.execute(
         select(User)

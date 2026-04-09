@@ -6,7 +6,7 @@ Refers to Suite ID: TS-UD-STK-RAC-001.
 
 from __future__ import annotations
 
-from src.stakeholders.domain.models import RACIRole, RaciActivity
+from src.stakeholders.domain.models import RaciActivity, RACIRole
 
 
 def validate_raci_row(roles: list[RACIRole]) -> None:

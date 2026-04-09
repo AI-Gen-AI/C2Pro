@@ -4,15 +4,15 @@ Test Suite ID: TS-I6-COH-SVC-001
 """
 
 from datetime import date
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel, Field
 
 try:
-    from src.coherence.domain.entities import CoherenceAlert, RuleInput
     from src.coherence.application.ports import CoherenceEngineService
+    from src.coherence.domain.entities import CoherenceAlert, RuleInput
 except ImportError:
     class CoherenceAlert(BaseModel):
         alert_id: str = Field(default_factory=lambda: str(uuid4()))
@@ -21,17 +21,17 @@ except ImportError:
         message: str
         evidence: dict[str, Any] = Field(default_factory=dict)
         triggered_by_rule: str
-        doc_id: Optional[str] = None
+        doc_id: str | None = None
         metadata: dict[str, Any] = Field(default_factory=dict)
 
     class RuleInput(BaseModel):
         doc_id: str = Field(default_factory=lambda: str(uuid4()))
-        schedule_data: Optional[dict[str, Any]] = None
-        actual_dates: Optional[dict[str, Any]] = None
-        budget_data: Optional[dict[str, Any]] = None
-        actual_costs: Optional[dict[str, Any]] = None
-        scope_data: Optional[dict[str, Any]] = None
-        procurement_items: Optional[dict[str, Any]] = None
+        schedule_data: dict[str, Any] | None = None
+        actual_dates: dict[str, Any] | None = None
+        budget_data: dict[str, Any] | None = None
+        actual_costs: dict[str, Any] | None = None
+        scope_data: dict[str, Any] | None = None
+        procurement_items: dict[str, Any] | None = None
 
     class CoherenceEngineService:
         def __init__(self, rules: list[Any], langsmith_client: Any = None):
@@ -53,7 +53,7 @@ class MockCoherenceRule:
         self.will_trigger = will_trigger
         self.severity = severity
 
-    def evaluate(self, rule_input: RuleInput) -> Optional[CoherenceAlert]:
+    def evaluate(self, rule_input: RuleInput) -> CoherenceAlert | None:
         if self.will_trigger:
             return CoherenceAlert(
                 alert_id=str(uuid4()),

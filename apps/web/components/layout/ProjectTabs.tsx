@@ -1,11 +1,13 @@
 import Link from "next/link";
 import {
   AlertTriangle,
+  ClipboardCheck,
   FileText,
   Gauge,
   LayoutDashboard,
   Settings,
   Users,
+  ListTree,
 } from "lucide-react";
 
 const tabs = [
@@ -14,7 +16,10 @@ const tabs = [
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/evidence", label: "Evidence", icon: Gauge },
   { href: "/alerts", label: "Alerts", icon: AlertTriangle },
+  { href: "/review", label: "Review", icon: ClipboardCheck },
   { href: "/stakeholders", label: "Stakeholders", icon: Users },
+  { href: "/wbs", label: "WBS", icon: ListTree },
+  { href: "/budget", label: "Budget", icon: Gauge },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

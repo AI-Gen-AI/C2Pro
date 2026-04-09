@@ -3,17 +3,24 @@ SQLAlchemy ORM model for Project.
 
 This is the persistence adapter for the Project domain entity.
 Maps domain concepts to database tables.
+Refers to Test Suite IDs: TS-E2E-SEC-TNT-001, TS-UD-PROJ-001.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, Float, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import DateTime, Enum, Float, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
+
+
+def _utcnow_naive() -> datetime:
+    """Return UTC now normalized to a naive timestamp for legacy TIMESTAMP columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ProjectORM(Base):
@@ -66,7 +73,7 @@ class ProjectORM(Base):
     metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow_naive, onupdate=_utcnow_naive)
 
     # Relationships (intentionally omitted to avoid cross-module ORM coupling)

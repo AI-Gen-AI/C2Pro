@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import Any, AsyncIterator, NamedTuple, Protocol
+from collections.abc import AsyncIterator
+from typing import Any, NamedTuple, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -73,7 +74,7 @@ class MCPQueryGuard:
             else:
                 data, truncated = self._truncate_rows(list(raw_result), config.max_rows_returned)
                 timed_out = False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self.audit_service.log_query_timeout(
                 tenant_id, query, config.max_execution_time_seconds
             )
@@ -114,7 +115,7 @@ class MCPQueryGuard:
                 item = await asyncio.wait_for(anext(iterator), timeout=remaining)
             except StopAsyncIteration:
                 return data, truncated, False
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return data, truncated, True
 
             if len(data) < max_rows:

@@ -59,7 +59,7 @@ class TestExtractStakeholdersUseCase:
             project_id=project_id,
             tenant_id=tenant_id,
         )
-        repo.add.assert_awaited_once_with(stakeholder)
+        repo.add.assert_awaited_once_with(stakeholder, tenant_id=tenant_id)
         repo.commit.assert_awaited_once()
         assert result == [stakeholder]
 

@@ -7,10 +7,8 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from golden.schemas import GoldenCase
-
+from pydantic import ValidationError
 
 # Path to cases directory
 CASES_DIR = Path(__file__).parent.parent.parent / "src" / "golden" / "cases"

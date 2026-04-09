@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.stakeholders.domain.models import PowerLevel, InterestLevel, StakeholderQuadrant
+from src.stakeholders.domain.models import InterestLevel, PowerLevel, StakeholderQuadrant
 
 
 def score_from_metadata(metadata: dict[str, Any], key: str, level: PowerLevel | InterestLevel) -> int:

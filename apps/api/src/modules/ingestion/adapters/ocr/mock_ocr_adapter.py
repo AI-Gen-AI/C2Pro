@@ -9,7 +9,7 @@ without calling an actual OCR provider.
 """
 
 import hashlib
-from typing import Optional
+
 import structlog
 
 from src.modules.ingestion.application.ports import OCRAdapter, OCRResult
@@ -86,10 +86,7 @@ class MockOCRAdapter(OCRAdapter):
         ]
 
         # Determine confidence score
-        if self.simulate_low_confidence:
-            confidence = 0.3  # Force low confidence for fallback testing
-        else:
-            confidence = self.default_confidence
+        confidence = 0.3 if self.simulate_low_confidence else self.default_confidence
 
         result: OCRResult = {
             "text": text,
@@ -129,7 +126,7 @@ class ConfigurableMockOCRAdapter(OCRAdapter):
     def __init__(self, provider_name: str = "ConfigurableMockOCR"):
         """Initialize the configurable mock OCR adapter."""
         self.provider_name = provider_name
-        self._next_confidence: Optional[float] = None
+        self._next_confidence: float | None = None
         self._call_count = 0
 
         logger.info(

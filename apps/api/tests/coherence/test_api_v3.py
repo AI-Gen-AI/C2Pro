@@ -17,16 +17,20 @@ Verifies:
 Location: apps/api/tests/coherence/test_api_v3.py
 """
 
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
-from datetime import datetime
 
-from fastapi.testclient import TestClient
-from pydantic import BaseModel
+import pytest
 
-from src.coherence.models import Clause, Alert, CoherenceResult, EnrichedCoherenceResult, CategoryBreakdown, SeverityCount
-
+from src.coherence.models import (
+    Alert,
+    CategoryBreakdown,
+    Clause,
+    CoherenceResult,
+    EnrichedCoherenceResult,
+    SeverityCount,
+)
 
 # =============================================================================
 # FIXTURES
@@ -119,8 +123,7 @@ async def test_evaluate_backward_compatible_response_shape(sample_clauses, sampl
     - Response has overall_score, alerts, category_breakdown, calculated_at
     - No diagnostic fields exposed (finding_signals, llm_cost_usd)
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
-    from src.coherence.graph.graph import evaluate_coherence
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     # Mock evaluate_coherence to return sample result
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
@@ -176,7 +179,7 @@ async def test_evaluate_granular_scoring_not_binary(sample_clauses, sample_enric
     - Score is NOT exactly 0 or 100
     - Score is in reasonable range (5-97)
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -211,8 +214,8 @@ async def test_evaluate_low_budget_mode_defaults_to_true(sample_clauses, sample_
     - When not specified, low_budget_mode=True is passed to config
     - LLM evaluators are skipped (verified via mock)
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
     from src.coherence.graph.state import EvaluationConfig
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -249,7 +252,7 @@ async def test_evaluate_diagnostics_via_query_param(sample_clauses, sample_enric
     - Response includes diagnostic fields
     - Response type is EnrichedCoherenceResult
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -290,7 +293,7 @@ async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_res
     - Always returns EnrichedCoherenceResult
     - Equivalent to include_diagnostics=true query param
     """
-    from src.coherence.router import evaluate_with_diagnostics, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_with_diagnostics
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -401,8 +404,8 @@ async def test_evaluate_rag_similarity_enabled_by_default(sample_clauses, sample
     Success Criteria:
     - When not specified, include_rag_similarity=True is passed to config
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
     from src.coherence.graph.state import EvaluationConfig
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -438,7 +441,7 @@ async def test_evaluate_accepts_explicit_clauses(sample_clauses, sample_enriched
     Success Criteria:
     - Clauses provided → use them directly, no RAG fetch
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         with patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
@@ -471,7 +474,7 @@ async def test_evaluate_fetches_from_rag_with_project_id(sample_clauses, sample_
     - project_id provided → fetch from RAG
     - Fetched clauses are passed to evaluate_coherence
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         with patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
@@ -505,8 +508,9 @@ async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result
     Success Criteria:
     - HTTPException with 422 status code
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
     from fastapi import HTTPException
+
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
@@ -540,7 +544,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
     - llm_cost_usd field exists in EnrichedCoherenceResult
     - llm_cost_usd=0.0 when low_budget_mode=True (no LLM calls)
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     # Create enriched result with cost tracking
     enriched_with_cost = EnrichedCoherenceResult(
@@ -588,7 +592,7 @@ async def test_evaluate_no_regression_in_response_fields(sample_clauses, sample_
     - category_breakdown (list[CategoryBreakdown])
     - calculated_at (datetime)
     """
-    from src.coherence.router import evaluate_project_coherence, CoherenceEvaluateRequest
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
     with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result

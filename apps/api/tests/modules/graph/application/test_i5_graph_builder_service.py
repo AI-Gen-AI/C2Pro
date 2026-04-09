@@ -5,17 +5,17 @@ Test Suite ID: TS-I5-GRAPH-APP-001
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Optional
-from uuid import UUID, uuid4
+from typing import Any
 from unittest.mock import AsyncMock
+from uuid import UUID, uuid4
 
 import pytest
 
 from src.modules.extraction.domain.entities import ExtractedClause
 
 try:
+    from src.modules.graph.application.ports import GraphBuilderService, GraphRepository
     from src.modules.graph.domain.entities import GraphNode
-    from src.modules.graph.application.ports import GraphRepository, GraphBuilderService
 except ImportError:
     @dataclass
     class GraphNode:  # type: ignore[override]
@@ -25,7 +25,7 @@ except ImportError:
 
     class GraphRepository:  # type: ignore[override]
         async def add_node(self, node: GraphNode) -> UUID: ...
-        async def get_node(self, node_id: UUID) -> Optional[GraphNode]: ...
+        async def get_node(self, node_id: UUID) -> GraphNode | None: ...
         async def add_edge(self, edge: Any) -> UUID: ...
 
     class GraphBuilderService:  # type: ignore[override]

@@ -6,8 +6,6 @@ Refers to Suite ID: TS-UD-COH-SCR-001.
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 
 from src.coherence.domain.subscore_calculator import (

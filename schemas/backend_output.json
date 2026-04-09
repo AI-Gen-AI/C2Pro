@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Backend Role Output Schema",
+  "description": "Output schema for backend role. Extends base_output.json with backend-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "codigo": {
+          "type": "object",
+          "description": "Code implementation details",
+          "properties": {
+            "archivos_nuevos": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "New files created"
+            },
+            "archivos_modificados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Existing files modified"
+            },
+            "lineas_agregadas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Lines of code added"
+            },
+            "lineas_eliminadas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Lines of code removed"
+            }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "description": "Testing results",
+          "properties": {
+            "tests_ejecutados": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of tests run"
+            },
+            "tests_pasados": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of tests passed"
+            },
+            "tests_fallidos": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of tests failed"
+            },
+            "cobertura": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Test coverage percentage"
+            },
+            "archivos_test": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Test files created/modified"
+            }
+          }
+        },
+        "validacion": {
+          "type": "object",
+          "description": "Code quality validation",
+          "properties": {
+            "lint_pasado": {
+              "type": "boolean",
+              "description": "Whether linting passed"
+            },
+            "type_check_pasado": {
+              "type": "boolean",
+              "description": "Whether type checking passed"
+            },
+            "errores_lint": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Linting errors found"
+            }
+          }
+        },
+        "database": {
+          "type": "object",
+          "description": "Database changes",
+          "properties": {
+            "migraciones": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Database migrations created"
+            },
+            "tablas_afectadas": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Database tables affected"
+            }
+          }
+        },
+        "api": {
+          "type": "object",
+          "description": "API changes",
+          "properties": {
+            "endpoints_nuevos": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "New API endpoints created"
+            },
+            "endpoints_modificados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Existing endpoints modified"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -10,12 +10,11 @@ Version: 1.0.0
 from __future__ import annotations
 
 import statistics
-import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import structlog
 
@@ -153,7 +152,7 @@ class ABExperiment:
     status: ExperimentStatus = ExperimentStatus.DRAFT
 
     # Timestamps
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -489,7 +488,7 @@ class ABExperimentService:
             raise ValueError(f"Experiment {experiment_id} not found")
 
         experiment.status = ExperimentStatus.RUNNING
-        experiment.started_at = datetime.utcnow()
+        experiment.started_at = datetime.now(UTC)
 
         logger.info(
             "ab_experiment_started",
@@ -521,7 +520,7 @@ class ABExperimentService:
             raise ValueError(f"Experiment {experiment_id} not found")
 
         experiment.status = ExperimentStatus.COMPLETED
-        experiment.completed_at = datetime.utcnow()
+        experiment.completed_at = datetime.now(UTC)
 
         logger.info(
             "ab_experiment_completed",

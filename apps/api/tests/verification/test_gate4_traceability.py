@@ -393,7 +393,7 @@ class TestGate4DataLineageIntegrity:
         tenant_id = uuid4()
         user_id = uuid4()
         project_id = uuid4()
-        document_id = uuid4()
+        uuid4()
         analysis_id = uuid4()
         test_run_id = uuid4().hex[:8]
 
@@ -480,33 +480,6 @@ class TestGate4Summary:
         audit_tables_count = result.scalar()
 
         # Generate evidence
-        evidence = {
-            "gate": "Gate 4 - Traceability & Audit Logging",
-            "status": "PASSED",
-            "audit_log_coverage": {
-                "audit_tables": audit_tables_count,
-                "audit_logs_rls": "ENABLED",
-                "schema_complete": "VERIFIED",
-            },
-            "traceability": {
-                "alert_to_clause_linkage": "VERIFIED",
-                "alert_to_analysis_chain": "VERIFIED",
-                "complete_lineage_chain": "VERIFIED",
-                "user_attribution": "VERIFIED",
-            },
-            "compliance": {
-                "temporal_tracking": "VERIFIED",
-                "soft_delete_mechanism": "AVAILABLE",
-                "data_retention": "COMPLIANT",
-            },
-            "verification": {
-                "audit_table_exists": "CONFIRMED",
-                "rls_on_audit_logs": "CONFIRMED",
-                "source_clause_tracking": "CONFIRMED",
-                "user_action_attribution": "CONFIRMED",
-                "timestamp_coverage": "CONFIRMED",
-            },
-        }
 
         # Log evidence (captured by pytest)
         print(f"\n{'=' * 80}")

@@ -1,9 +1,9 @@
 
 import abc
-from typing import List, NamedTuple, Dict
-from enum import Enum, auto
-from datetime import datetime, timedelta
 from collections import Counter
+from datetime import datetime, timedelta
+from enum import Enum, auto
+from typing import NamedTuple
 
 # --- DTOs and Enums ---
 
@@ -31,7 +31,7 @@ class UserEvent(NamedTuple):
 class GamificationRuleInput(NamedTuple):
     """Wraps all necessary data for a rule evaluation."""
     user_id: str
-    events: List[UserEvent]
+    events: list[UserEvent]
     current_score: float = 0.0
     document_count: int = 0
 
@@ -40,7 +40,7 @@ class GamificationRuleInput(NamedTuple):
 class GamificationRule(abc.ABC):
     """Abstract base class for a gamification anti-abuse rule."""
     @abc.abstractmethod
-    async def evaluate(self, input_data: GamificationRuleInput) -> List[GamificationViolation]:
+    async def evaluate(self, input_data: GamificationRuleInput) -> list[GamificationViolation]:
         pass
 
 # --- Concrete Rule Implementations ---
@@ -52,15 +52,15 @@ class MassChangeRule(GamificationRule):
         self.window_seconds = window_seconds
         self.rule_id = f"MASS_CHANGE_{max_events}_{window_seconds}"
 
-    async def evaluate(self, input_data: GamificationRuleInput) -> List[GamificationViolation]:
+    async def evaluate(self, input_data: GamificationRuleInput) -> list[GamificationViolation]:
         now = datetime.now()
         window_start = now - timedelta(seconds=self.window_seconds)
-        
+
         recent_events = [
-            event for event in input_data.events 
+            event for event in input_data.events
             if event.type == "edit" and event.timestamp >= window_start
         ]
-        
+
         if len(recent_events) > self.max_events:
             return [GamificationViolation(
                 rule_id=self.rule_id,
@@ -75,12 +75,12 @@ class ResolveReintroduceRule(GamificationRule):
         self.threshold = threshold
         self.penalty_points = penalty_points
         self.rule_id = "RESOLVE_REINTRODUCE"
-        
-    async def evaluate(self, input_data: GamificationRuleInput) -> List[GamificationViolation]:
+
+    async def evaluate(self, input_data: GamificationRuleInput) -> list[GamificationViolation]:
         violations = []
         resolve_events = [e for e in input_data.events if e.type == "resolve" and e.hash]
         hash_counts = Counter(e.hash for e in resolve_events)
-        
+
         for issue_hash, count in hash_counts.items():
             if count > self.threshold:
                 violations.append(GamificationViolation(
@@ -97,8 +97,8 @@ class HighScoreLowDocsRule(GamificationRule):
         self.score_threshold = score_threshold
         self.doc_count_threshold = doc_count_threshold
         self.rule_id = "HIGH_SCORE_LOW_DOCS"
-        
-    async def evaluate(self, input_data: GamificationRuleInput) -> List[GamificationViolation]:
+
+    async def evaluate(self, input_data: GamificationRuleInput) -> list[GamificationViolation]:
         if input_data.current_score > self.score_threshold and input_data.document_count < self.doc_count_threshold:
             return [GamificationViolation(
                 rule_id=self.rule_id,
@@ -114,15 +114,15 @@ class WeightChangeRule(GamificationRule):
         self.window_seconds = window_seconds
         self.rule_id = "LARGE_WEIGHT_CHANGE"
 
-    async def evaluate(self, input_data: GamificationRuleInput) -> List[GamificationViolation]:
+    async def evaluate(self, input_data: GamificationRuleInput) -> list[GamificationViolation]:
         now = datetime.now()
         window_start = now - timedelta(seconds=self.window_seconds)
-        
+
         recent_changes = [
             event for event in input_data.events
             if event.type == "weight_change" and event.timestamp >= window_start
         ]
-        
+
         for event in recent_changes:
             if event.old_weight > 0:
                 change = abs(event.new_weight - event.old_weight) / event.old_weight

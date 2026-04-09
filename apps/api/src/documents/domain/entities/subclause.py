@@ -4,10 +4,9 @@ TS-UD-DOC-CLS-003: SubClause hierarchy domain entity.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from uuid import UUID, uuid4
-
 
 _CODE_PATTERN = re.compile(r"^\d+(?:\.(?:\d+|[a-z]))*$")
 
@@ -36,7 +35,7 @@ class SubClause:
     parent_id: UUID | None = None
 
     @classmethod
-    def create(cls, clause_id: UUID, code: str, parent_id: UUID | None = None) -> "SubClause":
+    def create(cls, clause_id: UUID, code: str, parent_id: UUID | None = None) -> SubClause:
         """Refers to Suite ID: TS-UD-DOC-CLS-003."""
         normalized = _normalize_code(code)
         level = _calculate_level(normalized)
@@ -50,7 +49,7 @@ class SubClause:
             parent_id=parent_id,
         )
 
-    def can_be_child_of(self, parent: "SubClause") -> bool:
+    def can_be_child_of(self, parent: SubClause) -> bool:
         """Checks if the given parent is valid for this subclause."""
         if self.clause_id != parent.clause_id:
             return False
@@ -58,7 +57,7 @@ class SubClause:
             return False
         return self.code.startswith(f"{parent.code}.")
 
-    def validate_parent(self, parent: "SubClause") -> None:
+    def validate_parent(self, parent: SubClause) -> None:
         """Raises if the provided parent is not valid for this subclause."""
         if not self.can_be_child_of(parent):
             raise ValueError("Invalid parent reference")

@@ -7,8 +7,8 @@ Refers to Suite IDs: TS-E2E-ERR-TIM-001, TS-E2E-ERR-CON-001, TS-E2E-ERR-REC-001.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 import re
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
-
 # ---------------------------------------------------------------------------
 # Infrastructure: real DB container for optimistic locking tests
 # ---------------------------------------------------------------------------
@@ -28,7 +27,8 @@ from testcontainers.postgres import PostgresContainer
 @pytest_asyncio.fixture(scope="session")
 async def pg_engine():
     from src.core.database import Base
-    from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
+    from src.procurement.adapters.persistence.models import Base as ProcurementBase
+    from src.procurement.adapters.persistence.models import WBSItemORM
     from src.projects.adapters.persistence.models import ProjectORM
 
     engine = None
@@ -100,12 +100,11 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     """
     User A updates v1 -> v2, User B tries v1 -> must fail with 409.
     """
-    from src.procurement.application.use_cases.wbs_use_cases import UpdateWBSItemUseCase
-    from src.procurement.application.dtos import WBSItemUpdate
     from src.core.exceptions import ConflictError
-    from src.procurement.domain.models import WBSItem
-    from src.procurement.adapters.persistence.models import WBSItemORM
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+    from src.procurement.application.dtos import WBSItemUpdate
+    from src.procurement.application.use_cases.wbs_use_cases import UpdateWBSItemUseCase
+    from src.procurement.domain.models import WBSItem
     from src.projects.adapters.persistence.models import ProjectORM
 
     repo = SQLAlchemyWBSRepository(session)

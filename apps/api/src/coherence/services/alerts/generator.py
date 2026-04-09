@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
 
 from src.analysis.application.dtos import AlertCreate
-from src.shared_kernel.enums import AlertSeverity, AlertStatus
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
 from src.coherence.alert_generator import AlertGenerator
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
+from src.shared_kernel.enums import AlertSeverity, AlertStatus
 
 
 class AlertGeneratorService:
@@ -33,7 +33,7 @@ class AlertGeneratorService:
         }
 
         processed: list[AlertRecord] = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for violation in violations:
             fingerprint = self._fingerprint(violation)

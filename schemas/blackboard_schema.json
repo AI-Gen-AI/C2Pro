@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Blackboard Schema",
+  "description": "Validates the shared state blackboard.json structure to prevent corruption from LLM hallucinations.",
+  "type": "object",
+  "required": ["session_id", "objetivo_global", "estado_actual", "tareas"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for validation"
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Unique identifier for the current work session"
+    },
+    "objetivo_global": {
+      "type": ["string", "null"],
+      "description": "High-level goal for the current session"
+    },
+    "estado_actual": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "planificacion",
+        "planificacion_completada",
+        "en_ejecucion",
+        "en_revision",
+        "completado",
+        "fallido"
+      ],
+      "description": "Current state of the workflow"
+    },
+    "created_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "tareas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tarea_id", "backlog_id", "descripcion", "asignado_a", "estado"],
+        "properties": {
+          "tarea_id": {
+            "type": "string",
+            "pattern": "^T\\d{3,}$",
+            "description": "Unique task identifier (e.g., T001)"
+          },
+          "backlog_id": {
+            "type": "string",
+            "pattern": "^TASK-[A-Z0-9-]+$",
+            "description": "MANDATORY reference to C2PRO_MASTER_BACKLOG.md task ID (e.g., TASK-1490, TASK-UNIFY-005)"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "planning",
+              "backend",
+              "frontend",
+              "ai",
+              "infra",
+              "qa",
+              "review",
+              "security",
+              "devops"
+            ]
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 10
+          },
+          "asignado_a": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "backend",
+              "frontend",
+              "ai",
+              "infra",
+              "qa",
+              "reviewer",
+              "security",
+              "devops"
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "pendiente",
+              "en_progreso",
+              "completado",
+              "fallido",
+              "en_espera"
+            ]
+          },
+          "criterio_done": {
+            "type": "string",
+            "minLength": 10
+          },
+          "archivos_afectados": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "archivos_modificados": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "timestamps": {
+            "type": "object",
+            "properties": {
+              "creado": { "type": "string", "format": "date-time" },
+              "inicio": { "type": "string", "format": "date-time" },
+              "fin": { "type": "string", "format": "date-time" },
+              "completado": { "type": "string", "format": "date-time" }
+            }
+          },
+          "resultado": {
+            "type": "object",
+            "properties": {
+              "exitoso": { "type": "boolean" },
+              "mensaje": { "type": "string" },
+              "cambios_realizados": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "tests_pasados": { "type": "boolean" },
+              "validacion_lint": { "type": "boolean" }
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "contexto_paso_anterior": {
+      "type": "string",
+      "default": ""
+    },
+    "trazas_de_error": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tarea_id": { "type": "string" },
+          "tipo": { "type": "string" },
+          "severidad": {
+            "type": "string",
+            "enum": ["baja", "media", "alta", "critica"]
+          },
+          "archivo": { "type": "string" },
+          "linea": { "type": "integer" },
+          "mensaje": { "type": "string" }
+        }
+      }
+    },
+    "reintentos": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "max_reintentos": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3
+    },
+    "role_assignment": {
+      "type": "object",
+      "description": "Maps each role to the CLI instance ID executing it",
+      "properties": {
+        "planner": { "type": ["string", "null"] },
+        "backend": { "type": ["string", "null"] },
+        "frontend": { "type": ["string", "null"] },
+        "ai": { "type": ["string", "null"] },
+        "infra": { "type": ["string", "null"] },
+        "qa": { "type": ["string", "null"] },
+        "reviewer": { "type": ["string", "null"] },
+        "security": { "type": ["string", "null"] },
+        "devops": { "type": ["string", "null"] }
+      }
+    },
+    "backlog_sync": {
+      "type": "object",
+      "description": "Tracks synchronization with C2PRO_MASTER_BACKLOG.md",
+      "properties": {
+        "last_sync": { "type": ["string", "null"], "format": "date-time" },
+        "backlog_file": { "type": "string", "default": "C2PRO_MASTER_BACKLOG.md" },
+        "task_ids_en_sesion": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^TASK-[A-Z0-9-]+$"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

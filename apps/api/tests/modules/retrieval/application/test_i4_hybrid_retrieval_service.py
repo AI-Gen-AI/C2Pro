@@ -3,17 +3,23 @@ I4 - Hybrid Retrieval Application Tests
 Test Suite ID: TS-I4-RAG-SVC-001
 """
 
-import pytest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
-from typing import Dict, Any
 from uuid import uuid4
 
-# Assuming these will be defined in the skeleton
-from src.modules.retrieval.domain.entities import RetrievalResult, QueryIntent
+import pytest
+
 from src.modules.retrieval.application.ports import (
-    VectorStore, KeywordSearch, Reranker, RetrievalService, QueryRouter,
-    LangSmithClientProtocol # Re-use protocol from I3 if in conftest, or define locally
+    KeywordSearch,
+    QueryRouter,
+    Reranker,
+    RetrievalService,
+    VectorStore,
 )
+
+# Assuming these will be defined in the skeleton
+from src.modules.retrieval.domain.entities import QueryIntent, RetrievalResult
+
 
 # Mock LangSmith Client (from conftest.py or local)
 class MockLangSmithClient:
@@ -25,7 +31,7 @@ class MockLangSmithClient:
         self.spans.append(span)
         return span
 
-    def end_span(self, span: Dict[str, Any], outputs: Any = None):
+    def end_span(self, span: dict[str, Any], outputs: Any = None):
         for s in self.spans:
             if s["id"] == span["id"]:
                 s["outputs"] = outputs

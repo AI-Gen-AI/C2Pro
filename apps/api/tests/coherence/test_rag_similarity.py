@@ -12,28 +12,28 @@ Location: apps/api/tests/coherence/test_rag_similarity.py
 
 from __future__ import annotations
 
-import pytest
-from uuid import uuid4, UUID
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
-from src.coherence.ports.embedding_repository import (
-    IEmbeddingRepository,
-    EmbeddingRecord,
-    EmbeddingMatch,
-    EmbeddingSearchResult,
-)
+import pytest
+
 from src.coherence.adapters.persistence.pgvector_embedding_repository import (
     PgvectorEmbeddingRepository,
 )
-from src.coherence.graph.nodes import rag_similarity_check_async, prepare_context_async
+from src.coherence.graph.nodes import prepare_context_async, rag_similarity_check_async
 from src.coherence.graph.state import (
-    CoherenceGraphState,
     ClauseWithEmbedding,
+    CoherenceGraphState,
     EvaluationConfig,
 )
 from src.coherence.models import Clause
-
+from src.coherence.ports.embedding_repository import (
+    EmbeddingMatch,
+    EmbeddingRecord,
+    EmbeddingSearchResult,
+    IEmbeddingRepository,
+)
 
 # =============================================================================
 # FIXTURES
@@ -629,7 +629,7 @@ async def test_rag_similarity_performance(sample_project_id: UUID):
     )
 
     start = time.time()
-    result = await rag_similarity_check_async(state)
+    await rag_similarity_check_async(state)
     elapsed_ms = (time.time() - start) * 1000
 
     # Should complete quickly (mostly just function overhead in mocked version)

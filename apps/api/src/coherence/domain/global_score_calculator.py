@@ -7,7 +7,7 @@ Refers to Suite ID: TS-UD-COH-SCR-002.
 from __future__ import annotations
 
 import math
-from typing import Optional, TypeAlias
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field
 
@@ -41,9 +41,9 @@ class GlobalScoreCalculator:
         self._weight_history: list[WeightConfig] = []
 
     def _resolve_weights(
-        self, 
-        subscores: Subscores, 
-        weights: Optional[WeightConfig] = None,
+        self,
+        subscores: Subscores,
+        weights: WeightConfig | None = None,
         normalize_weights: bool = True
     ) -> dict[ScoreScope, float]:
         effective_weights = weights or self.DEFAULT_WEIGHTS
@@ -94,7 +94,7 @@ class GlobalScoreCalculator:
         Args:
             subscores: A dictionary mapping each ScoreScope to its calculated subscore.
             weights: A configuration of weights to apply. If None, default equal weights are used.
-            normalize_weights: If True, automatically normalizes weights to sum to 1.0. 
+            normalize_weights: If True, automatically normalizes weights to sum to 1.0.
                                If False, raises a ValueError if weights do not sum to 1.0.
 
         Returns:

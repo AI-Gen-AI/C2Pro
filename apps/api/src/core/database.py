@@ -5,6 +5,7 @@ SQLAlchemy async setup con Supabase PostgreSQL.
 Incluye Row Level Security (RLS) para multi-tenancy.
 """
 
+import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -27,16 +28,34 @@ logger = structlog.get_logger()
 # Slow query threshold in seconds (100ms)
 SLOW_QUERY_THRESHOLD_MS = 100
 
+# UUID validation pattern (safe for SQL string interpolation)
+_UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+
+def _validate_uuid_for_sql(value: UUID | str) -> str:
+    """
+    Validate and convert UUID to safe SQL string.
+
+    PostgreSQL SET commands don't support parameterized queries.
+    This function ensures the UUID is valid before using in SQL.
+    """
+    str_value = str(value)
+
+    if not _UUID_PATTERN.match(str_value):
+        raise ValueError(f"Invalid UUID format: {str_value}")
+
+    return str_value
+
 
 @event.listens_for(Engine, "before_cursor_execute")
-def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    """Record query start time for slow query detection."""
+def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+    """SQLAlchemy event handler - all args required by event listener interface."""
     conn.info.setdefault("query_start_time", []).append(time.perf_counter())
 
 
 @event.listens_for(Engine, "after_cursor_execute")
-def _receive_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    """Log slow queries (> 100ms) for performance monitoring."""
+def _receive_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+    """SQLAlchemy event handler - all args required by event listener interface."""
     start_times = conn.info.get("query_start_time", [])
     if start_times:
         start_time = start_times.pop()
@@ -65,8 +84,9 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 @event.listens_for(Engine, "connect")
-def _initialize_tenant_guc(dbapi_connection, connection_record) -> None:
+def _initialize_tenant_guc(dbapi_connection, connection_record) -> None:  # noqa: ARG001
     """
+    SQLAlchemy event handler - connection_record required by event listener interface.
     Ensure PostgreSQL custom GUC exists on every new DB connection.
 
     This keeps `SHOW app.current_tenant` available across sessions and enables
@@ -96,16 +116,16 @@ async def init_db() -> None:
     """
     global _engine, _session_factory
 
+    from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401
     from src.config import settings
 
     # Import all models to register them with SQLAlchemy
     # This is necessary for relationship resolution
     from src.core.auth import models as auth_models  # noqa: F401
-    from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401
     from src.documents.adapters.persistence import models as document_models  # noqa: F401
-    from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401
     from src.procurement.adapters.persistence import models as procurement_models  # noqa: F401
     from src.projects.adapters.persistence import models as project_models  # noqa: F401
+    from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401
 
     logger.debug("models_imported")
 
@@ -184,8 +204,9 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
             ):
                 tenant_id = request.state.tenant_id
                 # SET commands don't support parameterized queries in PostgreSQL
-                # Format the UUID directly into the SQL string (safe since UUID type is validated)
-                await session.execute(text(f"SET LOCAL app.current_tenant = '{str(tenant_id)}'"))
+                # Use validated UUID to prevent SQL injection
+                safe_tenant = _validate_uuid_for_sql(tenant_id)
+                await session.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
                 logger.debug("RLS_tenant_set", tenant_id=str(tenant_id))
 
             yield session
@@ -232,8 +253,9 @@ async def get_session_with_tenant(tenant_id: UUID) -> AsyncGenerator[AsyncSessio
         try:
             # Set tenant_id for RLS
             # SET commands don't support parameterized queries in PostgreSQL
-            # Format the UUID directly into the SQL string (safe since UUID type is validated)
-            await session.execute(text(f"SET LOCAL app.current_tenant = '{str(tenant_id)}'"))
+            # Use validated UUID to prevent SQL injection
+            safe_tenant = _validate_uuid_for_sql(tenant_id)
+            await session.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
             logger.debug("RLS_tenant_set", tenant_id=str(tenant_id))
 
             yield session

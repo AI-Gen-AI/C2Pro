@@ -12,7 +12,7 @@ function readRoute(pathFromWebRoot: string): string {
 
 describe("TASK-1427 canonical route standalone enforcement", () => {
   it("keeps the canonical dashboard landing page independent from app/dashboard", () => {
-    const source = readRoute("app/(app)/page.tsx");
+    const source = readRoute("app/(app)/dashboard/page.tsx");
 
     expect(source).not.toMatch(/dashboard\/page/);
     expect(source).not.toMatch(/export\s+\{\s*default\s*\}\s+from/);

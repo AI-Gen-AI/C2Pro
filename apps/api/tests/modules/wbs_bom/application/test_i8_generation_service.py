@@ -4,8 +4,8 @@ Test Suite ID: TS-I8-WBS-BOM-APP-001
 """
 
 from datetime import date
-from uuid import UUID, uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 

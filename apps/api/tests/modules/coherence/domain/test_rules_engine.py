@@ -6,17 +6,15 @@ Refers to Suite ID: TS-UD-COH-RUL-001 to TS-UD-COH-RUL-006.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
-
+from src.coherence.domain.anti_gaming import AlertEvent, AntiGamingDetector
 from src.coherence.domain.rules_engine import (
     CoherenceContext,
     CoherenceRulesEngine,
     ScoreCalculator,
 )
-from src.coherence.domain.anti_gaming import AlertEvent, AntiGamingDetector
 
 
 def _base_context(**overrides):
@@ -677,7 +675,7 @@ class TestAntiGamingRules:
     """Refers to Suite ID: TS-UD-COH-GAM-001."""
 
     def test_detects_more_than_10_changes_per_hour(self):
-        now = datetime(2026, 2, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
         user_id = uuid4()
         signature = "alert:coherence:budget_deviation"
 

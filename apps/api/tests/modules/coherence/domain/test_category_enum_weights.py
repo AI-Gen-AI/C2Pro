@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 
 from src.coherence.domain.category_weights import (
-    CoherenceCategory,
     DEFAULT_CATEGORY_WEIGHTS,
+    CoherenceCategory,
     get_default_category_weights,
     validate_category_weights,
 )

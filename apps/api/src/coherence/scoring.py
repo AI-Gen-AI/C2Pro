@@ -25,7 +25,6 @@ import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 # Temporarily add the parent directory to sys.path to allow relative imports when run directly
 script_dir = os.path.dirname(__file__)
@@ -34,22 +33,20 @@ project_root = os.path.abspath(
 )
 sys.path.insert(0, project_root)
 
-from src.coherence.config import (
+from src.coherence.config import (  # noqa: E402
     DECAY_FACTOR,
+    DEFAULT_SCORING_CONFIG,
     RULE_WEIGHT_OVERRIDES,
     SEVERITY_WEIGHTS,
     ScoringConfig,
-    DEFAULT_SCORING_CONFIG,
 )
-from src.coherence.models import (
+from src.coherence.models import (  # noqa: E402
     Alert,
-    Evidence,
     CategoryBreakdown,
-    SeverityCount,
+    Evidence,
     FindingSignal,
-    SeverityLevel,
+    SeverityCount,
 )
-
 
 # =============================================================================
 # SCORING RESULT DATACLASS
@@ -101,7 +98,7 @@ class ScoringService:
     New API: calculate_from_signals() accepts FindingSignal objects.
     """
 
-    def __init__(self, config: Optional[ScoringConfig] = None):
+    def __init__(self, config: ScoringConfig | None = None):
         """
         Initialize the scoring service.
 
@@ -110,7 +107,7 @@ class ScoringService:
                     If None, uses DEFAULT_SCORING_CONFIG.
         """
         self.config = config or DEFAULT_SCORING_CONFIG
-        self._normalized_weights: Optional[dict[str, float]] = None
+        self._normalized_weights: dict[str, float] | None = None
 
     @property
     def normalized_weights(self) -> dict[str, float]:
@@ -367,7 +364,7 @@ class ScoringService:
         base_score = 100.0
         total_deduction = 0.0
 
-        severity_counts: Dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
 
         for alert in alerts:
             # 1. Check for a rule-specific override first
@@ -396,7 +393,7 @@ class ScoringService:
         # Clamp the score between 0 and 100 and round to 2 decimal places
         return max(0.0, min(100.0, round(final_score, 2)))
 
-    def compute_category_breakdown(self, alerts: List[Alert]) -> List[CategoryBreakdown]:
+    def compute_category_breakdown(self, alerts: list[Alert]) -> list[CategoryBreakdown]:
         """
         Computes the coherence score breakdown by category.
 
@@ -407,7 +404,7 @@ class ScoringService:
             List of CategoryBreakdown objects, one per category with alerts
         """
         # Group alerts by category
-        category_alerts: Dict[str, List[Alert]] = defaultdict(list)
+        category_alerts: dict[str, list[Alert]] = defaultdict(list)
         for alert in alerts:
             category_alerts[alert.category].append(alert)
 
@@ -415,7 +412,7 @@ class ScoringService:
         overall_score = self.compute_score(alerts)
         total_deduction = 100.0 - overall_score
 
-        breakdown_list: List[CategoryBreakdown] = []
+        breakdown_list: list[CategoryBreakdown] = []
 
         for category, cat_alerts in category_alerts.items():
             # Calculate score for this category
@@ -448,7 +445,7 @@ class ScoringService:
 
         return breakdown_list
 
-    def _compute_category_score(self, alerts: List[Alert]) -> float:
+    def _compute_category_score(self, alerts: list[Alert]) -> float:
         """
         Computes the coherence score for a specific category of alerts.
 
@@ -461,7 +458,7 @@ class ScoringService:
         base_score = 100.0
         total_deduction = 0.0
 
-        severity_counts: Dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
 
         for alert in alerts:
             # Check for rule-specific override
@@ -488,7 +485,7 @@ class ScoringService:
 
         return max(0.0, min(100.0, round(final_score, 2)))
 
-    def _count_severity(self, alerts: List[Alert]) -> SeverityCount:
+    def _count_severity(self, alerts: list[Alert]) -> SeverityCount:
         """
         Counts alerts by severity level.
 

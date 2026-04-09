@@ -3,14 +3,13 @@ Update Project Use Case.
 
 Handles updating an existing project with business rule validation.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
 
 from src.projects.domain.models import Project, ProjectStatus, ProjectType
 from src.projects.ports.project_repository import ProjectRepository
-
 
 logger = structlog.get_logger()
 
@@ -110,7 +109,7 @@ class UpdateProjectUseCase:
             project.end_date = end_date
 
         # Update timestamp
-        project.updated_at = datetime.utcnow()
+        project.updated_at = datetime.now(UTC)
 
         # Persist
         updated_project = await self.repository.update(project)

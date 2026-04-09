@@ -50,4 +50,4 @@ class ImportWBSFromProjectsUseCase:
                 )
             )
 
-        return await self._wbs_repository.bulk_create(mapped_items)
+        return await self._wbs_repository.bulk_create(mapped_items, tenant_id)

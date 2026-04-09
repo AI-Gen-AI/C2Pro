@@ -7,8 +7,9 @@ These tests validate that the Document Extraction service maintains
 accuracy above baseline thresholds across the evaluation dataset.
 """
 
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from src.modules.observability.application.services.evaluation_runner import (
     EvalRunConfig,

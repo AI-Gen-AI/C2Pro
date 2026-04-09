@@ -4,8 +4,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.documents.application.dtos import RagAnswer
 from src.documents.adapters.rag.rag_service import RagService
+from src.documents.application.dtos import RagAnswer
 from src.documents.ports.rag_service import IRagService
 
 

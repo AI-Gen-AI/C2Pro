@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.adapters.graph.orchestrator_adapter import WorkflowOrchestrator
+from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.analyze_document_use_case import AnalyzeDocumentUseCase
 from src.analysis.domain.enums import AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
@@ -19,7 +20,6 @@ from src.core.auth.models import User
 from src.core.database import get_session
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/analysis",
@@ -37,7 +37,7 @@ PROCESSING_STAGE_TEMPLATE: list[dict[str, int | str]] = [
 
 
 def _sse_frame(event: str, data: dict[str, Any]) -> bytes:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode()
 
 
 def _build_completion_payload(
@@ -192,7 +192,7 @@ class AnalyzeResponse(BaseModel):
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_document(
     payload: AnalyzeRequest,
-    request: Request,
+    _request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
     use_case: AnalyzeDocumentUseCase = Depends(get_analyze_use_case),
@@ -238,7 +238,7 @@ async def analyze_document(
 @router.get("/projects/{project_id}/process/stream")
 async def stream_project_processing(
     project_id: UUID,
-    request: Request,
+    _request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> StreamingResponse:

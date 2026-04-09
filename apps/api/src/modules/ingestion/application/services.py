@@ -7,8 +7,9 @@ Increment I2: OCR + Table Parsing Reliability
 - OCRProcessingService: Orchestrates OCR with primary/fallback strategy
 """
 
+from typing import Any
+
 import structlog
-from typing import Any, Optional, List, Dict
 
 from src.modules.ingestion.application.ports import OCRAdapter, OCRResult
 from src.modules.ingestion.domain.entities import TableData
@@ -73,7 +74,7 @@ class OCRProcessingService:
     async def process_page_with_fallback(
         self,
         page_content: bytes,
-        mock_langsmith: Optional[Any] = None,
+        mock_langsmith: Any | None = None,
     ) -> OCRResult:
         """
         Process a PDF page with primary OCR, falling back if confidence is low.
@@ -229,7 +230,7 @@ class TableParserService:
         self,
         table_extractor: Any,
         low_confidence_threshold: float = 0.5,
-        langsmith_client: Optional[Any] = None,
+        langsmith_client: Any | None = None,
     ):
         """
         Initialize the table parser service.
@@ -251,8 +252,8 @@ class TableParserService:
     async def extract_tables_from_pdf_page(
         self,
         page_content: bytes,
-        mock_langsmith: Optional[Any] = None,
-    ) -> List[TableData]:
+        mock_langsmith: Any | None = None,
+    ) -> list[TableData]:
         """
         Extract tables from a PDF page with normalization.
 
@@ -366,7 +367,7 @@ class TableParserService:
 
     def _normalize_table(
         self,
-        raw_table: Dict[str, Any],
+        raw_table: dict[str, Any],
         table_index: int = 0,
     ) -> TableData:
         """
@@ -442,7 +443,7 @@ class TableParserService:
 
     def _build_table_metadata(
         self,
-        raw_table: Dict[str, Any],
+        raw_table: dict[str, Any],
         normalized_rows: list[list[str]],
     ) -> dict[str, Any]:
         """

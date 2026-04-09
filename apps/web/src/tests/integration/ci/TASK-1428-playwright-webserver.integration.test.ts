@@ -15,7 +15,7 @@ describe("TASK-1428 RED - Playwright managed web server stability", () => {
   });
 
   it("[TASK-1428-RED-02] pins the Next turbopack root to the app workspace to avoid wrong monorepo inference", () => {
-    const configPath = resolve(process.cwd(), "next.config.js");
+    const configPath = resolve(process.cwd(), "next.config.mjs");
     const config = readFileSync(configPath, "utf8");
 
     expect(config).toContain("turbopack:");

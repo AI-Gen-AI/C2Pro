@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Iterable
+from datetime import UTC, datetime
 
-from src.shared_kernel.enums import AlertSeverity, AlertStatus
 from src.analysis.ports.types import AlertRecord
 from src.services.scoring.weights import DEFAULT_SENSITIVITY, SEVERITY_WEIGHTS
+from src.shared_kernel.enums import AlertSeverity, AlertStatus
 
 
 @dataclass
@@ -39,7 +39,7 @@ class ScoreCalculator:
             value=score,
             severity_breakdown=self._severity_breakdown(open_alerts),
             top_drivers=self._top_drivers(open_alerts),
-            calculated_at=datetime.utcnow(),
+            calculated_at=datetime.now(UTC),
         )
 
     def _raw_penalty(self, alerts: list[AlertRecord]) -> int:

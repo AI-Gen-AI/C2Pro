@@ -8,8 +8,6 @@ Refers to Suite ID: TS-UA-COH-UC-002.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from src.coherence.application.dtos import (
     AlertAction,
     CalculateCoherenceCommand,

@@ -17,11 +17,10 @@ from src.coherence.application.dependencies import (
 from src.coherence.application.dtos import (
     AlertAction,
     CalculateCoherenceCommand,
-    CategoryScoreDetail,
     RecalculateOnAlertResult,
 )
-from src.coherence.application.use_cases import CalculateCoherenceUseCase
 from src.coherence.application.services import CoherenceCalculationService
+from src.coherence.application.use_cases import CalculateCoherenceUseCase
 from src.coherence.domain.category_weights import CoherenceCategory
 
 
@@ -420,7 +419,7 @@ class TestCoherenceCalculationService:
         )
 
         # Execute recalculation
-        result = service.recalculate_on_alert(
+        service.recalculate_on_alert(
             project_id=project_id,
             alert_ids=["R6"],
             alert_action=AlertAction.RESOLVED,

@@ -1,0 +1,11 @@
+id: analizar_codigo
+version: 1.0.0
+description: "Lee y analiza archivos de un directorio especificado"
+author: "C2Pro Team"
+input:
+  directorio: "string (required) - Ruta relativa del directorio"
+  profundidad: "integer (optional, default: 2) - Profundidad maxima"
+output:
+  archivos: "array de objetos con path, size_bytes, imports"
+dependencies: []
+timeout_ms: 15000

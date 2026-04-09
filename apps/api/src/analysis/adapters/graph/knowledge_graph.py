@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 from uuid import UUID
 
 import networkx as nx
@@ -47,7 +48,7 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
 
         stakeholders = await self._load_stakeholders(project_id)
         tasks = await self._load_tasks(project_id, tenant_id)
-        risks = await self._load_risks(project_id)
+        risks = await self._load_risks(project_id, tenant_id)
         clauses = await self._load_clauses(risks, tasks)
         raci_rows = await self._load_raci(project_id)
 
@@ -182,9 +183,11 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
     async def _load_tasks(self, project_id: UUID, tenant_id: UUID) -> list[WBSTaskView]:
         return await self.wbs_repository.get_by_project(project_id, tenant_id)
 
-    async def _load_risks(self, project_id: UUID) -> list[Alert]:
+    async def _load_risks(self, project_id: UUID, tenant_id: UUID) -> list[Alert]:
+        """Load risks with tenant isolation."""
         page = await self.alert_repository.list_for_project(
             project_id=project_id,
+            tenant_id=tenant_id,
             category="risk",
             limit=500,
         )

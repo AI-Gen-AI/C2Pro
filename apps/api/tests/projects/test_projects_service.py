@@ -8,28 +8,28 @@ Comprehensive tests for project management service including:
 - Statistics calculation
 """
 
-import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
+from src.core.exceptions import ConflictError, NotFoundError
 from src.projects.adapters.persistence.models import ProjectORM as Project
-from src.projects.domain.models import ProjectStatus, ProjectType
 from src.projects.application.dtos import (
     ProjectCreateRequest,
-    ProjectUpdateRequest,
     ProjectFilters,
+    ProjectUpdateRequest,
 )
-from src.core.auth.models import Tenant, User
-from src.core.exceptions import NotFoundError, ConflictError
+from src.projects.domain.models import ProjectStatus, ProjectType
 
 # RED-phase stubs — ProjectService is not yet implemented
 # These tests define the expected API; implementation is pending.
 try:
     from src.projects.application.service import (
-        get_project_by_id,
-        get_project_by_code,
         ProjectService,
+        get_project_by_code,
+        get_project_by_id,
     )
 except ImportError:
     import pytest
@@ -543,7 +543,7 @@ class TestProjectServiceList:
         """
         now = datetime.utcnow()
         yesterday = now - timedelta(days=1)
-        tomorrow = now + timedelta(days=1)
+        now + timedelta(days=1)
 
         # Create project and manually set created_at
         old_project = Project(

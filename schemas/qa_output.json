@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Role Output Schema",
+  "description": "Output schema for QA role. Extends base_output.json with QA-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tests": {
+          "type": "object",
+          "description": "Test execution results",
+          "properties": {
+            "tests_unitarios": {
+              "type": "object",
+              "properties": {
+                "ejecutados": {"type": "integer", "minimum": 0},
+                "pasados": {"type": "integer", "minimum": 0},
+                "fallidos": {"type": "integer", "minimum": 0},
+                "cobertura": {"type": "number", "minimum": 0, "maximum": 100}
+              }
+            },
+            "tests_integracion": {
+              "type": "object",
+              "properties": {
+                "ejecutados": {"type": "integer", "minimum": 0},
+                "pasados": {"type": "integer", "minimum": 0},
+                "fallidos": {"type": "integer", "minimum": 0}
+              }
+            },
+            "tests_e2e": {
+              "type": "object",
+              "properties": {
+                "ejecutados": {"type": "integer", "minimum": 0},
+                "pasados": {"type": "integer", "minimum": 0},
+                "fallidos": {"type": "integer", "minimum": 0},
+                "framework": {
+                  "type": "string",
+                  "description": "E2E framework used (Playwright, Cypress, etc.)"
+                }
+              }
+            },
+            "tests_rendimiento": {
+              "type": "object",
+              "properties": {
+                "ejecutados": {"type": "integer", "minimum": 0},
+                "pasados": {"type": "integer", "minimum": 0},
+                "metricas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "nombre": {"type": "string"},
+                      "valor": {"type": "number"},
+                      "umbral": {"type": "number"},
+                      "pasado": {"type": "boolean"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bugs": {
+          "type": "object",
+          "description": "Bugs found and reported",
+          "properties": {
+            "bugs_encontrados": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "severidad", "descripcion"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Bug ID"
+                  },
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["baja", "media", "alta", "critica"]
+                  },
+                  "descripcion": {
+                    "type": "string",
+                    "minLength": 10
+                  },
+                  "pasos_reproducir": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "estado": {
+                    "type": "string",
+                    "enum": ["abierto", "en_progreso", "resuelto", "cerrado"]
+                  }
+                }
+              }
+            },
+            "bugs_resueltos": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of bugs resolved"
+            }
+          }
+        },
+        "cobertura": {
+          "type": "object",
+          "description": "Overall test coverage",
+          "properties": {
+            "lineas": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Line coverage percentage"
+            },
+            "ramas": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Branch coverage percentage"
+            },
+            "funciones": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Function coverage percentage"
+            },
+            "reportes": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Coverage report files generated"
+            }
+          }
+        },
+        "regresion": {
+          "type": "object",
+          "description": "Regression testing",
+          "properties": {
+            "suite_ejecutada": {
+              "type": "boolean",
+              "description": "Whether regression suite was executed"
+            },
+            "nuevos_fallos": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "New failures in regression tests"
+            }
+          }
+        },
+        "validacion": {
+          "type": "object",
+          "description": "Validation checks",
+          "properties": {
+            "criterios_aceptacion": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "criterio": {"type": "string"},
+                  "cumplido": {"type": "boolean"}
+                }
+              },
+              "description": "Acceptance criteria validation"
+            },
+            "aprobado_qa": {
+              "type": "boolean",
+              "description": "Whether QA approved the changes"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

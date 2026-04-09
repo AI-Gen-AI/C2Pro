@@ -19,7 +19,7 @@ from src.coherence.application.dtos import (
 )
 from src.coherence.application.use_cases import CalculateCoherenceUseCase
 from src.coherence.domain.category_weights import CoherenceCategory
-from src.core.auth.models import Tenant, SubscriptionPlan
+from src.core.auth.models import Tenant
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -164,7 +164,7 @@ class TestCoherenceRepository:
         use_case = CalculateCoherenceUseCase()
 
         # Create 5 results
-        for i in range(5):
+        for _i in range(5):
             command = CalculateCoherenceCommand(project_id=test_project.id)
             result = use_case.execute(command)
             await repository.save(result)

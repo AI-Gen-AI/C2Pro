@@ -147,7 +147,7 @@ async def example_error_classification():
     print("EJEMPLO 5: Error Classification")
     print("=" * 60)
 
-    client = create_llm_client()
+    create_llm_client()
 
     print("\n🏷️  Tipos de errores:")
     print("   rate_limit      → Retry con delay largo")

@@ -5,8 +5,6 @@ ensuring proper constraint enforcement and error handling.
 """
 
 import pytest
-from pydantic import ValidationError
-
 from golden.schemas import (
     CoherenceDimension,
     CoherenceIssueAssertion,
@@ -17,6 +15,7 @@ from golden.schemas import (
     ToolCallAssertion,
     TrajectoryConstraint,
 )
+from pydantic import ValidationError
 
 
 class TestCoherenceDimension:

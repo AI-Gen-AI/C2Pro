@@ -172,7 +172,7 @@ try:
     AI_TOKENS_USED = Counter(
         "c2pro_ai_tokens_total",
         "Total AI tokens used",
-        ["model", "type"],  # type: input/output
+        ["model", "usage_type"],  # usage_type can be input or output
     )
 
     AI_COST_CENTS = Counter(
@@ -240,8 +240,8 @@ def record_ai_metric(
     """Registra métricas de una llamada a AI."""
     if METRICS_AVAILABLE:
         AI_REQUEST_COUNT.labels(model=model, operation=operation).inc()
-        AI_TOKENS_USED.labels(model=model, type="input").inc(input_tokens)
-        AI_TOKENS_USED.labels(model=model, type="output").inc(output_tokens)
+        AI_TOKENS_USED.labels(model=model, usage_type="input").inc(input_tokens)
+        AI_TOKENS_USED.labels(model=model, usage_type="output").inc(output_tokens)
         AI_LATENCY.labels(model=model, operation=operation).observe(duration)
 
         # Calcular costo aproximado (centavos)
@@ -302,3 +302,76 @@ def record_circuit_breaker_state_change(service: str, from_state: str, to_state:
         ).inc()
         # Also update the current state gauge
         record_circuit_breaker_state(service, to_state)
+
+
+# ===========================================
+# HITL WORKFLOW METRICS
+# ===========================================
+
+try:
+    # HITL Resume metrics
+    HITL_RESUME_TOTAL = Counter(
+        "c2pro_hitl_resume_total",
+        "Total HITL workflow resume attempts",
+        ["decision", "status"],
+    )
+
+    HITL_RESUME_LATENCY = Histogram(
+        "c2pro_hitl_resume_latency_seconds",
+        "HITL workflow resume latency in seconds",
+        ["decision"],
+        buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0],
+    )
+
+    HITL_RESUME_ERRORS = Counter(
+        "c2pro_hitl_resume_errors_total",
+        "Total HITL workflow resume errors by type",
+        ["error_type"],
+    )
+
+    HITL_REVIEW_ITEMS_PENDING = Gauge(
+        "c2pro_hitl_review_items_pending",
+        "Number of pending HITL review items",
+        ["tenant_id"],
+    )
+
+    HITL_REVIEW_ITEMS_TOTAL = Gauge(
+        "c2pro_hitl_review_items_total",
+        "Total number of HITL review items",
+        ["tenant_id"],
+    )
+
+    HITL_METRICS_AVAILABLE = True
+
+except ImportError:
+    HITL_METRICS_AVAILABLE = False
+
+
+def record_hitl_resume_attempt(decision: str, status: str) -> None:
+    """Record a HITL workflow resume attempt."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_RESUME_TOTAL.labels(decision=decision, status=status).inc()
+
+
+def record_hitl_resume_latency(decision: str, duration: float) -> None:
+    """Record HITL workflow resume latency."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_RESUME_LATENCY.labels(decision=decision).observe(duration)
+
+
+def record_hitl_resume_error(error_type: str) -> None:
+    """Record a HITL workflow resume error."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_RESUME_ERRORS.labels(error_type=error_type).inc()
+
+
+def update_hitl_pending_gauge(tenant_id: str, count: int) -> None:
+    """Update the pending review items gauge."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_REVIEW_ITEMS_PENDING.labels(tenant_id=tenant_id).set(count)
+
+
+def update_hitl_total_gauge(tenant_id: str, count: int) -> None:
+    """Update the total review items gauge."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_REVIEW_ITEMS_TOTAL.labels(tenant_id=tenant_id).set(count)

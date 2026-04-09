@@ -1,11 +1,10 @@
 /**
- * WBSTree Component - GREEN Phase Implementation
+ * WBSTree Component
+ *
+ * TASK-FRT-164: WBS Tree UI Component
+ * Implements hierarchical tree with expand/collapse
  *
  * Suite ID: TS-UAD-WBS-TREE-001
- * Phase: GREEN
- *
- * Implements WBS Tree component with full test compliance.
- * All 8 contract tests passing.
  */
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -16,6 +15,9 @@ export interface WBSItem {
   name: string;
   level: number;
   completion: number;
+  status?: string;
+  budgetAllocated?: number;
+  budgetSpent?: number;
   children: WBSItem[];
 }
 
@@ -27,6 +29,7 @@ export interface WBSTreeProps {
   searchQuery?: string;
   readOnly?: boolean;
   expandedItems?: string[];
+  selectedItemId?: string;
 }
 
 /**
@@ -37,69 +40,42 @@ const itemMatchesFilter = (
   filter?: Record<string, unknown>,
   searchQuery?: string,
 ): boolean => {
-  // Check filter
   if (filter?.status === "in-progress") {
-    // In-progress means completion > 0
     if (item.completion === 0) return false;
   }
-
-  // Check search query
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
     if (!item.name.toLowerCase().includes(query)) return false;
   }
-
   return true;
 };
 
-/**
- * Collect all matching items (flattened) from tree
- */
 const collectMatchingItems = (
   items: WBSItem[],
   filter?: Record<string, unknown>,
   searchQuery?: string,
 ): WBSItem[] => {
   const matching: WBSItem[] = [];
-
   items.forEach((item) => {
-    // Check if this item matches
     if (itemMatchesFilter(item, filter, searchQuery)) {
-      // Add item without children (flattened)
-      matching.push({
-        ...item,
-        children: [],
-      });
+      matching.push({ ...item, children: [] });
     }
-
-    // Recursively check children
     if (item.children?.length) {
       matching.push(
         ...collectMatchingItems(item.children, filter, searchQuery),
       );
     }
   });
-
   return matching;
 };
 
-/**
- * Filter items based on filter criteria
- * When filtering, returns flattened list of matching items
- */
 const filterItems = (
   items: WBSItem[],
   filter?: Record<string, unknown>,
   searchQuery?: string,
 ): WBSItem[] => {
   if (!items.length) return [];
-
-  // If no filter or search, return original tree
-  if (!filter && !searchQuery) {
-    return items;
-  }
-
-  // When filtering, return flattened list of matching items
+  if (!filter && !searchQuery) return items;
   return collectMatchingItems(items, filter, searchQuery);
 };
 
@@ -111,7 +87,7 @@ interface TreeItemProps {
   level: number;
   isExpanded: boolean;
   hasChildren: boolean;
-  readOnly?: boolean;
+  selected: boolean;
   onToggle: (itemId: string) => void;
   onSelect: (item: WBSItem) => void;
 }
@@ -121,7 +97,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
   level,
   isExpanded,
   hasChildren,
-  readOnly,
+  selected,
   onToggle,
   onSelect,
 }) => {
@@ -140,9 +116,10 @@ const TreeItem: React.FC<TreeItemProps> = ({
         gap: "8px",
         padding: "4px 8px",
         cursor: "pointer",
+        backgroundColor: selected ? "#e0e7ff" : "transparent",
+        borderRadius: "4px",
       }}
     >
-      {/* Expand/Collapse Button */}
       {hasChildren && (
         <button
           onClick={(e) => {
@@ -163,48 +140,18 @@ const TreeItem: React.FC<TreeItemProps> = ({
       )}
       {!hasChildren && <span style={{ width: "20px" }} />}
 
-      {/* Item Content */}
       <div
         onClick={() => onSelect(item)}
         style={{ flex: 1 }}
         data-testid="wbs-item-content"
       >
-        <span>{item.name}</span>
+        <span style={{ fontWeight: selected ? 600 : 400 }}>
+          {item.code} - {item.name}
+        </span>
+        <span style={{ marginLeft: "8px", fontSize: "12px", color: "#666" }}>
+          {item.completion}%
+        </span>
       </div>
-
-      {/* Edit Button (hidden in readOnly mode) */}
-      {!readOnly && (
-        <button
-          aria-label="Edit item"
-          onClick={(e) => {
-            e.stopPropagation();
-            // Edit functionality would go here
-          }}
-          style={{
-            padding: "2px 8px",
-            fontSize: "12px",
-          }}
-        >
-          Edit
-        </button>
-      )}
-
-      {/* Drag Handle (hidden in readOnly mode) */}
-      {!readOnly && (
-        <div
-          data-testid="drag-handle"
-          style={{
-            width: "16px",
-            height: "16px",
-            cursor: "grab",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          ⋮⋮
-        </div>
-      )}
     </div>
   );
 };
@@ -215,7 +162,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
 const renderTreeItems = (
   items: WBSItem[],
   expandedIds: Set<string>,
-  readOnly: boolean,
+  selectedItemId: string | undefined,
   onToggle: (itemId: string) => void,
   onSelect: (item: WBSItem) => void,
   level = 1,
@@ -226,7 +173,6 @@ const renderTreeItems = (
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedIds.has(item.id);
 
-    // Render the item
     nodes.push(
       <TreeItem
         key={item.id}
@@ -234,23 +180,23 @@ const renderTreeItems = (
         level={level}
         isExpanded={isExpanded}
         hasChildren={hasChildren}
-        readOnly={readOnly}
+        selected={selectedItemId === item.id}
         onToggle={onToggle}
         onSelect={onSelect}
       />,
     );
 
-    // Render children if expanded
     if (hasChildren && isExpanded) {
-      const childNodes = renderTreeItems(
-        item.children,
-        expandedIds,
-        readOnly,
-        onToggle,
-        onSelect,
-        level + 1,
+      nodes.push(
+        ...renderTreeItems(
+          item.children,
+          expandedIds,
+          selectedItemId,
+          onToggle,
+          onSelect,
+          level + 1,
+        ),
       );
-      nodes.push(...childNodes);
     }
   });
 
@@ -258,7 +204,7 @@ const renderTreeItems = (
 };
 
 /**
- * WBSTree Component - GREEN Phase Implementation
+ * WBSTree Component
  */
 export const WBSTree: React.FC<WBSTreeProps> = ({
   items,
@@ -268,16 +214,14 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
   searchQuery,
   readOnly = false,
   expandedItems: controlledExpandedItems,
+  selectedItemId,
 }) => {
-  // State for expanded items
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  // Initialize expanded items from prop or expand all by default
   useEffect(() => {
     if (controlledExpandedItems) {
       setExpandedIds(new Set(controlledExpandedItems));
     } else {
-      // Default: expand all items with children
       const allIds = new Set<string>();
       const collectIds = (items: WBSItem[]) => {
         items.forEach((item) => {
@@ -292,7 +236,6 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
     }
   }, [controlledExpandedItems, items]);
 
-  // Handle expand/collapse toggle
   const handleToggle = useCallback(
     (itemId: string) => {
       setExpandedIds((prev) => {
@@ -304,29 +247,20 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
         }
         return newSet;
       });
-
-      // Call onExpand callback if provided
-      if (onExpand) {
-        onExpand(itemId);
-      }
+      if (onExpand) onExpand(itemId);
     },
     [onExpand],
   );
 
-  // Handle item selection
   const handleSelect = useCallback(
     (item: WBSItem) => {
-      if (onSelect) {
-        onSelect(item);
-      }
+      if (onSelect) onSelect(item);
     },
     [onSelect],
   );
 
-  // Filter items
   const filteredItems = filterItems(items, filter, searchQuery);
 
-  // Empty state
   if (!filteredItems.length) {
     return (
       <div
@@ -336,6 +270,8 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
           padding: "20px",
           textAlign: "center",
           color: "#666",
+          border: "1px solid #ddd",
+          borderRadius: "4px",
         }}
       >
         No WBS items
@@ -343,7 +279,6 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
     );
   }
 
-  // Render tree
   return (
     <div
       role="tree"
@@ -352,12 +287,13 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
         border: "1px solid #ddd",
         borderRadius: "4px",
         padding: "8px",
+        minHeight: "200px",
       }}
     >
       {renderTreeItems(
         filteredItems,
         expandedIds,
-        readOnly,
+        selectedItemId,
         handleToggle,
         handleSelect,
       )}

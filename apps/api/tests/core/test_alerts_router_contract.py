@@ -4,8 +4,8 @@ TS-INT-DB-CLS-001: Alerts API contract tests.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import importlib
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
 

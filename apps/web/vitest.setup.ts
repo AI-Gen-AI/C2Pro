@@ -1,5 +1,13 @@
-import { ReadableStream, TransformStream, WritableStream } from "node:stream/web";
+import {
+  ReadableStream,
+  TransformStream,
+  WritableStream,
+} from "node:stream/web";
 import "@testing-library/jest-dom/vitest";
+import axios from "axios";
+
+process.env.NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+axios.defaults.baseURL = "/api";
 
 if (!globalThis.ReadableStream) {
   globalThis.ReadableStream =

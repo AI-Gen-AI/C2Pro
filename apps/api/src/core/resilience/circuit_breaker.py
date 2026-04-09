@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 
@@ -227,8 +228,7 @@ class CircuitBreaker:
         if self._state == CircuitBreakerState.HALF_OPEN:
             # Any failure in half-open state reopens the circuit
             self._transition_to_open()
-        elif self._state == CircuitBreakerState.CLOSED:
-            if self._failure_count >= self.config.failure_threshold:
+        elif self._state == CircuitBreakerState.CLOSED and self._failure_count >= self.config.failure_threshold:
                 self._transition_to_open()
 
     async def record_rejection(self) -> None:

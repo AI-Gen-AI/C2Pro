@@ -1,15 +1,15 @@
 """
 Extended LangGraph nodes (N1, N2, N6–N11, N15, N16).
 
-Each node wraps an existing use case / service so the graph orchestrator
-can call it without knowing the implementation details.  Dependencies are
-resolved lazily (inside each function) to avoid import-time coupling between
-bounded contexts — only Protocol-compatible dicts cross the boundary.
+Thin adapter wrappers — business logic lives in domain services and
+application use cases. Dependencies resolved lazily to avoid import-time
+coupling between bounded contexts.
+
+Refers to TASK-IMPL-010.8–.14 (node refactoring).
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 from uuid import UUID
 
@@ -22,55 +22,25 @@ from src.analysis.adapters.graph.dependencies import (
     get_pii_detector_service,
 )
 from src.analysis.adapters.graph.schema import ProjectState
-from src.coherence.application.dependencies import (
-    build_coherence_calculation_service,
-)
+from src.analysis.domain.document_classification import DocumentCategoryClassifier
+from src.analysis.domain.prompts import BUDGET_EXTRACTION_PROMPT, RACI_GENERATION_PROMPT
 
 logger = structlog.get_logger()
 
-# ── Category classification constants (N1) ──────────────────────────────────
+# ── Domain service instances (stateless, reusable) ──────────────────────────
 
-CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "SCOPE": ["alcance", "scope", "entregable", "deliverable", "requisito", "requirement"],
-    "BUDGET": ["presupuesto", "budget", "coste", "costo", "capex", "opex", "precio", "price"],
-    "TIME": ["plazo", "cronograma", "schedule", "hito", "milestone", "deadline", "fecha"],
-    "QUALITY": ["calidad", "quality", "norma", "standard", "iso", "certificación"],
-    "TECHNICAL": ["técnico", "technical", "especificación", "specification", "diseño", "design"],
-    "LEGAL": ["legal", "cláusula", "clause", "contrato", "contract", "obligación", "penalización"],
-}
-
-# ── Default PII anonymization config ─────────────────────────────────────────
-
-_DEFAULT_STRATEGY = "REDACT"
+_document_classifier = DocumentCategoryClassifier()
 
 
 # ---------------------------------------------------------------------------
 # N1 — Document Ingestion & Classification
 # ---------------------------------------------------------------------------
 
-def _classify_category(text: str) -> str:
-    """Classify document into a coherence category by keyword frequency."""
-    text_lower = text.lower()
-    scores: dict[str, int] = {}
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        scores[category] = sum(
-            len(re.findall(rf"\b{re.escape(kw)}\b", text_lower))
-            for kw in keywords
-        )
-    if not any(scores.values()):
-        return "TECHNICAL"  # default
-    return max(scores, key=lambda k: scores[k])
-
 
 async def document_ingestion_node(state: ProjectState) -> ProjectState:
-    """N1 — Parse the document and classify its coherence category.
-
-    Wraps: ``documents.application.parse_document_use_case.ParseDocumentUseCase``
-    for parsing (when document_id is available) and adds keyword-based category
-    classification that the original use case doesn't provide.
-    """
+    """N1 — Parse the document and classify its coherence category."""
     text = state.get("anonymized_text") or state["document_text"]
-    category = _classify_category(text)
+    category = _document_classifier.classify(text)
 
     state["document_parsed"] = True
     state["document_category"] = category
@@ -90,11 +60,7 @@ async def document_ingestion_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
-    """N2 — Detect and redact PII before downstream AI processing.
-
-    Wraps: ``anonymizer.application.anonymization_service.AnonymizationService``
-    and ``anonymizer.domain.pii_detector_service.PiiDetectorService``.
-    """
+    """N2 — Detect and redact PII before downstream AI processing."""
     from src.anonymizer.application.anonymization_service import (
         AnonymizationConfig,
         AnonymizationStrategy,
@@ -105,14 +71,11 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     detector = get_pii_detector_service()
     service = get_anonymization_service(detector)
 
-    # Default: redact all PII types
     config = AnonymizationConfig(
         strategies={pii_type: AnonymizationStrategy.REDACT for pii_type in PiiType}
     )
-
     anonymized = await service.anonymize(text, config)
 
-    # Build redaction log
     detection_result = await detector.detect(text)
     redactions = [
         {"text": item.text, "type": item.pii_type.name, "start": item.start, "end": item.end}
@@ -124,11 +87,7 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     state["messages"].append(
         AIMessage(content=f"N2 pii_anonymizer: {len(redactions)} PII items redacted")
     )
-    logger.info(
-        "node_pii_anonymizer",
-        project_id=state.get("project_id"),
-        pii_count=len(redactions),
-    )
+    logger.info("node_pii_anonymizer", project_id=state.get("project_id"), pii_count=len(redactions))
     return state
 
 
@@ -137,11 +96,7 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
-    """N6 — Extract stakeholders from document text.
-
-    Wraps: ``stakeholders.application.extract_stakeholders.ExtractStakeholdersUseCase``
-    Uses the AI-powered extraction with contract-specific prompts.
-    """
+    """N6 — Extract stakeholders from document text."""
     tenant_id = state.get("tenant_id")
     text = state.get("anonymized_text") or state["document_text"]
 
@@ -153,17 +108,13 @@ async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
+        from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
         from src.stakeholders.application.extract_stakeholders import (
             ExtractStakeholdersUseCase as AIExtractStakeholders,
         )
-        from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
 
-        ai_provider = get_anthropic_wrapper()
-        use_case = AIExtractStakeholders(ai_provider=ai_provider)
-        stakeholders = await use_case.execute(
-            contract_text=text,
-            tenant_id=UUID(tenant_id),
-        )
+        use_case = AIExtractStakeholders(ai_provider=get_anthropic_wrapper())
+        stakeholders = await use_case.execute(contract_text=text, tenant_id=UUID(tenant_id))
         result = [
             {
                 "name": getattr(s, "name", None),
@@ -189,12 +140,7 @@ async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def raci_generator_node(state: ProjectState) -> ProjectState:
-    """N7 — Generate RACI matrix from extracted stakeholders and WBS.
-
-    Wraps: ``stakeholders.domain.services.raci_matrix_generator`` for the
-    assignment logic.  Uses stakeholders and WBS items already in graph state
-    (from N5 and N6) to avoid heavy DB round-trips inside the graph.
-    """
+    """N7 — Generate RACI matrix from extracted stakeholders and WBS."""
     stakeholders = state.get("extracted_stakeholders", [])
     wbs_items = state.get("extracted_wbs", [])
 
@@ -211,16 +157,13 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
-        raci_prompt = (
-            "Dada la siguiente lista de stakeholders y actividades WBS, "
-            "genera una matriz RACI.\n"
-            "Devuelve SOLO un JSON array con objetos: "
-            '{"stakeholder": "...", "wbs_code": "...", "role": "R|A|C|I"}\n\n'
+        prompt = (
+            f"{RACI_GENERATION_PROMPT}\n\n"
             f"Stakeholders: {stakeholders}\n\n"
             f"WBS Items: {wbs_items}"
         )
         service = get_ai_service(state.get("tenant_id"))
-        payload = await service.run_extraction(raci_prompt, "")
+        payload = await service.run_extraction(prompt, "")
         if isinstance(payload, list):
             matrix = payload
         elif isinstance(payload, dict) and "assignments" in payload:
@@ -239,19 +182,11 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
 
 
 # ---------------------------------------------------------------------------
-# N8 — Coherence Scorer
+# N8 — Coherence Scorer (delegates to ScoreFromExtractionUseCase)
 # ---------------------------------------------------------------------------
 
 async def coherence_scorer_node(state: ProjectState) -> ProjectState:
-    """N8 — Calculate project coherence score from analysis results.
-
-    Derives coherence flags from extracted risks:
-    - Any HIGH/CRITICAL risk in a category → sets that category's compliance flag to False
-    - No WBS items → scope_defined=False
-    - Budget/Financial HIGH risks → marks BOM items as unassigned
-
-    Wraps: ``coherence.application.services.coherence_calculation_service.CoherenceCalculationService``
-    """
+    """N8 — Calculate Coherence Score via ScoreFromExtractionUseCase."""
     project_id = state.get("project_id")
 
     if not project_id:
@@ -263,141 +198,37 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
-        # Extract analysis data from state
-        extracted_risks = state.get("extracted_risks", [])
-        extracted_wbs = state.get("extracted_wbs", [])
-        bom_items_raw = state.get("bom_items", [])
-        confidence_score = state.get("confidence_score", 0.0)
-        document_text = state.get("document_text", "")
-
-        # === QUALITY GATE: Check for meaningful content ===
-        # If confidence is too low or document is too short, the extraction is unreliable
-        MIN_CONFIDENCE_THRESHOLD = 0.5
-        MIN_DOCUMENT_LENGTH = 100  # chars
-
-        low_confidence = confidence_score < MIN_CONFIDENCE_THRESHOLD
-        short_document = len(document_text.strip()) < MIN_DOCUMENT_LENGTH
-
-        # Calculate average confidence of extracted items
-        def avg_item_confidence(items: list) -> float:
-            confidences = [
-                item.get("confidence", 0.0)
-                for item in items
-                if isinstance(item.get("confidence"), (int, float))
-            ]
-            return sum(confidences) / len(confidences) if confidences else 0.0
-
-        avg_wbs_confidence = avg_item_confidence(extracted_wbs)
-        avg_risk_confidence = avg_item_confidence(extracted_risks)
-
-        # If extraction quality is poor, we cannot trust the results
-        poor_extraction_quality = (
-            low_confidence
-            or short_document
-            or (len(extracted_wbs) > 0 and avg_wbs_confidence < 0.5)
+        from src.analysis.domain.coherence_derivation import CoherenceScoringDerivationService
+        from src.coherence.application.dependencies import build_coherence_calculation_service
+        from src.coherence.application.use_cases.score_from_extraction import (
+            ScoreFromExtractionCommand,
+            ScoreFromExtractionUseCase,
         )
 
-        # Helper to check if category has HIGH/CRITICAL risks
-        def has_high_risk_in_category(category_names: set[str]) -> bool:
-            for risk in extracted_risks:
-                cat = (risk.get("category") or "").upper()
-                impact = (risk.get("impact") or "").upper()
-                if cat in category_names and impact in ("HIGH", "CRITICAL"):
-                    return True
-            return False
-
-        # === ALL 6 CATEGORIES ===
-
-        # SCOPE: defined if we have quality WBS items AND no HIGH/CRITICAL scope risks
-        # Poor extraction quality means scope is NOT properly defined
-        has_scope_risks = has_high_risk_in_category({"SCOPE"})
-        has_meaningful_content = len(extracted_wbs) > 0 or len(extracted_risks) > 0
-        scope_defined = has_meaningful_content and not has_scope_risks and not poor_extraction_quality
-
-        # BUDGET: pass actual BOM items - the rules engine will check:
-        #   - BOM total deviation from contract_price (R6)
-        #   - Unassigned budget lines (R15)
-        # Also mark items as "unassigned" if we have BUDGET/FINANCIAL HIGH risks
-        has_budget_risks = has_high_risk_in_category({"BUDGET", "FINANCIAL"})
-        if has_budget_risks and bom_items_raw:
-            # Mark all items as unassigned to trigger R15 violation
-            bom_items = [
-                {**item, "budget_line_assigned": False}
-                for item in bom_items_raw
-            ]
-        else:
-            bom_items = list(bom_items_raw)
-
-        # TIME/SCHEDULE: within contract if no HIGH/CRITICAL schedule risks
-        schedule_within_contract = not has_high_risk_in_category({"SCHEDULE", "TIME"})
-
-        # TECHNICAL: consistent if no HIGH/CRITICAL technical risks
-        technical_consistent = not has_high_risk_in_category({"TECHNICAL"})
-
-        # LEGAL: compliant if no HIGH/CRITICAL legal risks
-        legal_compliant = not has_high_risk_in_category({"LEGAL"})
-
-        # QUALITY: met if no HIGH/CRITICAL quality risks
-        quality_standard_met = not has_high_risk_in_category({"QUALITY"})
-
-        # Calculate contract price from BOM if available
-        contract_price = sum(
-            float(item.get("amount", 0) or item.get("total", 0) or 0)
-            for item in bom_items
+        result = ScoreFromExtractionUseCase(
+            derivation_service=CoherenceScoringDerivationService(),
+            calculation_service=build_coherence_calculation_service(),
+        ).execute(
+            ScoreFromExtractionCommand(
+                project_id=UUID(project_id),
+                extracted_risks=state.get("extracted_risks", []),
+                extracted_wbs=state.get("extracted_wbs", []),
+                bom_items=state.get("bom_items", []),
+                confidence_score=state.get("confidence_score", 0.0),
+                document_text=state.get("document_text", ""),
+            )
         )
-
-        service = build_coherence_calculation_service()
-        result = service.calculate_coherence(
-            project_id=UUID(project_id),
-            contract_price=contract_price,
-            bom_items=bom_items,
-            scope_defined=scope_defined,
-            schedule_within_contract=schedule_within_contract,
-            technical_consistent=technical_consistent,
-            legal_compliant=legal_compliant,
-            quality_standard_met=quality_standard_met,
-            document_count=1,
-        )
-        score = result.global_score
-        breakdown = {
-            cat.value: sub_score
-            for cat, sub_score in result.category_scores.items()
-        }
-
-        # Log the derivation for debugging
-        logger.info(
-            "coherence_scorer_derived_flags",
-            project_id=project_id,
-            scope_defined=scope_defined,
-            schedule_within_contract=schedule_within_contract,
-            technical_consistent=technical_consistent,
-            legal_compliant=legal_compliant,
-            quality_standard_met=quality_standard_met,
-            has_budget_risks=has_budget_risks,
-            risk_count=len(extracted_risks),
-            wbs_count=len(extracted_wbs),
-            bom_count=len(bom_items),
-            final_score=score,
-            # Quality gate info
-            confidence_score=confidence_score,
-            document_length=len(document_text),
-            poor_extraction_quality=poor_extraction_quality,
-            avg_wbs_confidence=avg_wbs_confidence,
-        )
+        score = result.score
+        breakdown = result.breakdown
+        quality_note = result.quality_note
     except Exception:
         logger.warning("node_coherence_scorer_failed", exc_info=True)
         score = 0
         breakdown = {}
-        poor_extraction_quality = True  # Assume poor quality on failure
+        quality_note = ""
 
-    # Build informative message
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
-    conf_score = state.get("confidence_score", 0.0)
-
-    quality_note = ""
-    if poor_extraction_quality:
-        quality_note = f", LOW QUALITY (conf={conf_score:.2f})"
 
     state["coherence_score"] = score
     state["coherence_breakdown"] = breakdown
@@ -415,25 +246,14 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
-    """N9 — Parse budget data and generate BOM items.
-
-    Wraps: ``procurement.application.bom_builder_service.BOMBuilderService``
-    Falls back to basic extraction when WBS items are missing.
-    """
+    """N9 — Parse budget data and generate BOM items."""
     text = state.get("anonymized_text") or state["document_text"]
     tenant_id = state.get("tenant_id")
-
-    # Use AI to extract budget line items
-    budget_prompt = (
-        "Extrae las partidas presupuestarias del documento.\n"
-        "Devuelve SOLO un JSON con el formato:\n"
-        '{"items": [{"name": "...", "amount": 0.0, "currency": "EUR", "category": "..."}]}'
-    )
 
     bom_items: list[dict[str, Any]] = []
     try:
         service = get_ai_service(tenant_id)
-        payload = await service.run_extraction(budget_prompt, text)
+        payload = await service.run_extraction(BUDGET_EXTRACTION_PROMPT, text)
         if isinstance(payload, dict):
             raw_items = payload.get("items", [])
             bom_items = [
@@ -463,10 +283,7 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
-    """N10 — Build a project knowledge graph from analysis results.
-
-    Wraps: ``analysis.application.build_project_knowledge_graph_use_case.BuildProjectKnowledgeGraphUseCase``
-    """
+    """N10 — Build a project knowledge graph from analysis results."""
     project_id = state.get("project_id")
     tenant_id = state.get("tenant_id")
 
@@ -479,21 +296,15 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
         return state
 
     try:
+        from src.analysis.adapters.graph.knowledge_graph import KnowledgeGraphAdapter
         from src.analysis.application.build_project_knowledge_graph_use_case import (
             BuildProjectKnowledgeGraphUseCase,
         )
-        from src.analysis.adapters.graph.knowledge_graph import KnowledgeGraphAdapter
 
         adapter = KnowledgeGraphAdapter()
         use_case = BuildProjectKnowledgeGraphUseCase(knowledge_graph=adapter)
-        graph = await use_case.execute(
-            project_id=UUID(project_id),
-            tenant_id=UUID(tenant_id),
-        )
-        nodes = [
-            {"id": str(n), "data": graph.nodes[n]}
-            for n in graph.nodes
-        ]
+        graph = await use_case.execute(project_id=UUID(project_id), tenant_id=UUID(tenant_id))
+        nodes = [{"id": str(n), "data": graph.nodes[n]} for n in graph.nodes]
         edges = [
             {"source": str(u), "target": str(v), "data": graph.edges[u, v]}
             for u, v in graph.edges
@@ -506,45 +317,37 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
     state["knowledge_graph_nodes"] = nodes
     state["knowledge_graph_edges"] = edges
     state["messages"].append(
-        AIMessage(
-            content=f"N10 knowledge_graph: {len(nodes)} nodes, {len(edges)} edges"
-        )
+        AIMessage(content=f"N10 knowledge_graph: {len(nodes)} nodes, {len(edges)} edges")
     )
     return state
 
 
 # ---------------------------------------------------------------------------
-# N11 — Decision Intelligence Orchestrator
+# N11 — Decision Intelligence (delegates to DecisionPackageAssemblyService)
 # ---------------------------------------------------------------------------
 
 async def decision_intelligence_node(state: ProjectState) -> ProjectState:
-    """N11 — Assemble a decision package from all upstream results.
+    """N11 — Assemble decision package via DecisionPackageAssemblyService."""
+    from src.analysis.domain.report_assembly import (
+        DecisionPackageAssemblyService,
+        DecisionPackageInput,
+    )
 
-    Wraps: ``modules.decision_intelligence.domain.entities.FinalDecisionPackage``
-    Uses the DI ports when a concrete adapter is available; otherwise assembles
-    the package directly from graph state.
-    """
-    package: dict[str, Any] = {
-        "coherence_score": state.get("coherence_score", 0),
-        "risks": state.get("extracted_risks", []),
-        "stakeholders": state.get("extracted_stakeholders", []),
-        "wbs_items": state.get("extracted_wbs", []),
-        "bom_items": state.get("bom_items", []),
-        "evidence_links": [],
-        "citations": [c.get("quote", "") for c in state.get("citations", [])],
-        "citation_validation_passed": state.get("citation_validation_passed", False),
-        "approved_by": None,
-        "approved_at": None,
-    }
-
-    # If human feedback was provided, mark it
-    if state.get("human_feedback"):
-        package["approved_by"] = "human_reviewer"
+    package = DecisionPackageAssemblyService().assemble(
+        DecisionPackageInput(
+            coherence_score=state.get("coherence_score", 0),
+            extracted_risks=state.get("extracted_risks", []),
+            extracted_stakeholders=state.get("extracted_stakeholders", []),
+            extracted_wbs=state.get("extracted_wbs", []),
+            bom_items=state.get("bom_items", []),
+            citations=state.get("citations", []),
+            citation_validation_passed=state.get("citation_validation_passed", False),
+            human_feedback=state.get("human_feedback", ""),
+        )
+    )
 
     state["decision_package"] = package
-    state["messages"].append(
-        AIMessage(content="N11 decision_intelligence: package assembled")
-    )
+    state["messages"].append(AIMessage(content="N11 decision_intelligence: package assembled"))
     logger.info(
         "node_decision_intelligence",
         project_id=state.get("project_id"),
@@ -558,98 +361,64 @@ async def decision_intelligence_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def citation_validator_node(state: ProjectState) -> ProjectState:
-    """N15 — Validate that extracted data can be traced back to source text.
+    """N15 — Validate that extracted data can be traced back to source text."""
+    from src.analysis.domain.citation_validation import CitationValidatorService
 
-    Compares extracted risk quotes and WBS descriptions against the original
-    document text to verify provenance.
-    """
     text = state.get("anonymized_text") or state["document_text"]
-    text_lower = text.lower()
+    risks = state.get("extracted_risks", [])
+    wbs_items = state.get("extracted_wbs", [])
 
-    citations: list[dict[str, Any]] = []
-    all_valid = True
+    validation = CitationValidatorService().validate(text, risks, wbs_items)
 
-    # Validate risk source quotes
-    for risk in state.get("extracted_risks", []):
-        quote = risk.get("source_quote") or risk.get("source_text_snippet") or ""
-        found = bool(quote and quote.lower() in text_lower)
-        citations.append({
-            "type": "risk",
-            "item": risk.get("title") or risk.get("summary", ""),
-            "quote": quote,
-            "found_in_source": found,
-        })
-        if not found and quote:
-            all_valid = False
-
-    # Validate WBS item descriptions
-    for wbs in state.get("extracted_wbs", []):
-        desc = wbs.get("description") or wbs.get("name") or ""
-        # For WBS, check if at least a significant fragment appears in the source
-        fragment = desc[:80].lower() if desc else ""
-        found = bool(fragment and fragment in text_lower)
-        citations.append({
-            "type": "wbs",
-            "item": wbs.get("code", ""),
-            "quote": desc[:120],
-            "found_in_source": found,
-        })
-
-    validated_count = sum(1 for c in citations if c["found_in_source"])
-    total = len(citations)
+    citations = [
+        {"type": c.type, "item": c.item, "quote": c.quote, "found_in_source": c.found_in_source}
+        for c in validation.citations
+    ]
 
     state["citations"] = citations
-    state["citation_validation_passed"] = all_valid or (total > 0 and validated_count / total >= 0.6)
+    state["citation_validation_passed"] = validation.validation_passed
     state["messages"].append(
         AIMessage(
-            content=f"N15 citation_validator: {validated_count}/{total} citations verified, "
-            f"passed={state['citation_validation_passed']}"
+            content=f"N15 citation_validator: {validation.validated_count}/{validation.total_count} "
+            f"citations verified, passed={validation.validation_passed}"
         )
     )
     return state
 
 
 # ---------------------------------------------------------------------------
-# N16 — Final Assembler
+# N16 — Final Assembler (delegates to ReportAssemblyService)
 # ---------------------------------------------------------------------------
 
 async def final_assembler_node(state: ProjectState) -> ProjectState:
-    """N16 — Assemble all analysis results into a structured final report.
+    """N16 — Assemble final report via ReportAssemblyService."""
+    from src.analysis.domain.report_assembly import ReportAssemblyService, ReportInput
 
-    Combines outputs from all upstream nodes into a single report dict
-    suitable for API response or PDF generation.
-    """
-    report: dict[str, Any] = {
-        "project_id": state.get("project_id"),
-        "document_id": state.get("document_id"),
-        "doc_type": state.get("doc_type"),
-        "document_category": state.get("document_category", ""),
-        "analysis_id": state.get("analysis_id"),
-        "summary": {
-            "total_risks": len(state.get("extracted_risks", [])),
-            "total_wbs_items": len(state.get("extracted_wbs", [])),
-            "total_stakeholders": len(state.get("extracted_stakeholders", [])),
-            "total_bom_items": len(state.get("bom_items", [])),
-            "coherence_score": state.get("coherence_score", 0),
-            "confidence_score": state.get("confidence_score", 0.0),
-            "citation_validation_passed": state.get("citation_validation_passed", False),
-            "pii_items_redacted": len(state.get("pii_redactions", [])),
-        },
-        "risks": state.get("extracted_risks", []),
-        "wbs_items": state.get("extracted_wbs", []),
-        "stakeholders": state.get("extracted_stakeholders", []),
-        "raci_matrix": state.get("raci_matrix", []),
-        "bom_items": state.get("bom_items", []),
-        "coherence_breakdown": state.get("coherence_breakdown", {}),
-        "citations": state.get("citations", []),
-        "knowledge_graph": {
-            "nodes": state.get("knowledge_graph_nodes", []),
-            "edges": state.get("knowledge_graph_edges", []),
-        },
-        "decision_package": state.get("decision_package", {}),
-        "human_approval_required": state.get("human_approval_required", False),
-        "human_feedback": state.get("human_feedback", ""),
-    }
+    report = ReportAssemblyService().assemble(
+        ReportInput(
+            project_id=state.get("project_id", ""),
+            document_id=state.get("document_id", ""),
+            doc_type=state.get("doc_type", ""),
+            document_category=state.get("document_category", ""),
+            analysis_id=state.get("analysis_id"),
+            extracted_risks=state.get("extracted_risks", []),
+            extracted_wbs=state.get("extracted_wbs", []),
+            extracted_stakeholders=state.get("extracted_stakeholders", []),
+            bom_items=state.get("bom_items", []),
+            coherence_score=state.get("coherence_score", 0),
+            confidence_score=state.get("confidence_score", 0.0),
+            citation_validation_passed=state.get("citation_validation_passed", False),
+            pii_redactions=state.get("pii_redactions", []),
+            raci_matrix=state.get("raci_matrix", []),
+            coherence_breakdown=state.get("coherence_breakdown", {}),
+            citations=state.get("citations", []),
+            knowledge_graph_nodes=state.get("knowledge_graph_nodes", []),
+            knowledge_graph_edges=state.get("knowledge_graph_edges", []),
+            decision_package=state.get("decision_package", {}),
+            human_approval_required=state.get("human_approval_required", False),
+            human_feedback=state.get("human_feedback", ""),
+        )
+    )
 
     state["final_report"] = report
     state["messages"].append(
@@ -662,9 +431,5 @@ async def final_assembler_node(state: ProjectState) -> ProjectState:
             )
         )
     )
-    logger.info(
-        "node_final_assembler",
-        project_id=state.get("project_id"),
-        summary=report["summary"],
-    )
+    logger.info("node_final_assembler", project_id=state.get("project_id"), summary=report["summary"])
     return state

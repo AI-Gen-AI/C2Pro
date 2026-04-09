@@ -9,9 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import get_session
-from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
-from src.core.security import CurrentUserId
+from src.core.auth.models import User
 from src.core.auth.schemas import (
     AuthErrorResponse,
     LoginRequest,
@@ -27,8 +25,10 @@ from src.core.auth.schemas import (
     UserUpdateRequest,
 )
 from src.core.auth.service import AuthService
-from src.core.auth.token_revocation import revoke_token
-from src.core.auth.models import User
+from src.core.auth.token_revocation import revoke_token_async
+from src.core.database import get_session
+from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
+from src.core.security import CurrentUserId
 
 logger = structlog.get_logger()
 
@@ -323,7 +323,7 @@ async def logout(request: Request, user_id: CurrentUserId):
     """
     authorization = request.headers.get("Authorization", "")
     if authorization.startswith("Bearer "):
-        revoke_token(authorization[7:])
+        await revoke_token_async(authorization[7:])
 
     logger.info("user_logged_out", user_id=str(user_id))
     return None

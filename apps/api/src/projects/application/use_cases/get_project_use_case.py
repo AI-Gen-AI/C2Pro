@@ -10,7 +10,6 @@ import structlog
 from src.projects.domain.models import Project
 from src.projects.ports.project_repository import ProjectRepository
 
-
 logger = structlog.get_logger()
 
 

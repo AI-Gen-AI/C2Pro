@@ -12,16 +12,15 @@ Location: apps/api/tests/coherence/test_llm_evaluator_v3.py
 """
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from dataclasses import dataclass
+
+import pytest
 
 from src.coherence.models import Clause, FindingSignal
 from src.coherence.rules_engine.llm_evaluator import (
-    LlmRuleEvaluator,
     LlmEvaluationMetrics,
+    LlmRuleEvaluator,
 )
-
 
 # =============================================================================
 # FIXTURES

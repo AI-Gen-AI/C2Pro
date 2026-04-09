@@ -1,14 +1,16 @@
 from __future__ import annotations
-from typing import List, TypedDict
+
+from typing import TypedDict
 from uuid import UUID
+
 import structlog
-from pydantic import BaseModel, Field
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from pydantic import BaseModel
 
 # Import from the new domain models file
-from src.procurement.domain.models import WBSItem, WBSItemList
+from src.procurement.domain.models import WBSItemList
 
 logger = structlog.get_logger(__name__)
 
@@ -25,7 +27,7 @@ class WBSGenerationState(TypedDict):
     contract_text: str
     wbs_items: WBSItemList
     attempt_count: int
-    validation_errors: List[str]
+    validation_errors: list[str]
     requires_approval: bool
 
 class WBSGenerationService:
@@ -85,7 +87,7 @@ You are an expert in project management and civil engineering, specialized in cr
         if not state["wbs_items"] or not state["wbs_items"].items:
             errors.append("WBS is empty. The LLM failed to generate any items.")
             return {"validation_errors": errors}
-        
+
         wbs_items = state["wbs_items"].items
         item_codes = {item.code for item in wbs_items}
 
@@ -94,11 +96,11 @@ You are an expert in project management and civil engineering, specialized in cr
                 errors.append(f"Item '{item.name}' ({item.code}) has an invalid parent_code '{item.parent_code}'.")
             if not item.source_clause_id:
                 errors.append(f"Item '{item.name}' ({item.code}) is missing a 'source_clause_id'.")
-        
+
         max_level = max((item.level for item in wbs_items), default=0)
         if max_level < 3:
             errors.append(f"The WBS has a maximum depth of {max_level}, but a depth of at least 3 is required.")
-        
+
         logger.info(f"Audit complete. Found {len(errors)} errors.")
         return {"validation_errors": errors}
 

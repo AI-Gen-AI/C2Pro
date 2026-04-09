@@ -6,25 +6,23 @@ Provides test database, authenticated clients, and test data.
 """
 
 import asyncio
+import json
 import os
 import sys
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from datetime import datetime, timedelta
-import json
 from types import SimpleNamespace
-from typing import Callable
 from unittest import mock
 from uuid import UUID, uuid4
 
+import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-import jwt
-from sqlalchemy import Column, text
+from sqlalchemy import Column, event, select, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
-from sqlalchemy import event, select
 
 # ===========================================
 # OPTIONAL DEPENDENCY STUBS
@@ -102,15 +100,31 @@ os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 # ===========================================
 
 from src.config import settings
-from src.core.database import Base, get_session
-from src.main import create_application
-from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401
+from src.coherence.adapters.persistence import models as coherence_models  # noqa: F401
+from src.core.ai import models as ai_models  # noqa: F401
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
-from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
+from src.core.database import Base, get_session
+from src.core.security.adapters.persistence import models as security_models  # noqa: F401
+from src.documents.adapters.persistence import models as document_models  # noqa: F401
+from src.procurement.adapters.persistence import models as procurement_models  # noqa: F401
+from src.projects.adapters.persistence import models as project_models  # noqa: F401
+from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401
 from tests.support.postgres_bootstrap import (
+    ensure_pgvector_extension,
     reset_public_schema,
     run_postgres_test_bootstrap,
 )
+from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
+
+# ===========================================
+# TEST CONSTANTS
+# ===========================================
+
+# Pre-computed bcrypt hash for "Password123!" to avoid bcrypt initialization
+# issues during fixture setup (bcrypt 4.0+ compatibility with passlib)
+TEST_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYvDqLTMKKe"
 
 
 def _iter_metadata_enum_types():
@@ -422,6 +436,24 @@ async def test_engine():
             ),
         )
 
+        # Recreate the engine after schema reset/bootstrap so test sessions do not
+        # reuse pooled connections that were opened before DROP/CREATE SCHEMA public.
+        await engine.dispose()
+        engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+            connect_args={"statement_cache_size": 0},
+        )
+        async with engine.begin() as conn:
+            _set_metadata_enum_create_type(False)
+            try:
+                await conn.run_sync(Base.metadata.create_all)
+            finally:
+                _set_metadata_enum_create_type(True)
+
         yield engine
 
         # Cleanup: Drop all tables after tests
@@ -488,6 +520,12 @@ async def db(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def db_session(db) -> AsyncGenerator[AsyncSession, None]:
     """Alias for db fixture for compatibility."""
+    yield db
+
+
+@pytest_asyncio.fixture
+async def async_session(db) -> AsyncGenerator[AsyncSession, None]:
+    """Backward-compatible async session fixture for legacy repository unit suites."""
     yield db
 
 
@@ -634,6 +672,7 @@ async def seeded_auth_context() -> dict[str, str]:
     _ensure_test_fk_stub_tables()
     async with engine.begin() as conn:
         await conn.execute(text("SET LOCAL search_path TO public"))
+        await ensure_pgvector_extension(conn)
         await conn.run_sync(Base.metadata.create_all)
 
     async with session_factory() as session:
@@ -943,6 +982,8 @@ async def app():
     """
     Creates a FastAPI application for testing.
     """
+    from src.main import create_application
+
     return create_application()
 
 
@@ -961,6 +1002,51 @@ async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         transport=transport,
         base_url="http://testserver",
         timeout=30.0,
+    ) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def authenticated_client(
+    app,
+    db: AsyncSession,
+    test_user: User,
+    generate_token: Callable,
+) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Creates an authenticated HTTP client for testing protected API endpoints.
+
+    Automatically includes JWT authentication headers for test_user.
+    Useful for testing endpoints that require authentication.
+
+    TASK-BCK-030: Authenticated test fixtures for HITL resume tests.
+
+    Usage:
+        async def test_protected_endpoint(authenticated_client: AsyncClient):
+            response = await authenticated_client.get("/api/v1/protected/resource")
+            assert response.status_code == 200
+    """
+    async def override_get_session():
+        yield db
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    # Generate JWT token for test_user
+    token = generate_token(
+        user_id=test_user.id,
+        tenant_id=test_user.tenant_id,
+        email=test_user.email,
+        role=test_user.role.value,
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=30.0,
+        headers={"Authorization": f"Bearer {token}"},
     ) as test_client:
         yield test_client
 

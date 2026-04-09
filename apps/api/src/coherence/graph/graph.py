@@ -16,22 +16,22 @@ Location: apps/api/src/coherence/graph/graph.py
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar
+from datetime import UTC
+from typing import Any
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 from ..models import Clause, EnrichedCoherenceResult
-from .state import CoherenceGraphState, EvaluationConfig
 from .nodes import (
-    prepare_context,
-    deterministic_evaluate,
-    llm_semantic_evaluate,
-    rag_similarity_check,
     cross_clause_eval,
-    scoring_arbiter,
+    deterministic_evaluate,
     format_output,
+    llm_semantic_evaluate,
+    prepare_context,
+    rag_similarity_check,
+    scoring_arbiter,
 )
-
+from .state import CoherenceGraphState, EvaluationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +249,7 @@ def evaluate_coherence(
         result = EnrichedCoherenceResult(
             overall_score=final_state.get("score", 100.0),
             alerts=final_state.get("alerts", []),
-            calculated_at=datetime.utcnow(),
+            calculated_at=datetime.now(UTC),
             finding_signals=final_state.get("all_signals", []),
         )
 
@@ -295,7 +295,7 @@ async def evaluate_coherence_async(
         result = EnrichedCoherenceResult(
             overall_score=final_state.get("score", 100.0),
             alerts=final_state.get("alerts", []),
-            calculated_at=datetime.utcnow(),
+            calculated_at=datetime.now(UTC),
             finding_signals=final_state.get("all_signals", []),
         )
 
@@ -330,8 +330,7 @@ def evaluate_coherence_with_streaming(
     graph = get_coherence_subgraph()
 
     for output in graph.stream(initial_state):
-        for node_name, node_output in output.items():
-            yield node_name, node_output
+        yield from output.items()
 
 
 # =============================================================================

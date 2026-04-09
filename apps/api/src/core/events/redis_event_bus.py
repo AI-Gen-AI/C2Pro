@@ -19,7 +19,6 @@ import structlog
 
 from src.core.events.event_bus import EventBus
 
-
 logger = structlog.get_logger()
 
 Handler = Callable[[dict[str, Any]], Any | Awaitable[Any]]

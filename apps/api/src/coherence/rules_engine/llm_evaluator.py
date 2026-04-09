@@ -24,22 +24,23 @@ Sprint: P2-02
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from typing import Any
 from uuid import UUID
 
 import structlog
 
-from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
-from src.core.ai.model_router import AITaskType
-from src.coherence.models import Clause, FindingSignal, impact_to_severity, CoherenceCategory
-from src.coherence.rules_engine.base import Finding, RuleEvaluator
 from src.coherence.graph.prompts import (
     COHERENCE_SYSTEM_PROMPT,
     build_evaluation_prompt,
 )
+from src.coherence.models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
+from src.coherence.rules_engine.base import Finding, RuleEvaluator
+from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType
 
 logger = structlog.get_logger()
 
@@ -190,7 +191,7 @@ class LlmRuleEvaluator(RuleEvaluator):
         default_severity: str = "medium",
         category: str = "general",
         low_budget_mode: bool = False,
-        tenant_id: Optional[UUID] = None,
+        tenant_id: UUID | None = None,
     ):
         """
         Inicializa el evaluador de reglas LLM.
@@ -485,10 +486,8 @@ class LlmRuleEvaluator(RuleEvaluator):
         # Try to extract confidence
         match = re.search(r'"confidence"\s*:\s*([0-9.]+)', content)
         if match:
-            try:
+            with contextlib.suppress(ValueError):
                 result["confidence"] = self._clamp_score(match.group(1))
-            except ValueError:
-                pass
 
         # Try to extract quote
         match = re.search(r'"quote"\s*:\s*"([^"]*)"', content)
@@ -719,7 +718,7 @@ Evalúa si esta cláusula viola la regla y responde en JSON:
 def create_llm_evaluator_from_rule(
     rule: dict[str, Any],
     low_budget_mode: bool = False,
-    tenant_id: Optional[UUID] = None,
+    tenant_id: UUID | None = None,
 ) -> LlmRuleEvaluator:
     """
     Crea un LlmRuleEvaluator desde un diccionario de regla.
@@ -827,7 +826,7 @@ Si los estándares son vagos o no referenciados, la regla está VIOLADA.""",
 
 def get_predefined_llm_evaluators(
     low_budget_mode: bool = False,
-    tenant_id: Optional[UUID] = None,
+    tenant_id: UUID | None = None,
 ) -> list[LlmRuleEvaluator]:
     """
     Obtiene los evaluadores LLM predefinidos.

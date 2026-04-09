@@ -44,6 +44,6 @@ class ExtractStakeholdersUseCase:
             return []
 
         for stakeholder in stakeholders:
-            await self.stakeholder_repository.add(stakeholder)
+            await self.stakeholder_repository.add(stakeholder, tenant_id=tenant_id)
         await self.stakeholder_repository.commit()
         return stakeholders

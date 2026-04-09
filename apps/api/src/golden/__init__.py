@@ -1,14 +1,10 @@
 """Golden dataset package for LangGraph multi-agent evaluation."""
 
-from golden.schemas import (
-    CoherenceDimension,
-    CoherenceIssueAssertion,
-    DifficultyLevel,
-    GoldenCase,
-    InputDocuments,
-    StateAssertion,
-    ToolCallAssertion,
-    TrajectoryConstraint,
+from golden.benchmark import (
+    AccuracyBenchmark,
+    AccuracyMetrics,
+    BaselineComparison,
+    BenchmarkHistory,
 )
 from golden.loader import (
     FileSizeError,
@@ -23,11 +19,15 @@ from golden.runner import (
     WorkflowExecutor,
     WorkflowResult,
 )
-from golden.benchmark import (
-    AccuracyBenchmark,
-    AccuracyMetrics,
-    BaselineComparison,
-    BenchmarkHistory,
+from golden.schemas import (
+    CoherenceDimension,
+    CoherenceIssueAssertion,
+    DifficultyLevel,
+    GoldenCase,
+    InputDocuments,
+    StateAssertion,
+    ToolCallAssertion,
+    TrajectoryConstraint,
 )
 
 __all__ = [

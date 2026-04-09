@@ -17,11 +17,11 @@ Coverage:
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.modules.ingestion.domain.entities import IngestionError
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

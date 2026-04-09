@@ -5,6 +5,7 @@ Refers to Suite ID: TS-INT-DB-BOM-001.
 """
 
 from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -21,7 +22,10 @@ from testcontainers.postgres import PostgresContainer
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.models import Base as ProcurementBase, WBSItemORM
+from src.procurement.adapters.persistence.models import BOMItemORM
+from src.procurement.adapters.persistence.models import BudgetItemORM
+from src.procurement.adapters.persistence.models import Base as ProcurementBase
+from src.procurement.adapters.persistence.models import WBSItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -64,8 +68,15 @@ async def pg_engine():
         )
         async with engine.begin() as conn:
             _ensure_test_fk_stub_tables()
-            await conn.run_sync(Base.metadata.create_all)
-            await conn.run_sync(ProcurementBase.metadata.create_all)
+            await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
+            await conn.run_sync(
+                ProcurementBase.metadata.create_all,
+                tables=[
+                    BudgetItemORM.__table__,
+                    WBSItemORM.__table__,
+                    BOMItemORM.__table__,
+                ],
+            )
         yield engine
     finally:
         core_database._engine = None
@@ -141,7 +152,7 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
         procurement_status=ProcurementStatus.REQUESTED,
         bom_metadata={"grade": "S275"},
     )
-    created = await repo.create(bom_item)
+    created = await repo.create(bom_item, tenant_a)
     assert created.item_code == "BOM-001"
     assert created.total_price == Decimal("1255.00")
 
@@ -163,3 +174,64 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
         tenant_b_repo = SQLAlchemyBOMRepository(tenant_b_session)
         tenant_b_items = await tenant_b_repo.get_by_project(project_a.id, tenant_b)
         assert tenant_b_items == []
+
+
+@pytest.mark.asyncio
+async def test_bom_repository_create_rejects_project_outside_tenant(session: AsyncSession):
+    """
+    BOM repository create should reject writes when the project is outside the caller tenant.
+    """
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+
+    project_a = ProjectORM(
+        id=uuid4(),
+        tenant_id=tenant_a,
+        name="Tenant A Project",
+        description=None,
+        code="A-2",
+        project_type="construction",
+        status="draft",
+        estimated_budget=5000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(project_a)
+    await session.commit()
+
+    wbs_item = WBSItemORM(
+        id=uuid4(),
+        project_id=project_a.id,
+        code=f"2-{uuid4().hex[:6]}",
+        name="Root",
+        level=1,
+    )
+    session.add(wbs_item)
+    await session.commit()
+
+    repo = SQLAlchemyBOMRepository(session)
+    bom_item = BOMItem(
+        id=uuid4(),
+        project_id=project_a.id,
+        wbs_item_id=wbs_item.id,
+        item_code="BOM-002",
+        item_name="Concrete",
+        description="Tenant mismatch",
+        category=BOMCategory.MATERIAL,
+        quantity=Decimal("2"),
+        unit="m3",
+        unit_price=Decimal("50.00"),
+        currency="EUR",
+        supplier="Supplier B",
+        lead_time_days=7,
+        procurement_status=ProcurementStatus.REQUESTED,
+    )
+
+    with pytest.raises(PermissionError, match="outside tenant"):
+        await repo.create(bom_item, tenant_b)

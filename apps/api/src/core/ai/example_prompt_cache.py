@@ -141,7 +141,7 @@ async def example_cache_control():
         # Con cache habilitado (default)
         print("\n[1] Request con use_cache=True")
         request1 = AIRequest(prompt=prompt, task_type=TaskType.SUMMARIZATION_SHORT, use_cache=True)
-        response1 = await service.generate(request1)
+        await service.generate(request1)
         print("   Cache enabled: Sí")
 
         # Sin cache (forzar llamada a API)
@@ -151,7 +151,7 @@ async def example_cache_control():
             task_type=TaskType.SUMMARIZATION_SHORT,
             use_cache=False,  # Desactivar cache
         )
-        response2 = await service.generate(request2)
+        await service.generate(request2)
         print("   Cache enabled: No")
         print("   Resultado: Siempre llama a la API, aunque el prompt sea idéntico")
 

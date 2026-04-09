@@ -11,8 +11,8 @@ from uuid import uuid4
 import pytest
 
 from src.documents.domain.entities.clause import Clause
-from src.documents.domain.exceptions import DomainValidationError
 from src.documents.domain.events import ClauseEntitiesExtracted
+from src.documents.domain.exceptions import DomainValidationError
 
 
 class TestClauseEntity:

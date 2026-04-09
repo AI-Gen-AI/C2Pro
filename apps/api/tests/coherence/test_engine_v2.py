@@ -5,8 +5,9 @@ Tests the integrated engine that supports both deterministic and LLM-based rules
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.coherence.engine_v2 import (
     CoherenceEngineV2,
@@ -18,7 +19,6 @@ from src.coherence.engine_v2 import (
 from src.coherence.models import Clause, ProjectContext
 from src.coherence.rules import Rule
 from src.coherence.rules_engine.base import Finding
-
 
 # ===========================================
 # FIXTURES
@@ -290,7 +290,7 @@ class TestLLMResultCache:
         await cache.set("rule-1", "clause-1", "text B", None)
 
         result_a = await cache.get("rule-1", "clause-1", "text A")
-        result_b = await cache.get("rule-1", "clause-1", "text B")
+        await cache.get("rule-1", "clause-1", "text B")
 
         assert result_a is not None
         # result_b should be None (cached as no finding)
@@ -416,7 +416,7 @@ class TestLLMIntegration:
         engine._llm_evaluators = {"R-SCOPE-CLARITY-01": mock_evaluator}
 
         project = ProjectContext(id="test", clauses=sample_clauses)
-        result = await engine.evaluate_async(project)
+        await engine.evaluate_async(project)
 
         # Verify LLM was called
         assert mock_evaluator.evaluate_async.called

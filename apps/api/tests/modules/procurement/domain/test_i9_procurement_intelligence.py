@@ -8,7 +8,10 @@ from decimal import Decimal
 from uuid import uuid4
 
 from src.procurement.domain.models import ProcurementPlanItem, ProcurementPriority
-from src.procurement.domain.services.procurement_intelligence_service import ProcurementIntelligenceService
+from src.procurement.domain.services.procurement_intelligence_service import (
+    ProcurementIntelligenceService,
+)
+
 
 def test_i9_detects_schedule_procurement_conflicts_for_late_orders() -> None:
     """Refers to I9.1: conflict intelligence must flag late order dates with explicit reason codes."""

@@ -1,12 +1,10 @@
-import asyncio
-import re
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
-from src.documents.domain.models import Clause, ClauseType
 from src.documents.application.services.source_locator import SourceLocation, SourceLocator
+from src.documents.domain.models import Clause, ClauseType
 
 # Ensure rapidfuzz is imported or mocked
 try:

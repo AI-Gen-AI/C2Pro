@@ -12,9 +12,9 @@ Available Adapters:
 - MockGoogleVisionOCRAdapter: Mock Google Vision for testing
 """
 
-from .mock_ocr_adapter import MockOCRAdapter, ConfigurableMockOCRAdapter
-from .tesseract_adapter import TesseractOCRAdapter
 from .google_vision_adapter import GoogleVisionOCRAdapter, MockGoogleVisionOCRAdapter
+from .mock_ocr_adapter import ConfigurableMockOCRAdapter, MockOCRAdapter
+from .tesseract_adapter import TesseractOCRAdapter
 
 __all__ = [
     "MockOCRAdapter",

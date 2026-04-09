@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from src.documents.domain.clause_entity import Clause, EmbeddingService
 
+
 # --- Test Data and Fixtures ---
 @pytest.fixture
 def minimal_clause_data():
@@ -58,7 +59,7 @@ class TestClauseEntity:
         """Tests that creation fails if a required field is missing."""
         invalid_data = minimal_clause_data.copy()
         del invalid_data[missing_field]
-        with pytest.raises(ValidationError, match=f"Field required"):
+        with pytest.raises(ValidationError, match="Field required"):
             Clause(**invalid_data)
 
     def test_006_clause_immutability_after_creation(self, minimal_clause_data):
@@ -68,7 +69,7 @@ class TestClauseEntity:
             clause.content = "New content"
         with pytest.raises(ValidationError, match="Instance is frozen"):
             clause.id = uuid4()
-    
+
     @pytest.mark.parametrize("input_num, expected_num", [
         ("Primera", "1"),
         ("Segunda", "2"),
@@ -109,14 +110,14 @@ class TestClauseEntity:
             Clause(**invalid_document_data)
         with pytest.raises(ValidationError):
             Clause(**invalid_tenant_data)
-    
+
     # Tests 017 and 018 are persistence layer concerns and not tested here.
 
     def test_019_clause_embedding_vector_size(self, minimal_clause_data):
         """Tests that an embedding vector of incorrect size is rejected."""
         with pytest.raises(ValidationError, match="Embedding must have 1536 dimensions"):
             Clause(**minimal_clause_data, clause_text_embedding=[0.1] * 10)
-    
+
     def test_021_clause_embedding_null_allowed(self, minimal_clause_data):
         """Tests that the embedding can be null on creation."""
         clause = Clause(**minimal_clause_data, clause_text_embedding=None)

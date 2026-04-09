@@ -4,9 +4,9 @@ Generate OpenAPI YAML from the FastAPI app.
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
 import sys
+from pathlib import Path
 
 
 def _ensure_env_defaults() -> None:

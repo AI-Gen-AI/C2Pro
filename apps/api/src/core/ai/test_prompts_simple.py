@@ -46,10 +46,10 @@ system_prompt, user_prompt, version = manager.render_prompt(
 )
 
 print(f"   - Version utilizada: {version}")
-print(f"   - System prompt (primeros 150 chars):")
+print("   - System prompt (primeros 150 chars):")
 print(f"     {system_prompt[:150]}...")
 print()
-print(f"   - User prompt (primeros 200 chars):")
+print("   - User prompt (primeros 200 chars):")
 print(f"     {user_prompt[:200]}...")
 print()
 
@@ -66,7 +66,7 @@ system2, user2, version2 = manager.render_prompt(
     },
     version="latest"
 )
-print(f"   - Template: stakeholder_classification")
+print("   - Template: stakeholder_classification")
 print(f"   - Version='latest' resolvio a: {version2}")
 print(f"   - System prompt length: {len(system2)} chars")
 print(f"   - User prompt incluye stakeholders: {bool('Ministerio de Salud' in user2)}")

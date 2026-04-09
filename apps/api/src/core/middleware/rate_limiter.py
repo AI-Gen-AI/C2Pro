@@ -6,17 +6,17 @@ Hierarchical rate limiter (user -> tenant) with Redis fixed window counters.
 
 from __future__ import annotations
 
-from datetime import datetime
 import os
 import time
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 from uuid import UUID
 
+import jwt
 import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-import jwt
 from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -70,7 +70,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if user_id is None and tenant_id is None:
             return await self._dispatch_in_memory(request, call_next)
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         window_key = now.strftime("%Y-%m-%dT%H:%M")
 
         user_count, tenant_count = await self._increment_counters(

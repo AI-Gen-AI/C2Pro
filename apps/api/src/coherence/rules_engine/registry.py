@@ -9,7 +9,6 @@ Version: 1.1.0 (CE-24)
 """
 
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 import structlog
@@ -78,7 +77,7 @@ def get_evaluator(rule_id: str) -> type[RuleEvaluator] | None:
 def get_llm_evaluator(
     rule_id: str,
     low_budget_mode: bool = False,
-    tenant_id: Optional[UUID] = None,
+    tenant_id: UUID | None = None,
 ) -> LlmRuleEvaluator | None:
     """
     Retrieves or creates an LLM evaluator instance for a rule ID.
@@ -127,7 +126,7 @@ def get_llm_evaluator(
 def get_any_evaluator(
     rule_id: str,
     low_budget_mode: bool = False,
-    tenant_id: Optional[UUID] = None,
+    tenant_id: UUID | None = None,
 ) -> RuleEvaluator | LlmRuleEvaluator | None:
     """
     Retrieves any evaluator (deterministic or LLM) for a rule ID.
@@ -240,7 +239,7 @@ def load_qualitative_rules(
 
 def get_all_llm_evaluators(
     low_budget_mode: bool = False,
-    tenant_id: Optional[UUID] = None,
+    tenant_id: UUID | None = None,
 ) -> list[LlmRuleEvaluator]:
     """
     Gets all registered LLM evaluators as instances.
@@ -314,7 +313,7 @@ def initialize_registry():
 
 # Auto-load rules if this module is imported
 # (Can be disabled by setting environment variable)
-import os
+import os  # noqa: E402
 
 if os.environ.get("C2PRO_SKIP_RULE_AUTOLOAD") != "1":
     try:

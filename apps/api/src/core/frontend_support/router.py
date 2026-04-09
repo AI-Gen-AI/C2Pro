@@ -3,18 +3,22 @@ Refers to Suite ID: TASK-051.
 
 Frontend support endpoints that close backend gaps for production frontend
 flows previously satisfied only by MSW handlers.
-"""
 
+TASK-REV-020: Cookie consent now persisted to database.
+"""
 from __future__ import annotations
 
-from collections.abc import MutableMapping
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.core.database import get_session
+from src.core.frontend_support.repository import CookieConsentRepository
 
 router = APIRouter(tags=["frontend-support"])
 
@@ -51,12 +55,10 @@ class OnboardingRetryRequest(BaseModel):
     sessionId: str | None = None
 
 
-def _consent_store(request: Request) -> MutableMapping[str, dict]:
-    store = getattr(request.app.state, "cookie_consent_store", None)
-    if store is None:
-        store = {}
-        request.app.state.cookie_consent_store = store
-    return store
+def _get_consent_repository(
+    db: AsyncSession = Depends(get_session),
+) -> CookieConsentRepository:
+    return CookieConsentRepository(session=db)
 
 
 def _accepted_scopes(request: Request) -> set[str]:
@@ -65,10 +67,6 @@ def _accepted_scopes(request: Request) -> set[str]:
         scopes = set()
         request.app.state.accepted_disclaimer_scopes = scopes
     return scopes
-
-
-def _consent_key(tenant_id: str, user_id: str, version: str) -> str:
-    return f"{tenant_id}:{user_id}:{version}"
 
 
 def _disclaimer_scope(project_id: str, tenant_id: str, user_id: str) -> str:
@@ -87,8 +85,9 @@ def _trackers_blocked(categories: ConsentCategories) -> list[str]:
 @router.post("/compliance/cookies/consent")
 async def create_cookie_consent(
     payload: CookieConsentCreateRequest,
-    request: Request,
+    _request: Request,
     response: Response,
+    repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict:
     if payload.forceError:
         response.status_code = 500
@@ -98,14 +97,16 @@ async def create_cookie_consent(
         }
 
     categories = payload.categories or ConsentCategories()
-    _consent_store(request)[
-        _consent_key(payload.tenantId, payload.userId, payload.version)
-    ] = {
-        "tenantId": payload.tenantId,
-        "userId": payload.userId,
-        "version": payload.version,
-        "categories": categories.model_dump(),
-    }
+    tenant_uuid = UUID(payload.tenantId)
+
+    await repo.upsert_consent(
+        tenant_id=tenant_uuid,
+        user_id=payload.userId,
+        version=payload.version,
+        categories=categories.model_dump(),
+    )
+    await repo.session.commit()
+
     return {
         "saved": True,
         "categories": categories.model_dump(),
@@ -118,30 +119,33 @@ async def get_cookie_consent(
     tenantId: str,
     userId: str,
     version: str,
-    request: Request,
+    repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict:
-    record = _consent_store(request).get(_consent_key(tenantId, userId, version))
+    tenant_uuid = UUID(tenantId)
+    record = await repo.get_consent(tenant_uuid, userId, version)
     return {
-        "hasConsent": bool(record),
-        "showBanner": not bool(record),
+        "hasConsent": record is not None,
+        "showBanner": record is None,
         "requiredVersion": version,
-        "categories": None if record is None else record["categories"],
+        "categories": record.categories if record else None,
     }
 
 
 @router.patch("/compliance/cookies/consent")
 async def update_cookie_consent(
     payload: CookieConsentUpdateRequest,
-    request: Request,
+    repo: CookieConsentRepository = Depends(_get_consent_repository),
 ) -> dict:
-    _consent_store(request)[
-        _consent_key(payload.tenantId, payload.userId, payload.version)
-    ] = {
-        "tenantId": payload.tenantId,
-        "userId": payload.userId,
-        "version": payload.version,
-        "categories": payload.categories.model_dump(),
-    }
+    tenant_uuid = UUID(payload.tenantId)
+
+    await repo.upsert_consent(
+        tenant_id=tenant_uuid,
+        user_id=payload.userId,
+        version=payload.version,
+        categories=payload.categories.model_dump(),
+    )
+    await repo.session.commit()
+
     return {
         "categories": payload.categories.model_dump(),
         "trackersBlocked": _trackers_blocked(payload.categories),
@@ -189,7 +193,7 @@ async def accept_legal_disclaimer(
 
 @router.post("/onboarding/sample-project/start")
 async def start_sample_project(
-    current_user: Annotated[User, Depends(get_current_user)],
+    _current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     return {
         "projectId": "proj_sample_001",
@@ -201,8 +205,8 @@ async def start_sample_project(
 
 @router.get("/onboarding/sample-project/ready")
 async def get_sample_project_ready(
-    current_user: Annotated[User, Depends(get_current_user)],
-    projectId: str | None = None,
+    _current_user: Annotated[User, Depends(get_current_user)],
+    _projectId: str | None = None,
 ) -> dict:
     return {
         "widgets": {
@@ -216,7 +220,7 @@ async def get_sample_project_ready(
 @router.post("/onboarding/sample-project/retry")
 async def retry_sample_project(
     payload: OnboardingRetryRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
+    _current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     return {
         "sessionId": payload.sessionId or "onb_001",
@@ -227,8 +231,8 @@ async def retry_sample_project(
 
 @router.get("/onboarding/sample-project/telemetry")
 async def get_sample_project_telemetry(
-    current_user: Annotated[User, Depends(get_current_user)],
-    sessionId: str | None = None,
+    _current_user: Annotated[User, Depends(get_current_user)],
+    _sessionId: str | None = None,
 ) -> dict:
     return {
         "events": ["start", "ready"],

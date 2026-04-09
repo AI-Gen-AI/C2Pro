@@ -9,7 +9,7 @@ Location: apps/api/src/coherence/rules_engine/config.py
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

@@ -20,7 +20,6 @@ Installation:
     # Windows: Download installer from GitHub
 """
 
-from typing import List, Tuple, Optional
 import structlog
 
 from src.modules.ingestion.application.ports import OCRAdapter, OCRResult
@@ -54,7 +53,7 @@ class TesseractOCRAdapter(OCRAdapter):
     def __init__(
         self,
         language: str = "eng",
-        tesseract_path: Optional[str] = None,
+        tesseract_path: str | None = None,
         dpi: int = 300,
         confidence_threshold: int = 0,
     ):
@@ -192,10 +191,7 @@ class TesseractOCRAdapter(OCRAdapter):
             text = " ".join(text_parts)
 
             # Calculate overall page confidence
-            if confidences:
-                overall_confidence = sum(confidences) / len(confidences)
-            else:
-                overall_confidence = 0.0
+            overall_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
             result: OCRResult = {
                 "text": text,

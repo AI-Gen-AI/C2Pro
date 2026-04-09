@@ -4,20 +4,20 @@ HTTP adapter (FastAPI router) for the Documents module.
 from __future__ import annotations
 
 import pathlib
-from datetime import datetime
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.database import get_session
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
-from src.analysis.adapters.persistence.models import Alert
+from src.documents.adapters.extraction.documents_entity_extraction_service import (
+    DocumentsEntityExtractionService,
+)
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
@@ -25,30 +25,34 @@ from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
+from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
-)
-from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
-from src.documents.adapters.extraction.documents_entity_extraction_service import (
-    DocumentsEntityExtractionService,
 )
 from src.documents.adapters.storage.local_file_storage_service import (
     LocalFileStorageService,
 )
-
-# Cross-module dependencies for entity extraction
-from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
-    SqlAlchemyStakeholderRepository,
-)
-from src.projects.adapters.persistence.models import ProjectORM
-from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
-from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
+from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
 from src.documents.application.delete_document_use_case import DeleteDocumentUseCase
 from src.documents.application.download_document_use_case import DownloadDocumentUseCase
+from src.documents.application.dtos import (
+    DocumentDetailResponse,
+    DocumentEntityResponse,
+    DocumentHistoryResponse,
+    DocumentListItem,
+    DocumentListResponse,
+    DocumentPollingStatus,
+    DocumentQueuedResponse,
+    DocumentRelationshipExplanationResponse,
+    DocumentResponse,
+    DocumentUploadResponse,
+    RagAnswerResponse,
+    RagQuestionRequest,
+)
+from src.documents.application.get_document_history_use_case import GetDocumentHistoryUseCase
+from src.documents.application.get_document_relationship_explanation_use_case import (
+    GetDocumentRelationshipExplanationUseCase,
+)
 from src.documents.application.get_document_use_case import GetDocumentUseCase
 from src.documents.application.get_document_with_clauses_use_case import (
     GetDocumentWithClausesUseCase,
@@ -57,29 +61,25 @@ from src.documents.application.list_project_documents_use_case import (
     ListProjectDocumentsUseCase,
 )
 from src.documents.application.parse_document_use_case import ParseDocumentUseCase
-from src.documents.application.upload_document_use_case import UploadDocumentUseCase
-from src.documents.application.answer_rag_question_use_case import AnswerRagQuestionUseCase
+from src.documents.application.reupload_document_use_case import (
+    ReuploadDocumentUseCase,  # TASK-BCK-023
+)
 from src.documents.application.services.relationship_explanation_service import (
     EvidenceRelationshipExplanationService,
-    ExplanationAlertInput,
 )
+from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
-from src.documents.application.dtos import (
-    DocumentEntityResponse,
-    DocumentDetailResponse,
-    DocumentHistoryResponse,
-    DocumentRelationshipExplanationResponse,
-    EvidenceHistoryEventResponse,
-    DocumentListItem,
-    DocumentListResponse,
-    DocumentPollingStatus,
-    DocumentQueuedResponse,
-    DocumentResponse,
-    DocumentUploadResponse,
-    RagAnswerResponse,
-    RagQuestionRequest,
-    RelationshipExplanationCitationResponse,
+from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
+from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
+from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
+from src.projects.ports.project_repository import ProjectRepository
+
+# Cross-module dependencies for entity extraction
+from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
+    SqlAlchemyStakeholderRepository,
 )
+from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
 
 logger = structlog.get_logger()
 
@@ -95,32 +95,6 @@ router = APIRouter(
 )
 
 ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".bc3"}
-
-
-def _format_history_action_title(action: str) -> str:
-    words = action.replace("_", " ").split()
-    return " ".join(word.capitalize() for word in words)
-
-
-def _build_alert_history_detail(alert: Alert, history_item: dict) -> str:
-    title = alert.title
-    details: list[str] = [title]
-    for key in ("decision", "resolution", "root_cause", "evidence_type", "rule_code"):
-        value = history_item.get(key)
-        if value:
-            details.append(str(value))
-    return " · ".join(details)
-
-
-def _parse_history_timestamp(value: str | None) -> datetime | None:
-    if not value:
-        return None
-
-    normalized = value.replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
 
 
 def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPollingStatus:
@@ -203,13 +177,20 @@ def get_rag_ingestion_service(
 def get_upload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
-    project_repo: SqlAlchemyProjectRepository = Depends(get_project_repository),
+    project_repo: ProjectRepository = Depends(get_project_repository),
 ) -> UploadDocumentUseCase:
     return UploadDocumentUseCase(
         document_repository=repo,
         storage_service=storage,
         project_repository=project_repo,
     )
+
+
+def get_reupload_use_case(
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> ReuploadDocumentUseCase:
+    """Dependency for ReuploadDocumentUseCase (TASK-BCK-023)."""
+    return ReuploadDocumentUseCase(document_repository=repo)
 
 
 def get_get_document_use_case(
@@ -244,8 +225,9 @@ def get_delete_use_case(
 
 def get_list_documents_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    project_repo: ProjectRepository = Depends(get_project_repository),
 ) -> ListProjectDocumentsUseCase:
-    return ListProjectDocumentsUseCase(document_repository=repo)
+    return ListProjectDocumentsUseCase(document_repository=repo, project_repository=project_repo)
 
 
 def get_get_document_with_clauses_use_case(
@@ -280,6 +262,28 @@ def get_answer_rag_use_case(
     rag_service: SqlAlchemyRagService = Depends(get_rag_service),
 ) -> AnswerRagQuestionUseCase:
     return AnswerRagQuestionUseCase(rag_service=rag_service)
+
+
+def get_document_history_use_case(
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> GetDocumentHistoryUseCase:
+    return GetDocumentHistoryUseCase(document_repository=repo)
+
+
+def get_document_relationship_explanation_service() -> EvidenceRelationshipExplanationService:
+    return EvidenceRelationshipExplanationService()
+
+
+def get_document_relationship_explanation_use_case(
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    explanation_service: EvidenceRelationshipExplanationService = Depends(
+        get_document_relationship_explanation_service
+    ),
+) -> GetDocumentRelationshipExplanationUseCase:
+    return GetDocumentRelationshipExplanationUseCase(
+        document_repository=repo,
+        explanation_service=explanation_service,
+    )
 
 
 @router.post(
@@ -327,6 +331,77 @@ async def upload_document_for_processing(
     return DocumentQueuedResponse(**response_data)
 
 
+@router.patch(
+    "/documents/{document_id}/file",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Re-upload a document file (creates new version)",
+)
+async def reupload_document_file(
+    document_id: UUID,
+    _user_id: CurrentUserId,
+    _tenant_id: CurrentTenantId,
+    file: UploadFile = File(...),
+    reupload_use_case: ReuploadDocumentUseCase = Depends(get_reupload_use_case),
+) -> DocumentResponse:
+    """
+    Re-upload a document with a new file.
+
+    TASK-BCK-023: Document versioning
+    - Calculates file hash and compares with existing
+    - Increments version if content changed
+    - Resets status to UPLOADED for re-processing
+    - Returns existing document if content unchanged
+    """
+    if file.size > settings.max_upload_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
+        )
+
+    file_extension = pathlib.Path(file.filename).suffix.lower()
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type '{file_extension}' is not allowed.",
+        )
+
+    # Read file content
+    file_content = await file.read()
+
+    try:
+        document_dto = await reupload_use_case.execute(
+            document_id=document_id,
+            file_content=file_content,
+            filename=file.filename,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+    # Trigger re-ingestion if version was incremented
+    # (use case returns same version if content unchanged)
+    # For now, just return the updated document
+    # Future: trigger re-ingestion task similar to upload
+
+    return DocumentResponse(
+        id=document_dto.id,
+        project_id=document_dto.project_id,
+        document_type=document_dto.document_type,
+        filename=document_dto.filename,
+        upload_status=document_dto.upload_status,
+        version=document_dto.version,
+        file_hash=document_dto.file_hash,
+        file_format=document_dto.file_format,
+        storage_url=document_dto.storage_url,
+        file_size_bytes=document_dto.file_size_bytes,
+        created_at=document_dto.created_at,
+        updated_at=document_dto.updated_at,
+    )
+
+
 @router.get(
     "/documents/{document_id}",
     response_model=DocumentDetailResponse,
@@ -334,7 +409,7 @@ async def upload_document_for_processing(
 )
 async def get_document_endpoint(
     document_id: UUID,
-    user_id: CurrentUserId,
+    _user_id: CurrentUserId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> DocumentDetailResponse:
     document = await use_case.execute(document_id)
@@ -368,104 +443,9 @@ async def get_document_endpoint(
 )
 async def get_document_history_endpoint(
     document_id: UUID,
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session),
+    use_case: GetDocumentHistoryUseCase = Depends(get_document_history_use_case),
 ) -> DocumentHistoryResponse:
-    document_result = await db.execute(
-        select(DocumentORM, func.count(ClauseORM.id))
-        .join(ProjectORM, ProjectORM.id == DocumentORM.project_id)
-        .outerjoin(ClauseORM, ClauseORM.document_id == DocumentORM.id)
-        .where(
-            DocumentORM.id == document_id,
-            ProjectORM.tenant_id == tenant_id,
-        )
-        .group_by(DocumentORM.id, ProjectORM.id)
-    )
-    document_row = document_result.one_or_none()
-    if document_row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    document, clause_count = document_row
-    clause_total = int(clause_count or 0)
-
-    events: list[EvidenceHistoryEventResponse] = [
-        EvidenceHistoryEventResponse(
-            id=f"document-uploaded-{document.id}",
-            title="Document uploaded",
-            detail=document.filename,
-            occurred_at=document.created_at,
-            source_type="document",
-            source_id=str(document.id),
-        )
-    ]
-
-    if document.parsed_at is not None:
-        clause_label = "clause" if clause_total == 1 else "clauses"
-        events.append(
-            EvidenceHistoryEventResponse(
-                id=f"document-parsed-{document.id}",
-                title="Document parsed",
-                detail=f"{clause_total} {clause_label} extracted",
-                occurred_at=document.parsed_at,
-                source_type="document",
-                source_id=str(document.id),
-            )
-        )
-
-    alert_result = await db.execute(
-        select(Alert)
-        .join(ProjectORM, ProjectORM.id == Alert.project_id)
-        .join(ClauseORM, ClauseORM.id == Alert.source_clause_id)
-        .where(
-            ProjectORM.tenant_id == tenant_id,
-            ClauseORM.document_id == document_id,
-        )
-        .order_by(Alert.created_at.asc())
-    )
-    alerts = list(alert_result.scalars().all())
-
-    for alert in alerts:
-        history_items = list((alert.alert_metadata or {}).get("history", []))
-        created_recorded = False
-
-        for index, history_item in enumerate(history_items):
-            action = str(history_item.get("action") or "").strip()
-            occurred_at = _parse_history_timestamp(history_item.get("timestamp"))
-            if not action or occurred_at is None:
-                continue
-
-            if action == "created":
-                created_recorded = True
-
-            events.append(
-                EvidenceHistoryEventResponse(
-                    id=f"alert-history-{alert.id}-{index}",
-                    title=f"Alert {_format_history_action_title(action)}",
-                    detail=_build_alert_history_detail(alert, history_item),
-                    occurred_at=occurred_at,
-                    source_type="alert",
-                    source_id=str(alert.id),
-                )
-            )
-
-        if not created_recorded:
-            events.append(
-                EvidenceHistoryEventResponse(
-                    id=f"alert-created-{alert.id}",
-                    title="Alert created",
-                    detail=alert.title,
-                    occurred_at=alert.created_at,
-                    source_type="alert",
-                    source_id=str(alert.id),
-                )
-            )
-
-    events.sort(key=lambda event: event.occurred_at)
-
-    return DocumentHistoryResponse(
-        document_id=document.id,
-        items=events,
-    )
+    return await use_case.execute(document_id)
 
 
 @router.get(
@@ -475,64 +455,12 @@ async def get_document_history_endpoint(
 )
 async def get_document_relationship_explanation_endpoint(
     document_id: UUID,
-    user_id: CurrentUserId,
-    tenant_id: CurrentTenantId,
-    db: AsyncSession = Depends(get_session),
-    use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
+    _user_id: CurrentUserId,
+    use_case: GetDocumentRelationshipExplanationUseCase = Depends(
+        get_document_relationship_explanation_use_case
+    ),
 ) -> DocumentRelationshipExplanationResponse:
-    document = await use_case.execute(document_id)
-
-    alert_result = await db.execute(
-        select(Alert)
-        .join(ProjectORM, ProjectORM.id == Alert.project_id)
-        .join(ClauseORM, ClauseORM.id == Alert.source_clause_id)
-        .where(
-            ProjectORM.tenant_id == tenant_id,
-            ClauseORM.document_id == document_id,
-        )
-        .order_by(Alert.created_at.asc())
-    )
-    alerts = list(alert_result.scalars().all())
-
-    filtered_alerts: list[ExplanationAlertInput] = []
-    clause_ids = {clause.id for clause in document.clauses}
-    for alert in alerts:
-        if alert.source_clause_id is not None and alert.source_clause_id not in clause_ids:
-            continue
-        filtered_alerts.append(
-            ExplanationAlertInput(
-                id=alert.id,
-                title=alert.title,
-                severity=alert.severity,
-                status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
-                created_at=alert.created_at,
-                updated_at=alert.updated_at,
-                source_clause_id=alert.source_clause_id,
-            )
-        )
-
-    explanation = EvidenceRelationshipExplanationService().build(
-        document=document,
-        alerts=filtered_alerts,
-    )
-
-    return DocumentRelationshipExplanationResponse(
-        document_id=document.id,
-        summary=explanation.summary,
-        strongest_cluster=explanation.strongest_cluster,
-        review_priority=explanation.review_priority,
-        latest_signal=explanation.latest_signal,
-        citations=[
-            RelationshipExplanationCitationResponse(
-                clause_id=citation.clause_id,
-                clause_code=citation.clause_code,
-                label=citation.label,
-                page=citation.page,
-                reason=citation.reason,
-            )
-            for citation in explanation.citations
-        ],
-    )
+    return await use_case.execute(document_id)
 
 
 @router.get(
@@ -542,7 +470,7 @@ async def get_document_relationship_explanation_endpoint(
 )
 async def get_document_entities_endpoint(
     document_id: UUID,
-    user_id: CurrentUserId,
+    _user_id: CurrentUserId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> list[DocumentEntityResponse]:
     document = await use_case.execute(document_id)
@@ -611,7 +539,7 @@ async def delete_document_endpoint(
 async def list_documents_for_project(
     project_id: UUID,
     tenant_id: CurrentTenantId,
-    user_id: CurrentUserId,
+    _user_id: CurrentUserId,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     list_use_case: ListProjectDocumentsUseCase = Depends(get_list_documents_use_case),
@@ -654,10 +582,10 @@ async def list_documents_for_project(
 )
 async def parse_document_endpoint(
     document_id: UUID,
-    user_id: CurrentUserId,
+    _user_id: CurrentUserId,
     parse_use_case: ParseDocumentUseCase = Depends(get_parse_document_use_case),
 ):
-    await parse_use_case.execute(document_id, user_id)
+    await parse_use_case.execute(document_id, _user_id)
     return DocumentUploadResponse(
         document_id=document_id,
         status=DocumentStatus.PARSED,
@@ -673,8 +601,8 @@ async def parse_document_endpoint(
 async def answer_project_question(
     project_id: UUID,
     payload: RagQuestionRequest,
-    user_id: CurrentUserId,
-    tenant_id: CurrentTenantId,
+    _user_id: CurrentUserId,
+    _tenant_id: CurrentTenantId,
     use_case: AnswerRagQuestionUseCase = Depends(get_answer_rag_use_case),
 ):
     result = await use_case.execute(

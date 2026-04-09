@@ -10,9 +10,8 @@ Ejecutar:
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # ===========================================
 # EXCEPTION CLASSES (standalone)
@@ -41,7 +40,7 @@ class C2ProException(Exception):
             "status_code": self.status_code,
             "error_code": self.code,
             "message": self.message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         if self.details:
@@ -171,17 +170,17 @@ def verify_error_format(error_dict: dict, expected_status: int, expected_code: s
     assert isinstance(error_dict["timestamp"], str), "timestamp debe ser str"
 
     # Verificar valores
-    assert error_dict["status_code"] == expected_status, f"status_code incorrecto"
-    assert error_dict["error_code"] == expected_code, f"error_code incorrecto"
+    assert error_dict["status_code"] == expected_status, "status_code incorrecto"
+    assert error_dict["error_code"] == expected_code, "error_code incorrecto"
 
     # Verificar formato de timestamp (ISO 8601)
     try:
         datetime.fromisoformat(error_dict["timestamp"].replace("Z", "+00:00"))
-        print(f"    [OK] Timestamp ISO 8601 valido")
+        print("    [OK] Timestamp ISO 8601 valido")
     except ValueError:
         raise AssertionError("Timestamp no es ISO 8601 valido")
 
-    print(f"    [OK] Formato correcto\n")
+    print("    [OK] Formato correcto\n")
 
 
 # TEST 1: ResourceNotFoundError
@@ -295,7 +294,7 @@ except C2ProException as e:
     verify_error_format(error, 500, "SIMPLE_ERROR")
 
     assert "details" not in error, "No debe incluir campo 'details' si esta vacio"
-    print(f"    [OK] Campo 'details' omitido correctamente cuando esta vacio\n")
+    print("    [OK] Campo 'details' omitido correctamente cuando esta vacio\n")
 
 
 # TEST 7: Error sin path
@@ -311,7 +310,7 @@ except C2ProException as e:
     assert "timestamp" in error
 
     assert "path" not in error, "No debe incluir campo 'path' si es None"
-    print(f"    [OK] Campo 'path' omitido correctamente cuando es None\n")
+    print("    [OK] Campo 'path' omitido correctamente cuando es None\n")
 
 
 # RESUMEN

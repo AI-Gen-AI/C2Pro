@@ -9,10 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
-
-from src.analysis.adapters.graph.neo4j_client import Neo4jGraphClient
 from src.analysis.adapters.graph.knowledge_graph import GraphPath
+from src.analysis.adapters.graph.neo4j_client import Neo4jGraphClient
 
 
 @dataclass
@@ -34,7 +32,7 @@ class _FakeSession:
             return _FakeResult(self.path_rows)
         return _FakeResult([])
 
-    def __enter__(self) -> "_FakeSession":
+    def __enter__(self) -> _FakeSession:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

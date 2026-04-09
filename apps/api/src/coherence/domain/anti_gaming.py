@@ -7,7 +7,7 @@ Refers to Suite ID: TS-UD-COH-GAM-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 
@@ -146,8 +146,8 @@ class AntiGamingDetector:
     @staticmethod
     def _resolve_reference_time(events: list[AlertEvent]) -> datetime:
         if not events:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
         latest = max(event.timestamp for event in events)
         if latest.tzinfo is None:
-            return latest.replace(tzinfo=timezone.utc)
-        return latest.astimezone(timezone.utc)
+            return latest.replace(tzinfo=UTC)
+        return latest.astimezone(UTC)

@@ -3,22 +3,27 @@ SQLAlchemy implementation of the IStakeholderRepository port.
 """
 from __future__ import annotations
 
-from typing import List, Tuple
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.approval import ApprovalStatus
-from src.stakeholders.domain.models import Stakeholder, RaciAssignment, RACIRole
-from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
-from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
+from src.stakeholders.domain.models import RaciAssignment, RACIRole, Stakeholder
+from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 
 
 class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def _get_project_tenant_id(self, project_id: UUID) -> UUID | None:
+        """Get tenant_id for a project."""
+        stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == project_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     # --- Mapper helpers ---
     def _to_domain(self, orm: StakeholderORM) -> Stakeholder:
@@ -102,7 +107,11 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             created_at=assignment.created_at,
         )
 
-    async def add(self, stakeholder: Stakeholder) -> None:
+    async def add(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
+        if tenant_id is not None:
+            proj_tenant = await self._get_project_tenant_id(stakeholder.project_id)
+            if proj_tenant is None or proj_tenant != tenant_id:
+                raise PermissionError("Cannot add stakeholder for project outside tenant")
         self.session.add(self._to_orm(stakeholder))
 
     async def get_by_id(
@@ -117,7 +126,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = result.scalar_one_or_none()
         return self._to_domain(orm) if orm else None
 
-    async def get_all_stakeholders(self, tenant_id: UUID) -> List[Stakeholder]:
+    async def get_all_stakeholders(self, tenant_id: UUID) -> list[Stakeholder]:
         stmt = (
             select(StakeholderORM)
             .join(ProjectORM, ProjectORM.id == StakeholderORM.project_id)
@@ -133,7 +142,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         skip: int = 0,
         limit: int = 100,
         tenant_id: UUID | None = None,
-    ) -> Tuple[List[Stakeholder], int]:
+    ) -> tuple[list[Stakeholder], int]:
         stmt = (
             select(StakeholderORM)
             .where(StakeholderORM.project_id == project_id)
@@ -159,10 +168,14 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
         return [self._to_domain(item) for item in items], total_count
 
-    async def update(self, stakeholder: Stakeholder) -> None:
+    async def update(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
         orm = await self.session.get(StakeholderORM, stakeholder.id)
         if orm is None:
             return
+        if tenant_id is not None:
+            proj_tenant = await self._get_project_tenant_id(orm.project_id)
+            if proj_tenant is None or proj_tenant != tenant_id:
+                raise PermissionError("Cannot update stakeholder for project outside tenant")
         orm.name = stakeholder.name
         orm.role = stakeholder.role
         orm.organization = stakeholder.organization
@@ -187,12 +200,18 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         if orm:
             await self.session.delete(orm)
 
-    async def add_raci_assignment(self, assignment: RaciAssignment) -> None:
+    async def add_raci_assignment(
+        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+    ) -> None:
+        if tenant_id is not None:
+            proj_tenant = await self._get_project_tenant_id(assignment.project_id)
+            if proj_tenant is None or proj_tenant != tenant_id:
+                raise PermissionError("Cannot add RACI assignment for project outside tenant")
         self.session.add(self._to_raci_orm(assignment))
 
     async def list_raci_assignments(
         self, project_id: UUID, tenant_id: UUID | None = None
-    ) -> List[RaciAssignment]:
+    ) -> list[RaciAssignment]:
         stmt = select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
         if tenant_id is not None:
             stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderWBSRaciORM.project_id).where(
@@ -244,10 +263,16 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = result.scalar_one_or_none()
         return self._to_raci_domain(orm) if orm else None
 
-    async def update_raci_assignment(self, assignment: RaciAssignment) -> None:
+    async def update_raci_assignment(
+        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+    ) -> None:
         orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
         if not orm:
             return
+        if tenant_id is not None:
+            proj_tenant = await self._get_project_tenant_id(orm.project_id)
+            if proj_tenant is None or proj_tenant != tenant_id:
+                raise PermissionError("Cannot update RACI assignment for project outside tenant")
         orm.raci_role = assignment.raci_role
         orm.evidence_text = assignment.evidence_text
         orm.generated_automatically = assignment.generated_automatically

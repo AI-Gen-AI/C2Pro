@@ -5,9 +5,10 @@ Tests that the coherence scorer properly derives compliance flags
 from extracted risks and passes them to the coherence calculation service.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def base_state():
 def mock_coherence_service():
     """Mock the CoherenceCalculationService."""
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -48,7 +49,7 @@ async def test_coherence_scorer_with_no_risks_and_wbs_returns_high_score(base_st
     base_state["extracted_wbs"] = [{"code": "1.0", "name": "Task 1", "confidence": 0.9}]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -64,7 +65,7 @@ async def test_coherence_scorer_with_no_risks_and_wbs_returns_high_score(base_st
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         # Verify all flags were True (no violations)
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
@@ -86,7 +87,7 @@ async def test_coherence_scorer_with_legal_high_risk_sets_legal_false(base_state
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -95,7 +96,7 @@ async def test_coherence_scorer_with_legal_high_risk_sets_legal_false(base_state
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["legal_compliant"] is False
@@ -117,7 +118,7 @@ async def test_coherence_scorer_with_schedule_high_risk_sets_schedule_false(base
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -126,7 +127,7 @@ async def test_coherence_scorer_with_schedule_high_risk_sets_schedule_false(base
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["schedule_within_contract"] is False
@@ -143,7 +144,7 @@ async def test_coherence_scorer_with_time_critical_risk_sets_schedule_false(base
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -152,7 +153,7 @@ async def test_coherence_scorer_with_time_critical_risk_sets_schedule_false(base
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["schedule_within_contract"] is False
@@ -169,7 +170,7 @@ async def test_coherence_scorer_with_technical_high_risk_sets_technical_false(ba
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -178,7 +179,7 @@ async def test_coherence_scorer_with_technical_high_risk_sets_technical_false(ba
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["technical_consistent"] is False
@@ -195,7 +196,7 @@ async def test_coherence_scorer_with_quality_high_risk_sets_quality_false(base_s
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -204,7 +205,7 @@ async def test_coherence_scorer_with_quality_high_risk_sets_quality_false(base_s
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["quality_standard_met"] is False
@@ -221,7 +222,7 @@ async def test_coherence_scorer_with_scope_high_risk_sets_scope_false(base_state
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -230,7 +231,7 @@ async def test_coherence_scorer_with_scope_high_risk_sets_scope_false(base_state
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["scope_defined"] is False
@@ -250,7 +251,7 @@ async def test_coherence_scorer_with_budget_high_risk_marks_bom_unassigned(base_
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -259,7 +260,7 @@ async def test_coherence_scorer_with_budget_high_risk_marks_bom_unassigned(base_
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # BOM items should be marked as unassigned
@@ -277,7 +278,7 @@ async def test_coherence_scorer_no_wbs_no_risks_sets_scope_false(base_state):
     base_state["extracted_risks"] = []
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -286,7 +287,7 @@ async def test_coherence_scorer_no_wbs_no_risks_sets_scope_false(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["scope_defined"] is False
@@ -305,7 +306,7 @@ async def test_coherence_scorer_multiple_high_risks(base_state):
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -314,7 +315,7 @@ async def test_coherence_scorer_multiple_high_risks(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         assert call_kwargs["legal_compliant"] is False
@@ -336,7 +337,7 @@ async def test_coherence_scorer_medium_risk_does_not_trigger(base_state):
     ]
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -345,7 +346,7 @@ async def test_coherence_scorer_medium_risk_does_not_trigger(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # MEDIUM should not trigger violation
@@ -375,7 +376,7 @@ async def test_coherence_scorer_low_confidence_sets_scope_false(base_state):
     base_state["document_text"] = "This is a real document with enough content to pass length check but low confidence."
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -384,7 +385,7 @@ async def test_coherence_scorer_low_confidence_sets_scope_false(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # Low confidence should trigger scope_defined=False
@@ -401,7 +402,7 @@ async def test_coherence_scorer_short_document_sets_scope_false(base_state):
     base_state["document_text"] = "string"  # Too short (< 100 chars)
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -410,7 +411,7 @@ async def test_coherence_scorer_short_document_sets_scope_false(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # Short document should trigger scope_defined=False
@@ -431,7 +432,7 @@ async def test_coherence_scorer_low_wbs_confidence_sets_scope_false(base_state):
     base_state["document_text"] = "This is a proper document with enough content to analyze properly for the coherence scoring system."
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -440,7 +441,7 @@ async def test_coherence_scorer_low_wbs_confidence_sets_scope_false(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # Low WBS confidence average (0.3) should trigger scope_defined=False
@@ -460,7 +461,7 @@ async def test_coherence_scorer_good_quality_passes(base_state):
     base_state["document_text"] = "This is a proper contract document with all the necessary clauses and specifications required for a comprehensive analysis."
 
     with patch(
-        "src.analysis.adapters.graph.nodes_extended.build_coherence_calculation_service"
+        "src.coherence.application.dependencies.build_coherence_calculation_service"
     ) as mock_cls:
         mock_instance = MagicMock()
         mock_result = MagicMock()
@@ -469,7 +470,7 @@ async def test_coherence_scorer_good_quality_passes(base_state):
         mock_instance.calculate_coherence.return_value = mock_result
         mock_cls.return_value = mock_instance
 
-        result = await coherence_scorer_node(base_state)
+        await coherence_scorer_node(base_state)
 
         call_kwargs = mock_instance.calculate_coherence.call_args[1]
         # Good quality should pass

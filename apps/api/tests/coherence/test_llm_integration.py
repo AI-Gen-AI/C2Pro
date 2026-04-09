@@ -8,13 +8,9 @@ Uses mocking for consistent, deterministic testing.
 Version: 1.0.0
 """
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from src.coherence.models import Clause, ProjectContext
-
 
 # ===========================================
 # TEST: CoherenceLLMService INITIALIZATION
@@ -277,7 +273,6 @@ class TestCoherenceLLMServiceMultiClause:
     ):
         """Test that multi-clause analysis requires at least 2 clauses."""
         from src.coherence.llm_integration import CoherenceLLMService
-        from tests.coherence.conftest import MockAIResponse
 
         mock_wrapper = MagicMock()
         mock_wrapper.get_statistics = MagicMock(return_value={})
@@ -476,7 +471,7 @@ class TestCoherenceLLMServiceSingleton:
             reset_coherence_llm_service,
         )
 
-        service1 = get_coherence_llm_service()
+        get_coherence_llm_service()
         reset_coherence_llm_service()
         service2 = get_coherence_llm_service()
 

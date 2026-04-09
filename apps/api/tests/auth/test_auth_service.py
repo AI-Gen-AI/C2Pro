@@ -9,32 +9,32 @@ Comprehensive tests for auth service including:
 - Token refresh functionality
 """
 
-import pytest
 import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import uuid4, UUID
+from uuid import uuid4
 
+import pytest
+
+from src.config import settings
 from src.core.auth.bootstrap_lookup import BootstrapUserRecord
+from src.core.auth.models import SubscriptionPlan, UserRole
+from src.core.auth.schemas import LoginRequest, RegisterRequest
 from src.core.auth.service import (
-    hash_password,
-    verify_password,
+    AuthService,
     create_access_token,
     create_refresh_token,
     decode_token,
     generate_tenant_slug,
     get_user_by_email,
     get_user_by_id,
-    AuthService,
+    hash_password,
+    verify_password,
 )
-from src.core.auth.models import User, Tenant, UserRole, SubscriptionPlan
-from src.core.auth.schemas import RegisterRequest, LoginRequest
 from src.core.exceptions import AuthenticationError, ConflictError, NotFoundError
-from src.config import settings
-
 
 # ===========================================
 # PASSWORD HASHING TESTS
@@ -534,7 +534,7 @@ class TestAuthServiceRegistration:
             company_name="Hash Company"
         )
 
-        response = await AuthService.register(db, request)
+        await AuthService.register(db, request)
 
         # Get user from database
         user = await get_user_by_email(db, request.email)
@@ -630,7 +630,7 @@ class TestAuthServiceRegistration:
         )
 
         before = datetime.utcnow()
-        response = await AuthService.register(db, request)
+        await AuthService.register(db, request)
         after = datetime.utcnow()
 
         # Get user to check last_login

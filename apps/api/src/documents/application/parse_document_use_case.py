@@ -1,19 +1,18 @@
 """
 Use Case for parsing a document, extracting entities, and ingesting for RAG.
 """
-import structlog
 from pathlib import Path
 from uuid import UUID
-from datetime import datetime # Import datetime for document.parsed_at update
 
+import structlog
 from fastapi import HTTPException, status
 
-from src.documents.domain.models import Document, DocumentStatus
+from src.documents.domain.models import DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
-from src.documents.ports.storage_service import IStorageService
-from src.documents.ports.file_parser_service import IFileParserService
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
+from src.documents.ports.file_parser_service import IFileParserService
 from src.documents.ports.rag_ingestion_service import IRagIngestionService
+from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
 
@@ -59,7 +58,7 @@ class ParseDocumentUseCase:
             parsed_payload = await self.file_parser_service.parse_document_file(document, file_path)
 
             # 6. Extract entities (Stakeholders, WBS, BOM)
-            extraction_summary = await self.entity_extraction_service.extract_entities_from_document(
+            await self.entity_extraction_service.extract_entities_from_document(
                 document=document,
                 parsed_payload=parsed_payload,
                 tenant_id=tenant_id,
@@ -80,8 +79,8 @@ class ParseDocumentUseCase:
                 document_id, DocumentStatus.PARSED, parsing_error=None
             )
             # Update parsed_at in domain model if needed, then sync with repository
-            # document.parsed_at = datetime.utcnow() # This would be part of a richer update operation
-            
+            # document.parsed_at = datetime.now(UTC) # This would be part of a richer update operation
+
             await self.document_repository.commit()
 
         except Exception as e:

@@ -25,17 +25,14 @@ Architecture Flow (from c2pro_master_flow_diagram_v2.2.1.md):
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 
-from src.core.auth.models import Tenant, User, UserRole, SubscriptionPlan
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
 from src.projects.adapters.persistence.models import ProjectORM
-
 
 # ===========================================
 # FIXTURES

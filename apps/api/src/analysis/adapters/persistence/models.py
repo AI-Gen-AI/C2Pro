@@ -7,8 +7,12 @@ Incluye trazabilidad legal mediante FKs a clauses (ROADMAP §5.3).
 Refers to Suite ID: TS-INT-DB-CLS-001.
 """
 
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as a naive datetime (for TIMESTAMP WITHOUT TIME ZONE columns)."""
+    return datetime.now(UTC).replace(tzinfo=None)
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -21,6 +25,8 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -29,15 +35,25 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.analysis.domain.enums import AnalysisStatus, AnalysisType, AlertSeverity, AlertStatus
-from src.core.database import Base
+from src.analysis.domain.enums import (
+    AlertSeverity,
+    AlertStatus,
+    AlertType,
+    AnalysisStatus,
+    AnalysisType,
+)
 from src.core.approval import ApprovalStatus
+from src.core.database import Base
 
 if TYPE_CHECKING:
     from src.core.auth.models import User
 
 
- 
+# Import for SQLAlchemy mapper registration of Alert <-> User relationships.
+from src.core.auth.models import User
+
+
+
 
 
 class Analysis(Base):
@@ -94,10 +110,10 @@ class Analysis(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False, index=True
+        DateTime, default=_utcnow, nullable=False, index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
     # Relationships
@@ -173,6 +189,11 @@ class Alert(Base):
     severity: Mapped[AlertSeverity] = mapped_column(
         SQLEnum(AlertSeverity, values_callable=lambda obj: [e.value for e in obj]), nullable=False
     )
+    alert_type: Mapped[AlertType] = mapped_column(
+        SQLEnum(AlertType, values_callable=lambda obj: [e.value for e in obj]),
+        default=AlertType.RISK,
+        nullable=False,
+    )
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     rule_id: Mapped[str | None] = mapped_column(
         String(100),
@@ -237,10 +258,10 @@ class Alert(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False, index=True
+        DateTime, default=_utcnow, nullable=False, index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
     # Relationships
@@ -256,11 +277,35 @@ class Alert(Base):
         Index("ix_alerts_project", "project_id"),
         Index("ix_alerts_analysis", "analysis_id"),
         Index("ix_alerts_severity", "severity"),
+        Index("ix_alerts_alert_type", "alert_type"),
         Index("ix_alerts_status", "status"),
         Index("ix_alerts_clause", "source_clause_id"),  # Para trazabilidad
         Index("ix_alerts_created", "created_at"),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
+
+    def __init__(self, **kwargs):
+        """
+        Initialize Alert with Python-level defaults and validation.
+
+        TASK-BCK-026: Ensure alert_type defaults to RISK for backward compatibility.
+        """
+        # Set alert_type default if not provided
+        if 'alert_type' not in kwargs:
+            kwargs['alert_type'] = AlertType.RISK
+        else:
+            # Validate alert_type is a valid AlertType enum
+            alert_type_value = kwargs['alert_type']
+            if not isinstance(alert_type_value, AlertType):
+                try:
+                    # Try to convert string to AlertType
+                    kwargs['alert_type'] = AlertType(alert_type_value)
+                except (ValueError, KeyError):
+                    raise ValueError(
+                        f"Invalid alert_type: {alert_type_value}. "
+                        f"Must be one of: {', '.join([e.value for e in AlertType])}"
+                    )
+        super().__init__(**kwargs)
 
     def __repr__(self) -> str:
         return (
@@ -295,7 +340,7 @@ class Alert(Base):
     @property
     def age_days(self) -> int:
         """Días desde que se creó la alerta."""
-        return (datetime.utcnow() - self.created_at).days
+        return (_utcnow() - self.created_at).days
 
     @property
     def is_stale(self) -> bool:
@@ -305,7 +350,7 @@ class Alert(Base):
     def mark_resolved(self, user_id: UUID, notes: str | None = None) -> None:
         """Marca la alerta como resuelta."""
         self.status = AlertStatus.RESOLVED
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = _utcnow()
         self.resolved_by = user_id
         self.resolution_notes = notes
 
@@ -323,7 +368,7 @@ class Alert(Base):
             raise ValueError("Dismissing alert requires resolution_notes (anti-gaming)")
 
         self.status = AlertStatus.DISMISSED
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = _utcnow()
         self.resolved_by = user_id
         self.resolution_notes = notes
 
@@ -367,7 +412,7 @@ class Extraction(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
     # Relationships
     # TODO: Re-enable relationship when documents table is implemented (GREEN phase)
@@ -396,3 +441,100 @@ class Extraction(Base):
             return "medium"
         else:
             return "low"
+
+
+class KnowledgeGraphNodeORM(Base):
+    """
+    ORM model for knowledge graph nodes.
+
+    Stores extracted entities as graph nodes for relationship discovery.
+    TASK-IMPL-012: Created ORM model for Gate 4 traceability.
+    """
+
+    __tablename__ = "knowledge_graph_nodes"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    entity_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "entity_type", "entity_id", name="kg_nodes_project_entity_unique"),
+        Index("ix_kg_nodes_project", "project_id"),
+        Index("ix_kg_nodes_type", "entity_type"),
+        Index("ix_kg_nodes_entity", "entity_id"),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
+    def __repr__(self) -> str:
+        return f"<KnowledgeGraphNodeORM(id={self.id}, type={self.entity_type})>"
+
+
+class KnowledgeGraphEdgeORM(Base):
+    """
+    ORM model for knowledge graph edges.
+
+    Stores relationships between knowledge graph nodes.
+    TASK-IMPL-012: Created ORM model for Gate 4 traceability.
+    """
+
+    __tablename__ = "knowledge_graph_edges"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_node_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("knowledge_graph_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    target_node_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("knowledge_graph_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    relationship_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "source_node_id", "target_node_id", "relationship_type",
+            name="kg_edges_unique"
+        ),
+        Index("ix_kg_edges_project", "project_id"),
+        Index("ix_kg_edges_source", "source_node_id"),
+        Index("ix_kg_edges_target", "target_node_id"),
+        Index("ix_kg_edges_rel", "relationship_type"),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
+    def __repr__(self) -> str:
+        return f"<KnowledgeGraphEdgeORM(id={self.id}, type={self.relationship_type})>"

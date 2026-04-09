@@ -1,5 +1,6 @@
 """Test database connection with asyncpg."""
 import asyncio
+
 import asyncpg
 
 

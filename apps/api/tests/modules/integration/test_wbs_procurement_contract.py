@@ -12,23 +12,25 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.procurement.domain.models import WBSItem
-from src.procurement.ports.wbs_repository import IWBSRepository
 from src.procurement.application.use_cases.import_wbs_from_projects_use_case import (
     ImportWBSFromProjectsUseCase,
 )
+from src.procurement.domain.models import WBSItem
+from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.domain.wbs_item_dto import WBSItemDTO
 
 
 @dataclass
 class _FakeWBSRepository(IWBSRepository):
     created_items: list[WBSItem] = field(default_factory=list)
+    bulk_create_calls: list[tuple[list[WBSItem], UUID]] = field(default_factory=list)
 
     async def create(self, wbs_item: WBSItem) -> WBSItem:
         self.created_items.append(wbs_item)
         return wbs_item
 
-    async def bulk_create(self, wbs_items: list[WBSItem]) -> list[WBSItem]:
+    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
+        self.bulk_create_calls.append((wbs_items, tenant_id))
         self.created_items.extend(wbs_items)
         return wbs_items
 
@@ -99,6 +101,7 @@ class TestWBSProcurementIntegration:
         assert repo.created_items[0].level == 1
         assert repo.created_items[0].wbs_metadata["discipline"] == "general"
         assert repo.created_items[1].wbs_metadata["parent_id"] == str(parent_id)
+        assert repo.bulk_create_calls[0][1] == tenant_id
 
     async def test_import_raises_on_project_mismatch(self) -> None:
         project_id = uuid4()
@@ -120,3 +123,23 @@ class TestWBSProcurementIntegration:
 
         with pytest.raises(ValueError):
             await use_case.execute(project_id=project_id, tenant_id=tenant_id, items=dtos)
+
+    async def test_import_passes_tenant_id_to_repository(self) -> None:
+        project_id = uuid4()
+        tenant_id = uuid4()
+        dto = WBSItemDTO(
+            id=uuid4(),
+            project_id=project_id,
+            code="1",
+            name="Root",
+            level=1,
+            start_date=date(2026, 2, 1),
+            end_date=date(2026, 2, 2),
+        )
+
+        repo = _FakeWBSRepository()
+        use_case = ImportWBSFromProjectsUseCase(repo)
+
+        await use_case.execute(project_id=project_id, tenant_id=tenant_id, items=[dto])
+
+        assert repo.bulk_create_calls == [([repo.created_items[0]], tenant_id)]

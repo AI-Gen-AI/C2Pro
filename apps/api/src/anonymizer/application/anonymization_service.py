@@ -4,15 +4,14 @@ TS-UC-SEC-ANO-002: Anonymization strategies application service.
 
 import hashlib
 from enum import Enum, auto
-from typing import Dict, List
 
 from pydantic import BaseModel, Field
 
 # Assuming the PII detection components are available from the domain layer
 from ..domain.pii_detector_service import (
+    DetectedPii,
     PiiDetectorService,
     PiiType,
-    PiiDetectionResult,
 )
 
 
@@ -29,7 +28,7 @@ class AnonymizationConfig(BaseModel):
     Configuration defining which anonymization strategy to apply for each PII type.
     If a PII type is not in the dictionary, it will not be anonymized.
     """
-    strategies: Dict[PiiType, AnonymizationStrategy] = Field(default_factory=dict)
+    strategies: dict[PiiType, AnonymizationStrategy] = Field(default_factory=dict)
 
 
 class AnonymizationService:
@@ -69,7 +68,7 @@ class AnonymizationService:
             return text
 
         replacements: dict[tuple[int, int], str] = {}
-        pseudonym_map: Dict[str, str] = {}
+        pseudonym_map: dict[str, str] = {}
         pseudonym_counter = 1
 
         # Build replacements in natural text order to keep pseudonym IDs stable.
@@ -97,9 +96,9 @@ class AnonymizationService:
 
     @staticmethod
     def _select_non_overlapping_items(
-        items: List["DetectedPii"],
-        strategies: Dict[PiiType, AnonymizationStrategy],
-    ) -> List["DetectedPii"]:
+        items: list["DetectedPii"],
+        strategies: dict[PiiType, AnonymizationStrategy],
+    ) -> list["DetectedPii"]:
         """
         Keep only actionable, non-overlapping detections.
         For overlaps, the longest match wins.
@@ -112,7 +111,7 @@ class AnonymizationService:
         if not actionable:
             return []
 
-        chosen: List["DetectedPii"] = []
+        chosen: list["DetectedPii"] = []
         for candidate in sorted(
             actionable,
             key=lambda item: (-(item.end - item.start), item.start),

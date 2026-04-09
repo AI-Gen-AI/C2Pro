@@ -12,13 +12,13 @@ These tests will FAIL until the API endpoints are implemented.
 Run: pytest tests/modules/wbs/adapters/test_wbs_api_contract.py -v
 """
 
-import pytest
 import re
-from uuid import uuid4, UUID
-from unittest.mock import Mock, patch
-from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
+from types import SimpleNamespace
+from uuid import uuid4
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ===========================================
 # FIXTURES
@@ -28,10 +28,14 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def test_app():
     """Create FastAPI app for testing WBS endpoints."""
+    from src.core.auth.dependencies import get_current_user
     from src.wbs.adapters.http.router import router as wbs_router
+
+    tenant_id = uuid4()
     app = FastAPI()
     # Include WBS router - GREEN phase
     app.include_router(wbs_router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(tenant_id=tenant_id)
     return app
 
 
@@ -72,9 +76,9 @@ class TestGetWBSContract:
     def test_get_wbs_returns_correct_schema(self, client, test_project_id):
         """
         RED Phase: Contract test for GET /projects/{id}/wbs
-        
+
         Expected: Returns 200 with items, coverage, alerts
-        
+
         This test will FAIL until:
         - The endpoint is implemented
         - The router is registered
@@ -116,7 +120,7 @@ class TestGetWBSContract:
     def test_get_wbs_handles_missing_project(self, client):
         """
         RED Phase: 404 for non-existent project
-        
+
         Expected: Returns 404 with appropriate error message
         """
         response = client.get("/api/v1/projects/non-existent/wbs")
@@ -124,7 +128,7 @@ class TestGetWBSContract:
         assert response.status_code == 404, (
             f"Expected 404, got {response.status_code}"
         )
-        
+
         data = response.json()
         assert "detail" in data, "Error response must have 'detail' field"
         assert "not found" in data["detail"].lower(), (
@@ -143,7 +147,7 @@ class TestCreateWBSItemContract:
     def test_create_wbs_item_requires_name(self, client, test_project_id):
         """
         RED Phase: Validation contract test - name is required
-        
+
         Expected: Returns 422 when name is missing
         """
         # Act - Missing required field
@@ -168,7 +172,7 @@ class TestCreateWBSItemContract:
     ):
         """
         RED Phase: Code format validation contract
-        
+
         Valid codes: 1, 1.1, 1.1.1, 1.1.1.1
         Invalid codes: 1.1.1.1.1 (too deep), A.1 (letters), 1..1 (double dot)
         """
@@ -185,7 +189,7 @@ class TestCreateWBSItemContract:
                 **valid_wbs_item_data,
                 "code": code
             }
-            
+
             response = client.post(
                 f"/api/v1/projects/{test_project_id}/wbs/items",
                 json=payload
@@ -195,7 +199,7 @@ class TestCreateWBSItemContract:
                 f"Code '{code}' should be rejected with 422, "
                 f"got {response.status_code}"
             )
-            
+
             error_str = str(response.json()).lower()
             assert "code" in error_str, (
                 f"Error should mention 'code' field for invalid code '{code}'"
@@ -206,7 +210,7 @@ class TestCreateWBSItemContract:
     ):
         """
         RED Phase: Code auto-generation when not provided
-        
+
         Expected: Returns 201 with auto-generated code
         """
         payload = {
@@ -245,7 +249,7 @@ class TestMoveWBSItemContract:
     ):
         """
         GREEN Phase: Business logic contract test
-        
+
         Cannot move an item to be its own descendant
         Expected: Returns 400 with circular reference error
         """
@@ -269,7 +273,7 @@ class TestMoveWBSItemContract:
             f"Expected 400, got {response.status_code}. "
             "Moving to self should be rejected"
         )
-        
+
         data = response.json()
         assert "detail" in data, "Error must have detail field"
         assert "circular" in data["detail"].lower(), (
@@ -279,7 +283,7 @@ class TestMoveWBSItemContract:
     def test_move_wbs_item_enforces_max_depth(self, client, test_project_id):
         """
         GREEN Phase: Cannot exceed 4 levels when moving
-        
+
         Expected: Returns 400 when move would create level 5 item
         """
         # Create level 1 item
@@ -289,7 +293,7 @@ class TestMoveWBSItemContract:
         )
         assert level_1_response.status_code == 201
         level_1_item_id = level_1_response.json()["id"]
-        
+
         # Create level 2, 3, 4 hierarchy
         level_2_response = client.post(
             f"/api/v1/projects/{test_project_id}/wbs/items",
@@ -297,14 +301,14 @@ class TestMoveWBSItemContract:
         )
         assert level_2_response.status_code == 201
         level_2_item_id = level_2_response.json()["id"]
-        
+
         level_3_response = client.post(
             f"/api/v1/projects/{test_project_id}/wbs/items",
             json={"name": "Level 3 Item", "parent_id": level_2_item_id}
         )
         assert level_3_response.status_code == 201
         level_3_item_id = level_3_response.json()["id"]
-        
+
         level_4_response = client.post(
             f"/api/v1/projects/{test_project_id}/wbs/items",
             json={"name": "Level 4 Item", "parent_id": level_3_item_id}
@@ -323,7 +327,7 @@ class TestMoveWBSItemContract:
         assert response.status_code == 400, (
             f"Expected 400, got {response.status_code}"
         )
-        
+
         data = response.json()
         assert "detail" in data, "Error must have detail field"
         assert "depth" in data["detail"].lower(), (
@@ -344,7 +348,7 @@ class TestDeleteWBSItemContract:
     ):
         """
         GREEN Phase: Cascade delete protection
-        
+
         Expected: Returns 400 when trying to delete parent without cascade
         """
         # First create parent item
@@ -354,7 +358,7 @@ class TestDeleteWBSItemContract:
         )
         assert parent_response.status_code == 201
         parent_item_id = parent_response.json()["id"]
-        
+
         # Create child item
         child_response = client.post(
             f"/api/v1/projects/{test_project_id}/wbs/items",
@@ -372,7 +376,7 @@ class TestDeleteWBSItemContract:
             f"Expected 400, got {response.status_code}. "
             "Should reject delete of parent without cascade"
         )
-        
+
         data = response.json()
         assert "detail" in data, "Error must have detail field"
         assert "children" in data["detail"].lower(), (
@@ -384,7 +388,7 @@ class TestDeleteWBSItemContract:
     ):
         """
         GREEN Phase: Cascade delete removes all descendants
-        
+
         Expected: Returns 204 and removes all descendants
         """
         # First create parent item
@@ -394,7 +398,7 @@ class TestDeleteWBSItemContract:
         )
         assert parent_response.status_code == 201
         parent_id = parent_response.json()["id"]
-        
+
         # Create child item
         child_response = client.post(
             f"/api/v1/projects/{test_project_id}/wbs/items",
@@ -434,7 +438,7 @@ class TestUpdateWBSItemContract:
     ):
         """
         RED Phase: Budget cannot be negative
-        
+
         Expected: Returns 422 when budget amount is negative
         """
         item_id = "item-001"
@@ -449,7 +453,7 @@ class TestUpdateWBSItemContract:
         assert response.status_code == 422, (
             f"Expected 422, got {response.status_code}"
         )
-        
+
         error_str = str(response.json()).lower()
         assert "budget" in error_str, (
             "Error should mention budget field"
@@ -469,7 +473,7 @@ class TestWBSTenantIsolationContract:
     ):
         """
         RED Phase: Tenant context in response headers
-        
+
         Expected: Tenant isolation enforced via headers or response structure
         """
         tenant_id = "tenant-001"

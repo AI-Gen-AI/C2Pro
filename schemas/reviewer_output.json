@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reviewer Role Output Schema",
+  "description": "Output schema for reviewer role. Extends base_output.json with code review-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "object",
+          "description": "Code review details",
+          "properties": {
+            "archivos_revisados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Files reviewed"
+            },
+            "lineas_revisadas": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total lines of code reviewed"
+            },
+            "tiempo_revision_minutos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Time spent on review in minutes"
+            }
+          }
+        },
+        "feedback": {
+          "type": "object",
+          "description": "Review feedback",
+          "properties": {
+            "comentarios": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["archivo", "linea", "severidad", "mensaje"],
+                "properties": {
+                  "archivo": {
+                    "type": "string",
+                    "description": "File path"
+                  },
+                  "linea": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Line number"
+                  },
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["info", "sugerencia", "advertencia", "critico"],
+                    "description": "Comment severity"
+                  },
+                  "mensaje": {
+                    "type": "string",
+                    "minLength": 10,
+                    "description": "Review comment"
+                  },
+                  "sugerencia_codigo": {
+                    "type": "string",
+                    "description": "Suggested code fix"
+                  }
+                }
+              },
+              "description": "Review comments"
+            },
+            "resumen": {
+              "type": "string",
+              "minLength": 20,
+              "description": "Overall review summary"
+            }
+          }
+        },
+        "calidad": {
+          "type": "object",
+          "description": "Code quality assessment",
+          "properties": {
+            "patron_diseno": {
+              "type": "boolean",
+              "description": "Whether design patterns are properly used"
+            },
+            "legibilidad": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Code readability score (1-5)"
+            },
+            "mantenibilidad": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Code maintainability score (1-5)"
+            },
+            "rendimiento": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Performance score (1-5)"
+            },
+            "seguridad": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Security score (1-5)"
+            }
+          }
+        },
+        "problemas": {
+          "type": "object",
+          "description": "Issues found during review",
+          "properties": {
+            "criticos": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of critical issues"
+            },
+            "advertencias": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of warnings"
+            },
+            "sugerencias": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of suggestions"
+            },
+            "detalles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tipo": {
+                    "type": "string",
+                    "enum": ["legibilidad", "rendimiento", "seguridad", "arquitectura", "tests", "documentacion"]
+                  },
+                  "descripcion": {"type": "string"},
+                  "severidad": {
+                    "type": "string",
+                    "enum": ["info", "sugerencia", "advertencia", "critico"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "aprobacion": {
+          "type": "object",
+          "description": "Review approval status",
+          "properties": {
+            "estado": {
+              "type": "string",
+              "enum": ["aprobado", "aprobado_con_cambios", "rechazado", "requiere_revision"],
+              "description": "Review decision"
+            },
+            "cambios_solicitados": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Changes requested before approval"
+            },
+            "bloqueante": {
+              "type": "boolean",
+              "description": "Whether issues are blocking merge"
+            }
+          }
+        },
+        "metricas": {
+          "type": "object",
+          "description": "Code metrics",
+          "properties": {
+            "complejidad_ciclomatica": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cyclomatic complexity"
+            },
+            "duplicacion_codigo": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Code duplication percentage"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

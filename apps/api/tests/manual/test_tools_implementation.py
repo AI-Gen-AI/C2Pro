@@ -21,26 +21,9 @@ def test_imports():
     print("=" * 60)
 
     try:
-        from src.core.ai.tools import (
-            BaseTool,
-            ToolMetadata,
-            ToolResult,
-            ToolStatus,
-            get_tool,
-            get_tool_registry,
-            list_tools,
-            register_tool,
-        )
 
         print("[OK] Core tool imports successful")
 
-        from src.analysis.adapters.ai.tools import (
-            RiskExtractionInput,
-            RiskExtractionTool,
-            WBSExtractionInput,
-            WBSExtractionTool,
-            WBSItemOutput,
-        )
 
         print("[OK] Analysis tool imports successful")
         return True
@@ -59,13 +42,8 @@ def test_registry():
     print("=" * 60)
 
     try:
-        from src.core.ai.tools import get_tool_registry, list_tools
-
         # Import tools to trigger registration
-        from src.analysis.adapters.ai.tools import (
-            RiskExtractionTool,
-            WBSExtractionTool,
-        )
+        from src.core.ai.tools import get_tool_registry, list_tools
 
         registry = get_tool_registry()
         print(f"[OK] Registry initialized: {registry}")
@@ -114,7 +92,7 @@ def test_tool_retrieval():
         # Test latest version retrieval
         risk_tool_latest = get_tool("risk_extraction", version="latest")
         assert risk_tool_latest.version == "1.0"
-        print(f"\n[OK] Latest version resolution works")
+        print("\n[OK] Latest version resolution works")
 
         return True
     except Exception as e:
@@ -137,7 +115,7 @@ def test_metadata():
         risk_tool = get_tool("risk_extraction")
         metadata = risk_tool.metadata
 
-        print(f"Risk Extraction Tool Metadata:")
+        print("Risk Extraction Tool Metadata:")
         print(f"  - Name: {metadata.name}")
         print(f"  - Version: {metadata.version}")
         print(f"  - Description: {metadata.description}")
@@ -151,7 +129,7 @@ def test_metadata():
         wbs_tool = get_tool("wbs_extraction")
         metadata = wbs_tool.metadata
 
-        print(f"\nWBS Extraction Tool Metadata:")
+        print("\nWBS Extraction Tool Metadata:")
         print(f"  - Name: {metadata.name}")
         print(f"  - Version: {metadata.version}")
         print(f"  - Description: {metadata.description}")
@@ -186,7 +164,7 @@ def test_input_models():
             max_risks=10,
             filter_relevant=True,
         )
-        print(f"[OK] RiskExtractionInput created:")
+        print("[OK] RiskExtractionInput created:")
         print(f"  - document_text length: {len(risk_input.document_text)}")
         print(f"  - max_risks: {risk_input.max_risks}")
         print(f"  - filter_relevant: {risk_input.filter_relevant}")
@@ -195,19 +173,19 @@ def test_input_models():
         wbs_input = WBSExtractionInput(
             document_text="Sample technical spec...", max_items=50
         )
-        print(f"\n[OK] WBSExtractionInput created:")
+        print("\n[OK] WBSExtractionInput created:")
         print(f"  - document_text length: {len(wbs_input.document_text)}")
         print(f"  - max_items: {wbs_input.max_items}")
 
         # Test validation (max_risks out of range)
         try:
-            invalid_input = RiskExtractionInput(
+            RiskExtractionInput(
                 document_text="test", max_risks=100  # Should fail (max is 50)
             )
             print("\n[FAIL] Validation failed - should have rejected max_risks=100")
             return False
         except Exception:
-            print(f"\n[OK] Validation correctly rejected invalid max_risks")
+            print("\n[OK] Validation correctly rejected invalid max_risks")
 
         print("\n[OK] All input model tests passed")
         return True
@@ -242,7 +220,7 @@ def test_output_models():
             probability=RiskProbability.HIGH,
             impact=RiskImpact.CRITICAL,
         )
-        print(f"[OK] RiskItem created:")
+        print("[OK] RiskItem created:")
         print(f"  - title: {risk_item.title}")
         print(f"  - category: {risk_item.category.value}")
         print(f"  - probability: {risk_item.probability.value}")
@@ -257,7 +235,7 @@ def test_output_models():
             confidence=0.95,
             budget_allocated=50000.0,
         )
-        print(f"\n[OK] WBSItemOutput created:")
+        print("\n[OK] WBSItemOutput created:")
         print(f"  - code: {wbs_item.code}")
         print(f"  - name: {wbs_item.name}")
         print(f"  - item_type: {wbs_item.item_type}")
@@ -266,7 +244,7 @@ def test_output_models():
 
         # Test item_type validation
         try:
-            invalid_wbs = WBSItemOutput(
+            WBSItemOutput(
                 code="1.1",
                 name="Test",
                 item_type="invalid_type",  # Should fail
@@ -275,7 +253,7 @@ def test_output_models():
             print("\n[FAIL] Validation failed - should have rejected invalid item_type")
             return False
         except Exception:
-            print(f"\n[OK] Validation correctly rejected invalid item_type")
+            print("\n[OK] Validation correctly rejected invalid item_type")
 
         print("\n[OK] All output model tests passed")
         return True
@@ -297,20 +275,20 @@ def test_node_integration():
         # Import nodes to verify they compile
         from src.analysis.adapters.graph import nodes
 
-        print(f"[OK] nodes.py imported successfully")
+        print("[OK] nodes.py imported successfully")
 
         # Verify the updated functions exist
         assert hasattr(nodes, "risk_extractor_node")
         assert hasattr(nodes, "wbs_extractor_node")
-        print(f"[OK] risk_extractor_node exists")
-        print(f"[OK] wbs_extractor_node exists")
+        print("[OK] risk_extractor_node exists")
+        print("[OK] wbs_extractor_node exists")
 
         # Check if they're async functions
         import inspect
 
         assert inspect.iscoroutinefunction(nodes.risk_extractor_node)
         assert inspect.iscoroutinefunction(nodes.wbs_extractor_node)
-        print(f"[OK] Node functions are async")
+        print("[OK] Node functions are async")
 
         print("\n[OK] Node integration test passed")
         return True
@@ -341,18 +319,18 @@ def test_tool_protocol():
 
         # Check required methods exist
         assert hasattr(risk_tool, "execute")
-        assert hasattr(risk_tool, "__call__")
+        assert callable(risk_tool)
         assert hasattr(risk_tool, "extract_input_from_state")
         assert hasattr(risk_tool, "inject_output_into_state")
         assert hasattr(risk_tool, "metadata")
-        print(f"\n[OK] Risk tool has all required methods")
+        print("\n[OK] Risk tool has all required methods")
 
         assert hasattr(wbs_tool, "execute")
-        assert hasattr(wbs_tool, "__call__")
+        assert callable(wbs_tool)
         assert hasattr(wbs_tool, "extract_input_from_state")
         assert hasattr(wbs_tool, "inject_output_into_state")
         assert hasattr(wbs_tool, "metadata")
-        print(f"[OK] WBS tool has all required methods")
+        print("[OK] WBS tool has all required methods")
 
         print("\n[OK] Protocol implementation test passed")
         return True

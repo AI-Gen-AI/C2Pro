@@ -17,13 +17,14 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 
 from src.core import database as database_module
 from src.core.auth.models import Tenant, User
-from src.core.database import Base, get_session_with_tenant
+from src.core.database import Base
+from src.core.dlq.models import DLQFailedTask
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
@@ -57,6 +58,7 @@ async def sqlite_engine():
                 ProjectORM.__table__,
                 DocumentORM.__table__,
                 ClauseORM.__table__,
+                DLQFailedTask.__table__,
             ],
         )
 

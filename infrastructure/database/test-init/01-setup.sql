@@ -23,3 +23,6 @@ GRANT CREATE ON SCHEMA public TO nonsuperuser;
 
 -- Allow nonsuperuser to create extensions (needed for some PostgreSQL features)
 ALTER USER nonsuperuser WITH CREATEROLE;
+
+-- Ensure pgvector is available for DB-backed coherence/document tests.
+CREATE EXTENSION IF NOT EXISTS vector;

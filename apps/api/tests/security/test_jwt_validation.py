@@ -5,6 +5,8 @@ import pytest
 from httpx import AsyncClient
 
 from src.core.auth.models import Tenant, User  # Import models for database setup
+
+
 @pytest.mark.asyncio
 @pytest.mark.security
 async def test_protected_endpoint_with_valid_jwt(
@@ -154,8 +156,8 @@ async def test_jwt_refresh_token_valid(client: AsyncClient, create_test_token, c
     """
     # === Arrange ===
     # Create tenant and user directly in database, bypassing test transaction
-    from src.core.database import _session_factory
     from src.core.auth.models import Tenant, User
+    from src.core.database import _session_factory
 
     test_user_id = uuid4()
     test_tenant_id = uuid4()

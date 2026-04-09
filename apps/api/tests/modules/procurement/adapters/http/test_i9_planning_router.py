@@ -12,20 +12,20 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from src.core.security import get_current_tenant_id
 from src.procurement.adapters.http.router import (
-    get_planning_service,
+    get_procurement_plan_use_case,
     router,
 )
 from src.procurement.application.dtos import PlanningDecision
-from src.core.security import get_current_tenant_id
 
 
-class _FakePlanningService:
-    async def build_procurement_plan(
+class _FakePlanningUseCase:
+    async def execute(
         self,
-        project_id: UUID,
-        tenant_id: UUID,
-        required_on_site: date,
+        project_id: UUID,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
+        tenant_id: UUID,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
+        required_on_site: date,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
     ) -> PlanningDecision:
         return PlanningDecision(
             plan_fingerprint="f" * 64,
@@ -34,12 +34,12 @@ class _FakePlanningService:
         )
 
 
-class _FailingPlanningService:
-    async def build_procurement_plan(
+class _FailingPlanningUseCase:
+    async def execute(
         self,
-        project_id: UUID,
-        tenant_id: UUID,
-        required_on_site: date,
+        project_id: UUID,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
+        tenant_id: UUID,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
+        required_on_site: date,  # noqa: ARG002 - HTTP contract fake preserves the real call signature
     ) -> PlanningDecision:
         raise RuntimeError("snapshot unavailable")
 
@@ -49,7 +49,7 @@ async def test_i9_planning_endpoint_returns_contract_fields() -> None:
     """I9 HTTP contract: endpoint must return fingerprint, conflicts, and review gate flag."""
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
-    app.dependency_overrides[get_planning_service] = lambda: _FakePlanningService()
+    app.dependency_overrides[get_procurement_plan_use_case] = lambda: _FakePlanningUseCase()
     app.dependency_overrides[get_current_tenant_id] = lambda: UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
     async with AsyncClient(
@@ -78,7 +78,7 @@ async def test_i9_planning_endpoint_maps_snapshot_failures_to_503() -> None:
     """I9 HTTP contract: snapshot retrieval failures must map to 503 for clients."""
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
-    app.dependency_overrides[get_planning_service] = lambda: _FailingPlanningService()
+    app.dependency_overrides[get_procurement_plan_use_case] = lambda: _FailingPlanningUseCase()
     app.dependency_overrides[get_current_tenant_id] = lambda: UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
 

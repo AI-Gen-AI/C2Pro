@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_session
 from src.core.repositories import (
     get_project_repository as get_core_project_repository,
+)
+from src.core.repositories import (
     get_wbs_repository as get_core_wbs_repository,
 )
 from src.core.security import CurrentTenantId, CurrentUserId
@@ -24,6 +26,9 @@ from src.stakeholders.application.dtos import (
     RaciAssignmentUpsertRequest,
     RaciAssignmentUpsertResponse,
     RaciMatrixViewResponse,
+)
+from src.stakeholders.application.get_global_raci_matrix_use_case import (
+    GetGlobalRaciMatrixUseCase,
 )
 from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixUseCase
 from src.stakeholders.application.upsert_raci_assignment_use_case import (
@@ -73,6 +78,16 @@ def get_matrix_use_case(
         project_repository=project_repo,
     )
 
+
+def get_global_matrix_use_case(
+    project_repo: ProjectRepository = Depends(get_project_repository),
+    matrix_use_case: GetRaciMatrixUseCase = Depends(get_matrix_use_case),
+) -> GetGlobalRaciMatrixUseCase:
+    return GetGlobalRaciMatrixUseCase(
+        project_repository=project_repo,
+        project_matrix_use_case=matrix_use_case,
+    )
+
 def get_upsert_use_case(
     stakeholder_repo: SqlAlchemyStakeholderRepository = Depends(get_stakeholder_repository),
     wbs_repo: IWBSRepository = Depends(get_wbs_repository),
@@ -91,20 +106,9 @@ def get_upsert_use_case(
 async def get_global_raci_matrix(
     tenant_id: CurrentTenantId,
     _user_id: CurrentUserId,
-    use_case: GetRaciMatrixUseCase = Depends(get_matrix_use_case),
-    project_repo: ProjectRepository = Depends(get_project_repository),
+    use_case: GetGlobalRaciMatrixUseCase = Depends(get_global_matrix_use_case),
 ) -> RaciMatrixViewResponse:
-    from src.stakeholders.application.dtos import RaciMatrixTaskRow
-    all_projects = await project_repo.list(tenant_id=tenant_id)
-    all_rows: list[RaciMatrixTaskRow] = []
-    for project in all_projects:
-        try:
-            matrix = await use_case.execute(project_id=project.id, tenant_id=tenant_id)
-            for row in matrix.matrix:
-                all_rows.append(row)
-        except ValueError:
-            continue
-    return RaciMatrixViewResponse(matrix=all_rows)
+    return await use_case.execute(tenant_id=tenant_id)
 
 
 @router.get(

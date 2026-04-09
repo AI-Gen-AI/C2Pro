@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from src.shared_kernel.enums import AlertSeverity
 from src.analysis.application.dtos import AlertCreate
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
+from src.shared_kernel.enums import AlertSeverity, AlertType
 
 TEMPLATES: dict[str, str] = {
     "R14": (
@@ -80,6 +80,7 @@ class AlertGenerator:
                 AlertCreate(
                     project_id=self._project_id,
                     analysis_id=self._analysis_id,
+                    alert_type=AlertType.COHERENCE,  # TASK-BCK-026: Set alert type
                     title=self._title_for(rule_id),
                     description=description,
                     severity=self._severity_for(rule_id, item),
@@ -96,6 +97,66 @@ class AlertGenerator:
                 )
             )
         return alerts
+
+    def generate_risk_alerts(self, risk_items: list[dict]) -> list[AlertCreate]:
+        """
+        Generate risk alerts from AI extraction (TASK-BCK-026).
+
+        Args:
+            risk_items: List of risk dictionaries from AI extraction
+
+        Returns:
+            List of AlertCreate DTOs
+        """
+        alerts: list[AlertCreate] = []
+
+        for item in risk_items:
+            severity = self._map_risk_severity(item)
+            title = item.get("summary") or item.get("title") or "Risk identified"
+            description = item.get("description") or "Risk detected by AI extraction."
+            category = item.get("category") or "risk"
+            impact_level = item.get("impact_level")
+            confidence = item.get("confidence")
+
+            alerts.append(
+                AlertCreate(
+                    project_id=self._project_id,
+                    analysis_id=self._analysis_id,
+                    alert_type=AlertType.RISK,
+                    title=title,
+                    description=description,
+                    severity=severity,
+                    category=category,
+                    impact_level=impact_level,
+                    alert_metadata={
+                        "confidence": confidence,
+                        "raw": item,
+                    },
+                )
+            )
+
+        return alerts
+
+    def _map_risk_severity(self, risk_item: dict) -> AlertSeverity:
+        """
+        Map risk impact_level to AlertSeverity.
+
+        Args:
+            risk_item: Risk dictionary with impact_level field
+
+        Returns:
+            AlertSeverity enum value
+        """
+        impact_level = str(risk_item.get("impact_level", "")).lower()
+
+        severity_mapping = {
+            "critical": AlertSeverity.CRITICAL,
+            "high": AlertSeverity.HIGH,
+            "medium": AlertSeverity.MEDIUM,
+            "low": AlertSeverity.LOW,
+        }
+
+        return severity_mapping.get(impact_level, AlertSeverity.LOW)
 
     def _should_group(self, rule_id: str, items: list[dict]) -> bool:
         return rule_id in SUMMARY_TEMPLATES and len(items) > 1
@@ -115,6 +176,7 @@ class AlertGenerator:
         return AlertCreate(
             project_id=self._project_id,
             analysis_id=self._analysis_id,
+            alert_type=AlertType.COHERENCE,  # TASK-BCK-026: Set alert type
             title=self._title_for(rule_id),
             description=self._render_message(
                 rule_id,

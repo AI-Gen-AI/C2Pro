@@ -4,11 +4,12 @@ Domain models for the Stakeholders bounded context.
 Refers to Suite ID: TS-UD-STK-ENT-001.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Literal
 from uuid import UUID, uuid4
-from typing import Literal, Any
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,7 @@ class StakeholderQuadrant(str, Enum):
     MONITOR = "monitor"  # low/low
 
 
-from src.shared_kernel.enums import RACIRole  # noqa: F401 — re-export
+from src.shared_kernel.enums import RACIRole  # noqa: E402, F401
 
 
 @dataclass

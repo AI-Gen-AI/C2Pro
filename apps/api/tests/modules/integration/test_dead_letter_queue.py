@@ -4,7 +4,7 @@ Dead letter queue integration tests.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from src.core.events.dead_letter_queue import DeadLetterQueue, DLQMessage
 

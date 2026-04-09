@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from jinja2 import Environment, Template, select_autoescape
+from jinja2 import Environment, select_autoescape
 
 logger = structlog.get_logger()
 

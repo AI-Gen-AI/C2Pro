@@ -3,7 +3,7 @@ Use case for reviewing stakeholder approvals.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -34,7 +34,7 @@ class ReviewStakeholderApprovalUseCase:
 
         stakeholder.approval_status = _normalize_status(status, correction_data)
         stakeholder.reviewed_by = user_id
-        stakeholder.reviewed_at = datetime.utcnow()
+        stakeholder.reviewed_at = datetime.now(UTC)
         stakeholder.review_comment = feedback_comment
 
         await self.repository.update(stakeholder)

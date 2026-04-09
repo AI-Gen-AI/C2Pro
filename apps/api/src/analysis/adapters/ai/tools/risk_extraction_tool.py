@@ -60,7 +60,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     async def _execute_impl(
         self,
         input_data: RiskExtractionInput,
-        tenant_id: UUID | None,
+        _tenant_id: UUID | None,
         ai_response: AIResponse,
     ) -> list[RiskItem]:
         """Parse AI response and apply domain logic."""

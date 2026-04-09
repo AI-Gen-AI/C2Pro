@@ -12,8 +12,8 @@ from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnal
 from src.core.observability.router import get_analysis_repository, get_observability_service
 from src.core.observability.service import ObservabilityService
 from src.procurement.adapters.http.router import (
-    get_bom_repository,
     get_bom_item_use_case,
+    get_bom_repository,
     get_create_bom_item_use_case,
     get_create_wbs_item_use_case,
     get_delete_bom_item_use_case,
@@ -34,8 +34,8 @@ from src.procurement.application.use_cases import (
     DeleteBOMItemUseCase,
     DeleteWBSItemUseCase,
     GetBOMItemUseCase,
-    GetWBSTreeUseCase,
     GetWBSItemUseCase,
+    GetWBSTreeUseCase,
     ListBOMItemsUseCase,
     ListWBSItemsUseCase,
     UpdateBOMItemUseCase,
@@ -50,8 +50,10 @@ from src.wbs.adapters.http.router import (
 )
 from src.wbs.adapters.http.router import (
     get_move_wbs_item_use_case,
-    get_update_wbs_item_use_case as get_wbs_update_item_use_case,
     get_wbs_use_case,
+)
+from src.wbs.adapters.http.router import (
+    get_update_wbs_item_use_case as get_wbs_update_item_use_case,
 )
 from src.wbs.adapters.persistence import InMemoryWBSRepository
 from src.wbs.application.use_cases import (
@@ -60,7 +62,8 @@ from src.wbs.application.use_cases import (
 from src.wbs.application.use_cases import (
     DeleteWBSItemUseCase as DeleteAppWBSItemUseCase,
 )
-from src.wbs.application.use_cases import GetWBSUseCase, MoveWBSItemUseCase, UpdateWBSItemUseCase as UpdateAppWBSItemUseCase
+from src.wbs.application.use_cases import GetWBSUseCase, MoveWBSItemUseCase
+from src.wbs.application.use_cases import UpdateWBSItemUseCase as UpdateAppWBSItemUseCase
 
 API_ROOT = Path(__file__).resolve().parents[2]
 

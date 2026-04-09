@@ -7,8 +7,9 @@ from __future__ import annotations
 import asyncio
 import math
 import time
-from datetime import datetime, timezone
-from typing import Callable, NamedTuple, Protocol
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import NamedTuple, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -51,7 +52,7 @@ class MCPRateLimiter:
         self.config = config
         self.audit_service = audit_service
         self._time_provider = time_provider or time.time
-        self._datetime_provider = datetime_provider or (lambda: datetime.now(timezone.utc))
+        self._datetime_provider = datetime_provider or (lambda: datetime.now(UTC))
         self._requests: dict[str, list[float]] = {}
         self._last_midnight_reset: dict[str, datetime] = {}
         self._lock = asyncio.Lock()
@@ -97,4 +98,4 @@ class MCPRateLimiter:
 
     @staticmethod
     def _get_midnight_utc(dt: datetime) -> datetime:
-        return dt.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        return dt.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)

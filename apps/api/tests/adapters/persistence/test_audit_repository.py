@@ -5,7 +5,8 @@ Refers to Suite ID: TS-INT-DB-AUD-001.
 """
 
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -19,9 +20,8 @@ from testcontainers.postgres import PostgresContainer
 
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
-from src.core.security.audit_trail import AuditTrail
 from src.core.security.adapters.persistence.audit_repository import SQLAlchemyAuditRepository
-from src.core.security.adapters.persistence.models import AuditLogORM
+from src.core.security.audit_trail import AuditTrail
 
 
 def _ensure_test_fk_stub_tables() -> None:
@@ -85,7 +85,7 @@ async def test_audit_repository_persists_and_filters_by_tenant(session: AsyncSes
     """
     Audit repository should persist events and filter by tenant.
     """
-    trail = AuditTrail(lambda: datetime(2026, 2, 7, 12, 0, tzinfo=timezone.utc))
+    trail = AuditTrail(lambda: datetime(2026, 2, 7, 12, 0, tzinfo=UTC))
     tenant_a = str(uuid4())
     tenant_b = str(uuid4())
 

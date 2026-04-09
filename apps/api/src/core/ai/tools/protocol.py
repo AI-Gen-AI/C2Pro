@@ -8,8 +8,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from .metadata import ToolMetadata, ToolResult
 
 if TYPE_CHECKING:

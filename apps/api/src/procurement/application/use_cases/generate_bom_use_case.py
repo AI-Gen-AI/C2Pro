@@ -49,4 +49,4 @@ class GenerateBOMUseCase:
         if not bom_items:
             return []
 
-        return await self.bom_repository.bulk_create(bom_items)
+        return await self.bom_repository.bulk_create(bom_items, tenant_id)

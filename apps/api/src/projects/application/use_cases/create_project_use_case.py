@@ -3,14 +3,13 @@ Create Project Use Case.
 
 Handles the creation of a new project with business rule validation.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import structlog
 
 from src.projects.domain.models import Project, ProjectStatus, ProjectType
 from src.projects.ports.project_repository import ProjectRepository
-
 
 logger = structlog.get_logger()
 
@@ -73,7 +72,7 @@ class CreateProjectUseCase:
                 raise ValueError(f"Project with code '{code}' already exists")
 
         # Create domain entity
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         project = Project(
             id=uuid4(),
             tenant_id=tenant_id,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+import tempfile
 from typing import BinaryIO
 from uuid import UUID
 
@@ -20,14 +21,29 @@ logger = structlog.get_logger()
 
 # Use /app/uploads for Docker compatibility with shared volumes
 _DEFAULT_UPLOAD_DIR = Path("/app/uploads")
+_FALLBACK_UPLOAD_DIR = Path(tempfile.gettempdir()) / "c2pro-uploads"
 
 
 class LocalFileStorageService(IStorageService):
     """Stores files on the local filesystem."""
 
     def __init__(self, base_dir: Path | None = None) -> None:
-        self._base_dir = base_dir or _DEFAULT_UPLOAD_DIR
-        self._base_dir.mkdir(parents=True, exist_ok=True)
+        preferred_dir = base_dir or _DEFAULT_UPLOAD_DIR
+        self._base_dir = self._ensure_writable_directory(preferred_dir)
+
+    @staticmethod
+    def _ensure_writable_directory(preferred_dir: Path) -> Path:
+        try:
+            preferred_dir.mkdir(parents=True, exist_ok=True)
+            return preferred_dir
+        except OSError:
+            _FALLBACK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            logger.warning(
+                "local_storage_fallback_dir",
+                preferred=str(preferred_dir),
+                fallback=str(_FALLBACK_UPLOAD_DIR),
+            )
+            return _FALLBACK_UPLOAD_DIR
 
     async def upload_file(self, file_content: BinaryIO, file_id: UUID, file_extension: str) -> str:
         dest = self._base_dir / f"{file_id}{file_extension}"

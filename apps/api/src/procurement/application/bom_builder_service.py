@@ -1,23 +1,23 @@
 from __future__ import annotations
-from typing import List, TypedDict
-from uuid import UUID
+
+from typing import TypedDict
+
 import structlog
-from pydantic import BaseModel
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 # Import from the new domain models file
-from src.procurement.domain.models import WBSItem, BOMItem, BOMItemList, BudgetItem
+from src.procurement.domain.models import BOMItem, BOMItemList, BudgetItem, WBSItem
 
 logger = structlog.get_logger(__name__)
 
 # This is the state for the LangGraph orchestrator, belongs in the application layer.
 class BOMBuildingState(TypedDict):
     """Represents the state of the BOM generation process."""
-    wbs_items: List[WBSItem]
-    budget_items: List[BudgetItem]
-    bom_items: List[BOMItem]
+    wbs_items: list[WBSItem]
+    budget_items: list[BudgetItem]
+    bom_items: list[BOMItem]
 
 class BOMBuilderService:
     """
@@ -39,13 +39,13 @@ class BOMBuilderService:
 
         wbs_codes_that_are_parents = {item.parent_code for item in state["wbs_items"] if item.parent_code}
         leaf_wbs_items = [item for item in state["wbs_items"] if item.code not in wbs_codes_that_are_parents]
-        
+
         all_bom_items = []
-        
+
         batch_size = 5
         for i in range(0, len(leaf_wbs_items), batch_size):
             batch = leaf_wbs_items[i:i+batch_size]
-            
+
             system_prompt = """
 You are a Senior Supply Chain Architect and expert in EPC projects. Your task is to analyze a list of Work Breakdown Structure (WBS) work packages and a list of budget items to create a detailed Bill of Materials (BOM).
 
@@ -79,16 +79,16 @@ You are a Senior Supply Chain Architect and expert in EPC projects. Your task is
             budget_text = "\n".join([f"ID: {item.id}, Code: {item.code}, Name: {item.name}, Amount: {item.amount}" for item in state["budget_items"]])
 
             bom_item_list = chain.invoke({"wbs_items": wbs_text, "budget_items": budget_text})
-            
+
             for bom_item in bom_item_list.items:
                 if batch:
                     bom_item.project_id = batch[0].project_id
-            
+
             all_bom_items.extend(bom_item_list.items)
 
         return {"bom_items": all_bom_items}
 
-    def run(self, wbs_items: List[WBSItem], budget_items: List[BudgetItem]) -> dict:
+    def run(self, wbs_items: list[WBSItem], budget_items: list[BudgetItem]) -> dict:
         """Entry point to run the BOM building graph."""
         initial_state: BOMBuildingState = {
             "wbs_items": wbs_items,

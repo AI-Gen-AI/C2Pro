@@ -3,11 +3,11 @@ C2Pro - Authentication Dependency Tests
 TS-E2E-SEC-TNT-001
 """
 
-import jwt
-from unittest.mock import AsyncMock, Mock, patch
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+import jwt
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
@@ -20,7 +20,12 @@ from src.core.auth.bootstrap_lookup import (
     BootstrapUserRecord,
     lookup_user_by_email,
 )
-from src.core.auth.dependencies import _provision_clerk_user, _try_clerk_jwt, _try_local_jwt, get_current_user
+from src.core.auth.dependencies import (
+    _provision_clerk_user,
+    _try_clerk_jwt,
+    _try_local_jwt,
+    get_current_user,
+)
 from src.core.auth.models import Tenant, User
 
 
@@ -489,17 +494,17 @@ async def test_get_current_user_maps_bootstrap_policy_block_to_http_401(monkeypa
 
 
 def test_bootstrap_fallback_mode_blocks_production(monkeypatch):
-    """Should deny fallback in production when mode is non_production."""
+    """Should deny fallback in production by default."""
     monkeypatch.setattr(settings, "environment", "production")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "non_production", raising=False)
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", False)
 
     assert bootstrap_lookup.is_bootstrap_fallback_allowed() is False
 
 
-def test_bootstrap_fallback_mode_allows_test_environment(monkeypatch):
-    """Should allow fallback in test when mode is non_production."""
-    monkeypatch.setattr(settings, "environment", "test")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "non_production", raising=False)
+def test_bootstrap_fallback_mode_allows_emergency_override(monkeypatch):
+    """Should allow fallback only when AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY=true."""
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", True)
 
     assert bootstrap_lookup.is_bootstrap_fallback_allowed() is True
 
@@ -507,7 +512,7 @@ def test_bootstrap_fallback_mode_allows_test_environment(monkeypatch):
 def test_bootstrap_ci_guard_blocks_orm_fallback_in_production(monkeypatch):
     """Production policy should emit blocked resolution, never orm_fallback."""
     monkeypatch.setattr(settings, "environment", "production")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "deny")
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", False)
     monkeypatch.setattr(settings, "auth_bootstrap_emit_metrics", True)
 
     with patch("src.core.auth.bootstrap_lookup.logger.info") as mock_info:
@@ -526,7 +531,7 @@ def test_bootstrap_ci_guard_blocks_orm_fallback_in_production(monkeypatch):
 async def test_bootstrap_sql_path_emits_resolution_telemetry(monkeypatch):
     """SQL success path should emit bootstrap_sql resolution telemetry."""
     monkeypatch.setattr(settings, "environment", "test")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "non_production")
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", False)
     monkeypatch.setattr(settings, "auth_bootstrap_emit_metrics", True)
 
     db = Mock()
@@ -563,7 +568,7 @@ async def test_orm_fallback_path_emits_resolution_telemetry_when_allowed(monkeyp
     user_id = uuid4()
 
     monkeypatch.setattr(settings, "environment", "test")
-    monkeypatch.setattr(settings, "auth_bootstrap_fallback_mode", "non_production")
+    monkeypatch.setattr(settings, "auth_bootstrap_allow_fallback_emergency", True)
     monkeypatch.setattr(settings, "auth_bootstrap_emit_metrics", True)
 
     db = Mock()

@@ -1,6 +1,19 @@
 """
 C2Pro - PII Anonymization Service (GDPR Compliant)
 
+DEPRECATED: This module is deprecated. Use src.anonymizer instead.
+
+Migration:
+    from src.anonymizer.application.anonymization_service import AnonymizationService
+    from src.anonymizer.domain.pii_detector_service import PiiDetectorService
+
+    detector = PiiDetectorService()
+    service = AnonymizationService(pii_detector=detector)
+    # For async:
+    result = await service.anonymize(text, config)
+
+---
+
 This service detects and anonymizes Personally Identifiable Information (PII)
 in documents before sending them to AI services like Anthropic Claude.
 
@@ -16,31 +29,19 @@ Security Policy:
 - ANONYMIZE: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, IBAN_CODE, DNI/NIE
 - PRESERVE: DATE_TIME, MONEY, ORGANIZATION (needed for AI coherence analysis)
 
-Usage:
-    from services.privacy.anonymizer import get_anonymizer
-
-    anonymizer = get_anonymizer()
-    result = anonymizer.anonymize_document(text)
-
-    # Send result.anonymized_text to AI
-    ai_response = ai_service.process(result.anonymized_text)
-
-    # Restore real names in response
-    clean_response = anonymizer.deanonymize_response(ai_response, result.mapping)
-
-Version: 1.0.0
+Version: 1.0.0 (deprecated)
 Date: 2026-01-13
 """
 
-import re
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+import re
 from dataclasses import dataclass, field
 from threading import Lock
+from typing import Any, Optional
 
 # Optional presidio imports - not required for testing
 try:
-    from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
+    from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
     from presidio_analyzer.nlp_engine import NlpEngineProvider
     from presidio_anonymizer import AnonymizerEngine
     from presidio_anonymizer.entities import OperatorConfig
@@ -76,15 +77,15 @@ class AnonymizedResult:
     anonymized_text: str
     """Text with PII replaced by placeholders (e.g., <PERSON_1>)."""
 
-    mapping: Dict[str, str]
+    mapping: dict[str, str]
     """Mapping from placeholder to original value.
     Example: {"<PERSON_1>": "Juan Pérez", "<EMAIL_1>": "juan@empresa.com"}
     """
 
-    entities_found: List[Dict[str, any]] = field(default_factory=list)
+    entities_found: list[dict[str, any]] = field(default_factory=list)
     """List of detected entities with metadata (type, score, position)."""
 
-    statistics: Dict[str, int] = field(default_factory=dict)
+    statistics: dict[str, int] = field(default_factory=dict)
     """Statistics about anonymization (e.g., {"PERSON": 3, "EMAIL_ADDRESS": 2})."""
 
 
@@ -179,6 +180,16 @@ class PiiAnonymizerService:
     """
     Singleton service for PII anonymization using Microsoft Presidio.
 
+    DEPRECATED: This service is deprecated. Use src.anonymizer instead.
+
+    Migration path:
+        from src.anonymizer.application.anonymization_service import AnonymizationService
+        from src.anonymizer.domain.pii_detector_service import PiiDetectorService
+
+        detector = PiiDetectorService()
+        service = AnonymizationService(pii_detector=detector)
+        result = await service.anonymize(text, config)
+
     This service loads the Spacy model ONCE and reuses it for all requests.
     Loading the model on every request would consume too much memory and time.
 
@@ -188,6 +199,7 @@ class PiiAnonymizerService:
     _instance: Optional['PiiAnonymizerService'] = None
     _lock: Lock = Lock()
     _initialized: bool = False
+    _deprecated_warned: bool = False
 
     # Entity types to anonymize (CRITICAL: Only physical persons, not organizations)
     ENTITIES_TO_ANONYMIZE = [
@@ -216,6 +228,17 @@ class PiiAnonymizerService:
 
     def __init__(self):
         """Initialize the anonymizer service (only once)."""
+        import warnings
+        if not PiiAnonymizerService._deprecated_warned:
+            warnings.warn(
+                "PiiAnonymizerService is deprecated. "
+                "Use src.anonymizer.application.anonymization_service.AnonymizationService instead. "
+                "See migration path in class docstring.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            PiiAnonymizerService._deprecated_warned = True
+
         if self._initialized:
             return
 
@@ -228,9 +251,9 @@ class PiiAnonymizerService:
                 self._nlp_engine = None
                 self._analyzer = None
                 self._anonymizer_engine = None
-                self._entity_counters: Dict[str, int] = {}
-                self._entity_mapping: Dict[str, str] = {}
-                self._reverse_mapping: Dict[str, str] = {}
+                self._entity_counters: dict[str, int] = {}
+                self._entity_mapping: dict[str, str] = {}
+                self._reverse_mapping: dict[str, str] = {}
                 self._initialized = True
                 return
 
@@ -246,9 +269,9 @@ class PiiAnonymizerService:
             self._anonymizer_engine = AnonymizerEngine()
 
             # Step 4: Initialize entity counters for consistent mapping
-            self._entity_counters: Dict[str, int] = {}
-            self._entity_mapping: Dict[str, str] = {}  # placeholder -> original
-            self._reverse_mapping: Dict[str, str] = {}  # original -> placeholder
+            self._entity_counters: dict[str, int] = {}
+            self._entity_mapping: dict[str, str] = {}  # placeholder -> original
+            self._reverse_mapping: dict[str, str] = {}  # original -> placeholder
 
             self._initialized = True
             logger.info("PII Anonymizer Service initialized successfully")
@@ -437,8 +460,8 @@ class PiiAnonymizerService:
 
     def _anonymize_with_regex_fallback(self, text: str) -> AnonymizedResult:
         replacements: list[tuple[int, int, str]] = []
-        entities_metadata: List[Dict[str, Any]] = []
-        entity_stats: Dict[str, int] = {}
+        entities_metadata: list[dict[str, Any]] = []
+        entity_stats: dict[str, int] = {}
 
         for entity_type, pattern in _FALLBACK_PATTERNS:
             for match in pattern.finditer(text):
@@ -526,7 +549,7 @@ class PiiAnonymizerService:
     def deanonymize_response(
         self,
         text: str,
-        mapping: Dict[str, str]
+        mapping: dict[str, str]
     ) -> str:
         """
         Restore original values in text using mapping.
@@ -575,7 +598,7 @@ class PiiAnonymizerService:
         self._entity_mapping.clear()
         self._reverse_mapping.clear()
 
-    def get_statistics(self) -> Dict[str, int]:
+    def get_statistics(self) -> dict[str, int]:
         """
         Get current entity counter statistics.
 
@@ -589,7 +612,7 @@ class PiiAnonymizerService:
 # SINGLETON ACCESSOR
 # =====================================================
 
-_anonymizer_instance: Optional[PiiAnonymizerService] = None
+_anonymizer_instance: PiiAnonymizerService | None = None
 
 
 def get_anonymizer() -> PiiAnonymizerService:
@@ -618,7 +641,7 @@ def get_anonymizer() -> PiiAnonymizerService:
 # UTILITY FUNCTIONS
 # =====================================================
 
-def anonymize_text_simple(text: str) -> Tuple[str, Dict[str, str]]:
+def anonymize_text_simple(text: str) -> tuple[str, dict[str, str]]:
     """
     Simple convenience function for anonymizing text.
 
@@ -640,7 +663,7 @@ def anonymize_text_simple(text: str) -> Tuple[str, Dict[str, str]]:
     return result.anonymized_text, result.mapping
 
 
-def deanonymize_text_simple(text: str, mapping: Dict[str, str]) -> str:
+def deanonymize_text_simple(text: str, mapping: dict[str, str]) -> str:
     """
     Simple convenience function for deanonymizing text.
 
@@ -660,3 +683,23 @@ def deanonymize_text_simple(text: str, mapping: Dict[str, str]) -> str:
     """
     anonymizer = get_anonymizer()
     return anonymizer.deanonymize_response(text, mapping)
+
+
+# =============================================================================
+# DEPRECATED: Migration reference
+# =============================================================================
+# The following modules provide the new (non-deprecated) anonymization services:
+#
+# Primary:
+#   from src.anonymizer.application.anonymization_service import AnonymizationService
+#   from src.anonymizer.domain.pii_detector_service import PiiDetectorService
+#
+# Usage:
+#   detector = PiiDetectorService()
+#   service = AnonymizationService(pii_detector=detector)
+#   # For async usage:
+#   result = await service.anonymize(text, config)
+#
+# For backward compatibility during migration, the old PiiAnonymizerService
+# will continue to work but will emit deprecation warnings.
+# =============================================================================

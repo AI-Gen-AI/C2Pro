@@ -9,6 +9,7 @@ Refers to Suite ID: TS-UA-DTO-ALL-001.
 """
 from datetime import date, datetime
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import domain enums
@@ -33,8 +34,7 @@ class ProjectCreateRequest(BaseModel):
     @field_validator("end_date")
     @classmethod
     def validate_end_date(cls, v: datetime | None, info) -> datetime | None:
-        if v and "start_date" in info.data and info.data["start_date"]:
-            if v <= info.data["start_date"]:
+        if v and "start_date" in info.data and info.data["start_date"] and v <= info.data["start_date"]:
                 raise ValueError("end_date must be after start_date")
         return v
 

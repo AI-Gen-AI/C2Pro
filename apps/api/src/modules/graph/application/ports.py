@@ -4,7 +4,7 @@ Test Suite ID: TS-I5-GRAPH-APP-001
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.modules.extraction.domain.entities import ExtractedClause
@@ -24,7 +24,7 @@ class GraphRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_node(self, node_id: UUID) -> Optional[GraphNode]:
+    async def get_node(self, node_id: UUID) -> GraphNode | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -38,7 +38,7 @@ class GraphBuilderService:
     def __init__(
         self,
         graph_repository: GraphRepository,
-        langsmith_client: Optional[LangSmithClientProtocol] = None,
+        langsmith_client: LangSmithClientProtocol | None = None,
     ) -> None:
         self.graph_repository = graph_repository
         self.langsmith_client = langsmith_client

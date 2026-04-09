@@ -7,14 +7,13 @@ Tests that feature flags actually control endpoint availability:
 3. Feature flag state is logged at startup
 """
 
-import pytest
 from unittest.mock import patch
-from fastapi import FastAPI, Depends
+
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from src.config import settings
 from src.core.middleware.feature_flags import require_feature
-
 
 # ===========================================
 # require_feature DEPENDENCY TESTS

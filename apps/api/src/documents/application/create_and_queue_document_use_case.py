@@ -2,14 +2,14 @@
 Use Case for creating a document record and queuing it for processing.
 """
 import os
-from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
-from src.config import settings # Keep settings for validation for now
-from src.documents.domain.models import Document, DocumentType, DocumentStatus
+from src.config import settings  # Keep settings for validation for now
+from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
+
 
 class CreateAndQueueDocumentUseCase:
     def __init__(self, document_repository: IDocumentRepository):
@@ -40,7 +40,7 @@ class CreateAndQueueDocumentUseCase:
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. Allowed types: {', '.join(settings.allowed_document_types)}",
             )
-        
+
         # 2. Get tenant_id
         tenant_id = await self.document_repository.get_project_tenant_id(project_id)
         if not tenant_id:

@@ -4,7 +4,6 @@ Test Suite ID: TS-I12-OBS-DOM-001
 """
 
 import contextvars
-from typing import Optional
 from uuid import uuid4
 
 import pytest
@@ -13,14 +12,14 @@ from src.modules.observability.domain.entities import TraceContext
 
 
 class _TraceContextManager:
-    _current: contextvars.ContextVar[Optional[TraceContext]] = contextvars.ContextVar(
+    _current: contextvars.ContextVar[TraceContext | None] = contextvars.ContextVar(
         "current_trace_context", default=None
     )
 
     def set_context(self, context: TraceContext) -> None:
         self._current.set(context)
 
-    def get_context(self) -> Optional[TraceContext]:
+    def get_context(self) -> TraceContext | None:
         return self._current.get()
 
     def clear_context(self) -> None:

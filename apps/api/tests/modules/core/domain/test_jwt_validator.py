@@ -4,7 +4,7 @@ JWT validation domain tests.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import jwt
@@ -127,7 +127,7 @@ class TestJwtValidator:
         include_sub: bool = True,
         sub: str | None = None,
     ) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload: dict[str, object] = {
             "exp": now + expires_delta,
             "iat": now,

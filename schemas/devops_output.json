@@ -1,0 +1,210 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DevOps Role Output Schema",
+  "description": "Output schema for devops role. Extends base_output.json with DevOps-specific fields.",
+  "allOf": [
+    {
+      "$ref": "base_output.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "pipeline": {
+          "type": "object",
+          "description": "CI/CD pipeline details",
+          "properties": {
+            "herramienta": {
+              "type": "string",
+              "enum": ["github_actions", "gitlab_ci", "jenkins", "circleci", "azure_devops"],
+              "description": "CI/CD platform used"
+            },
+            "archivo_pipeline": {
+              "type": "string",
+              "description": "Pipeline configuration file"
+            },
+            "jobs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "nombre": {"type": "string"},
+                  "estado": {
+                    "type": "string",
+                    "enum": ["exitoso", "fallido", "cancelado", "en_progreso"]
+                  },
+                  "duracion_segundos": {"type": "number", "minimum": 0}
+                }
+              },
+              "description": "Pipeline jobs executed"
+            },
+            "stages": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Pipeline stages (build, test, deploy, etc.)"
+            }
+          }
+        },
+        "build": {
+          "type": "object",
+          "description": "Build process details",
+          "properties": {
+            "exitoso": {
+              "type": "boolean",
+              "description": "Whether build succeeded"
+            },
+            "duracion_segundos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Build duration"
+            },
+            "artefactos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "nombre": {"type": "string"},
+                  "tipo": {
+                    "type": "string",
+                    "enum": ["docker_image", "binary", "package", "zip", "otro"]
+                  },
+                  "tamano_mb": {"type": "number", "minimum": 0},
+                  "ubicacion": {"type": "string"}
+                }
+              },
+              "description": "Build artifacts produced"
+            },
+            "errores": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Build errors encountered"
+            }
+          }
+        },
+        "deployment": {
+          "type": "object",
+          "description": "Deployment details",
+          "properties": {
+            "entorno": {
+              "type": "string",
+              "enum": ["desarrollo", "staging", "produccion"],
+              "description": "Target environment"
+            },
+            "estrategia": {
+              "type": "string",
+              "enum": ["blue_green", "canary", "rolling", "recreate"],
+              "description": "Deployment strategy"
+            },
+            "version": {
+              "type": "string",
+              "description": "Version deployed"
+            },
+            "commit_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{7,40}$",
+              "description": "Git commit hash deployed"
+            },
+            "estado": {
+              "type": "string",
+              "enum": ["exitoso", "fallido", "rollback", "en_progreso"],
+              "description": "Deployment status"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Deployment URL"
+            },
+            "duracion_segundos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Deployment duration"
+            }
+          }
+        },
+        "docker": {
+          "type": "object",
+          "description": "Docker image details",
+          "properties": {
+            "imagenes_creadas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "nombre": {"type": "string"},
+                  "tag": {"type": "string"},
+                  "tamano_mb": {"type": "number", "minimum": 0},
+                  "registry": {"type": "string"}
+                }
+              }
+            },
+            "dockerfile_modificado": {
+              "type": "boolean",
+              "description": "Whether Dockerfile was modified"
+            }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "description": "Test execution in pipeline",
+          "properties": {
+            "tests_ejecutados": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tests_pasados": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tests_fallidos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cobertura": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "rollback": {
+          "type": "object",
+          "description": "Rollback details if applicable",
+          "properties": {
+            "ejecutado": {
+              "type": "boolean",
+              "description": "Whether rollback was performed"
+            },
+            "version_anterior": {
+              "type": "string",
+              "description": "Version rolled back to"
+            },
+            "razon": {
+              "type": "string",
+              "description": "Reason for rollback"
+            }
+          }
+        },
+        "metricas": {
+          "type": "object",
+          "description": "Deployment metrics",
+          "properties": {
+            "tiempo_deploy_minutos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Total deployment time"
+            },
+            "frecuencia_deploys_dia": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Deployment frequency per day"
+            },
+            "tiempo_recovery_minutos": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Mean time to recovery"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

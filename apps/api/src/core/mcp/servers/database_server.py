@@ -19,13 +19,12 @@ import json
 import time
 from datetime import datetime
 from typing import Any, Literal, Protocol
-from uuid import uuid4
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import redis.asyncio as redis
 import structlog
-from redis.exceptions import RedisError
 from pydantic import BaseModel, Field, field_validator
+from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -138,7 +137,7 @@ class QueryAuditLog(BaseModel):
     project_id: UUID | None = None
     row_count: int
     execution_time_ms: float
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class RateLimitBackend(Protocol):

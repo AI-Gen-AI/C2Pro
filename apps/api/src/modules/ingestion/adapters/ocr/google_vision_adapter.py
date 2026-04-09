@@ -18,7 +18,7 @@ Configuration:
     export GOOGLE_APPLICATION_CREDENTIALS="/path/to/credentials.json"
 """
 
-from typing import Optional
+
 import structlog
 
 from src.modules.ingestion.application.ports import OCRAdapter, OCRResult
@@ -55,7 +55,7 @@ class GoogleVisionOCRAdapter(OCRAdapter):
 
     def __init__(
         self,
-        credentials_path: Optional[str] = None,
+        credentials_path: str | None = None,
         min_confidence: float = 0.0,
     ):
         """
@@ -70,8 +70,8 @@ class GoogleVisionOCRAdapter(OCRAdapter):
 
         # Import dependencies (deferred to allow installation without dependencies)
         try:
+            import google.auth  # noqa: F401
             from google.cloud import vision
-            import google.auth
 
             self.vision = vision
 
@@ -152,10 +152,7 @@ class GoogleVisionOCRAdapter(OCRAdapter):
                 )
 
             # Extract full text
-            if response.full_text_annotation:
-                full_text = response.full_text_annotation.text
-            else:
-                full_text = ""
+            full_text = response.full_text_annotation.text if response.full_text_annotation else ""
 
             # Extract bounding boxes and confidence from words
             bboxes = []
@@ -196,10 +193,7 @@ class GoogleVisionOCRAdapter(OCRAdapter):
                                 confidences.append(word_confidence)
 
             # Calculate overall page confidence
-            if confidences:
-                overall_confidence = sum(confidences) / len(confidences)
-            else:
-                overall_confidence = 0.0
+            overall_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
             result: OCRResult = {
                 "text": full_text,

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from golden.evaluators.base import EvaluationResult
 from golden.runner import (
     CaseResult,

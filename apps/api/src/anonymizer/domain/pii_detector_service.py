@@ -4,7 +4,8 @@ TS-UC-SEC-ANO-001: PII detector domain service.
 
 import re
 from enum import Enum, auto
-from typing import List, NamedTuple, Dict
+from typing import NamedTuple
+
 
 class PiiType(Enum):
     """Enumeration of detectable Personally Identifiable Information (PII) types."""
@@ -22,9 +23,9 @@ class DetectedPii(NamedTuple):
 
 class PiiDetectionResult:
     """Represents the outcome of a PII detection scan."""
-    def __init__(self, items: List[DetectedPii]):
+    def __init__(self, items: list[DetectedPii]):
         self.items = items
-    
+
     def __len__(self) -> int:
         return len(self.items)
 
@@ -33,7 +34,7 @@ class PiiDetectionResult:
         return len(self.items) == 0
 
     @property
-    def counts(self) -> Dict[PiiType, int]:
+    def counts(self) -> dict[PiiType, int]:
         """Returns a dictionary with the count of each detected PII type."""
         counts_dict = {pii_type: 0 for pii_type in PiiType}
         for item in self.items:
@@ -45,7 +46,7 @@ class PiiDetectorService:
     A domain service to detect Personally Identifiable Information (PII) in text.
     This service uses regular expressions and validation logic to find and classify PII.
     """
-    
+
     # --- Regular Expressions for PII Detection ---
     _DNI_REGEX = re.compile(r'\b\d{8}[A-Z]\b')
     # A more comprehensive email regex that supports unicode and plus notation
@@ -57,7 +58,7 @@ class PiiDetectorService:
 
     # --- Checksum validation tables ---
     _DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
-    
+
     def _is_valid_dni(self, dni: str) -> bool:
         """Validates a Spanish DNI based on its checksum letter."""
         if len(dni) != 9:
@@ -128,7 +129,7 @@ class PiiDetectorService:
                 start=match.start(),
                 end=match.end()
             ))
-        
+
         # Find IBAN
         for match in self._IBAN_REGEX.finditer(text):
             if self._is_valid_iban(match.group(0)):

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
 from uuid import UUID
 
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.analysis.ports.alert_repository import AlertRepository
 from src.analysis.ports.types import AlertRecord
 from src.core.pagination import Page
@@ -18,14 +17,18 @@ class ListAlertsUseCase:
         self,
         *,
         project_id: UUID,
-        severities: Optional[List[AlertSeverity]] = None,
-        statuses: Optional[List[AlertStatus]] = None,
-        category: Optional[str] = None,
-        cursor: Optional[str] = None,
+        tenant_id: UUID | None = None,
+        alert_type: AlertType | None = None,
+        severities: list[AlertSeverity] | None = None,
+        statuses: list[AlertStatus] | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
         limit: int = 20,
     ) -> Page[AlertRecord]:
         return await self.repository.list_for_project(
             project_id=project_id,
+            tenant_id=tenant_id,
+            alert_type=alert_type,
             severities=severities,
             statuses=statuses,
             category=category,
@@ -38,16 +41,16 @@ class GetAlertsStatsUseCase:
     def __init__(self, repository: AlertRepository) -> None:
         self.repository = repository
 
-    async def execute(self, project_id: UUID) -> dict[str, int]:
-        return await self.repository.get_stats(project_id)
+    async def execute(self, project_id: UUID, tenant_id: UUID | None = None) -> dict[str, int]:
+        return await self.repository.get_stats(project_id, tenant_id)
 
 
 class GetAlertUseCase:
     def __init__(self, repository: AlertRepository) -> None:
         self.repository = repository
 
-    async def execute(self, alert_id: UUID) -> AlertRecord:
-        alert = await self.repository.get_by_id(alert_id)
+    async def execute(self, alert_id: UUID, tenant_id: UUID | None = None) -> AlertRecord:
+        alert = await self.repository.get_by_id(alert_id, tenant_id)
         if not alert:
             raise ValueError("alert_not_found")
         return alert
@@ -61,10 +64,11 @@ class UpdateAlertStatusUseCase:
         self,
         *,
         alert_id: UUID,
+        tenant_id: UUID | None = None,
         status: AlertStatus,
         resolution_notes: str | None = None,
     ) -> AlertRecord:
-        alert = await self.repository.get_by_id(alert_id)
+        alert = await self.repository.get_by_id(alert_id, tenant_id)
         if not alert:
             raise ValueError("alert_not_found")
 
@@ -77,7 +81,7 @@ class UpdateAlertStatusUseCase:
         alert.status = status
 
         if status in {AlertStatus.RESOLVED, AlertStatus.DISMISSED}:
-            alert.resolved_at = datetime.utcnow()
+            alert.resolved_at = datetime.now(timezone.utc)
             if resolution_notes:
                 alert.resolution_notes = resolution_notes
 
@@ -91,8 +95,8 @@ class DeleteAlertUseCase:
     def __init__(self, repository: AlertRepository) -> None:
         self.repository = repository
 
-    async def execute(self, alert_id: UUID) -> None:
-        deleted = await self.repository.delete(alert_id)
+    async def execute(self, alert_id: UUID, tenant_id: UUID | None = None) -> None:
+        deleted = await self.repository.delete(alert_id, tenant_id)
         if not deleted:
             raise ValueError("alert_not_found")
         await self.repository.commit()

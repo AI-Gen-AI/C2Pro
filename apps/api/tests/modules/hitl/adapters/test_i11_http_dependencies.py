@@ -6,7 +6,6 @@ Test Suite ID: TS-I11-HITL-HTTP-001
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
-from uuid import uuid4
 
 from src.modules.hitl.adapters.http.dependencies import (
     get_confidence_router,

@@ -4,7 +4,7 @@ MCP gateway audit logging adapter tests.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -50,7 +50,7 @@ class TestMCPAuditLogger:
     async def test_006_events_are_ordered_by_timestamp(self) -> None:
         class _Clock:
             def __init__(self) -> None:
-                self._value = datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc)
+                self._value = datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC)
 
             def now(self) -> datetime:
                 current = self._value

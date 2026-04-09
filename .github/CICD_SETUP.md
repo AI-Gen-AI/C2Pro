@@ -170,7 +170,7 @@ To merge a PR, all checks must pass:
 - [ ] Unit tests: PASSED
 - [x] Integration tests: PASSED
 - [x] E2E security tests: PASSED
-- [ ] Coverage: ≥60% (orange), ≥80% (green)
+- [x] Coverage: ≥60% (orange), ≥80% (green) via repo policy in `codecov.yml`; CI fail-fast floor is `--cov-fail-under=60`
 
 ---
 
@@ -389,11 +389,27 @@ Tests are auto-discovered by pytest.
 
 ### Add Coverage Requirements
 
-Enforce minimum coverage in workflows:
+Enforce minimum coverage in workflows and keep the badge/comment thresholds in `codecov.yml`:
 ```yaml
 - name: Check coverage
   run: |
-    pytest --cov=src --cov-fail-under=80
+    pytest --cov=src --cov-report=xml:coverage.xml --cov-fail-under=60
+```
+
+Repo policy:
+
+```yaml
+# codecov.yml
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 20%
+    patch:
+      default:
+        target: 80%
+  range: 60..100
 ```
 
 ### Add Security Scanning

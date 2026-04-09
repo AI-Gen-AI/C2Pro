@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from io import BytesIO
 from types import SimpleNamespace
-from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, Mock
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -26,13 +26,16 @@ class TestUploadDocumentUseCase:
         return SimpleNamespace(filename=filename, size=size, file=file_obj)
 
     @pytest.mark.asyncio
-    async def test_001_rejects_file_over_size_limit(self, monkeypatch):
-        monkeypatch.setattr(settings, "max_upload_size_mb", 0)
-        file = self._make_upload_file("contract.pdf", 2)
+    async def test_001_rejects_file_over_size_limit(self):
+        file = self._make_upload_file(
+            "contract.pdf",
+            settings.max_upload_size_bytes + 1,
+        )
 
         repo = AsyncMock()
         storage = AsyncMock()
-        use_case = UploadDocumentUseCase(repo, storage)
+        project_repository = AsyncMock()
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
 
         with pytest.raises(HTTPException) as exc:
             await use_case.execute(
@@ -40,6 +43,7 @@ class TestUploadDocumentUseCase:
                 file=file,
                 document_type=DocumentType.CONTRACT,
                 user_id=uuid4(),
+                tenant_id=uuid4(),
             )
 
         assert exc.value.status_code == 413
@@ -51,7 +55,8 @@ class TestUploadDocumentUseCase:
 
         repo = AsyncMock()
         storage = AsyncMock()
-        use_case = UploadDocumentUseCase(repo, storage)
+        project_repository = AsyncMock()
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
 
         with pytest.raises(HTTPException) as exc:
             await use_case.execute(
@@ -59,6 +64,7 @@ class TestUploadDocumentUseCase:
                 file=file,
                 document_type=DocumentType.CONTRACT,
                 user_id=uuid4(),
+                tenant_id=uuid4(),
             )
 
         assert exc.value.status_code == 415
@@ -68,9 +74,10 @@ class TestUploadDocumentUseCase:
         file = self._make_upload_file("contract.pdf", 1)
 
         repo = AsyncMock()
-        repo.get_project_tenant_id.return_value = None
         storage = AsyncMock()
-        use_case = UploadDocumentUseCase(repo, storage)
+        project_repository = AsyncMock()
+        project_repository.exists_by_id.return_value = False
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
 
         with pytest.raises(HTTPException) as exc:
             await use_case.execute(
@@ -78,6 +85,7 @@ class TestUploadDocumentUseCase:
                 file=file,
                 document_type=DocumentType.CONTRACT,
                 user_id=uuid4(),
+                tenant_id=uuid4(),
             )
 
         assert exc.value.status_code == 404
@@ -93,17 +101,19 @@ class TestUploadDocumentUseCase:
         tenant_id = uuid4()
 
         repo = AsyncMock()
-        repo.get_project_tenant_id.return_value = tenant_id
         storage = AsyncMock()
         storage.upload_file.return_value = "/local-storage/contract.pdf"
+        project_repository = AsyncMock()
+        project_repository.exists_by_id.return_value = True
 
-        use_case = UploadDocumentUseCase(repo, storage)
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
 
         document = await use_case.execute(
             project_id=project_id,
             file=file,
             document_type=DocumentType.CONTRACT,
             user_id=user_id,
+            tenant_id=tenant_id,
         )
 
         repo.add.assert_awaited_once()
@@ -119,5 +129,6 @@ class TestUploadDocumentUseCase:
 
         repo.update_storage_path.assert_awaited_once_with(added_doc.id, "/local-storage/contract.pdf")
         repo.update_status.assert_awaited_once_with(added_doc.id, DocumentStatus.UPLOADED)
+        project_repository.exists_by_id.assert_awaited_once_with(project_id, tenant_id)
         repo.refresh.assert_awaited_once_with(added_doc)
         assert isinstance(document.id, UUID)

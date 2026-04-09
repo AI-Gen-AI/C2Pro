@@ -49,9 +49,9 @@ async def test_graph_flow_retries_on_negative_critique(monkeypatch) -> None:
     sys.modules["src.ai.agents.risk_agent"] = stub_risk_agent
     sys.modules["src.ai.agents.wbs_agent"] = stub_wbs_agent
 
-    from src.ai.graph.workflow import compile_workflow
     import src.ai.graph.nodes as nodes
     import src.ai.graph.workflow as workflow
+    from src.ai.graph.workflow import compile_workflow
 
     calls = {"extract": 0, "critique": 0}
 

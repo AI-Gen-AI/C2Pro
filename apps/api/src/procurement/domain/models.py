@@ -5,19 +5,16 @@ These are pure domain entities representing core business concepts.
 Refers to Suite ID: TS-UD-PROC-BOM-001.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, List
 from uuid import UUID, uuid4
-
 
 # ===========================================
 # ENUMS
 # ===========================================
-
-
 from src.shared_kernel.enums import WBSItemType  # noqa: F401 — re-export
 
 
@@ -80,19 +77,19 @@ class WBSItem:
 
     # Optional/default fields after
     id: UUID = field(default_factory=uuid4)
-    description: Optional[str] = None
-    parent_code: Optional[str] = None
-    item_type: Optional[WBSItemType] = None
-    budget_allocated: Optional[Decimal] = None
+    description: str | None = None
+    parent_code: str | None = None
+    item_type: WBSItemType | None = None
+    budget_allocated: Decimal | None = None
     budget_spent: Decimal = field(default=Decimal(0))
-    planned_start: Optional[datetime] = None
-    planned_end: Optional[datetime] = None
-    actual_start: Optional[datetime] = None
-    actual_end: Optional[datetime] = None
-    source_clause_id: Optional[UUID] = None
+    planned_start: datetime | None = None
+    planned_end: datetime | None = None
+    actual_start: datetime | None = None
+    actual_end: datetime | None = None
+    source_clause_id: UUID | None = None
     version: int = 1
     wbs_metadata: dict = field(default_factory=dict)
-    children: List["WBSItem"] = field(default_factory=list)
+    children: list[WBSItem] = field(default_factory=list)
 
     def is_leaf(self) -> bool:
         """Check if this WBS item is a leaf node (has no children)."""
@@ -122,7 +119,7 @@ class WBSItem:
 @dataclass
 class WBSItemList:
     """Container for a list of WBS items, used for structured LLM output."""
-    items: List[WBSItem] = field(default_factory=list)
+    items: list[WBSItem] = field(default_factory=list)
 
 
 # ===========================================
@@ -143,21 +140,21 @@ class BOMItem:
 
     # Optional/default fields after
     id: UUID = field(default_factory=uuid4)
-    wbs_item_id: Optional[UUID] = None
-    item_code: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[BOMCategory] = None
-    unit: Optional[str] = None
-    unit_price: Optional[Decimal] = None
-    total_price: Optional[Decimal] = None
+    wbs_item_id: UUID | None = None
+    item_code: str | None = None
+    description: str | None = None
+    category: BOMCategory | None = None
+    unit: str | None = None
+    unit_price: Decimal | None = None
+    total_price: Decimal | None = None
     currency: str = "EUR"
-    supplier: Optional[str] = None
-    lead_time_days: Optional[int] = None
-    production_time_days: Optional[int] = None
-    transit_time_days: Optional[int] = None
-    incoterm: Optional[str] = None
-    contract_clause_id: Optional[UUID] = None
-    budget_item_id: Optional[UUID] = None
+    supplier: str | None = None
+    lead_time_days: int | None = None
+    production_time_days: int | None = None
+    transit_time_days: int | None = None
+    incoterm: str | None = None
+    contract_clause_id: UUID | None = None
+    budget_item_id: UUID | None = None
     procurement_status: ProcurementStatus = ProcurementStatus.PENDING
     bom_metadata: dict = field(default_factory=dict)
 
@@ -209,7 +206,7 @@ class BOMItem:
         """Update the procurement status."""
         self.procurement_status = new_status
 
-    def get_estimated_delivery_date(self, order_date: datetime) -> Optional[datetime]:
+    def get_estimated_delivery_date(self, order_date: datetime) -> datetime | None:
         """Calculate estimated delivery date based on order date and lead time."""
         if self.lead_time_days is None:
             return None
@@ -220,17 +217,17 @@ class BOMItem:
 @dataclass
 class BOMItemList:
     """Container for a list of BOM items, used for structured LLM output."""
-    items: List[BOMItem] = field(default_factory=list)
+    items: list[BOMItem] = field(default_factory=list)
 
     def get_total_cost(self) -> Decimal:
         """Calculate total cost of all BOM items."""
         return sum((item.get_total_cost() for item in self.items), Decimal(0))
 
-    def filter_by_category(self, category: BOMCategory) -> List[BOMItem]:
+    def filter_by_category(self, category: BOMCategory) -> list[BOMItem]:
         """Filter BOM items by category."""
         return [item for item in self.items if item.category == category]
 
-    def filter_by_status(self, status: ProcurementStatus) -> List[BOMItem]:
+    def filter_by_status(self, status: ProcurementStatus) -> list[BOMItem]:
         """Filter BOM items by procurement status."""
         return [item for item in self.items if item.procurement_status == status]
 

@@ -4,8 +4,8 @@ TS-INT-DB-CLS-001: Bulk alert resolve contract tests.
 
 from __future__ import annotations
 
-from datetime import datetime
 import importlib
+from datetime import datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -44,7 +44,7 @@ class _FakeResult:
     def __init__(self, alerts: list[_FakeAlert]) -> None:
         self._alerts = alerts
 
-    def scalars(self) -> "_FakeResult":
+    def scalars(self) -> _FakeResult:
         return self
 
     def all(self) -> list[_FakeAlert]:

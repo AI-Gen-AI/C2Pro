@@ -5,6 +5,7 @@ from uuid import UUID
 
 from src.documents.ports.document_repository import IDocumentRepository
 
+
 class UpdateDocumentStoragePathUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository

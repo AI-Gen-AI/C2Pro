@@ -13,7 +13,6 @@ from uuid import uuid4
 
 import pytest
 
-
 Handler = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 

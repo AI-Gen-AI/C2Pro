@@ -11,6 +11,7 @@ CRITICAL FOR SECURITY:
 - Circuit breaker protection for JWKS fetch
 """
 
+import contextlib
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
@@ -21,11 +22,9 @@ import jwt
 import structlog
 from fastapi import Depends, HTTPException, Request, Response, status
 from jwt.algorithms import RSAAlgorithm
-from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
-from src.core.database import get_raw_session
 from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
 
@@ -388,10 +387,8 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
 
             # If user has organization with tenant_id, inject it
             if user.has_tenant():
-                try:
+                with contextlib.suppress(ValueError):
                     request.state.tenant_id = UUID(user.tenant_id)
-                except ValueError:
-                    pass
 
             # Bind to structured logging context
             structlog.contextvars.bind_contextvars(

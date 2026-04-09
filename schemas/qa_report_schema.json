@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Report Schema",
+  "description": "Forces QA agents to return test results in a predictable format.",
+  "type": "object",
+  "required": ["tarea_id", "resultado", "tests_ejecutados"],
+  "properties": {
+    "tarea_id": {
+      "type": "string",
+      "pattern": "^T\\d{3,}$"
+    },
+    "resultado": {
+      "type": "string",
+      "enum": ["aprobado", "rechazado"]
+    },
+    "tests_ejecutados": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tests_pasados": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tests_fallidos": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cobertura": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Code coverage percentage"
+    },
+    "trazas_de_error": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tipo", "severidad", "mensaje"],
+        "properties": {
+          "tarea_id": { "type": "string" },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "test_failure",
+              "arquitectura",
+              "seguridad",
+              "linter",
+              "accesibilidad",
+              "otro"
+            ]
+          },
+          "severidad": {
+            "type": "string",
+            "enum": ["baja", "media", "alta", "critica"]
+          },
+          "archivo": { "type": "string" },
+          "linea": { "type": "integer" },
+          "mensaje": { "type": "string" },
+          "traza_completa": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "recomendaciones": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Suggestions for improvement"
+    }
+  },
+  "additionalProperties": false
+}

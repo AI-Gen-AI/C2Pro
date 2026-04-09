@@ -7,7 +7,7 @@ Refers to Suite ID: TS-INT-EVT-DLQ-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -49,7 +49,7 @@ class DeadLetterQueue:
             topic=topic,
             payload=payload,
             reason=reason,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             retryable=retryable,
             attempts=attempts,
             task_id=task_id,

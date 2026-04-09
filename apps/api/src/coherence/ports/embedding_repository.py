@@ -20,7 +20,6 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-
 # =============================================================================
 # DTOs (Data Transfer Objects)
 # =============================================================================

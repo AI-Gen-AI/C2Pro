@@ -15,27 +15,20 @@ Methodology: TDD Strict (Red → Green → Refactor)
 Testing Approach: Unit tests with mocked dependencies (use cases/repositories)
 """
 
-import pytest
+from unittest.mock import AsyncMock
 from uuid import uuid4
-from datetime import datetime
-from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
+from src.coherence.router import router as coherence_router
+from src.documents.adapters.http.router import router as documents_router
+
 # Import routers
 from src.projects.adapters.http.router import router as projects_router
-from src.documents.adapters.http.router import router as documents_router
-from src.coherence.router import router as coherence_router
 
 # Import DTOs for response validation
-from src.projects.application.dtos import (
-    ProjectDetailResponse,
-    ProjectListResponse,
-)
-from src.projects.domain.models import ProjectStatus, ProjectType
-from src.coherence.models import CoherenceResult, Alert as CoherenceAlert
-
 
 # ===========================================
 # TEST APPLICATION SETUP
@@ -45,10 +38,10 @@ from src.coherence.models import CoherenceResult, Alert as CoherenceAlert
 @pytest.fixture
 def app(mock_session):
     """Create a FastAPI app with routers for testing."""
-    from src.core.database import get_session
-    from src.core.security import CurrentTenantId, CurrentUserId
     from src.core.auth.dependencies import get_current_user
     from src.core.auth.models import User
+    from src.core.database import get_session
+    from src.core.security import CurrentTenantId, CurrentUserId
 
     app = FastAPI()
     app.include_router(projects_router)

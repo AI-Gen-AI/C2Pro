@@ -13,8 +13,8 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_create_project_success(
-    client: AsyncClient, 
-    get_auth_headers, 
+    client: AsyncClient,
+    get_auth_headers,
     create_test_user_and_tenant
 ):
     """
@@ -29,7 +29,7 @@ async def test_create_project_success(
         tenant_name="Test Tenant Create", user_email="create-user@test.com"
     )
     headers = get_auth_headers(user_id=user.id, tenant_id=tenant.id)
-    
+
     project_data = {
         "name": "New Test Project",
         "description": "A project created via integration test.",
@@ -44,7 +44,7 @@ async def test_create_project_success(
     # Assert: Check the response
     assert response.status_code == 201
     response_data = response.json()
-    
+
     assert response_data["name"] == project_data["name"]
     assert response_data["description"] == project_data["description"]
     assert response_data["tenant_id"] == str(tenant.id)
@@ -52,8 +52,8 @@ async def test_create_project_success(
 
 
 async def test_get_project_isolation_failure(
-    client: AsyncClient, 
-    get_auth_headers, 
+    client: AsyncClient,
+    get_auth_headers,
     create_test_user_and_tenant
 ):
     """
@@ -99,7 +99,7 @@ async def test_patch_project_success(
         tenant_name="Test Tenant Patch", user_email="patch-user@test.com"
     )
     headers = get_auth_headers(user_id=user.id, tenant_id=tenant.id)
-    
+
     project_data = {
         "name": "Project to be Patched",
         "description": "Initial description.",
@@ -144,7 +144,7 @@ async def test_delete_project_success(
     )
     headers = get_auth_headers(user_id=user.id, tenant_id=tenant.id)
     project_data = {"name": "Project to be Deleted"}
-    
+
     response_create = await client.post("/api/v1/projects", json=project_data, headers=headers)
     assert response_create.status_code == 201
     project_id = response_create.json()["id"]

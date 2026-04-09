@@ -26,7 +26,7 @@ class StakeholderResolver:
             names = {stakeholder.name.strip().lower() if stakeholder.name else ""}
             # Check aliases
             names.update({alias.strip().lower() for alias in stakeholder.aliases})
-            
+
             if query in names:
                 matches.append(stakeholder)
 

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from enum import Enum
 import json
-from typing import Any, Iterable
+from collections.abc import Iterable
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.ai.anthropic_client import AIService

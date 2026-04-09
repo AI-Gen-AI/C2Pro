@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from src.analysis.adapters.ai.agents.base_agent import BaseAgent
-from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractorAgent, RiskImpact, RiskProbability
+from src.analysis.adapters.ai.agents.risk_extractor import (
+    RiskExtractorAgent,
+    RiskImpact,
+    RiskProbability,
+)
 from src.analysis.adapters.graph.nodes import _map_risk_severity
 from src.analysis.adapters.persistence.models import AlertSeverity
 

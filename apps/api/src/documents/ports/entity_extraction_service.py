@@ -3,16 +3,17 @@ Entity Extraction Service Interface (Port).
 Defines the contract for extracting domain entities from parsed document content.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any
 from uuid import UUID
 
 from src.documents.domain.models import Document
 
+
 class IEntityExtractionService(ABC):
     @abstractmethod
     async def extract_entities_from_document(
-        self, document: Document, parsed_payload: Dict[str, Any], tenant_id: UUID
-    ) -> Dict[str, int]:
+        self, document: Document, parsed_payload: dict[str, Any], tenant_id: UUID
+    ) -> dict[str, int]:
         """
         Extracts various entities (stakeholders, WBS, BOM) from parsed document content.
         :param document: The domain Document entity.

@@ -10,7 +10,7 @@ Minimal implementation for TS-E2E-SEC-TNT-001.
 """
 
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import jwt
 import structlog
@@ -29,9 +29,8 @@ from src.core.auth.bootstrap_lookup import (
     lookup_tenant_by_clerk_org_id,
     lookup_user_by_clerk_user_id,
 )
-from src.core.auth.models import Tenant, User, UserRole
+from src.core.auth.models import Tenant, User
 from src.core.database import get_session
-
 
 logger = structlog.get_logger()
 security = HTTPBearer()
@@ -102,7 +101,6 @@ async def _provision_clerk_user(
     # Use Clerk org_id as tenant identifier, or create a personal tenant
     if clerk_org_id:
         tenant_record = await lookup_tenant_by_clerk_org_id(db, clerk_org_id)
-        tenant = None
 
         if tenant_record is None:
             # Create tenant for this Clerk organization
@@ -141,8 +139,10 @@ async def _provision_clerk_user(
     user = None
 
     if not settings.database_url.startswith("sqlite"):
+        from src.core.database import _validate_uuid_for_sql
         context_tenant_id = user_record.tenant_id if user_record is not None else target_tenant_id
-        await db.execute(text(f"SET LOCAL app.current_tenant = '{str(context_tenant_id)}'"))
+        safe_tenant = _validate_uuid_for_sql(context_tenant_id)
+        await db.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
 
     if user_record is not None:
         result = await db.execute(select(User).where(User.id == user_record.user_id))

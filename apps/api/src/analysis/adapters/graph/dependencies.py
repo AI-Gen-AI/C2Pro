@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.ai.anthropic_client import AIService
 from src.anonymizer.application.anonymization_service import AnonymizationService
 from src.anonymizer.domain.pii_detector_service import PiiDetectorService
-from src.coherence.application.dependencies import build_coherence_calculation_service
 from src.modules.hitl.adapters.notifications.log_notification_service import (
     LogNotificationService,
 )

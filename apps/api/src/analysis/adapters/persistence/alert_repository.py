@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.analysis.application.dtos import AlertCreate
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.analysis.ports.alert_repository import AlertRepository
 from src.core.pagination import Page, paginate
 from src.projects.adapters.persistence.models import ProjectORM
@@ -22,10 +21,11 @@ class SqlAlchemyAlertRepository(AlertRepository):
         self,
         project_id: UUID,
         tenant_id: UUID | None = None,
-        severities: Optional[List[AlertSeverity]] = None,
-        statuses: Optional[List[AlertStatus]] = None,
-        category: Optional[str] = None,
-        cursor: Optional[str] = None,
+        alert_type: AlertType | None = None,
+        severities: list[AlertSeverity] | None = None,
+        statuses: list[AlertStatus] | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
         limit: int = 20,
     ) -> Page[Alert]:
         query = select(Alert).where(Alert.project_id == project_id)
@@ -40,6 +40,8 @@ class SqlAlchemyAlertRepository(AlertRepository):
             query = query.where(Alert.status.in_(statuses))
         if category:
             query = query.where(Alert.category == category)
+        if alert_type:
+            query = query.where(Alert.alert_type == alert_type)
 
         query = query.order_by(Alert.severity.desc(), Alert.created_at.desc())
 

@@ -12,26 +12,24 @@ Location: apps/api/tests/coherence/test_v3_models.py
 """
 
 import math
+
 import pytest
 from pydantic import ValidationError
 
+from src.coherence.config import (
+    DEFAULT_SCORING_CONFIG,
+    ScoringConfig,
+    get_scoring_config,
+)
 from src.coherence.models import (
     FindingSignal,
     impact_to_severity,
-    CoherenceCategory,
-    SeverityLevel,
-)
-from src.coherence.config import (
-    ScoringConfig,
-    DEFAULT_SCORING_CONFIG,
-    get_scoring_config,
 )
 from src.coherence.rules_engine.config import (
-    EvaluatorConfig,
     DEFAULT_CONFIG,
+    EvaluatorConfig,
     get_config,
 )
-
 
 # ===========================================
 # IMPACT_TO_SEVERITY TESTS
@@ -515,8 +513,8 @@ class TestRuleEvaluatorBase:
 
     def test_concrete_evaluator_with_evaluate_v3(self):
         """Test concrete evaluator implementing evaluate_v3."""
-        from src.coherence.rules_engine.base import RuleEvaluator, Finding
         from src.coherence.models import Clause
+        from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
         class TestBudgetEvaluator(RuleEvaluator):
             rule_id = "DET-BUD-TEST"
@@ -549,8 +547,8 @@ class TestRuleEvaluatorBase:
 
     def test_evaluate_v3_returns_none_when_no_finding(self):
         """Test evaluate_v3 returns None when no issue found."""
-        from src.coherence.rules_engine.base import RuleEvaluator, Finding
         from src.coherence.models import Clause
+        from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
         class TestEvaluator(RuleEvaluator):
             rule_id = "DET-TEST"
@@ -568,8 +566,8 @@ class TestRuleEvaluatorBase:
 
     def test_evaluate_v3_preserves_raw_data(self):
         """Test that evaluate_v3 preserves raw_data from Finding."""
-        from src.coherence.rules_engine.base import RuleEvaluator, Finding
         from src.coherence.models import Clause
+        from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
         class TestEvaluator(RuleEvaluator):
             rule_id = "DET-TEST"
@@ -591,8 +589,8 @@ class TestRuleEvaluatorBase:
 
     def test_evaluate_v3_truncates_long_quote(self):
         """Test that evaluate_v3 truncates long clause text for quote."""
-        from src.coherence.rules_engine.base import RuleEvaluator, Finding
         from src.coherence.models import Clause
+        from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
         class TestEvaluator(RuleEvaluator):
             rule_id = "DET-TEST"
@@ -612,8 +610,8 @@ class TestRuleEvaluatorBase:
 
     def test_custom_evaluate_v3_override(self):
         """Test that subclasses can override evaluate_v3 for continuous scoring."""
-        from src.coherence.rules_engine.base import RuleEvaluator, Finding
         from src.coherence.models import Clause, FindingSignal
+        from src.coherence.rules_engine.base import Finding, RuleEvaluator
 
         class ContinuousBudgetEvaluator(RuleEvaluator):
             rule_id = "DET-BUD-OVERRUN"

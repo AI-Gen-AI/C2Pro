@@ -7,10 +7,10 @@ Increment I3: Clause Extraction + Normalization
 - ExtractedClause: Normalized clause DTO with validation
 """
 
-from pydantic import BaseModel, Field, field_validator
-from uuid import UUID
-from typing import Optional
 from datetime import date
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExtractedClause(BaseModel):
@@ -74,12 +74,12 @@ class ExtractedClause(BaseModel):
         description="Modal verb or phrase indicating obligation level (e.g., 'Shall', 'May', 'Must Not')."
     )
 
-    due_date: Optional[date] = Field(
+    due_date: date | None = Field(
         None,
         description="Specific date if the clause has a temporal constraint."
     )
 
-    penalty_linkage: Optional[str] = Field(
+    penalty_linkage: str | None = Field(
         None,
         description="Description of linked penalties or consequences."
     )

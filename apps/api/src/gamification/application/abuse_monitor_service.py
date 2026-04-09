@@ -1,7 +1,8 @@
 
 import abc
 from enum import Enum, auto
-from typing import List, NamedTuple, Any
+from typing import Any, NamedTuple
+
 
 # --- DTOs for events ---
 # In a real app, these might be more complex Pydantic models
@@ -32,9 +33,9 @@ class AbuseType(Enum):
 
 class GamificationAbuseRepository(abc.ABC):
     @abc.abstractmethod
-    async def get_change_events_in_last_hour(self, user_id: str) -> List[Any]:
+    async def get_change_events_in_last_hour(self, user_id: str) -> list[Any]:
         raise NotImplementedError
-    
+
     @abc.abstractmethod
     async def get_resolution_count_for_hash(self, user_id: str, issue_hash: str) -> int:
         raise NotImplementedError
@@ -71,7 +72,7 @@ class AbuseMonitorService:
     """
     Monitors user activities for signs of gamification abuse.
     """
-    
+
     # --- Thresholds ---
     MASS_CHANGES_LIMIT = 10
     RESOLVE_REINTRODUCE_LIMIT = 2 # Triggers on the 3rd time

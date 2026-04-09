@@ -3,7 +3,6 @@ I6 Coherence Domain Entities
 Test Suite IDs: TS-I6-COH-CONTRACT-001, TS-I6-COH-RULES-001
 """
 
-from datetime import date
 from typing import Any, Literal
 from uuid import UUID, uuid4
 

@@ -8,9 +8,9 @@ Adds clerk_org_id to tenants and clerk_user_id to users
 for Clerk authentication integration.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260317_clerk_int"

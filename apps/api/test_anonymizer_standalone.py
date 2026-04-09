@@ -15,8 +15,9 @@ Expected Output:
     All tests pass with detailed output showing anonymization results.
 """
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Add src to path
@@ -24,9 +25,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 try:
     from services.privacy.anonymizer import (
-        get_anonymizer,
         anonymize_text_simple,
         deanonymize_text_simple,
+        get_anonymizer,
     )
 except ModuleNotFoundError as exc:
     pytest.skip(
@@ -131,7 +132,7 @@ Juan Pérez aprobó el presupuesto.
     assert count == 3, f"Juan Pérez appears 3 times, should be <PERSON_1> 3 times (found {count})"
     assert "<PERSON_2>" not in result.anonymized_text, "Should not create multiple placeholders for same person"
 
-    print(f"\nConsistency verified: 'Juan Pérez' → '<PERSON_1>' (3 occurrences)")
+    print("\nConsistency verified: 'Juan Pérez' → '<PERSON_1>' (3 occurrences)")
     print("\n[OK] Test 3 passed")
     return True
 
@@ -157,7 +158,7 @@ NIE: X1234567L
     print_result("Statistics", str(result.statistics))
 
     # Check if DNI/NIE were detected
-    has_dni_nie = any("<DNI_NIE_" in placeholder for placeholder in result.mapping.keys())
+    has_dni_nie = any("<DNI_NIE_" in placeholder for placeholder in result.mapping)
 
     if has_dni_nie:
         assert "12345678Z" not in result.anonymized_text, "DNI should be anonymized"

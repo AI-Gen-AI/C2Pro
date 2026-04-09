@@ -20,7 +20,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -28,15 +28,14 @@ import structlog
 from .models import Alert, Clause, CoherenceResult, Evidence, ProjectContext
 from .rules import Rule, load_rules
 from .rules_engine.base import Finding, RuleEvaluator
+from .rules_engine.llm_evaluator import LlmRuleEvaluator
 from .rules_engine.registry import (
     DETERMINISTIC_EVALUATORS,
     LLM_RULE_CONFIGS,
     get_evaluator,
     get_llm_evaluator,
-    get_all_llm_evaluators,
     load_qualitative_rules,
 )
-from .rules_engine.llm_evaluator import LlmRuleEvaluator
 from .scoring import ScoringService
 
 logger = structlog.get_logger()
@@ -71,15 +70,15 @@ class EngineConfig:
     cache_ttl_seconds: int = 3600  # 1 hour default
 
     # Tenant settings
-    tenant_id: Optional[UUID] = None
+    tenant_id: UUID | None = None
 
     # Timeouts
     llm_timeout_seconds: float = 30.0
 
     # Filtering
-    enabled_rule_ids: Optional[list[str]] = None  # If set, only run these rules
+    enabled_rule_ids: list[str] | None = None  # If set, only run these rules
     disabled_rule_ids: list[str] = field(default_factory=list)
-    enabled_categories: Optional[list[str]] = None  # Filter LLM rules by category
+    enabled_categories: list[str] | None = None  # Filter LLM rules by category
 
 
 # ===========================================
@@ -116,7 +115,7 @@ class LLMResultCache:
         text_hash = hashlib.sha256(clause_text.encode()).hexdigest()[:16]
         return f"coherence:llm:{rule_id}:{clause_id}:{text_hash}"
 
-    async def get(self, rule_id: str, clause_id: str, clause_text: str) -> Optional[Finding]:
+    async def get(self, rule_id: str, clause_id: str, clause_text: str) -> Finding | None:
         """Get cached result if available."""
         key = self._generate_key(rule_id, clause_id, clause_text)
 
@@ -146,7 +145,7 @@ class LLMResultCache:
 
         return None
 
-    async def set(self, rule_id: str, clause_id: str, clause_text: str, finding: Optional[Finding]):
+    async def set(self, rule_id: str, clause_id: str, clause_text: str, finding: Finding | None):
         """Cache a result."""
         key = self._generate_key(rule_id, clause_id, clause_text)
         data = self._serialize_finding(finding)
@@ -166,7 +165,7 @@ class LLMResultCache:
             self._memory_cache[key] = (time.time(), data)
             logger.debug("llm_cache_set_memory", rule_id=rule_id, clause_id=clause_id)
 
-    def _serialize_finding(self, finding: Optional[Finding]) -> dict:
+    def _serialize_finding(self, finding: Finding | None) -> dict:
         """Serialize a Finding for caching."""
         if finding is None:
             return {"is_none": True}
@@ -180,7 +179,7 @@ class LLMResultCache:
             "raw_data": finding.raw_data,
         }
 
-    def _deserialize_finding(self, data: dict) -> Optional[Finding]:
+    def _deserialize_finding(self, data: dict) -> Finding | None:
         """Deserialize a Finding from cache."""
         if data.get("is_none", True):
             return None
@@ -263,7 +262,7 @@ class CoherenceEngineV2:
     def __init__(
         self,
         rules: list[Rule],
-        config: Optional[EngineConfig] = None,
+        config: EngineConfig | None = None,
     ):
         """
         Initialize the Coherence Engine v2.
@@ -323,15 +322,14 @@ class CoherenceEngineV2:
             if rule.id in DETERMINISTIC_EVALUATORS:
                 self._deterministic_rules.append(rule)
             # Check if it's an LLM rule
-            elif rule.id in LLM_RULE_CONFIGS:
-                if self.config.enable_llm_rules:
-                    # Filter by category if specified
-                    rule_config = LLM_RULE_CONFIGS[rule.id]
-                    if self.config.enabled_categories:
-                        if rule_config.get("category") in self.config.enabled_categories:
-                            self._llm_rules.append(rule)
-                    else:
+            elif rule.id in LLM_RULE_CONFIGS and self.config.enable_llm_rules:
+                # Filter by category if specified
+                rule_config = LLM_RULE_CONFIGS[rule.id]
+                if self.config.enabled_categories:
+                    if rule_config.get("category") in self.config.enabled_categories:
                         self._llm_rules.append(rule)
+                else:
+                    self._llm_rules.append(rule)
 
     def _init_evaluators(self):
         """Initialize evaluators for categorized rules."""
@@ -431,7 +429,7 @@ class CoherenceEngineV2:
         rule: Rule,
         clause: Clause,
         semaphore: asyncio.Semaphore,
-    ) -> Optional[Alert]:
+    ) -> Alert | None:
         """Evaluate a single LLM rule against a clause with caching."""
         evaluator = self._llm_evaluators.get(rule.id)
         if not evaluator:
@@ -467,7 +465,7 @@ class CoherenceEngineV2:
 
                 return None
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     "llm_evaluation_timeout",
                     rule_id=rule.id,
@@ -684,8 +682,8 @@ class CoherenceEngineV2:
 
 
 def create_engine_v2(
-    rules_path: Optional[str] = None,
-    config: Optional[EngineConfig] = None,
+    rules_path: str | None = None,
+    config: EngineConfig | None = None,
     load_llm_rules: bool = True,
 ) -> CoherenceEngineV2:
     """

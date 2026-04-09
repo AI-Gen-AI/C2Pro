@@ -5,8 +5,8 @@ TS-UD-DOC-CLS-001: Clause entity domain model.
 import abc
 import re
 from uuid import UUID, uuid4
-from typing import List, Optional, Any
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # --- Constants ---
 MAX_CONTENT_LENGTH = 5000
@@ -18,7 +18,7 @@ class EmbeddingService(abc.ABC):
     Port for an external service that can generate text embeddings.
     """
     @abc.abstractmethod
-    def generate_embedding(self, text: str) -> List[float]:
+    def generate_embedding(self, text: str) -> list[float]:
         """Generates an embedding vector for the given text."""
         raise NotImplementedError
 
@@ -34,8 +34,8 @@ class Clause(BaseModel):
     tenant_id: UUID
     document_id: UUID
     content: str
-    clause_number: Optional[str] = None
-    clause_text_embedding: Optional[List[float]] = None
+    clause_number: str | None = None
+    clause_text_embedding: list[float] | None = None
 
     @field_validator('content')
     @classmethod
@@ -48,22 +48,22 @@ class Clause(BaseModel):
 
     @field_validator('clause_number')
     @classmethod
-    def normalize_clause_number(cls, value: Optional[str]) -> Optional[str]:
+    def normalize_clause_number(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        
+
         normalized_value = value.strip().rstrip('.').lower()
-        
+
         # Dictionary for Spanish numerals to numbers
         word_map = {
-            "primera": "1", "segunda": "2", "tercera": "3", "cuarta": "4", 
-            "quinta": "5", "sexta": "6", "septima": "7", "octava": "8", 
+            "primera": "1", "segunda": "2", "tercera": "3", "cuarta": "4",
+            "quinta": "5", "sexta": "6", "septima": "7", "octava": "8",
             "novena": "9", "decima": "10"
         }
-        
+
         if normalized_value in word_map:
             return word_map[normalized_value]
-        
+
         # Check if it's a valid numeric/decimal format
         if re.match(r'^\d+(\.\d+)*$', normalized_value):
             return normalized_value
@@ -72,7 +72,7 @@ class Clause(BaseModel):
 
     @field_validator('clause_text_embedding')
     @classmethod
-    def validate_embedding_dimension(cls, value: Optional[List[float]]) -> Optional[List[float]]:
+    def validate_embedding_dimension(cls, value: list[float] | None) -> list[float] | None:
         if value is not None and len(value) != EMBEDDING_DIMENSION:
             raise ValueError(f"Embedding must have {EMBEDDING_DIMENSION} dimensions")
         return value
@@ -80,7 +80,7 @@ class Clause(BaseModel):
     def update_embedding(self, embedding_service: EmbeddingService) -> 'Clause':
         """
         Generates an embedding for the clause's content and returns a new Clause instance.
-        
+
         Args:
             embedding_service: The service to use for generating the embedding vector.
 
@@ -91,6 +91,6 @@ class Clause(BaseModel):
             raise ValueError("Cannot generate embedding for empty content")
 
         new_embedding = embedding_service.generate_embedding(self.content)
-        
+
         # Since the model is frozen, we use model_copy to create a new instance
         return self.model_copy(update={"clause_text_embedding": new_embedding})

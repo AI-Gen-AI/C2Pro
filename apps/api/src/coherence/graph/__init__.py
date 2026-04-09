@@ -8,42 +8,39 @@ This package contains:
 - graph.py: LangGraph subgraph builder (Phase 5)
 """
 
-from .prompts import (
-    COHERENCE_SYSTEM_PROMPT,
-    RULE_EVALUATION_PROMPT,
-    BATCH_EVALUATION_PROMPT,
-    CROSS_CLAUSE_PROMPT,
-    FEW_SHOT_EXAMPLES,
-    build_evaluation_prompt,
-    build_batch_prompt,
-    build_cross_clause_prompt,
-)
-
-from .state import (
-    ClauseWithEmbedding,
-    CrossClausePair,
-    EvaluationConfig,
-    CoherenceGraphState,
-)
-
-from .nodes import (
-    prepare_context,
-    deterministic_evaluate,
-    llm_semantic_evaluate,
-    cross_clause_eval,
-    scoring_arbiter,
-    format_output,
-    infer_category,
-    infer_document_type,
-)
-
 from .graph import (
     build_coherence_subgraph,
     build_parallel_coherence_subgraph,
-    get_coherence_subgraph,
     evaluate_coherence,
     evaluate_coherence_async,
     evaluate_coherence_with_streaming,
+    get_coherence_subgraph,
+)
+from .nodes import (
+    cross_clause_eval,
+    deterministic_evaluate,
+    format_output,
+    infer_category,
+    infer_document_type,
+    llm_semantic_evaluate,
+    prepare_context,
+    scoring_arbiter,
+)
+from .prompts import (
+    BATCH_EVALUATION_PROMPT,
+    COHERENCE_SYSTEM_PROMPT,
+    CROSS_CLAUSE_PROMPT,
+    FEW_SHOT_EXAMPLES,
+    RULE_EVALUATION_PROMPT,
+    build_batch_prompt,
+    build_cross_clause_prompt,
+    build_evaluation_prompt,
+)
+from .state import (
+    ClauseWithEmbedding,
+    CoherenceGraphState,
+    CrossClausePair,
+    EvaluationConfig,
 )
 
 __all__ = [

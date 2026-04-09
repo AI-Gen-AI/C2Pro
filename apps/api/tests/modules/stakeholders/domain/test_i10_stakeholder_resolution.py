@@ -4,9 +4,7 @@ Test Suite ID: TS-I10-STKH-DOM-001
 """
 
 from datetime import datetime
-from uuid import uuid4, UUID
-
-import pytest
+from uuid import uuid4
 
 from src.stakeholders.domain.models import (
     InterestLevel,
@@ -17,8 +15,8 @@ from src.stakeholders.domain.models import (
     RACIRole,
     Stakeholder,
 )
-from src.stakeholders.domain.services.stakeholder_resolver import StakeholderResolver
 from src.stakeholders.domain.services.raci_validator import validate_activity_raci
+from src.stakeholders.domain.services.stakeholder_resolver import StakeholderResolver
 
 
 class RACIValidator:

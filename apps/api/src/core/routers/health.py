@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 from src.core.cache import get_cache_service
 from src.core.database import get_raw_session
-from src.core.resilience import CircuitBreakerRegistry, CircuitBreakerState
+from src.core.resilience import CircuitBreakerRegistry
 from src.core.tasks.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -91,7 +91,7 @@ async def readiness_check():
                 timeout=HEALTH_CHECK_TIMEOUT
             )
             db_status = "up"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("health_check_db_timeout")
     except Exception as e:
         logger.error("health_check_db_failed", error=str(e))
@@ -107,7 +107,7 @@ async def readiness_check():
             )
             if is_redis_ok:
                 redis_status = "up"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("health_check_redis_timeout")
         except RedisError as e:
             logger.error("health_check_redis_failed", error=str(e))

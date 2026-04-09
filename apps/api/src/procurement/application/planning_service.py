@@ -8,11 +8,11 @@ Refers to Suite ID: TS-I9-PROC-APP-001.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Protocol, Any
+from typing import Protocol
 from uuid import UUID
 
 from src.procurement.application.dtos import PlanningDecision
-from src.procurement.domain.models import ProcurementPlanItem, ProcurementConflict
+from src.procurement.domain.models import ProcurementConflict, ProcurementPlanItem
 from src.procurement.domain.services.procurement_intelligence_service import (
     ProcurementIntelligenceService,
 )
@@ -86,13 +86,13 @@ class ProcurementPlanningService:
             tenant_id=tenant_id,
             required_on_site=required_on_site,
         )
-        
+
         # Ensure we have a date for timedelta
         if isinstance(required_on_site, datetime):
             target_date = required_on_site.date()
         else:
             target_date = required_on_site
-            
+
         current_date = target_date - timedelta(days=3)
         conflicts = self.intelligence.detect_conflicts(plan_items, current_date=current_date)
         fingerprint = self.intelligence.generate_plan_fingerprint(plan_items)
@@ -120,8 +120,8 @@ class ProcurementPlanningService:
     ) -> PlanningDecision:
         if fingerprint is not None and fingerprint in self._persisted_fingerprints:
             return PlanningDecision(
-                plan_fingerprint=fingerprint, 
-                conflicts=[], 
+                plan_fingerprint=fingerprint,
+                conflicts=[],
                 requires_human_review=False
             )
 
@@ -130,7 +130,7 @@ class ProcurementPlanningService:
             tenant_id=tenant_id,
             required_on_site=required_on_site,
         )
-        
+
         plan_items = await self.repository.get_snapshot_items(
             project_id=project_id,
             tenant_id=tenant_id,

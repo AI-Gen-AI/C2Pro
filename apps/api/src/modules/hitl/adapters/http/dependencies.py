@@ -13,12 +13,18 @@ from src.core.security import CurrentTenantId
 from src.modules.hitl.adapters.notifications.log_notification_service import (
     LogNotificationService,
 )
+from src.modules.hitl.adapters.persistence.notification_config_repository import (  # TASK-BCK-025
+    NotificationConfigRepository,
+)
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
 from src.modules.hitl.application.ports import HumanInTheLoopService
-from src.modules.hitl.ports.notification_service import INotificationService
+from src.modules.hitl.application.resume_workflow_use_case import (
+    ResumeWorkflowUseCase,  # TASK-BCK-024
+)
 from src.modules.hitl.domain.services import ConfidenceRouter
+from src.modules.hitl.ports.notification_service import INotificationService
 
 
 def get_review_queue_repo(
@@ -46,3 +52,17 @@ def get_hitl_service(
         notification_service=notification_service,
         confidence_router=confidence_router,
     )
+
+
+# TASK-BCK-024: Resume workflow use case
+def get_resume_workflow_use_case(
+    repo: SqlAlchemyReviewQueueRepository = Depends(get_review_queue_repo),
+) -> ResumeWorkflowUseCase:
+    return ResumeWorkflowUseCase(review_queue_repo=repo)
+
+
+# TASK-BCK-025: Notification configuration repository
+def get_notification_config_repository(
+    db: AsyncSession = Depends(get_session),
+) -> NotificationConfigRepository:
+    return NotificationConfigRepository(session=db)

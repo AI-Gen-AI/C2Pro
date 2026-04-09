@@ -8,10 +8,10 @@ Increment I4: Hybrid RAG Retrieval Correctness
 - QueryIntent: Enum for retrieval strategy selection
 """
 
-from pydantic import BaseModel, Field
-from uuid import UUID
-from typing import Optional
 from enum import StrEnum
+from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class QueryIntent(StrEnum):
@@ -64,7 +64,7 @@ class RetrievalResult(BaseModel):
         description="ID of the document version."
     )
 
-    clause_id: Optional[UUID] = Field(
+    clause_id: UUID | None = Field(
         None,
         description="Optional ID of the specific clause if applicable."
     )

@@ -47,3 +47,50 @@ class ReviewItemResponse(BaseModel):
 class ReviewQueueResponse(BaseModel):
     items: list[ReviewItemResponse]
     total: int
+
+
+# TASK-BCK-024: Resume workflow after HITL approval/rejection
+
+
+class ResumeWorkflowRequest(BaseModel):
+    """
+    Request to resume workflow after HITL decision.
+
+    After a human reviewer makes a decision on a pending review item,
+    this endpoint resumes the LangGraph workflow with the decision.
+
+    - **approve**: Workflow resumes from interrupt point with approved status
+    - **reject**: Workflow terminates gracefully with rejection reason
+    """
+
+    decision: str = Field(
+        ...,
+        pattern="^(approve|reject)$",
+        description="The reviewer's decision: 'approve' to resume workflow, 'reject' to terminate",
+        examples=["approve", "reject"],
+    )
+    feedback: str = Field(
+        "",
+        max_length=5000,
+        description="Optional feedback or reason for the decision (required for rejections)",
+        examples=["Approved - clause looks correct", "Rejected - clause needs revision"],
+    )
+
+
+class ResumeWorkflowResponse(BaseModel):
+    """
+    Response from workflow resumption.
+
+    Returns the outcome of the resume operation including the final status.
+    """
+
+    review_id: UUID = Field(..., description="The ID of the review item that was processed")
+    status: str = Field(
+        ...,
+        description="Result status: 'resumed' (approved), 'rejected' (terminated), or 'terminated_with_errors'",
+        examples=["resumed", "rejected"],
+    )
+    message: str = Field(
+        ...,
+        description="Human-readable message describing the outcome",
+    )

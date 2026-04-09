@@ -2,7 +2,7 @@
 Rule loader and schema for the coherence engine.
 """
 
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -31,11 +31,11 @@ class Rule(BaseModel):
         default="deterministic",
         description="Type of evaluator: 'deterministic' for code-based, 'llm' for AI-based.",
     )
-    category: Optional[str] = Field(
+    category: str | None = Field(
         default="general",
         description="Category of the rule (legal, financial, technical, schedule, scope, quality).",
     )
-    name: Optional[str] = Field(
+    name: str | None = Field(
         default=None,
         description="Human-readable name for the rule. If None, uses id.",
     )

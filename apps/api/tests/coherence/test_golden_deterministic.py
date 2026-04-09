@@ -8,7 +8,6 @@ import pytest
 
 from src.coherence.models import Clause
 from src.coherence.rules_engine.deterministic import get_all_deterministic_evaluators
-
 from tests.coherence.golden_deterministic import GOLDEN_CASES
 
 

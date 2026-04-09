@@ -15,6 +15,7 @@ Version: 1.2.0
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -29,7 +30,7 @@ from anthropic.types import Message
 from src.config import settings
 from src.core.ai.model_router import ModelRouter, ModelTier
 from src.core.ai.token_counter import get_token_counter
-from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry, CircuitBreakerState
+from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
 
 logger = structlog.get_logger()
@@ -439,8 +440,8 @@ class LLMClient:
                     error_type=error_type.value,
                 )
 
-                # Wait before retry
-                time.sleep(delay)
+                # Wait before retry (non-blocking)
+                await asyncio.sleep(delay)
 
         # All retries exhausted
         execution_time_ms = (time.perf_counter() - start_time) * 1000

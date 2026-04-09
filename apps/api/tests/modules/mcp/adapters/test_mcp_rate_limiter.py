@@ -5,7 +5,7 @@ TS-UC-SEC-MCP-002: MCP Gateway Rate Limiting tests.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,7 +21,7 @@ class _Clock:
         return self.epoch
 
     def now_utc(self) -> datetime:
-        return datetime.fromtimestamp(self.epoch, tz=timezone.utc)
+        return datetime.fromtimestamp(self.epoch, tz=UTC)
 
     def advance(self, seconds: float) -> None:
         self.epoch += seconds
@@ -172,11 +172,11 @@ class TestMCPGatewayRateLimiting:
             time_provider=clock.time,
             datetime_provider=clock.now_utc,
         )
-        clock.epoch = datetime(2026, 2, 1, 23, 59, 50, tzinfo=timezone.utc).timestamp()
+        clock.epoch = datetime(2026, 2, 1, 23, 59, 50, tzinfo=UTC).timestamp()
         for _ in range(60):
             await midnight_limiter.allow_request("tenant_a")
         assert (await midnight_limiter.allow_request("tenant_a")).allowed is False
-        clock.epoch = datetime(2026, 2, 2, 0, 0, 10, tzinfo=timezone.utc).timestamp()
+        clock.epoch = datetime(2026, 2, 2, 0, 0, 10, tzinfo=UTC).timestamp()
         assert (await midnight_limiter.allow_request("tenant_a")).allowed is True
 
     async def test_edge_001_burst_59_requests_simultaneous(self, limiter: MCPRateLimiter) -> None:
