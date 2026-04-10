@@ -32,6 +32,8 @@ describe("S1-13 frontend CI pipeline", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.build).toBe("next build --webpack");
+    expect(packageJson.scripts?.build).toBe(
+      "node ./scripts/clean-next-build.mjs && next build --webpack",
+    );
   });
 });

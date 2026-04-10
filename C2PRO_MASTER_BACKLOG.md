@@ -22,7 +22,7 @@
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
 | Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 162 | 26 | 136 |
-| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 56 | 18 | 38 |
+| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 57 | 18 | 39 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 96 | 35 | 61 |
 | Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 25 | 0 |
@@ -91,7 +91,8 @@
 | [x]    | P3       | `TASK-FRT-133` | None        | Ensure all coverage-improvement tests pass `[x] @2026-04-09`                                                                                                                                                                                                                             |
 | [x]    | P3       | `TASK-FRT-134` | None        | Reach at least 70 percent coverage on targeted area `[x] @2026-04-09`                                                                                                                                                                                                                    |
 | [x]    | P3       | `TASK-FRT-135` | None        | Prove no regression in existing tests `[x] @2026-04-09`                                                                                                                                                                                                                                                    |
-| [x]    | P1       | `TASK-FRT-168` | Frontend    | Restore Vercel frontend build parity after API/codegen drift in WBS and review flows `[x] @2026-04-09 - Removed invalid `projectId`/`nodeType` payload fields from WBS creation, aligned `useWBSTree` with generated snake_case OpenAPI contracts and query-key helpers, updated the HITL review test mock cast for current React Query typings, switched client hooks to the browser-safe axios bundle, and pinned `turbopack.root` to the monorepo root so hoisted `next` installs resolve cleanly and match Vercel tracing root expectations.` |
+| [x]    | P1       | `TASK-FRT-168` | Frontend    | Restore Vercel frontend build parity after API/codegen drift in WBS and review flows `[x] @2026-04-09 - Removed invalid `projectId`/`nodeType` payload fields from WBS creation, aligned `useWBSTree` with generated snake_case OpenAPI contracts and query-key helpers, updated the HITL review test mock cast for current React Query typings, switched client hooks to the browser-safe axios bundle, and pinned the frontend build script to `next build --webpack` so Next 16 workspace builds avoid the Turbopack root-resolution failure seen in Vercel and local production builds.` |
+| [x]    | P1       | `TASK-FRT-169` | Frontend    | Remove the regressed duplicate root route that makes Vercel look for the missing `app/(app)/page_client-reference-manifest.js` during build trace collection `[x] @2026-04-10 - Added a regression test proving `/` is owned only by `app/page.tsx`, deleted the stale `app/(app)/page.tsx` route-group root page, and updated the frontend build script to clear `.next` before `next build --webpack` so restored caches do not retain deleted route artifacts.` |
 
 **Full frontend backlog**: [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)
 
@@ -118,7 +119,7 @@
 
 ---
 
-### Infrastructure (20 pending)
+### Infrastructure (18 pending)
 
 | Status | Priority | Task ID                          | Depends On | Description                                                                |
 | ------ | -------- | -------------------------------- | ---------- | -------------------------------------------------------------------------- |
@@ -139,6 +140,7 @@
 | [x]    | P3       | `TASK-INF-053`                   | None       | Coverage gates defined as `>=60%` orange and `>=80%` green `[x] @2026-04-09 - Added root codecov.yml with 60..100 range and 80% project/patch targets, aligned unit-test CI to emit coverage.xml and fail below 60%, and updated CI/CD setup docs to point at the repo-level gate policy. External Codecov account/app hookup remains an operational follow-up, not a missing repo config.]` |
 | [ ]    | P3       | `TASK-INF-055`                   | DevOps     | Monitor auth failures in Sentry                                            |
 | [ ]    | P3       | `TASK-INF-056`                   | DevOps     | Define and run performance benchmarks                                      |
+| [x]    | P1       | `TASK-INF-057`                   | DevOps     | Make the API container bind Railway's assigned `$PORT` instead of a hard-coded `8000` so platform health checks can reach `/api/v1/health` `[x] @2026-04-10 - Added a Dockerfile regression test, switched the container healthcheck to `localhost:${PORT:-8000}/health`, and changed the runtime command to launch uvicorn on `${PORT:-8000}`.]` |
 
 **Full infrastructure backlog**: [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md)
 

@@ -8,6 +8,7 @@ const repoRoot = resolve(__dirname, "../..");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: repoRoot,
   turbopack: {
     root: repoRoot,
   },
