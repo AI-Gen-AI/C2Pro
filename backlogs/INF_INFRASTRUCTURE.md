@@ -2,7 +2,7 @@
 
 **Category**: Infrastructure (INF)
 **Owner Role**: infra
-**Last Updated**: 2026-04-04
+**Last Updated**: 2026-04-10
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -18,7 +18,7 @@
 
 **Completed Tasks**: 38
 
-- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-053`, `TASK-INF-054`
+- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-057`
 
 **Usage Note**:
 
@@ -85,16 +85,37 @@
 | [x] | P2 | `TASK-INF-054` | DevOps | Remove non-core `everything-claude-code` agent-management workspace from the monorepo index so it never appears as a tracked submodule/gitlink on `main`; keep it ignored as local-only tooling `[x] Implemented (Gitlink Removed + Ignore Rule Added)` | Repo hygiene follow-up 2026-04-02 `[x] @2026-04-02` |
 | [ ] | P3 | `TASK-INF-055` | DevOps | Monitor auth failures in Sentry | `docs/archive/plans/Clerk/IMPLEMENTATION_GUIDE.md` |
 | [ ] | P3 | `TASK-INF-056` | DevOps | Define and run performance benchmarks | `docs/archive/plans/tdd-testing/TDD_QUICK_REFERENCE.md` |
+| [x] | P1 | `TASK-INF-057` | DevOps | Make the API container bind Railway's assigned `$PORT` instead of a hard-coded `8000` so platform health checks can reach `/api/v1/health` `[x] @2026-04-10 - Added a Dockerfile regression test, switched the container healthcheck to `localhost:${PORT:-8000}/health`, and changed the runtime command to launch uvicorn on `${PORT:-8000}`.` | Railway runtime healthcheck failure on backend deploy @2026-04-10 |
 
 **Statistics**:
-- Total: 56 tasks
-- Active: 18 (32.1%)
-- Completed: 38 (67.9%)
+- Total: 57 tasks
+- Active: 18 (31.6%)
+- Completed: 39 (68.4%)
 - Blocked: 0 (0%)
 
 ---
 
 ## 2. Specifications
+
+### Railway Runtime Port Binding (TASK-INF-057)
+
+**Task**: `TASK-INF-057`
+
+**Problem**:
+
+- Railway builds the backend image successfully, then probes `/api/v1/health` on the platform-assigned port.
+- `apps/api/Dockerfile` started uvicorn on a fixed `8000`, so the service never listened on Railway's injected `$PORT`.
+- The result is repeated `service unavailable` during rollout even when the app image itself is otherwise healthy.
+
+**Resolution**:
+
+- Added `apps/api/tests/unit/test_dockerfile_runtime.py` as a regression guard for hosted-platform port binding.
+- Updated `apps/api/Dockerfile` healthcheck to target `localhost:${PORT:-8000}/health`.
+- Updated the runtime command to `uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}` via `sh -c` so shell expansion works inside the container.
+
+**Verification**:
+
+- `python -m pytest apps/api/tests/unit/test_dockerfile_runtime.py -q`
 
 ### Category Backlog Architecture (TASK-INF-001) - Completed 2026-04-04
 

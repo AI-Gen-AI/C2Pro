@@ -19,6 +19,7 @@ describe("TASK-1428 RED - Playwright managed web server stability", () => {
     const config = readFileSync(configPath, "utf8");
 
     expect(config).toContain("turbopack:");
+    expect(config).toContain("outputFileTracingRoot: repoRoot");
     expect(config).not.toContain("root: __dirname");
     expect(config).toContain("const repoRoot");
     expect(config).toContain("root: repoRoot");

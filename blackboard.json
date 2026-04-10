@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-09T21:31:17.682512+00:00",
+  "updated_at": "2026-04-10T21:10:00+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -21,25 +21,93 @@
       "tarea_id": "T049",
       "backlog_id": "TASK-FRT-168",
       "tipo": "frontend",
-      "descripcion": "Verify and fix the remaining Vercel frontend build parity regression for hoisted Next.js workspace resolution.",
+      "descripcion": "Verify and fix the remaining Vercel frontend build parity regression caused by Next 16 selecting the Turbopack production path in the frontend workspace.",
       "asignado_a": "frontend",
       "estado": "completado",
-      "criterio_done": "Regression test fails first, Turbopack root fix lands, and the targeted frontend verification passes.",
+      "criterio_done": "Regression test fails first, the frontend build script is pinned to the verified webpack path, and the targeted frontend verification passes.",
       "archivos_modificados": [
-        "apps/web/next.config.mjs",
-        "apps/web/src/tests/integration/ci/TASK-1428-playwright-webserver.integration.test.ts"
+        "apps/web/package.json",
+        "apps/web/src/tests/integration/ci/S1-13-frontend-ci.integration.test.ts",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md"
       ],
       "timestamps": {
         "inicio": "2026-04-09T21:18:00+00:00",
-        "completado": "2026-04-09T21:31:17.682512+00:00"
+        "completado": "2026-04-09T21:38:34.452802+00:00"
       },
       "resultado": {
         "exitoso": true,
-        "mensaje": "Targeted frontend regression test passed after pinning turbopack.root to the monorepo root; Vercel WBS type error maps to already-fixed local WBS contract changes.",
+        "mensaje": "Targeted frontend regression test and production build passed after pinning the frontend build script to next build --webpack for Next 16/Vercel workspace parity.",
         "cambios_realizados": [
-          "Updated TASK-1428 regression coverage for monorepo Turbopack root resolution.",
-          "Pinned apps/web Turbopack root to the repository root for hoisted next resolution on build.",
-          "Confirmed the reported Vercel WBS CreateWBSItemInput error is already addressed in local WBS page and hook diffs."
+          "Added regression coverage asserting the frontend production build command remains next build --webpack.",
+          "Updated apps/web/package.json to use the verified webpack production build path.",
+          "Corrected TASK-FRT-168 tracking notes in the master backlog, frontend backlog, and blackboard to reflect the actual root cause and fix."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T050",
+      "backlog_id": "TASK-FRT-169",
+      "tipo": "frontend",
+      "descripcion": "Remove the regressed duplicate root route that causes Vercel to look for a missing app/(app)/page_client-reference-manifest.js during build trace collection.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "A failing regression test proves / is owned by app/page.tsx only, the duplicate grouped root page is removed, and the build script clears stale .next artifacts before webpack production builds.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/page.tsx",
+        "apps/web/package.json",
+        "apps/web/scripts/clean-next-build.mjs",
+        "apps/web/src/tests/integration/ci/TASK-FRT-169-root-route-manifest-parity.integration.test.ts",
+        "apps/web/src/tests/integration/ci/S1-13-frontend-ci.integration.test.ts",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-10T20:33:00+00:00",
+        "completado": "2026-04-10T20:57:35.7423558+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "The duplicate grouped root page was removed, a regression test now blocks it from returning, and the build script clears .next before next build --webpack so cached route artifacts do not trigger the missing manifest lookup again.",
+        "cambios_realizados": [
+          "Added a CI regression test asserting that app/page.tsx is the only root page owner.",
+          "Deleted apps/web/app/(app)/page.tsx to remove the conflicting grouped root route.",
+          "Prepended a .next cleanup step to the frontend production build command."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "build_verification": "Local npm run build still fails later on Windows because Next 16 does not emit the expected .next/types/app/(app) route stubs during its own generated-type check."
+      }
+    },
+    {
+      "tarea_id": "T051",
+      "backlog_id": "TASK-INF-057",
+      "tipo": "infra",
+      "descripcion": "Make the API container bind Railway's assigned $PORT instead of a hard-coded 8000 so platform health checks can reach /api/v1/health.",
+      "asignado_a": "infra",
+      "estado": "completado",
+      "criterio_done": "A failing regression test proves the Dockerfile binds ${PORT:-8000}, the container healthcheck follows the same port, and the targeted verification passes.",
+      "archivos_modificados": [
+        "apps/api/Dockerfile",
+        "apps/api/tests/unit/test_dockerfile_runtime.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/INF_INFRASTRUCTURE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-10T21:02:00+00:00",
+        "completado": "2026-04-10T21:10:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "The backend container now binds Railway's injected port, and its internal healthcheck uses the same resolved port so hosted rollout probes can reach the API.",
+        "cambios_realizados": [
+          "Added a regression test that reads the Dockerfile and enforces platform-port binding.",
+          "Switched the Dockerfile healthcheck to localhost:${PORT:-8000}/health.",
+          "Changed the runtime command to start uvicorn on ${PORT:-8000} via sh -c."
         ],
         "tests_pasados": true,
         "validacion_lint": false
@@ -100,7 +168,9 @@
       "TASK-AI-031",
       "TASK-BCK-027",
       "TASK-QA-103",
-      "TASK-FRT-168"
+      "TASK-FRT-168",
+      "TASK-FRT-169",
+      "TASK-INF-057"
     ]
   },
   "plan_actual": {
@@ -216,7 +286,14 @@
     "audit_pending": 4
   },
   "contexto_paso_anterior": "",
-  "trazas_de_error": [],
+  "trazas_de_error": [
+    {
+      "timestamp": "2026-04-10T20:54:00+00:00",
+      "origen": "frontend",
+      "detalle": "Local Windows verification still hits a Next 16 generated-types issue after the manifest regression fix: .next/types/app/(app)/** route stubs are missing during the build typecheck phase even after clearing .next.",
+      "backlog_id": "TASK-FRT-169"
+    }
+  ],
   "reintentos": 0,
   "max_reintentos": 3
 }
