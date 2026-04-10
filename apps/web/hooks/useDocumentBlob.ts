@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import axios from 'axios/dist/browser/axios.cjs';
 import { apiClient } from '@/lib/api/client';
 
 interface UseDocumentBlobResult {

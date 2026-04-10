@@ -84,7 +84,7 @@ function setupMock(overrides: Record<string, unknown> = {}) {
     error: null,
     refetch: mockRefetch,
     ...overrides,
-  } as ReturnType<typeof useListReviewQueueApiV1HitlQueueGet>);
+  } as unknown as ReturnType<typeof useListReviewQueueApiV1HitlQueueGet>);
 }
 
 describe('ReviewPage', () => {
