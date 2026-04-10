@@ -9,6 +9,7 @@
 import { useState, useCallback, useMemo } from "react";
 import {
   useGetWbsApiV1ProjectsProjectIdWbsGet,
+  getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey,
   useCreateWbsItemApiV1ProjectsProjectIdWbsItemsPost,
   useUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch,
   useDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete,
@@ -83,11 +84,22 @@ const transformToTreeItems = (items: WBSItemOutput[]): WBSTreeItem[] => {
       name: item.name,
       level: item.level ?? 0,
       completion: item.completion ?? 0,
-      status: item.status,
-      budgetAllocated: item.budgetAllocated,
-      budgetSpent: item.budgetSpent,
-      plannedStart: item.plannedStart ?? undefined,
-      plannedEnd: item.plannedEnd ?? undefined,
+      budgetAllocated:
+        typeof item.budget === "object" &&
+        item.budget !== null &&
+        "allocated" in item.budget &&
+        typeof item.budget.allocated === "number"
+          ? item.budget.allocated
+          : undefined,
+      budgetSpent:
+        typeof item.budget === "object" &&
+        item.budget !== null &&
+        "spent" in item.budget &&
+        typeof item.budget.spent === "number"
+          ? item.budget.spent
+          : undefined,
+      plannedStart: item.start_date ?? undefined,
+      plannedEnd: item.end_date ?? undefined,
       children: [],
     });
   });
@@ -95,8 +107,8 @@ const transformToTreeItems = (items: WBSItemOutput[]): WBSTreeItem[] => {
   // Second pass: build tree structure
   items.forEach((item) => {
     const treeItem = itemMap.get(item.id)!;
-    if (item.parentId && itemMap.has(item.parentId)) {
-      const parent = itemMap.get(item.parentId)!;
+    if (item.parent_id && itemMap.has(item.parent_id)) {
+      const parent = itemMap.get(item.parent_id)!;
       parent.children.push(treeItem);
     } else {
       rootItems.push(treeItem);
@@ -111,7 +123,7 @@ export function useWBSTree({
   enabled = true,
 }: UseWBSTreeOptions): UseWBSTreeReturn {
   // Query state
-  const queryKey = useGetWbsApiV1ProjectsProjectIdWbsGetQueryKey(projectId);
+  const queryKey = getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey(projectId);
   const { data, isLoading, isError, error, refetch } =
     useGetWbsApiV1ProjectsProjectIdWbsGet(projectId, {
       query: {
@@ -188,9 +200,8 @@ export function useWBSTree({
               name: result.name,
               level: result.level ?? 0,
               completion: result.completion ?? 0,
-              status: result.status,
-              budgetAllocated: result.budgetAllocated,
-              budgetSpent: result.budgetSpent,
+              plannedStart: result.start_date ?? undefined,
+              plannedEnd: result.end_date ?? undefined,
               children: [],
             }
           : null;
@@ -222,9 +233,8 @@ export function useWBSTree({
               name: result.name,
               level: result.level ?? 0,
               completion: result.completion ?? 0,
-              status: result.status,
-              budgetAllocated: result.budgetAllocated,
-              budgetSpent: result.budgetSpent,
+              plannedStart: result.start_date ?? undefined,
+              plannedEnd: result.end_date ?? undefined,
               children: [],
             }
           : null;
@@ -263,8 +273,7 @@ export function useWBSTree({
     async (itemId: string, newParentId: string | null): Promise<boolean> => {
       try {
         const input: MoveWBSItemInput = {
-          newParentId,
-          position: "append", // or "before", "after" for ordering
+          new_parent_id: newParentId,
         };
         await moveMutation.mutateAsync({ projectId, itemId, data: input });
         refetch();

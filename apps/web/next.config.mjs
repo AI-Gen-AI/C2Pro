@@ -1,14 +1,15 @@
 import webpack from "next/dist/compiled/webpack/webpack-lib.js";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, "../..");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   turbopack: {
-    root: __dirname,
+    root: repoRoot,
   },
   transpilePackages: ["react-pdf", "pdfjs-dist"],
   webpack: (config) => {

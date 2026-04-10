@@ -14,12 +14,14 @@ describe("TASK-1428 RED - Playwright managed web server stability", () => {
     expect(config).toContain("--webpack");
   });
 
-  it("[TASK-1428-RED-02] pins the Next turbopack root to the app workspace to avoid wrong monorepo inference", () => {
+  it("[TASK-1428-RED-02] pins the Next turbopack root to the monorepo root so hoisted next installs resolve during production builds", () => {
     const configPath = resolve(process.cwd(), "next.config.mjs");
     const config = readFileSync(configPath, "utf8");
 
     expect(config).toContain("turbopack:");
-    expect(config).toContain("root: __dirname");
+    expect(config).not.toContain("root: __dirname");
+    expect(config).toContain("const repoRoot");
+    expect(config).toContain("root: repoRoot");
   });
 
   it("[TASK-1428-RED-03] probes a stable public route for Playwright webServer readiness instead of a heavy demo page", () => {

@@ -206,10 +206,8 @@ export default function ProjectWBSPage() {
   const handleCreate = async () => {
     if (newItemName && newItemCode) {
       const success = await createItem({
-        projectId,
         code: newItemCode,
         name: newItemName,
-        nodeType: "TASK",
       });
       if (success) {
         setShowSuccessToast(true);

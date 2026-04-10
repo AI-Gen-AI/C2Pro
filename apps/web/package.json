@@ -2,9 +2,10 @@
   "name": "c2pro-web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "typecheck": "tsc --noEmit",
     "generate:api": "orval",
     "generate:api:check": "orval && git diff --exit-code -- lib/api/generated schema/api.json",
