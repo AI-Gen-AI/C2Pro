@@ -13,6 +13,7 @@ sqlalchemy>=2.0.36  # Updated for Python 3.13 compatibility
 asyncpg>=0.31.0  # Use newer version with prebuilt wheels for Python 3.13
 psycopg[binary]>=3.1.0  # Sync PostgreSQL driver for bootstrap/migration scripts
 psycopg[binary]>=3.1.18  # Needed by CI infra bootstrap scripts (sync DB admin/migration checks)
+pgvector>=0.3.6  # SQLAlchemy Vector type used by document/clause embedding ORM models
 alembic>=1.13.1
 supabase==2.5.0
 

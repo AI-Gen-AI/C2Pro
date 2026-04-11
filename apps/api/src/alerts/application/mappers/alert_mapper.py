@@ -3,12 +3,13 @@ Alert DTO Mappers.
 
 Provides centralized mapping between domain entities and DTOs.
 This separates transformation logic from use cases, following hexagonal architecture.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 
 from uuid import UUID
 
-from alerts.application.dtos import AlertResponse
-from alerts.domain.models import Alert
+from src.alerts.application.dtos import AlertResponse
+from src.alerts.domain.models import Alert
 
 
 class AlertMapper:

@@ -15,3 +15,11 @@ def test_api_dockerfile_binds_platform_port() -> None:
     assert 'HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\' in content
     assert "localhost:${PORT:-8000}/health" in content
     assert 'CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]' in content
+
+
+def test_api_runtime_requirements_include_pgvector() -> None:
+    """TASK-INF-058: the API image must install pgvector before vector-backed ORM imports load."""
+    requirements = Path(__file__).resolve().parents[2] / "requirements.txt"
+    content = requirements.read_text(encoding="utf-8")
+
+    assert "pgvector" in content

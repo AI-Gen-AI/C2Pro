@@ -2,7 +2,7 @@
 HTTP Adapter for Alerts Module.
 
 FastAPI router using hexagonal architecture use cases.
-Refers to Suite ID: TS-UC-ALR-LST-001, TS-UC-ALR-REV-001, TS-UC-ALR-RSV-001.
+Refers to Suite ID: TS-UC-ALR-LST-001, TS-UC-ALR-REV-001, TS-UC-ALR-RSV-001, TS-BUG-ALRT-IMPORT-001.
 
 Phase B: Migrating from legacy router.py to hexagonal architecture.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from alerts.application.dtos import (
+from src.alerts.application.dtos import (
     AlertHistoryResponse,
     AlertListResponse,
     AlertResponse,
@@ -22,20 +22,20 @@ from alerts.application.dtos import (
     ResolveAlertRequest,
     ReviewAlertRequest,
 )
-from alerts.application.mappers import AlertMapper
-from alerts.application.ports.alert_repository import IAlertRepository
-from alerts.application.use_cases.create_alert_use_case import CreateAlertUseCase
-from alerts.application.use_cases.list_alerts_use_case import ListAlertsUseCase
-from alerts.application.use_cases.resolve_alert_use_case import (
+from src.alerts.application.mappers import AlertMapper
+from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.application.use_cases.create_alert_use_case import CreateAlertUseCase
+from src.alerts.application.use_cases.list_alerts_use_case import ListAlertsUseCase
+from src.alerts.application.use_cases.resolve_alert_use_case import (
     AlertNotFoundError as ResolveAlertNotFoundError,
 )
-from alerts.application.use_cases.resolve_alert_use_case import (
+from src.alerts.application.use_cases.resolve_alert_use_case import (
     ResolveAlertUseCase,
 )
-from alerts.application.use_cases.review_alert_use_case import (
+from src.alerts.application.use_cases.review_alert_use_case import (
     AlertNotFoundError as ReviewAlertNotFoundError,
 )
-from alerts.application.use_cases.review_alert_use_case import (
+from src.alerts.application.use_cases.review_alert_use_case import (
     ReviewAlertUseCase,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -50,7 +50,7 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 def get_alert_repository(
     session: AsyncSession = Depends(get_session),
 ) -> IAlertRepository:
-    from alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+    from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
     return SqlAlchemyAlertRepository(session=session)
 
 

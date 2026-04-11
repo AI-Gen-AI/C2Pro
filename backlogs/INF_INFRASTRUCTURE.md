@@ -2,7 +2,7 @@
 
 **Category**: Infrastructure (INF)
 **Owner Role**: infra
-**Last Updated**: 2026-04-10
+**Last Updated**: 2026-04-11
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -16,9 +16,9 @@
 
 - IDs: `TASK-INF-008`-`TASK-INF-019`, `TASK-INF-055`-`TASK-INF-056`
 
-**Completed Tasks**: 38
+**Completed Tasks**: 40
 
-- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-057`
+- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-057`-`TASK-INF-058`
 
 **Usage Note**:
 
@@ -86,11 +86,12 @@
 | [ ] | P3 | `TASK-INF-055` | DevOps | Monitor auth failures in Sentry | `docs/archive/plans/Clerk/IMPLEMENTATION_GUIDE.md` |
 | [ ] | P3 | `TASK-INF-056` | DevOps | Define and run performance benchmarks | `docs/archive/plans/tdd-testing/TDD_QUICK_REFERENCE.md` |
 | [x] | P1 | `TASK-INF-057` | DevOps | Make the API container bind Railway's assigned `$PORT` instead of a hard-coded `8000` so platform health checks can reach `/api/v1/health` `[x] @2026-04-10 - Added a Dockerfile regression test, switched the container healthcheck to `localhost:${PORT:-8000}/health`, and changed the runtime command to launch uvicorn on `${PORT:-8000}`.` | Railway runtime healthcheck failure on backend deploy @2026-04-10 |
+| [x] | P0 | `TASK-INF-058` | DevOps | Restore API container startup by shipping the Python `pgvector` dependency required by `src.documents.adapters.persistence.models` `[x] @2026-04-11 - Added a regression test that enforces `pgvector` in `apps/api/requirements.txt` and restored the missing runtime dependency so vector-backed ORM imports no longer crash the API container at boot.` | Docker runtime failure `ModuleNotFoundError: No module named 'pgvector'` @2026-04-11 |
 
 **Statistics**:
-- Total: 57 tasks
+- Total: 58 tasks
 - Active: 18 (31.6%)
-- Completed: 39 (68.4%)
+- Completed: 40 (69.0%)
 - Blocked: 0 (0%)
 
 ---
@@ -112,6 +113,25 @@
 - Added `apps/api/tests/unit/test_dockerfile_runtime.py` as a regression guard for hosted-platform port binding.
 - Updated `apps/api/Dockerfile` healthcheck to target `localhost:${PORT:-8000}/health`.
 - Updated the runtime command to `uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}` via `sh -c` so shell expansion works inside the container.
+
+**Verification**:
+
+- `python -m pytest apps/api/tests/unit/test_dockerfile_runtime.py -q`
+
+### Missing pgvector Runtime Dependency (TASK-INF-058)
+
+**Task**: `TASK-INF-058`
+
+**Problem**:
+
+- The API container restarted on boot with `ModuleNotFoundError: No module named 'pgvector'`.
+- Startup imports `src.alerts.adapters.http.router`, which reaches `src.documents.adapters.persistence.models`.
+- That model module imports `Vector` from `pgvector.sqlalchemy`, but `apps/api/requirements.txt` did not install `pgvector` into the image.
+
+**Resolution**:
+
+- Added a regression guard in `apps/api/tests/unit/test_dockerfile_runtime.py` to keep `pgvector` in the runtime dependency set.
+- Added `pgvector>=0.3.6` to `apps/api/requirements.txt`.
 
 **Verification**:
 

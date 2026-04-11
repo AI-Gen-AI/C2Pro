@@ -13,13 +13,13 @@ u# Backend Tasks & Knowledge Base
 
 ## 0. Status View
 
-**Pending Tasks**: 6
+**Pending Tasks**: 8
 
-- IDs: `TASK-BCK-020`, `TASK-BCK-032`-`TASK-BCK-033`, `TASK-BCK-040`-`TASK-BCK-042`
+- IDs: `TASK-BCK-020`, `TASK-BCK-032`-`TASK-BCK-033`, `TASK-BCK-040`-`TASK-BCK-044`
 
-**Completed Tasks**: 35
+**Completed Tasks**: 37
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-039`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-039`, `TASK-BCK-045`
 
 **Usage Note**:
 
@@ -71,17 +71,28 @@ u# Backend Tasks & Knowledge Base
 | [ ]    | P1       | `TASK-BCK-040` | QA Support, `TASK-BCK-039` | Resolve Ruff linting debt (2692 errors found) - systematic cleanup of code quality violations across codebase. Auto-fix safe issues, manually review remaining. Target: <50 errors.                                                                                                                                                                       | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T007                                  |
 | [ ]    | P2       | `TASK-BCK-041` | QA Support                 | **Ruff ARG Error Audit - tenant_id/user_id Review**: Audit 25 ARG errors involving tenant*id/user_id to determine real security bugs vs design patterns. Requires second opinion before implementing fixes. Result: 0 security bugs - 17 design correct, 8 interface contracts. FIX: Use `*` prefix for all 25 errors. Pending second opinion.            | Post-T007 Audit (2026-04-07)                                                                                                                                            | Role Backend                                     |
 | [ ]    | P2       | `TASK-BCK-042` | Backend                    | **DLQ Admin Endpoints**: Implement 2 admin endpoints for Dead Letter Queue management. `GET /api/v1/admin/dlq` (list tasks by status) and `POST /api/v1/admin/dlq/{id}/retry` (manual retry). Service layer exists (DLQService). Need: router, DTOs, admin authorization, tests.                                                                           | DLQ Integration Review (2026-04-09)                                                                                                                                     | Role Backend                                     |
+| [ ]    | P2       | `TASK-BCK-043` | Backend, DB Infra          | **WBS Integration Tests Hang Without DB**: `tests/unit/wbs/test_wbs_node_repository.py` (9 tests) are marked `pytest.mark.integration` but live in `tests/unit/`. They require `async_session` fixture with real PostgreSQL. Fix: either (a) move to `tests/integration/` and skip in unit runs, or (b) add a skip marker when DB is unavailable. Currently causes 1 ERROR + 8 FAIL + timeouts in full unit suite.                                                                          | Frontend Audit (2026-04-09)                                                                                                                                             | Role Backend                                     |
+| [ ]    | P3       | `TASK-BCK-044` | Backend, Alerts            | **Flaky SLA Calculator Test**: `tests/unit/alerts/domain/test_sla_calculator.py::test_calculate_at_exact_due_time` fails intermittently under load (timing-sensitive boundary condition at exact due time). Passes when run alone. Fix: freeze time with `freezegun` or `time_machine` to eliminate flakiness.                                                | Frontend Audit (2026-04-09)                                                                                                                                             | Role Backend                                     |
+| [x]    | P0       | `TASK-BCK-045` | Backend, Alerts            | **Railway Alerts Import Crash**: fix the backend startup regression where `src.main` imports `src.alerts.adapters.http.router`, but legacy top-level `alerts.*` imports inside `src/alerts` crash the container with `ModuleNotFoundError: No module named 'alerts'`. `[x] Implemented (subprocess regression test + import normalization to \`src.alerts.*\`)` | Railway log `logs.1775857904790.json` (2026-04-10)                                                                                                                      | Role Backend                                     |
 
 **Statistics**:
 
-- Total: 40 tasks
-- Active: 6 (15%)
-- Completed: 35 (87.5%)
+- Total: 45 tasks
+- Active: 8 (17.8%)
+- Completed: 37 (82.2%)
 - Blocked: 0
 
 ---
 
 ## 2. Specifications
+
+### TASK-BCK-045 - Railway Alerts Import Crash (2026-04-10)
+
+- Symptom: Railway deployment `6f50520f-b6f1-4fe0-9dd1-4d1b7d407679` crashed during backend startup at `2026-04-10 21:38:54 UTC` while importing `src.main`.
+- Root cause: `src.alerts.adapters.__init__`, `src.alerts.adapters.http.router`, and downstream alerts package modules still referenced legacy `alerts.*` absolute imports. In the container, only the `src` package root is importable, so `uvicorn` failed before the app object loaded.
+- TDD evidence: added `apps/api/tests/unit/alerts/test_package_imports.py` with subprocess coverage for a plain `import src.alerts.adapters.http.router` from `apps/api`, matching the non-pytest runtime path that Railway uses.
+- Implementation: normalized internal alerts-package imports to `src.alerts.*` across adapters, application, and domain modules; updated touched implementation docstrings with `TS-BUG-ALRT-IMPORT-001`.
+- Verification: targeted pytest passed, and a plain interpreter run from `apps/api` now completes `import src.main` successfully.
 
 ### Frontend Priority Session - Backend APIs (2026-04-05)
 
@@ -1753,6 +1764,8 @@ _Lessons learned will be documented here_
 
 | Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-10 | **TASK-BCK-045 complete**: Fixed Railway backend startup crash from `logs.1775857904790.json` (deployment `6f50520f-b6f1-4fe0-9dd1-4d1b7d407679`). Root cause was legacy `alerts.*` imports inside `src/alerts` while the runtime only exposes the `src` package root. Added subprocess regression coverage for plain `import src.alerts.adapters.http.router`, normalized alerts-package imports to `src.alerts.*`, and verified plain `import src.main` now succeeds from `apps/api`. Total tasks: 45 (37 completed, 8 pending). |
+| 2026-04-09 | Added TASK-BCK-043 and TASK-BCK-044 from Frontend Audit. TASK-BCK-043 (P2): WBS integration tests (9 tests) hang without DB - misplaced in tests/unit/ but need async_session with real PostgreSQL. TASK-BCK-044 (P3): Flaky SLA calculator test (timing-sensitive boundary). Full unit suite: 828 passed, 9 DB-dependent failures, 1 flaky. Total tasks: 42 (35 completed, 8 pending). |
 | 2026-04-09 | Added TASK-BCK-042: DLQ Admin Endpoints - 2 admin endpoints for Dead Letter Queue management (GET list, POST retry). Service layer complete, need HTTP router layer with admin authorization. Source: DLQ Integration Review skipped tests in test_dlq_operations.py. Total tasks: 40 (35 completed, 6 pending). |
 | 2026-04-06 | **TASK-BCK-028 complete**: All 7 E2E tests passing (14h actual vs 12h estimated) - Fixed 3 blocking issues: (1) Bcrypt compatibility: added TEST_PASSWORD_HASH constant in conftest.py to bypass hash_password() during fixture setup, (2) AnalysisStatus enum: changed PENDING_REVIEW → RUNNING in tests 002/003 (HITL flows), (3) API endpoint: changed GET /alerts/{id} → GET /projects/{project_id}/alerts in test 005 (notification delivery). Test results: 7 passed in 162.73s (test_001: upload→analysis→alerts, test_002: HITL approval, test_003: HITL rejection, test_004: document update re-trigger, test_005: notification delivery, test_006: DLQ error handling, test_007: concurrent processing). Files modified: tests/conftest.py (TEST_PASSWORD_HASH constant), tests/e2e/flows/test_document_analysis_pipeline_e2e.py (3 fixes). Total tasks: 34 (28 completed, 6 pending, 0 blocked). |
 | 2026-04-06 | TASK-BCK-035 complete: Fixed critical DuplicateTableError in Alert model (0.25h actual vs 0.5h estimated) - QA Leader identified production blocker: duplicate index definition on alert_type (L180 index=True + L265 Index in **table_args**). Removed redundant Index declaration from **table_args**, kept column-level index. Verified: database setup now successful, tests initialize without error. Unblocked: TASK-BCK-030 (22 HITL tests), TASK-BCK-029 (WBS integration), TASK-BCK-028 (E2E pipeline), TASK-QA-098 (QA verification). Total tasks: 34 (28 completed, 6 pending, 0 blocked).                                                                                                                                                                                                                                                                                                       |

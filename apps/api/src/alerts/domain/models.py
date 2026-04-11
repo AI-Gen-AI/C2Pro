@@ -3,7 +3,7 @@ Alert Domain Model.
 
 Pure Python domain entity - NO SQLAlchemy, NO external dependencies.
 Contains business logic for alert lifecycle management.
-Refers to TASK-REV-006.
+Refers to TASK-REV-006, TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
+from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 
 
 @dataclass

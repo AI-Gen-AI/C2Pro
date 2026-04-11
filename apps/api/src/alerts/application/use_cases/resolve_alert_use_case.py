@@ -2,6 +2,7 @@
 Resolve Alert Use Case.
 
 Use case for resolving alerts with validation.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
@@ -10,11 +11,11 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
-from alerts.application.dtos import AlertResponse
-from alerts.application.mappers import AlertMapper
-from alerts.application.ports.alert_repository import IAlertRepository
-from alerts.domain.enums import AlertSeverity
-from alerts.domain.models import Alert
+from src.alerts.application.dtos import AlertResponse
+from src.alerts.application.mappers import AlertMapper
+from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.domain.enums import AlertSeverity
+from src.alerts.domain.models import Alert
 
 
 class AlertNotFoundError(Exception):
