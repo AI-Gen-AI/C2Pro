@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { Upload } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { uploadDocument } from "@/lib/api";
 
@@ -113,25 +113,11 @@ export function DocumentUploadDropzone({
 
   return (
     <section
-      className="rounded-[28px] border border-border/70 bg-background p-6 shadow-sm"
+      className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-sm"
       data-project-id={projectId}
       data-testid="document-upload-surface"
     >
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-4">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Supported formats</p>
-          <p className="text-sm text-muted-foreground">
-            PDF, XLSX, BC3 up to 50MB per file.
-          </p>
-        </div>
-        <div
-          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
-          data-testid="document-upload-guidance"
-        >
-          Files stay private to this project workspace.
-        </div>
-      </div>
-
+      {/* Drop zone */}
       <button
         type="button"
         aria-label={ariaLabel}
@@ -140,30 +126,41 @@ export function DocumentUploadDropzone({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`min-h-[260px] w-full rounded-[24px] border-2 border-dashed bg-background px-6 py-10 text-center text-foreground shadow-sm transition-colors ${
+        className={`min-h-[260px] w-full bg-background px-6 py-10 text-center text-foreground shadow-sm transition-colors ${
           dragState === "active"
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border/90 hover:border-primary/50 hover:bg-muted/30"
+            ? "border-b-2 border-dashed border-primary bg-primary/5 text-primary"
+            : "border-b border-dashed border-border/60 hover:bg-muted/20"
         }`}
       >
-        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/70 bg-muted text-foreground shadow-sm">
-          <Upload className="h-7 w-7" />
-        </div>
-        <p className="text-lg font-semibold tracking-tight">Drag and drop files here</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Upload contracts, schedules, budgets, or BC3 files for this project.
-        </p>
-        <p className="mt-4 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          PDF, XLSX, BC3
-        </p>
+        {uploading ? (
+          <div className="flex flex-col items-center justify-center">
+            <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary" />
+            <p className="text-base font-semibold tracking-tight">Uploading your files…</p>
+            <p className="mt-1 text-sm text-muted-foreground">This may take a moment</p>
+          </div>
+        ) : (
+          <>
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/70 bg-muted text-foreground shadow-sm">
+              <Upload className="h-7 w-7" />
+            </div>
+            <p className="text-lg font-semibold tracking-tight">Drag and drop files here</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Upload contracts, schedules, budgets, or BC3 files for this project.
+            </p>
+            <p className="mt-4 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground/70">
+              PDF · XLSX · BC3
+            </p>
+          </>
+        )}
       </button>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/80 px-4 py-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Prefer browsing?</p>
-          <p className="text-xs text-muted-foreground">
-            Choose one or multiple files and we will queue them for backend processing.
-          </p>
+      {/* Footer: privacy badge + browse button */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <div
+          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+          data-testid="document-upload-guidance"
+        >
+          Files stay private to this project workspace.
         </div>
         <Button
           type="button"
@@ -175,26 +172,26 @@ export function DocumentUploadDropzone({
           <Upload className="mr-2 h-4 w-4" />
           Browse files
         </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept=".pdf,.xlsx,.bc3"
-          className="sr-only"
-          disabled={uploading}
-          onChange={(event) => handleUpload(Array.from(event.target.files ?? []))}
-        />
       </div>
 
-      <p role="status" aria-live="polite" className="mt-4 text-sm text-muted-foreground">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".pdf,.xlsx,.bc3"
+        className="sr-only"
+        disabled={uploading}
+        onChange={(event) => handleUpload(Array.from(event.target.files ?? []))}
+      />
+
+      <p role="status" aria-live="polite" className="sr-only">
         {statusMessage}
       </p>
       {message ? (
-        <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-foreground">
+        <div className="mx-5 mb-4 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-foreground">
           {message}
         </div>
       ) : null}
     </section>
   );
 }
-
