@@ -184,31 +184,25 @@ export default function ProjectDocumentsPage() {
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent
-          className="gap-5 border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[720px] sm:rounded-[28px]"
+          className="gap-4 border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[680px] sm:rounded-[28px]"
           data-testid="documents-upload-dialog-shell"
         >
           <DialogHeader className="rounded-[24px] border border-border/70 bg-muted/35 px-5 py-5">
             <DialogTitle>Upload Documents</DialogTitle>
             <DialogDescription>
-              Add project files with a clearer upload surface and live status feedback.
+              Files will be scoped to{" "}
+              <span className="font-medium text-foreground">{projectName}</span> and will
+              appear in the document register once queued.
             </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 rounded-[24px] border border-border/60 bg-background/80 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Project intake</p>
-              <p className="text-sm text-muted-foreground">
-                Files stay scoped to {projectName} and will appear in the document register once queued.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm">
-                Supported formats
+                PDF, XLSX, BC3
               </span>
               <span className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
-                Max 50MB each
+                Max 50 MB each
               </span>
             </div>
-          </div>
+          </DialogHeader>
           <DocumentUploadDropzone
             projectId={projectId}
             maxFileSizeBytes={50 * 1024 * 1024}
