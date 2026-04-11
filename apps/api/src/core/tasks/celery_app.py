@@ -6,6 +6,7 @@ It sets up Redis as the broker and result backend and configures task
 auto-discovery.
 
 This is the entry point for Celery workers.
+Refers to Suite ID: TS-OPS-CELERY-QUEUE-001.
 """
 
 from celery import Celery
@@ -37,6 +38,9 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
 
     # Task settings
+    task_default_queue="document_parsing",
+    task_default_exchange="document_parsing",
+    task_default_routing_key="document_parsing",
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

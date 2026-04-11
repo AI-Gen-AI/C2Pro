@@ -102,7 +102,9 @@ jobs:
       - name: Deploy backend to Railway production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
-        run: railway up --service api
+        run: |
+          railway up --service api
+          railway up --service celery-worker
 
       - name: Health check backend
         env:

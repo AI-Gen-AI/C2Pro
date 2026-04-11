@@ -22,6 +22,7 @@ def test_deploy_production_workflow_exists_and_validates_gate7_bundle() -> None:
     assert "commit_sha:" in contents
     assert "python scripts/validate_release_evidence.py" in contents
     assert "railway up --service api" in contents
+    assert "railway up --service celery-worker" in contents
     assert "vercel deploy --prebuilt --prod" in contents
 
 
