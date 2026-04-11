@@ -216,6 +216,10 @@ export async function uploadDocument(
     | "SPECIFICATION"
     | "DRAWING"
     | "OTHER" = "CONTRACT",
+  authOverride?: {
+    token?: string | null;
+    tenantId?: string | null;
+  },
 ): Promise<{ id: string; task_id: string }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -224,7 +228,9 @@ export async function uploadDocument(
 
   // Import auth store to get token - file uploads go directly to backend
   const { useAuthStore } = await import("@/stores/auth");
-  const { token, tenantId } = useAuthStore.getState();
+  const storeAuth = useAuthStore.getState();
+  const token = authOverride?.token ?? storeAuth.token;
+  const tenantId = authOverride?.tenantId ?? storeAuth.tenantId;
 
   const headers: Record<string, string> = {};
   if (token) {

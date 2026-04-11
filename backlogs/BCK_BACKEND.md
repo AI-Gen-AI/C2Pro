@@ -17,9 +17,9 @@ u# Backend Tasks & Knowledge Base
 
 - IDs: `TASK-BCK-020`, `TASK-BCK-032`-`TASK-BCK-033`, `TASK-BCK-040`-`TASK-BCK-044`
 
-**Completed Tasks**: 40
+**Completed Tasks**: 41
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-048`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-049`
 
 **Usage Note**:
 
@@ -77,17 +77,29 @@ u# Backend Tasks & Knowledge Base
 | [x]    | P0       | `TASK-BCK-046` | Frontend                   | **Project Status Update Contract Fix**: replace the settings page free-text status input with a bounded select and always send `expected_version` so project status updates no longer fail the API concurrency guard `[x] @2026-04-11 - Implemented status Select + `expected_version` PATCH payload parity on the project settings page.` | User report 2026-04-11 | Role Backend |
 | [x]    | P0       | `TASK-BCK-047` | Full-Stack                 | **Document Reprocess And Status Mapping Fix**: correct frontend document status normalization for queued/analyzed states, add backend `POST /projects/{project_id}/documents/{document_id}/reprocess`, and expose a retry control for errored/uploaded documents `[x] @2026-04-11 - Implemented backend reprocess endpoint, frontend retry button, and fixed status mapping so documents no longer look stuck in error when they are uploaded/analyzed.` | User report 2026-04-11 | Role Backend |
 | [x]    | P0       | `TASK-BCK-048` | Frontend, Infrastructure   | **Production Alerts Route + Upload CORS Parity**: restore `GET /api/v1/projects/{project_id}/alerts` compatibility for live frontend clients and auto-expand `c2pro.io`/`www.c2pro.io` CORS origins when either one is configured so direct browser uploads are allowed from the production site `[x] @2026-04-11 - Added route-contract tests, registered a compatibility alerts router under `/projects/{project_id}/alerts`, and normalized apex/www production origins inside settings parsing.` | User report 2026-04-11 | Role Backend |
+| [x]    | P0       | `TASK-BCK-049` | Frontend, Infrastructure   | **Direct Upload Clerk Token + Error CORS Fix**: fetch a fresh Clerk token at upload time for direct browser uploads and make sure early auth failures from the backend still carry CORS headers so the browser receives a real 401 instead of a masked network/CORS error `[x] @2026-04-11 - Reordered FastAPI middleware so CORS wraps auth middleware, added a regression for unauthorized upload responses retaining `Access-Control-Allow-Origin`, and updated the upload dropzone/lib upload helper to send a fresh Clerk token per upload attempt.` | User report 2026-04-11 | Role Backend |
 
 **Statistics**:
 
-- Total: 48 tasks
+- Total: 49 tasks
 - Active: 8 (17.8%)
-- Completed: 40 (83.3%)
+- Completed: 41 (83.7%)
 - Blocked: 0
 
 ---
 
 ## 2. Specifications
+
+### TASK-BCK-049 - Direct Upload Clerk Token + Error CORS Fix (2026-04-11)
+
+- Symptom: production preflight requests succeeded, but the final browser `POST` still failed during live document uploads. Railway returned early auth failures without `Access-Control-Allow-Origin`, which the browser surfaced as a generic CORS/network error. At the same time, the frontend direct upload path depended on a possibly stale Zustand token instead of always asking Clerk for the current session token.
+- Root cause 1: `DocumentUploadDropzone` called the direct upload helper without refreshing the Clerk token first, so uploads could race the auth-sync store or use an expired cached token.
+- Root cause 2: FastAPI middleware registration put auth/tenant middleware outside CORS, so a short-circuit `401` response from `TenantIsolationMiddleware` never passed back through `CORSMiddleware`.
+- TDD evidence: added `apps/api/tests/core/test_cors_error_responses.py` to assert unauthorized upload responses keep CORS headers, expanded `apps/web/lib/api/uploadDocument.test.ts` to verify explicit token override behavior, and updated `apps/web/components/features/documents/DocumentUploadDropzone.test.tsx` to prove the dropzone requests a fresh Clerk token before upload.
+- Implementation: moved `CORSMiddleware` to the outermost position in `create_application()`, added an optional auth override to `uploadDocument()`, and updated the upload dropzone to call Clerk `getToken()` per file before posting directly to Railway.
+- Verification:
+  - `pytest apps/api/tests/core/test_cors_error_responses.py apps/api/tests/core/test_alerts_route_contract.py apps/api/tests/unit/core/test_config_settings.py apps/api/tests/core/test_feature_flags.py -q`
+  - `pnpm vitest run lib/api/uploadDocument.test.ts components/features/documents/DocumentUploadDropzone.test.tsx --config vitest.config.mts`
 
 ### TASK-BCK-048 - Production Alerts Route + Upload CORS Parity (2026-04-11)
 

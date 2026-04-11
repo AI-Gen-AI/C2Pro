@@ -151,4 +151,31 @@ describe("uploadDocument", () => {
 
     expect(mockedHandleAuthErrorStatus).toHaveBeenCalledWith(401);
   });
+
+  it("prefers an explicit fresh auth token override for direct uploads", async () => {
+    const { uploadDocument } = await import("./index");
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ id: "doc-1", task_id: "task-1" }),
+    });
+
+    const file = new File(["contract"], "contract.pdf", {
+      type: "application/pdf",
+    });
+
+    await uploadDocument("proj_live_001", file, "CONTRACT", {
+      token: "fresh-token-456",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/projects/proj_live_001/documents"),
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer fresh-token-456",
+          "X-Tenant-ID": "tenant-001",
+        },
+      }),
+    );
+  });
 });

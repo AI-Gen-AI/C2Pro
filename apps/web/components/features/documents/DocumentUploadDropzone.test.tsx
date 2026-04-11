@@ -7,9 +7,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DocumentUploadDropzone } from "@/components/features/documents/DocumentUploadDropzone";
 
 const uploadDocumentMock = vi.fn();
+const getTokenMock = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   uploadDocument: (...args: unknown[]) => uploadDocumentMock(...args),
+}));
+
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({
+    getToken: getTokenMock,
+  }),
 }));
 
 function createFile(name: string, type: string, size = 1024): File {
@@ -19,6 +26,7 @@ function createFile(name: string, type: string, size = 1024): File {
 describe("S2-09 - DocumentUploadDropzone", () => {
   afterEach(() => {
     uploadDocumentMock.mockReset();
+    getTokenMock.mockReset();
   });
 
   it("rejects non-allowlisted extensions with explicit error", async () => {
@@ -86,6 +94,7 @@ describe("S2-09 - DocumentUploadDropzone", () => {
 
   it("reports upload acceptance without implying backend processing is finished", async () => {
     uploadDocumentMock.mockResolvedValue({ id: "doc-1", task_id: "task-1" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
     const onUploadComplete = vi.fn();
 
     render(
@@ -107,6 +116,7 @@ describe("S2-09 - DocumentUploadDropzone", () => {
         "proj_live_001",
         expect.objectContaining({ name: "contract.pdf" }),
         "CONTRACT",
+        { token: "fresh-token-123" },
       );
     });
 
@@ -120,6 +130,29 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     );
     expect(screen.queryByText(/upload complete!/i)).not.toBeInTheDocument();
     expect(onUploadComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the shared auth store path when Clerk cannot supply a fresh token", async () => {
+    uploadDocumentMock.mockResolvedValue({ id: "doc-1", task_id: "task-1" });
+    getTokenMock.mockResolvedValue(null);
+
+    render(<DocumentUploadDropzone projectId="proj_live_002" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile("contract.pdf", "application/pdf")],
+      },
+    });
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_live_002",
+        expect.objectContaining({ name: "contract.pdf" }),
+        "CONTRACT",
+        undefined,
+      );
+    });
   });
 
   it("renders the upload surface with high-contrast styling for production readability", () => {

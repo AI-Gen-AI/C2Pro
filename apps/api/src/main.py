@@ -210,7 +210,13 @@ def create_application() -> FastAPI:
     # MIDDLEWARE
     # ===========================================
 
-    # CORS
+    # Custom middleware
+    app.add_middleware(APIContractMiddleware)  # Adds X-API-Version and X-Response-Time headers
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(TenantIsolationMiddleware)
+
+    # CORS must wrap auth/tenant middleware so even early 401/500 responses keep CORS headers.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -218,12 +224,6 @@ def create_application() -> FastAPI:
         allow_methods=settings.cors_methods,
         allow_headers=settings.cors_headers,
     )
-
-    # Custom middleware
-    app.add_middleware(APIContractMiddleware)  # Adds X-API-Version and X-Response-Time headers
-    app.add_middleware(RateLimitMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
-    app.add_middleware(TenantIsolationMiddleware)
 
     # ===========================================
     # EXCEPTION HANDLERS
