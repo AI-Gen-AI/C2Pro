@@ -4,14 +4,15 @@ Create Alert Use Case.
 Use case for creating new alerts with tenant isolation.
 TASK-IMPL-003: Fixed tenant_id propagation to repository.
 Refers to Suite ID: TS-E2E-FLW-JRN-001.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from alerts.application.ports.alert_repository import IAlertRepository
-from alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
-from alerts.domain.models import Alert
+from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
+from src.alerts.domain.models import Alert
 
 
 class CreateAlertUseCase:

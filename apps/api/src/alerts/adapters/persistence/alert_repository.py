@@ -4,7 +4,7 @@ SQLAlchemy Alert Repository.
 Persistence adapter using AlertORM from analysis module.
 Implements IAlertRepository port with tenant isolation.
 
-Refers to Suite ID: TS-E2E-FLW-JRN-001.
+Refers to Suite ID: TS-E2E-FLW-JRN-001, TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from alerts.application.ports.alert_repository import IAlertRepository
-from alerts.domain.enums import AlertSeverity, AlertStatus
-from alerts.domain.models import Alert
+from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.domain.enums import AlertSeverity, AlertStatus
+from src.alerts.domain.models import Alert
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.documents.adapters.persistence.models import ClauseORM
 from src.projects.adapters.persistence.models import ProjectORM

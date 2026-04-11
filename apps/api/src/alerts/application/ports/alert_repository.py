@@ -2,14 +2,15 @@
 Alert Repository Port.
 
 Interface for alert persistence operations.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
 from typing import Protocol
 from uuid import UUID
 
-from alerts.domain.enums import AlertSeverity, AlertStatus
-from alerts.domain.models import Alert
+from src.alerts.domain.enums import AlertSeverity, AlertStatus
+from src.alerts.domain.models import Alert
 
 
 class IAlertRepository(Protocol):

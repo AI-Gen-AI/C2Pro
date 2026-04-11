@@ -3,15 +3,16 @@ List Alerts Use Case.
 
 Use case for listing alerts with tenant isolation.
 TASK-IMPL-004: Fixed copy-paste bug where severity was used instead of status.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
 from uuid import UUID
 
-from alerts.application.dtos import AlertListResponse
-from alerts.application.mappers import AlertMapper
-from alerts.application.ports.alert_repository import IAlertRepository
-from alerts.domain.enums import AlertSeverity, AlertStatus
+from src.alerts.application.dtos import AlertListResponse
+from src.alerts.application.mappers import AlertMapper
+from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.domain.enums import AlertSeverity, AlertStatus
 
 
 class ListAlertsUseCase:

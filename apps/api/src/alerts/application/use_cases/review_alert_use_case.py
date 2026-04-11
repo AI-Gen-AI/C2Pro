@@ -2,14 +2,15 @@
 Review Alert Use Case.
 
 Use case for reviewing (approve/reject) alerts.
+Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
 from uuid import UUID
 
-from alerts.application.dtos import AlertResponse
-from alerts.application.mappers import AlertMapper
-from alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.application.dtos import AlertResponse
+from src.alerts.application.mappers import AlertMapper
+from src.alerts.application.ports.alert_repository import IAlertRepository
 
 
 class AlertNotFoundError(Exception):
