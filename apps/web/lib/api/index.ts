@@ -15,6 +15,9 @@ import { reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch } from "@/lib/a
 import { createHighlight, getHighlightColor } from "@/types/highlight";
 import { apiClient, handleAuthErrorStatus } from "./client";
 
+const RUNTIME_BACKEND_URL_ENDPOINT = "/api/runtime/backend-url";
+let runtimeBackendApiBaseUrlPromise: Promise<string | null> | null = null;
+
 /**
  * Processed entity type for document analysis
  */
@@ -231,8 +234,9 @@ export async function uploadDocument(
     headers["X-Tenant-ID"] = tenantId;
   }
 
+  const uploadApiBaseUrl = await resolveUploadApiBaseUrl();
   const response = await fetch(
-    `${env.API_BASE_URL}/projects/${projectId}/documents`,
+    `${uploadApiBaseUrl}/projects/${projectId}/documents`,
     {
       method: "POST",
       headers,
@@ -553,6 +557,38 @@ function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
     normalized: typeof candidate.normalized === "boolean" ? candidate.normalized : undefined,
     page_number: typeof candidate.page_number === "number" ? candidate.page_number : undefined,
   };
+}
+
+async function resolveUploadApiBaseUrl(): Promise<string> {
+  if (env.API_BASE_URL.startsWith("http://") || env.API_BASE_URL.startsWith("https://")) {
+    return env.API_BASE_URL;
+  }
+
+  const runtimeApiBaseUrl = await getRuntimeBackendApiBaseUrl();
+  return runtimeApiBaseUrl ?? env.API_BASE_URL;
+}
+
+async function getRuntimeBackendApiBaseUrl(): Promise<string | null> {
+  if (!runtimeBackendApiBaseUrlPromise) {
+    runtimeBackendApiBaseUrlPromise = fetch(RUNTIME_BACKEND_URL_ENDPOINT, {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        const payload = (await response.json()) as { apiBaseUrl?: unknown };
+        return typeof payload.apiBaseUrl === "string" &&
+          (payload.apiBaseUrl.startsWith("http://") ||
+            payload.apiBaseUrl.startsWith("https://"))
+          ? payload.apiBaseUrl.replace(/\/+$/, "")
+          : null;
+      })
+      .catch(() => null);
+  }
+
+  return runtimeBackendApiBaseUrlPromise;
 }
 
 function severityToColor(severity: Alert["severity"]): string {
