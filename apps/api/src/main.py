@@ -17,6 +17,7 @@ from sentry_sdk.utils import BadDsn
 
 # Import AI tools to trigger registration via @register_tool decorators
 import src.analysis.adapters.ai.tools  # noqa: F401
+from src.alerts.adapters.http.router import project_alerts_router
 from src.alerts.adapters.http.router import router as alerts_router
 from src.analysis.adapters.graph.workflow import (
     close_checkpointer_resources,
@@ -268,6 +269,7 @@ def create_application() -> FastAPI:
     app.include_router(projects_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
+    app.include_router(project_alerts_router, prefix=api_v1_prefix)
     app.include_router(bulk_operations_router, prefix=api_v1_prefix)
     app.include_router(observability_router, prefix=api_v1_prefix)
     app.include_router(frontend_support_router, prefix=api_v1_prefix)

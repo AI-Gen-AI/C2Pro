@@ -6,6 +6,7 @@ Soporta múltiples ambientes (dev, staging, prod).
 """
 
 from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -325,11 +326,40 @@ class Settings(BaseSettings):  # type: ignore[misc]
             if v.strip().startswith("["):
                 import json
 
-                return list(json.loads(v))
-            return [origin.strip() for origin in v.split(",")]
+                return cls._expand_cors_origin_variants(list(json.loads(v)))
+            return cls._expand_cors_origin_variants([origin.strip() for origin in v.split(",")])
         if isinstance(v, list):
-            return [str(origin) for origin in v]
+            return cls._expand_cors_origin_variants([str(origin) for origin in v])
         return []
+
+    @staticmethod
+    def _expand_cors_origin_variants(origins: list[str]) -> list[str]:
+        expanded: list[str] = []
+
+        for origin in origins:
+            normalized_origin = origin.strip()
+            if not normalized_origin:
+                continue
+
+            for candidate in (normalized_origin, Settings._paired_c2pro_origin(normalized_origin)):
+                if candidate and candidate not in expanded:
+                    expanded.append(candidate)
+
+        return expanded
+
+    @staticmethod
+    def _paired_c2pro_origin(origin: str) -> str | None:
+        parts = urlsplit(origin)
+        hostname = parts.hostname
+        if hostname not in {"c2pro.io", "www.c2pro.io"}:
+            return None
+
+        paired_hostname = "www.c2pro.io" if hostname == "c2pro.io" else "c2pro.io"
+        netloc = paired_hostname
+        if parts.port:
+            netloc = f"{paired_hostname}:{parts.port}"
+
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
     @field_validator("integration_api_keys", mode="before")  # type: ignore[misc]
     @classmethod

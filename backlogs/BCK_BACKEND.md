@@ -17,9 +17,9 @@ u# Backend Tasks & Knowledge Base
 
 - IDs: `TASK-BCK-020`, `TASK-BCK-032`-`TASK-BCK-033`, `TASK-BCK-040`-`TASK-BCK-044`
 
-**Completed Tasks**: 37
+**Completed Tasks**: 40
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-039`, `TASK-BCK-045`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-048`
 
 **Usage Note**:
 
@@ -74,17 +74,29 @@ u# Backend Tasks & Knowledge Base
 | [ ]    | P2       | `TASK-BCK-043` | Backend, DB Infra          | **WBS Integration Tests Hang Without DB**: `tests/unit/wbs/test_wbs_node_repository.py` (9 tests) are marked `pytest.mark.integration` but live in `tests/unit/`. They require `async_session` fixture with real PostgreSQL. Fix: either (a) move to `tests/integration/` and skip in unit runs, or (b) add a skip marker when DB is unavailable. Currently causes 1 ERROR + 8 FAIL + timeouts in full unit suite.                                                                          | Frontend Audit (2026-04-09)                                                                                                                                             | Role Backend                                     |
 | [ ]    | P3       | `TASK-BCK-044` | Backend, Alerts            | **Flaky SLA Calculator Test**: `tests/unit/alerts/domain/test_sla_calculator.py::test_calculate_at_exact_due_time` fails intermittently under load (timing-sensitive boundary condition at exact due time). Passes when run alone. Fix: freeze time with `freezegun` or `time_machine` to eliminate flakiness.                                                | Frontend Audit (2026-04-09)                                                                                                                                             | Role Backend                                     |
 | [x]    | P0       | `TASK-BCK-045` | Backend, Alerts            | **Railway Alerts Import Crash**: fix the backend startup regression where `src.main` imports `src.alerts.adapters.http.router`, but legacy top-level `alerts.*` imports inside `src/alerts` crash the container with `ModuleNotFoundError: No module named 'alerts'`. `[x] Implemented (subprocess regression test + import normalization to \`src.alerts.*\`)` | Railway log `logs.1775857904790.json` (2026-04-10)                                                                                                                      | Role Backend                                     |
+| [x]    | P0       | `TASK-BCK-046` | Frontend                   | **Project Status Update Contract Fix**: replace the settings page free-text status input with a bounded select and always send `expected_version` so project status updates no longer fail the API concurrency guard `[x] @2026-04-11 - Implemented status Select + `expected_version` PATCH payload parity on the project settings page.` | User report 2026-04-11 | Role Backend |
+| [x]    | P0       | `TASK-BCK-047` | Full-Stack                 | **Document Reprocess And Status Mapping Fix**: correct frontend document status normalization for queued/analyzed states, add backend `POST /projects/{project_id}/documents/{document_id}/reprocess`, and expose a retry control for errored/uploaded documents `[x] @2026-04-11 - Implemented backend reprocess endpoint, frontend retry button, and fixed status mapping so documents no longer look stuck in error when they are uploaded/analyzed.` | User report 2026-04-11 | Role Backend |
+| [x]    | P0       | `TASK-BCK-048` | Frontend, Infrastructure   | **Production Alerts Route + Upload CORS Parity**: restore `GET /api/v1/projects/{project_id}/alerts` compatibility for live frontend clients and auto-expand `c2pro.io`/`www.c2pro.io` CORS origins when either one is configured so direct browser uploads are allowed from the production site `[x] @2026-04-11 - Added route-contract tests, registered a compatibility alerts router under `/projects/{project_id}/alerts`, and normalized apex/www production origins inside settings parsing.` | User report 2026-04-11 | Role Backend |
 
 **Statistics**:
 
-- Total: 45 tasks
+- Total: 48 tasks
 - Active: 8 (17.8%)
-- Completed: 37 (82.2%)
+- Completed: 40 (83.3%)
 - Blocked: 0
 
 ---
 
 ## 2. Specifications
+
+### TASK-BCK-048 - Production Alerts Route + Upload CORS Parity (2026-04-11)
+
+- Symptom: the live frontend at `https://www.c2pro.io` still failed after the previous upload fix with two visible regressions: `GET /api/projects/{id}/alerts` returned `404`, and direct browser uploads to Railway failed CORS when the backend allowed only one of the `c2pro.io` domain variants.
+- Root cause 1: the active backend alerts router exposed `GET /api/v1/alerts/projects/{project_id}` while the canonical OpenAPI/frontend contract still called `GET /api/v1/projects/{project_id}/alerts`.
+- Root cause 2: production CORS configuration depended on an exact origin list; when only apex or `www` was configured, the other production hostname was rejected, which broke the browser-direct upload path added in `TASK-FRT-170`.
+- TDD evidence: added `apps/api/tests/core/test_alerts_route_contract.py` to lock the canonical project-alerts route, and expanded `apps/api/tests/unit/core/test_config_settings.py` to verify automatic apex/www origin pairing for `c2pro.io`.
+- Implementation: registered a compatibility alerts router at `/projects/{project_id}/alerts` that reuses the existing use case and tenant-scoped filtering, and normalized `cors_origins` parsing so `https://c2pro.io` and `https://www.c2pro.io` are automatically paired in production-style configs.
+- Verification: targeted backend contract/config tests passed, plus an additional route-registration/feature-flag regression pass over `test_coherence_route_contract.py` and `test_feature_flags.py`.
 
 ### TASK-BCK-045 - Railway Alerts Import Crash (2026-04-10)
 
