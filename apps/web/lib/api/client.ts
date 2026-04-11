@@ -33,7 +33,10 @@ let browserLocationAdapter: BrowserLocationAdapter = defaultBrowserLocationAdapt
 export async function orvalApiClient<T>(
   config: AxiosRequestConfig,
 ): Promise<T> {
-  const response = await apiClient.request<T>(config);
+  const response = await apiClient.request<T>({
+    ...config,
+    url: normalizeGeneratedApiUrl(config.url),
+  });
   return response.data;
 }
 
@@ -102,6 +105,15 @@ export const handleAuthErrorStatus = (status: number | undefined) => {
     showToast("Sin permisos");
   }
 };
+
+function normalizeGeneratedApiUrl(url: AxiosRequestConfig["url"]): AxiosRequestConfig["url"] {
+  if (typeof url !== "string") {
+    return url;
+  }
+
+  const normalizedUrl = url.replace(/^\/?api\/v1(?=\/|$)/, "");
+  return normalizedUrl.length > 0 ? normalizedUrl : "/";
+}
 
 apiClient.interceptors.request.use(attachAuthToken);
 

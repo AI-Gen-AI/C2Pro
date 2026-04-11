@@ -21,7 +21,7 @@
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 9 | 19 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 162 | 26 | 136 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 163 | 26 | 137 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 18 | 41 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 96 | 35 | 61 |
@@ -96,6 +96,7 @@
 | [x]    | P3       | `TASK-FRT-135` | None        | Prove no regression in existing tests `[x] @2026-04-09`                                                                                                                                                                                                                                                    |
 | [x]    | P1       | `TASK-FRT-168` | Frontend    | Restore Vercel frontend build parity after API/codegen drift in WBS and review flows `[x] @2026-04-09 - Removed invalid `projectId`/`nodeType` payload fields from WBS creation, aligned `useWBSTree` with generated snake_case OpenAPI contracts and query-key helpers, updated the HITL review test mock cast for current React Query typings, switched client hooks to the browser-safe axios bundle, and pinned the frontend build script to `next build --webpack` so Next 16 workspace builds avoid the Turbopack root-resolution failure seen in Vercel and local production builds.` |
 | [x]    | P1       | `TASK-FRT-169` | Frontend    | Remove the regressed duplicate root route that makes Vercel look for the missing `app/(app)/page_client-reference-manifest.js` during build trace collection `[x] @2026-04-10 - Added a regression test proving `/` is owned only by `app/page.tsx`, deleted the stale `app/(app)/page.tsx` route-group root page, and updated the frontend build script to clear `.next` before `next build --webpack` so restored caches do not retain deleted route artifacts.` |
+| [x]    | P0       | `TASK-FRT-170` | Frontend    | Restore production document upload and project alerts routing by bypassing the Vercel proxy for browser-side file uploads and normalizing generated `/api/v1` client URLs before they duplicate the `/api` proxy prefix `[x] @2026-04-11 - Added frontend regression coverage, exposed the server-side backend URL through a no-store runtime endpoint so uploads resolve directly to the API instead of hitting Vercel's payload limit, and normalized generated client URLs to stop requesting `/api/api/v1/projects/.../alerts`. |
 
 **Full frontend backlog**: [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md)
 

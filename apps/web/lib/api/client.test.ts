@@ -169,6 +169,24 @@ describe("apiClient auth interceptor", () => {
     );
   });
 
+  it("normalizes generated /api/v1 paths before delegating through the shared axios client", async () => {
+    mockedAxiosClient.request.mockResolvedValue({ data: { ok: true } });
+
+    await expect(
+      orvalApiClient<{ ok: boolean }>({
+        url: "/api/v1/projects/proj-1/alerts",
+        method: "GET",
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(mockedAxiosClient.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "/projects/proj-1/alerts",
+        method: "GET",
+      }),
+    );
+  });
+
   it("clears auth state and redirects to the canonical sign-in route on 401", async () => {
     currentPathname = "/projects";
 

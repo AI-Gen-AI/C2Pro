@@ -17,9 +17,9 @@
 
 - IDs: `TASK-FRT-041`, `TASK-FRT-045`, `TASK-FRT-091`, `TASK-FRT-123`-`TASK-FRT-135`
 
-**Completed Tasks**: 152
+**Completed Tasks**: 153
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-044`, `TASK-FRT-046`-`TASK-FRT-090`, `TASK-FRT-092`-`TASK-FRT-122`, `TASK-FRT-136`-`TASK-FRT-169`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-044`, `TASK-FRT-046`-`TASK-FRT-090`, `TASK-FRT-092`-`TASK-FRT-122`, `TASK-FRT-136`-`TASK-FRT-170`
 
 **Usage Note**:
 
@@ -199,12 +199,13 @@
 | [x]    | P2       | `TASK-FRT-167` | Backend API, `TASK-BCK-031`                                     | HITL Review UI: Implement workflow resume interface with checkpoint restoration, approval/rejection actions, review history timeline, notification delivery status `[x] @2026-04-09 - Implemented /projects/[id]/review page with: review queue list from HITL API, approve/reject dialogs calling generated hooks, SLA overdue indicators, impact level badges, expandable item detail with review timeline, stat cards (pending/approved/rejected/escalated), status filter. Added Review tab to ProjectTabs. Unit tests with 9 test cases.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Sprint 2 - Core Flow Completion (2026-04-06)                                                                                                                                                                                                                                                                                                                                                                          | Blackboard T012 |
 | [x]    | P1       | `TASK-FRT-168` | Frontend                                                        | Restore Vercel frontend build parity after API/codegen drift in WBS and review flows `[x] @2026-04-09 - Removed invalid `projectId`/`nodeType` payload fields from WBS creation, aligned `useWBSTree` with generated snake_case OpenAPI contracts and query-key helpers, updated the HITL review test mock cast for current React Query typings, switched client hooks to the browser-safe axios bundle, and pinned the frontend build script to `next build --webpack` so Next 16 workspace builds avoid the Turbopack root-resolution failure seen in Vercel and local production builds.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Vercel frontend build failure on commit `00d3bd61` @2026-04-09                                                                                                                                                                                                                                                                                                                                                       | Blackboard T048 |
 | [x]    | P1       | `TASK-FRT-169` | Frontend                                                        | Remove the regressed duplicate root route that makes Vercel look for the missing `app/(app)/page_client-reference-manifest.js` during build trace collection `[x] @2026-04-10 - Added a regression test proving `/` is owned only by `app/page.tsx`, deleted the stale `app/(app)/page.tsx` route-group root page, and updated the frontend build script to clear `.next` before `next build --webpack` so restored caches do not retain deleted route artifacts.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Vercel frontend build failure on commit `9857901` @2026-04-10                                                                                                                                                                                                                                                                                                                                                       | Blackboard T050 |
+| [x]    | P0       | `TASK-FRT-170` | Frontend                                                        | Restore production document upload and project alerts routing by bypassing the Vercel proxy for browser-side file uploads and normalizing generated `/api/v1` client URLs before they duplicate the `/api` proxy prefix `[x] @2026-04-11 - Added frontend regression coverage, exposed the server-side backend URL through a no-store runtime endpoint so uploads resolve directly to the API instead of hitting Vercel's payload limit, and normalized generated client URLs to stop requesting `/api/api/v1/projects/.../alerts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Production HAR `C:\Users\esus_\Downloads\www.c2pro.io.har` @2026-04-11                                                                                                                                                                                                                                                                                                                                              | Blackboard T055 |
 
 **Statistics**:
 
-- Total: 167 tasks
+- Total: 168 tasks
 - Active: 30 (18.0%)
-- Completed: 137 (82.0%)
+- Completed: 138 (82.1%)
 - Blocked: 0 (0%)
 
 ---
@@ -250,6 +251,27 @@
 
 - `pnpm vitest run src/tests/integration/ci/TASK-FRT-169-root-route-manifest-parity.integration.test.ts src/tests/integration/ci/S1-13-frontend-ci.integration.test.ts`
 - `npm run build` still fails locally on Windows after the route fix because Next 16's generated `.next/types/app/(app)/**` stubs are missing during its own typecheck phase, which appears separate from the Vercel manifest regression.
+
+### Production Upload And Alerts Routing Follow-up (2026-04-11)
+
+**Task**: `TASK-FRT-170`
+
+**Root Cause**:
+
+- Browser-side uploads still used `env.API_BASE_URL`, which defaults to `/api` in production and therefore pushed large multipart payloads through the Vercel proxy.
+- The HAR captured `POST https://www.c2pro.io/api/projects/.../documents` failing with `413 Request Entity Too Large` and `FUNCTION_PAYLOAD_TOO_LARGE` before the request reached the backend parser/worker flow.
+- Generated React Query clients emitted `/api/v1/...` paths while the shared axios client already proxied through `/api`, producing browser requests like `/api/api/v1/projects/.../alerts`.
+
+**Resolution**:
+
+- Added `apps/web/lib/api/uploadDocument.test.ts` coverage proving uploads must first resolve the direct backend API base when the browser only knows the proxy route.
+- Added `apps/web/app/api/runtime/backend-url/route.ts` so the browser can read the server-side `BACKEND_URL` as a no-store runtime value and upload directly to the backend origin.
+- Updated `apps/web/lib/api/index.ts` so document uploads use that resolved backend API base instead of posting large files through `/api`.
+- Updated `apps/web/lib/api/client.ts` so generated `/api/v1/...` URLs are normalized before axios combines them with the shared `/api` proxy base.
+
+**Verification**:
+
+- `pnpm vitest run apps/web/app/api/[...proxy]/route.test.ts apps/web/lib/api/uploadDocument.test.ts apps/web/lib/api/client.test.ts --config apps/web/vitest.config.mts`
 
 ### Frontend Priority Analysis (2026-04-05)
 
