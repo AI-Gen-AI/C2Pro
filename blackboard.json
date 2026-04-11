@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-11T17:56:39.7203432+00:00",
+  "updated_at": "2026-04-11T21:15:00+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,40 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T056",
+      "backlog_id": "TASK-BCK-048",
+      "tipo": "backend",
+      "descripcion": "Restore live project alerts route compatibility and production upload CORS parity by re-exposing GET /api/v1/projects/{project_id}/alerts and auto-expanding c2pro.io/www.c2pro.io origins for direct browser uploads.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Backend contract tests prove the canonical project alerts route returns 200 again, and config parsing expands apex/www production origins so direct browser uploads can pass CORS from the live site.",
+      "archivos_modificados": [
+        "apps/api/src/alerts/adapters/http/router.py",
+        "apps/api/src/config.py",
+        "apps/api/src/main.py",
+        "apps/api/tests/core/test_alerts_route_contract.py",
+        "apps/api/tests/unit/core/test_config_settings.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-11T21:05:00+00:00",
+        "completado": "2026-04-11T21:15:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "The live frontend contract is restored for project alerts, and production browser uploads can be allowed from both c2pro.io hostnames with a single configured origin.",
+        "cambios_realizados": [
+          "Added a canonical alerts route compatibility layer under /api/v1/projects/{project_id}/alerts.",
+          "Expanded CORS settings parsing to pair https://c2pro.io and https://www.c2pro.io automatically.",
+          "Added backend regression coverage for the restored route contract and production origin expansion."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
     {
       "tarea_id": "T055",
       "backlog_id": "TASK-FRT-170",
@@ -319,7 +353,8 @@
       "TASK-BCK-045",
       "TASK-INF-058",
       "TASK-INF-059",
-      "TASK-FRT-170"
+      "TASK-FRT-170",
+      "TASK-BCK-048"
     ]
   },
   "plan_actual": {
@@ -408,8 +443,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 45,
-    "tareas_completadas": 32,
+    "total_tareas": 46,
+    "tareas_completadas": 33,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 13,
     "total_horas_estimadas": 229,

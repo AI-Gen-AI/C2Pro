@@ -64,6 +64,38 @@ def test_production_settings_reject_wildcard_cors_origins(
         Settings(_env_file=None)
 
 
+def test_production_settings_expand_c2pro_www_origin_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["https://c2pro.io"]')
+
+    settings = Settings(_env_file=None)
+
+    assert settings.cors_origins == [
+        "https://c2pro.io",
+        "https://www.c2pro.io",
+    ]
+
+
+def test_production_settings_expand_c2pro_apex_from_www_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_required_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:prod-pass@supabase.example.com/app")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CORS_ORIGINS", '["https://www.c2pro.io"]')
+
+    settings = Settings(_env_file=None)
+
+    assert settings.cors_origins == [
+        "https://www.c2pro.io",
+        "https://c2pro.io",
+    ]
+
+
 def test_test_settings_allow_missing_supabase_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

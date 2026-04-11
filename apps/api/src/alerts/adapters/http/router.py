@@ -45,6 +45,7 @@ from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+project_alerts_router = APIRouter(prefix="/projects", tags=["alerts"])
 
 
 def get_alert_repository(
@@ -120,6 +121,29 @@ async def list_project_alerts(
         project_id=project_id,
         tenant_id=tenant_id,
         status=status_filter,
+        category=category,
+        severity=severity,
+    )
+
+
+@project_alerts_router.get(
+    "/{project_id}/alerts",
+    response_model=AlertListResponse,
+    summary="List alerts for a project",
+)
+async def list_project_alerts_compatibility(
+    project_id: UUID,
+    tenant_id: CurrentTenantId,
+    list_use_case: ListAlertsUseCase = Depends(get_list_alerts_use_case),
+    status_filter: str | None = None,
+    category: str | None = None,
+    severity: str | None = None,
+) -> AlertListResponse:
+    return await list_project_alerts(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        list_use_case=list_use_case,
+        status_filter=status_filter,
         category=category,
         severity=severity,
     )
