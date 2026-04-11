@@ -44,6 +44,7 @@ export interface Alert {
 
 export interface Project {
   id: string;
+  version?: number;
   tenant_id?: string;
   name: string;
   description?: string;
