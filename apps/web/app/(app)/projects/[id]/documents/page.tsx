@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, Search, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,14 +32,19 @@ type DocumentStatus = 'Analyzed' | 'Processing' | 'Uploaded' | 'Error';
 
 function normalizeStatus(status: string): DocumentStatus {
   switch (status) {
+    case 'analyzed':
     case 'parsed':
+    case 'parsed_pending_analysis':
       return 'Analyzed';
     case 'processing':
       return 'Processing';
-    case 'queued':
+    case 'uploaded':  // Stored, awaiting Celery worker pickup
+    case 'queued':    // Initial enqueue state
       return 'Uploaded';
-    default:
+    case 'error':
       return 'Error';
+    default:
+      return 'Uploaded';  // Unknown → treat as queued, not errored
   }
 }
 
@@ -90,6 +95,24 @@ export default function ProjectDocumentsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
+
+  const handleRetryProcessing = async (docId: string) => {
+    setRetryingDocumentId(docId);
+    try {
+      const response = await fetch(`/api/v1/projects/${projectId}/documents/${docId}/reprocess`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        console.error('Reprocess request failed:', response.status);
+      }
+      refetch();
+    } catch (error) {
+      console.error('Failed to reprocess document:', error);
+    } finally {
+      setRetryingDocumentId(null);
+    }
+  };
 
   const handleUploadComplete = () => {
     setUploadDialogOpen(false);
@@ -397,15 +420,33 @@ export default function ProjectDocumentsPage() {
                         {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-4 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Delete ${doc.name}`}
-                          className="rounded-xl bg-background/95 text-destructive shadow-sm hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => handleDeleteClick(doc.id, doc.name)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          {(doc.status === 'Error' || doc.status === 'Uploaded') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Retry processing ${doc.name}`}
+                              className="rounded-xl bg-background/95 shadow-sm"
+                              disabled={retryingDocumentId === doc.id}
+                              onClick={() => void handleRetryProcessing(doc.id)}
+                            >
+                              {retryingDocumentId === doc.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Delete ${doc.name}`}
+                            className="rounded-xl bg-background/95 text-destructive shadow-sm hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => handleDeleteClick(doc.id, doc.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
