@@ -9,6 +9,13 @@ import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProject } from "@/hooks/useProject";
 import { useUpdateProject } from "@/hooks/useUpdateProject";
@@ -77,6 +84,7 @@ export default function ProjectSettingsPage() {
           ? Number(draft.estimated_budget)
           : null,
         currency: draft.currency.trim() || null,
+        expected_version: project?.version ?? 1,
       },
     });
 
@@ -143,13 +151,22 @@ export default function ProjectSettingsPage() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="project-status">Status</Label>
-            <Input
-              id="project-status"
+            <Select
               value={draft.status}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, status: event.target.value }))
+              onValueChange={(value) =>
+                setDraft((current) => ({ ...current, status: value }))
               }
-            />
+            >
+              <SelectTrigger id="project-status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="estimated-budget">Estimated Budget</Label>
