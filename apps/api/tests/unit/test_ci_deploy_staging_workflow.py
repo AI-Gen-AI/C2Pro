@@ -21,5 +21,6 @@ def test_deploy_staging_workflow_exists_and_targets_main() -> None:
     assert "deploy-frontend:" in contents
     assert "environment: staging" in contents
     assert "railway up --service api" in contents
+    assert "railway up --service celery-worker" in contents
     assert "vercel deploy --prebuilt" in contents
     assert "needs: [deploy-backend]" in contents

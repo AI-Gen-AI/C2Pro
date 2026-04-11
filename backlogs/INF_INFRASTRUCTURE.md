@@ -16,9 +16,9 @@
 
 - IDs: `TASK-INF-008`-`TASK-INF-019`, `TASK-INF-055`-`TASK-INF-056`
 
-**Completed Tasks**: 40
+**Completed Tasks**: 41
 
-- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-057`-`TASK-INF-058`
+- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-057`-`TASK-INF-059`
 
 **Usage Note**:
 
@@ -87,11 +87,12 @@
 | [ ] | P3 | `TASK-INF-056` | DevOps | Define and run performance benchmarks | `docs/archive/plans/tdd-testing/TDD_QUICK_REFERENCE.md` |
 | [x] | P1 | `TASK-INF-057` | DevOps | Make the API container bind Railway's assigned `$PORT` instead of a hard-coded `8000` so platform health checks can reach `/api/v1/health` `[x] @2026-04-10 - Added a Dockerfile regression test, switched the container healthcheck to `localhost:${PORT:-8000}/health`, and changed the runtime command to launch uvicorn on `${PORT:-8000}`.` | Railway runtime healthcheck failure on backend deploy @2026-04-10 |
 | [x] | P0 | `TASK-INF-058` | DevOps | Restore API container startup by shipping the Python `pgvector` dependency required by `src.documents.adapters.persistence.models` `[x] @2026-04-11 - Added a regression test that enforces `pgvector` in `apps/api/requirements.txt` and restored the missing runtime dependency so vector-backed ORM imports no longer crash the API container at boot.` | Docker runtime failure `ModuleNotFoundError: No module named 'pgvector'` @2026-04-11 |
+| [x] | P0 | `TASK-INF-059` | DevOps | Restore asynchronous document processing parity by aligning Celery with the `document_parsing` queue and deploying the Railway worker alongside the API `[x] @2026-04-11 - Added regression coverage for Railway staging/production workflows to deploy `celery-worker`, configured Celery to use `document_parsing` as the default queue, and confirmed the local worker health contract/tests now match the intended queue wiring.` | Production investigation after uploads stayed queued/error without analysis @2026-04-11 |
 
 **Statistics**:
-- Total: 58 tasks
+- Total: 59 tasks
 - Active: 18 (31.6%)
-- Completed: 40 (69.0%)
+- Completed: 41 (69.5%)
 - Blocked: 0 (0%)
 
 ---
@@ -136,6 +137,28 @@
 **Verification**:
 
 - `python -m pytest apps/api/tests/unit/test_dockerfile_runtime.py -q`
+
+### Celery Queue And Railway Worker Deployment Parity (TASK-INF-059)
+
+**Task**: `TASK-INF-059`
+
+**Problem**:
+
+- Project creation defaults to `draft`, which is expected, but uploaded documents were remaining queued/error because asynchronous ingestion was not reaching a healthy worker path.
+- The deploy workflows only published the Railway `api` service, leaving no corresponding `celery-worker` rollout in CI/CD.
+- Separately, Celery was still using the default `celery` queue while `/api/v1/health/worker` enforced `document_parsing`, creating a false-negative worker health signal and mismatched routing expectations.
+
+**Resolution**:
+
+- Added regression checks that both staging and production Railway workflows deploy `celery-worker` in addition to `api`.
+- Set `task_default_queue`, `task_default_exchange`, and `task_default_routing_key` to `document_parsing` in `apps/api/src/core/tasks/celery_app.py`.
+- Added queue-configuration regression coverage in `apps/api/tests/unit/test_celery_queue_config.py`.
+
+**Verification**:
+
+- `python -m pytest apps/api/tests/unit/test_ci_deploy_staging_workflow.py -q`
+- `python -m pytest apps/api/tests/unit/test_ci_deploy_production_workflow.py -q`
+- `python -m pytest apps/api/tests/unit/test_celery_queue_config.py -q apps/api/tests/core/test_worker_health_router.py -q`
 
 ### Category Backlog Architecture (TASK-INF-001) - Completed 2026-04-04
 

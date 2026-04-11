@@ -31,7 +31,9 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SVC_ID: ${{ secrets.RAILWAY_SERVICE_API_STAGING }}
-        run: railway up --service api
+        run: |
+          railway up --service api
+          railway up --service celery-worker
 
       - name: Health check backend
         env:

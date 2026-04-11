@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-11T07:22:11.6248056+00:00",
+  "updated_at": "2026-04-11T17:17:58.6434007+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,41 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T054",
+      "backlog_id": "TASK-INF-059",
+      "tipo": "infra",
+      "descripcion": "Align Celery document-processing queue wiring with worker health expectations and deploy the Railway celery-worker service alongside the API.",
+      "asignado_a": "infra",
+      "estado": "completado",
+      "criterio_done": "Regression tests prove Railway workflows deploy the worker service, Celery defaults to the document_parsing queue, and queue-health tests pass.",
+      "archivos_modificados": [
+        ".github/workflows/deploy-staging.yml",
+        ".github/workflows/deploy-production.yml",
+        "apps/api/src/core/tasks/celery_app.py",
+        "apps/api/tests/unit/test_ci_deploy_staging_workflow.py",
+        "apps/api/tests/unit/test_ci_deploy_production_workflow.py",
+        "apps/api/tests/unit/test_celery_queue_config.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/INF_INFRASTRUCTURE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-11T17:17:58.6434007+00:00",
+        "completado": "2026-04-11T17:17:58.6434007+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Railway deploy automation now includes the Celery worker service, and Celery queue configuration matches the document worker health contract.",
+        "cambios_realizados": [
+          "Added workflow regression checks for celery-worker deployment in staging and production.",
+          "Configured Celery to use document_parsing as the default queue/exchange/routing key.",
+          "Added queue-wiring regression coverage and updated infrastructure tracking."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
     {
       "tarea_id": "T053",
       "backlog_id": "TASK-INF-058",
@@ -248,7 +283,8 @@
       "TASK-FRT-169",
       "TASK-INF-057",
       "TASK-BCK-045",
-      "TASK-INF-058"
+      "TASK-INF-058",
+      "TASK-INF-059"
     ]
   },
   "plan_actual": {
@@ -337,8 +373,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 43,
-    "tareas_completadas": 30,
+    "total_tareas": 44,
+    "tareas_completadas": 31,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 13,
     "total_horas_estimadas": 229,
