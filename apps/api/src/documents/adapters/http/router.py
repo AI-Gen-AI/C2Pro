@@ -594,6 +594,42 @@ async def parse_document_endpoint(
 
 
 @router.post(
+    "/projects/{project_id}/documents/{document_id}/reprocess",
+    response_model=DocumentQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Re-trigger async processing for a stuck or errored document",
+)
+async def reprocess_document_endpoint(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> DocumentQueuedResponse:
+    """
+    Re-dispatch a Celery processing task for a document stuck in queued, uploaded,
+    or error state. Resets the document status to UPLOADED and enqueues a fresh
+    parse + analysis run.
+    """
+    document = await repo.get_by_id(document_id)
+    if not document or document.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    await repo.update_status(document_id, DocumentStatus.UPLOADED, parsing_error=None)
+    await repo.commit()
+    await repo.refresh(document)
+
+    from src.core.tasks.ingestion_tasks import process_document_async
+
+    task = process_document_async.delay(document_id=str(document_id))
+    response_data = DocumentResponse.model_validate(document).model_dump()
+    response_data["task_id"] = task.id
+    response_data["processing_status"] = DocumentPollingStatus.QUEUED
+    response_data["status_detail"] = "Document reprocessing has been queued."
+    return DocumentQueuedResponse(**response_data)
+
+
+@router.post(
     "/projects/{project_id}/rag/answer",
     response_model=RagAnswerResponse,
     summary="Ask a question about project documents (RAG)",
