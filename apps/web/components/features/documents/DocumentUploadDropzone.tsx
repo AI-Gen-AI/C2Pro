@@ -2,6 +2,7 @@
 
 import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Loader2, Upload } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { uploadDocument } from "@/lib/api";
 
@@ -23,6 +24,7 @@ export function DocumentUploadDropzone({
   maxFileSizeBytes,
   onUploadComplete,
 }: DocumentUploadDropzoneProps) {
+  const { getToken } = useAuth();
   const [dragState, setDragState] = useState<"idle" | "active">("idle");
   const [message, setMessage] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<string>("");
@@ -60,7 +62,8 @@ export function DocumentUploadDropzone({
     try {
       for (const file of files) {
         setStatusMessage(`Uploading: ${file.name}`);
-        await uploadDocument(projectId, file, "CONTRACT");
+        const freshToken = await getToken();
+        await uploadDocument(projectId, file, "CONTRACT", freshToken ? { token: freshToken } : undefined);
       }
       setMessage(
         `Upload accepted for ${files.length} file(s). Backend processing is still required.`,

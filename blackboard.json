@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-11T21:15:00+00:00",
+  "updated_at": "2026-04-11T21:32:00+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,41 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T057",
+      "backlog_id": "TASK-BCK-049",
+      "tipo": "backend",
+      "descripcion": "Restore live direct uploads by forcing a fresh Clerk token per upload and ensuring early backend auth failures still return CORS headers.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Direct uploads obtain a fresh Clerk token at call time, backend 401 upload failures keep CORS headers, and targeted backend/frontend regressions pass.",
+      "archivos_modificados": [
+        "apps/api/src/main.py",
+        "apps/api/tests/core/test_cors_error_responses.py",
+        "apps/web/components/features/documents/DocumentUploadDropzone.tsx",
+        "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx",
+        "apps/web/lib/api/index.ts",
+        "apps/web/lib/api/uploadDocument.test.ts",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-11T21:20:00+00:00",
+        "completado": "2026-04-11T21:32:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Direct uploads now request a fresh Clerk token before posting to Railway, and backend auth failures preserve CORS headers so the browser sees the real response.",
+        "cambios_realizados": [
+          "Moved CORSMiddleware outside auth/tenant middleware so short-circuit 401 responses keep Access-Control-Allow-Origin.",
+          "Added a per-upload Clerk getToken() flow in the document upload dropzone.",
+          "Extended backend/frontend regression coverage for direct uploads and error-path CORS behavior."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
     {
       "tarea_id": "T056",
       "backlog_id": "TASK-BCK-048",
@@ -354,7 +389,8 @@
       "TASK-INF-058",
       "TASK-INF-059",
       "TASK-FRT-170",
-      "TASK-BCK-048"
+      "TASK-BCK-048",
+      "TASK-BCK-049"
     ]
   },
   "plan_actual": {
@@ -443,8 +479,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 46,
-    "tareas_completadas": 33,
+    "total_tareas": 47,
+    "tareas_completadas": 34,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 13,
     "total_horas_estimadas": 229,
