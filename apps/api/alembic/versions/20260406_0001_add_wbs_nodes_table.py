@@ -1,7 +1,7 @@
 """Add wbs_nodes table with nested set model
 
-Revision ID: 20260406_0001_add_wbs_nodes_table
-Revises: 20260406_0004_add_alert_type_discriminator
+Revision ID: 20260406_0005
+Revises: 20260406_0004
 Create Date: 2026-04-06 15:00:00.000000
 
 TASK-BCK-029: WBS API Endpoint with nested set model
@@ -24,8 +24,8 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260406_0001_add_wbs_nodes_table'
-down_revision = '20260406_0004_add_alert_type_discriminator'
+revision = '20260406_0005'
+down_revision = '20260406_0004'
 branch_labels = None
 depends_on = None
 
@@ -155,10 +155,9 @@ def upgrade() -> None:
     )
 
     # Create RLS policy for tenant isolation
+    op.execute("DROP POLICY IF EXISTS wbs_nodes_tenant_isolation ON wbs_nodes;")
     op.execute(
         """
-        DROP POLICY IF EXISTS wbs_nodes_tenant_isolation ON wbs_nodes;
-
         CREATE POLICY wbs_nodes_tenant_isolation
         ON wbs_nodes
         FOR ALL

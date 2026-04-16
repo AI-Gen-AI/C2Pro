@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 RACI matrix generation tests.
 
@@ -25,7 +26,7 @@ class TestRaciMatrixGeneration:
             stakeholder_id=uuid4(),
             wbs_item_id=wbs_item_id,
             raci_role=raci_role,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
     def test_001_groups_assignments_by_wbs_item(self) -> None:

@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 WBS Repository Integration Tests (TDD - RED Phase)
 """
@@ -103,8 +104,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         session.add(project_a)
         await session.commit()
@@ -168,8 +169,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         project_b = ProjectORM(
             id=uuid4(),
@@ -186,8 +187,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         session.add_all([project_a, project_b])
         await session.commit()

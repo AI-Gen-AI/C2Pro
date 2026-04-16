@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Phase 7 E2E API Tests for Coherence Engine v0.3
 
@@ -102,7 +103,7 @@ def sample_enriched_result():
                 impact_percentage=15.0,
             ),
         ],
-        calculated_at=datetime.utcnow(),
+        calculated_at=datetime.now(timezone.utc),
         # Diagnostic fields
         finding_signals=[],
         llm_cost_usd=0.0,
@@ -551,7 +552,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
         overall_score=75.0,
         alerts=[],
         category_breakdown=[],
-        calculated_at=datetime.utcnow(),
+        calculated_at=datetime.now(timezone.utc),
         finding_signals=[],
         llm_cost_usd=0.0,  # Zero cost in low_budget_mode
     )

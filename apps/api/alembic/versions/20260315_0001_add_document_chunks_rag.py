@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import ProgrammingError
 
 from alembic import op
 
@@ -20,9 +21,27 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _ensure_vector_extension() -> bool:
+    bind = op.get_bind()
+    # Use a separate connection with autocommit for CREATE EXTENSION
+    # to prevent transaction abortion on permission errors.
+    connection = bind.engine.connect().execution_options(autocommit=True)
+    try:
+        connection.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        connection.commit()
+        return True
+    except ProgrammingError:
+        connection.rollback()
+        return False
+    except Exception:
+        connection.rollback()
+        return False
+    finally:
+        connection.close()
+
+
 def upgrade() -> None:
-    # Enable pgvector extension
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    vector_available = _ensure_vector_extension()
 
     # Create document_chunks table
     op.create_table(
@@ -49,55 +68,55 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    # Alter embedding column to use vector type
-    op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1536) USING embedding::vector(1536)")
+    # Alter embedding column to use vector type when available.
+    if vector_available:
+        op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1536) USING embedding::vector(1536)")
 
     # Create indexes
     op.create_index("ix_document_chunks_document_id", "document_chunks", ["document_id"])
     op.create_index("ix_document_chunks_project_id", "document_chunks", ["project_id"])
 
-    # Create HNSW index for fast similarity search
-    op.execute(
-        """
-        CREATE INDEX ix_document_chunks_embedding_hnsw
-        ON document_chunks
-        USING hnsw (embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64)
-        """
-    )
+    # Create HNSW index and similarity helper only when vector is available.
+    if vector_available:
+        op.execute(
+            """
+            CREATE INDEX ix_document_chunks_embedding_hnsw
+            ON document_chunks
+            USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+            """
+        )
 
-    # Create match_documents function for similarity search
-    op.execute(
-        """
-        CREATE OR REPLACE FUNCTION match_documents(
-            query_project_id UUID,
-            query_embedding vector(1536),
-            match_count INT DEFAULT 5
+        op.execute(
+            """
+            CREATE OR REPLACE FUNCTION match_documents(
+                query_project_id UUID,
+                query_embedding vector(1536),
+                match_count INT DEFAULT 5
+            )
+            RETURNS TABLE (
+                content TEXT,
+                metadata JSONB,
+                distance FLOAT
+            )
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RETURN QUERY
+                SELECT
+                    dc.content,
+                    dc.metadata,
+                    (dc.embedding <=> query_embedding)::FLOAT AS distance
+                FROM document_chunks dc
+                WHERE dc.project_id = query_project_id
+                ORDER BY dc.embedding <=> query_embedding
+                LIMIT match_count;
+            END;
+            $$
+            """
         )
-        RETURNS TABLE (
-            content TEXT,
-            metadata JSONB,
-            distance FLOAT
-        )
-        LANGUAGE plpgsql
-        AS $$
-        BEGIN
-            RETURN QUERY
-            SELECT
-                dc.content,
-                dc.metadata,
-                (dc.embedding <=> query_embedding)::FLOAT AS distance
-            FROM document_chunks dc
-            WHERE dc.project_id = query_project_id
-            ORDER BY dc.embedding <=> query_embedding
-            LIMIT match_count;
-        END;
-        $$
-        """
-    )
 
 
 def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS match_documents")
     op.drop_table("document_chunks")
-    op.execute("DROP EXTENSION IF EXISTS vector")

@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Large Document Processing E2E Tests (TDD - RED Phase)
 
@@ -27,8 +28,8 @@ async def test_large_document_upload_and_processing(client, get_auth_headers):
         "project_type": "construction",
         "estimated_budget": 100000.0,
         "currency": "EUR",
-        "start_date": datetime.utcnow().isoformat(),
-        "end_date": datetime.utcnow().isoformat(),
+        "start_date": datetime.now(timezone.utc).isoformat(),
+        "end_date": datetime.now(timezone.utc).isoformat(),
     }
     project_response = await client.post("/api/v1/projects", json=project_payload, headers=headers)
     assert project_response.status_code == 201

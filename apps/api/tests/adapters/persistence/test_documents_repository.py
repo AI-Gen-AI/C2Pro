@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Documents Repository Integration Tests (TDD - RED Phase)
 
@@ -95,8 +96,8 @@ async def test_clause_repository_crud_and_tenant_filtering(session: AsyncSession
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     session.add(project_a)
     await session.commit()
@@ -107,8 +108,8 @@ async def test_clause_repository_crud_and_tenant_filtering(session: AsyncSession
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
         upload_status=DocumentStatus.UPLOADED,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
         document_metadata={},
     )
     clause = Clause(

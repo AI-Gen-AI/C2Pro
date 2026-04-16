@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Extract Stakeholders Use Case tests.
 
@@ -20,7 +21,7 @@ class TestExtractStakeholdersUseCase:
     """Refers to Suite ID: TS-UA-STK-UC-001."""
 
     def _make_stakeholder(self, project_id):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return Stakeholder(
             id=uuid4(),
             project_id=project_id,

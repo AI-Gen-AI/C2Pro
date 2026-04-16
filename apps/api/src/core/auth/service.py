@@ -11,6 +11,7 @@ from uuid import UUID
 
 import jwt
 import structlog
+from src.core.auth.token_revocation import is_token_revoked_async
 from passlib.context import CryptContext
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,7 +157,7 @@ def create_refresh_token(user_id: UUID, tenant_id: UUID | None = None) -> str:
     return encoded_jwt
 
 
-def decode_token(token: str) -> TokenPayload:
+async def decode_token(token: str) -> TokenPayload:
     """
     Decodifica y valida JWT token.
 
@@ -191,6 +192,11 @@ def decode_token(token: str) -> TokenPayload:
 
         exp = datetime.fromtimestamp(payload.get("exp"))
         iat = datetime.fromtimestamp(payload.get("iat"))
+
+        # Check if token is revoked (TASK-ARCH-009)
+        if await is_token_revoked_async(token):
+            logger.warning("token_revoked", user_id=user_id, tenant_id=tenant_id)
+            raise AuthenticationError("Token has been revoked")
 
         return TokenPayload(
             sub=user_id, tenant_id=tenant_id, email=email, role=role, exp=exp, iat=iat
@@ -516,6 +522,11 @@ class AuthService:
             if token_type != "refresh":
                 logger.warning("wrong_token_type", type=token_type)
                 raise AuthenticationError("Invalid token type, expected 'refresh'")
+
+            # Check if refresh token is revoked (TASK-ARCH-009)
+            if await is_token_revoked_async(refresh_token):
+                logger.warning("refresh_token_revoked", token_type=token_type, user_id=payload.get("sub"))
+                raise AuthenticationError("Refresh token has been revoked")
 
             # Extraer user_id
             user_id = UUID(payload.get("sub"))

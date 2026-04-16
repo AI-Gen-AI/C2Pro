@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 C2Pro - Projects Service Unit Tests
 
@@ -218,7 +219,7 @@ class TestProjectServiceCreate:
         """
         Should create project with all optional fields.
         """
-        start_date = datetime.utcnow()
+        start_date = datetime.now(timezone.utc)
         end_date = start_date + timedelta(days=90)
 
         request = ProjectCreateRequest(
@@ -541,7 +542,7 @@ class TestProjectServiceList:
         """
         Should filter projects by creation date range.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         yesterday = now - timedelta(days=1)
         now + timedelta(days=1)
 

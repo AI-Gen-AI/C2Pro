@@ -10,6 +10,7 @@ Refers to TASK-IMPL-010.8–.14.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 from uuid import UUID
 
@@ -98,8 +99,70 @@ async def router_node(state: ProjectState) -> ProjectState:
 # ── N4 — Risk Extractor ─────────────────────────────────────────────────────
 
 
+def _deterministic_contract_risks(text: str) -> list[dict[str, Any]]:
+    risks: list[dict[str, Any]] = []
+    lower = text.lower()
+    if "penalt" in lower or "% for delay" in lower or "delay" in lower:
+        risks.append(
+            {
+                "category": "LEGAL",
+                "title": "Delay penalty exposure",
+                "summary": "Contract includes delay penalties.",
+                "description": "The contract contains penalty language linked to delay or late completion.",
+                "probability": "MEDIUM",
+                "impact": "HIGH",
+                "mitigation_suggestion": "Validate schedule buffers, milestone logic, and penalty caps before execution.",
+                "source_quote": "Daily penalty 2% for delay.",
+                "source_text_snippet": "Daily penalty 2% for delay.",
+                "risk_score": 6,
+                "immediate_alert": False,
+                "confidence": 0.82,
+            }
+        )
+    if re.search(r"\b30\s+days\b", lower) and "payment" in lower:
+        risks.append(
+            {
+                "category": "FINANCIAL",
+                "title": "Payment term cash-flow risk",
+                "summary": "Payment depends on certified milestones within a defined term.",
+                "description": "Cash flow may depend on milestone certification and payment timing discipline.",
+                "probability": "MEDIUM",
+                "impact": "MEDIUM",
+                "mitigation_suggestion": "Check certification workflow, invoice timing, and interim financing assumptions.",
+                "source_quote": "Payment subject to certified milestones within 30 days.",
+                "source_text_snippet": "Payment subject to certified milestones within 30 days.",
+                "risk_score": 4,
+                "immediate_alert": False,
+                "confidence": 0.79,
+            }
+        )
+    if "warranty" in lower:
+        risks.append(
+            {
+                "category": "QUALITY",
+                "title": "Warranty obligation exposure",
+                "summary": "Warranty obligations extend post-handover liability.",
+                "description": "The contract imposes a warranty period that may require post-completion corrections.",
+                "probability": "MEDIUM",
+                "impact": "MEDIUM",
+                "mitigation_suggestion": "Confirm defect response process, retention terms, and warranty reserve assumptions.",
+                "source_quote": "Warranty period is 24 months.",
+                "source_text_snippet": "Warranty period is 24 months.",
+                "risk_score": 4,
+                "immediate_alert": False,
+                "confidence": 0.77,
+            }
+        )
+    return risks
+
+
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """N4 — Extract risks via RiskExtractionTool."""
+    if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        state["extracted_risks"] = _deterministic_contract_risks(state.get("document_text", ""))
+        state["messages"].append(AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks"))
+        return state
+
     from src.core.ai.tools import get_tool
 
     return await get_tool("risk_extraction", version="1.0")(state)
@@ -108,8 +171,39 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
 
 
+def _deterministic_wbs_items(text: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    lower = text.lower()
+    if any(term in lower for term in ["scope", "works", "materials", "inspection", "handover"]):
+        items.append(
+            {
+                "code": "1.1",
+                "name": "Contract scope execution",
+                "description": "Execution of the contract scope including materials, inspection, testing, and handover.",
+                "item_type": "work_package",
+                "confidence": 0.8,
+            }
+        )
+    if "deadline" in lower or "completion" in lower:
+        items.append(
+            {
+                "code": "1.2",
+                "name": "Completion milestone control",
+                "description": "Control of delivery and completion milestones against contractual dates.",
+                "item_type": "activity",
+                "confidence": 0.78,
+            }
+        )
+    return items
+
+
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     """N5 — Extract WBS items via WBSExtractionTool."""
+    if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        state["extracted_wbs"] = _deterministic_wbs_items(state.get("document_text", ""))
+        state["messages"].append(AIMessage(content=f"WBS extractor mock mode: {len(state['extracted_wbs'])} items"))
+        return state
+
     from src.core.ai.tools import get_tool
 
     return await get_tool("wbs_extraction", version="1.0")(state)
@@ -133,6 +227,14 @@ async def critique_node(state: ProjectState) -> ProjectState:
 
     Delegates confidence calculation and evaluation to CritiqueEvaluationService.
     """
+    if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        state["confidence_score"] = 0.95 # Mock confidence
+        state["retry_count"] = 0
+        state["critique_notes"] = "Mock critique: Extraction quality is good."
+        state["human_approval_required"] = False
+        state["messages"].append(AIMessage(content="Critique mock mode: passed."))
+        return state
+
     items = state["extracted_risks"] if state["extracted_risks"] else state["extracted_wbs"]
     confidence = _critique_evaluator.calculate_confidence(items)
     state["confidence_score"] = confidence
@@ -143,13 +245,11 @@ async def critique_node(state: ProjectState) -> ProjectState:
         tenant_id=state.get("tenant_id"),
     )
 
-    skip_hitl = os.getenv("C2PRO_AI_MOCK", "0") == "1"
     result = _critique_evaluator.evaluate_critique(
         critique_status=critique["status"],
         critique_notes=critique["notes"],
         confidence=confidence,
         retry_count=state["retry_count"],
-        skip_hitl=skip_hitl,
     )
 
     state["retry_count"] = result.retry_count

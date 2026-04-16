@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 I10 stakeholder + RACI security hardening tests (RED).
 Test Suite ID: TS-I10-STK-SEC-001
@@ -18,7 +19,7 @@ from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, 
 
 
 def _stakeholder(project_id, stakeholder_id) -> Stakeholder:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return Stakeholder(
         id=stakeholder_id,
         project_id=project_id,

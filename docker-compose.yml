@@ -138,7 +138,6 @@ services:
       - R2_ACCESS_KEY_ID=minioadmin
       - R2_SECRET_ACCESS_KEY=minioadmin
       - R2_BUCKET_NAME=c2pro-documents
-      - C2PRO_AI_MOCK=1
       # Clerk Authentication
       - CLERK_ISSUER=https://content-cardinal-74.clerk.accounts.dev
       - CLERK_JWKS_URL=https://content-cardinal-74.clerk.accounts.dev/.well-known/jwks.json
@@ -149,6 +148,7 @@ services:
     volumes:
       - ./apps/api/src:/app/src:ro
       - ./apps/api/alembic:/app/alembic:ro
+      - ./apps/api/tests:/app/tests:rw
       - uploads_data:/app/uploads
     depends_on:
       postgres:

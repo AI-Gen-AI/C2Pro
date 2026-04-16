@@ -48,6 +48,9 @@ from src.documents.adapters.http.router import router as documents_router
 from src.modules.decision_intelligence.adapters.http.router import (
     router as decision_intelligence_router,
 )
+from src.modules.decision_intelligence.runtime import (
+    build_decision_intelligence_services,
+)
 from src.modules.hitl.adapters.http.notification_settings_router import (
     router as notification_settings_router,  # TASK-BCK-025
 )
@@ -102,6 +105,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     await ensure_checkpointer_ready()
     logger.info("langgraph_checkpointer_initialized")
+
+    # Refers to Suite ID: TS-I13-E2E-REAL-001.
+    # Wire real Decision Intelligence port adapters into app.state so the
+    # HTTP router can satisfy get_ingestion_service/get_extraction_service/
+    # get_retrieval_service/get_coherence_scoring_service/get_hitl_service
+    # dependencies without falling back to the 503 "requires real port
+    # implementations" fail-closed path.
+    try:
+        di_services = build_decision_intelligence_services()
+    except Exception as exc:
+        logger.error(
+            "decision_intelligence_services_init_failed",
+            error=str(exc),
+        )
+    else:
+        app.state.decision_ingestion_service = di_services.ingestion
+        app.state.decision_extraction_service = di_services.extraction
+        app.state.decision_retrieval_service = di_services.retrieval
+        app.state.decision_coherence_scoring_service = di_services.coherence
+        app.state.decision_hitl_service = di_services.hitl
+        logger.info("decision_intelligence_services_initialized")
 
     sentry_enabled = bool(settings.sentry_dsn)
     app.state.sentry_enabled = sentry_enabled

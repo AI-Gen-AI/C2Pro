@@ -124,15 +124,18 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         result: ToolResult[list[RiskItem]],
     ) -> ProjectState:
         """Inject output into LangGraph state."""
-        # Convert RiskItems to dicts for state storage
-        state["extracted_risks"] = [
-            self._risk_item_to_dict(risk) for risk in result.data
-        ]
+        risks = result.data or []
+        state["extracted_risks"] = [self._risk_item_to_dict(risk) for risk in risks]
+
+        if not result.success:
+            state["critique_notes"] = result.error or "Risk extraction failed"
+            state["confidence_score"] = 0.0
+            return state
 
         # Update confidence score based on result quality
         if result.confidence_score:
-            if result.data:
-                confidences = [item.confidence for item in result.data]
+            if risks:
+                confidences = [item.confidence for item in risks]
                 state["confidence_score"] = (
                     sum(confidences) / len(confidences) if confidences else 0.9
                 )

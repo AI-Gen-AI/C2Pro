@@ -1,3 +1,4 @@
+from datetime import timezone
 """Tests for HITL real adapters: repository, notification, HTTP schemas, graph integration.
 
 These tests verify the concrete adapter implementations without requiring
@@ -33,8 +34,8 @@ def _make_review_item(**overrides) -> ReviewItem:
         "current_status": ReviewStatus.PENDING_REVIEW_REQUIRED,
         "confidence": 0.4,
         "impact_level": ImpactLevel.MEDIUM,
-        "created_at": datetime.utcnow(),
-        "sla_due_date": datetime.utcnow() + timedelta(days=3),
+        "created_at": datetime.now(timezone.utc),
+        "sla_due_date": datetime.now(timezone.utc) + timedelta(days=3),
         "item_data": {"project_id": str(uuid4())},
     }
     defaults.update(overrides)
@@ -141,7 +142,7 @@ class TestRepositoryMappers:
             SqlAlchemyReviewQueueRepository,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         orm = ReviewItemORM(
             item_id=uuid4(),
             item_type="coherence_alert",
@@ -250,7 +251,7 @@ class TestHITLServiceIntegration:
         self, hitl_service, mock_repo, mock_notification
     ):
         overdue = _make_review_item(
-            sla_due_date=datetime.utcnow() - timedelta(days=1),
+            sla_due_date=datetime.now(timezone.utc) - timedelta(days=1),
         )
         mock_repo.get_overdue_items.return_value = [overdue]
 
@@ -278,7 +279,7 @@ class TestHITLServiceIntegration:
         approved = _make_review_item(
             current_status=ReviewStatus.APPROVED,
             approved_by="Admin",
-            approved_at=datetime.utcnow(),
+            approved_at=datetime.now(timezone.utc),
         )
         mock_repo.get_review_item.return_value = approved
 
@@ -344,7 +345,7 @@ class TestHTTPSchemas:
     def test_review_item_response_serializes(self):
         from src.modules.hitl.adapters.http.schemas import ReviewItemResponse
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ReviewItemResponse(
             item_id=uuid4(),
             item_type="budget_parse",

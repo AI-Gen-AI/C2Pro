@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Refers to Suite ID: TS-E2E-FLW-ALR-001
 
@@ -650,7 +651,7 @@ async def test_009_dashboard_shows_review_statistics(
         created_by=alert_user.id,
         document_metadata={},
     )
-    calculated_at = datetime.utcnow().replace(microsecond=0)
+    calculated_at = datetime.now(timezone.utc).replace(microsecond=0)
     analysis = Analysis(
         id=uuid4(),
         project_id=project_id,
@@ -754,7 +755,7 @@ async def test_010_dashboard_values_change_when_analysis_and_documents_change(
         created_by=alert_user.id,
         document_metadata={},
     )
-    first_analysis_at = datetime.utcnow().replace(microsecond=0) - timedelta(minutes=5)
+    first_analysis_at = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(minutes=5)
     first_analysis = Analysis(
         id=uuid4(),
         project_id=project_id,
@@ -798,7 +799,7 @@ async def test_010_dashboard_values_change_when_analysis_and_documents_change(
         created_by=alert_user.id,
         document_metadata={},
     )
-    second_analysis_at = datetime.utcnow().replace(microsecond=0)
+    second_analysis_at = datetime.now(timezone.utc).replace(microsecond=0)
     second_analysis = Analysis(
         id=uuid4(),
         project_id=project_id,

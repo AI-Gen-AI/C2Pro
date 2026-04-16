@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -44,6 +45,9 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
     "stakeholder_extractor",
 ]:
     """Extended critique router — sends to N13/14 (HITL) or enrichment nodes."""
+    if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        return "stakeholder_extractor"
+
     if state.get("human_approval_required"):
         return "human_interrupt"
     if state.get("critique_notes") and state.get("retry_count", 0) > 0:

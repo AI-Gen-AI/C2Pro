@@ -69,7 +69,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
 
     # Classification
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, name="documenttype", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentType, name="document_type", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         index=True,
     )
@@ -86,7 +86,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
 
     # Processing
     upload_status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, name="documentstatus", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
+        SQLEnum(DocumentStatus, name="document_status", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
         default=DocumentStatus.UPLOADED,
         index=True,
     )
@@ -172,7 +172,14 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
         index=True,
     )
     clause_type: Mapped[ClauseType | None] = mapped_column(
-        SQLEnum(ClauseType), nullable=True, index=True
+        SQLEnum(
+            ClauseType,
+            name="clausetype",
+            create_type=False,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        nullable=True,
+        index=True,
     )
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -252,7 +259,7 @@ class DocumentChunkORM(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
-    chunk_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

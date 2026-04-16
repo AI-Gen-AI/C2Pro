@@ -174,10 +174,57 @@ async def get_clauses_from_rag(
     max_chunks: int = 50,
 ) -> list[Clause]:
     """
-    Fetch document clauses from RAG chunks with tenant isolation.
-
-    TASK-REV-004: Added tenant_id parameter and filtering.
+    Resolve coherence clauses with this precedence:
+    1. Persisted document clauses
+    2. RAG chunks
+    3. Parsed document text fallback
     """
+    persisted_stmt = text("""
+        SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
+        FROM clauses c
+        JOIN documents d ON c.document_id = d.id
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id = CAST(:project_id AS uuid)
+          AND p.tenant_id = CAST(:tenant_id AS uuid)
+        ORDER BY c.created_at ASC
+        LIMIT :limit
+    """)
+    persisted_result = await db.execute(
+        persisted_stmt,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": max_chunks},
+    )
+    persisted_rows = persisted_result.fetchall()
+    persisted_clauses = []
+    for row in persisted_rows:
+        clause_id = str(row[0])
+        text_value = row[1] or ""
+        extracted = row[2] or {}
+        doc_id = str(row[3])
+        doc_type = row[4] or "unknown"
+        if not text_value:
+            continue
+        extracted_dict = extracted if isinstance(extracted, dict) else {}
+        affected_categories = extracted_dict.get("affected_categories")
+        if not isinstance(affected_categories, list) or not affected_categories:
+            fallback_category = extracted_dict.get("category", doc_type)
+            affected_categories = [str(fallback_category).upper()]
+        persisted_clauses.append(
+            Clause(
+                id=clause_id,
+                text=text_value,
+                data={
+                    "document_id": doc_id,
+                    "source": "persisted_clause",
+                    "source_document_type": doc_type,
+                    "category": affected_categories[0],
+                    "affected_categories": affected_categories,
+                    **extracted_dict,
+                },
+            )
+        )
+    if persisted_clauses:
+        return persisted_clauses
+
     stmt = text("""
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
@@ -197,17 +244,61 @@ async def get_clauses_from_rag(
     for i, row in enumerate(rows):
         metadata = row[1] or {}
         doc_id = str(row[2]) if row[2] else str(project_id)
+        inferred_category = str(metadata.get("document_type", "unknown")).upper()
         clause = Clause(
             id=f"chunk_{i}_{doc_id[:8]}",
             text=row[0],
             data={
                 "document_id": doc_id,
                 "source": "rag_chunk",
-                "category": metadata.get("document_type", "unknown"),
+                "source_document_type": metadata.get("document_type", "unknown"),
+                "category": inferred_category,
+                "affected_categories": [inferred_category],
             },
         )
         clauses.append(clause)
-    return clauses
+
+    if clauses:
+        return clauses
+
+    fallback_stmt = text("""
+        SELECT d.id, d.document_type::text, d.document_metadata
+        FROM documents d
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id = CAST(:project_id AS uuid)
+          AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
+        ORDER BY d.created_at DESC
+    """)
+    fallback_result = await db.execute(
+        fallback_stmt,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
+    )
+    documents = fallback_result.fetchall()
+
+    fallback_clauses = []
+    for row in documents:
+        doc_id = str(row[0])
+        doc_type = row[1] or "unknown"
+        metadata = row[2] or {}
+        parsed_text = metadata.get("parsed_text") if isinstance(metadata, dict) else None
+        if not isinstance(parsed_text, str) or not parsed_text.strip():
+            continue
+        normalized_doc_type = str(doc_type).upper()
+        fallback_clauses.append(
+            Clause(
+                id=f"parsed_{doc_id[:8]}",
+                text=parsed_text.strip(),
+                data={
+                    "document_id": doc_id,
+                    "source": "document_metadata.parsed_text",
+                    "source_document_type": doc_type,
+                    "category": normalized_doc_type,
+                    "affected_categories": [normalized_doc_type],
+                },
+            )
+        )
+    return fallback_clauses
 
 
 # ---- API Endpoint ----

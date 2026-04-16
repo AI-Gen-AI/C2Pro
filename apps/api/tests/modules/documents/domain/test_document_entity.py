@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 TS-UD-DOC-DOC-001: Document Entity tests.
 """
@@ -27,7 +28,7 @@ class TestDocumentEntity:
         assert doc.clauses == []
 
     def test_002_document_creation_all_fields(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),

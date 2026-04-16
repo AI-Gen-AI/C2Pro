@@ -18,7 +18,7 @@ from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
-from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.adapters.persistence.models import DocumentChunkORM, DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 router = APIRouter(
@@ -125,46 +125,111 @@ def get_analyze_use_case(
 async def get_document_text_from_rag(
     db: AsyncSession,
     project_id: UUID,
+    tenant_id: UUID,
     document_id: UUID | None = None,
     prompt: str = "",
     top_k: int = 10,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Fetch document text from RAG chunks and build context."""
+    """Fetch document text from RAG chunks and build context, with parsed_text fallback."""
     if document_id:
-        stmt = text("""
-            SELECT content, metadata
-            FROM document_chunks
-            WHERE project_id = CAST(:project_id AS uuid)
-              AND document_id = CAST(:document_id AS uuid)
+        chunk_stmt = text("""
+            SELECT dc.content, dc.metadata
+            FROM document_chunks dc
+            JOIN projects p ON dc.project_id = p.id
+            WHERE dc.project_id = CAST(:project_id AS uuid)
+              AND dc.document_id = CAST(:document_id AS uuid)
+              AND p.tenant_id = CAST(:tenant_id AS uuid)
+            ORDER BY dc.created_at DESC
             LIMIT :limit
         """)
-        params = {"project_id": str(project_id), "document_id": str(document_id), "limit": top_k}
+        chunk_params = {
+            "project_id": str(project_id),
+            "document_id": str(document_id),
+            "tenant_id": str(tenant_id),
+            "limit": top_k,
+        }
     else:
-        stmt = text("""
-            SELECT content, metadata
-            FROM document_chunks
-            WHERE project_id = CAST(:project_id AS uuid)
-            ORDER BY created_at DESC
+        chunk_stmt = text("""
+            SELECT dc.content, dc.metadata
+            FROM document_chunks dc
+            JOIN projects p ON dc.project_id = p.id
+            WHERE dc.project_id = CAST(:project_id AS uuid)
+              AND p.tenant_id = CAST(:tenant_id AS uuid)
+            ORDER BY dc.created_at DESC
             LIMIT :limit
         """)
-        params = {"project_id": str(project_id), "limit": top_k * 3}
+        chunk_params = {
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+            "limit": top_k * 3,
+        }
 
-    result = await db.execute(stmt, params)
+    result = await db.execute(chunk_stmt, chunk_params)
     rows = result.fetchall()
 
-    if not rows:
+    chunks = [{"content": row[0], "metadata": row[1] or {}} for row in rows]
+    if chunks:
+        context = "\n\n---\n\n".join(c["content"] for c in chunks)
+        full_text = f"CONSULTA: {prompt}\n\nDOCUMENTOS:\n{context}"
+        return full_text, chunks
+
+    if document_id:
+        doc_stmt = text("""
+            SELECT d.id, d.document_type::text, d.document_metadata
+            FROM documents d
+            JOIN projects p ON d.project_id = p.id
+            WHERE d.project_id = CAST(:project_id AS uuid)
+              AND d.id = CAST(:document_id AS uuid)
+              AND p.tenant_id = CAST(:tenant_id AS uuid)
+              AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
+            ORDER BY d.created_at DESC
+        """)
+        doc_params = {
+            "project_id": str(project_id),
+            "document_id": str(document_id),
+            "tenant_id": str(tenant_id),
+        }
+    else:
+        doc_stmt = text("""
+            SELECT d.id, d.document_type::text, d.document_metadata
+            FROM documents d
+            JOIN projects p ON d.project_id = p.id
+            WHERE d.project_id = CAST(:project_id AS uuid)
+              AND p.tenant_id = CAST(:tenant_id AS uuid)
+              AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
+            ORDER BY d.created_at DESC
+        """)
+        doc_params = {
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+        }
+
+    doc_result = await db.execute(doc_stmt, doc_params)
+    documents = doc_result.fetchall()
+    fallback_docs = []
+    for row in documents:
+        doc_id = str(row[0])
+        doc_type = row[1] or "unknown"
+        metadata = row[2] or {}
+        parsed_text = metadata.get("parsed_text") if isinstance(metadata, dict) else None
+        if isinstance(parsed_text, str) and parsed_text.strip():
+            fallback_docs.append(
+                {
+                    "content": parsed_text.strip(),
+                    "metadata": {
+                        "document_id": doc_id,
+                        "document_type": doc_type,
+                        "source": "document_metadata.parsed_text",
+                    },
+                }
+            )
+
+    if not fallback_docs:
         return "", []
 
-    chunks = []
-    for row in rows:
-        chunks.append({
-            "content": row[0],
-            "metadata": row[1] or {},
-        })
-
-    context = "\n\n---\n\n".join(c["content"] for c in chunks)
+    context = "\n\n---\n\n".join(c["content"] for c in fallback_docs)
     full_text = f"CONSULTA: {prompt}\n\nDOCUMENTOS:\n{context}"
-    return full_text, chunks
+    return full_text, fallback_docs
 
 
 class AnalyzeRequest(BaseModel):
@@ -200,6 +265,7 @@ async def analyze_document(
     document_text, sources = await get_document_text_from_rag(
         db=db,
         project_id=payload.project_id,
+        tenant_id=current_user.tenant_id,
         document_id=payload.document_id,
         prompt=payload.analysis_prompt,
         top_k=10,

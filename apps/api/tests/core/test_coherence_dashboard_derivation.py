@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 TS-E2E-FLW-DOC-001: Coherence dashboard persisted derivation tests.
 """
@@ -69,7 +70,7 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_results(
     db, test_tenant, monkeypatch
 ) -> None:
-    coherence_time = datetime.utcnow().replace(microsecond=0) - timedelta(hours=2)
+    coherence_time = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=2)
     project = ProjectORM(
         id=uuid4(),
         tenant_id=test_tenant.id,
@@ -83,7 +84,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
         start_date=None,
         end_date=None,
         coherence_score=33.0,
-        last_analysis_at=datetime.utcnow() - timedelta(days=2),
+        last_analysis_at=datetime.now(timezone.utc) - timedelta(days=2),
         metadata_json={},
     )
     project.updated_at = coherence_time - timedelta(days=1)
@@ -170,7 +171,7 @@ async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
         coherence_score=71,
         coherence_breakdown=["unexpected", "legacy", "list"],
         alerts_count=2,
-        completed_at=datetime.utcnow(),
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(analysis)
     await db.commit()

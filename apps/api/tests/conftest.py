@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 C2Pro - Test Configuration
 
@@ -585,7 +586,7 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
-        last_login=datetime.utcnow(),
+        last_login=datetime.now(timezone.utc),
     )
 
     db.add(user)
@@ -833,11 +834,11 @@ def generate_token() -> Callable:
         # Calculate expiration
         if expires_delta_seconds is None:
             if token_type == "access":
-                expire = datetime.utcnow() + timedelta(hours=24)
+                expire = datetime.now(timezone.utc) + timedelta(hours=24)
             else:
-                expire = datetime.utcnow() + timedelta(days=7)
+                expire = datetime.now(timezone.utc) + timedelta(days=7)
         else:
-            expire = datetime.utcnow() + timedelta(seconds=expires_delta_seconds)
+            expire = datetime.now(timezone.utc) + timedelta(seconds=expires_delta_seconds)
 
         # Build payload
         payload = {
@@ -846,7 +847,7 @@ def generate_token() -> Callable:
             "email": email,
             "role": role,
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "type": token_type,
         }
 

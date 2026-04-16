@@ -9,6 +9,7 @@ Tests for token revocation security:
 """
 
 import pytest
+import pytest_asyncio
 import jwt
 from datetime import datetime, timedelta, UTC
 from uuid import uuid4
@@ -21,6 +22,8 @@ from src.core.auth.token_revocation import (
     is_token_revoked,
     _token_fingerprint,
     cleanup_expired_tokens,
+    revoke_token_async, # Imported for async tests
+    is_token_revoked_async, # Imported for async tests
 )
 
 
@@ -127,3 +130,90 @@ class TestCleanupExpiredTokens:
         with _memory_lock:
             assert "expired_fp" not in _memory_fallback
             assert "valid_fp" in _memory_fallback
+
+
+# --- New Async Redis Tests (TASK-ARCH-009) ---
+class TestTokenRevocationRedisAsync:
+    """Tests for async Redis-backed token revocation."""
+
+    @pytest_asyncio.fixture(autouse=True)
+    def setup_mocker(self, mocker):
+        self.mock_redis = mocker.AsyncMock()
+        mocker.patch('src.core.cache.CacheService._redis', new_callable=mocker.PropertyMock, return_value=self.mock_redis)
+        mocker.patch('src.core.cache.get_cache_service', return_value=mocker.Mock(_redis=self.mock_redis)) # Patch get_cache_service
+        # Ensure in-memory fallback is clean for each test
+        with _memory_lock:
+            _memory_fallback.clear()
+
+    @pytest.mark.asyncio
+    async def test_revoke_token_async_uses_redis(self, mocker):
+        payload = {
+            "sub": str(uuid4()),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
+        }
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        fingerprint = _token_fingerprint(token)
+
+        await revoke_token_async(token)
+
+        self.mock_redis.set.assert_called_once_with(
+            f"revoked_token:{fingerprint}", "1", ex=mocker.ANY  # Check 'ex' is passed
+        )
+        # Ensure we check Redis before falling back to memory
+        self.mock_redis.exists.return_value = True
+        assert await is_token_revoked_async(token) is True
+
+    @pytest.mark.asyncio
+    async def test_is_token_revoked_async_checks_redis(self):
+        payload = {
+            "sub": str(uuid4()),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
+        }
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        fingerprint = _token_fingerprint(token)
+
+        self.mock_redis.exists.return_value = True
+
+        assert await is_token_revoked_async(token) is True
+        self.mock_redis.exists.assert_called_once_with(f"revoked_token:{fingerprint}")
+
+    @pytest.mark.asyncio
+    async def test_is_token_revoked_async_falls_back_to_memory_if_redis_fails(self, mocker):
+        payload = {
+            "sub": str(uuid4()),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
+        }
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        fingerprint = _token_fingerprint(token)
+
+        # Simulate Redis failure by raising an exception on exists call
+        self.mock_redis.exists.side_effect = Exception("Redis connection error")
+
+        with _memory_lock:
+            _memory_fallback[fingerprint] = datetime.now(UTC) + timedelta(hours=1)
+
+        assert await is_token_revoked_async(token) is True
+        assert self.mock_redis.exists.called # Redis was attempted
+
+    @pytest.mark.asyncio
+    async def test_revoke_token_async_falls_back_to_memory_if_redis_fails(self, mocker):
+        payload = {
+            "sub": str(uuid4()),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
+        }
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        fingerprint = _token_fingerprint(token)
+
+        # Simulate Redis failure by raising an exception on set call
+        self.mock_redis.set.side_effect = Exception("Redis connection error")
+
+        await revoke_token_async(token)
+
+        with _memory_lock:
+            assert fingerprint in _memory_fallback
+            assert _memory_fallback[fingerprint] > datetime.now(UTC) - timedelta(minutes=1) # Ensure expiry is in the future
+        assert self.mock_redis.set.called # Redis was attempted
