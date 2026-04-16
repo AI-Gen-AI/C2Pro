@@ -97,6 +97,37 @@ router = APIRouter(
 ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".bc3"}
 
 
+def _get_upload_file_size(file: UploadFile) -> int:
+    size = getattr(file, "size", None)
+    if isinstance(size, int):
+        return size
+
+    current_position = file.file.tell()
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(current_position)
+    return size
+
+
+def _enqueue_document_processing(document_id: UUID) -> str | None:
+    try:
+        from src.core.tasks.ingestion_tasks import process_document_async
+
+        if process_document_async is None:
+            logger.warning("document_processing_task_unavailable", document_id=str(document_id))
+            return None
+
+        task = process_document_async.delay(document_id=str(document_id))
+        return getattr(task, "id", None)
+    except Exception as exc:  # pragma: no cover - runtime infra failure path
+        logger.warning(
+            "document_processing_enqueue_failed",
+            document_id=str(document_id),
+            error=str(exc),
+        )
+        return None
+
+
 def _normalize_document_status_for_polling(status: DocumentStatus) -> DocumentPollingStatus:
     if status == DocumentStatus.UPLOADED:
         return DocumentPollingStatus.QUEUED
@@ -300,7 +331,9 @@ async def upload_document_for_processing(
     file: UploadFile = File(...),
     upload_use_case: UploadDocumentUseCase = Depends(get_upload_use_case),
 ) -> DocumentQueuedResponse:
-    if file.size > settings.max_upload_size_bytes:
+    file_size = _get_upload_file_size(file)
+
+    if file_size > settings.max_upload_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
@@ -320,14 +353,14 @@ async def upload_document_for_processing(
         user_id=user_id,
         tenant_id=tenant_id,
     )
-
-    from src.core.tasks.ingestion_tasks import process_document_async
-
-    task = process_document_async.delay(document_id=str(document.id))
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = task.id
+    response_data["task_id"] = _enqueue_document_processing(document.id)
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
-    response_data["status_detail"] = _document_status_detail_for_polling(DocumentStatus.UPLOADED)
+    response_data["status_detail"] = (
+        "Upload accepted. File stored successfully. Background processing will start when the worker is available."
+        if response_data["task_id"] is None
+        else _document_status_detail_for_polling(DocumentStatus.UPLOADED)
+    )
     return DocumentQueuedResponse(**response_data)
 
 
@@ -353,7 +386,9 @@ async def reupload_document_file(
     - Resets status to UPLOADED for re-processing
     - Returns existing document if content unchanged
     """
-    if file.size > settings.max_upload_size_bytes:
+    file_size = _get_upload_file_size(file)
+
+    if file_size > settings.max_upload_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
@@ -619,13 +654,14 @@ async def reprocess_document_endpoint(
     await repo.commit()
     await repo.refresh(document)
 
-    from src.core.tasks.ingestion_tasks import process_document_async
-
-    task = process_document_async.delay(document_id=str(document_id))
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = task.id
+    response_data["task_id"] = _enqueue_document_processing(document_id)
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
-    response_data["status_detail"] = "Document reprocessing has been queued."
+    response_data["status_detail"] = (
+        "Document status reset successfully. Background reprocessing will start when the worker is available."
+        if response_data["task_id"] is None
+        else "Document reprocessing has been queued."
+    )
     return DocumentQueuedResponse(**response_data)
 
 

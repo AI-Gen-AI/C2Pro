@@ -27,8 +27,15 @@ class CreateAndQueueDocumentUseCase:
         This is the first, synchronous step in the async processing workflow,
         before the file is actually uploaded to permanent storage.
         """
+        file_size = getattr(file, "size", None)
+        if not isinstance(file_size, int):
+            current_position = file.file.tell()
+            file.file.seek(0, 2)
+            file_size = file.file.tell()
+            file.file.seek(current_position)
+
         # 1. Validate file size and type (basic validation before even queueing)
-        if file.size > settings.max_upload_size_bytes:
+        if file_size > settings.max_upload_size_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
@@ -56,7 +63,7 @@ class CreateAndQueueDocumentUseCase:
             parsed_at=None,
             parsing_error=None,
             file_format=file_extension,
-            file_size_bytes=file.size,
+            file_size_bytes=file_size,
             # storage_url will be updated later by a background worker after file upload
         )
 
