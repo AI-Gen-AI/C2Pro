@@ -6,31 +6,36 @@ Refers to Suite ID: TS-I13-E2E-REAL-001.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
 from src.modules.decision_intelligence.domain.entities import FinalDecisionPackage
 from src.modules.decision_intelligence.domain.exceptions import FinalizationBlockedError
 
 
+@runtime_checkable
 class IngestionPort(Protocol):
     async def ingest_document(self, doc_bytes: bytes) -> dict[str, Any]: ...
 
 
+@runtime_checkable
 class ExtractionPort(Protocol):
     async def extract_clauses(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
 
 
+@runtime_checkable
 class RetrievalPort(Protocol):
     async def retrieve(self, query: str) -> list[dict[str, Any]]: ...
 
 
+@runtime_checkable
 class CoherenceScoringPort(Protocol):
     async def aggregate_coherence_score(
         self, alerts: list[dict[str, Any]], tenant_id: UUID, project_id: UUID
     ) -> dict[str, Any]: ...
 
 
+@runtime_checkable
 class HITLPort(Protocol):
     async def route_for_review(
         self, item_id: UUID, item_type: str, confidence: float, impact_level: str, item_data: dict[str, Any]
