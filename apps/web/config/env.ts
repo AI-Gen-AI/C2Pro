@@ -47,5 +47,7 @@ export const env = {
   COHERENCE_BASE_URL,
   IS_DEMO: process.env.NEXT_PUBLIC_APP_MODE === "demo",
   IS_DEV: process.env.NODE_ENV === "development",
+  FEATURE_RACI_GENERATION:
+    process.env.NEXT_PUBLIC_FEATURE_RACI_GENERATION === "true",
   SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
 } as const;

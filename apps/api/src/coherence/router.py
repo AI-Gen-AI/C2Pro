@@ -56,6 +56,14 @@ COHERENCE_WEIGHTS = {
 }
 
 
+def _normalize_utc_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class CoherenceEvaluateRequest(BaseModel):
     """Request model that accepts either project_id (to fetch from RAG) or clauses directly."""
 
@@ -588,7 +596,12 @@ async def get_coherence_dashboard(
         latest_alert_at,
         project.updated_at,
     ]
-    last_updated = max((c for c in candidates if c is not None), default=datetime.now(UTC))
+    normalized_candidates = [
+        normalized
+        for candidate in candidates
+        if (normalized := _normalize_utc_datetime(candidate)) is not None
+    ]
+    last_updated = max(normalized_candidates, default=datetime.now(UTC))
 
     return {
         "project_id": str(project_id),
@@ -600,5 +613,5 @@ async def get_coherence_dashboard(
         "alert_count": alert_count,
         "document_count": document_count,
         "methodology_version": "3.0",  # Updated to 3.0 for v0.3 engine
-        "last_updated": last_updated.isoformat() + "Z" if not last_updated.tzinfo else last_updated.isoformat(),
+        "last_updated": last_updated.isoformat(),
     }

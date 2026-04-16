@@ -42,16 +42,25 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     def _to_domain(self, orm_alert: AlertORM) -> Alert:
         """Convert ORM model to domain entity."""
+        severity_value = getattr(orm_alert.severity, "value", orm_alert.severity)
+        status_value = getattr(orm_alert.status, "value", orm_alert.status)
+
+        try:
+            severity = AlertSeverity(str(severity_value).lower())
+        except ValueError:
+            severity = AlertSeverity.MEDIUM
+
+        try:
+            status = AlertStatus(str(status_value).lower())
+        except ValueError:
+            status = AlertStatus.OPEN
+
         return Alert(
             id=orm_alert.id,
             project_id=orm_alert.project_id,
-            severity=AlertSeverity(orm_alert.severity.value)
-                if hasattr(orm_alert.severity, "value")
-                else AlertSeverity(orm_alert.severity),
+            severity=severity,
             category=orm_alert.category or "risk",
-            status=AlertStatus(orm_alert.status.value)
-                if hasattr(orm_alert.status, "value")
-                else AlertStatus(orm_alert.status),
+            status=status,
             approval_status=orm_alert.approval_status,
             rule_id=orm_alert.rule_id,
             title=orm_alert.title,
