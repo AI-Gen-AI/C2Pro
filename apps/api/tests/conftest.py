@@ -69,7 +69,7 @@ os.environ.setdefault("DEBUG", "true")
 # Prefer a dedicated test DB variable so pytest does not mutate the normal app DATABASE_URL.
 # src.config gives TEST_DATABASE_URL precedence over DATABASE_URL when present.
 os.environ.setdefault(
-    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/c2pro_test"
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@postgres-test:5432/c2pro_test"
 )
 
 # Supabase

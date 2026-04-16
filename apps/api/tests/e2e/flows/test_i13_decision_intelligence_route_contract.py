@@ -25,7 +25,7 @@ def _skip_if_decision_ports_not_wired(response) -> None:
 @pytest_asyncio.fixture
 async def live_app(app):
     """Refers to Suite ID: TS-I13-E2E-REAL-001."""
-    async with LifespanManager(app):
+    async with LifespanManager(app, startup_timeout=30.0):
         yield app
 
 
