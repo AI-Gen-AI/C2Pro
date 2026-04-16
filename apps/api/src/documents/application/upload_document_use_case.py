@@ -40,8 +40,15 @@ class UploadDocumentUseCase:
         if not metadata:
             metadata = {}
 
+        file_size = getattr(file, "size", None)
+        if not isinstance(file_size, int):
+            current_position = file.file.tell()
+            file.file.seek(0, 2)
+            file_size = file.file.tell()
+            file.file.seek(current_position)
+
         # 1. Validate file size and type
-        if file.size > settings.max_upload_size_bytes:
+        if file_size > settings.max_upload_size_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"File size exceeds limit of {settings.max_upload_size_mb}MB.",
@@ -70,7 +77,7 @@ class UploadDocumentUseCase:
             parsing_error=None,
             # Other fields from the original Document model
             file_format=file_extension,
-            file_size_bytes=file.size,
+            file_size_bytes=file_size,
             # storage_url will be set after upload
         )
 
