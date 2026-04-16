@@ -12,6 +12,8 @@ from typing import Protocol
 from uuid import UUID
 
 import jwt
+from src.core.auth.token_revocation import is_token_revoked_async
+from src.core.auth.token_revocation import _token_fingerprint # To log the fingerprint of revoked token
 from fastapi import HTTPException
 
 
@@ -43,7 +45,7 @@ class JwtValidator:
         self._public_key_provider = public_key_provider
         self._algorithm = algorithm
 
-    def decode(self, token: str, expected_token_type: str = "access") -> JWTClaims:
+    async def decode(self, token: str, expected_token_type: str = "access") -> JWTClaims:
         if not token:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
@@ -54,6 +56,12 @@ class JwtValidator:
             raise HTTPException(status_code=401, detail="Token has expired")
         except jwt.PyJWTError:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+        # Check if token is revoked (TASK-ARCH-009)
+        if await is_token_revoked_async(token):
+            # Log the token fingerprint for auditing purposes (TASK-ARCH-009)
+            logger.warning("jwt_revoked_by_validator", token_fingerprint=_token_fingerprint(token))
+            raise HTTPException(status_code=401, detail="Token has been revoked")
 
         sub_value = payload.get("sub")
         if not sub_value:

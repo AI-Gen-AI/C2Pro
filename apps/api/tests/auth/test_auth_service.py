@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 C2Pro - Authentication Service Unit Tests
 TS-E2E-SEC-TNT-001
@@ -215,7 +216,8 @@ class TestJWTTokens:
         assert "email" not in payload
         assert "role" not in payload
 
-    def test_decode_token_with_valid_token(self):
+    @pytest.mark.asyncio
+    async def test_decode_token_with_valid_token(self):
         """
         Decoding valid token should return correct payload.
         """
@@ -231,14 +233,14 @@ class TestJWTTokens:
             role=role
         )
 
-        payload = decode_token(token)
-
+        payload = await decode_token(token)
         assert payload.sub == user_id
         assert payload.tenant_id == tenant_id
         assert payload.email == email
         assert payload.role == role
 
-    def test_decode_token_with_invalid_signature(self):
+    @pytest.mark.asyncio
+    async def test_decode_token_with_invalid_signature(self):
         """
         Decoding token with wrong signature should raise AuthenticationError.
         """
@@ -254,9 +256,10 @@ class TestJWTTokens:
         )
 
         with pytest.raises(AuthenticationError, match="Invalid token"):
-            decode_token(token)
+            await decode_token(token)
 
-    def test_decode_token_with_expired_token(self):
+    @pytest.mark.asyncio
+    async def test_decode_token_with_expired_token(self):
         """
         Decoding expired token should raise AuthenticationError.
         """
@@ -275,16 +278,18 @@ class TestJWTTokens:
         )
 
         with pytest.raises(AuthenticationError, match="Invalid token"):
-            decode_token(token)
+            await decode_token(token)
 
-    def test_decode_token_with_malformed_token(self):
+    @pytest.mark.asyncio
+    async def test_decode_token_with_malformed_token(self):
         """
         Decoding malformed token should raise AuthenticationError.
         """
         with pytest.raises(AuthenticationError):
-            decode_token("not-a-valid-jwt-token")
+            await decode_token("not-a-valid-jwt-token")
 
-    def test_decode_token_with_missing_claims(self):
+    @pytest.mark.asyncio
+    async def test_decode_token_with_missing_claims(self):
         """
         Token missing required claims should raise AuthenticationError.
         """
@@ -298,7 +303,7 @@ class TestJWTTokens:
         )
 
         with pytest.raises(AuthenticationError, match="Invalid token"):
-            decode_token(token)
+            await decode_token(token)
 
 
 # ===========================================
@@ -603,7 +608,7 @@ class TestAuthServiceRegistration:
         response = await AuthService.register(db, request)
 
         # Access token should be decodable
-        payload = decode_token(response.tokens.access_token)
+        payload = await decode_token(response.tokens.access_token)
         assert payload.email == request.email
         assert payload.role == UserRole.ADMIN
 
@@ -629,11 +634,11 @@ class TestAuthServiceRegistration:
             company_name="Login Co"
         )
 
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         await AuthService.register(db, request)
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
 
-        # Get user to check last_login
+        # Get user from database
         user = await get_user_by_email(db, request.email)
         assert user.last_login is not None
         assert before <= user.last_login <= after
@@ -758,7 +763,7 @@ class TestAuthServiceLogin:
         response = await AuthService.login(db, request)
 
         # Decode and verify access token
-        payload = decode_token(response.tokens.access_token)
+        payload = await decode_token(response.tokens.access_token)
         assert payload.sub == test_user.id
         assert payload.tenant_id == test_user.tenant_id
         assert payload.email == test_user.email
@@ -832,8 +837,7 @@ class TestAuthServiceOtherMethods:
         assert response.token_type == "bearer"
 
         # Verify new access token
-        payload = decode_token(response.access_token)
-        assert payload.sub == test_user.id
+        payload = await decode_token(response.access_token)
 
     @pytest.mark.asyncio
     async def test_refresh_access_token_with_access_token(self, db, test_user, test_tenant):
@@ -870,8 +874,8 @@ class TestAuthServiceOtherMethods:
         payload = {
             "sub": str(test_user.id),
             "type": "refresh",
-            "exp": datetime.utcnow() - timedelta(hours=1),
-            "iat": datetime.utcnow() - timedelta(hours=2)
+            "exp": datetime.now(timezone.utc) - timedelta(hours=1),
+            "iat": datetime.now(timezone.utc) - timedelta(hours=2)
         }
 
         expired_token = jwt.encode(

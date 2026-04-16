@@ -1,7 +1,7 @@
 """Add audit chain fields to audit_logs
 
 Revision ID: 20260407_0001
-Revises: 20260406_0004
+Revises: 20260406_0005
 Create Date: 2026-04-07 00:01:00.000000
 
 TASK-IMPL-002: Fix AuditLog Traceability Failure
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260407_0001"
-down_revision: str = "20260406_0004"
+down_revision: str = "20260406_0005"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

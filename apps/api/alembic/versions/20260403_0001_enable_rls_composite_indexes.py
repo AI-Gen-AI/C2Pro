@@ -15,6 +15,9 @@ Suite ID: TS-DB-MIG-RLS-001
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
+from sqlalchemy.exc import ProgrammingError
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -24,12 +27,31 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _ensure_extension(extension_name: str) -> bool:
+    bind = op.get_bind()
+    # Use a separate connection with autocommit for CREATE EXTENSION
+    # to prevent transaction abortion on permission errors.
+    connection = bind.engine.connect().execution_options(autocommit=True)
+    try:
+        connection.execute(sa.text(f"CREATE EXTENSION IF NOT EXISTS {extension_name}"))
+        connection.commit()
+        return True
+    except ProgrammingError:
+        connection.rollback()
+        return False
+    except Exception:
+        connection.rollback()
+        return False
+    finally:
+        connection.close()
+
+
 def upgrade() -> None:
     # ===========================================
     # ENABLE PG_STAT_STATEMENTS EXTENSION
     # ===========================================
     # monitor-001: Enable query performance monitoring
-    op.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+    _ensure_extension("pg_stat_statements")
 
     # ===========================================
     # ENABLE ROW LEVEL SECURITY ON DOCUMENTS

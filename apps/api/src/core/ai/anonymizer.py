@@ -3,4 +3,10 @@ Legacy shim for anonymizer.
 Canonical implementation lives in src.core.privacy.anonymizer.
 """
 
-from src.core.privacy.anonymizer import *  # noqa: F403,F401
+from src.anonymizer.application.anonymization_service import AnonymizationService
+from src.anonymizer.domain.pii_detector_service import PiiDetectorService
+from src.anonymizer.domain.entities import AnonymizedResult, AnonymizationConfig
+
+def get_anonymizer() -> AnonymizationService:
+    return AnonymizationService(pii_detector=PiiDetectorService())
+

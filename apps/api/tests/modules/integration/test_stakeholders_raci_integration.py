@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Stakeholders → RACI Integration Tests (TDD - RED Phase)
 
@@ -53,8 +54,8 @@ class TestStakeholdersRaciIntegration:
                 power_level=PowerLevel.HIGH,
                 interest_level=InterestLevel.MEDIUM,
                 approval_status="approved",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 name="Alice",
                 role="Owner",
                 organization="Acme",
@@ -66,8 +67,8 @@ class TestStakeholdersRaciIntegration:
                 power_level=PowerLevel.LOW,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 name="Bob",
                 role="PM",
                 organization="BuilderCo",

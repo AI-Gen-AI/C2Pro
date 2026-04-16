@@ -18,6 +18,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.auth.token_revocation import is_token_revoked_async
 
 from src.config import settings
 from src.core.auth.bootstrap_lookup import (
@@ -68,6 +69,15 @@ async def _try_local_jwt(token: str) -> dict[str, Any] | None:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
+
+        # Check if token is revoked (TASK-ARCH-009)
+        if await is_token_revoked_async(token):
+            logger.warning("local_jwt_revoked", token_fingerprint=_token_fingerprint(token))
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+            )
+
         return dict(payload)
     except jwt.ExpiredSignatureError:
         raise HTTPException(

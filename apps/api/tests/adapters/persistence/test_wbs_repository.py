@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 WBS Repository Integration Tests (TDD - RED Phase)
 
@@ -106,8 +107,8 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     session.add(project_a)
     await session.commit()
@@ -170,8 +171,8 @@ async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSess
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     session.add(project_a)
     await session.commit()

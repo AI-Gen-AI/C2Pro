@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 BOM Repository Integration Tests (TDD - RED Phase)
 
@@ -117,8 +118,8 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     session.add(project_a)
     await session.commit()
@@ -199,8 +200,8 @@ async def test_bom_repository_create_rejects_project_outside_tenant(session: Asy
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     session.add(project_a)
     await session.commit()

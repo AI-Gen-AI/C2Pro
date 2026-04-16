@@ -7,7 +7,7 @@ Test Suite ID: TS-UNIFIED-ALERTS-API-001
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import pytest
@@ -33,8 +33,8 @@ async def project_id(db: AsyncSession, tenant_id: UUID):
         id=uuid4(),
         name="Test Project",
         tenant_id=tenant_id,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(project)
     await db.commit()
@@ -50,8 +50,8 @@ async def analysis_id(db: AsyncSession, project_id: UUID):
         project_id=project_id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(analysis)
     await db.commit()
@@ -76,8 +76,8 @@ async def sample_alerts(
             title="Schedule delay risk",
             description="Project timeline at risk.",
             status=AlertStatus.OPEN,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         ),
         Alert(
             id=uuid4(),
@@ -89,8 +89,8 @@ async def sample_alerts(
             title="Budget overrun risk",
             description="Budget may be exceeded.",
             status=AlertStatus.OPEN,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         ),
         # Coherence alerts
         Alert(
@@ -104,8 +104,8 @@ async def sample_alerts(
             title="Budget coherence violation",
             description="Budget item exceeds contract amount.",
             status=AlertStatus.OPEN,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         ),
         Alert(
             id=uuid4(),
@@ -118,8 +118,8 @@ async def sample_alerts(
             title="Schedule dependency violation",
             description="Invalid task dependencies detected.",
             status=AlertStatus.ACKNOWLEDGED,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         ),
         Alert(
             id=uuid4(),
@@ -132,8 +132,8 @@ async def sample_alerts(
             title="Compliance issue",
             description="Missing required permits.",
             status=AlertStatus.RESOLVED,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         ),
     ]
 
@@ -305,8 +305,8 @@ class TestUnifiedAlertsAPI:
             id=uuid4(),
             name="Other Tenant Project",
             tenant_id=other_tenant_id,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(other_project)
         await db.commit()
@@ -316,8 +316,8 @@ class TestUnifiedAlertsAPI:
             project_id=other_project.id,
             analysis_type=AnalysisType.COHERENCE,
             status=AnalysisStatus.COMPLETED,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(other_analysis)
         await db.commit()
@@ -331,8 +331,8 @@ class TestUnifiedAlertsAPI:
             title="Other tenant alert",
             description="Should not be visible.",
             status=AlertStatus.OPEN,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(other_alert)
         await db.commit()

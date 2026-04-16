@@ -6,7 +6,7 @@ Metadata schemas for tool registration and execution tracking.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Generic, TypeVar
 from uuid import uuid4

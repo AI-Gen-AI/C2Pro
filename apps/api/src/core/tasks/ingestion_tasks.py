@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from src.analysis.factories.orchestrator_factory import AnalysisOrchestratorFactory
 from src.core.database import get_raw_session, init_db
@@ -36,7 +37,7 @@ from src.documents.adapters.storage.local_file_storage_service import (
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
-from src.documents.domain.models import DocumentStatus
+from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
@@ -67,10 +68,170 @@ def _build_processing_details(extraction_summary: dict) -> dict:
         "processing_stage": "parsed_pending_analysis",
         "analysis_status": "queued",
         "status_detail": (
-            "Document parsing and RAG ingestion completed. Analysis orchestration queued."
+            "Document parsing and downstream extraction completed. Analysis orchestration queued."
         ),
         "extraction_summary": extraction_summary,
     }
+
+
+def _infer_contract_clause_type(text: str) -> ClauseType:
+    lowered = text.lower()
+    if any(term in lowered for term in ["penalt", "liquidated damages", "delay"]):
+        return ClauseType.PENALTY
+    if any(term in lowered for term in ["payment", "invoice", "certified"]):
+        return ClauseType.PAYMENT
+    if any(term in lowered for term in ["warranty", "defect", "liability"]):
+        return ClauseType.WARRANTY
+    if any(term in lowered for term in ["scope", "includes", "works", "deliverable"]):
+        return ClauseType.SCOPE
+    if any(term in lowered for term in ["milestone", "deadline", "completion", "schedule"]):
+        return ClauseType.DELIVERY
+    return ClauseType.OTHER
+
+
+def _extract_numeric_money(text: str) -> float | None:
+    match = re.search(r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE)
+    if not match:
+        return None
+    raw = match.group(1) or match.group(2)
+    if not raw:
+        return None
+    normalized = raw.replace(",", "").replace(" ", "")
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
+
+
+def _extract_percentage(text: str) -> float | None:
+    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1)) / 100.0
+    except ValueError:
+        return None
+
+
+def _extract_days(text: str) -> int | None:
+    match = re.search(r"([0-9]+)\s*(?:day|days|días)", text, re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _extract_months(text: str) -> int | None:
+    match = re.search(r"([0-9]+)\s*(?:month|months|mes|meses)", text, re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[str]:
+    lowered = text.lower()
+    categories: list[str] = []
+
+    if clause_type == ClauseType.PENALTY:
+        categories.extend(["LEGAL", "TIME"])
+        if "%" in text or "penalt" in lowered:
+            categories.append("BUDGET")
+    elif clause_type == ClauseType.PAYMENT:
+        categories.extend(["BUDGET", "LEGAL"])
+        if any(term in lowered for term in ["milestone", "certified", "acceptance"]):
+            categories.append("TIME")
+    elif clause_type == ClauseType.WARRANTY:
+        categories.extend(["LEGAL", "QUALITY"])
+        if any(term in lowered for term in ["technical", "specification", "performance"]):
+            categories.append("TECHNICAL")
+    elif clause_type == ClauseType.SCOPE:
+        categories.extend(["SCOPE"])
+        if any(term in lowered for term in ["material", "specification", "technical"]):
+            categories.append("TECHNICAL")
+        if any(term in lowered for term in ["inspection", "testing", "acceptance"]):
+            categories.append("QUALITY")
+    elif clause_type == ClauseType.DELIVERY:
+        categories.extend(["TIME", "SCOPE"])
+    else:
+        categories.append("LEGAL")
+
+    deduped: list[str] = []
+    for category in categories:
+        if category not in deduped:
+            deduped.append(category)
+    return deduped
+
+
+
+def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
+    clause_type = _infer_contract_clause_type(text)
+    affected_categories = _contract_affected_categories(clause_type, text)
+    data = {
+        "category": affected_categories[0] if affected_categories else "LEGAL",
+        "affected_categories": affected_categories,
+        "source_document_type": "contract",
+        "source": "contract_ingestion_deterministic",
+    }
+
+    amount = _extract_numeric_money(text) or _extract_numeric_money(parsed_text)
+    if amount is not None:
+        data.setdefault("currency", "EUR")
+        data["planned"] = amount
+        data["total_amount"] = amount
+
+    if clause_type == ClauseType.PENALTY:
+        pct = _extract_percentage(text)
+        if pct is not None:
+            data["daily_penalty_pct"] = pct
+            data["penalty_cap_pct"] = pct
+    if clause_type == ClauseType.PAYMENT:
+        days = _extract_days(text)
+        if days is not None:
+            data["payment_term_days"] = days
+    if clause_type == ClauseType.WARRANTY:
+        months = _extract_months(text)
+        if months is not None:
+            data["warranty_months"] = months
+    if clause_type == ClauseType.MILESTONE:
+        deadline = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
+        if deadline:
+            data["deadline"] = deadline.group(1)
+    if clause_type == ClauseType.QUALITY:
+        if any(term in text.lower() for term in ["inspection", "testing", "acceptance"]):
+            data["quality_standards"] = ["inspection-testing-acceptance"]
+    if clause_type == ClauseType.SCOPE:
+        data["deliverables"] = [{"name": text[:120]}]
+
+    return data
+
+
+def _extract_contract_clauses(*, document_id: UUID, project_id: UUID, parsed_text: str) -> list[Clause]:
+    segments = [segment.strip() for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text) if segment.strip()]
+    clauses: list[Clause] = []
+    for index, segment in enumerate(segments, start=1):
+        if len(segment) < 20:
+            continue
+        clause_type = _infer_contract_clause_type(segment)
+        clauses.append(
+            Clause(
+                id=uuid4(),
+                project_id=project_id,
+                document_id=document_id,
+                clause_code=f"AUTO-{index:03d}",
+                clause_type=clause_type,
+                title=segment[:80],
+                full_text=segment,
+                extracted_entities=_build_contract_clause_data(segment, parsed_text),
+                extraction_confidence=0.65,
+                extraction_model="deterministic-contract-ingestion",
+            )
+        )
+    return clauses
 
 
 def _dispatch_failed_task(**kwargs) -> None:
@@ -162,9 +323,34 @@ async def _process(document_id: UUID) -> dict:
             )
 
             document.document_metadata = document.document_metadata or {}
-            document.document_metadata["parsed_text"] = parsed_payload.raw_text
+            text_blocks = parsed_payload.get("text_blocks", [])
+            parsed_text = "\n\n".join(
+                block.get("text", "")
+                for block in text_blocks
+                if isinstance(block.get("text"), str)
+            ).strip()
+            contract_clause_count = 0
+            metadata = dict(document.document_metadata or {})
+            if parsed_text:
+                metadata["parsed_text"] = parsed_text
+                if document.document_type == DocumentType.CONTRACT:
+                    existing_clauses = await repo.list_clauses_for_document(document_id)
+                    if not existing_clauses:
+                        extracted_clauses = _extract_contract_clauses(
+                            document_id=document_id,
+                            project_id=document.project_id,
+                            parsed_text=parsed_text,
+                        )
+                        for clause in extracted_clauses:
+                            await repo.add_clause(clause)
+                        contract_clause_count = len(extracted_clauses)
+                        metadata["contract_clause_count"] = contract_clause_count
+            await repo.update_metadata(document_id, metadata)
             await repo.update_status(document_id, DocumentStatus.PARSED_PENDING_ANALYSIS)
             await session.commit()
+
+            if contract_clause_count:
+                extraction_summary["contract_clauses"] = contract_clause_count
 
             processing_details = _build_processing_details(extraction_summary)
 
@@ -195,9 +381,11 @@ async def _process(document_id: UUID) -> dict:
 
             logger.info(
                 "document_ingestion_stop_point_reached",
-                document_id=str(document_id),
-                processing_stage=processing_details["processing_stage"],
-                analysis_status=processing_details["analysis_status"],
+                extra={
+                    "document_id": str(document_id),
+                    "processing_stage": processing_details["processing_stage"],
+                    "analysis_status": processing_details["analysis_status"],
+                },
             )
             return {
                 "status": "success",
@@ -207,6 +395,7 @@ async def _process(document_id: UUID) -> dict:
 
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
+            await session.rollback()
             await repo.update_status(document_id, DocumentStatus.ERROR, parsing_error=str(error))
             await session.commit()
             raise

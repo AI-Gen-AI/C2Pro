@@ -3,6 +3,7 @@ SQLAlchemy implementation of the IStakeholderRepository port.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -18,6 +19,14 @@ from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
 class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def _normalize_naive_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     async def _get_project_tenant_id(self, project_id: UUID) -> UUID | None:
         """Get tenant_id for a project."""
@@ -72,9 +81,11 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             extracted_from_document_id=domain.extracted_from_document_id,
             approval_status=approval_status,
             reviewed_by=domain.reviewed_by,
-            reviewed_at=domain.reviewed_at,
+            reviewed_at=self._normalize_naive_utc(domain.reviewed_at),
             review_comment=domain.review_comment,
             stakeholder_metadata=domain.stakeholder_metadata,
+            created_at=self._normalize_naive_utc(domain.created_at),
+            updated_at=self._normalize_naive_utc(domain.updated_at),
         )
 
     def _to_raci_domain(self, orm: StakeholderWBSRaciORM) -> RaciAssignment:
@@ -189,7 +200,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.extracted_from_document_id = stakeholder.extracted_from_document_id
         orm.approval_status = stakeholder.approval_status
         orm.reviewed_by = stakeholder.reviewed_by
-        orm.reviewed_at = stakeholder.reviewed_at
+        orm.reviewed_at = self._normalize_naive_utc(stakeholder.reviewed_at)
         orm.review_comment = stakeholder.review_comment
         orm.stakeholder_metadata = stakeholder.stakeholder_metadata
 

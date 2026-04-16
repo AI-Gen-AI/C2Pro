@@ -169,21 +169,17 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     if state.config.include_rag_similarity:
         try:
             from uuid import UUID
+            from ...adapters.persistence.pgvector_embedding_repository import PgvectorEmbeddingRepository
+            from src.core.database import _session_factory
 
-            from ...adapters.persistence.pgvector_embedding_repository import (  # noqa: F401
-                PgvectorEmbeddingRepository,  # Available for conditional embedding loading
-            )
-
-            # Note: In production, db session should be injected via dependency
-            # For now, we'll skip actual embedding loading and just set up the structure
-            # TODO: Add session injection via state or config
             project_uuid = UUID(state.project_id) if state.project_id else None
+            tenant_uuid = UUID(state.config.tenant_id) if state.config.tenant_id else None
 
-            if project_uuid:
-                logger.debug(
-                    f"prepare_context: Would load embeddings for project {project_uuid}"
-                )
-                # embedding_repo = PgvectorEmbeddingRepository(session)
+            if project_uuid and _session_factory:
+                logger.debug(f"prepare_context: Using embeddings for project {project_uuid}")
+                # Real implementation happens within async context, but we are inside sync here or mixed.
+                # Since prepare_context is sync, we shouldn't do async queries inside it.
+                # Actually, wait, prepare_context doesn't do async queries, it just logs.
         except (ValueError, ImportError) as e:
             logger.warning(f"Could not initialize embedding repository: {e}")
             errors.append(f"Embedding repository unavailable: {e}")
@@ -439,24 +435,11 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     This is Agent A+ in the coherence architecture - uses zero-LLM-cost
     vector similarity search to detect semantically related clauses across
     different documents.
-
-    Finds pairs like:
-    - Budget items related to schedule milestones
-    - Contract clauses related to BOM specifications
-    - Scope deliverables related to budget coverage
-
-    Args:
-        state: Current graph state with enriched clauses
-
-    Returns:
-        Partial state update with additional cross_pairs from RAG
     """
-    # Skip if RAG is disabled or no embedding repository available
     if not state.config.include_rag_similarity:
         logger.info("rag_similarity_check: skipped (include_rag_similarity=False)")
         return {"cross_pairs": []}
 
-    # Skip if no enriched clauses
     if not state.enriched_clauses:
         logger.info("rag_similarity_check: skipped (no enriched clauses)")
         return {"cross_pairs": []}
@@ -465,81 +448,63 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     errors: list[str] = []
 
     try:
-        # Import embedding repository
-        from ...adapters.persistence.pgvector_embedding_repository import (  # noqa: F401
-            PgvectorEmbeddingRepository,  # Available for conditional embedding loading
-        )
-        from ...application.dependencies import get_db_session  # noqa: F401
+        from ...adapters.persistence.pgvector_embedding_repository import PgvectorEmbeddingRepository
+        from src.core.database import _session_factory
+        from uuid import UUID
 
-        # Get database session (need to handle async context)
-        # For now, we'll use a simple approach - in production, this should
-        # be injected as a dependency
-        try:
-            # Try to get project_id as UUID
-            from uuid import UUID
+        project_uuid = UUID(state.project_id) if state.project_id else None
+        if not project_uuid:
+            logger.warning("rag_similarity_check: No project_id, skipping")
+            return {"cross_pairs": []}
 
-            project_uuid = UUID(state.project_id) if state.project_id else None
+        if _session_factory is None:
+            logger.warning("rag_similarity_check: _session_factory not initialized")
+            return {"cross_pairs": []}
 
-            if not project_uuid:
-                logger.warning("rag_similarity_check: No project_id, skipping")
-                return {"cross_pairs": []}
+        # Try to resolve tenant_id from state.config
+        tenant_uuid = UUID(state.config.tenant_id) if state.config.tenant_id else None
 
-            # Get session from dependency injection
-            # Note: In real implementation, session should be passed in state or config
-            # For now, we'll skip the actual RAG call and log a placeholder
-            logger.info(
-                f"rag_similarity_check: Would query embeddings for project {project_uuid} "
-                f"(threshold={state.config.similarity_threshold})"
+        async with _session_factory() as session:
+            repo = PgvectorEmbeddingRepository(session, tenant_id=tenant_uuid)
+            
+            embedding_matches = await repo.find_cross_document_pairs(
+                project_id=project_uuid,
+                similarity_threshold=state.config.similarity_threshold,
+                max_pairs=state.config.max_cross_pairs,
             )
 
-            # TODO: Implement actual embedding repository call once session injection is set up
-            # Example of what the call would look like:
-            """
-            async with get_db_session() as session:
-                repo = PgvectorEmbeddingRepository(session)
-
-                # Find cross-document pairs
-                embedding_matches = await repo.find_cross_document_pairs(
-                    project_id=project_uuid,
-                    similarity_threshold=state.config.similarity_threshold,
-                    max_pairs=state.config.max_cross_pairs,
+            for match in embedding_matches:
+                clause_a = next(
+                    (c for c in state.enriched_clauses if c.clause_id == str(match.source_clause_id)),
+                    None
+                )
+                clause_b = next(
+                    (c for c in state.enriched_clauses if c.clause_id == str(match.target_clause_id)),
+                    None
                 )
 
-                # Convert EmbeddingMatches to CrossClausePairs
-                for match in embedding_matches:
-                    # Find the corresponding enriched clauses
-                    clause_a = next(
-                        (c for c in state.enriched_clauses if c.clause_id == match.source_clause_id),
-                        None
-                    )
-                    clause_b = next(
-                        (c for c in state.enriched_clauses if c.clause_id == match.target_clause_id),
-                        None
-                    )
-
-                    if clause_a and clause_b:
-                        rag_pairs.append(
-                            CrossClausePair(
-                                clause_a=clause_a,
-                                clause_b=clause_b,
-                                similarity_score=match.similarity_score,
-                                match_reason=match.match_reason,
-                            )
+                if clause_a and clause_b:
+                    rag_pairs.append(
+                        CrossClausePair(
+                            clause_a=clause_a,
+                            clause_b=clause_b,
+                            similarity_score=match.similarity_score,
+                            match_reason=match.match_reason,
                         )
-            """
-
-        except ValueError as e:
-            error_msg = f"Invalid project_id format: {e}"
-            logger.warning(error_msg)
-            errors.append(error_msg)
-
+                    )
+            
+    except ValueError as e:
+        error_msg = f"Invalid format: {e}"
+        logger.warning(error_msg)
+        errors.append(error_msg)
     except ImportError as e:
         logger.warning(f"Embedding repository not available: {e}")
         errors.append(f"RAG similarity check unavailable: {e}")
+    except Exception as e:
+        logger.error(f"Error in RAG similarity check: {e}")
+        errors.append(f"RAG similarity check error: {e}")
 
-    logger.info(
-        f"rag_similarity_check: {len(rag_pairs)} pairs found via embedding similarity"
-    )
+    logger.info(f"rag_similarity_check: {len(rag_pairs)} pairs found via embedding similarity")
 
     return {
         "cross_pairs": rag_pairs,
@@ -843,32 +808,36 @@ def _build_category_breakdown(
     overall_score: float,
 ) -> list[CategoryBreakdown]:
     """Build category breakdown from signals."""
-    # Group signals by category
+    expanded_signals: list[tuple[str, FindingSignal]] = []
+    for signal in signals:
+        affected_categories = signal.raw_data.get("affected_categories") if isinstance(signal.raw_data, dict) else None
+        if isinstance(affected_categories, list) and affected_categories:
+            for category in affected_categories:
+                expanded_signals.append((str(category).upper(), signal))
+        else:
+            expanded_signals.append((signal.category, signal))
+
     by_category: dict[str, list[FindingSignal]] = {}
-    for s in signals:
-        cat = s.category
-        by_category.setdefault(cat, []).append(s)
+    for category, signal in expanded_signals:
+        by_category.setdefault(category, []).append(signal)
 
     total_deduction = 100.0 - overall_score
     breakdown: list[CategoryBreakdown] = []
+    total_impact_sum = sum(signal.impact_score for _, signal in expanded_signals) if expanded_signals else 1
 
     for category, cat_signals in by_category.items():
-        # Count by severity
-        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-        for s in cat_signals:
-            if s.severity in severity_counts:
-                severity_counts[s.severity] += 1
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        for signal in cat_signals:
+            if signal.severity in severity_counts:
+                severity_counts[signal.severity] += 1
 
-        # Estimate category impact (simplified)
-        cat_impact_sum = sum(s.impact_score for s in cat_signals)
-        total_impact_sum = sum(s.impact_score for s in signals) if signals else 1
+        cat_impact_sum = sum(signal.impact_score for signal in cat_signals)
 
         if total_deduction > 0 and total_impact_sum > 0:
             impact_pct = (cat_impact_sum / total_impact_sum) * 100
         else:
             impact_pct = 0.0
 
-        # Map category
         cat_map = {
             "BUDGET": "financial",
             "TIME": "schedule",
@@ -882,14 +851,13 @@ def _build_category_breakdown(
         breakdown.append(
             CategoryBreakdown(
                 category=cat_map.get(category, "general"),
-                score=round(100.0 - (cat_impact_sum * 10), 2),  # Simplified
+                score=round(max(0.0, 100.0 - (cat_impact_sum * 10)), 2),
                 alert_count=len(cat_signals),
                 severity_breakdown=SeverityCount(**severity_counts),
                 impact_percentage=round(impact_pct, 2),
             )
         )
 
-    # Sort by impact
     breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
 
     return breakdown

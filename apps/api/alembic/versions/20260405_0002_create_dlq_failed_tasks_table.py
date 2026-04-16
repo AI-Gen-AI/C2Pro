@@ -22,6 +22,20 @@ depends_on = None
 def upgrade():
     """Create dlq_failed_tasks table with RLS support."""
 
+    # Ensure shared trigger helper exists for updated_at maintenance.
+    # This migration cannot assume Supabase bootstrap SQL was applied beforehand.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$;
+    """)
+
     # Create DLQ status enum
     op.execute("""
         DO $$
@@ -100,7 +114,7 @@ def upgrade():
         CREATE TRIGGER update_dlq_failed_tasks_updated_at
         BEFORE UPDATE ON dlq_failed_tasks
         FOR EACH ROW
-        EXECUTE FUNCTION update_updated_at_column();
+        EXECUTE FUNCTION public.update_updated_at_column();
     """)
 
 

@@ -8,6 +8,7 @@ Refers to TASK-IMPL-010.3.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -35,6 +36,7 @@ class CritiqueEvaluationService:
     ) -> None:
         self.confidence_threshold = confidence_threshold
         self.max_retries = max_retries
+        self.is_mock_mode = os.getenv("C2PRO_AI_MOCK") == "1"
 
     def calculate_confidence(self, items: list[dict[str, Any]]) -> float:
         """Calculate average confidence from extracted items.
@@ -59,7 +61,6 @@ class CritiqueEvaluationService:
         critique_notes: str,
         confidence: float,
         retry_count: int,
-        skip_hitl: bool = False,
     ) -> CritiqueEvaluationResult:
         """Evaluate critique result and determine HITL requirement.
 
@@ -68,7 +69,6 @@ class CritiqueEvaluationService:
             critique_notes: Reviewer notes
             confidence: Confidence score (0.0-1.0)
             retry_count: Current retry count
-            skip_hitl: If True, bypass HITL (e.g. mock mode)
         """
         new_retry_count = retry_count
         cleared_notes = ""
@@ -79,7 +79,7 @@ class CritiqueEvaluationService:
         # OK clears notes
 
         human_approval_required = False
-        if not skip_hitl:
+        if not self.is_mock_mode:
             human_approval_required = (
                 confidence < self.confidence_threshold
                 or (critique_status == "RETRY" and new_retry_count >= self.max_retries)
@@ -105,10 +105,10 @@ class CritiqueEvaluationService:
         Returns one of: "risk_extractor", "wbs_extractor", "budget_parser",
         "human_interrupt", "stakeholder_extractor".
         """
-        if human_approval_required:
+        if human_approval_required and not self.is_mock_mode:
             return "human_interrupt"
 
-        if critique_notes and 0 < retry_count <= self.max_retries:
+        if critique_notes and 0 < retry_count <= self.max_retries and not self.is_mock_mode:
             if doc_type == "contract":
                 return "risk_extractor"
             if doc_type == "budget":

@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 I10 - Stakeholder Runtime Wiring Integration (RED)
 Test Suite ID: TS-I10-STK-INT-001
@@ -38,8 +39,8 @@ async def test_i10_int_runtime_wires_canonical_service_through_i10_inference_gat
                 power_level=PowerLevel.HIGH,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 name="Contractor Inc.",
                 role="Contractor",
                 organization="BuildCo",
@@ -106,8 +107,8 @@ async def test_i10_int_runtime_rejects_unresolved_stakeholder_ids_from_deprecate
                 power_level=PowerLevel.MEDIUM,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 name="Client Holdings",
                 role="Client",
                 organization="Owner Corp",

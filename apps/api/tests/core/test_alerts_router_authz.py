@@ -85,8 +85,8 @@ async def test_admin_can_update_alert() -> None:
                 "resolved_at": None,
                 "resolved_by": None,
                 "resolution_notes": "done",
-                "created_at": __import__("datetime").datetime.utcnow(),
-                "updated_at": __import__("datetime").datetime.utcnow(),
+                "created_at": __import__("datetime").datetime.now(timezone.utc),
+                "updated_at": __import__("datetime").datetime.now(timezone.utc),
             }
         )
     )

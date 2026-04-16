@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 TDD tests for SlackNotificationService.
 Part of TASK-BCK-025: Add real notification delivery beyond log-only.
@@ -25,7 +26,7 @@ def test_review_item():
         current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
         confidence=0.65,
         impact_level=ImpactLevel.HIGH,
-        sla_due_date=datetime.utcnow() + timedelta(hours=24),
+        sla_due_date=datetime.now(timezone.utc) + timedelta(hours=24),
         approved_by=None,
         approved_at=None,
         item_data={

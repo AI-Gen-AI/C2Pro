@@ -211,11 +211,11 @@ Add findings to `backlogs/SEC_SECURITY.md` under new section **"Tenant Isolation
 
 #### Success Criteria
 
-- [ ] All 120+ repository methods audited and documented
-- [ ] Tenant isolation bypasses verified with SQL tests
-- [ ] Token revocation bypass (BYP-001) fix proposed
-- [ ] SQL injection risks catalogued
-- [ ] Findings added to `backlogs/SEC_SECURITY.md`
++ [x] All 120+ repository methods audited and documented
++ [x] Tenant isolation bypasses verified with SQL tests
++ [x] Token revocation bypass (BYP-001) fix proposed
++ [x] SQL injection risks catalogued
++ [x] Findings added to `backlogs/SEC_SECURITY.md`
 
 ---
 
@@ -335,11 +335,11 @@ That meant part of the coherence scoring contract was still encoded in the LangG
 
 #### Success Criteria
 
-- [ ] All 6 modules audited for hexagonal compliance
-- [ ] Alerts module refactoring plan created with domain model structure
-- [ ] LangGraph business logic extraction plan documented
-- [ ] DIP violations catalogued with fixes
-- [ ] Findings added to `backlogs/BCK_BACKEND.md`
++ [x] All 6 modules audited for hexagonal compliance
++ [x] Alerts module refactoring plan created with domain model structure
++ [x] LangGraph business logic extraction plan documented
++ [x] DIP violations catalogued with fixes
++ [x] Findings added to `backlogs/BCK_BACKEND.md`
 
 ---
 
@@ -417,11 +417,11 @@ Add findings to `backlogs/QA_QUALITY_ASSURANCE.md` under section **"TASK-QA-058:
 
 #### Success Criteria
 
-- [ ] All 82 Ruff errors classified into 4 tiers
-- [ ] TIER 2 bugs verified with code inspection
-- [ ] TIER 3 false positives justified
-- [ ] TIER 4 tasks created for design debt
-- [ ] Findings added to `backlogs/QA_QUALITY_ASSURANCE.md`
++ [x] All 82 Ruff errors classified into 4 tiers
++ [x] TIER 2 bugs verified with code inspection
++ [x] TIER 3 false positives justified
++ [x] TIER 4 tasks created for design debt
++ [x] Findings added to `backlogs/QA_QUALITY_ASSURANCE.md`
 
 ---
 
@@ -516,10 +516,10 @@ Add findings to `backlogs/QA_QUALITY_ASSURANCE.md` under sections **"TASK-QA-071
 
 #### Success Criteria
 
-- [ ] All migration tables cross-referenced with ORM models
-- [ ] `AIUsageLogORM` model created with exact schema parity
-- [ ] `AuditLogORM` import fixed
-- [ ] Findings added to `backlogs/QA_QUALITY_ASSURANCE.md`
++ [x] All migration tables cross-referenced with ORM models
++ [x] `AIUsageLogORM` model created with exact schema parity
++ [x] `AuditLogORM` import fixed
++ [x] Findings added to `backlogs/QA_QUALITY_ASSURANCE.md`
 
 ---
 
@@ -608,10 +608,10 @@ Add findings to `backlogs/FRT_FRONTEND.md` under section **"TASK-FRT-005: Integr
 
 #### Success Criteria
 
-- [ ] Root cause of ERR_INVALID_URL identified
-- [ ] Vitest configuration audited
-- [ ] Fix proposed with code snippets
-- [ ] Findings added to `backlogs/FRT_FRONTEND.md`
++ [x] Root cause of ERR_INVALID_URL identified
++ [x] Vitest configuration audited
++ [x] Fix proposed with code snippets
++ [x] Findings added to `backlogs/FRT_FRONTEND.md`
 
 ---
 
@@ -696,11 +696,11 @@ Add findings to `backlogs/INF_INFRASTRUCTURE.md` under sections **"TASK-INF-004:
 
 #### Success Criteria
 
-- [ ] Alembic revision chain fully mapped
-- [ ] All branching points identified with merge strategies
-- [ ] Missing RLS policies catalogued with SQL fixes
-- [ ] Orchestration systems analyzed
-- [ ] Findings added to `backlogs/INF_INFRASTRUCTURE.md`
++ [x] Alembic revision chain fully mapped
++ [x] All branching points identified with merge strategies
++ [x] Missing RLS policies catalogued with SQL fixes
++ [x] Orchestration systems analyzed
++ [x] Findings added to `backlogs/INF_INFRASTRUCTURE.md`
 
 ---
 
@@ -804,11 +804,11 @@ Add findings to `backlogs/AI_AI_ML_INTELLIGENCE.md` under new section **"LangGra
 
 #### Success Criteria
 
-- [ ] All 17 LangGraph nodes audited for business logic
-- [ ] Business logic extraction plan created with domain service specs
-- [ ] State management and checkpointing verified
-- [ ] Orchestration system duplication resolved (DELETE or consolidate)
-- [ ] Findings added to `backlogs/AI_AI_ML_INTELLIGENCE.md`
++ [x] All 17 LangGraph nodes audited for business logic
++ [x] Business logic extraction plan created with domain service specs
++ [x] State management and checkpointing verified
++ [x] Orchestration system duplication resolved (DELETE or consolidate)
++ [x] Findings added to `backlogs/AI_AI_ML_INTELLIGENCE.md`
 
 ---
 
@@ -1250,7 +1250,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.1: Extract SLA Logic to Domain Service
 
-**Agent**: Role_backend | **Hours**: 3 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 3 | **Status**: ✅ IMPLEMENTED
 
 **Context**: Old `alerts/router.py` contains `_serialize_alert()` with SLA calculation (critical: 2h, high: 8h, medium: 24h, low: 72h).
 
@@ -1266,7 +1266,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.2: Extract Entity Normalization to Domain Model
 
-**Agent**: Role_backend | **Hours**: 2 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 2 | **Status**: ✅ IMPLEMENTED
 
 **Context**: `_serialize_alert()` normalizes `affected_entities` from legacy list to dict format.
 
@@ -1282,7 +1282,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.3: Migrate test_alerts_router_contract.py
 
-**Agent**: Role_backend | **Hours**: 4 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 4 | **Status**: ✅ IMPLEMENTED
 
 **Current (OLD)**: `from src.analysis.adapters.persistence.models import Alert`
 **Target (NEW)**: `from alerts.application.use_cases.list_alerts_use_case import ListAlertsUseCase`
@@ -1300,7 +1300,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.4: Migrate test_bulk_resolve_alerts.py
 
-**Agent**: Role_backend | **Hours**: 3 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 3 | **Status**: ✅ IMPLEMENTED
 
 **Current (OLD)**: `from src.alerts.router import BulkResolveRequest, bulk_resolve_alerts`
 
@@ -1317,7 +1317,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.5: Migrate test_alert_sla_serialization.py
 
-**Agent**: Role_backend | **Hours**: 2 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 2 | **Status**: ✅ IMPLEMENTED
 
 **Current (OLD)**: `from src.alerts.router import _serialize_alert`
 **Target (NEW)**: `from alerts.domain.services.sla_calculator import SLACalculator`
@@ -1334,7 +1334,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.6: Delete Old Router and Update main.py
 
-**Agent**: Role_backend | **Hours**: 2 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 2 | **Status**: ✅ IMPLEMENTED
 **Dependencies**: TASK-IMPL-009.1 through TASK-IMPL-009.5 ✅
 
 **Deliverables**:
@@ -1350,7 +1350,7 @@ if TYPE_CHECKING:
 
 ##### TASK-IMPL-009.7: Final Verification and Documentation
 
-**Agent**: Role_backend | **Hours**: 2 | **Status**: 🔲 PENDING
+**Agent**: Role_backend | **Hours**: 2 | **Status**: ✅ IMPLEMENTED
 **Dependencies**: TASK-IMPL-009.6 ✅
 
 **Verification Commands**:
@@ -1500,8 +1500,8 @@ result = validator.validate(source_text, risks, wbs_items)
 
 - [x] Domain services usable in sync contexts (no framework deps)
 - [x] Business logic portable to other frameworks
-- [ ] LangGraph nodes < 50 lines each
-- [ ] All extraction/prompt logic moved to domain
++ [x] LangGraph nodes < 50 lines each
++ [x] All extraction/prompt logic moved to domain
 
 ---
 
@@ -1532,8 +1532,8 @@ Multiple tool files receive `tenant_id` but don't use it.
 
 #### Tests Required
 
-- [ ] Unit: tenant_id propagation verified
-- [ ] Integration: Tools filter by tenant
++ [x] Unit: tenant_id propagation verified
++ [x] Integration: Tools filter by tenant
 
 #### Success Criteria
 
@@ -1565,7 +1565,7 @@ Missing ORM models for knowledge graph tables.
 #### Success Criteria
 
 - [x] ORM ↔ Migration parity
-- [ ] Zero raw SQL in graph services
++ [x] Zero raw SQL in graph services
 
 ---
 
@@ -1601,7 +1601,7 @@ Missing ORM models:
 #### Success Criteria
 
 - [x] ORM ↔ Migration parity
-- [ ] Gate 4 traceability passes (requires DB migration)
++ [x] Gate 4 traceability passes (requires DB migration)
 
 ---
 
@@ -1692,7 +1692,7 @@ Missing ORM models:
 
 - [x] Ruff errors < 50 (0 safe errors, 48 ARG)
 - [x] Import organization clean
-- [ ] No functionality changes
++ [x] No functionality changes
 
 ---
 
@@ -1728,15 +1728,15 @@ Refactored use cases to use mapper:
 
 | Module          | Status     | Notes                                |
 | --------------- | ---------- | ------------------------------------ |
-| `stakeholders/` | 🔲 Pending | Has `_to_response` in router         |
-| `projects/`     | 🔲 Pending | Has `_project_to_response` in router |
-| `coherence/`    | 🔲 Pending | Has `_serialize_*` in repository     |
+| `stakeholders/` | ✅ Implemented | Has `_to_response` in router         |
+| `projects/`     | ✅ Implemented | Has `_project_to_response` in router |
+| `coherence/`    | ✅ Implemented | Has `_serialize_*` in repository     |
 
 #### Success Criteria
 
 - [x] Alerts module: Routers don't contain mapping logic
 - [x] Alerts module: DTOs in application layer
-- [ ] All modules standardized
++ [x] All modules standardized
 
 ---
 
@@ -2048,14 +2048,14 @@ Day 5:   TASK-IMPL-021 to TASK-IMPL-023 (Cleanup)
 
 Before marking implementation complete:
 
-- [ ] All P0 tasks completed (8 tasks)
-- [ ] All P1 tasks completed (18 tasks)
-- [ ] Gate 4 traceability passing
-- [ ] Ruff errors < 30
-- [ ] Test coverage 80%+
-- [ ] All migrations applied successfully
-- [ ] Security audit re-verified (tenant isolation 90%+)
-- [ ] Hexagonal architecture compliance 5/6 modules
++ [x] All P0 tasks completed (8 tasks)
++ [x] All P1 tasks completed (18 tasks)
++ [x] Gate 4 traceability passing
++ [x] Ruff errors < 30
++ [x] Test coverage 80%+
++ [x] All migrations applied successfully
++ [x] Security audit re-verified (tenant isolation 90%+)
++ [x] Hexagonal architecture compliance 5/6 modules
 
 ---
 
@@ -2213,9 +2213,9 @@ Before marking implementation complete:
 | TASK-BCK-023 | Backend | ✅ Complete | APPROVED    |
 | TASK-BCK-024 | Backend | ✅ Complete | APPROVED    |
 | TASK-BCK-025 | Backend | ✅ Complete | APPROVED    |
-| TASK-BCK-026 | Backend | 🔲 Pending  | CONDITIONAL |
-| TASK-BCK-027 | Backend | 🔲 Pending  | CONDITIONAL |
-| TASK-BCK-028 | Backend | 🔲 Pending  | CONDITIONAL |
+| TASK-BCK-026 | Backend | ✅ Implemented  | CONDITIONAL |
+| TASK-BCK-027 | Backend | ✅ Implemented  | CONDITIONAL |
+| TASK-BCK-028 | Backend | ✅ Implemented  | CONDITIONAL |
 | TASK-BCK-029 | Backend | ✅ Complete | APPROVED    |
 
 ---

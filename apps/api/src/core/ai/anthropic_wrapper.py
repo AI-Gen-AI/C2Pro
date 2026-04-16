@@ -30,8 +30,8 @@ from src.config import settings
 from src.core.ai.llm_client import LLMClient, LLMRequest
 from src.core.ai.model_router import AITaskType, ModelTier, get_model_router
 from src.core.cache import get_cache_service
-from src.core.privacy.anonymizer import PiiAnonymizerService
-from src.core.privacy.anonymizer import get_anonymizer as get_pii_anonymizer_service
+from src.anonymizer.application.anonymization_service import AnonymizationService
+from src.anonymizer.domain.pii_detector_service import PiiDetectorService
 
 logger = structlog.get_logger()
 
@@ -234,7 +234,7 @@ class AnthropicWrapper:
         self.model_router = get_model_router()
         self.cache_service = get_cache_service() if enable_cache else None
         self.llm_client = LLMClient(api_key=self.api_key, max_retries=max_retries)
-        self.anonymizer_service: PiiAnonymizerService = get_pii_anonymizer_service()
+        self.anonymizer_service: AnonymizationService = AnonymizationService(pii_detector=PiiDetectorService())
 
         # Initialize async client for direct calls
         self.async_client = AsyncAnthropic(api_key=self.api_key)

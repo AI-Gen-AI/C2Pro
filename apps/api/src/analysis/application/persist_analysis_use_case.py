@@ -67,6 +67,7 @@ class PersistAnalysisUseCase:
         )
         analysis_id = uuid4()
 
+        completed_at = datetime.now(UTC).replace(tzinfo=None)
         analysis = Analysis(
             id=analysis_id,
             project_id=command.project_id,
@@ -75,7 +76,7 @@ class PersistAnalysisUseCase:
             coherence_score=command.coherence_score,
             coherence_breakdown=command.coherence_breakdown,
             alerts_count=len(command.extracted_risks),
-            completed_at=datetime.now(UTC),
+            completed_at=completed_at,
             result_json={
                 "risks": command.extracted_risks,
                 "wbs": command.extracted_wbs,

@@ -25,7 +25,8 @@ from src.core.middleware import TenantIsolationMiddleware
 class TestJwtValidation:
     """Refers to Suite ID: TS-UC-SEC-JWT-001."""
 
-    def test_expired_token_raises_401(self):
+    @pytest.mark.asyncio
+    async def test_expired_token_raises_401(self):
         """Expired token must raise 401."""
         public_key_provider = Mock()
         public_key_provider.get_public_key.return_value = "test-secret-key"
@@ -40,7 +41,7 @@ class TestJwtValidation:
         token = pyjwt.encode(expired_payload, "test-secret-key", algorithm="HS256")
 
         with pytest.raises(HTTPException) as exc_info:
-            validator.decode(token)
+            await validator.decode(token)
 
         assert exc_info.value.status_code == 401
         public_key_provider.get_public_key.assert_called_once()

@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Multi-tenant Isolation E2E Tests (TDD - RED Phase)
 
@@ -547,8 +548,8 @@ async def test_007_missing_tenant_id_in_jwt_rejected(
         # tenant_id intentionally missing
         "email": user_a.email,
         "role": "admin",
-        "exp": datetime.utcnow() + timedelta(hours=1),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
         "type": "access",
     }
     token_without_tenant = jwt.encode(

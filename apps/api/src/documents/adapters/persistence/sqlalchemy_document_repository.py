@@ -316,6 +316,17 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             orm_document.parsing_error = parsing_error
             orm_document.updated_at = self._normalize_naive_utc(datetime.now(UTC))
 
+    async def update_metadata(self, document_id: UUID, document_metadata: dict) -> None:
+        tenant_id = await self._get_current_tenant_id()
+        orm_document = await self.session.get(DocumentORM, document_id)
+        if orm_document:
+            if tenant_id is not None:
+                doc_tenant = await self.get_project_tenant_id(orm_document.project_id)
+                if doc_tenant is None or doc_tenant != tenant_id:
+                    raise PermissionError("Cannot update document for project outside tenant")
+            orm_document.document_metadata = document_metadata or {}
+            orm_document.updated_at = self._normalize_naive_utc(datetime.now(UTC))
+
     async def update_storage_path(self, document_id: UUID, storage_url: str) -> None:
         tenant_id = await self._get_current_tenant_id()
         orm_document = await self.session.get(DocumentORM, document_id)
