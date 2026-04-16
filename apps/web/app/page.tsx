@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import LandingPageContent from '@/components/landing-page-content';
+import AppDashboardPage from '@/app/(app)/dashboard/page';
 
 export default function RootPage() {
   const { isAuthenticated, isLoading, userRole } = useAuth();
@@ -16,16 +17,14 @@ export default function RootPage() {
 
     if (isAuthenticated) {
       if (userRole === 'c2pro_admin') {
-        router.push('/admin/c2pro');
+        router.replace('/admin/c2pro');
       } else if (userRole === 'tenant_admin') {
-        router.push('/admin/tenant');
-      } else {
-        router.push('/dashboard');
+        router.replace('/admin/tenant');
       }
       return;
-    } else {
-      setShowLanding(true);
     }
+
+    setShowLanding(true);
   }, [isAuthenticated, isLoading, userRole, router]);
 
   if (isLoading) {
@@ -41,6 +40,10 @@ export default function RootPage() {
 
   if (showLanding) {
     return <LandingPageContent />;
+  }
+
+  if (isAuthenticated) {
+    return <AppDashboardPage />;
   }
 
   return (

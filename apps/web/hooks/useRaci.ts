@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { env } from "@/config/env";
 import { apiClient } from "@/lib/api/client";
 
 export interface RaciRow {
@@ -80,6 +81,15 @@ export function useRaci(projectId?: string): UseRaciResult {
     let active = true;
 
     async function fetchRaci() {
+      if (!env.FEATURE_RACI_GENERATION) {
+        if (active) {
+          setData([]);
+          setError(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       setLoading(true);
       setError(null);
 

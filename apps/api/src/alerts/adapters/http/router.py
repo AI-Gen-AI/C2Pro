@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from pydantic import BaseModel, Field
 from src.alerts.application.dtos import (
     AlertHistoryResponse,
     AlertListResponse,
@@ -39,13 +40,36 @@ from src.alerts.application.use_cases.review_alert_use_case import (
     ReviewAlertUseCase,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.auth.models import Tenant
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 project_alerts_router = APIRouter(prefix="/projects", tags=["alerts"])
+
+
+class AlertRuleConfigPayload(BaseModel):
+    id: str
+    name: str
+    description: str
+    enabled: bool
+    threshold: int
+    severity: str
+
+
+class AlertSubscriptionConfigPayload(BaseModel):
+    emailEnabled: bool = False
+    emailAddress: str = ""
+    slackEnabled: bool = False
+    slackChannel: str = ""
+
+
+class AlertWorkspaceSettingsPayload(BaseModel):
+    rules: list[AlertRuleConfigPayload] = Field(default_factory=list)
+    subscriptions: AlertSubscriptionConfigPayload | None = None
 
 
 def get_alert_repository(
@@ -77,6 +101,64 @@ def get_resolve_alert_use_case(
     repository: IAlertRepository = Depends(get_alert_repository),
 ) -> ResolveAlertUseCase:
     return ResolveAlertUseCase(repository=repository)
+
+
+async def _get_tenant(
+    session: AsyncSession,
+    tenant_id: UUID,
+) -> Tenant | None:
+    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+    return result.scalar_one_or_none()
+
+
+def _get_workspace_settings_payload(tenant: Tenant) -> AlertWorkspaceSettingsPayload:
+    settings = dict(tenant.settings or {})
+    workspace_settings = settings.get("alerts_workspace", {})
+    return AlertWorkspaceSettingsPayload.model_validate(
+        {
+            "rules": workspace_settings.get("rules", []),
+            "subscriptions": workspace_settings.get("subscriptions"),
+        }
+    )
+
+
+@router.get(
+    "/workspace-settings",
+    response_model=AlertWorkspaceSettingsPayload,
+    summary="Get alert workspace settings",
+)
+async def get_alert_workspace_settings(
+    tenant_id: CurrentTenantId,
+    session: AsyncSession = Depends(get_session),
+) -> AlertWorkspaceSettingsPayload:
+    tenant = await _get_tenant(session, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    return _get_workspace_settings_payload(tenant)
+
+
+@router.put(
+    "/workspace-settings",
+    response_model=AlertWorkspaceSettingsPayload,
+    summary="Save alert workspace settings",
+)
+async def put_alert_workspace_settings(
+    payload: AlertWorkspaceSettingsPayload,
+    tenant_id: CurrentTenantId,
+    session: AsyncSession = Depends(get_session),
+) -> AlertWorkspaceSettingsPayload:
+    tenant = await _get_tenant(session, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    settings = dict(tenant.settings or {})
+    settings["alerts_workspace"] = payload.model_dump(mode="json")
+    tenant.settings = settings
+    await session.commit()
+    await session.refresh(tenant)
+
+    return _get_workspace_settings_payload(tenant)
 
 
 @router.post(

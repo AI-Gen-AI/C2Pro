@@ -36,71 +36,10 @@ describe("uploadDocument", () => {
     vi.unstubAllGlobals();
   });
 
-  it("resolves the backend API base before uploading when the browser only knows the proxy route", async () => {
+  it("uploads through the same-origin API proxy when the browser is configured with a relative API base", async () => {
     const { uploadDocument } = await import("./index");
 
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          apiBaseUrl: "https://api.c2pro.io/api/v1",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: vi.fn().mockResolvedValue({ id: "doc-1", task_id: "task-1" }),
-      });
-
-    const file = new File(["contract"], "contract.pdf", {
-      type: "application/pdf",
-    });
-
-    await uploadDocument("proj_live_001", file, "CONTRACT");
-
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "/api/runtime/backend-url",
-      expect.objectContaining({
-        cache: "no-store",
-      }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "https://api.c2pro.io/api/v1/projects/proj_live_001/documents",
-      expect.objectContaining({
-        method: "POST",
-        headers: {
-          Authorization: "Bearer token-123",
-          "X-Tenant-ID": "tenant-001",
-        },
-        body: expect.any(FormData),
-      }),
-    );
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("/api/projects/proj_live_001/documents"),
-      expect.anything(),
-    );
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("/uploads/start"),
-      expect.anything(),
-    );
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("/uploads/finalize"),
-      expect.anything(),
-    );
-  });
-
-  it("uses the configured absolute backend base directly when available", async () => {
-    vi.doMock("@/config/env", () => ({
-      env: {
-        API_BASE_URL: "https://api.c2pro.io/api/v1",
-        BACKEND_ORIGIN: "https://api.c2pro.io",
-      },
-    }));
-
-    const { uploadDocument } = await import("./index");
-
-    fetchMock.mockResolvedValue({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       json: vi.fn().mockResolvedValue({ id: "doc-1", task_id: "task-1" }),
     });
@@ -112,7 +51,7 @@ describe("uploadDocument", () => {
     await uploadDocument("proj_live_001", file, "CONTRACT");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.c2pro.io/api/v1/projects/proj_live_001/documents",
+      "/api/projects/proj_live_001/documents",
       expect.objectContaining({
         method: "POST",
         headers: {

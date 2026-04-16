@@ -37,6 +37,10 @@ export const metadata: Metadata = {
   title: "C2Pro v3.0 - Coherence Monitor",
   description:
     "Enterprise Contract & Project Coherence Monitoring Platform. AI-powered cross-document analysis for construction and engineering projects.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
 };
 
 export const viewport: Viewport = {

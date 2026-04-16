@@ -76,7 +76,7 @@ export function useAlerts(): UseAlertsResult {
 
       try {
         const [alertsRes, projectsRes] = await Promise.all([
-          apiClient.get<AlertListResponse>("/alerts"),
+          apiClient.get<AlertListResponse>("/alerts/tenant"),
           apiClient.get<ProjectsListResponse>("/projects"),
         ]);
 

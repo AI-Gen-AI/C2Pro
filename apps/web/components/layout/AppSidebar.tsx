@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useOrganization } from '@clerk/nextjs';
+import { env } from '@/config/env';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -31,7 +32,6 @@ const navItems: NavItem[] = [
   { href: '/evidence', label: 'Evidence', icon: Gauge },
   { href: '/alerts', label: 'Alerts', icon: AlertTriangle },
   { href: '/stakeholders', label: 'Stakeholders', icon: Users },
-  { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 },
 ];
 
 export function AppSidebar() {
@@ -43,6 +43,9 @@ export function AppSidebar() {
   const isDemoMode = pathname.startsWith('/demo');
   const basePrefix = isDemoMode ? '/demo' : '';
   const workspaceLabel = isDemoMode ? 'Demo Workspace' : organization?.name ?? 'Workspace';
+  const visibleNavItems = env.FEATURE_RACI_GENERATION
+    ? [...navItems, { href: '/raci', label: 'RACI Matrix', icon: Grid3X3 }]
+    : navItems;
 
   const getHref = (href: string) => {
     if (href === '/dashboard') {
@@ -101,7 +104,7 @@ export function AppSidebar() {
         className="flex-1 space-y-0.5 px-0"
         aria-label="Primary"
       >
-        {navItems.map((item: NavItem) => {
+        {visibleNavItems.map((item: NavItem) => {
           const active = isActive(item.href);
           const Icon = item.icon;
 
