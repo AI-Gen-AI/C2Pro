@@ -368,10 +368,14 @@ class TestUsageAnalyticsService:
         # Add significant usage (>50% of budget)
         for _ in range(100):
             service.record_usage(
-                "claude-sonnet-4-20250514", "test",
-                1000, 500, 0.6,  # 60 cents each
-                100, True,
-                tenant_id="tenant-1"
+                "claude-sonnet-4-20250514",
+                "test",
+                1000,
+                500,
+                0.6,  # 60 cents each
+                100,
+                True,
+                tenant_id="tenant-1",
             )
 
         alerts = service.check_budget_alerts("tenant-1", budget_limit=100.0)
@@ -386,10 +390,7 @@ class TestUsageAnalyticsService:
         # Add usage to trigger alert
         for _ in range(100):
             service.record_usage(
-                "claude-sonnet-4-20250514", "test",
-                1000, 500, 1.0,
-                100, True,
-                tenant_id="tenant-1"
+                "claude-sonnet-4-20250514", "test", 1000, 500, 1.0, 100, True, tenant_id="tenant-1"
             )
 
         alerts = service.check_budget_alerts("tenant-1", budget_limit=50.0)
@@ -412,9 +413,13 @@ class TestUsageAnalyticsService:
         # Add some usage
         for _ in range(10):
             service.record_usage(
-                "claude-sonnet-4-20250514", "test",
-                500, 200, 0.002,
-                100, True,
+                "claude-sonnet-4-20250514",
+                "test",
+                500,
+                200,
+                0.002,
+                100,
+                True,
             )
 
         forecast = service.forecast_monthly_cost()
@@ -457,9 +462,13 @@ class TestUsageAnalyticsService:
 
         # Add records for multiple tasks
         for _ in range(5):
-            service.record_usage("claude-sonnet-4-20250514", "contract_extraction", 500, 200, 0.003, 100, True)
+            service.record_usage(
+                "claude-sonnet-4-20250514", "contract_extraction", 500, 200, 0.003, 100, True
+            )
         for _ in range(3):
-            service.record_usage("claude-sonnet-4-20250514", "coherence_check", 300, 100, 0.001, 80, True)
+            service.record_usage(
+                "claude-sonnet-4-20250514", "coherence_check", 300, 100, 0.001, 80, True
+            )
 
         breakdown = service.get_task_breakdown()
 
@@ -476,8 +485,11 @@ class TestUsageAnalyticsService:
             service.record_usage(
                 "claude-sonnet-4-20250514",
                 "contract_extraction",
-                500, 200, 0.002,
-                100, True,
+                500,
+                200,
+                0.002,
+                100,
+                True,
             )
 
         dashboard = service.get_dashboard()
@@ -494,6 +506,122 @@ class TestUsageAnalyticsService:
         assert "task_breakdown" in dashboard
         assert "active_alerts" in dashboard
 
+    def test_optimization_empty_when_no_data(self):
+        """No suggestions when no usage data."""
+        service = UsageAnalyticsService()
+        suggestions = service.get_optimization_suggestions()
+        assert suggestions == []
+
+    def test_optimization_model_downgrade(self):
+        """Suggests model downgrade for simple high-success tasks."""
+        service = UsageAnalyticsService()
+        for _ in range(10):
+            service.record_usage(
+                "claude-sonnet-4-20250514",
+                "simple_task",
+                500,
+                200,
+                0.003,
+                100,
+                True,
+            )
+        suggestions = service.get_optimization_suggestions()
+        downgrade = [s for s in suggestions if s["type"] == "model_downgrade"]
+        assert len(downgrade) == 1
+        assert downgrade[0]["task_name"] == "simple_task"
+        assert downgrade[0]["potential_savings_pct"] == 66
+
+    def test_optimization_low_success_rate(self):
+        """Flags tasks with low success rate."""
+        service = UsageAnalyticsService()
+        for i in range(10):
+            service.record_usage(
+                "claude-sonnet-4-20250514",
+                "flaky_task",
+                500,
+                200,
+                0.003,
+                100,
+                success=(i < 5),  # 50% success
+                prompt_version="1.0",
+            )
+        suggestions = service.get_optimization_suggestions()
+        low_success = [s for s in suggestions if s["type"] == "low_success_rate"]
+        assert len(low_success) == 1
+        assert low_success[0]["severity"] == "high"
+
+    def test_optimization_caching_opportunity(self):
+        """Suggests caching for high-latency, low-cache-hit tasks."""
+        service = UsageAnalyticsService()
+        for _ in range(10):
+            service.record_usage(
+                "claude-sonnet-4-20250514",
+                "slow_task",
+                500,
+                200,
+                0.003,
+                8000,
+                True,  # 8 sec latency
+            )
+        suggestions = service.get_optimization_suggestions()
+        caching = [s for s in suggestions if s["type"] == "enable_caching"]
+        assert len(caching) == 1
+        assert caching[0]["avg_latency_ms"] > 5000
+
+    def test_optimization_prompt_compression(self):
+        """Suggests compression for token-heavy prompts."""
+        service = UsageAnalyticsService()
+        for _ in range(10):
+            service.record_usage(
+                "claude-haiku-4-20250514",
+                "big_prompt_task",
+                12000,
+                500,
+                0.001,
+                200,
+                True,
+            )
+        suggestions = service.get_optimization_suggestions()
+        compression = [s for s in suggestions if s["type"] == "prompt_compression"]
+        assert len(compression) == 1
+        assert compression[0]["avg_input_tokens"] > 8000
+
+    def test_optimization_sorted_by_severity(self):
+        """Suggestions sorted by severity (high first)."""
+        service = UsageAnalyticsService()
+        # Low success (high severity)
+        for i in range(10):
+            service.record_usage(
+                "claude-haiku-4-20250514",
+                "flaky",
+                500,
+                200,
+                0.001,
+                100,
+                success=(i < 3),
+            )
+        # Downgrade opportunity (medium severity)
+        for _ in range(10):
+            service.record_usage(
+                "claude-sonnet-4-20250514",
+                "easy",
+                400,
+                150,
+                0.003,
+                80,
+                True,
+            )
+        suggestions = service.get_optimization_suggestions()
+        assert len(suggestions) >= 2
+        assert suggestions[0]["severity"] == "high"
+
+    def test_optimization_in_dashboard(self):
+        """Dashboard includes optimization_suggestions."""
+        service = UsageAnalyticsService()
+        service.record_usage("claude-sonnet-4-20250514", "t", 100, 50, 0.001, 100, True)
+        dashboard = service.get_dashboard()
+        assert "optimization_suggestions" in dashboard
+
     def test_get_dashboard_filtered_by_tenant(self):
         """Dashboard filters by tenant."""
         service = UsageAnalyticsService()
@@ -501,14 +629,10 @@ class TestUsageAnalyticsService:
         # Add usage for different tenants
         for _ in range(5):
             service.record_usage(
-                "claude-sonnet-4-20250514", "test",
-                500, 200, 0.002, 100, True,
-                tenant_id="tenant-a"
+                "claude-sonnet-4-20250514", "test", 500, 200, 0.002, 100, True, tenant_id="tenant-a"
             )
             service.record_usage(
-                "claude-sonnet-4-20250514", "test",
-                300, 100, 0.001, 80, True,
-                tenant_id="tenant-b"
+                "claude-sonnet-4-20250514", "test", 300, 100, 0.001, 80, True, tenant_id="tenant-b"
             )
 
         dashboard_a = service.get_dashboard(tenant_id="tenant-a")
@@ -530,6 +654,7 @@ class TestSingleton:
         """get_usage_analytics_service returns same instance."""
         # Reset singleton for test
         import src.core.ai.usage_analytics as module
+
         module._analytics_service = None
 
         service1 = get_usage_analytics_service()

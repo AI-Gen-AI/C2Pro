@@ -14,7 +14,8 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { Progress } from "@/components/ui/progress"; // Phase 2: budget progress bars
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -215,7 +216,8 @@ export default function ProjectBudgetPage() {
   const currency = readString(data, "currency") || "EUR";
   const items = (data.items as BudgetItem[]) ?? [];
 
-  const remainingBudget = Math.max(totalBudget - spentAmount, 0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const remainingBudget = Math.max(totalBudget - spentAmount, 0); // Phase 2: variance display
   const safeUtilization =
     utilization > 0
       ? utilization

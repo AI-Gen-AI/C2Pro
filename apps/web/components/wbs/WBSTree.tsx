@@ -212,7 +212,7 @@ export const WBSTree: React.FC<WBSTreeProps> = ({
   onExpand,
   filter,
   searchQuery,
-  readOnly = false,
+  readOnly = false, // eslint-disable-line @typescript-eslint/no-unused-vars -- Phase 2: read-only mode
   expandedItems: controlledExpandedItems,
   selectedItemId,
 }) => {

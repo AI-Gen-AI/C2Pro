@@ -343,7 +343,8 @@ class UsageAnalyticsService:
 
         # Filter records
         records = [
-            r for r in self._records
+            r
+            for r in self._records
             if r.timestamp >= start_time
             and (tenant_id is None or r.tenant_id == tenant_id)
             and (model is None or r.model == model)
@@ -420,7 +421,8 @@ class UsageAnalyticsService:
 
         # Filter records
         records = [
-            r for r in self._records
+            r
+            for r in self._records
             if _normalize_timestamp(r.timestamp) >= start_time
             and (tenant_id is None or r.tenant_id == tenant_id)
         ]
@@ -437,16 +439,19 @@ class UsageAnalyticsService:
         current = start_time
         while current <= now:
             bucket_records = buckets.get(current, [])
-            series.append({
-                "timestamp": current.isoformat(),
-                "requests": len(bucket_records),
-                "cost_usd": sum(r.cost_usd for r in bucket_records),
-                "tokens": sum(r.input_tokens + r.output_tokens for r in bucket_records),
-                "success_rate": (
-                    sum(1 for r in bucket_records if r.success) / len(bucket_records)
-                    if bucket_records else 1.0
-                ),
-            })
+            series.append(
+                {
+                    "timestamp": current.isoformat(),
+                    "requests": len(bucket_records),
+                    "cost_usd": sum(r.cost_usd for r in bucket_records),
+                    "tokens": sum(r.input_tokens + r.output_tokens for r in bucket_records),
+                    "success_rate": (
+                        sum(1 for r in bucket_records if r.success) / len(bucket_records)
+                        if bucket_records
+                        else 1.0
+                    ),
+                }
+            )
             current += delta
 
         return series
@@ -478,7 +483,8 @@ class UsageAnalyticsService:
             if current_pct >= threshold_pct:
                 # Check if we already have this alert
                 existing = [
-                    a for a in self._alerts
+                    a
+                    for a in self._alerts
                     if a.tenant_id == tenant_id
                     and a.threshold_pct == threshold_pct
                     and not a.acknowledged
@@ -570,7 +576,11 @@ class UsageAnalyticsService:
             "daily_average_cost_usd": round(daily_avg_cost, 4),
             "actual_cost_to_date_usd": round(actual_this_month.total_cost_usd, 4),
             "days_remaining": days_remaining,
-            "confidence": "high" if summary.total_requests >= 50 else "medium" if summary.total_requests >= 10 else "low",
+            "confidence": "high"
+            if summary.total_requests >= 50
+            else "medium"
+            if summary.total_requests >= 10
+            else "low",
             "sample_requests": summary.total_requests,
         }
 
@@ -598,19 +608,25 @@ class UsageAnalyticsService:
         for model, cost in summary.cost_by_model.items():
             # Count requests per model
             model_records = [
-                r for r in self._records
-                if r.model == model
-                and (tenant_id is None or r.tenant_id == tenant_id)
+                r
+                for r in self._records
+                if r.model == model and (tenant_id is None or r.tenant_id == tenant_id)
             ]
 
-            breakdowns.append({
-                "model": model,
-                "requests": len(model_records),
-                "request_pct": round(len(model_records) / summary.total_requests * 100, 2),
-                "cost_usd": round(cost, 4),
-                "cost_pct": round(cost / summary.total_cost_usd * 100, 2) if summary.total_cost_usd > 0 else 0,
-                "avg_cost_per_request": round(cost / len(model_records), 6) if model_records else 0,
-            })
+            breakdowns.append(
+                {
+                    "model": model,
+                    "requests": len(model_records),
+                    "request_pct": round(len(model_records) / summary.total_requests * 100, 2),
+                    "cost_usd": round(cost, 4),
+                    "cost_pct": round(cost / summary.total_cost_usd * 100, 2)
+                    if summary.total_cost_usd > 0
+                    else 0,
+                    "avg_cost_per_request": round(cost / len(model_records), 6)
+                    if model_records
+                    else 0,
+                }
+            )
 
         return sorted(breakdowns, key=lambda x: x["cost_usd"], reverse=True)
 
@@ -638,21 +654,192 @@ class UsageAnalyticsService:
         for task, cost in summary.cost_by_task.items():
             # Count requests per task
             task_records = [
-                r for r in self._records
-                if r.task_name == task
-                and (tenant_id is None or r.tenant_id == tenant_id)
+                r
+                for r in self._records
+                if r.task_name == task and (tenant_id is None or r.tenant_id == tenant_id)
             ]
 
-            breakdowns.append({
-                "task_name": task,
-                "requests": len(task_records),
-                "request_pct": round(len(task_records) / summary.total_requests * 100, 2),
-                "cost_usd": round(cost, 4),
-                "cost_pct": round(cost / summary.total_cost_usd * 100, 2) if summary.total_cost_usd > 0 else 0,
-                "avg_cost_per_request": round(cost / len(task_records), 6) if task_records else 0,
-            })
+            breakdowns.append(
+                {
+                    "task_name": task,
+                    "requests": len(task_records),
+                    "request_pct": round(len(task_records) / summary.total_requests * 100, 2),
+                    "cost_usd": round(cost, 4),
+                    "cost_pct": round(cost / summary.total_cost_usd * 100, 2)
+                    if summary.total_cost_usd > 0
+                    else 0,
+                    "avg_cost_per_request": round(cost / len(task_records), 6)
+                    if task_records
+                    else 0,
+                }
+            )
 
         return sorted(breakdowns, key=lambda x: x["cost_usd"], reverse=True)
+
+    def get_optimization_suggestions(
+        self,
+        tenant_id: str | None = None,
+        period: TimePeriod = TimePeriod.WEEK,
+    ) -> list[dict[str, Any]]:
+        """
+        Analyze usage patterns and return actionable optimization suggestions.
+
+        Checks for:
+        - High-cost tasks that could use cheaper models
+        - Low success-rate prompts that need improvement
+        - High latency tasks that could benefit from caching
+        - Token-heavy prompts that could be compressed
+        - Underused prompt versions (stale A/B experiments)
+
+        Args:
+            tenant_id: Filter by tenant
+            period: Time period to analyze
+
+        Returns:
+            List of suggestion dicts with type, severity, message, and details.
+        """
+        summary = self.get_summary(period=period, tenant_id=tenant_id)
+        suggestions: list[dict[str, Any]] = []
+
+        if summary.total_requests == 0:
+            return suggestions
+
+        # Filter records for the period
+        now = datetime.now(UTC)
+        if period == TimePeriod.HOUR:
+            start_time = now - timedelta(hours=1)
+        elif period == TimePeriod.DAY:
+            start_time = now - timedelta(days=1)
+        elif period == TimePeriod.WEEK:
+            start_time = now - timedelta(weeks=1)
+        else:
+            start_time = now - timedelta(days=30)
+
+        records = [
+            r
+            for r in self._records
+            if r.timestamp >= start_time and (tenant_id is None or r.tenant_id == tenant_id)
+        ]
+
+        # --- 1. Model downgrade opportunities ---
+        task_models: dict[str, list[UsageRecord]] = defaultdict(list)
+        for r in records:
+            task_models[r.task_name].append(r)
+
+        expensive_models = {"claude-opus-4-20250514", "claude-sonnet-4-20250514"}
+        for task_name, task_records in task_models.items():
+            expensive_records = [r for r in task_records if r.model in expensive_models]
+            if not expensive_records:
+                continue
+            success_rate = sum(1 for r in expensive_records if r.success) / len(expensive_records)
+            avg_tokens = sum(r.input_tokens + r.output_tokens for r in expensive_records) / len(
+                expensive_records
+            )
+            # Simple tasks with high success rate and low token usage can use cheaper models
+            if success_rate >= 0.95 and avg_tokens < 2000 and len(expensive_records) >= 5:
+                avg_cost = sum(r.cost_usd for r in expensive_records) / len(expensive_records)
+                suggestions.append(
+                    {
+                        "type": "model_downgrade",
+                        "severity": "medium",
+                        "task_name": task_name,
+                        "message": (
+                            f"Task '{task_name}' uses expensive models with {success_rate:.0%} "
+                            f"success rate and avg {avg_tokens:.0f} tokens. "
+                            f"Consider downgrading to Haiku for ~3x cost savings."
+                        ),
+                        "potential_savings_pct": 66,
+                        "current_avg_cost": round(avg_cost, 6),
+                        "sample_size": len(expensive_records),
+                    }
+                )
+
+        # --- 2. Low success-rate prompts ---
+        for task_name, task_records in task_models.items():
+            if len(task_records) < 5:
+                continue
+            success_rate = sum(1 for r in task_records if r.success) / len(task_records)
+            if success_rate < 0.80:
+                # Group by prompt_version to find the worst performer
+                version_failures: dict[str | None, int] = defaultdict(int)
+                version_totals: dict[str | None, int] = defaultdict(int)
+                for r in task_records:
+                    version_totals[r.prompt_version] += 1
+                    if not r.success:
+                        version_failures[r.prompt_version] += 1
+
+                worst_version = max(
+                    version_failures,
+                    key=lambda v: version_failures[v] / max(version_totals[v], 1),
+                )
+                suggestions.append(
+                    {
+                        "type": "low_success_rate",
+                        "severity": "high",
+                        "task_name": task_name,
+                        "message": (
+                            f"Task '{task_name}' has {success_rate:.0%} success rate "
+                            f"({len(task_records)} requests). "
+                            f"Review and improve prompt template."
+                        ),
+                        "success_rate": round(success_rate, 4),
+                        "worst_version": worst_version,
+                        "sample_size": len(task_records),
+                    }
+                )
+
+        # --- 3. High latency tasks (caching opportunity) ---
+        for task_name, task_records in task_models.items():
+            if len(task_records) < 5:
+                continue
+            latencies = [r.latency_ms for r in task_records]
+            avg_latency = statistics.mean(latencies)
+            if avg_latency > 5000:  # > 5 seconds average
+                cached_count = sum(1 for r in task_records if r.cost_usd == 0.0)
+                cache_hit_rate = cached_count / len(task_records)
+                if cache_hit_rate < 0.30:
+                    suggestions.append(
+                        {
+                            "type": "enable_caching",
+                            "severity": "medium",
+                            "task_name": task_name,
+                            "message": (
+                                f"Task '{task_name}' averages {avg_latency:.0f}ms latency "
+                                f"with only {cache_hit_rate:.0%} cache hit rate. "
+                                f"Enable or tune prompt caching for faster responses."
+                            ),
+                            "avg_latency_ms": round(avg_latency, 2),
+                            "cache_hit_rate": round(cache_hit_rate, 4),
+                            "sample_size": len(task_records),
+                        }
+                    )
+
+        # --- 4. Token-heavy prompts ---
+        for task_name, task_records in task_models.items():
+            if len(task_records) < 5:
+                continue
+            avg_input = statistics.mean([r.input_tokens for r in task_records])
+            if avg_input > 8000:
+                suggestions.append(
+                    {
+                        "type": "prompt_compression",
+                        "severity": "low",
+                        "task_name": task_name,
+                        "message": (
+                            f"Task '{task_name}' averages {avg_input:.0f} input tokens. "
+                            f"Consider compressing system prompts or chunking documents "
+                            f"to reduce cost."
+                        ),
+                        "avg_input_tokens": round(avg_input),
+                        "sample_size": len(task_records),
+                    }
+                )
+
+        # Sort by severity
+        severity_order = {"high": 0, "medium": 1, "low": 2}
+        suggestions.sort(key=lambda s: severity_order.get(s["severity"], 3))
+
+        return suggestions
 
     def get_dashboard(
         self,
@@ -689,6 +876,7 @@ class UsageAnalyticsService:
             "model_breakdown": self.get_model_breakdown(tenant_id=tenant_id),
             "task_breakdown": self.get_task_breakdown(tenant_id=tenant_id),
             "active_alerts": [a.to_dict() for a in self.get_active_alerts(tenant_id)],
+            "optimization_suggestions": self.get_optimization_suggestions(tenant_id=tenant_id),
         }
 
 

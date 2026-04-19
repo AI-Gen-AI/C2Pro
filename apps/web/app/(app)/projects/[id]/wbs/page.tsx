@@ -163,12 +163,12 @@ export default function ProjectWBSPage() {
     error,
     updateItem,
     createItem,
-    deleteItem,
+    deleteItem, // eslint-disable-line @typescript-eslint/no-unused-vars -- Phase 2: delete WBS item
     moveItem,
     expandedItems,
     toggleExpanded,
     expandAll,
-    collapseAll,
+    collapseAll, // eslint-disable-line @typescript-eslint/no-unused-vars -- Phase 2: collapse all button
   } = useWBSTree({ projectId });
 
   const [editModalOpen, setEditModalOpen] = useState(false);

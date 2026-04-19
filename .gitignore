@@ -98,6 +98,20 @@ everything-claude-code/
 apps/web/tsconfig.tsbuildinfo
 dev-log.ndjson
 
+# Root-level throwaway scripts
+/*.py
+
+# Claude Code worktrees (temporary agent workspaces)
+.claude/worktrees/
+
+# Temp/backup directories
+temp_conflicting_frontend_files/
+tmp-gh-artifacts/
+backups/
+playwright-report/
+test-results/
+sandbox/
+
 # Multi-CLI Agent Ecosystem
 logs/execution_traces.log
 logs/metrics.json
