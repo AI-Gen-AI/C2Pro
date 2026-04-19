@@ -48,7 +48,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "overrides": {
-    "axios": "1.14.0",
+    "axios": "1.15.0",
     "ajv": "8.18.0",
     "brace-expansion": "5.0.5",
     "esbuild": "0.27.4",
@@ -61,8 +61,10 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "1.14.0",
+      "axios": "1.15.0",
       "ajv": "8.18.0",
+      "eslint>ajv": "6.12.6",
+      "@eslint/eslintrc>ajv": "6.12.6",
       "brace-expansion": "5.0.5",
       "flatted": "3.4.2",
       "handlebars": "4.7.9",
