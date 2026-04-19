@@ -37,10 +37,12 @@ from src.core.ai.model_router import (
     TaskType,
     get_model_router,
 )
+from src.core.ai.models import AIUsageLogORM
 from src.core.ai.prompt_cache import (
     get_prompt_cache_service,
 )
 from src.core.cache import get_cache_service
+from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
 
 logger = structlog.get_logger()
@@ -298,10 +300,10 @@ class AIService:
         )
 
         if self.budget_remaining_usd is not None and estimated_cost > self.budget_remaining_usd:
-                raise ValueError(
-                    f"Insufficient budget: ${self.budget_remaining_usd:.2f} remaining, "
-                    f"estimated cost: ${estimated_cost:.4f}"
-                )
+            raise ValueError(
+                f"Insufficient budget: ${self.budget_remaining_usd:.2f} remaining, "
+                f"estimated cost: ${estimated_cost:.4f}"
+            )
 
         # 3. Prepare request
         max_tokens = request.max_tokens or model_config.max_tokens
@@ -402,19 +404,19 @@ class AIService:
                 },
             )
 
-        # TODO: Guardar en tabla ai_usage_logs
-        # await self._save_usage_log(
-        #     tenant_id=self.tenant_id,
-        #     project_id=None,  # Obtener del contexto si está disponible
-        #     model=model_config.name,
-        #     operation=request.task_type,
-        #     prompt_version=request.prompt_version,  # ¡CRÍTICO para auditoría!
-        #     input_tokens=response.usage.input_tokens,
-        #     output_tokens=response.usage.output_tokens,
-        #     cost_usd=actual_cost,
-        #     cached=False,
-        #     latency_ms=round(execution_time_ms, 2),
-        # )
+        # Persist usage to ai_usage_logs table
+        await self._save_usage_log(
+            tenant_id=self.tenant_id,
+            project_id=None,
+            model=model_config.name,
+            operation=request.task_type,
+            prompt_version=request.prompt_version,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cost_usd=actual_cost,
+            cached=False,
+            latency_ms=round(execution_time_ms, 2),
+        )
 
         return AIResponse(
             content=content,
@@ -503,6 +505,55 @@ class AIService:
                 return text
 
         return ""
+
+    async def _save_usage_log(
+        self,
+        *,
+        tenant_id: UUID | None,
+        project_id: UUID | None,
+        model: str,
+        operation: TaskType | str,
+        prompt_version: str | None,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        cached: bool,
+        latency_ms: float,
+    ) -> None:
+        """Persist AI usage to ai_usage_logs table. Fire-and-forget; errors are logged, not raised."""
+        if tenant_id is None:
+            logger.warning("ai_usage_log_skipped", reason="no_tenant_id")
+            return
+
+        operation_str = operation.value if isinstance(operation, TaskType) else str(operation)
+        total_tokens = input_tokens + output_tokens
+
+        try:
+            async with get_session_with_tenant(tenant_id) as session:
+                log_entry = AIUsageLogORM(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    model_name=model,
+                    operation_type=operation_str,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    estimated_cost=cost_usd,
+                    duration_ms=round(latency_ms),
+                    status="cached" if cached else "success",
+                    log_metadata={
+                        "prompt_version": prompt_version,
+                        "cached": cached,
+                    },
+                )
+                session.add(log_entry)
+        except Exception:
+            logger.exception(
+                "ai_usage_log_save_failed",
+                tenant_id=str(tenant_id),
+                model=model,
+                operation=operation_str,
+            )
 
     def _parse_json_response(self, raw: str) -> Any:
         """
@@ -630,4 +681,3 @@ def create_ai_service(
         tenant_id=tenant_id,
         budget_remaining_usd=budget_remaining_usd,
     )
-

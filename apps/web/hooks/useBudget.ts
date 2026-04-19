@@ -6,7 +6,7 @@
  * TASK-FRT-165: Budget Dashboard UI
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react"; // eslint-disable-line @typescript-eslint/no-unused-vars -- Phase 2: memoized budget calculations
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios/dist/browser/axios.cjs";
 
