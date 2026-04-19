@@ -80,8 +80,13 @@ SECRETS.md
 claves postgre.txt
 
 # Office temp files
+~$*
 ~.xls*
 .~lock.*
+
+# Test artifacts
+.pytest-tmp-local/
+ruff_errors.json
 
 # Local copies
 * - copia.xlsx
