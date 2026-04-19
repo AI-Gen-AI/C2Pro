@@ -32,7 +32,7 @@ langgraph==1.0.10rc1
 langgraph-checkpoint-postgres>=2.0.0  # PostgreSQL checkpointer for state persistence
 langchain-core>=0.2.40
 langchain>=0.2.0  # Full LangChain for LangSmith integration
-langsmith>=0.1.0  # LangSmith observability
+langsmith>=0.7.31  # LangSmith observability (>=0.7.31 fixes streaming token bypass CVE)
 
 # Document Parsing
 pymupdf==1.26.7  # PDF
@@ -84,9 +84,9 @@ email-validator==2.1.1
 networkx==3.3
 
 # Testing
-pytest==7.4.0
-pytest-asyncio==0.23.4
-pytest-cov==4.1.0
+pytest>=9.0.3  # >=9.0.3 fixes tmpdir predictable path CVE
+pytest-asyncio>=0.24.0  # >=0.24.0 required for pytest 9 compatibility
+pytest-cov>=5.0.0  # >=5.0.0 required for pytest 9 compatibility
 factory-boy==3.3.0
 Faker==40.1.0  # For factory-boy
 docker>=7.0.0  # Required by testcontainers-backed persistence tests
