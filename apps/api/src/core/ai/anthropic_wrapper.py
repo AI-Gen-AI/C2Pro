@@ -19,7 +19,10 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
+
+from pydantic import BaseModel
+
 from uuid import UUID, uuid4
 
 import structlog
@@ -29,9 +32,12 @@ from anthropic.types import Message
 from src.config import settings
 from src.core.ai.llm_client import LLMClient, LLMRequest
 from src.core.ai.model_router import AITaskType, ModelTier, get_model_router
+from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 from src.core.cache import get_cache_service
 from src.anonymizer.application.anonymization_service import AnonymizationService
 from src.anonymizer.domain.pii_detector_service import PiiDetectorService
+
+_T = TypeVar("_T", bound=BaseModel)
 
 logger = structlog.get_logger()
 
@@ -442,6 +448,28 @@ class AnthropicWrapper:
             task_type=request.task_type.value,
             raw_response=llm_response.raw_response,
         )
+
+    async def generate_structured(self, request: AIRequest, schema: type[_T]) -> _T:
+        """
+        Generate a response and Pydantic-validate it against *schema*.
+
+        This is the preferred method when the caller needs a typed result.
+        It delegates all caching, anonymization, and retry logic to generate(),
+        then passes the raw content through parse_llm_json().
+
+        Args:
+            request: Same AIRequest used by generate().
+            schema:  Pydantic BaseModel subclass describing the expected JSON shape.
+
+        Returns:
+            A validated instance of *schema*.
+
+        Raises:
+            LLMSchemaError: If the LLM output is not valid JSON or fails schema
+                            validation. Callers should handle this gracefully.
+        """
+        response = await self.generate(request)
+        return parse_llm_json(response.content, schema)
 
     # ===========================================
     # CACHE METHODS
