@@ -119,7 +119,7 @@
 | [x]    | P1       | `TASK-AI-009`                  | `TASK-216`  | Create CLI command `python -m core.ai.sync_prompts` `[x] @2026-04-20 - Added `src/core/ai/sync_prompts.py` deployment CLI for template discovery + bulk sync orchestration through `PromptRegistry`, with JSON summary output and RED/GREEN unit tests in `src/core/ai/test_sync_prompts_cli.py`.` |
 | [ ]    | P2       | `TASK-AI-010`                  | `TASK-216`  | Add prompt metadata to LangSmith Hub                      |
 | [ ]    | P2       | `TASK-AI-011`                  | `TASK-216`  | Implement A/B test config in LangSmith Hub                |
-| [ ]    | P1       | `TASK-AI-012` to `TASK-AI-051` | Various     | LangSmith integration phases 3-6 (34 tasks) `[-] Next AI priority activated @2026-04-20 after completing TASK-AI-009.` |
+| [ ]    | P1       | `TASK-AI-012` to `TASK-AI-051` | Various     | LangSmith integration phases 3-6 (34 tasks) `[x] @2026-04-20 - Completed TASK-AI-012 by enhancing traced_llm_call with prompt/model input capture, output usage metrics (tokens/cost), and latency tracking. Next priority moved to TASK-AI-013.` |
 
 **Full AI/ML backlog**: [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md)
 

@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-20T13:50:48+00:00",
+  "updated_at": "2026-04-20T20:20:39+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -18,22 +18,53 @@
   },
   "tareas": [
     {
+      "tarea_id": "T063",
+      "backlog_id": "TASK-AI-013",
+      "tipo": "ai",
+      "descripcion": "Integrate tracing with usage_logger.py to persist LangSmith trace linkage alongside local ai_usage_logs records.",
+      "asignado_a": "ai",
+      "estado": "en_progreso",
+      "criterio_done": "LLM executions emit trace identifiers and local usage rows stay synchronized with trace metadata for analytics joins.",
+      "archivos_modificados": [],
+      "timestamps": {
+        "inicio": "2026-04-20T20:20:39+00:00"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Activated as next priority after completing TASK-AI-012.",
+        "cambios_realizados": [],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
+    {
       "tarea_id": "T062",
       "backlog_id": "TASK-AI-012",
       "tipo": "ai",
       "descripcion": "Enhance @traced_llm_call decorator to capture input prompt, model params, output, tokens, cost, latency.",
       "asignado_a": "ai",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "Decorator captures full LangSmith trace payload fields (input/model/output/tokens/cost/latency) with deterministic metadata and unit coverage.",
-      "archivos_modificados": [],
+      "archivos_modificados": [
+        "apps/api/src/core/ai/traced_llm_call.py",
+        "apps/api/src/core/ai/test_traced_llm_call.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "blackboard.json"
+      ],
       "timestamps": {
-        "inicio": "2026-04-20T13:50:48+00:00"
+        "inicio": "2026-04-20T13:50:48+00:00",
+        "completado": "2026-04-20T20:20:39+00:00"
       },
       "resultado": {
-        "exitoso": false,
-        "mensaje": "Activated as next priority after completing TASK-AI-009.",
-        "cambios_realizados": [],
-        "tests_pasados": false,
+        "exitoso": true,
+        "mensaje": "Enhanced traced_llm_call to capture prompt/model inputs, output usage metrics, cost, and latency for success/error paths.",
+        "cambios_realizados": [
+          "Extended src/core/ai/traced_llm_call.py with prompt/model extraction plus usage metric enrichment (tokens_input/tokens_output/tokens_total/cost_usd/latency_ms).",
+          "Added decorator coverage in src/core/ai/test_traced_llm_call.py for prompt/model payload capture and usage metric emission.",
+          "Updated AI/master backlog tracking to close TASK-AI-012 and activate TASK-AI-013 as next priority."
+        ],
+        "tests_pasados": true,
         "validacion_lint": false
       }
     },
