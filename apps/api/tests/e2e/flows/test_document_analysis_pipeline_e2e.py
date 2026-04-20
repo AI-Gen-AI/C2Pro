@@ -430,7 +430,7 @@ async def test_004_hitl_triggered_on_low_confidence_extraction(
             "item_id": str(item_id),
             "item_type": "risk_extraction",
             "confidence": 0.35,  # Low confidence
-            "impact_level": "high",
+            "impact_level": "HIGH",
             "item_data": {
                 "project_id": str(pipeline_project.id),
                 "doc_type": "contract",
@@ -493,12 +493,13 @@ async def test_005_alerts_generated_with_type_discriminator(
     project_id = str(pipeline_project.id)
 
     # Create a risk-type alert (as N17 would generate from risk extraction)
+    # category must be one of: SCOPE, BUDGET, QUALITY, TECHNICAL, LEGAL, TIME
     risk_alert_resp = await client.post(
         "/api/v1/alerts",
         json={
             "project_id": project_id,
             "rule_code": "RISK-001",
-            "category": "RISK",
+            "category": "LEGAL",
             "severity": "high",
             "message": "Contract penalty clause detected: 0.5% daily for delays over 30 days",
             "affected_entities": {"penalty_rate": 0.005, "threshold_days": 30},
