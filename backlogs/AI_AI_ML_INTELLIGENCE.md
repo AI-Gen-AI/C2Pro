@@ -12,13 +12,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 46
+**Pending Tasks**: 45
 
-- IDs: `TASK-AI-002`-`TASK-AI-004`, `TASK-AI-006`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
+- IDs: `TASK-AI-002`-`TASK-AI-004`, `TASK-AI-007`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
 
-**Completed Tasks**: 32
+**Completed Tasks**: 33
 
-- IDs: `TASK-AI-001`, `TASK-AI-005`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
+- IDs: `TASK-AI-001`, `TASK-AI-005`-`TASK-AI-006`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
 
 **Usage Note**:
 
@@ -34,9 +34,9 @@
 | [ ] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [ ] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-005` | `TASK-216` | Implement `langsmith_client.py` wrapper with environment-based config and helper methods `[x] @2026-04-20 - Added src/core/ai/langsmith_client.py with environment-driven config, `enabled` guard, and helper builders for canonical tags/metadata payloads used by downstream tracing decorators and usage analytics integration.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [ ] | P1 | `TASK-AI-006` | `TASK-216` | Create `@traced_llm_call` decorator for automatic tracing of all LLM calls `[-] In Progress @2026-04-20 - Prioritized immediately after TASK-AI-005 completion; implementation pending.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
+| [x] | P1 | `TASK-AI-006` | `TASK-216` | Create `@traced_llm_call` decorator for automatic tracing of all LLM calls `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with signature-preserving sync/async decorators that standardize LangSmith tags + metadata via `LangSmithClient` and finalize spans for both success and exception paths, with dedicated unit coverage in `src/core/ai/test_traced_llm_call.py`.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [ ] | P2 | `TASK-AI-007` | `TASK-216` | Add `trace_id` and `trace_url` columns to `ai_usage_logs` table (nullable, indexed) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [ ] | P1 | `TASK-AI-008` | `TASK-216` | Implement `prompt_registry.py` to sync Jinja2 templates to LangSmith Prompt Hub | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
+| [ ] | P1 | `TASK-AI-008` | `TASK-216` | Implement `prompt_registry.py` to sync Jinja2 templates to LangSmith Prompt Hub `[-] In Progress @2026-04-20 - Activated as next priority after completing TASK-AI-006.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P1 | `TASK-AI-009` | `TASK-216` | Create CLI command `python -m core.ai.sync_prompts` to push all templates on deployment | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-010` | `TASK-216` | Add prompt metadata to LangSmith Hub (owner, description, tags) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-011` | `TASK-216` | Implement A/B test config in LangSmith Hub for gradual rollout | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
