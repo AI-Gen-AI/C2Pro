@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import time
 from typing import Any, Callable, ParamSpec, Protocol, TypeVar
 from uuid import uuid4
 
@@ -48,6 +49,53 @@ def _extract_tenant_id(call_kwargs: dict[str, Any]) -> str | None:
     return str(tenant)
 
 
+def _extract_prompt(call_kwargs: dict[str, Any]) -> str | None:
+    for key in ("prompt", "rendered_prompt", "input_prompt"):
+        value = call_kwargs.get(key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _extract_model_name(call_kwargs: dict[str, Any], result: Any | None = None) -> str | None:
+    for source in (call_kwargs, result if isinstance(result, dict) else None):
+        if source is None:
+            continue
+        model_name = source.get("model_name")
+        if model_name:
+            return str(model_name)
+    return None
+
+
+def _extract_model_params(call_kwargs: dict[str, Any]) -> dict[str, Any]:
+    model_params = call_kwargs.get("model_params")
+    if isinstance(model_params, dict):
+        return model_params
+
+    extracted: dict[str, Any] = {}
+    for key in ("temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"):
+        if key in call_kwargs:
+            extracted[key] = call_kwargs[key]
+    return extracted
+
+
+def _extract_usage_metrics(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+
+    usage = result.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+
+    return {
+        "output": result.get("output") or result.get("completion") or result.get("text"),
+        "tokens_input": usage.get("prompt_tokens", 0),
+        "tokens_output": usage.get("completion_tokens", 0),
+        "tokens_total": usage.get("total_tokens", 0),
+        "cost_usd": result.get("cost_usd", 0.0),
+    }
+
+
 def traced_llm_call(
     *,
     task_type: str,
@@ -67,7 +115,11 @@ def traced_llm_call(
             span_client = _extract_span_client(args, kwargs)
             request_id = str(kwargs.get("request_id") or uuid4())
             tenant_id = _extract_tenant_id(kwargs)
+            prompt = _extract_prompt(kwargs)
+            model_name = _extract_model_name(kwargs)
+            model_params = _extract_model_params(kwargs)
             span = None
+            started_at = time.perf_counter()
 
             if resolved_client.enabled and span_client is not None:
                 tags = resolved_client.build_tags(
@@ -83,7 +135,13 @@ def traced_llm_call(
                 )
                 span = span_client.start_span(
                     name=name,
-                    input={"args_count": len(args), "kwargs": list(kwargs.keys())},
+                    input={
+                        "args_count": len(args),
+                        "kwargs": list(kwargs.keys()),
+                        "prompt": prompt,
+                        "model_name": model_name,
+                        "model_params": model_params,
+                    },
                     run_type=run_type,
                     tags=tags,
                     metadata=metadata,
@@ -93,11 +151,22 @@ def traced_llm_call(
                 result = await func(*args, **kwargs)
             except Exception as exc:
                 if span_client is not None and span is not None:
-                    span_client.end_span(span, outputs={"status": "error", "error": str(exc)})
+                    latency_ms = int((time.perf_counter() - started_at) * 1000)
+                    span_client.end_span(
+                        span,
+                        outputs={
+                            "status": "error",
+                            "error": str(exc),
+                            "latency_ms": latency_ms,
+                        },
+                    )
                 raise
 
             if span_client is not None and span is not None:
-                span_client.end_span(span, outputs={"status": "success"})
+                usage_metrics = _extract_usage_metrics(result)
+                usage_metrics["model_name"] = _extract_model_name(kwargs, result)
+                usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
+                span_client.end_span(span, outputs={"status": "success", **usage_metrics})
 
             return result
 
@@ -105,7 +174,11 @@ def traced_llm_call(
             span_client = _extract_span_client(args, kwargs)
             request_id = str(kwargs.get("request_id") or uuid4())
             tenant_id = _extract_tenant_id(kwargs)
+            prompt = _extract_prompt(kwargs)
+            model_name = _extract_model_name(kwargs)
+            model_params = _extract_model_params(kwargs)
             span = None
+            started_at = time.perf_counter()
 
             if resolved_client.enabled and span_client is not None:
                 tags = resolved_client.build_tags(
@@ -121,7 +194,13 @@ def traced_llm_call(
                 )
                 span = span_client.start_span(
                     name=name,
-                    input={"args_count": len(args), "kwargs": list(kwargs.keys())},
+                    input={
+                        "args_count": len(args),
+                        "kwargs": list(kwargs.keys()),
+                        "prompt": prompt,
+                        "model_name": model_name,
+                        "model_params": model_params,
+                    },
                     run_type=run_type,
                     tags=tags,
                     metadata=metadata,
@@ -131,11 +210,22 @@ def traced_llm_call(
                 result = func(*args, **kwargs)
             except Exception as exc:
                 if span_client is not None and span is not None:
-                    span_client.end_span(span, outputs={"status": "error", "error": str(exc)})
+                    latency_ms = int((time.perf_counter() - started_at) * 1000)
+                    span_client.end_span(
+                        span,
+                        outputs={
+                            "status": "error",
+                            "error": str(exc),
+                            "latency_ms": latency_ms,
+                        },
+                    )
                 raise
 
             if span_client is not None and span is not None:
-                span_client.end_span(span, outputs={"status": "success"})
+                usage_metrics = _extract_usage_metrics(result)
+                usage_metrics["model_name"] = _extract_model_name(kwargs, result)
+                usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
+                span_client.end_span(span, outputs={"status": "success", **usage_metrics})
 
             return result
 

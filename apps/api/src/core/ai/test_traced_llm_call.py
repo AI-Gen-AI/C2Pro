@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import asyncio
+import time
 
 import pytest
 
@@ -61,7 +62,7 @@ def test_traced_llm_call_records_successful_async_span(monkeypatch: pytest.Monke
     assert "task:coherence" in span_client.start_calls[0]["tags"]
     assert "tenant:tenant-123" in span_client.start_calls[0]["tags"]
     assert span_client.start_calls[0]["metadata"]["task_type"] == "coherence"
-    assert span_client.end_calls[0]["outputs"] == {"status": "success"}
+    assert span_client.end_calls[0]["outputs"]["status"] == "success"
 
 
 def test_traced_llm_call_records_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,3 +97,58 @@ def test_traced_llm_call_preserves_sync_function_name(monkeypatch: pytest.Monkey
     assert _sync_call(langsmith_client=span_client) == "done"
     assert span_client.start_calls == []
     assert span_client.end_calls == []
+
+
+def test_traced_llm_call_captures_prompt_model_usage_and_latency(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LANGSMITH_API_KEY", "unit-test-key")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+
+    span_client = _RecordingSpanClient()
+    langsmith_wrapper = LangSmithClient(project_name="c2pro-test")
+
+    @traced_llm_call(
+        task_type="coherence",
+        span_name="llm_call_with_metrics",
+        extra_tags=["suite:TS-AI-LANGSMITH-002"],
+        client=langsmith_wrapper,
+    )
+    async def _evaluate(
+        *,
+        tenant_id: str,
+        prompt: str,
+        model_name: str,
+        model_params: dict[str, Any],
+        langsmith_client: _RecordingSpanClient,
+    ) -> dict[str, Any]:
+        time.sleep(0.001)
+        return {
+            "output": "analysis completed",
+            "usage": {"prompt_tokens": 111, "completion_tokens": 24, "total_tokens": 135},
+            "model_name": model_name,
+            "cost_usd": 0.0042,
+        }
+
+    asyncio.run(
+        _evaluate(
+            tenant_id="tenant-321",
+            prompt="Summarize project risks.",
+            model_name="gpt-4o-mini",
+            model_params={"temperature": 0.2, "max_tokens": 512},
+            langsmith_client=span_client,
+        ),
+    )
+
+    start_call = span_client.start_calls[0]
+    end_call = span_client.end_calls[0]["outputs"]
+
+    assert start_call["input"]["prompt"] == "Summarize project risks."
+    assert start_call["input"]["model_name"] == "gpt-4o-mini"
+    assert start_call["input"]["model_params"] == {"temperature": 0.2, "max_tokens": 512}
+    assert end_call["status"] == "success"
+    assert end_call["output"] == "analysis completed"
+    assert end_call["tokens_input"] == 111
+    assert end_call["tokens_output"] == 24
+    assert end_call["tokens_total"] == 135
+    assert end_call["cost_usd"] == 0.0042
+    assert isinstance(end_call["latency_ms"], int)
+    assert end_call["latency_ms"] >= 1
