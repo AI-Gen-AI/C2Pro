@@ -6,7 +6,7 @@
 > **Navigation Guide**:
 >
 > - **Quick Navigation** → Links to all category backlogs with statistics
-> - **Pending Tasks by Category** → Complete overview of all active work (138 pending tasks)
+> - **Pending Tasks by Category** → Complete overview of all active work (137 pending tasks)
 > - **Cross-Category Initiatives** → Tasks affecting multiple categories (29 tasks)
 > - **Category Backlogs** → Detailed specifications, lessons learned, ADRs, and metrics per category
 
@@ -17,7 +17,7 @@
 | Category | File | Owner | Total Tasks | Active | Completed |
 | -------- | ---- | ----- | ----------- | ------ | --------- |
 
-| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 47 | 31 |
+| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 46 | 32 |
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 9 | 19 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
@@ -104,7 +104,7 @@
 
 ---
 
-### AI/ML Intelligence (64 pending)
+### AI/ML Intelligence (63 pending)
 
 | Status | Priority | Task ID                        | Depends On  | Description                                               |
 | ------ | -------- | ------------------------------ | ----------- | --------------------------------------------------------- |
@@ -112,8 +112,8 @@
 | [ ]    | P1       | `TASK-AI-002`                  | Backend API | Prompt Analytics Dashboard `[-] In Progress`              |
 | [ ]    | P1       | `TASK-AI-003`                  | `TASK-216`  | Create LangSmith organization account                     |
 | [ ]    | P1       | `TASK-AI-004`                  | `TASK-216`  | Add `langsmith` SDK to dependencies                       |
-| [ ]    | P1       | `TASK-AI-005`                  | `TASK-216`  | Implement `langsmith_client.py` wrapper                   |
-| [ ]    | P1       | `TASK-AI-006`                  | `TASK-216`  | Create `@traced_llm_call` decorator                       |
+| [x]    | P1       | `TASK-AI-005`                  | `TASK-216`  | Implement `langsmith_client.py` wrapper `[x] @2026-04-20 - Added `src/core/ai/langsmith_client.py` with environment-driven config, enablement checks, and canonical trace metadata/tag helpers.` |
+| [ ]    | P1       | `TASK-AI-006`                  | `TASK-216`  | Create `@traced_llm_call` decorator `[-] In Progress @2026-04-20 - Activated as the next priority AI task after TASK-AI-005.` |
 | [ ]    | P2       | `TASK-AI-007`                  | `TASK-216`  | Add `trace_id` and `trace_url` columns to `ai_usage_logs` |
 | [ ]    | P1       | `TASK-AI-008`                  | `TASK-216`  | Implement `prompt_registry.py`                            |
 | [ ]    | P1       | `TASK-AI-009`                  | `TASK-216`  | Create CLI command `python -m core.ai.sync_prompts`       |

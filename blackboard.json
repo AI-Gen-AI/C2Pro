@@ -4,12 +4,12 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-11T21:32:00+00:00",
+  "updated_at": "2026-04-20T13:24:47+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
     "frontend": "completed",
-    "ai": null,
+    "ai": "in_progress",
     "infra": "in_progress",
     "qa": "in_progress",
     "reviewer": "completed",
@@ -17,6 +17,57 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T059",
+      "backlog_id": "TASK-AI-006",
+      "tipo": "ai",
+      "descripcion": "Create @traced_llm_call decorator to standardize LangSmith tracing metadata across LLM calls.",
+      "asignado_a": "ai",
+      "estado": "en_progreso",
+      "criterio_done": "Decorator wraps LLM calls, preserves function signatures, and emits canonical tags/metadata via LangSmith client wrapper.",
+      "archivos_modificados": [],
+      "timestamps": {
+        "inicio": "2026-04-20T13:24:47+00:00"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Next priority AI task activated after closing TASK-AI-005.",
+        "cambios_realizados": [],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T058",
+      "backlog_id": "TASK-AI-005",
+      "tipo": "ai",
+      "descripcion": "Implement LangSmith client wrapper with environment-based configuration and helper methods for trace tags/metadata.",
+      "asignado_a": "ai",
+      "estado": "completado",
+      "criterio_done": "LangSmith wrapper can be toggled through env vars and exposes reusable helper methods for tags + metadata payloads.",
+      "archivos_modificados": [
+        "apps/api/src/core/ai/langsmith_client.py",
+        "apps/api/src/core/ai/test_langsmith_client.py",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-20T13:24:35+00:00",
+        "completado": "2026-04-20T13:24:35+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "LangSmith integration now has a dedicated wrapper for standardized runtime config and observability payload builders.",
+        "cambios_realizados": [
+          "Added src/core/ai/langsmith_client.py with LangSmithConfig, enabled guard, and tag/metadata helper builders.",
+          "Added focused wrapper tests in src/core/ai/test_langsmith_client.py for env-based enablement and helper payload correctness.",
+          "Updated AI/master backlogs to close TASK-AI-005 and reflect next-priority ownership sequencing."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
     {
       "tarea_id": "T057",
       "backlog_id": "TASK-BCK-049",
