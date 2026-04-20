@@ -68,8 +68,8 @@
 | [x] | P1 | `TASK-AI-037` | None | Python MCP tools must enable complete workflows, not just endpoint wrappers `[x] Implemented (added comprehensive "Complete Workflows vs Endpoint Wrappers" section to Python MCP reference with FastMCP examples, design patterns, and refactoring checklist)` | `Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md` `[x] @2026-04-04` |
 | [ ] | P1 | `TASK-AI-038` | None | Python MCP server naming follows `{service}_mcp` | `Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md` |
 | [ ] | P0 | `TASK-IMPL-010` | None | **CORE**: Decouple AI Logic from LangGraph Nodes — 16 subtasks, 4 phases, 29.5h | `backlogs/AI_AI_ML_INTELLIGENCE.md §3.1` |
-| [ ] | P0 | `TASK-IMPL-010.1` | None | Create prompt templates registry (`analysis/domain/prompts.py`) | TASK-IMPL-010 Phase 1 |
-| [ ] | P0 | `TASK-IMPL-010.2` | None | Create document augmentation service (`analysis/domain/document_augmentation.py`) | TASK-IMPL-010 Phase 1 |
+| [x] | P0 | `TASK-IMPL-010.1` | None | Create prompt templates registry (`analysis/domain/prompts.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/prompts.py with centralized domain prompt constants and no framework dependencies.` | TASK-IMPL-010 Phase 1 |
+| [x] | P0 | `TASK-IMPL-010.2` | None | Create document augmentation service (`analysis/domain/document_augmentation.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/document_augmentation.py with `DocumentAugmentationService` + `RiskItemConverter` domain services.` | TASK-IMPL-010 Phase 1 |
 | [ ] | P0 | `TASK-IMPL-010.3` | None | Create critique evaluation service (`analysis/domain/critique_evaluation.py`) | TASK-IMPL-010 Phase 1 |
 | [ ] | P1 | `TASK-IMPL-010.4` | None | Create report assembly services (`analysis/domain/report_assembly.py`) | TASK-IMPL-010 Phase 1 |
 | [ ] | P0 | `TASK-IMPL-010.5` | `.3` | Create Coherence Score™ extraction use case (`coherence/application/use_cases/score_from_extraction.py`) | TASK-IMPL-010 Phase 2 |
