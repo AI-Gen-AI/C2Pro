@@ -115,8 +115,8 @@
 | [x]    | P1       | `TASK-AI-005`                  | `TASK-216`  | Implement `langsmith_client.py` wrapper `[x] @2026-04-20 - Added `src/core/ai/langsmith_client.py` with environment-driven config, enablement checks, and canonical trace metadata/tag helpers.` |
 | [x]    | P1       | `TASK-AI-006`                  | `TASK-216`  | Create `@traced_llm_call` decorator `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with sync/async tracing wrappers that preserve signatures, emit canonical LangSmith tags/metadata via `LangSmithClient`, and close spans for success/error paths with focused regression tests.` |
 | [ ]    | P2       | `TASK-AI-007`                  | `TASK-216`  | Add `trace_id` and `trace_url` columns to `ai_usage_logs` |
-| [ ]    | P1       | `TASK-AI-008`                  | `TASK-216`  | Implement `prompt_registry.py` `[-] In Progress @2026-04-20 - Activated as the next eligible AI priority task after TASK-AI-006.` |
-| [ ]    | P1       | `TASK-AI-009`                  | `TASK-216`  | Create CLI command `python -m core.ai.sync_prompts`       |
+| [x]    | P1       | `TASK-AI-008`                  | `TASK-216`  | Implement `prompt_registry.py` `[x] @2026-04-20 - Added `src/core/ai/prompt_registry.py` with Prompt Hub sync/pull/version APIs, template discovery for `.jinja/.jinja2` files, and canonical metadata builders plus tests.` |
+| [ ]    | P1       | `TASK-AI-009`                  | `TASK-216`  | Create CLI command `python -m core.ai.sync_prompts` `[-] In Progress @2026-04-20 - Activated as the next eligible AI priority task after TASK-AI-008.` |
 | [ ]    | P2       | `TASK-AI-010`                  | `TASK-216`  | Add prompt metadata to LangSmith Hub                      |
 | [ ]    | P2       | `TASK-AI-011`                  | `TASK-216`  | Implement A/B test config in LangSmith Hub                |
 | [ ]    | P1       | `TASK-AI-012` to `TASK-AI-051` | Various     | LangSmith integration phases 3-6 (34 tasks)               |

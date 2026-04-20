@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-20T13:34:18+00:00",
+  "updated_at": "2026-04-20T13:42:40+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -18,22 +18,53 @@
   },
   "tareas": [
     {
+      "tarea_id": "T061",
+      "backlog_id": "TASK-AI-009",
+      "tipo": "ai",
+      "descripcion": "Create CLI entrypoint python -m core.ai.sync_prompts to push managed templates during deployment.",
+      "asignado_a": "ai",
+      "estado": "en_progreso",
+      "criterio_done": "CLI discovers managed templates and syncs each revision through PromptRegistry with deploy-safe output summary.",
+      "archivos_modificados": [],
+      "timestamps": {
+        "inicio": "2026-04-20T13:42:40+00:00"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Activated as next priority after completing TASK-AI-008.",
+        "cambios_realizados": [],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
+    {
       "tarea_id": "T060",
       "backlog_id": "TASK-AI-008",
       "tipo": "ai",
       "descripcion": "Implement prompt_registry.py to sync managed Jinja templates to LangSmith Prompt Hub with version metadata.",
       "asignado_a": "ai",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "Prompt registry can discover configured templates, build hub payloads with metadata, and expose sync-ready API for deployment tooling.",
-      "archivos_modificados": [],
+      "archivos_modificados": [
+        "apps/api/src/core/ai/prompt_registry.py",
+        "apps/api/src/core/ai/test_prompt_registry.py",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
       "timestamps": {
-        "inicio": "2026-04-20T13:34:18+00:00"
+        "inicio": "2026-04-20T13:34:18+00:00",
+        "completado": "2026-04-20T13:42:40+00:00"
       },
       "resultado": {
-        "exitoso": false,
-        "mensaje": "Next priority AI task activated after closing TASK-AI-006.",
-        "cambios_realizados": [],
-        "tests_pasados": false,
+        "exitoso": true,
+        "mensaje": "Implemented prompt registry sync helpers with template discovery, metadata builders, and Prompt Hub adapter APIs.",
+        "cambios_realizados": [
+          "Added src/core/ai/prompt_registry.py with PromptRegistry service, hub protocol, and in-memory hub adapter.",
+          "Added src/core/ai/test_prompt_registry.py covering sync/pull/version flows, enablement guardrails, and template discovery.",
+          "Updated backlog tracking to close TASK-AI-008 and activate TASK-AI-009 as next priority."
+        ],
+        "tests_pasados": true,
         "validacion_lint": false
       }
     },
@@ -561,10 +592,10 @@
     ]
   },
   "metricas": {
-    "total_tareas": 47,
-    "tareas_completadas": 34,
+    "total_tareas": 13,
+    "tareas_completadas": 12,
     "tareas_en_progreso": 1,
-    "tareas_pendientes": 13,
+    "tareas_pendientes": 0,
     "total_horas_estimadas": 229,
     "horas_consumidas": 80,
     "roles_involucrados": [
