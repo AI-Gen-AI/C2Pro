@@ -1,5 +1,4 @@
-"""
-Critique evaluation domain service.
+"""Critique evaluation domain service.
 
 Pure domain logic for confidence calculation, retry logic, and HITL threshold
 determination. No os, langgraph, or langchain imports.
@@ -8,7 +7,6 @@ Refers to TASK-IMPL-010.3.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,7 +34,6 @@ class CritiqueEvaluationService:
     ) -> None:
         self.confidence_threshold = confidence_threshold
         self.max_retries = max_retries
-        self.is_mock_mode = os.getenv("C2PRO_AI_MOCK") == "1"
 
     def calculate_confidence(self, items: list[dict[str, Any]]) -> float:
         """Calculate average confidence from extracted items.
@@ -61,6 +58,7 @@ class CritiqueEvaluationService:
         critique_notes: str,
         confidence: float,
         retry_count: int,
+        skip_hitl: bool = False,
     ) -> CritiqueEvaluationResult:
         """Evaluate critique result and determine HITL requirement.
 
@@ -70,20 +68,19 @@ class CritiqueEvaluationService:
             confidence: Confidence score (0.0-1.0)
             retry_count: Current retry count
         """
+        normalized_status = critique_status.upper()
         new_retry_count = retry_count
         cleared_notes = ""
 
-        if critique_status == "RETRY":
+        if normalized_status == "RETRY":
             new_retry_count = retry_count + 1
             cleared_notes = critique_notes
         # OK clears notes
 
-        human_approval_required = False
-        if not self.is_mock_mode:
-            human_approval_required = (
-                confidence < self.confidence_threshold
-                or (critique_status == "RETRY" and new_retry_count >= self.max_retries)
-            )
+        human_approval_required = False if skip_hitl else (
+            confidence < self.confidence_threshold
+            or (normalized_status == "RETRY" and new_retry_count >= self.max_retries)
+        )
 
         return CritiqueEvaluationResult(
             confidence=confidence,
@@ -99,16 +96,17 @@ class CritiqueEvaluationService:
         critique_notes: str,
         retry_count: int,
         doc_type: str,
+        skip_hitl: bool = False,
     ) -> str:
         """Determine the next graph node after critique.
 
         Returns one of: "risk_extractor", "wbs_extractor", "budget_parser",
         "human_interrupt", "stakeholder_extractor".
         """
-        if human_approval_required and not self.is_mock_mode:
+        if human_approval_required and not skip_hitl:
             return "human_interrupt"
 
-        if critique_notes and 0 < retry_count <= self.max_retries and not self.is_mock_mode:
+        if critique_notes and 0 < retry_count <= self.max_retries and not skip_hitl:
             if doc_type == "contract":
                 return "risk_extractor"
             if doc_type == "budget":
