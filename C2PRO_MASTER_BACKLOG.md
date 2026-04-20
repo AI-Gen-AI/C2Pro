@@ -104,14 +104,14 @@
 
 ---
 
-### AI/ML Intelligence (63 pending)
+### AI/ML Intelligence (62 pending)
 
 | Status | Priority | Task ID                        | Depends On  | Description                                               |
 | ------ | -------- | ------------------------------ | ----------- | --------------------------------------------------------- |
 | [x]    | P0       | `TASK-IMPL-010`               | None        | **CORE**: Decouple AI Logic from LangGraph Nodes `[x] @2026-04-09 - All 4 phases complete, 222/222 tests GREEN. Created: D1 prompts.py, D2 DocumentAugmentationService, D3 CritiqueEvaluationService, D4 ReportAssemblyService, D5 ScoreFromExtractionUseCase, D6 RouteForGraphReviewUseCase, D7 PersistAnalysisUseCase. Nodes reduced 24%: 345→262 lines (nodes.py), 568→435 lines (nodes_extended.py). Schedule doc type added as 4th core type.` |
 | [ ]    | P1       | `TASK-AI-002`                  | Backend API | Prompt Analytics Dashboard `[-] In Progress`              |
 | [ ]    | P1       | `TASK-AI-003`                  | `TASK-216`  | Create LangSmith organization account                     |
-| [ ]    | P1       | `TASK-AI-004`                  | `TASK-216`  | Add `langsmith` SDK to dependencies                       |
+| [x]    | P1       | `TASK-AI-004`                  | `TASK-216`  | Add `langsmith` SDK to dependencies `[x] @2026-04-20 - Added PEP 621 `dependencies` entry with `langsmith>=0.7.31` in `apps/api/pyproject.toml`.` |
 | [x]    | P1       | `TASK-AI-005`                  | `TASK-216`  | Implement `langsmith_client.py` wrapper `[x] @2026-04-20 - Added `src/core/ai/langsmith_client.py` with environment-driven config, enablement checks, and canonical trace metadata/tag helpers.` |
 | [x]    | P1       | `TASK-AI-006`                  | `TASK-216`  | Create `@traced_llm_call` decorator `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with sync/async tracing wrappers that preserve signatures, emit canonical LangSmith tags/metadata via `LangSmithClient`, and close spans for success/error paths with focused regression tests.` |
 | [ ]    | P2       | `TASK-AI-007`                  | `TASK-216`  | Add `trace_id` and `trace_url` columns to `ai_usage_logs` |
