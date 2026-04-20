@@ -1,0 +1,39 @@
+{
+  "bundle_id": "BUNDLE-001",
+  "name": "Milestone date mismatch in rail signalling project",
+  "dimensions": ["Schedule"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-RAIL-01 Contract",
+      "synthetic_text": "Clause 4.2 - Key Milestones: Completion of Phase A by 2026-06-30. Completion of Phase B by 2026-12-31. Liquidated damages apply after 15 days of delay on any milestone.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-RAIL-01 Baseline Schedule",
+      "synthetic_text": "WBS 1.0 Phase A - finish 2026-07-31. WBS 2.0 Phase B - finish 2026-12-31. Critical path runs through Phase A signalling installation.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-RAIL-01 Budget",
+      "synthetic_text": "Total contract value: 12,500,000 EUR. Phase A: 5,000,000 EUR. Phase B: 7,500,000 EUR. Payment on milestone completion.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-001",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "Phase A milestone date in schedule exceeds contractual milestone"
+    }
+  ],
+  "metadata": {
+    "sector": "rail",
+    "tags": ["milestone", "schedule-contract-mismatch"]
+  }
+}

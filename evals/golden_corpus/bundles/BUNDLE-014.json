@@ -1,0 +1,81 @@
+{
+  "bundle_id": "BUNDLE-014",
+  "name": "Cross-cutting EPC incoherence across all six dimensions",
+  "dimensions": ["Legal", "Quality", "Scope", "Schedule", "Cost", "Technical"],
+  "difficulty": "Expert",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-AIR-14 Contract",
+      "synthetic_text": "EPC lump sum, FIDIC Silver 2017. Hard delivery 2028-06-30. Scope per Annex II. Warranty 24 months. LDs 0.15%/day capped 10%. IEC 61850 MMS for substations. Class A BMS integration.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-AIR-14 Schedule",
+      "synthetic_text": "Forecast completion 2028-09-30. Critical path through terminal roof. BMS commissioning omitted. No FAT for substation protection relays despite 2-week window reserved in early 2028 activities.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-AIR-14 Budget",
+      "synthetic_text": "EPC value 480,000,000 EUR. Contingency 2% (below industry norm 5%). No explicit allocation for BMS. LD provision 0 EUR. Substation 22,000,000 EUR.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-AIR-14 Technical Specifications",
+      "synthetic_text": "Substation protection must support IEC 61850 edition 2.1 GOOSE and MMS. BMS shall comply with ASHRAE Guideline 36. Fire detection EN 54-13 certified. Acceptance via 30-day operational test.",
+      "language": "en"
+    },
+    {
+      "kind": "drawings",
+      "title": "EPC-SYN-AIR-14 Key Drawings",
+      "synthetic_text": "Drawing AR-200 shows two substations only; contract references three. Drawing ME-310 omits BMS riser. Structural drawings STR-100 reference 2022 Eurocode annex while contract cites 2024 annex.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-301",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "LD cap and warranty interact with a forecast delay that exceeds the capped amount"
+    },
+    {
+      "rule_id": "QUAL-301",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "No FAT scheduled for substation protection relays despite specification requirement"
+    },
+    {
+      "rule_id": "SCOPE-301",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "Third substation in contract is missing from drawings and schedule"
+    },
+    {
+      "rule_id": "SCHED-301",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "Forecast completion is 3 months past the hard delivery date"
+    },
+    {
+      "rule_id": "COST-301",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "Contingency below industry norm and no LD provision"
+    },
+    {
+      "rule_id": "TECH-301",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "Drawings reference Eurocode 2022 annex while contract requires 2024 annex"
+    }
+  ],
+  "metadata": {
+    "sector": "airport",
+    "tags": ["tri-dimensional", "all-dimensions", "expert"]
+  }
+}

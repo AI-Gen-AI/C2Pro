@@ -1,0 +1,45 @@
+{
+  "bundle_id": "BUNDLE-007",
+  "name": "Payment milestone drifts from physical progress",
+  "dimensions": ["Schedule", "Cost"],
+  "difficulty": "Medium",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-BLD-07 Contract",
+      "synthetic_text": "Article 8 - Payments. 20% on signature. 30% on completion of structure. 30% on mechanical completion. 20% on final acceptance.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-BLD-07 Schedule",
+      "synthetic_text": "Structure completion forecast 2026-09-15. Mechanical completion forecast 2027-01-20. Final acceptance forecast 2027-03-30.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-BLD-07 Budget (Cash flow)",
+      "synthetic_text": "Cash flow places the 30% structure payment in 2026-06, three months before the scheduled structure completion. Mechanical completion cash tranche scheduled 2026-11, two months early.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-101",
+      "dimension": "Schedule",
+      "severity": "medium",
+      "description_contains": "Structure milestone invoiced before scheduled physical completion"
+    },
+    {
+      "rule_id": "COST-101",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "Cash flow front-loads payments ahead of progress"
+    }
+  ],
+  "metadata": {
+    "sector": "building",
+    "tags": ["cash-flow", "payment-milestone"]
+  }
+}

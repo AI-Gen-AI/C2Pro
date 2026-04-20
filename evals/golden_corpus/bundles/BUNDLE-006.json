@@ -1,0 +1,45 @@
+{
+  "bundle_id": "BUNDLE-006",
+  "name": "Technical spec mismatch between drawings and contract (cable section)",
+  "dimensions": ["Technical"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-SUB-06 Contract",
+      "synthetic_text": "Technical Annex T-3: Medium voltage cable section shall be 240 mm² copper for all primary feeders. Insulation XLPE class 2. Operating voltage 20 kV.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-SUB-06 Schedule",
+      "synthetic_text": "MV cable pulling from 2026-05-02 to 2026-06-20. Testing week starting 2026-06-22.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-SUB-06 Budget",
+      "synthetic_text": "MV cable supply 420,000 EUR. Pulling 150,000 EUR. Testing 75,000 EUR.",
+      "language": "en"
+    },
+    {
+      "kind": "drawings",
+      "title": "EPC-SYN-SUB-06 Electrical Drawings rev A",
+      "synthetic_text": "Drawing E-101 rev A indicates MV primary feeders as 185 mm² copper XLPE. Single line diagram E-100 also shows 185 mm².",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "TECH-001",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "drawings specify 185 mm² cable while contract requires 240 mm²"
+    }
+  ],
+  "metadata": {
+    "sector": "substation",
+    "tags": ["drawings-vs-contract", "spec-mismatch"]
+  }
+}
