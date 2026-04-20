@@ -1,0 +1,51 @@
+{
+  "bundle_id": "BUNDLE-008",
+  "name": "Warranty period contradicts QA acceptance protocol",
+  "dimensions": ["Legal", "Quality"],
+  "difficulty": "Medium",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-WTR-08 Contract",
+      "synthetic_text": "Clause 11 - Warranty. Defects liability period is 24 months from Taking Over Certificate. No extensions.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-WTR-08 Schedule",
+      "synthetic_text": "Taking Over planned 2026-10-30. Start of warranty 2026-10-31. Expected end 2028-10-30.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-WTR-08 Budget",
+      "synthetic_text": "Warranty provision 2% of contract value = 240,000 EUR, expensed over 24 months.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-WTR-08 QA Acceptance Protocol",
+      "synthetic_text": "Acceptance is provisional until 36 months of continuous operation under normal duty have elapsed, after which final acceptance is granted and latent defect liability terminates.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-101",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "Contract warranty of 24 months conflicts with QA protocol requiring 36 months"
+    },
+    {
+      "rule_id": "QUAL-101",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "QA protocol acceptance window is inconsistent with contractual warranty"
+    }
+  ],
+  "metadata": {
+    "sector": "water treatment",
+    "tags": ["warranty", "qa-protocol", "contradiction"]
+  }
+}

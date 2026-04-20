@@ -1,0 +1,51 @@
+{
+  "bundle_id": "BUNDLE-012",
+  "name": "Tri-dimensional cascade: schedule slip drives cost and scope cuts",
+  "dimensions": ["Schedule", "Cost", "Scope"],
+  "difficulty": "Hard",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-MET-12 Contract",
+      "synthetic_text": "Delivery deadline 2027-04-30 hard stop. Scope fixed per Annex II. Any descoping requires owner written approval. LDs 0.2% per day.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-MET-12 Schedule",
+      "synthetic_text": "Forecast completion 2027-07-15, i.e. 76 days late. Recovery plan drops Annex II item 4 (second platform finishing) and item 6 (third crossover).",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-MET-12 Budget",
+      "synthetic_text": "Original 42,000,000 EUR. Updated forecast 39,500,000 EUR reflecting savings from dropped scope. LD provision 0 EUR.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCHED-202",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "Forecast slips 76 days past the contractual hard stop"
+    },
+    {
+      "rule_id": "SCOPE-201",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "Annex II items silently removed from schedule without change order"
+    },
+    {
+      "rule_id": "COST-201",
+      "dimension": "Cost",
+      "severity": "medium",
+      "description_contains": "Budget omits LD accrual implied by the delay"
+    }
+  ],
+  "metadata": {
+    "sector": "metro",
+    "tags": ["cascade", "tri-dimensional"]
+  }
+}

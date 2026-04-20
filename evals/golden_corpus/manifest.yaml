@@ -1,0 +1,65 @@
+# Golden Corpus Manifest
+# Frozen at 15 bundles; see openspec/changes/build-golden-corpus/specs/golden-corpus/spec.md
+version: 1
+total_bundles: 15
+bundles:
+  - id: BUNDLE-001
+    dimensions: [Schedule]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-002
+    dimensions: [Cost]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-003
+    dimensions: [Legal]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-004
+    dimensions: [Quality]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-005
+    dimensions: [Scope]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-006
+    dimensions: [Technical]
+    difficulty: Easy
+    expected_issue_count: 1
+  - id: BUNDLE-007
+    dimensions: [Schedule, Cost]
+    difficulty: Medium
+    expected_issue_count: 2
+  - id: BUNDLE-008
+    dimensions: [Legal, Quality]
+    difficulty: Medium
+    expected_issue_count: 2
+  - id: BUNDLE-009
+    dimensions: [Scope, Technical]
+    difficulty: Medium
+    expected_issue_count: 2
+  - id: BUNDLE-010
+    dimensions: [Cost, Technical]
+    difficulty: Medium
+    expected_issue_count: 2
+  - id: BUNDLE-011
+    dimensions: [Schedule, Legal]
+    difficulty: Hard
+    expected_issue_count: 2
+  - id: BUNDLE-012
+    dimensions: [Schedule, Cost, Scope]
+    difficulty: Hard
+    expected_issue_count: 3
+  - id: BUNDLE-013
+    dimensions: [Quality, Technical]
+    difficulty: Hard
+    expected_issue_count: 2
+  - id: BUNDLE-014
+    dimensions: [Legal, Quality, Scope, Schedule, Cost, Technical]
+    difficulty: Expert
+    expected_issue_count: 6
+  - id: BUNDLE-015
+    dimensions: [Legal, Cost, Technical]
+    difficulty: Expert
+    expected_issue_count: 3

@@ -1,0 +1,39 @@
+{
+  "bundle_id": "BUNDLE-002",
+  "name": "Budget line exceeds contractual ceiling for civil works",
+  "dimensions": ["Cost"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-CIV-02 Contract",
+      "synthetic_text": "Article 6.1 - Maximum contract value for civil works: 8,000,000 EUR. Any amount in excess requires a formal change order signed by both parties.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-CIV-02 Schedule",
+      "synthetic_text": "Civil works from 2026-03-01 to 2026-10-31. Foundations, structure, finishing. No change orders registered.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-CIV-02 Budget",
+      "synthetic_text": "Civil works budget: 8,600,000 EUR distributed across foundations (3,100,000), structure (3,500,000), finishing (2,000,000). No CO reference.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-001",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "Civil works budget exceeds contractual ceiling by 600,000 EUR"
+    }
+  ],
+  "metadata": {
+    "sector": "civil",
+    "tags": ["budget-overrun", "ceiling-breach"]
+  }
+}

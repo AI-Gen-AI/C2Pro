@@ -1,0 +1,45 @@
+{
+  "bundle_id": "BUNDLE-004",
+  "name": "Quality plan missing acceptance criteria for commissioning tests",
+  "dimensions": ["Quality"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-PLT-04 Contract",
+      "synthetic_text": "Section 9 - Quality Assurance. Contractor shall deliver a Quality Plan including acceptance criteria for all commissioning tests prior to energisation.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-PLT-04 Schedule",
+      "synthetic_text": "Commissioning window: 2026-11-01 to 2026-12-15. Hot tests scheduled 2026-12-05. Quality Plan approval scheduled 2026-10-20.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-PLT-04 Budget",
+      "synthetic_text": "Commissioning: 450,000 EUR. Quality management: 180,000 EUR. Documentation: 60,000 EUR.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-PLT-04 Quality Plan v0.3",
+      "synthetic_text": "Hot tests will be performed. Cold tests will be performed. Inspection reports will be issued. No acceptance criteria, thresholds, or pass/fail tolerances are defined.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-001",
+      "dimension": "Quality",
+      "severity": "medium",
+      "description_contains": "Quality Plan lacks acceptance criteria for commissioning tests"
+    }
+  ],
+  "metadata": {
+    "sector": "power plant",
+    "tags": ["quality-plan", "missing-criteria"]
+  }
+}

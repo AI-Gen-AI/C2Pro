@@ -1,0 +1,45 @@
+{
+  "bundle_id": "BUNDLE-011",
+  "name": "Force majeure clause contradicts baseline schedule float",
+  "dimensions": ["Schedule", "Legal"],
+  "difficulty": "Hard",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-LNG-11 Contract",
+      "synthetic_text": "Clause 17 - Force Majeure. Contractor is entitled to a time extension equal to the actual impact, capped at 30 calendar days aggregate over the project lifecycle. No float sharing is permitted.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-LNG-11 Schedule",
+      "synthetic_text": "Baseline reserves 60 days of owner float on the critical path for weather contingency. Critical path runs through cryogenic tank hydrotest. Two weather windows totalling 55 days are pre-allocated as FM absorbers.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-LNG-11 Budget",
+      "synthetic_text": "Contingency 4% of contract value. No explicit FM-related reserve. LDs 0.1% per day capped at 10%.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-201",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "Force majeure cap of 30 days conflicts with 60 days of weather float embedded in the baseline"
+    },
+    {
+      "rule_id": "SCHED-201",
+      "dimension": "Schedule",
+      "severity": "high",
+      "description_contains": "Schedule float allocation assumes recoveries beyond contractual FM cap"
+    }
+  ],
+  "metadata": {
+    "sector": "lng",
+    "tags": ["force-majeure", "float", "contradiction"]
+  }
+}

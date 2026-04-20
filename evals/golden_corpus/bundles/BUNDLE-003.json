@@ -1,0 +1,39 @@
+{
+  "bundle_id": "BUNDLE-003",
+  "name": "Contract missing liability cap clause for subcontractors",
+  "dimensions": ["Legal"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-OFF-03 Contract",
+      "synthetic_text": "Clause 12 - Liability. The Contractor is liable for direct damages. No reference to subcontractor liability, no overall cap stated, no carve-outs described.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-OFF-03 Schedule",
+      "synthetic_text": "Phase 1 design assisted by subcontractor SUB-A. Phase 2 installation partially delegated to SUB-B. Delivery dates per baseline.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-OFF-03 Budget",
+      "synthetic_text": "Subcontractor SUB-A: 1,200,000 EUR. Subcontractor SUB-B: 2,800,000 EUR. Total subcontracted: 4,000,000 EUR of the 10,000,000 EUR contract.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-001",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "liability cap and subcontractor liability regime are missing"
+    }
+  ],
+  "metadata": {
+    "sector": "offices",
+    "tags": ["missing-clause", "liability"]
+  }
+}
