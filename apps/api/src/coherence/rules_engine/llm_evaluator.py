@@ -24,9 +24,7 @@ Sprint: P2-02
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
-import re
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -37,10 +35,12 @@ from src.coherence.graph.prompts import (
     COHERENCE_SYSTEM_PROMPT,
     build_evaluation_prompt,
 )
+from src.coherence.llm_schemas import LlmEvaluationLegacyResponse, LlmEvaluationV3Response
 from src.coherence.models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
 from src.coherence.rules_engine.base import Finding, RuleEvaluator
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
 logger = structlog.get_logger()
 
@@ -322,12 +322,11 @@ class LlmRuleEvaluator(RuleEvaluator):
         try:
             response = await self.wrapper.generate(request)
 
-            # Parse response with improved error handling
+            # Parse and validate response against schema
             result = self._parse_v3_response(response.content)
 
-            # Extract and validate scores
-            impact_score = self._clamp_score(result.get("impact_score", 0.0))
-            confidence = self._clamp_score(result.get("confidence", 0.8))
+            impact_score = result.impact_score
+            confidence = result.confidence
 
             # Record metrics
             self.metrics.record_evaluation(
@@ -341,7 +340,6 @@ class LlmRuleEvaluator(RuleEvaluator):
             self.evaluations_count += 1
             self.total_cost += response.cost_usd
 
-            # No violation if impact_score is 0 or very low
             if impact_score < 0.05:
                 logger.debug(
                     "llm_rule_no_violation_v3",
@@ -353,8 +351,6 @@ class LlmRuleEvaluator(RuleEvaluator):
 
             self.violations_found += 1
 
-            # Build FindingSignal
-            evidence = result.get("evidence", {})
             return FindingSignal(
                 rule_id=self.rule_id,
                 clause_id=clause.id,
@@ -363,11 +359,11 @@ class LlmRuleEvaluator(RuleEvaluator):
                 confidence=confidence,
                 severity=impact_to_severity(impact_score),
                 category=self.coherence_category,
-                evidence_summary=evidence.get("explanation", ""),
-                quote=evidence.get("quote", ""),
+                evidence_summary=result.evidence.explanation,
+                quote=result.evidence.quote,
                 raw_data={
                     "rule_name": self.rule_name,
-                    "recommendation": result.get("recommendation", ""),
+                    "recommendation": result.recommendation,
                     "model_used": response.model_used,
                     "cached": response.cached,
                     "cost_usd": response.cost_usd,
@@ -384,49 +380,16 @@ class LlmRuleEvaluator(RuleEvaluator):
             # Return None on error (graceful fallback)
             return None
 
-    @staticmethod
-    def _clamp_score(value: Any) -> float:
-        """Clamp a value to [0.0, 1.0] range with type coercion."""
-        try:
-            score = float(value)
-            return max(0.0, min(1.0, score))
-        except (TypeError, ValueError):
-            return 0.0
-
-    def _parse_v3_response(self, content: str) -> dict[str, Any]:
+    def _parse_v3_response(self, content: str) -> LlmEvaluationV3Response:
         """
-        Parse LLM response with improved error handling.
+        Parse and Pydantic-validate the v3 LLM evaluation response.
 
-        Handles:
-        - JSON in markdown code blocks
-        - Raw JSON
-        - Partial JSON recovery
-        - Graceful fallback on parse errors
-
-        Returns dict with at minimum: impact_score, confidence, evidence
+        Falls back to a safe zero-impact default on parse or schema errors
+        so the evaluation pipeline never hard-crashes on a bad LLM response.
         """
-        content = content.strip()
-
-        # Try to extract JSON from various formats
-        json_str = self._extract_json(content)
-
         try:
-            result = json.loads(json_str)
-
-            # Validate required fields
-            if not isinstance(result, dict):
-                raise ValueError("Response is not a JSON object")
-
-            # Ensure required fields exist with defaults
-            result.setdefault("impact_score", 0.0)
-            result.setdefault("confidence", 0.8)
-            result.setdefault("rule_violated", result.get("impact_score", 0) > 0.05)
-            result.setdefault("evidence", {"quote": "", "explanation": ""})
-            result.setdefault("recommendation", "")
-
-            return result
-
-        except (json.JSONDecodeError, ValueError) as e:
+            return parse_llm_json(content, LlmEvaluationV3Response)
+        except LLMSchemaError as e:
             logger.warning(
                 "llm_response_parse_failed_v3",
                 rule_id=self.rule_id,
@@ -434,72 +397,7 @@ class LlmRuleEvaluator(RuleEvaluator):
                 content_preview=content[:200],
             )
             self.metrics.record_parse_error()
-
-            # Attempt to recover partial data
-            return self._recover_partial_response(content)
-
-    def _extract_json(self, content: str) -> str:
-        """Extract JSON from content, handling markdown code blocks."""
-        # Try markdown code block with json tag
-        match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-
-        # Try generic code block
-        match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
-        if match:
-            potential_json = match.group(1).strip()
-            if potential_json.startswith('{'):
-                return potential_json
-
-        # Try to find raw JSON object
-        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
-        if match:
-            return match.group(0)
-
-        return content
-
-    def _recover_partial_response(self, content: str) -> dict[str, Any]:
-        """
-        Attempt to recover useful data from malformed response.
-
-        Returns a safe default dict if recovery fails.
-        """
-        result = {
-            "impact_score": 0.0,
-            "confidence": 0.5,
-            "rule_violated": False,
-            "evidence": {"quote": "", "explanation": ""},
-            "recommendation": "",
-            "parse_error": True,
-        }
-
-        # Try to extract impact_score
-        match = re.search(r'"impact_score"\s*:\s*([0-9.]+)', content)
-        if match:
-            try:
-                result["impact_score"] = self._clamp_score(match.group(1))
-                result["rule_violated"] = result["impact_score"] > 0.05
-            except ValueError:
-                pass
-
-        # Try to extract confidence
-        match = re.search(r'"confidence"\s*:\s*([0-9.]+)', content)
-        if match:
-            with contextlib.suppress(ValueError):
-                result["confidence"] = self._clamp_score(match.group(1))
-
-        # Try to extract quote
-        match = re.search(r'"quote"\s*:\s*"([^"]*)"', content)
-        if match:
-            result["evidence"]["quote"] = match.group(1)
-
-        # Try to extract explanation
-        match = re.search(r'"explanation"\s*:\s*"([^"]*)"', content)
-        if match:
-            result["evidence"]["explanation"] = match.group(1)
-
-        return result
+            return LlmEvaluationV3Response()
 
     async def evaluate_async(self, clause: Clause) -> Finding | None:
         """
@@ -543,21 +441,20 @@ class LlmRuleEvaluator(RuleEvaluator):
             self.metrics.total_cost_usd += response.cost_usd
             self.metrics.llm_calls_count += 1
 
-            # Parse response
+            # Parse and validate against schema
             result = self._parse_evaluation_response(response.content)
 
-            if result.get("rule_violated", False):
+            if result.rule_violated:
                 self.violations_found += 1
                 self.metrics.violations_found += 1
-                # Track impact and confidence for averages
-                self.metrics._impact_sum += result.get("impact_score", 0.0)
-                self.metrics._confidence_sum += result.get("confidence", 1.0)
+                self.metrics._impact_sum += 1.0  # legacy v1 has no impact_score
+                self.metrics._confidence_sum += result.confidence
 
                 logger.info(
                     "llm_rule_violation_detected",
                     rule_id=self.rule_id,
                     clause_id=clause.id,
-                    severity=result.get("severity", self.default_severity),
+                    severity=result.severity,
                 )
 
                 return Finding(
@@ -566,10 +463,10 @@ class LlmRuleEvaluator(RuleEvaluator):
                         "rule_id": self.rule_id,
                         "rule_name": self.rule_name,
                         "category": self.category,
-                        "severity": result.get("severity", self.default_severity),
-                        "evidence": result.get("evidence", {}),
-                        "confidence": result.get("confidence", 0.0),
-                        "recommendation": result.get("recommendation", ""),
+                        "severity": result.severity,
+                        "evidence": result.evidence.model_dump(),
+                        "confidence": result.confidence,
+                        "recommendation": result.recommendation,
                         "model_used": response.model_used,
                         "cached": response.cached,
                     },
@@ -648,33 +545,18 @@ Evalúa si esta cláusula viola la regla y responde en JSON:
 }}
 ```"""
 
-    def _parse_evaluation_response(self, content: str) -> dict[str, Any]:
-        """Parsea la respuesta JSON del LLM."""
-        content = content.strip()
-
-        # Handle markdown code blocks
-        if "```json" in content:
-            start = content.find("```json") + 7
-            end = content.find("```", start)
-            content = content[start:end].strip()
-        elif "```" in content:
-            start = content.find("```") + 3
-            end = content.find("```", start)
-            content = content[start:end].strip()
-
+    def _parse_evaluation_response(self, content: str) -> LlmEvaluationLegacyResponse:
+        """Parse and Pydantic-validate the v1 LLM evaluation response."""
         try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
+            return parse_llm_json(content, LlmEvaluationLegacyResponse)
+        except LLMSchemaError as e:
             logger.warning(
                 "llm_response_parse_failed",
                 rule_id=self.rule_id,
                 error=str(e),
             )
-            # Return safe default
-            return {
-                "rule_violated": False,
-                "parse_error": str(e),
-            }
+            self.metrics.record_parse_error()
+            return LlmEvaluationLegacyResponse(rule_violated=False)
 
     def get_statistics(self) -> dict[str, Any]:
         """
