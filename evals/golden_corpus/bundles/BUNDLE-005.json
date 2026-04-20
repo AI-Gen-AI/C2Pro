@@ -1,0 +1,39 @@
+{
+  "bundle_id": "BUNDLE-005",
+  "name": "Deliverable listed in contract absent from schedule",
+  "dimensions": ["Scope"],
+  "difficulty": "Easy",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-DATA-05 Contract",
+      "synthetic_text": "Annex II - Deliverables: 1) Detailed design. 2) Construction. 3) As-built documentation. 4) Operator training program of 120 hours. 5) Spare parts list.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-DATA-05 Schedule",
+      "synthetic_text": "Tasks: Detailed design Q1. Construction Q2-Q3. As-built documentation Q4. Spare parts list Q4. No entry for operator training.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-DATA-05 Budget",
+      "synthetic_text": "Design 500k. Construction 3,200k. As-built 150k. Spare parts 220k. No line item for training.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-001",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "Operator training deliverable is contracted but absent from schedule"
+    }
+  ],
+  "metadata": {
+    "sector": "data centre",
+    "tags": ["missing-deliverable", "scope-gap"]
+  }
+}

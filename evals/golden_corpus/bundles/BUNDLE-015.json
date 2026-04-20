@@ -1,0 +1,57 @@
+{
+  "bundle_id": "BUNDLE-015",
+  "name": "Indemnity carve-outs vs liquidated damages cap mismatch",
+  "dimensions": ["Legal", "Cost", "Technical"],
+  "difficulty": "Expert",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-REF-15 Contract",
+      "synthetic_text": "Clause 13 - Indemnities. Unlimited indemnity for IP infringement, wilful misconduct, and environmental breach. Clause 14 - LDs capped at 10% of contract price; aggregate liability capped at 100%. Clause 15 - Performance guarantees: availability ≥ 99.5%, heat rate ≤ 8,900 kJ/kWh.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-REF-15 Schedule",
+      "synthetic_text": "Performance test window 2027-01-10 to 2027-01-24. Reliability run 2027-02-01 to 2027-04-30. Final Acceptance 2027-05-02.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-REF-15 Budget",
+      "synthetic_text": "Contract price 260,000,000 EUR. LD provision 26,000,000 EUR. Performance shortfall reserve 12,000,000 EUR. No reserve against IP or environmental indemnity exposure.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-REF-15 Technical Performance Spec",
+      "synthetic_text": "Equipment supplied is licensed from Licensor L-9 under back-to-back terms. Licensor liability for IP infringement is capped at 5,000,000 EUR. Plant emits NOx 120 mg/Nm³ (limit 100 mg/Nm³ per local environmental permit).",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "LEG-302",
+      "dimension": "Legal",
+      "severity": "high",
+      "description_contains": "Unlimited IP indemnity conflicts with licensor back-to-back cap of 5,000,000 EUR"
+    },
+    {
+      "rule_id": "COST-302",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "Budget has no reserve against the unlimited IP or environmental indemnity exposure"
+    },
+    {
+      "rule_id": "TECH-302",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "NOx emissions exceed the environmental permit, triggering the unlimited indemnity"
+    }
+  ],
+  "metadata": {
+    "sector": "refinery",
+    "tags": ["indemnity", "ld-cap", "back-to-back"]
+  }
+}

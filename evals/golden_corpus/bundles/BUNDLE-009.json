@@ -1,0 +1,51 @@
+{
+  "bundle_id": "BUNDLE-009",
+  "name": "Scope omits BIM deliverable required by technical specifications",
+  "dimensions": ["Scope", "Technical"],
+  "difficulty": "Medium",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-HOS-09 Contract",
+      "synthetic_text": "Annex III - Scope of Works: architectural, structural, MEP design and construction. No explicit mention of BIM model delivery.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-HOS-09 Schedule",
+      "synthetic_text": "Design phases D1-D4. Construction C1-C7. FIT-OUT F1-F2. No BIM handover milestone.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-HOS-09 Budget",
+      "synthetic_text": "Design 1,800,000 EUR. Construction 14,500,000 EUR. Fit-out 3,200,000 EUR. No line for BIM model delivery or LOD 500 coordination.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-HOS-09 Technical Specifications",
+      "synthetic_text": "Section 2.7 - A coordinated BIM model LOD 500 in IFC 4.3 format shall be delivered at substantial completion, including clash-free federated disciplines.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "SCOPE-101",
+      "dimension": "Scope",
+      "severity": "high",
+      "description_contains": "BIM deliverable is required by specifications but absent from scope of works"
+    },
+    {
+      "rule_id": "TECH-101",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "BIM LOD 500 IFC 4.3 requirement is not reflected in the contractual scope"
+    }
+  ],
+  "metadata": {
+    "sector": "hospital",
+    "tags": ["bim", "scope-gap"]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "bundle_id": "BUNDLE-013",
+  "name": "Acceptance criteria diverge from test protocol thresholds",
+  "dimensions": ["Quality", "Technical"],
+  "difficulty": "Hard",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-PHR-13 Contract",
+      "synthetic_text": "Clean room acceptance criteria: ISO 14644-1 Class 7 (at rest), particle count ≤ 352,000/m³ for ≥0.5 µm particles. Temperature 20±1 °C. Humidity 45±5%.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-PHR-13 Schedule",
+      "synthetic_text": "Validation tests planned 2026-12-05 to 2026-12-20. Dry run 2026-12-01. Final acceptance certificate 2026-12-22.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-PHR-13 Budget",
+      "synthetic_text": "Clean room HVAC 2,300,000 EUR. Validation 280,000 EUR. Documentation 80,000 EUR.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-PHR-13 Validation Test Protocol VTP-04",
+      "synthetic_text": "VTP-04 passes the clean room if particle count ≤ 3,520,000/m³ at 0.5 µm (operational ISO 8). Temperature 20±2 °C. Humidity 40-60%.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "QUAL-202",
+      "dimension": "Quality",
+      "severity": "high",
+      "description_contains": "Test protocol VTP-04 uses ISO 8 thresholds while contract requires ISO 7"
+    },
+    {
+      "rule_id": "TECH-202",
+      "dimension": "Technical",
+      "severity": "high",
+      "description_contains": "Temperature and humidity tolerances in VTP-04 exceed contractual bounds"
+    }
+  ],
+  "metadata": {
+    "sector": "pharma",
+    "tags": ["clean-room", "validation", "iso-14644"]
+  }
+}
