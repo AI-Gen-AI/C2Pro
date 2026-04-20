@@ -12,13 +12,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 45
+**Pending Tasks**: 44
 
-- IDs: `TASK-AI-002`-`TASK-AI-004`, `TASK-AI-007`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
+- IDs: `TASK-AI-002`-`TASK-AI-003`, `TASK-AI-007`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
 
-**Completed Tasks**: 33
+**Completed Tasks**: 34
 
-- IDs: `TASK-AI-001`, `TASK-AI-005`-`TASK-AI-006`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
+- IDs: `TASK-AI-001`, `TASK-AI-004`-`TASK-AI-006`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
 
 **Usage Note**:
 
@@ -32,7 +32,7 @@
 | [x] | P0 | `TASK-AI-001` | AI & Intelligence | Enforce strict severity taxonomy in scoring: Critical, High, Medium, Low, Info `[x] Implemented (5-level severity taxonomy: critical/high/medium/low/info with thresholds 0.85/0.60/0.35/0.15; severity weights updated in config; 488 coherence tests passing)` | `docs/archive/plans/tdd-testing/I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` `[x] @2026-02-16` |
 | [ ] | P1 | `TASK-AI-002` | Backend API | Prompt Analytics Dashboard: metrics by prompt version with LangSmith integration `[-] In Progress (Implementation plan created; see docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md for 6-phase roadmap)` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`; `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` |
 | [ ] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [ ] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
+| [x] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies `[x] @2026-04-20 - Added PEP 621 `dependencies` entry with `langsmith>=0.7.31` in `apps/api/pyproject.toml` to align package metadata with LangSmith integration requirements.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-005` | `TASK-216` | Implement `langsmith_client.py` wrapper with environment-based config and helper methods `[x] @2026-04-20 - Added src/core/ai/langsmith_client.py with environment-driven config, `enabled` guard, and helper builders for canonical tags/metadata payloads used by downstream tracing decorators and usage analytics integration.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-006` | `TASK-216` | Create `@traced_llm_call` decorator for automatic tracing of all LLM calls `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with signature-preserving sync/async decorators that standardize LangSmith tags + metadata via `LangSmithClient` and finalize spans for both success and exception paths, with dedicated unit coverage in `src/core/ai/test_traced_llm_call.py`.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [ ] | P2 | `TASK-AI-007` | `TASK-216` | Add `trace_id` and `trace_url` columns to `ai_usage_logs` table (nullable, indexed) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
