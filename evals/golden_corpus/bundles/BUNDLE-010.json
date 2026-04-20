@@ -1,0 +1,51 @@
+{
+  "bundle_id": "BUNDLE-010",
+  "name": "Unpriced technical scope for SCADA integration",
+  "dimensions": ["Cost", "Technical"],
+  "difficulty": "Medium",
+  "synthetic": true,
+  "documents": [
+    {
+      "kind": "contract",
+      "title": "EPC-SYN-IND-10 Contract",
+      "synthetic_text": "Technical scope includes SCADA integration with existing DCS via OPC UA and redundant industrial Ethernet ring. All supply, engineering and commissioning included.",
+      "language": "en"
+    },
+    {
+      "kind": "schedule",
+      "title": "EPC-SYN-IND-10 Schedule",
+      "synthetic_text": "SCADA engineering 2026-04-01 to 2026-07-30. FAT 2026-08-15. SAT 2026-10-30.",
+      "language": "en"
+    },
+    {
+      "kind": "budget",
+      "title": "EPC-SYN-IND-10 Budget",
+      "synthetic_text": "Electrical 1,200,000. Mechanical 2,400,000. Instrumentation 860,000. No line item for SCADA integration or OPC UA licences.",
+      "language": "en"
+    },
+    {
+      "kind": "specifications",
+      "title": "EPC-SYN-IND-10 Control System Spec",
+      "synthetic_text": "SCADA vendor certified gateway required. 200 OPC UA tags minimum. Redundant ring latency ≤ 20 ms. Cybersecurity hardening to IEC 62443 SL-2.",
+      "language": "en"
+    }
+  ],
+  "expected_issues": [
+    {
+      "rule_id": "COST-102",
+      "dimension": "Cost",
+      "severity": "high",
+      "description_contains": "SCADA integration scope is contractually included but unpriced in budget"
+    },
+    {
+      "rule_id": "TECH-102",
+      "dimension": "Technical",
+      "severity": "medium",
+      "description_contains": "IEC 62443 SL-2 hardening has no cost allocation"
+    }
+  ],
+  "metadata": {
+    "sector": "industrial",
+    "tags": ["scada", "unpriced-scope"]
+  }
+}

@@ -121,4 +121,5 @@ sandbox/
 logs/execution_traces.log
 logs/metrics.json
 evals/results.json
+evals/results/
 blackboard.json
