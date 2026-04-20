@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-20T13:42:40+00:00",
+  "updated_at": "2026-04-20T13:50:48+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -18,22 +18,53 @@
   },
   "tareas": [
     {
+      "tarea_id": "T062",
+      "backlog_id": "TASK-AI-012",
+      "tipo": "ai",
+      "descripcion": "Enhance @traced_llm_call decorator to capture input prompt, model params, output, tokens, cost, latency.",
+      "asignado_a": "ai",
+      "estado": "en_progreso",
+      "criterio_done": "Decorator captures full LangSmith trace payload fields (input/model/output/tokens/cost/latency) with deterministic metadata and unit coverage.",
+      "archivos_modificados": [],
+      "timestamps": {
+        "inicio": "2026-04-20T13:50:48+00:00"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Activated as next priority after completing TASK-AI-009.",
+        "cambios_realizados": [],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
+    {
       "tarea_id": "T061",
       "backlog_id": "TASK-AI-009",
       "tipo": "ai",
       "descripcion": "Create CLI entrypoint python -m core.ai.sync_prompts to push managed templates during deployment.",
       "asignado_a": "ai",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "CLI discovers managed templates and syncs each revision through PromptRegistry with deploy-safe output summary.",
-      "archivos_modificados": [],
+      "archivos_modificados": [
+        "apps/api/src/core/ai/sync_prompts.py",
+        "apps/api/src/core/ai/test_sync_prompts_cli.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "blackboard.json"
+      ],
       "timestamps": {
-        "inicio": "2026-04-20T13:42:40+00:00"
+        "inicio": "2026-04-20T13:42:40+00:00",
+        "completado": "2026-04-20T13:50:48+00:00"
       },
       "resultado": {
-        "exitoso": false,
-        "mensaje": "Activated as next priority after completing TASK-AI-008.",
-        "cambios_realizados": [],
-        "tests_pasados": false,
+        "exitoso": true,
+        "mensaje": "Implemented deployment CLI module core.ai.sync_prompts to discover and sync managed templates through PromptRegistry with summary output.",
+        "cambios_realizados": [
+          "Added src/core/ai/sync_prompts.py with run_sync orchestration and python -m core.ai.sync_prompts entrypoint.",
+          "Added CLI tests in src/core/ai/test_sync_prompts_cli.py for sync success, empty discovery, and LangSmith enablement failure paths.",
+          "Updated AI/master backlogs to close TASK-AI-009 and record next-priority activation."
+        ],
+        "tests_pasados": true,
         "validacion_lint": false
       }
     },
