@@ -16,13 +16,18 @@ Sprint: P2-02
 
 from __future__ import annotations
 
-import json
+import json  # still used in analyze_clause prompt formatting
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
 import structlog
 
+from src.coherence.llm_schemas import (
+    ClauseAnalysisLLMResponse,
+    CoherenceRuleCheckLLMResponse,
+    MultiClauseCoherenceLLMResponse,
+)
 from src.coherence.models import Clause, ProjectContext
 from src.core.ai.anthropic_wrapper import (
     AIRequest,
@@ -31,6 +36,7 @@ from src.core.ai.anthropic_wrapper import (
     get_anthropic_wrapper,
 )
 from src.core.ai.model_router import AITaskType
+from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
 logger = structlog.get_logger()
 
@@ -317,19 +323,12 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         rule_description: str,
         detection_logic: str,
         tenant_id: UUID | None = None,
-    ) -> dict[str, Any]:
+    ) -> CoherenceRuleCheckLLMResponse:
         """
         Verifica si una cláusula viola una regla de coherencia específica.
 
-        Args:
-            clause: Cláusula a verificar
-            rule_id: ID de la regla
-            rule_description: Descripción de la regla
-            detection_logic: Lógica de detección en lenguaje natural
-            tenant_id: ID del tenant
-
         Returns:
-            Dict con el resultado de la verificación
+            CoherenceRuleCheckLLMResponse validated against the schema.
         """
         logger.info(
             "checking_coherence_rule",
@@ -350,7 +349,7 @@ Evalúa si esta cláusula viola la regla especificada."""
 
         request = AIRequest(
             prompt=prompt,
-            task_type=AITaskType.COHERENCE_CHECK,  # Uses faster model (Haiku)
+            task_type=AITaskType.COHERENCE_CHECK,
             system_prompt=COHERENCE_CHECK_SYSTEM_PROMPT,
             low_budget_mode=self.low_budget_mode,
             tenant_id=tenant_id,
@@ -364,22 +363,25 @@ Evalúa si esta cláusula viola la regla especificada."""
             self.total_tokens += response.total_tokens
             self.total_cost += response.cost_usd
 
-            # Parse JSON response
-            result = self._parse_json_response(response.content)
-            result["clause_id"] = clause.id
-            result["rule_id"] = rule_id
-            result["model_used"] = response.model_used
-            result["cached"] = response.cached
+            validated = parse_llm_json(response.content, CoherenceRuleCheckLLMResponse)
 
             logger.info(
                 "coherence_rule_check_complete",
                 clause_id=clause.id,
                 rule_id=rule_id,
-                rule_violated=result.get("rule_violated", False),
+                rule_violated=validated.rule_violated,
             )
 
-            return result
+            return validated
 
+        except LLMSchemaError as e:
+            logger.warning(
+                "coherence_rule_check_schema_error",
+                clause_id=clause.id,
+                rule_id=rule_id,
+                error=str(e),
+            )
+            return CoherenceRuleCheckLLMResponse(rule_violated=False)
         except Exception as e:
             logger.error(
                 "coherence_rule_check_failed",
@@ -397,30 +399,25 @@ Evalúa si esta cláusula viola la regla especificada."""
         self,
         clauses: list[Clause],
         tenant_id: UUID | None = None,
-    ) -> dict[str, Any]:
+    ) -> MultiClauseCoherenceLLMResponse:
         """
         Analiza coherencia entre múltiples cláusulas.
 
-        Args:
-            clauses: Lista de cláusulas a analizar en conjunto
-            tenant_id: ID del tenant
-
         Returns:
-            Dict con análisis de coherencia cruzada
+            MultiClauseCoherenceLLMResponse validated against the schema.
         """
         if len(clauses) < 2:
-            return {
-                "cross_clause_issues": [],
-                "overall_coherence_score": 100,
-                "summary": "Se requieren al menos 2 cláusulas para análisis cruzado",
-            }
+            return MultiClauseCoherenceLLMResponse(
+                cross_clause_issues=[],
+                overall_coherence_score=100,
+                summary="Se requieren al menos 2 cláusulas para análisis cruzado",
+            )
 
         logger.info(
             "analyzing_multi_clause_coherence",
             clauses_count=len(clauses),
         )
 
-        # Build clauses text
         clauses_text = "\n\n".join([
             f"--- CLÁUSULA {c.id} ---\n{c.text}"
             for c in clauses
@@ -430,7 +427,7 @@ Evalúa si esta cláusula viola la regla especificada."""
 
         request = AIRequest(
             prompt=prompt,
-            task_type=AITaskType.COHERENCE_ANALYSIS,  # Uses Sonnet for complex analysis
+            task_type=AITaskType.COHERENCE_ANALYSIS,
             system_prompt="Eres un experto en análisis de coherencia contractual.",
             low_budget_mode=self.low_budget_mode,
             tenant_id=tenant_id,
@@ -444,18 +441,23 @@ Evalúa si esta cláusula viola la regla especificada."""
             self.total_tokens += response.total_tokens
             self.total_cost += response.cost_usd
 
-            result = self._parse_json_response(response.content)
-            result["clauses_analyzed"] = [c.id for c in clauses]
-            result["model_used"] = response.model_used
+            validated = parse_llm_json(response.content, MultiClauseCoherenceLLMResponse)
 
             logger.info(
                 "multi_clause_analysis_complete",
                 clauses_count=len(clauses),
-                issues_found=len(result.get("cross_clause_issues", [])),
+                issues_found=len(validated.cross_clause_issues),
             )
 
-            return result
+            return validated
 
+        except LLMSchemaError as e:
+            logger.warning(
+                "multi_clause_analysis_schema_error",
+                clauses_count=len(clauses),
+                error=str(e),
+            )
+            return MultiClauseCoherenceLLMResponse()
         except Exception as e:
             logger.error(
                 "multi_clause_analysis_failed",
@@ -524,10 +526,10 @@ Evalúa si esta cláusula viola la regla especificada."""
                 tenant_id=tenant_id,
             )
 
-            for issue in cross_result.get("cross_clause_issues", []):
+            for issue in cross_result.cross_clause_issues:
                 findings.append({
                     "source": "cross_clause_analysis",
-                    **issue,
+                    **issue.model_dump(),
                 })
 
         # Determine risk level
@@ -567,23 +569,22 @@ Evalúa si esta cláusula viola la regla especificada."""
         clause_id: str,
         response: AIResponse,
     ) -> ClauseAnalysisResult:
-        """Parsea la respuesta del análisis de cláusula."""
+        """Parse and Pydantic-validate the clause analysis LLM response."""
         try:
-            data = self._parse_json_response(response.content)
-
+            validated = parse_llm_json(response.content, ClauseAnalysisLLMResponse)
             return ClauseAnalysisResult(
                 clause_id=clause_id,
-                has_issues=data.get("has_issues", False),
-                issues=data.get("issues", []),
-                confidence=data.get("confidence", 0.0),
-                reasoning=data.get("reasoning", ""),
+                has_issues=validated.has_issues,
+                issues=[issue.model_dump() for issue in validated.issues],
+                confidence=validated.confidence,
+                reasoning=validated.reasoning,
                 raw_response=response.content,
                 model_used=response.model_used,
                 tokens_used=response.total_tokens,
                 cost_usd=response.cost_usd,
                 cached=response.cached,
             )
-        except Exception as e:
+        except LLMSchemaError as e:
             logger.warning(
                 "failed_to_parse_clause_analysis",
                 clause_id=clause_id,
@@ -592,34 +593,13 @@ Evalúa si esta cláusula viola la regla especificada."""
             return ClauseAnalysisResult(
                 clause_id=clause_id,
                 has_issues=False,
-                reasoning=f"Error parsing response: {e}",
+                reasoning=f"Schema validation error: {e}",
                 raw_response=response.content,
                 model_used=response.model_used,
                 tokens_used=response.total_tokens,
                 cost_usd=response.cost_usd,
                 cached=response.cached,
             )
-
-    def _parse_json_response(self, content: str) -> dict[str, Any]:
-        """Parsea respuesta JSON del LLM."""
-        # Try to extract JSON from response
-        content = content.strip()
-
-        # Handle markdown code blocks
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-
-        content = content.strip()
-
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.warning("json_parse_failed", error=str(e), content=content[:200])
-            return {"parse_error": str(e), "raw_content": content}
 
     def _calculate_risk_level(self, findings: list[dict]) -> str:
         """Calcula el nivel de riesgo basado en los hallazgos."""
