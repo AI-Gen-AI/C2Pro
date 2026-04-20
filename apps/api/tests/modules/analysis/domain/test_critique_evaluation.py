@@ -126,6 +126,16 @@ class TestEvaluateCritique:
         )
         assert result.confidence == 0.85
 
+    def test_retry_status_is_case_insensitive(self):
+        result = self.service.evaluate_critique(
+            critique_status="retry",
+            confidence=0.9,
+            critique_notes="retry lowercase",
+            retry_count=0,
+        )
+        assert result.retry_count == 1
+        assert result.critique_notes == "retry lowercase"
+
 
 class TestDetermineNextStep:
     def setup_method(self):
@@ -182,5 +192,15 @@ class TestDetermineNextStep:
             critique_notes="Still failing",
             retry_count=3,  # Over max_retries=2
             doc_type="contract",
+        )
+        assert result == "stakeholder_extractor"
+
+    def test_skip_hitl_avoids_interrupt_routing(self):
+        result = self.service.determine_next_step(
+            human_approval_required=True,
+            critique_notes="",
+            retry_count=0,
+            doc_type="contract",
+            skip_hitl=True,
         )
         assert result == "stakeholder_extractor"
