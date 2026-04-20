@@ -70,7 +70,7 @@
 | [ ] | P0 | `TASK-IMPL-010` | None | **CORE**: Decouple AI Logic from LangGraph Nodes — 16 subtasks, 4 phases, 29.5h | `backlogs/AI_AI_ML_INTELLIGENCE.md §3.1` |
 | [x] | P0 | `TASK-IMPL-010.1` | None | Create prompt templates registry (`analysis/domain/prompts.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/prompts.py with centralized domain prompt constants and no framework dependencies.` | TASK-IMPL-010 Phase 1 |
 | [x] | P0 | `TASK-IMPL-010.2` | None | Create document augmentation service (`analysis/domain/document_augmentation.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/document_augmentation.py with `DocumentAugmentationService` + `RiskItemConverter` domain services.` | TASK-IMPL-010 Phase 1 |
-| [x] | P0 | `TASK-IMPL-010.3` | None | Create critique evaluation service (`analysis/domain/critique_evaluation.py`) `[x] @2026-04-20 - Implemented pure-domain critique evaluator with injectable `skip_hitl`, retry/confidence routing logic, and no environment-variable coupling.` | TASK-IMPL-010 Phase 1 |
+| [ ] | P0 | `TASK-IMPL-010.3` | None | Create critique evaluation service (`analysis/domain/critique_evaluation.py`) | TASK-IMPL-010 Phase 1 |
 | [ ] | P1 | `TASK-IMPL-010.4` | None | Create report assembly services (`analysis/domain/report_assembly.py`) | TASK-IMPL-010 Phase 1 |
 | [ ] | P0 | `TASK-IMPL-010.5` | `.3` | Create Coherence Score™ extraction use case (`coherence/application/use_cases/score_from_extraction.py`) | TASK-IMPL-010 Phase 2 |
 | [ ] | P0 | `TASK-IMPL-010.6` | None | Create HITL graph routing use case (`modules/hitl/application/route_for_graph_review_use_case.py`) | TASK-IMPL-010 Phase 2 |
