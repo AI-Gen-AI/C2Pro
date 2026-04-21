@@ -40,7 +40,7 @@
 | [ ] | P2 | `TASK-INF-009` | Planned | Implement Procurement Plan flow with LangChain | Planning |
 | [ ] | P2 | `TASK-INF-010` | Planned | Implement RACI flow with LangChain | Planning |
 | [ ] | P2 | `TASK-INF-011` | Planned | Implement Stakeholder Resolution flow with LangChain | Planning |
-| [ ] | P3 | `TASK-INF-012` | None | Persist AI usage into `ai_usage_logs` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
+| [x] | P3 | `TASK-INF-012` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Added centralized usage logger + tenant trace ownership checks and trace metadata persistence used by AI tracing pipeline.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
 | [ ] | P3 | `TASK-INF-013` | Env Setup | A/B testing framework for prompt versions | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-INF-014` | None | Prompt optimization suggestions from usage metrics | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-INF-015` | None | Implement Flash/cache layer described in AI README | `apps/api/src/core/ai/README_FLASH.md` |
