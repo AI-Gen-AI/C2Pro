@@ -4,14 +4,14 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-21T20:02:50Z",
+  "updated_at": "2026-04-21T23:30:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
     "frontend": "completed",
     "ai": "in_progress",
     "infra": "in_progress",
-    "qa": "in_progress",
+    "qa": "completed",
     "reviewer": "completed",
     "security": null,
     "devops": null
@@ -571,6 +571,39 @@
           "Added subprocess regression coverage for plain import src.alerts.adapters.http.router from apps/api.",
           "Normalized internal alerts package imports from alerts.* to src.alerts.*.",
           "Verified that a plain import of src.main now succeeds from apps/api."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T066",
+      "backlog_id": "EPIC-LANGSMITH-VALIDATION",
+      "tipo": "qa",
+      "descripcion": "Implement TASK-AI-027/028/029 testing pyramid for LangSmith observability stack.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "Unit, integration, and Playwright E2E suites added with strict external SDK/API mocking boundaries.",
+      "archivos_modificados": [
+        "apps/api/tests/conftest.py",
+        "apps/api/tests/unit/core/ai/test_langsmith_validation_unit.py",
+        "apps/api/tests/integration/core/ai/test_langsmith_validation_integration.py",
+        "apps/web/src/tests/e2e/TASK-AI-029-ai-analytics-dashboard.spec.ts",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-21T23:00:00Z",
+        "completado": "2026-04-21T23:30:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "EPIC-LANGSMITH-VALIDATION completed with test pyramid coverage and mocked LangSmith boundaries.",
+        "cambios_realizados": [
+          "Added autouse fixture to globally mock langsmith.Client and langchain.hub.",
+          "Added unit + integration backend tests for decorator, feedback, analytics aggregation, and usage persistence.",
+          "Added Playwright E2E dashboard validation with deterministic analytics endpoint interception."
         ],
         "tests_pasados": true,
         "validacion_lint": false

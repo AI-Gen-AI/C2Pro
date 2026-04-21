@@ -128,6 +128,19 @@ from tests.support.seeded_identity_guard import assert_seeded_identity_isolation
 TEST_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYvDqLTMKKe"
 
 
+@pytest.fixture(autouse=True)
+def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
+    sdk_client = mock.MagicMock(name="langsmith_client")
+    langsmith_module = SimpleNamespace(Client=mock.MagicMock(return_value=sdk_client))
+    langchain_hub = mock.MagicMock(name="langchain_hub")
+    langchain_module = SimpleNamespace(hub=langchain_hub)
+
+    monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
+    monkeypatch.setitem(sys.modules, "langchain", langchain_module)
+    return SimpleNamespace(langsmith_client=sdk_client, langchain_hub=langchain_hub)
+
+
 def _iter_metadata_enum_types():
     """Yield unique PostgreSQL enum types declared in SQLAlchemy metadata."""
     seen: set[str] = set()
