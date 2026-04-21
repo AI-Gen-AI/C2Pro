@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-21T21:30:00+00:00",
+  "updated_at": "2026-04-21T22:00:00+00:00",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,45 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T065",
+      "backlog_id": "EPIC-DDD-MIGRATION",
+      "tipo": "backend",
+      "descripcion": "Enforce tenant-first port signatures for docs/stakeholders/procurement and finish DDD migration boundary hardening.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Ports require tenant_id and adapters/use-cases propagate tenant context.",
+      "archivos_modificados": [
+        "apps/api/src/core/tenants/types.py",
+        "apps/api/src/documents/ports/document_repository.py",
+        "apps/api/src/stakeholders/ports/stakeholder_repository.py",
+        "apps/api/src/stakeholders/adapters/persistence/sqlalchemy_stakeholder_repository.py",
+        "apps/api/src/stakeholders/application/list_project_stakeholders_use_case.py",
+        "apps/api/src/stakeholders/application/services/raci_generation_service.py",
+        "apps/api/src/stakeholders/adapters/http/router.py",
+        "apps/api/src/procurement/ports/wbs_repository.py",
+        "apps/api/src/procurement/ports/bom_repository.py",
+        "apps/api/src/procurement/ports/budget_repository.py",
+        "apps/api/src/procurement/adapters/persistence/wbs_repository.py",
+        "apps/api/src/procurement/application/use_cases/wbs_use_cases.py",
+        "C2PRO_MASTER_BACKLOG.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-21T22:00:00+00:00",
+        "completado": "2026-04-21T22:00:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "EPIC-DDD-MIGRATION boundary hardening delivered with tenant propagation enforcement and legacy schema status closed.",
+        "cambios_realizados": [
+          "Added tenant boundary type+guard.",
+          "Updated stakeholder/procurement/document repository ports to require tenant_id.",
+          "Propagated tenant_id in stakeholder/procurement use-case wiring."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
     {
       "tarea_id": "T064",
       "backlog_id": "EPIC-TENANT-RLS-HARDENING",
