@@ -5,10 +5,12 @@ from __future__ import annotations
 import functools
 import inspect
 import time
+from contextvars import ContextVar
 from typing import Any, Callable, ParamSpec, Protocol, TypeVar
 from uuid import uuid4
 
 from src.core.ai.langsmith_client import LangSmithClient
+from src.core.ai.usage_logger import AIUsageLogRecord
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -28,6 +30,9 @@ class _SpanClient(Protocol):
     def end_span(self, span: Any, outputs: dict[str, Any] | None = None) -> None: ...
 
 
+_TRACE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("trace_context", default=None)
+
+
 def _extract_span_client(call_args: tuple[Any, ...], call_kwargs: dict[str, Any]) -> _SpanClient | None:
     explicit = call_kwargs.get("langsmith_client")
     if explicit is not None:
@@ -39,6 +44,18 @@ def _extract_span_client(call_args: tuple[Any, ...], call_kwargs: dict[str, Any]
         if owner_client is not None:
             return owner_client
 
+    return None
+
+
+def _extract_usage_logger(call_args: tuple[Any, ...], call_kwargs: dict[str, Any]) -> Any | None:
+    explicit = call_kwargs.get("usage_logger")
+    if explicit is not None:
+        return explicit
+    if call_args:
+        owner = call_args[0]
+        owner_logger = getattr(owner, "usage_logger", None)
+        if owner_logger is not None:
+            return owner_logger
     return None
 
 
@@ -93,7 +110,26 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
         "tokens_output": usage.get("completion_tokens", 0),
         "tokens_total": usage.get("total_tokens", 0),
         "cost_usd": result.get("cost_usd", 0.0),
+        "operation": result.get("operation_type") or result.get("task_type"),
+        "cached": bool(result.get("cached", False)),
     }
+
+
+def _extract_trace_identifiers(span: Any, run_id: str | None = None) -> tuple[str | None, str | None]:
+    trace_id = run_id
+    trace_url = None
+    if isinstance(span, dict):
+        trace_id = trace_id or span.get("id") or span.get("run_id") or span.get("trace_id")
+        trace_url = span.get("url") or span.get("trace_url")
+    else:
+        trace_id = trace_id or getattr(span, "id", None) or getattr(span, "run_id", None)
+        trace_url = getattr(span, "url", None) or getattr(span, "trace_url", None)
+    return (str(trace_id) if trace_id else None, str(trace_url) if trace_url else None)
+
+
+def get_current_trace_context() -> dict[str, Any] | None:
+    """TS-AI-LANGSMITH-013: Returns the current trace context for in-flight LLM call."""
+    return _TRACE_CONTEXT.get()
 
 
 def traced_llm_call(
@@ -113,13 +149,16 @@ def traced_llm_call(
 
         async def _run_async(*args: P.args, **kwargs: P.kwargs) -> Any:
             span_client = _extract_span_client(args, kwargs)
+            usage_logger = _extract_usage_logger(args, kwargs)
             request_id = str(kwargs.get("request_id") or uuid4())
             tenant_id = _extract_tenant_id(kwargs)
             prompt = _extract_prompt(kwargs)
             model_name = _extract_model_name(kwargs)
             model_params = _extract_model_params(kwargs)
             span = None
+            run_id = None
             started_at = time.perf_counter()
+            token = _TRACE_CONTEXT.set(None)
 
             if resolved_client.enabled and span_client is not None:
                 tags = resolved_client.build_tags(
@@ -146,29 +185,53 @@ def traced_llm_call(
                     tags=tags,
                     metadata=metadata,
                 )
+                run_id = metadata.get("run_id")
 
             try:
-                result = await func(*args, **kwargs)
-            except Exception as exc:
+                try:
+                    result = await func(*args, **kwargs)
+                except Exception as exc:
+                    if span_client is not None and span is not None:
+                        latency_ms = int((time.perf_counter() - started_at) * 1000)
+                        span_client.end_span(
+                            span,
+                            outputs={
+                                "status": "error",
+                                "error": str(exc),
+                                "latency_ms": latency_ms,
+                            },
+                        )
+                    raise
+
                 if span_client is not None and span is not None:
-                    latency_ms = int((time.perf_counter() - started_at) * 1000)
-                    span_client.end_span(
-                        span,
-                        outputs={
-                            "status": "error",
-                            "error": str(exc),
-                            "latency_ms": latency_ms,
-                        },
-                    )
-                raise
-
-            if span_client is not None and span is not None:
-                usage_metrics = _extract_usage_metrics(result)
-                usage_metrics["model_name"] = _extract_model_name(kwargs, result)
-                usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
-                span_client.end_span(span, outputs={"status": "success", **usage_metrics})
-
-            return result
+                    usage_metrics = _extract_usage_metrics(result)
+                    usage_metrics["model_name"] = _extract_model_name(kwargs, result)
+                    usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
+                    span_client.end_span(span, outputs={"status": "success", **usage_metrics})
+                    trace_id, trace_url = _extract_trace_identifiers(span, run_id=run_id)
+                    _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
+                    tenant_uuid = kwargs.get("tenant_id")
+                    if usage_logger is not None and tenant_uuid is not None and trace_id:
+                        await usage_logger.log_success(
+                            AIUsageLogRecord(
+                                tenant_id=tenant_uuid,
+                                project_id=kwargs.get("project_id"),
+                                model=usage_metrics.get("model_name") or "unknown",
+                                operation=usage_metrics.get("operation") or task_type,
+                                input_tokens=int(usage_metrics.get("tokens_input", 0)),
+                                output_tokens=int(usage_metrics.get("tokens_output", 0)),
+                                cost_usd=float(usage_metrics.get("cost_usd", 0.0)),
+                                latency_ms=float(usage_metrics["latency_ms"]),
+                                cached=bool(usage_metrics.get("cached", False)),
+                                trace_id=trace_id,
+                                trace_url=trace_url,
+                                prompt_version=kwargs.get("prompt_version"),
+                                metadata={"request_id": request_id},
+                            )
+                        )
+                return result
+            finally:
+                _TRACE_CONTEXT.reset(token)
 
         def _run_sync(*args: P.args, **kwargs: P.kwargs) -> Any:
             span_client = _extract_span_client(args, kwargs)
@@ -226,6 +289,8 @@ def traced_llm_call(
                 usage_metrics["model_name"] = _extract_model_name(kwargs, result)
                 usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
                 span_client.end_span(span, outputs={"status": "success", **usage_metrics})
+                trace_id, trace_url = _extract_trace_identifiers(span)
+                _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
 
             return result
 
