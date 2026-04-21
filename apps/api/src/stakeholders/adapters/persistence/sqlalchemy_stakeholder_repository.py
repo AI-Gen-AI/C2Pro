@@ -118,7 +118,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             created_at=assignment.created_at,
         )
 
-    async def add(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
+    async def add(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
         if tenant_id is not None:
             proj_tenant = await self._get_project_tenant_id(stakeholder.project_id)
             if proj_tenant is None or proj_tenant != tenant_id:
@@ -126,7 +126,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         self.session.add(self._to_orm(stakeholder))
 
     async def get_by_id(
-        self, stakeholder_id: UUID, tenant_id: UUID | None = None
+        self, stakeholder_id: UUID, tenant_id: UUID
     ) -> Stakeholder | None:
         stmt = select(StakeholderORM).where(StakeholderORM.id == stakeholder_id)
         if tenant_id is not None:
@@ -150,9 +150,9 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def get_stakeholders_by_project(
         self,
         project_id: UUID,
+        tenant_id: UUID,
         skip: int = 0,
         limit: int = 100,
-        tenant_id: UUID | None = None,
     ) -> tuple[list[Stakeholder], int]:
         stmt = (
             select(StakeholderORM)
@@ -179,7 +179,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
 
         return [self._to_domain(item) for item in items], total_count
 
-    async def update(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
+    async def update(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
         orm = await self.session.get(StakeholderORM, stakeholder.id)
         if orm is None:
             return
@@ -204,7 +204,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.review_comment = stakeholder.review_comment
         orm.stakeholder_metadata = stakeholder.stakeholder_metadata
 
-    async def delete(self, stakeholder_id: UUID, tenant_id: UUID | None = None) -> None:
+    async def delete(self, stakeholder_id: UUID, tenant_id: UUID) -> None:
         orm = await self.get_by_id(stakeholder_id=stakeholder_id, tenant_id=tenant_id)
         if orm:
             orm = await self.session.get(StakeholderORM, orm.id)
@@ -212,7 +212,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
             await self.session.delete(orm)
 
     async def add_raci_assignment(
-        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+        self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
         if tenant_id is not None:
             proj_tenant = await self._get_project_tenant_id(assignment.project_id)
@@ -221,7 +221,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         self.session.add(self._to_raci_orm(assignment))
 
     async def list_raci_assignments(
-        self, project_id: UUID, tenant_id: UUID | None = None
+        self, project_id: UUID, tenant_id: UUID
     ) -> list[RaciAssignment]:
         stmt = select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
         if tenant_id is not None:
@@ -237,7 +237,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         project_id: UUID,
         wbs_item_id: UUID,
         stakeholder_id: UUID,
-        tenant_id: UUID | None = None,
+        tenant_id: UUID,
     ) -> RaciAssignment | None:
         stmt = select(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.project_id == project_id,
@@ -256,8 +256,8 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         self,
         project_id: UUID,
         wbs_item_id: UUID,
+        tenant_id: UUID,
         exclude_stakeholder_id: UUID | None = None,
-        tenant_id: UUID | None = None,
     ) -> RaciAssignment | None:
         stmt = select(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.project_id == project_id,
@@ -275,7 +275,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         return self._to_raci_domain(orm) if orm else None
 
     async def update_raci_assignment(
-        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+        self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
         orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
         if not orm:
