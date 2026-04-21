@@ -86,14 +86,12 @@
 
 > Only `[ ]` items are listed here. For completed task history, see [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md) or the category backlog files.
 
-### Backend (4 pending)
+### Backend (2 pending)
 
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
 | P2 | `TASK-BCK-032` | Backend | Add monitoring/metrics for workflow resumption (Prometheus/DataDog). |
 | P2 | `TASK-BCK-033` | Backend | Document HITL resume API in OpenAPI spec. |
-| P2 | `TASK-BCK-043` | Backend, DB | WBS integration tests misplaced in `tests/unit/` — move to `tests/integration/` or add DB-skip marker. |
-| P3 | `TASK-BCK-044` | Backend, Alerts | Flaky SLA calculator boundary test — freeze time with `freezegun`/`time_machine`. |
 
 ### Frontend (2 pending)
 
@@ -138,6 +136,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-04-21 | **EPIC-TEST-STABILIZATION partial close** — TASK-BCK-043 (relocated `test_wbs_node_repository.py` from `tests/unit/wbs/` to `tests/integration/wbs/`) and TASK-BCK-044 (added `freezegun==1.5.1`; froze time on `test_calculate_at_exact_due_time` boundary case) shipped on `claude/execute-backlog-task-kBOJ3`. Backend pending count: 4 → 2. |
 | 2026-04-21 | **Slim-master restructure** — Moved 132 completed rows and verbose history to `backlogs/COMPLETED.md`; fixed Quick Navigation table spacing; master now tracks pending-only + Restructured Manifest v3. |
 | 2026-04-21 | **Restructured Manifest v3 (Epic-Based)** — 130+ pending tasks consolidated into 15 dependency-ordered epics across 4 tiers; 3 foundational epics injected; 11 duplicate/orphan tasks pruned as WONT DO. See `blackboard/SESSION_2026-04-21_backlog_audit.md`. |
 | 2026-04-20 | **Backlog-drift reconciliation pass** — TASK-BCK-020/028/030, TASK-AI-007, TASK-1474/1479, TASK-EVAL-015 flipped to `[x]` with verification pointers. |
