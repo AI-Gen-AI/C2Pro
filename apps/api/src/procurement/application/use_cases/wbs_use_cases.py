@@ -50,7 +50,7 @@ class CreateWBSItemUseCase:
             if parent:
                 wbs_item.parent_code = parent.code
 
-        return await self.wbs_repository.create(wbs_item)
+        return await self.wbs_repository.create(wbs_item, tenant_id)
 
 
 class ListWBSItemsUseCase:

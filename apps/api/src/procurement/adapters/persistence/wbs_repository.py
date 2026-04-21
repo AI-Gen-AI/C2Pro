@@ -89,8 +89,10 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         if result.scalar_one_or_none() is None:
             raise PermissionError("Cannot create WBS items for project outside tenant")
 
-    async def create(self, wbs_item: WBSItem) -> WBSItem:
+    async def create(self, wbs_item: WBSItem, tenant_id: UUID | None = None) -> WBSItem:
         """Create a new WBS item."""
+        if tenant_id is not None:
+            await self._ensure_project_in_tenant(wbs_item.project_id, tenant_id)
         orm = self._domain_to_orm(wbs_item)
         self.session.add(orm)
         await self.session.flush()
@@ -314,4 +316,3 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             )
 
         return await self.bulk_create(wbs_items, tenant_id)
-

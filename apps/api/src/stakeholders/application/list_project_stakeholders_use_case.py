@@ -16,9 +16,13 @@ class ListProjectStakeholdersUseCase:
     async def execute(
         self,
         project_id: UUID,
+        tenant_id: UUID,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Stakeholder], int]:
         return await self.repository.get_stakeholders_by_project(
-            project_id=project_id, skip=skip, limit=limit
+            project_id=project_id,
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
         )

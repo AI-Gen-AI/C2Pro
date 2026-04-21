@@ -81,11 +81,14 @@ def get_delete_use_case(
 )
 async def list_project_stakeholders(
     project_id: UUID,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     _user_id: CurrentUserId,
     list_use_case: ListProjectStakeholdersUseCase = Depends(get_list_use_case),
 ) -> list[StakeholderResponseOut]:
-    stakeholders, _ = await list_use_case.execute(project_id=project_id)
+    stakeholders, _ = await list_use_case.execute(
+        project_id=project_id,
+        tenant_id=tenant_id,
+    )
     return [_to_response(stakeholder) for stakeholder in stakeholders]
 
 
