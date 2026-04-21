@@ -29,10 +29,14 @@ from src.analysis.adapters.graph.nodes_extended import (
     stakeholder_extractor_node,
 )
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 
 logger = structlog.get_logger()
 
 _graph_app = None
+
+# Stateless routing service — reused across all conditional-edge evaluations.
+_critique_evaluator = CritiqueEvaluationService()
 
 
 # ── Conditional edge: route after critique ──────────────────────────────────
@@ -44,22 +48,14 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
     "human_interrupt",
     "stakeholder_extractor",
 ]:
-    """Extended critique router — sends to N13/14 (HITL) or enrichment nodes."""
-    if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        return "stakeholder_extractor"
-
-    if state.get("human_approval_required"):
-        return "human_interrupt"
-    if state.get("critique_notes") and state.get("retry_count", 0) > 0:
-        retry_count = state["retry_count"]
-        if retry_count <= 2:
-            if state.get("doc_type") == "contract":
-                return "risk_extractor"
-            if state.get("doc_type") == "budget":
-                return "budget_parser"
-            return "wbs_extractor"
-    # Critique passed — proceed to enrichment pipeline
-    return "stakeholder_extractor"
+    """Thin conditional edge — delegates branching to CritiqueEvaluationService."""
+    return _critique_evaluator.determine_next_step(  # type: ignore[return-value]
+        human_approval_required=bool(state.get("human_approval_required")),
+        critique_notes=state.get("critique_notes", "") or "",
+        retry_count=int(state.get("retry_count", 0)),
+        doc_type=state.get("doc_type") or "",
+        skip_hitl=os.getenv("C2PRO_AI_MOCK", "0") == "1",
+    )
 
 
 # ── Graph builder ────────────────────────────────────────────────────────────
