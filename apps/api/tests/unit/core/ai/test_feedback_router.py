@@ -24,6 +24,9 @@ class _StubUsageLogger:
         self.calls.append((str(tenant_id), trace_id))
         return self._owns_trace
 
+    async def record_feedback(self, *, tenant_id, trace_id: str, score: float, comment: str | None) -> bool:
+        return self._owns_trace
+
 
 class _StubFeedbackClient:
     def __init__(self) -> None:

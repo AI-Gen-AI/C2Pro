@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from src.core.ai.usage_logger import AIUsageLogger
+from src.core.cache import get_cache_service
 from src.core.security import CurrentTenantId
 
 logger = structlog.get_logger()
@@ -52,6 +53,15 @@ def get_feedback_client() -> LangSmithFeedbackClient:
     return LangSmithFeedbackClient()
 
 
+async def _invalidate_analytics_cache(tenant_id: CurrentTenantId) -> None:
+    cache = get_cache_service()
+    if cache is None:
+        return
+    for timeframe in ("24h", "7d", "30d", "90d"):
+        for metric in ("cost", "versions", "quality-drift"):
+            await cache.delete(f"analytics:{tenant_id}:{metric}:{timeframe}:default")
+
+
 @router.post(
     "/feedback",
     response_model=FeedbackResponse,
@@ -79,6 +89,14 @@ async def submit_ai_feedback(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to submit feedback",
         ) from exc
+
+    await usage_logger.record_feedback(
+        tenant_id=tenant_id,
+        trace_id=payload.trace_id,
+        score=payload.score,
+        comment=payload.comment,
+    )
+    await _invalidate_analytics_cache(tenant_id)
 
     logger.info(
         "langsmith_feedback_submitted",
