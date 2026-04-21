@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -77,3 +78,29 @@ class AIUsageLogger:
             )
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
+
+    async def record_feedback(
+        self,
+        *,
+        tenant_id: UUID,
+        trace_id: str,
+        score: float,
+        comment: str | None,
+    ) -> bool:
+        async with get_session_with_tenant(tenant_id) as session:
+            stmt = select(AIUsageLogORM).where(
+                AIUsageLogORM.tenant_id == tenant_id,
+                AIUsageLogORM.trace_id == trace_id,
+            )
+            result = await session.execute(stmt)
+            record = result.scalars().first()
+            if record is None:
+                return False
+
+            metadata = dict(record.log_metadata or {})
+            metadata["feedback_score"] = score
+            if comment:
+                metadata["feedback_comment"] = comment
+            metadata["feedback_at"] = datetime.now(UTC).isoformat()
+            record.log_metadata = metadata
+            return True
