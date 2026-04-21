@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from freezegun import freeze_time
 
 from alerts.domain.services.sla_calculator import (
     CRITICAL_SLA,
@@ -152,13 +153,22 @@ class TestSLACalculatorCalculate:
         assert result.hours_remaining == -1
         assert result.is_overdue is True
 
+    @freeze_time("2026-04-08T12:00:00+00:00")
     def test_calculate_at_exact_due_time(self) -> None:
-        """Test calculation at exact SLA due time."""
-        created_at = datetime.now(UTC) - timedelta(hours=2)
-        
+        """Test calculation at exact SLA due time.
+
+        Time is frozen so that the calculator's internal `datetime.now(UTC)`
+        matches the test's reference instant exactly, eliminating microsecond
+        drift that previously caused intermittent `is_overdue=True` failures
+        on slow runners.
+        """
+        now = datetime.now(UTC)
+        created_at = now - timedelta(hours=2)
+
         result = SLACalculator.calculate("critical", created_at)
-        
+
         assert result.policy_name is not None
+        assert result.due_at == now
         assert result.hours_remaining == 0
         assert result.is_overdue is False
 
