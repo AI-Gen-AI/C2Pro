@@ -22,6 +22,16 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "record_cache_hit":      ("src.core.observability.monitoring", "record_cache_hit"),
     "record_cache_miss":     ("src.core.observability.monitoring", "record_cache_miss"),
     "METRICS_AVAILABLE":     ("src.core.observability.monitoring", "METRICS_AVAILABLE"),
+    # HITL (TASK-BCK-032)
+    "record_hitl_resume_attempt":         ("src.core.observability.monitoring", "record_hitl_resume_attempt"),
+    "record_hitl_resume_latency":         ("src.core.observability.monitoring", "record_hitl_resume_latency"),
+    "record_hitl_resume_error":           ("src.core.observability.monitoring", "record_hitl_resume_error"),
+    "record_hitl_checkpoint_load_error":  ("src.core.observability.monitoring", "record_hitl_checkpoint_load_error"),
+    "record_hitl_workflow_resume_error":  ("src.core.observability.monitoring", "record_hitl_workflow_resume_error"),
+    "record_hitl_decision":               ("src.core.observability.monitoring", "record_hitl_decision"),
+    "update_hitl_pending_gauge":          ("src.core.observability.monitoring", "update_hitl_pending_gauge"),
+    "update_hitl_total_gauge":            ("src.core.observability.monitoring", "update_hitl_total_gauge"),
+    "DATADOG_AVAILABLE":                  ("src.core.observability.monitoring", "DATADOG_AVAILABLE"),
     # Service
     "ObservabilityService":  ("src.core.observability.service", "ObservabilityService"),
     # Schemas

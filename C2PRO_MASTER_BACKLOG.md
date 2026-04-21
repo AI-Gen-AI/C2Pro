@@ -13,7 +13,7 @@
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 46 | 32 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 8 | 20 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 7 | 21 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
 | Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 163 | 26 | 137 |
@@ -86,11 +86,9 @@
 
 > Only `[ ]` items are listed here. For completed task history, see [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md) or the category backlog files.
 
-### Backend (1 pending)
+### Backend (0 pending)
 
-| Priority | Task ID | Depends On | Description |
-| -------- | ------- | ---------- | ----------- |
-| P2 | `TASK-BCK-032` | Backend | Add monitoring/metrics for workflow resumption (Prometheus/DataDog). |
+All backend tasks complete as of 2026-04-21. Future backend work will be tracked in the Manifest v3 epics or added here as it surfaces.
 
 ### Frontend (2 pending)
 
@@ -135,6 +133,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-04-21 | **TASK-BCK-032 complete** — HITL resume monitoring: added `c2pro_hitl_checkpoint_load_errors_total`, `c2pro_hitl_workflow_resume_errors_total`, `c2pro_hitl_decision_total`, and `c2pro_hitl_approval_rate` Prometheus metrics; feature-detected DataDog StatsD adapter (`c2pro.hitl.*`); tenant-scoped audit log event `hitl_decision_recorded`; runbook `docs/runbooks/HITL_RESUME_MONITORING.md` with PromQL dashboards + alert rules; 20 new unit tests in `apps/api/tests/unit/core/observability/test_hitl_metrics.py` and `apps/api/tests/unit/modules/hitl/test_resume_workflow_metrics.py`. Backend pending count: 1 → 0. |
 | 2026-04-21 | **TASK-BCK-033 complete** — OpenAPI contract for `POST /api/v1/hitl/resume/{review_id}` now includes explicit operationId, request/response examples, and enum-constrained decision schema (`approve`/`reject`), with coverage in `apps/api/tests/core/test_hitl_resume_openapi.py`. Backend pending count: 2 → 1. |
 | 2026-04-21 | **EPIC-TEST-STABILIZATION partial close** — TASK-BCK-043 (relocated `test_wbs_node_repository.py` from `tests/unit/wbs/` to `tests/integration/wbs/`) and TASK-BCK-044 (added `freezegun==1.5.1`; froze time on `test_calculate_at_exact_due_time` boundary case) shipped on `claude/execute-backlog-task-kBOJ3`. Backend pending count: 4 → 2. |
 | 2026-04-21 | **Slim-master restructure** — Moved 132 completed rows and verbose history to `backlogs/COMPLETED.md`; fixed Quick Navigation table spacing; master now tracks pending-only + Restructured Manifest v3. |
