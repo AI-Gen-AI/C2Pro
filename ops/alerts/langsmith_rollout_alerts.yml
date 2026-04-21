@@ -1,0 +1,37 @@
+groups:
+  - name: langsmith-rollout-slo
+    interval: 30s
+    rules:
+      - alert: LangSmithTraceFailureRateHigh
+        expr: |
+          (
+            sum(rate(c2pro_langsmith_trace_failures_total[5m]))
+            /
+            clamp_min(sum(rate(c2pro_langsmith_trace_attempts_total[5m])), 1)
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: sre
+          epic: EPIC-LANGSMITH-ROLLOUT
+        annotations:
+          summary: "LangSmith trace failure rate >1% over 5m"
+          description: "Tracing failures exceed 1% for 5 minutes during rollout. Set LANGSMITH_ROLLOUT_PERCENTAGE=0 and investigate LangSmith/API dependencies."
+
+      - alert: AIP99LatencyRegression300ms
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(c2pro_ai_request_duration_seconds_bucket[5m])) by (le)
+          )
+          -
+          avg_over_time(c2pro_ai_request_p99_baseline_seconds[30m])
+          > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          team: sre
+          epic: EPIC-LANGSMITH-ROLLOUT
+        annotations:
+          summary: "P99 endpoint latency regression >300ms"
+          description: "P99 latency is more than 300ms above baseline for 5 minutes. Roll back LangSmith rollout percentage and validate downstream API saturation."
