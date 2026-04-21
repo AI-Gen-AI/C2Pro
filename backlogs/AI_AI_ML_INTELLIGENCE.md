@@ -41,9 +41,9 @@
 | [ ] | P2 | `TASK-AI-010` | `TASK-216` | Add prompt metadata to LangSmith Hub (owner, description, tags) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-011` | `TASK-216` | Implement A/B test config in LangSmith Hub for gradual rollout | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [x] | P1 | `TASK-AI-012` | `TASK-216` | Enhance `@traced_llm_call` decorator to capture input prompt, model params, output, tokens, cost, latency `[x] @2026-04-20 - Extended decorator span payloads to capture prompt/model inputs, emitted output + token/cost metrics on completion, and added latency_ms for success/error paths with dedicated unit coverage.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [ ] | P1 | `TASK-AI-013` | `TASK-216` | Integrate tracing with existing `usage_logger.py` to write both LangSmith trace and local DB row with trace_id | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [ ] | P2 | `TASK-AI-014` | `TASK-216` | Implement feedback collection API `POST /api/v1/ai/feedback` for user thumbs up/down | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [ ] | P2 | `TASK-AI-015` | `TASK-216` | Add trace URL to `ai_usage_logs` for debugging deep-links | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
+| [x] | P1 | `TASK-AI-013` | `TASK-216` | Integrate tracing with existing `usage_logger.py` to write both LangSmith trace and local DB row with trace_id `[x] @2026-04-21 - Added `AIUsageLogger` and wired `@traced_llm_call` to persist successful run trace_id/trace_url metadata into `ai_usage_logs` with tenant-scoped ownership checks.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
+| [x] | P2 | `TASK-AI-014` | `TASK-216` | Implement feedback collection API `POST /api/v1/ai/feedback` for user thumbs up/down `[x] @2026-04-21 - Added `POST /api/v1/ai/feedback` with payload validation plus LangSmith `create_feedback` submission flow.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
+| [x] | P2 | `TASK-AI-015` | `TASK-216` | Add trace URL to `ai_usage_logs` for debugging deep-links `[x] @2026-04-21 - Usage persistence now records trace_url alongside trace_id for deep-link debugging.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
 | [ ] | P1 | `TASK-AI-016` | `TASK-216` | Implement `GET /api/v1/ai/analytics/versions` to list all prompt versions with stats | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
 | [ ] | P1 | `TASK-AI-017` | `TASK-216` | Implement `GET /api/v1/ai/analytics/comparison` to compare two prompt versions | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
 | [ ] | P1 | `TASK-AI-018` | `TASK-216` | Implement `GET /api/v1/ai/analytics/cost-breakdown` for cost by version & model | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
@@ -89,7 +89,7 @@
 | [ ] | P2 | `TASK-AI-041` | Planned | Implement Procurement Plan flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-042` | Planned | Implement RACI flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-043` | Planned | Implement Stakeholder Resolution flow with LangChain | Planning |
-| [ ] | P3 | `TASK-AI-044` | None | Persist AI usage into `ai_usage_logs` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
+| [x] | P3 | `TASK-AI-044` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Refactored to centralized `AIUsageLogger` persistence path used by service and traced decorator for successful calls.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
 | [ ] | P3 | `TASK-AI-045` | Env Setup | A/B testing framework for prompt versions | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-AI-046` | None | Prompt optimization suggestions from usage metrics | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-AI-047` | None | Implement Flash/cache layer described in AI README | `apps/api/src/core/ai/README_FLASH.md` |

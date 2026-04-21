@@ -37,12 +37,11 @@ from src.core.ai.model_router import (
     TaskType,
     get_model_router,
 )
-from src.core.ai.models import AIUsageLogORM
+from src.core.ai.usage_logger import AIUsageLogRecord, AIUsageLogger
 from src.core.ai.prompt_cache import (
     get_prompt_cache_service,
 )
 from src.core.cache import get_cache_service
-from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
 
 logger = structlog.get_logger()
@@ -167,6 +166,7 @@ class AIService:
             self.wrapper = get_anthropic_wrapper()
         else:
             self.wrapper = wrapper
+        self.usage_logger = AIUsageLogger()
 
         logger.info(
             "ai_service_initialized",
@@ -416,6 +416,8 @@ class AIService:
             cost_usd=actual_cost,
             cached=False,
             latency_ms=round(execution_time_ms, 2),
+            trace_id=None,
+            trace_url=None,
         )
 
         return AIResponse(
@@ -519,6 +521,8 @@ class AIService:
         cost_usd: float,
         cached: bool,
         latency_ms: float,
+        trace_id: str | None = None,
+        trace_url: str | None = None,
     ) -> None:
         """Persist AI usage to ai_usage_logs table. Fire-and-forget; errors are logged, not raised."""
         if tenant_id is None:
@@ -526,34 +530,22 @@ class AIService:
             return
 
         operation_str = operation.value if isinstance(operation, TaskType) else str(operation)
-        total_tokens = input_tokens + output_tokens
-
-        try:
-            async with get_session_with_tenant(tenant_id) as session:
-                log_entry = AIUsageLogORM(
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    model_name=model,
-                    operation_type=operation_str,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    total_tokens=total_tokens,
-                    estimated_cost=cost_usd,
-                    duration_ms=round(latency_ms),
-                    status="cached" if cached else "success",
-                    log_metadata={
-                        "prompt_version": prompt_version,
-                        "cached": cached,
-                    },
-                )
-                session.add(log_entry)
-        except Exception:
-            logger.exception(
-                "ai_usage_log_save_failed",
-                tenant_id=str(tenant_id),
+        await self.usage_logger.log_success(
+            AIUsageLogRecord(
+                tenant_id=tenant_id,
+                project_id=project_id,
                 model=model,
                 operation=operation_str,
+                prompt_version=prompt_version,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost_usd,
+                cached=cached,
+                latency_ms=latency_ms,
+                trace_id=trace_id,
+                trace_url=trace_url,
             )
+        )
 
     def _parse_json_response(self, raw: str) -> Any:
         """

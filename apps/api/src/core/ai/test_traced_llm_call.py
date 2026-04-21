@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 import asyncio
 import time
@@ -10,7 +11,7 @@ import time
 import pytest
 
 from src.core.ai.langsmith_client import LangSmithClient
-from src.core.ai.traced_llm_call import traced_llm_call
+from src.core.ai.traced_llm_call import get_current_trace_context, traced_llm_call
 
 
 class _RecordingSpanClient:
@@ -36,6 +37,14 @@ class _RecordingSpanClient:
 
     def end_span(self, span: Any, outputs: dict[str, Any] | None = None) -> None:
         self.end_calls.append({"span": span, "outputs": outputs})
+
+
+class _RecordingUsageLogger:
+    def __init__(self) -> None:
+        self.records: list[Any] = []
+
+    async def log_success(self, record: Any) -> None:
+        self.records.append(record)
 
 
 def test_traced_llm_call_records_successful_async_span(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,3 +161,45 @@ def test_traced_llm_call_captures_prompt_model_usage_and_latency(monkeypatch: py
     assert end_call["cost_usd"] == 0.0042
     assert isinstance(end_call["latency_ms"], int)
     assert end_call["latency_ms"] >= 1
+
+
+def test_traced_llm_call_persists_trace_to_usage_logger(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LANGSMITH_API_KEY", "unit-test-key")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+
+    span_client = _RecordingSpanClient()
+    usage_logger = _RecordingUsageLogger()
+    langsmith_wrapper = LangSmithClient(project_name="c2pro-test")
+    tenant_id = uuid4()
+
+    @traced_llm_call(task_type="coherence", client=langsmith_wrapper)
+    async def _evaluate(
+        *,
+        tenant_id: Any,
+        prompt_version: str,
+        langsmith_client: _RecordingSpanClient,
+        usage_logger: _RecordingUsageLogger,
+    ) -> dict[str, Any]:
+        return {
+            "output": "analysis completed",
+            "usage": {"prompt_tokens": 11, "completion_tokens": 4, "total_tokens": 15},
+            "model_name": "claude-sonnet-4",
+            "cost_usd": 0.001,
+            "operation_type": "coherence",
+        }
+
+    asyncio.run(
+        _evaluate(
+            tenant_id=tenant_id,
+            prompt_version="v1",
+            langsmith_client=span_client,
+            usage_logger=usage_logger,
+        ),
+    )
+
+    assert usage_logger.records
+    record = usage_logger.records[0]
+    assert record.tenant_id == tenant_id
+    assert record.trace_id == "span-1"
+    assert record.operation == "coherence"
+    assert get_current_trace_context() is None
