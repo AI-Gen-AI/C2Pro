@@ -91,6 +91,7 @@ factory-boy==3.3.0
 Faker==40.1.0  # For factory-boy
 docker>=7.0.0  # Required by testcontainers-backed persistence tests
 testcontainers>=4.14.0  # PostgreSQL integration tests
+freezegun==1.5.1  # Deterministic time control for boundary-sensitive tests
 
 # Linting & Formatting
 ruff==0.2.1
