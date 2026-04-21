@@ -1,7 +1,7 @@
 # C2PRO Master Backlog - Index & Overview
 
 **Purpose**: High-level project overview, pending tasks by category, and cross-category coordination
-**Last Updated**: 2026-04-07 (v2 - Architecture Sprint added)
+**Last Updated**: 2026-04-21 (v3 — Epic-Based Restructure, see §Restructured Manifest v3)
 
 > **Navigation Guide**:
 >
@@ -288,10 +288,68 @@ All DevOps tasks completed! 🎉
 
 ---
 
+## Restructured Manifest v3 (Epic-Based, 2026-04-21)
+
+> Ordered strictly by **architectural dependency** first, **business value** second.
+> Session record: `blackboard/SESSION_2026-04-21_backlog_audit.md`.
+> Merged/pruned tasks retain their original IDs in their category backlog; this manifest is the authoritative execution order.
+
+### Tier 0 — Foundation (blockers for every downstream feature)
+
+| Task ID | Title | Type | Priority | Blocking Dependencies | Technical Strategy |
+| ------- | ----- | ---- | -------- | --------------------- | ------------------ |
+| `EPIC-TENANT-RLS-HARDENING` | Multi-tenant RLS + credential hygiene | Architecture | P0-Critical | — | Ship Alembic migration adding RLS policies to `clause_embeddings`, close remaining SEC-009..011 gaps, and unblock `TASK-FRT-045` by coordinating Clerk credential rotation through the approved secret channel. |
+| `EPIC-CORE-DECOUPLE` | Decouple AI logic from LangGraph nodes (TASK-IMPL-010 + 14 subtasks) | Refactor | P0-Critical | — | Execute Phases 1–4 of TASK-IMPL-010 in order (critique/assembly/coherence domain services → use cases → node delegations → workflow edge → cleanup + 80% coverage gate). |
+
+### Tier 1 — Architectural Refactor (prerequisite for workflow features)
+
+| Task ID | Title | Type | Priority | Blocking Dependencies | Technical Strategy |
+| ------- | ----- | ---- | -------- | --------------------- | ------------------ |
+| `EPIC-DDD-MIGRATION` | Finish hexagonal refactor of documents/stakeholders/procurement (TASK-DDD-004/005/006) | Refactor | P1-High | `EPIC-CORE-DECOUPLE` | Complete router/service migration for each remaining bounded context, delete legacy `schemas.py` shims, and enforce tenant propagation in every port; gate merge on contract-test parity. |
+
+### Tier 2 — Build on Stabilized Base
+
+| Task ID | Title | Type | Priority | Blocking Dependencies | Technical Strategy |
+| ------- | ----- | ---- | -------- | --------------------- | ------------------ |
+| `EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (TASK-AI-003/010/011) | Feature | P1-High | `EPIC-CORE-DECOUPLE` | Provision LangSmith org + API keys per env, register prompt metadata/tags, and configure A/B experiment scaffolding in Hub before any runtime tracing is enabled. |
+| `EPIC-LANGSMITH-PHASE-2` | Tracing instrumentation + ai_usage_logs integration (TASK-AI-013/014/015, TASK-AI-044/INF-012) | Feature | P1-High | `EPIC-LANGSMITH-PHASE-1` | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, and expose feedback `POST /api/v1/ai/feedback`; cover with mock-SDK unit tests. |
+| `EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (TASK-AI-016..026, TASK-AI-046/INF-014) | Feature | P1-High | `EPIC-LANGSMITH-PHASE-2` | Implement `/api/v1/ai/analytics/*` endpoints with Redis cache, build `PromptAnalyticsDashboard` + Version/Cost/Drift components, and deep-link traces from AI usage logs page. |
+| `EPIC-LANGSMITH-VALIDATION` | Test suite for LangSmith (TASK-AI-027/028/029) | Feature | P1-High | `EPIC-LANGSMITH-ANALYTICS` | Unit-mock the SDK, integrate with test DB + mocked LangSmith, and add Playwright E2E for the dashboard before rollout. |
+| `EPIC-LANGSMITH-ROLLOUT` | Load test, staging verification, gradual rollout, monitoring, docs (TASK-AI-030..034, TASK-AI-045/INF-013) | Feature | P1-High | `EPIC-LANGSMITH-VALIDATION` | Load-test 10k calls/day, deploy to staging, 10→50→100% rollout, alerting on trace-failure/latency, and publish data-scientist/PM usage guide. |
+| `EPIC-LC-WORKFLOWS` | Procurement Plan + RACI + Stakeholder Resolution LangChain flows with EN/ES prompts (TASK-AI-040..043, TASK-INF-008..011, TASK-FRT-124..127) | Feature | P2-Medium | `EPIC-DDD-MIGRATION`, `EPIC-LANGSMITH-PHASE-2` | Deliver three LangChain flows against refactored hexagonal bounded contexts, with EN/ES template pairs loaded from PromptRegistry and traced end-to-end in LangSmith. |
+| `EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL workflow resumption (TASK-BCK-032/033) | Feature | P2-Medium | `EPIC-CORE-DECOUPLE` | Emit Prometheus/DataDog counters/histograms from `ResumeWorkflowUseCase` and publish the `/hitl/resume/{id}` contract in the generated OpenAPI spec. |
+| `EPIC-DLQ-ADMIN` | DLQ admin endpoints (TASK-BCK-042) | Feature | P2-Medium | `EPIC-CORE-DECOUPLE` | Add `GET /admin/dlq` and `POST /admin/dlq/{id}/retry` against the existing DLQService, gate on admin scope, and add contract tests. |
+| `TASK-1481` | Supervisor API key wiring (Claude/Codex/Gemini) | Feature | P1-High | — | Provision API keys in the secret store, verify `shlex.split` command parsing + models.yaml CLI syntax, and prove end-to-end auto-mode orchestration with a green integration run. |
+
+### Tier 3 — Stabilization & Debt
+
+| Task ID | Title | Type | Priority | Blocking Dependencies | Technical Strategy |
+| ------- | ----- | ---- | -------- | --------------------- | ------------------ |
+| `EPIC-TEST-STABILIZATION` | WBS misplacement + flaky SLA + React act() + alerts/evidence flakiness (TASK-BCK-043/044, TASK-QA-077, TASK-1480) | Bug | P2-Medium | `EPIC-DDD-MIGRATION` | Relocate WBS integration tests out of `tests/unit/` (or guard with DB-availability skip), freeze time in the SLA boundary test, and wrap React state updates in `act()` with raised timeouts. |
+| `EPIC-QA-CONTRACT-COVERAGE` | Contract testing suite + wireframe TCs + quality-gate reports (TASK-QA-028/034/050..064/069/070/084..095) | Refactor | P2-Medium | `EPIC-DDD-MIGRATION` | Re-plan the 20+ stub QA tasks into a single contract-test deliverable: pick toolchain (schemathesis/pact), author per-module specs, migrate DB bootstrap, and publish the quality-gate report pipeline. |
+| `EPIC-COVERAGE-GATES` | Coverage improvement + regression proof (merged AI-048..051 / INF-016..019 / FRT-132..135) | Feature | P3-Low | `EPIC-QA-CONTRACT-COVERAGE` | Target 70% module coverage, add the documented coverage-plan tests, and prove zero regression against the current suite. |
+| `EPIC-SENTRY-PERF` | Sentry auth monitoring + perf benchmarks (TASK-INF-055/056) | Feature | P3-Low | `EPIC-TENANT-RLS-HARDENING` | Wire Sentry alerts for auth-failure patterns and codify the performance-benchmark harness + baselines. |
+| `EPIC-AI-CACHE` | Flash/cache layer for AI (TASK-AI-047/INF-015) | Feature | P3-Low | `EPIC-LANGSMITH-ROLLOUT` | Implement the README_FLASH cache layer on the Claude wrapper, with hit-rate metrics fed into LangSmith for A/B attribution. |
+| `TASK-FRT-041` | Clerk production email templates | Feature | P3-Low | `EPIC-TENANT-RLS-HARDENING` | BLOCKED on Clerk operator access; close by following `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md` once credentials rotate. |
+
+### Pruned — [STATUS: WONT DO]
+| Task ID | Single-sentence justification |
+| ------- | ----------------------------- |
+| `TASK-AI-038` | Duplicate of completed `TASK-INF-006`; MCP naming convention already documented. |
+| `TASK-BCK-040` | Superseded by `TASK-QA-072` Phase 1 (2692→82); no new scope. |
+| `TASK-BCK-041` | Superseded by completed `TASK-ARCH-002`/`TASK-LINT-002` — 0 confirmed security bugs. |
+| `TASK-QA-100` / `TASK-QA-101` | Orphan IDs — no specification in source backlog. |
+| `TASK-INF-049` / `TASK-INF-050` / `TASK-INF-051` | Duplicate execution lanes of completed `TASK-DDD-004/005/006`. |
+| `TASK-AI-039` / `TASK-INF-007` | Prompt-template validator already shipped @2026-04-09 via `TASK-FRT-123`. |
+| `TASK-FRT-091` | Master already marks `[x]`; status drift in detail file only. |
+
+---
+
 ## Change Log
 
 | Date       | Major Milestone                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-21 | **Restructured Manifest v3 (Epic-Based)** — Autonomous Principal-Architect audit consolidated 130+ pending tasks into 15 dependency-ordered epics across 4 tiers. Injected 3 new foundational epics (`EPIC-TENANT-RLS-HARDENING`, `EPIC-CORE-DECOUPLE`, `EPIC-DDD-MIGRATION`). Merged AI/INF/FRT triplicated tasks (Procurement/RACI/Stakeholder workflows, coverage gates, prompt tooling) into `EPIC-LC-WORKFLOWS` + `EPIC-COVERAGE-GATES`. Pruned 11 duplicate/orphan/superseded tasks as `[STATUS: WONT DO]` (TASK-AI-038, TASK-BCK-040/041, TASK-QA-100/101, TASK-INF-049/050/051, TASK-AI-039, TASK-INF-007, TASK-FRT-091). Verified dependency graph is acyclic. See `blackboard/SESSION_2026-04-21_backlog_audit.md` for full decision log. |
 | 2026-04-20 | **TASK-BCK-028 reconciled** — Master backlog drift corrected: the 8-test E2E suite `apps/api/tests/e2e/flows/test_document_analysis_pipeline_e2e.py` (delivered 2026-04-20) was already authored and collects cleanly, but the master backlog entry still showed `[ ]`. Status flipped to `[x]` with verification pointer to the 8 tests (contract/budget/schedule happy paths, HITL queue contract, alert discriminator, re-upload, concurrency, coherence dashboard). |
 | 2026-04-20 | **TASK-1474 + TASK-1479 reconciled** — Both Cross-Category tasks were satisfied months ago but left `[ ]` in the master backlog. TASK-1474 (Audit Logs Realignment) was completed by TASK-QA-071 (2026-04-06, "Synced AuditLogORM. Gate 4 tests passing 12/12"). TASK-1479 (Test Registry Stabilization) was completed by TASK-QA-076 (2026-04-06, "Added AuditLogORM and AIUsageLogORM imports"). Verified apps/api/tests/conftest.py imports `src.core.ai.models` (line 106) and `src.core.security.adapters.persistence.models` (line 110), registering both ORMs to Base.metadata; apps/api/tests/verification/test_gate4_traceability.py declares 12 Gate 4 tests. Both flipped to `[x]`. |
 | 2026-04-20 | **TASK-BCK-020 reconciled** — Backend task "Reconcile document adapter contract quality issues" was satisfied on 2026-03-28 per `docs/TEST_COVERAGE_ISSUES_REPORT.md` (Resolution Status: "All TDD drift issues have been resolved"), but the backlog status remained `[ ]`. Verified fixes in the current tree: `get_file_path` method (local_file_storage_service.py:71), `ClauseCategory = ClauseType` alias (documents/domain/models.py:53), `CompositeFileParser.create()` factory (composite_file_parser.py:29), plus RAG service contract methods (`ingest_document_chunks`, `answer_question`). Status flipped to `[x]`. |
