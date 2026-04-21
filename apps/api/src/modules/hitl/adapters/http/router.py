@@ -280,6 +280,7 @@ async def check_and_escalate(
 # TASK-BCK-024: Resume workflow after HITL approval/rejection
 @router.post(
     "/resume/{review_id}",
+    operation_id="resumeHitlWorkflow",
     response_model=ResumeWorkflowResponse,
     status_code=status.HTTP_200_OK,
     summary="Resume workflow after HITL approval/rejection",
@@ -304,12 +305,61 @@ async def check_and_escalate(
     - `c2pro_hitl_resume_errors_total` - Errors by type
     """,
     responses={
-        200: {"description": "Workflow resume operation completed successfully"},
+        200: {
+            "description": "Workflow resume operation completed successfully",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approved": {
+                            "summary": "Workflow resumed after approval",
+                            "value": {
+                                "review_id": "45cc5455-8770-4949-9fb2-9a9426851c20",
+                                "status": "resumed",
+                                "message": "Workflow resumed with feedback: Approved by PM reviewer",
+                            },
+                        },
+                        "rejected": {
+                            "summary": "Workflow terminated after rejection",
+                            "value": {
+                                "review_id": "45cc5455-8770-4949-9fb2-9a9426851c20",
+                                "status": "rejected",
+                                "message": "Workflow rejected with feedback: Rejected - requires legal review",
+                            },
+                        },
+                    }
+                }
+            },
+        },
         400: {"description": "Invalid request - review item not pending or missing checkpoint data"},
         404: {"description": "Review item not found"},
         422: {"description": "Validation error - invalid decision value or feedback too long"},
     },
     tags=["HITL", "Workflow"],
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approve": {
+                            "summary": "Approve and resume workflow",
+                            "value": {
+                                "decision": "approve",
+                                "feedback": "Approved by PM reviewer",
+                            },
+                        },
+                        "reject": {
+                            "summary": "Reject and terminate workflow",
+                            "value": {
+                                "decision": "reject",
+                                "feedback": "Rejected - legal clause is ambiguous",
+                            },
+                        },
+                    }
+                }
+            },
+        }
+    },
 )
 async def resume_workflow(
     review_id: UUID,

@@ -13,13 +13,13 @@ u# Backend Tasks & Knowledge Base
 
 ## 0. Status View
 
-**Pending Tasks**: 8
+**Pending Tasks**: 7
 
-- IDs: `TASK-BCK-020`, `TASK-BCK-032`-`TASK-BCK-033`, `TASK-BCK-040`-`TASK-BCK-044`
+- IDs: `TASK-BCK-020`, `TASK-BCK-032`, `TASK-BCK-040`-`TASK-BCK-044`
 
-**Completed Tasks**: 41
+**Completed Tasks**: 42
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-035`-`TASK-BCK-049`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-049`
 
 **Usage Note**:
 
@@ -62,7 +62,7 @@ u# Backend Tasks & Knowledge Base
 | [x]    | P1       | `TASK-BCK-030` | QA                         | Set up authenticated test fixtures for HITL resume tests (GREEN phase) `[x] Implementation Complete (authenticated_client fixture, 22 tests updated, documentation created) - Verification blocked by TASK-BCK-035`                                                                                                                                       | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     | **COMPLETED** 2026-04-06 (verification blocked)  |
 | [x]    | P0       | `TASK-BCK-031` | AI                         | Implement LangGraph checkpoint restoration for HITL resume workflow `[x] Implementation Complete (CheckpointService, state injection, workflow resumption, unit tests)`                                                                                                                                                                                   | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     | **COMPLETED** 2026-04-06                         |
 | [ ]    | P2       | `TASK-BCK-032` | Backend                    | Add monitoring/metrics for workflow resumption (Prometheus/DataDog)                                                                                                                                                                                                                                                                                       | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
-| [ ]    | P2       | `TASK-BCK-033` | Backend                    | Document HITL resume API in OpenAPI spec                                                                                                                                                                                                                                                                                                                  | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
+| [x]    | P2       | `TASK-BCK-033` | Backend                    | Document HITL resume API in OpenAPI spec `[x] @2026-04-21 - Added explicit OpenAPI operationId and request/response examples for POST /api/v1/hitl/resume/{review_id}; enforced decision enum (approve/reject) in schema; added OpenAPI contract test coverage.`                                                                                                                                                                                                               | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
 | [x]    | P0       | `TASK-BCK-035` | Backend, Blocker           | **CRITICAL BUG**: Fix duplicate index definition in Alert model causing `DuplicateTableError: relation "ix_alerts_alert_type" already exists` `[x] FIXED - Removed redundant Index declaration from __table_args__ L265, kept index=True on column L180. Tests now initialize successfully.` Linked: TASK-QA-098.                                         | QA Leader report (2026-04-06)                                                                                                                                           | **COMPLETED** 2026-04-06                         |
 | [x]    | P1       | `TASK-BCK-036` | QA Support                 | Fix syntax error in `src/core/observability/monitoring.py:175` preventing mypy and monitoring service from loading. `[x] @2026-04-06 - Fixed malformed type annotation comment. Changed '# usage_type: input/output' to '# usage_type can be input or output'. Mypy now passes.`                                                                          | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T001                                  |
 | [x]    | P1       | `TASK-BCK-037` | QA Support, `TASK-BCK-036` | Update `apps/api/tests/conftest.py` to import all security models (AuditLogORM, AIUsageLogORM) for proper test DB initialization `[x] @2026-04-06 - Added AuditLogORM and AIUsageLogORM imports. All security models now registered.`                                                                                                                     | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T002                                  |
@@ -82,8 +82,8 @@ u# Backend Tasks & Knowledge Base
 **Statistics**:
 
 - Total: 49 tasks
-- Active: 8 (17.8%)
-- Completed: 41 (83.7%)
+- Active: 7 (14.3%)
+- Completed: 42 (85.7%)
 - Blocked: 0
 
 ---
