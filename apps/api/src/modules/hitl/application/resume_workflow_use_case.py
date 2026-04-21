@@ -14,9 +14,11 @@ from uuid import UUID
 import structlog
 
 from src.core.observability.monitoring import (
+    record_hitl_checkpoint_load_error,
     record_hitl_resume_attempt,
     record_hitl_resume_error,
     record_hitl_resume_latency,
+    record_hitl_workflow_resume_error,
 )
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
@@ -189,6 +191,7 @@ class ResumeWorkflowUseCase:
 
             if not checkpoint:
                 record_hitl_resume_error("checkpoint_not_found")
+                record_hitl_checkpoint_load_error("not_found")
                 raise ValueError(self._ERR_CHECKPOINT_NOT_FOUND.format(thread_id=thread_id))
 
             # 5. Extract and update state with human feedback (TASK-BCK-031)
@@ -269,14 +272,25 @@ class ResumeWorkflowUseCase:
                     exc_info=True,
                 )
                 record_hitl_resume_error("workflow_error")
+                record_hitl_workflow_resume_error(decision)
                 # Don't fail the entire operation if workflow resumption fails
                 # The review item is already updated, so the decision is recorded
                 status_message = f"{status_message}_with_errors"
 
-            # Record success metrics
+            # Record success metrics + audit event
             duration = time.perf_counter() - start_time
             record_hitl_resume_attempt(decision, status_message)
             record_hitl_resume_latency(decision, duration)
+
+            logger.info(
+                "hitl_decision_recorded",
+                review_id=str(review_id),
+                thread_id=thread_id,
+                decision=decision,
+                status=status_message,
+                latency_seconds=round(duration, 4),
+                feedback_length=len(request.feedback),
+            )
 
             return ResumeWorkflowResponse(
                 review_id=review_id,

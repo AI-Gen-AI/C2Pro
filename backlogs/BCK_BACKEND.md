@@ -13,13 +13,13 @@ u# Backend Tasks & Knowledge Base
 
 ## 0. Status View
 
-**Pending Tasks**: 7
+**Pending Tasks**: 6
 
-- IDs: `TASK-BCK-020`, `TASK-BCK-032`, `TASK-BCK-040`-`TASK-BCK-044`
+- IDs: `TASK-BCK-020`, `TASK-BCK-040`-`TASK-BCK-044`
 
-**Completed Tasks**: 42
+**Completed Tasks**: 43
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-031`, `TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-049`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-049`
 
 **Usage Note**:
 
@@ -61,7 +61,7 @@ u# Backend Tasks & Knowledge Base
 | [x]    | P0       | `TASK-BCK-029` | Backend                    | WBS API Endpoint with nested set model (TDD) `[x] Implementation Complete (Repository, Use Cases, API endpoints, Unit Tests)`                                                                                                                                                                                                                             | Frontend Priority Session (2026-04-05)                                                                                                                                  | **COMPLETED** 2026-04-06                         |
 | [x]    | P1       | `TASK-BCK-030` | QA                         | Set up authenticated test fixtures for HITL resume tests (GREEN phase) `[x] Implementation Complete (authenticated_client fixture, 22 tests updated, documentation created) - Verification blocked by TASK-BCK-035`                                                                                                                                       | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     | **COMPLETED** 2026-04-06 (verification blocked)  |
 | [x]    | P0       | `TASK-BCK-031` | AI                         | Implement LangGraph checkpoint restoration for HITL resume workflow `[x] Implementation Complete (CheckpointService, state injection, workflow resumption, unit tests)`                                                                                                                                                                                   | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     | **COMPLETED** 2026-04-06                         |
-| [ ]    | P2       | `TASK-BCK-032` | Backend                    | Add monitoring/metrics for workflow resumption (Prometheus/DataDog)                                                                                                                                                                                                                                                                                       | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
+| [x]    | P2       | `TASK-BCK-032` | Backend                    | Add monitoring/metrics for workflow resumption (Prometheus/DataDog) `[x] @2026-04-21 - Added c2pro_hitl_checkpoint_load_errors_total, c2pro_hitl_workflow_resume_errors_total, c2pro_hitl_decision_total, and c2pro_hitl_approval_rate metrics; feature-detected DataDog StatsD adapter; hitl_decision_recorded audit event; runbook docs/runbooks/HITL_RESUME_MONITORING.md; 20 unit tests (31/31 pass including regression).`                                                                                                                                                                                                                                                                                                                                      | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
 | [x]    | P2       | `TASK-BCK-033` | Backend                    | Document HITL resume API in OpenAPI spec `[x] @2026-04-21 - Added explicit OpenAPI operationId and request/response examples for POST /api/v1/hitl/resume/{review_id}; enforced decision enum (approve/reject) in schema; added OpenAPI contract test coverage.`                                                                                                                                                                                                               | TASK-BCK-024 follow-up (2026-04-06)                                                                                                                                     |
 | [x]    | P0       | `TASK-BCK-035` | Backend, Blocker           | **CRITICAL BUG**: Fix duplicate index definition in Alert model causing `DuplicateTableError: relation "ix_alerts_alert_type" already exists` `[x] FIXED - Removed redundant Index declaration from __table_args__ L265, kept index=True on column L180. Tests now initialize successfully.` Linked: TASK-QA-098.                                         | QA Leader report (2026-04-06)                                                                                                                                           | **COMPLETED** 2026-04-06                         |
 | [x]    | P1       | `TASK-BCK-036` | QA Support                 | Fix syntax error in `src/core/observability/monitoring.py:175` preventing mypy and monitoring service from loading. `[x] @2026-04-06 - Fixed malformed type annotation comment. Changed '# usage_type: input/output' to '# usage_type can be input or output'. Mypy now passes.`                                                                          | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T001                                  |
@@ -1336,10 +1336,10 @@ pytest apps/api/tests/e2e/flows/test_document_analysis_pipeline_e2e.py -v
 - [x] Approval data stored in review_decision and metadata
 - [x] Rejection flow updates status and stores reason
 - [x] 21 comprehensive TDD tests written (RED phase complete)
-- [ ] LangGraph checkpoint restoration (→ TASK-BCK-031)
+- [x] LangGraph checkpoint restoration (→ TASK-BCK-031) @2026-04-06
 - [ ] Test authentication setup (→ TASK-BCK-030)
-- [ ] Monitoring/metrics (→ TASK-BCK-032)
-- [ ] OpenAPI documentation (→ TASK-BCK-033)
+- [x] Monitoring/metrics (→ TASK-BCK-032) @2026-04-21
+- [x] OpenAPI documentation (→ TASK-BCK-033) @2026-04-21
 
 **TASK-BCK-025** (Notifications):
 
@@ -1536,8 +1536,62 @@ else:
 #### TASK-BCK-032: Add monitoring/metrics for workflow resumption
 
 **Estimated Hours**: 6
+**Actual Hours**: 4
 **Priority**: P2
-**Depends On**: `TASK-BCK-031`
+**Depends On**: `TASK-BCK-031` ✅
+**Status**: ✅ **COMPLETED** 2026-04-21
+
+**Implementation Complete (2026-04-21)**:
+
+- ✅ Added Prometheus metrics in `src/core/observability/monitoring.py`:
+  - `c2pro_hitl_checkpoint_load_errors_total{reason}` counter
+  - `c2pro_hitl_workflow_resume_errors_total{decision}` counter
+  - `c2pro_hitl_decision_total{tenant_id,decision}` counter
+  - `c2pro_hitl_approval_rate{tenant_id}` gauge (running approve ratio per tenant)
+  - Pre-existing: `c2pro_hitl_resume_total`, `c2pro_hitl_resume_latency_seconds`,
+    `c2pro_hitl_resume_errors_total`, `c2pro_hitl_review_items_pending/total`
+- ✅ Feature-detected DataDog StatsD adapter (`DD_AGENT_HOST` or
+  `DATADOG_STATSD_HOST`); all HITL recorders mirror to `c2pro.hitl.*` when
+  active and are hermetic no-ops otherwise. Errors inside the StatsD client are
+  swallowed so the hot path is never broken.
+- ✅ `ResumeWorkflowUseCase` now calls the named error recorders on the
+  checkpoint-not-found and `aupdate_state` failure paths, and emits a
+  structured `hitl_decision_recorded` audit log at the end of every call
+  (fields: `review_id`, `thread_id`, `decision`, `status`, `latency_seconds`,
+  `feedback_length`).
+- ✅ Router `POST /api/v1/hitl/resume/{review_id}` calls
+  `record_hitl_decision(tenant_id, decision)` after the use case succeeds, so
+  the approval-rate gauge is tenant-scoped end-to-end.
+- ✅ Runbook `docs/runbooks/HITL_RESUME_MONITORING.md` documents all emitted
+  metrics, PromQL dashboard queries (throughput, p50/p95/p99 latency,
+  approval rate, error breakdown), alert rules (P0 errors spike, P1 latency
+  regression, P2 rejection-rate anomaly, P2 checkpoint infra), and DataDog
+  parity table.
+- ✅ Tests: 15 unit tests in
+  `apps/api/tests/unit/core/observability/test_hitl_metrics.py` pinning
+  counter/gauge behavior, tenant isolation, DataDog no-op path, and StatsD
+  exception-swallowing. 5 unit tests in
+  `apps/api/tests/unit/modules/hitl/test_resume_workflow_metrics.py` verifying
+  that the use case wires the recorders on every branch (approve success,
+  reject, checkpoint-not-found, workflow-resume failure).
+
+**Files Modified**:
+
+- `apps/api/src/core/observability/monitoring.py` - New metrics + DataDog adapter
+- `apps/api/src/core/observability/__init__.py` - Lazy-loader exports
+- `apps/api/src/modules/hitl/application/resume_workflow_use_case.py` - New recorders + audit log
+- `apps/api/src/modules/hitl/adapters/http/router.py` - Tenant-scoped decision recording
+
+**Files Created**:
+
+- `apps/api/tests/unit/core/observability/test_hitl_metrics.py` (15 tests)
+- `apps/api/tests/unit/modules/hitl/test_resume_workflow_metrics.py` (5 tests)
+- `docs/runbooks/HITL_RESUME_MONITORING.md`
+
+**Verification**:
+
+- `pytest tests/unit/modules/hitl/ tests/unit/core/observability/ tests/core/test_hitl_resume_openapi.py` → 31/31 pass
+- `ruff check` on all touched files → only pre-existing `UP042` on `WorkflowDecision(str, Enum)` (out of scope)
 
 ```python
 # Deliverables
@@ -1763,6 +1817,7 @@ _Lessons learned will be documented here_
 
 | Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-21 | **TASK-BCK-032 complete**: HITL resume monitoring shipped. Added 4 new Prometheus primitives (`c2pro_hitl_checkpoint_load_errors_total`, `c2pro_hitl_workflow_resume_errors_total`, `c2pro_hitl_decision_total`, `c2pro_hitl_approval_rate`), wired a feature-detected DataDog StatsD adapter (`c2pro.hitl.*`), added the `hitl_decision_recorded` structured audit log event, instrumented the checkpoint-not-found and workflow-resume failure paths in `ResumeWorkflowUseCase`, threaded tenant-scoped decision recording through the router, and published the `HITL_RESUME_MONITORING.md` runbook with PromQL dashboards and Prometheus alert rules. 20 new unit tests added; 31/31 touched tests pass (unit HITL + unit observability + OpenAPI contract). Total tasks: 49 (43 completed, 6 pending). |
 | 2026-04-10 | **TASK-BCK-045 complete**: Fixed Railway backend startup crash from `logs.1775857904790.json` (deployment `6f50520f-b6f1-4fe0-9dd1-4d1b7d407679`). Root cause was legacy `alerts.*` imports inside `src/alerts` while the runtime only exposes the `src` package root. Added subprocess regression coverage for plain `import src.alerts.adapters.http.router`, normalized alerts-package imports to `src.alerts.*`, and verified plain `import src.main` now succeeds from `apps/api`. Total tasks: 45 (37 completed, 8 pending). |
 | 2026-04-09 | Added TASK-BCK-043 and TASK-BCK-044 from Frontend Audit. TASK-BCK-043 (P2): WBS integration tests (9 tests) hang without DB - misplaced in tests/unit/ but need async_session with real PostgreSQL. TASK-BCK-044 (P3): Flaky SLA calculator test (timing-sensitive boundary). Full unit suite: 828 passed, 9 DB-dependent failures, 1 flaky. Total tasks: 42 (35 completed, 8 pending). |
 | 2026-04-09 | Added TASK-BCK-042: DLQ Admin Endpoints - 2 admin endpoints for Dead Letter Queue management (GET list, POST retry). Service layer complete, need HTTP router layer with admin authorization. Source: DLQ Integration Review skipped tests in test_dlq_operations.py. Total tasks: 40 (35 completed, 6 pending). |

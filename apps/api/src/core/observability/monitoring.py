@@ -5,7 +5,9 @@ Configuración de logging estructurado, métricas y error tracking.
 """
 
 import logging
+import os
 import sys
+from collections import defaultdict
 from typing import Any
 
 import sentry_sdk
@@ -341,6 +343,33 @@ try:
         ["tenant_id"],
     )
 
+    # TASK-BCK-032: Named error counters (complement the generic HITL_RESUME_ERRORS
+    # by splitting the two most critical failure modes reviewers page on).
+    HITL_CHECKPOINT_LOAD_ERRORS = Counter(
+        "c2pro_hitl_checkpoint_load_errors_total",
+        "Failed LangGraph checkpoint loads during HITL resume",
+        ["reason"],
+    )
+
+    HITL_WORKFLOW_RESUME_ERRORS = Counter(
+        "c2pro_hitl_workflow_resume_errors_total",
+        "Failed workflow resumes after HITL decision",
+        ["decision"],
+    )
+
+    # TASK-BCK-032: Decision + approval-rate metrics.
+    HITL_DECISION_TOTAL = Counter(
+        "c2pro_hitl_decision_total",
+        "HITL decisions recorded (approve/reject)",
+        ["tenant_id", "decision"],
+    )
+
+    HITL_APPROVAL_RATE = Gauge(
+        "c2pro_hitl_approval_rate",
+        "Running approval rate (approve / (approve + reject)) per tenant since process start",
+        ["tenant_id"],
+    )
+
     HITL_METRICS_AVAILABLE = True
 
 except ImportError:
@@ -351,18 +380,31 @@ def record_hitl_resume_attempt(decision: str, status: str) -> None:
     """Record a HITL workflow resume attempt."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
         HITL_RESUME_TOTAL.labels(decision=decision, status=status).inc()
+    _datadog_increment(
+        "c2pro.hitl.resume_attempt",
+        tags=[f"decision:{decision}", f"status:{status}"],
+    )
 
 
 def record_hitl_resume_latency(decision: str, duration: float) -> None:
     """Record HITL workflow resume latency."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
         HITL_RESUME_LATENCY.labels(decision=decision).observe(duration)
+    _datadog_histogram(
+        "c2pro.hitl.resume_latency_seconds",
+        duration,
+        tags=[f"decision:{decision}"],
+    )
 
 
 def record_hitl_resume_error(error_type: str) -> None:
     """Record a HITL workflow resume error."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
         HITL_RESUME_ERRORS.labels(error_type=error_type).inc()
+    _datadog_increment(
+        "c2pro.hitl.resume_errors",
+        tags=[f"error_type:{error_type}"],
+    )
 
 
 def update_hitl_pending_gauge(tenant_id: str, count: int) -> None:
@@ -375,3 +417,122 @@ def update_hitl_total_gauge(tenant_id: str, count: int) -> None:
     """Update the total review items gauge."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
         HITL_REVIEW_ITEMS_TOTAL.labels(tenant_id=tenant_id).set(count)
+
+
+# ===========================================
+# TASK-BCK-032 — HITL decision telemetry
+# ===========================================
+
+# In-process running totals. Accurate within a single worker; use PromQL
+# (sum by (tenant_id)) for cluster-wide rates.
+_hitl_approve_counts: dict[str, int] = defaultdict(int)
+_hitl_reject_counts: dict[str, int] = defaultdict(int)
+
+
+def record_hitl_checkpoint_load_error(reason: str) -> None:
+    """Record a failed checkpoint load (not_found, db_error, etc.)."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_CHECKPOINT_LOAD_ERRORS.labels(reason=reason).inc()
+    _datadog_increment("c2pro.hitl.checkpoint_load_errors", tags=[f"reason:{reason}"])
+
+
+def record_hitl_workflow_resume_error(decision: str) -> None:
+    """Record a failed workflow resume (state update exception)."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_WORKFLOW_RESUME_ERRORS.labels(decision=decision).inc()
+    _datadog_increment("c2pro.hitl.workflow_resume_errors", tags=[f"decision:{decision}"])
+
+
+def record_hitl_decision(tenant_id: str, decision: str) -> None:
+    """
+    Record a HITL decision and refresh the approval-rate gauge for the tenant.
+
+    Only ``approve`` and ``reject`` are counted toward the approval rate;
+    other status values are ignored to keep the ratio meaningful.
+    """
+    if decision not in {"approve", "reject"}:
+        return
+
+    if decision == "approve":
+        _hitl_approve_counts[tenant_id] += 1
+    else:
+        _hitl_reject_counts[tenant_id] += 1
+
+    approves = _hitl_approve_counts[tenant_id]
+    rejects = _hitl_reject_counts[tenant_id]
+    total = approves + rejects
+
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_DECISION_TOTAL.labels(tenant_id=tenant_id, decision=decision).inc()
+        if total > 0:
+            HITL_APPROVAL_RATE.labels(tenant_id=tenant_id).set(approves / total)
+
+    _datadog_increment(
+        "c2pro.hitl.decision",
+        tags=[f"tenant_id:{tenant_id}", f"decision:{decision}"],
+    )
+    if total > 0:
+        _datadog_gauge(
+            "c2pro.hitl.approval_rate",
+            approves / total,
+            tags=[f"tenant_id:{tenant_id}"],
+        )
+
+
+def reset_hitl_decision_counters() -> None:
+    """Clear in-process approval/rejection counts (test helper)."""
+    _hitl_approve_counts.clear()
+    _hitl_reject_counts.clear()
+
+
+# ===========================================
+# DataDog adapter (feature-detected)
+# ===========================================
+# Activated only when both `datadog` SDK is importable and
+# the DD_AGENT_HOST env var (or DATADOG_STATSD_HOST) is set. In every
+# other environment the calls are no-ops so tests and CI remain hermetic.
+
+_DD_STATSD: Any | None = None
+DATADOG_AVAILABLE = False
+
+try:
+    if os.environ.get("DD_AGENT_HOST") or os.environ.get("DATADOG_STATSD_HOST"):
+        from datadog import DogStatsd  # type: ignore[import-not-found]
+
+        _DD_STATSD = DogStatsd(
+            host=os.environ.get("DD_AGENT_HOST")
+            or os.environ.get("DATADOG_STATSD_HOST", "localhost"),
+            port=int(os.environ.get("DD_DOGSTATSD_PORT", "8125")),
+            namespace=os.environ.get("DD_NAMESPACE", "c2pro"),
+            constant_tags=[f"env:{settings.environment}"],
+        )
+        DATADOG_AVAILABLE = True
+except ImportError:
+    DATADOG_AVAILABLE = False
+
+
+def _datadog_increment(metric: str, tags: list[str] | None = None, value: int = 1) -> None:
+    """Forward a counter increment to DataDog if configured."""
+    if DATADOG_AVAILABLE and _DD_STATSD is not None:
+        try:
+            _DD_STATSD.increment(metric, value=value, tags=tags or [])
+        except Exception:  # noqa: BLE001 - telemetry must never break the hot path
+            logging.getLogger(__name__).debug("datadog_increment_failed", exc_info=True)
+
+
+def _datadog_gauge(metric: str, value: float, tags: list[str] | None = None) -> None:
+    """Forward a gauge set to DataDog if configured."""
+    if DATADOG_AVAILABLE and _DD_STATSD is not None:
+        try:
+            _DD_STATSD.gauge(metric, value, tags=tags or [])
+        except Exception:  # noqa: BLE001 - telemetry must never break the hot path
+            logging.getLogger(__name__).debug("datadog_gauge_failed", exc_info=True)
+
+
+def _datadog_histogram(metric: str, value: float, tags: list[str] | None = None) -> None:
+    """Forward a histogram observation to DataDog if configured."""
+    if DATADOG_AVAILABLE and _DD_STATSD is not None:
+        try:
+            _DD_STATSD.histogram(metric, value, tags=tags or [])
+        except Exception:  # noqa: BLE001 - telemetry must never break the hot path
+            logging.getLogger(__name__).debug("datadog_histogram_failed", exc_info=True)
