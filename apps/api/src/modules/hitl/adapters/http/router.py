@@ -9,6 +9,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.core.observability.monitoring import record_hitl_decision
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.modules.hitl.adapters.http.dependencies import (
     get_hitl_service,
@@ -364,7 +365,7 @@ async def check_and_escalate(
 async def resume_workflow(
     review_id: UUID,
     payload: ResumeWorkflowRequest,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ResumeWorkflowResponse:
     """
@@ -397,9 +398,13 @@ async def resume_workflow(
         # Execute use case
         result = await use_case.execute(review_id=review_id, request=request)
 
+        # TASK-BCK-032: update tenant-scoped approval-rate gauge + audit log
+        record_hitl_decision(str(tenant_id), payload.decision)
+
         logger.info(
             "workflow_resumed",
             review_id=str(review_id),
+            tenant_id=str(tenant_id),
             decision=payload.decision,
             status=result.status,
         )
