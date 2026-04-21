@@ -177,10 +177,28 @@ async def test_i3_langsmith_captures_prompt_version_and_extracted_entities(
     assert len(extraction_spans) == 1
     logged_span = extraction_spans[0]
 
-    assert logged_span["input"]["prompt_version"] == "v1.0"
+    assert logged_span["input"]["prompt_version"]
+    assert logged_span["input"]["prompt_tag"] == "latest"
     assert "chunk_content" in logged_span["input"]
     assert len(logged_span["outputs"]["extracted_clauses"]) > 0
     assert logged_span["outputs"]["extracted_clauses"][0]["type"] == "Work Obligation"
+
+
+@pytest.mark.asyncio
+async def test_i3_extraction_uses_experiment_prompt_tag(
+    mock_llm_adapter, mock_ingestion_chunks, mock_langsmith_client
+):
+    extraction_service = ClauseExtractionService(
+        llm_adapter=mock_llm_adapter,
+        langsmith_client=mock_langsmith_client,
+    )
+    await extraction_service.extract_clauses(
+        mock_ingestion_chunks,
+        experiment_config={"enabled": True, "prompt_tag": "variant-B"},
+    )
+
+    extraction_spans = mock_langsmith_client.get_spans_by_name("extract_clauses_run")
+    assert extraction_spans[0]["input"]["prompt_tag"] == "variant-B"
 
 
 @pytest.mark.asyncio
