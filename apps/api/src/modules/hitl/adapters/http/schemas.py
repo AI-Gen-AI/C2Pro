@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -63,9 +64,8 @@ class ResumeWorkflowRequest(BaseModel):
     - **reject**: Workflow terminates gracefully with rejection reason
     """
 
-    decision: str = Field(
+    decision: Literal["approve", "reject"] = Field(
         ...,
-        pattern="^(approve|reject)$",
         description="The reviewer's decision: 'approve' to resume workflow, 'reject' to terminate",
         examples=["approve", "reject"],
     )
