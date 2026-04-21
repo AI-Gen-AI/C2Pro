@@ -13,7 +13,7 @@
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 46 | 32 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 9 | 19 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 8 | 20 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
 | Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 163 | 26 | 137 |
@@ -86,12 +86,11 @@
 
 > Only `[ ]` items are listed here. For completed task history, see [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md) or the category backlog files.
 
-### Backend (2 pending)
+### Backend (1 pending)
 
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
 | P2 | `TASK-BCK-032` | Backend | Add monitoring/metrics for workflow resumption (Prometheus/DataDog). |
-| P2 | `TASK-BCK-033` | Backend | Document HITL resume API in OpenAPI spec. |
 
 ### Frontend (2 pending)
 
@@ -136,6 +135,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-04-21 | **TASK-BCK-033 complete** — OpenAPI contract for `POST /api/v1/hitl/resume/{review_id}` now includes explicit operationId, request/response examples, and enum-constrained decision schema (`approve`/`reject`), with coverage in `apps/api/tests/core/test_hitl_resume_openapi.py`. Backend pending count: 2 → 1. |
 | 2026-04-21 | **EPIC-TEST-STABILIZATION partial close** — TASK-BCK-043 (relocated `test_wbs_node_repository.py` from `tests/unit/wbs/` to `tests/integration/wbs/`) and TASK-BCK-044 (added `freezegun==1.5.1`; froze time on `test_calculate_at_exact_due_time` boundary case) shipped on `claude/execute-backlog-task-kBOJ3`. Backend pending count: 4 → 2. |
 | 2026-04-21 | **Slim-master restructure** — Moved 132 completed rows and verbose history to `backlogs/COMPLETED.md`; fixed Quick Navigation table spacing; master now tracks pending-only + Restructured Manifest v3. |
 | 2026-04-21 | **Restructured Manifest v3 (Epic-Based)** — 130+ pending tasks consolidated into 15 dependency-ordered epics across 4 tiers; 3 foundational epics injected; 11 duplicate/orphan tasks pruned as WONT DO. See `blackboard/SESSION_2026-04-21_backlog_audit.md`. |
