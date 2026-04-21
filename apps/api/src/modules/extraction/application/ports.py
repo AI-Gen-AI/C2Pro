@@ -16,12 +16,16 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import structlog
 
+from src.core.ai.langsmith_hub import PromptHubResolver
 from src.modules.extraction.domain.entities import ExtractedClause
 
 # Re-using IngestionChunk from I1
 from src.modules.ingestion.domain.entities import IngestionChunk
 
 logger = structlog.get_logger(__name__)
+
+DEFAULT_EXTRACTION_PROMPT = "Extract all clauses and their attributes from the following text:"
+DEFAULT_EXTRACTION_PROMPT_REPO = "c2pro/core-extraction"
 
 
 class LangSmithClientProtocol(Protocol):
@@ -108,6 +112,9 @@ class ClauseExtractionService:
         llm_adapter: LLMAdapter,
         langsmith_client: LangSmithClientProtocol | None = None,
         low_confidence_threshold: float = 0.5,
+        prompt_hub_resolver: PromptHubResolver | None = None,
+        prompt_repo: str = DEFAULT_EXTRACTION_PROMPT_REPO,
+        fallback_prompt_template: str = DEFAULT_EXTRACTION_PROMPT,
     ):
         """
         Initialize the clause extraction service.
@@ -120,14 +127,20 @@ class ClauseExtractionService:
         self.llm_adapter = llm_adapter
         self.langsmith_client = langsmith_client
         self.low_confidence_threshold = low_confidence_threshold
+        self.prompt_hub_resolver = prompt_hub_resolver or PromptHubResolver()
+        self.prompt_repo = prompt_repo
+        self.fallback_prompt_template = fallback_prompt_template
 
         logger.info(
             "clause_extraction_service_initialized",
             low_confidence_threshold=low_confidence_threshold,
+            prompt_repo=prompt_repo,
         )
 
     async def extract_clauses(
-        self, chunks: list[IngestionChunk]
+        self,
+        chunks: list[IngestionChunk],
+        experiment_config: dict[str, Any] | None = None,
     ) -> list[ExtractedClause]:
         """
         Extracts and normalizes clauses from a list of ingestion chunks.
@@ -165,6 +178,13 @@ class ClauseExtractionService:
             chunk_count=len(chunks),
         )
 
+        prompt_tag = self.prompt_hub_resolver.resolve_prompt_tag(experiment_config)
+        extraction_prompt, prompt_version = self.prompt_hub_resolver.pull_prompt(
+            prompt_repo=self.prompt_repo,
+            prompt_tag=prompt_tag,
+            fallback_prompt=self.fallback_prompt_template,
+        )
+
         # Step 1: Start LangSmith span for observability
         # Refers to I3.5: Observability hooks
         span = None
@@ -174,7 +194,8 @@ class ClauseExtractionService:
                 input={
                     "chunk_count": len(chunks),
                     "chunk_content": [c.content for c in chunks],
-                    "prompt_version": "v1.0",
+                    "prompt_version": prompt_version,
+                    "prompt_tag": prompt_tag,
                 },
                 run_type="chain",
             )
@@ -191,7 +212,7 @@ class ClauseExtractionService:
 
             # Call LLM adapter for structured extraction
             llm_output = await self.llm_adapter.extract_structured_data(
-                prompt="Extract all clauses and their attributes from the following text:",
+                prompt=extraction_prompt,
                 schema={
                     "type": "object",
                     "properties": {
