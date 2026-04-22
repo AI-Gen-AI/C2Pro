@@ -2,8 +2,8 @@
 # Core AI stack — versions aligned with apps/api/requirements.txt
 anthropic>=0.18.1,<1.0.0
 langchain>=0.2.0,<0.4.0
-langchain-core>=0.3.81,<0.4.0
-langgraph>=0.3.34,<0.4.0
+langchain-core>=0.3.81,<1.4.0
+langgraph>=0.3.34,<1.2.0
 langgraph-checkpoint>=4.0.0  # >=4.0.0 fixes RCE via deserialization CVE
 langsmith>=0.7.31  # >=0.7.31 fixes streaming token bypass CVE
 
