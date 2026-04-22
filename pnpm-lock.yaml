@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  axios: 1.14.0
+  axios: 1.15.0
   ajv: 8.18.0
   eslint>ajv: 6.12.6
   '@eslint/eslintrc>ajv': 6.12.6
@@ -83,8 +83,8 @@ importers:
   apps/web:
     dependencies:
       '@clerk/nextjs':
-        specifier: ^6.12.0
-        version: 6.37.3(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5))(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+        specifier: ^6.39.2
+        version: 6.39.2(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5))(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       '@dnd-kit/core':
         specifier: ^6.1.0
         version: 6.3.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
@@ -155,8 +155,8 @@ importers:
         specifier: ^5.87.1
         version: 5.90.20(react@19.1.5)
       axios:
-        specifier: 1.14.0
-        version: 1.14.0
+        specifier: 1.15.0
+        version: 1.15.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -395,28 +395,27 @@ packages:
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
 
-  '@clerk/backend@2.30.1':
-    resolution: {integrity: sha512-GoxnJzVH0ycNPAGCDMfo3lPBFbo5nehpLSVFjgGEnzIRGGahBtAB8PQT7KM2zo58pD8apjb/+suhcB/WCiEasQ==}
+  '@clerk/backend@2.33.2':
+    resolution: {integrity: sha512-5nNPTdSLCTt7yVvMdd5CoEYZXVQhA9i0C50PxmAOjApYDIEfASedP9KXRb+YARiDrOSHQg0qFJhWUnujaG3hpw==}
     engines: {node: '>=18.17.0'}
 
-  '@clerk/clerk-react@5.60.0':
-    resolution: {integrity: sha512-P88FncsJpq/3WZJhhlj+md8mYb35BIXpr462C/figwsBGHsinr8VuBQUMcMZZ/6M34C8ABfLTPa6PHVp6+3D5Q==}
+  '@clerk/clerk-react@5.61.5':
+    resolution: {integrity: sha512-MKVEsvRR47WlizFki5BPjLIm1TPbJju4m2CNJGzrRqhEMide0Yjm4DGYfh/r2k/uFjOGMWfSJ7EToM1y2AQ5rg==}
     engines: {node: '>=18.17.0'}
-    deprecated: 'This package is no longer supported. Please use @clerk/react instead. See the upgrade guide for more info: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/core-3'
     peerDependencies:
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
       react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
 
-  '@clerk/nextjs@6.37.3':
-    resolution: {integrity: sha512-kammmf4b5R2Izb/SN4UbEa/6rdyop9fPHwZkyyJoVfgMLFM26fwpXWaSqVJPe4YL2BmHKP+orIOolzTmEhhdQQ==}
+  '@clerk/nextjs@6.39.2':
+    resolution: {integrity: sha512-NTAgvhpntCdQD4KR+4f/KFs8cqd6oyzoE73AoO9w0xKoJbTB8IIIPG+CtdIw+mx7z4JqbQATKWZbMPGeZbZYCw==}
     engines: {node: '>=18.17.0'}
     peerDependencies:
       next: ^13.5.7 || ^14.2.25 || ^15.2.3 || ^16
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
       react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
 
-  '@clerk/shared@3.44.0':
-    resolution: {integrity: sha512-kH+chNeZwqml3IDpWLgebWECfOZifyUQO4OISd/96w1EuCY1Bzw6cBq/ZbpsoO8jyG8/6bGr/MGXLhDzTrpPfA==}
+  '@clerk/shared@3.47.4':
+    resolution: {integrity: sha512-0O5/zgB5SO26PKarAIw7uj4j+4JsnT2/uiJ7SPI3LQMb62sM+AjDlVadcXuYc+4sY6w1szrAIVepI5Bkv57hnQ==}
     engines: {node: '>=18.17.0'}
     peerDependencies:
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
@@ -427,10 +426,9 @@ packages:
       react-dom:
         optional: true
 
-  '@clerk/types@4.101.14':
-    resolution: {integrity: sha512-jl7DywmeaZx1IntgEXcjDZq2uyk+X/1yAZOjxOboeGTS0rNTiQNhv7xK8tFVjexsUAFrYlwC1AxhFuJiMDQjow==}
+  '@clerk/types@4.101.22':
+    resolution: {integrity: sha512-74hV9MMw9MzOOSuJNJMFP95XZ2jDfPS1v3pfALS3rSQa+h/lNREU+fLGArzYckEpqNtuF6xy0odg9YqF5BLNhA==}
     engines: {node: '>=18.17.0'}
-    deprecated: 'This package is no longer supported. Please import types from @clerk/shared/types instead. See the upgrade guide for more info: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/core-3'
 
   '@commander-js/extra-typings@14.0.0':
     resolution: {integrity: sha512-hIn0ncNaJRLkZrxBIp5AsW/eXEHNKYQBh0aPdoUqNgD+Io3NIykQqpKFyKcuasZhicGaEZJX/JBSIkZ4e5x8Dg==}
@@ -2626,8 +2624,8 @@ packages:
     resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
     engines: {node: '>=4'}
 
-  axios@1.14.0:
-    resolution: {integrity: sha512-3Y8yrqLSwjuzpXuZ0oIYZ/XGgLwUIBU3uLvbcpb0pidD9ctpShJd43KSlEEkVQg6DS0G9NKyzOvBfUtDKEyHvQ==}
+  axios@1.15.0:
+    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
 
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
@@ -3377,6 +3375,10 @@ packages:
 
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
+    engines: {node: '>= 0.4'}
+
+  hasown@2.0.3:
+    resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
   headers-polyfill@4.0.3:
@@ -5133,36 +5135,36 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@clerk/backend@2.30.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+  '@clerk/backend@2.33.2(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
-      '@clerk/shared': 3.44.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
-      '@clerk/types': 4.101.14(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/shared': 3.47.4(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/types': 4.101.22(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       standardwebhooks: 1.0.0
       tslib: 2.8.1
     transitivePeerDependencies:
       - react
       - react-dom
 
-  '@clerk/clerk-react@5.60.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+  '@clerk/clerk-react@5.61.5(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
-      '@clerk/shared': 3.44.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/shared': 3.47.4(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       react: 19.1.5
       react-dom: 19.1.5(react@19.1.5)
       tslib: 2.8.1
 
-  '@clerk/nextjs@6.37.3(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5))(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+  '@clerk/nextjs@6.39.2(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5))(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
-      '@clerk/backend': 2.30.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
-      '@clerk/clerk-react': 5.60.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
-      '@clerk/shared': 3.44.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
-      '@clerk/types': 4.101.14(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/backend': 2.33.2(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/clerk-react': 5.61.5(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/shared': 3.47.4(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/types': 4.101.22(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       next: 16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       react: 19.1.5
       react-dom: 19.1.5(react@19.1.5)
       server-only: 0.0.1
       tslib: 2.8.1
 
-  '@clerk/shared@3.44.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+  '@clerk/shared@3.47.4(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
       csstype: 3.1.3
       dequal: 2.0.3
@@ -5174,9 +5176,9 @@ snapshots:
       react: 19.1.5
       react-dom: 19.1.5(react@19.1.5)
 
-  '@clerk/types@4.101.14(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+  '@clerk/types@4.101.22(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
-      '@clerk/shared': 3.44.0(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/shared': 3.47.4(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
     transitivePeerDependencies:
       - react
       - react-dom
@@ -7231,7 +7233,7 @@ snapshots:
 
   axe-core@4.11.1: {}
 
-  axios@1.14.0:
+  axios@1.15.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
@@ -7611,7 +7613,7 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.3
 
   es-shim-unscopables@1.1.0:
     dependencies:
@@ -8049,7 +8051,7 @@ snapshots:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
-      hasown: 2.0.2
+      hasown: 2.0.3
       mime-types: 2.1.35
 
   formdata-polyfill@4.0.10:
@@ -8192,6 +8194,10 @@ snapshots:
       has-symbols: 1.1.0
 
   hasown@2.0.2:
+    dependencies:
+      function-bind: 1.1.2
+
+  hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
 
