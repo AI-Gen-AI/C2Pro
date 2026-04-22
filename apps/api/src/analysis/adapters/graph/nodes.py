@@ -32,23 +32,41 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionUseCase,
 )
 from src.analysis.domain.ai_extraction import (
+    CritiqueExtractionService,
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
 )
+from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 
 # Stateless domain services (reusable across requests)
 _risk_rules = DeterministicRiskRulesService()
 _wbs_rules = DeterministicWbsRulesService()
+_critique_service = CritiqueExtractionService()
 
 
 # ── Backwards-compatible shims ──────────────────────────────────────────────
-# Kept only because external tests (TS-ADP-GRAPH-DI-001) still import them.
+# Kept because legacy facade modules (src.ai.graph) and the TS-ADP-GRAPH-DI-001
+# suite import these helpers by name and monkeypatch them at runtime.
 
 
 async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(tenant_id))
     return await use_case.execute(ClassifyDocumentCommand(text=text))
+
+
+async def _critique_extraction(
+    *,
+    items: list[dict[str, Any]],
+    doc_type: str,
+    tenant_id: str | None,
+) -> dict[str, str]:
+    result = await _critique_service.extract(
+        items=items,
+        doc_type=doc_type,
+        ai=get_ai_service(tenant_id),
+    )
+    return {"status": result.status, "notes": result.notes}
 
 
 def _deterministic_contract_risks(text: str) -> list[dict[str, Any]]:
@@ -59,17 +77,33 @@ def _deterministic_wbs_items(text: str) -> list[dict[str, Any]]:
     return _wbs_rules.extract(text)
 
 
+def _map_risk_severity(item: dict[str, Any]):
+    """Map a risk dict to an AlertSeverity enum.
+
+    Backwards-compat shim — legacy tests (tests/ai/test_risk_extractor.py)
+    still import this helper by name. Production alert generation now lives
+    in ``src.coherence.alert_generator.AlertGenerator``.
+    """
+    from src.shared_kernel.enums import AlertSeverity
+
+    severity_source = item.get("severity") or item.get("impact") or "low"
+    severity_value = str(severity_source).lower()
+    for candidate in AlertSeverity:
+        if candidate.value == severity_value:
+            return candidate
+    return AlertSeverity.LOW
+
+
 # ── N3 — Router ─────────────────────────────────────────────────────────────
 
 
 async def router_node(state: ProjectState) -> ProjectState:
     """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
+    if state.get("doc_type") in DOC_TYPES:
+        return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
     doc_type = await use_case.execute(
-        ClassifyDocumentCommand(
-            text=state["document_text"],
-            current_doc_type=state.get("doc_type"),
-        )
+        ClassifyDocumentCommand(text=state["document_text"])
     )
     state["doc_type"] = doc_type
     state["messages"].append(AIMessage(content=f"Router doc_type={doc_type}"))

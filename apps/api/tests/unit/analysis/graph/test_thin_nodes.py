@@ -77,12 +77,17 @@ class TestRouterNodeThinDelegation:
     async def test_uses_existing_doc_type_when_valid(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
-        ai = _FakeAI(payload={"doc_type": "budget"})
-        monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
+        # get_ai_service must not even be constructed for the short-circuit path.
+        def _explode(*_a, **_kw):
+            raise AssertionError("get_ai_service called on short-circuit path")
+        monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
 
-        result = await nodes.router_node(_make_state(doc_type="contract"))
+        state = _make_state(doc_type="contract")
+        msg_count_before = len(state["messages"])
+        result = await nodes.router_node(state)
         assert result["doc_type"] == "contract"
-        assert ai.calls == []  # short-circuit — no AI call
+        # Parity with original: short-circuit adds no new message.
+        assert len(result["messages"]) == msg_count_before
 
     @pytest.mark.asyncio
     async def test_delegates_to_use_case_when_unknown(self, monkeypatch) -> None:
