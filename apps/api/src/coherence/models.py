@@ -3,8 +3,27 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-# Define valid alert categories as a type
-AlertCategory = Literal["legal", "financial", "technical", "schedule", "scope", "quality", "general"]
+# Canonical six-value risk / alert taxonomy — see
+# src.analysis.domain.risk_categories for the authoritative enum. The
+# legacy lowercase / "financial" / "general" values are accepted so
+# pre-existing payloads keep validating while clients migrate.
+AlertCategory = Literal[
+    # Canonical
+    "LEGAL",
+    "SCHEDULE",
+    "QUALITY",
+    "SCOPE",
+    "TECHNICAL",
+    "BUDGET",
+    # Legacy — normalized at the persistence boundary
+    "legal",
+    "financial",
+    "technical",
+    "schedule",
+    "scope",
+    "quality",
+    "general",
+]
 
 # Severity levels for continuous scoring (TASK-504: strict 5-level taxonomy)
 SeverityLevel = Literal["critical", "high", "medium", "low", "info"]
