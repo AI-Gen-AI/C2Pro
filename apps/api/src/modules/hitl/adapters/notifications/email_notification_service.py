@@ -19,13 +19,24 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency in tests/d
     aiosmtplib = None
 
 if TYPE_CHECKING:
+    from src.modules.hitl.adapters.notifications.recipient_resolver import (
+        RecipientResolver,
+    )
     from src.modules.hitl.domain.entities import ReviewItem
 
 logger = structlog.get_logger()
 
 
 class EmailNotificationService:
-    """Send HITL notifications via email using SMTP."""
+    """Send HITL notifications via email using SMTP.
+
+    Attributes:
+        recipient_resolver: Maps recipient UUID → e-mail address. Required
+            for real deployments; without it, ``send_notification`` refuses
+            to send (avoiding the old "UUID-as-recipient" footgun).
+        escalation_recipients: Static list of emails to fan escalation
+            alerts out to. Falls back to ``from_email`` when empty.
+    """
 
     def __init__(
         self,
@@ -35,6 +46,8 @@ class EmailNotificationService:
         smtp_password: str,
         from_email: str,
         max_retries: int = 3,
+        recipient_resolver: RecipientResolver | None = None,
+        escalation_recipients: list[str] | None = None,
     ):
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
@@ -42,16 +55,27 @@ class EmailNotificationService:
         self.smtp_password = smtp_password
         self.from_email = from_email
         self.max_retries = max_retries
+        self.recipient_resolver = recipient_resolver
+        self.escalation_recipients = list(escalation_recipients or [])
 
     async def send_notification(
         self, recipient_id: UUID, message: str, item: ReviewItem
     ) -> None:
         """Send notification email for review item."""
+        to_address = await self._resolve_recipient_email(recipient_id)
+        if to_address is None:
+            logger.warning(
+                "email_notification_skipped_no_recipient_email",
+                recipient_id=str(recipient_id),
+                item_id=str(item.item_id),
+            )
+            return
+
         subject = f"HITL Review Required: {item.item_type}"
         body = self._format_notification_body(recipient_id, message, item)
 
         await self._send_email(
-            to_address=str(recipient_id),  # TODO: Map recipient_id to actual email
+            to_address=to_address,
             subject=subject,
             body=body,
         )
@@ -59,29 +83,41 @@ class EmailNotificationService:
         logger.info(
             "email_notification_sent",
             recipient_id=str(recipient_id),
+            to=to_address,
             item_id=str(item.item_id),
             smtp_host=self.smtp_host,
         )
 
     async def send_escalation_alert(self, item: ReviewItem) -> None:
-        """Send urgent escalation alert email."""
+        """Send urgent escalation alert email to configured escalation list."""
         subject = f"URGENT ESCALATION: HITL Review Overdue - {item.item_type}"
         body = self._format_escalation_body(item)
 
-        # Send to configured escalation recipients
-        # TODO: Get escalation recipients from config
-        await self._send_email(
-            to_address=self.smtp_user,  # Fallback to admin
-            subject=subject,
-            body=body,
-        )
+        recipients = self.escalation_recipients or [self.from_email]
+        for to_address in recipients:
+            await self._send_email(
+                to_address=to_address,
+                subject=subject,
+                body=body,
+            )
 
         logger.warning(
             "email_escalation_sent",
             item_id=str(item.item_id),
             impact_level=item.impact_level.value,
+            recipients=recipients,
             smtp_host=self.smtp_host,
         )
+
+    async def _resolve_recipient_email(self, recipient_id: UUID) -> str | None:
+        """Map a recipient UUID to an email via the configured resolver."""
+        if self.recipient_resolver is None:
+            logger.error(
+                "email_notification_no_resolver_configured",
+                recipient_id=str(recipient_id),
+            )
+            return None
+        return await self.recipient_resolver.resolve_email(recipient_id)
 
     async def _send_email(self, to_address: str, subject: str, body: str) -> None:
         """Send email with retry logic."""

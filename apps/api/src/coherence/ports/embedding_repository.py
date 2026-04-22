@@ -295,6 +295,20 @@ class IEmbeddingRepository(ABC):
         ...
 
     @abstractmethod
+    async def load_embeddings_batch(
+        self,
+        clause_ids: list[str],
+        project_id: UUID,
+    ) -> dict[str, list[float]]:
+        """Batch-load embedding vectors for a set of clauses in one query.
+
+        Returns a ``clause_id -> vector`` mapping; clauses without a
+        stored embedding are omitted. Adapters must perform tenant
+        ownership verification for ``project_id``.
+        """
+        ...
+
+    @abstractmethod
     async def delete_project_embeddings(
         self,
         project_id: UUID,

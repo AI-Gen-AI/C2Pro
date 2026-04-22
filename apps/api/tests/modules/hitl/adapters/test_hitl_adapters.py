@@ -1,4 +1,3 @@
-from datetime import timezone
 """Tests for HITL real adapters: repository, notification, HTTP schemas, graph integration.
 
 These tests verify the concrete adapter implementations without requiring
@@ -7,7 +6,7 @@ a running database or external services.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

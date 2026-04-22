@@ -511,6 +511,65 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
             created_at=row[7],
         )
 
+    async def load_embeddings_batch(
+        self,
+        clause_ids: list[str],
+        project_id: UUID,
+    ) -> dict[str, list[float]]:
+        """Load embedding vectors for a set of clauses in one query.
+
+        Used by the coherence engine's ``prepare_context`` node to pull
+        pre-computed vectors for RAG similarity scoring. Returns a dict
+        keyed by ``clause_id``; clauses without a stored embedding are
+        omitted. Tenant ownership is verified once for the project.
+
+        Args:
+            clause_ids: Clause identifiers to look up.
+            project_id: Project all clauses belong to.
+
+        Returns:
+            Mapping of clause_id -> embedding vector (list of floats).
+
+        Raises:
+            PermissionError: If project does not belong to current tenant.
+        """
+        if not clause_ids:
+            return {}
+
+        if self.tenant_id is not None:
+            if not await self._verify_project_tenant(project_id):
+                raise PermissionError(
+                    "Cannot access embeddings for project outside tenant"
+                )
+
+        stmt = sql_text(
+            """SELECT clause_id, embedding::text
+               FROM clause_embeddings
+               WHERE project_id = :project_id
+                 AND clause_id = ANY(:clause_ids)"""
+        )
+        result = await self.session.execute(
+            stmt,
+            {"project_id": str(project_id), "clause_ids": list(clause_ids)},
+        )
+
+        vectors: dict[str, list[float]] = {}
+        for row in result.fetchall():
+            clause_id, embedding_text = row[0], row[1]
+            if not embedding_text:
+                continue
+            # pgvector returns "[0.1,0.2,...]" when cast to text.
+            try:
+                stripped = embedding_text.strip().lstrip("[").rstrip("]")
+                vectors[clause_id] = [float(x) for x in stripped.split(",") if x]
+            except (ValueError, AttributeError) as exc:
+                logger.warning(
+                    "Failed to parse embedding for clause %s: %s",
+                    clause_id,
+                    exc,
+                )
+        return vectors
+
     async def delete_project_embeddings(
         self,
         project_id: UUID,

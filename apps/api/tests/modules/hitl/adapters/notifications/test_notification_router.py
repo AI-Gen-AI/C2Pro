@@ -1,4 +1,3 @@
-from datetime import timezone
 """
 TDD tests for NotificationRouter (strategy pattern).
 Part of TASK-BCK-025: Add real notification delivery beyond log-only.
@@ -8,7 +7,7 @@ Test Suite ID: TS-HITL-NOTIFY-ROUTER-001
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
