@@ -1,4 +1,3 @@
-from datetime import timezone
 """
 TDD tests for EmailNotificationService.
 Part of TASK-BCK-025: Add real notification delivery beyond log-only.
@@ -8,14 +7,29 @@ Test Suite ID: TS-HITL-EMAIL-NOTIFY-001
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+
+
+class _AnyRecipientResolver:
+    """Test resolver — maps any UUID to a fixed email."""
+
+    def __init__(self, email: str = "reviewer@example.com") -> None:
+        self._email = email
+
+    async def resolve_email(self, recipient_id: UUID) -> str | None:
+        return self._email
+
+
+@pytest.fixture
+def resolver() -> _AnyRecipientResolver:
+    return _AnyRecipientResolver()
 
 
 @pytest.fixture
@@ -46,7 +60,7 @@ class TestEmailNotificationServiceUnit:
     """Unit tests for EmailNotificationService."""
 
     @pytest.mark.asyncio
-    async def test_send_notification_sends_email_via_smtp(self, test_review_item):
+    async def test_send_notification_sends_email_via_smtp(self, test_review_item, resolver):
         """EmailNotificationService should send email via SMTP server."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -58,6 +72,7 @@ class TestEmailNotificationServiceUnit:
             smtp_user="notifications@example.com",
             smtp_password="secret",
             from_email="notifications@example.com",
+            recipient_resolver=resolver,
         )
 
         recipient_id = uuid4()
@@ -81,14 +96,17 @@ class TestEmailNotificationServiceUnit:
             # Verify email was sent
             mock_smtp.send_message.assert_awaited_once()
             sent_message = mock_smtp.send_message.call_args[0][0]
-            assert sent_message["To"] == str(recipient_id)  # TODO: map to actual email
+            # Resolver maps recipient UUID → email. Assert on the resolved
+            # email rather than the raw UUID (the old str(recipient_id)
+            # behaviour was a bug; notifications never routed).
+            assert sent_message["To"] == "reviewer@example.com"
             assert sent_message["Subject"] is not None
             assert message in sent_message.get_content()
 
             mock_smtp.quit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_send_escalation_alert_sends_urgent_email(self, test_review_item):
+    async def test_send_escalation_alert_sends_urgent_email(self, test_review_item, resolver):
         """Escalation alerts should have urgent priority and specific formatting."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -100,6 +118,7 @@ class TestEmailNotificationServiceUnit:
             smtp_user="notifications@example.com",
             smtp_password="secret",
             from_email="notifications@example.com",
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()
@@ -120,7 +139,7 @@ class TestEmailNotificationServiceUnit:
             assert str(test_review_item.item_id) in sent_message.get_content()
 
     @pytest.mark.asyncio
-    async def test_smtp_connection_failure_raises_exception(self, test_review_item):
+    async def test_smtp_connection_failure_raises_exception(self, test_review_item, resolver):
         """SMTP connection failures should raise clear exceptions."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -132,6 +151,7 @@ class TestEmailNotificationServiceUnit:
             smtp_user="test@example.com",
             smtp_password="wrong",
             from_email="test@example.com",
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()
@@ -149,7 +169,7 @@ class TestEmailNotificationServiceUnit:
                 )
 
     @pytest.mark.asyncio
-    async def test_authentication_failure_raises_exception(self, test_review_item):
+    async def test_authentication_failure_raises_exception(self, test_review_item, resolver):
         """SMTP authentication failures should raise clear exceptions."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -161,6 +181,7 @@ class TestEmailNotificationServiceUnit:
             smtp_user="test@example.com",
             smtp_password="wrong",
             from_email="test@example.com",
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()
@@ -178,7 +199,7 @@ class TestEmailNotificationServiceUnit:
                 )
 
     @pytest.mark.asyncio
-    async def test_email_contains_review_item_details(self, test_review_item):
+    async def test_email_contains_review_item_details(self, test_review_item, resolver):
         """Email body should contain all relevant review item details."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -190,6 +211,7 @@ class TestEmailNotificationServiceUnit:
             smtp_user="notifications@example.com",
             smtp_password="secret",
             from_email="notifications@example.com",
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()
@@ -219,7 +241,7 @@ class TestEmailNotificationServiceIntegration:
     """Integration tests for EmailNotificationService with real SMTP (mocked)."""
 
     @pytest.mark.asyncio
-    async def test_full_notification_flow_with_retry(self, test_review_item):
+    async def test_full_notification_flow_with_retry(self, test_review_item, resolver):
         """Full notification flow with retry on transient failures."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -232,6 +254,7 @@ class TestEmailNotificationServiceIntegration:
             smtp_password="secret",
             from_email="notifications@example.com",
             max_retries=3,
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()
@@ -257,7 +280,7 @@ class TestEmailNotificationServiceIntegration:
             assert mock_smtp.send_message.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_max_retries_exhausted_raises_exception(self, test_review_item):
+    async def test_max_retries_exhausted_raises_exception(self, test_review_item, resolver):
         """After max retries, should raise exception."""
         from src.modules.hitl.adapters.notifications.email_notification_service import (
             EmailNotificationService,
@@ -270,6 +293,7 @@ class TestEmailNotificationServiceIntegration:
             smtp_password="secret",
             from_email="notifications@example.com",
             max_retries=2,
+            recipient_resolver=resolver,
         )
 
         mock_smtp_class = Mock()

@@ -164,45 +164,59 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     enriched: list[ClauseWithEmbedding] = []
     errors: list[str] = []
 
-    # Try to load embeddings if RAG is enabled
-    embedding_repo = None
-    if state.config.include_rag_similarity:
+    # Batch-load pre-computed vectors for RAG similarity, if enabled.
+    # Embeddings are produced during document ingestion; this node is
+    # read-only and degrades gracefully (empty vector) if the table or
+    # session isn't available in the current environment.
+    embeddings_by_clause: dict[str, list[float]] = {}
+    if state.config.include_rag_similarity and state.clauses:
         try:
             from uuid import UUID
-            from ...adapters.persistence.pgvector_embedding_repository import PgvectorEmbeddingRepository
+
             from src.core.database import _session_factory
 
-            project_uuid = UUID(state.project_id) if state.project_id else None
-            tenant_uuid = UUID(state.config.tenant_id) if state.config.tenant_id else None
+            from ...adapters.persistence.pgvector_embedding_repository import (
+                PgvectorEmbeddingRepository,
+            )
 
-            if project_uuid and _session_factory:
-                logger.debug(f"prepare_context: Using embeddings for project {project_uuid}")
-                # Real implementation happens within async context, but we are inside sync here or mixed.
-                # Since prepare_context is sync, we shouldn't do async queries inside it.
-                # Actually, wait, prepare_context doesn't do async queries, it just logs.
+            project_uuid = UUID(state.project_id) if state.project_id else None
+            tenant_uuid = (
+                UUID(state.config.tenant_id) if state.config.tenant_id else None
+            )
+
+            if project_uuid and _session_factory is not None:
+                async with _session_factory() as session:
+                    repo = PgvectorEmbeddingRepository(
+                        session=session, tenant_id=tenant_uuid
+                    )
+                    clause_ids = [c.id for c in state.clauses]
+                    embeddings_by_clause = await repo.load_embeddings_batch(
+                        clause_ids=clause_ids,
+                        project_id=project_uuid,
+                    )
+                logger.debug(
+                    "prepare_context: loaded %s/%s embeddings for project %s",
+                    len(embeddings_by_clause),
+                    len(state.clauses),
+                    project_uuid,
+                )
         except (ValueError, ImportError) as e:
             logger.warning(f"Could not initialize embedding repository: {e}")
             errors.append(f"Embedding repository unavailable: {e}")
+        except PermissionError as e:
+            logger.warning(f"Tenant isolation rejected embedding load: {e}")
+            errors.append(f"Embedding load denied: {e}")
+        except Exception as e:  # noqa: BLE001 — degrade gracefully
+            logger.warning(f"Embedding batch load failed, continuing without RAG: {e}")
+            errors.append(f"Embedding batch load failed: {e}")
 
     for clause in state.clauses:
         category = infer_category(clause)
         doc_type = infer_document_type(clause)
 
-        # Try to load embedding if repository is available
-        embedding_vector: list[float] = []
-        if embedding_repo:
-            try:
-                # TODO: Implement actual embedding loading
-                # record = await embedding_repo.get_embedding(clause.id, project_uuid)
-                # if record and record.has_embedding():
-                #     embedding_vector = record.embedding
-                pass
-            except Exception as e:
-                logger.debug(f"Could not load embedding for clause {clause.id}: {e}")
-
         enriched_clause = ClauseWithEmbedding(
             clause=clause,
-            embedding=embedding_vector,  # Empty if not found or RAG disabled
+            embedding=embeddings_by_clause.get(clause.id, []),
             category=category,
             document_type=doc_type,
         )
