@@ -60,3 +60,66 @@ export interface ProjectDocumentsGroup {
   projectName: string;
   documents: ProjectDocumentListItem[];
 }
+
+export interface AICostSeriesPoint {
+  bucket: string | null;
+  model: string;
+  prompt_version: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost: number;
+  avg_latency_ms: number;
+}
+
+export interface AICostAnalytics {
+  timeframe: string;
+  window_start: string;
+  summary: {
+    total_cost: number;
+    total_tokens: number;
+    total_requests: number;
+  };
+  series: AICostSeriesPoint[];
+}
+
+export interface AIVersionPerformanceItem {
+  prompt_version: string;
+  prompt_tag: string;
+  total_runs: number;
+  success_runs: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  total_cost: number;
+  feedback_count: number;
+  avg_feedback_score: number;
+}
+
+export interface AIVersionPerformance {
+  timeframe: string;
+  window_start: string;
+  versions: AIVersionPerformanceItem[];
+}
+
+export interface AIQualityDriftPoint {
+  bucket: string | null;
+  operation: string;
+  run_count: number;
+  avg_latency_ms: number;
+  avg_feedback_score: number;
+  feedback_count: number;
+}
+
+export interface AIQualityDriftAlert {
+  severity: "low" | "medium" | "high";
+  type: "feedback_drop" | "latency_spike";
+  operation: string;
+  bucket: string | null;
+  message: string;
+}
+
+export interface AIQualityDrift {
+  timeframe: string;
+  window_start: string;
+  series: AIQualityDriftPoint[];
+  alerts: AIQualityDriftAlert[];
+}

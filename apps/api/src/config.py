@@ -135,6 +135,36 @@ class Settings(BaseSettings):  # type: ignore[misc]
     clerk_issuer: str | None = Field(
         default=None, description="Clerk JWT issuer for validation"
     )
+    secret_channel_token: str | None = Field(
+        default=None,
+        validation_alias="SECRET_CHANNEL_TOKEN",
+        description="Shared token required to access secure frontend secret channel",
+    )
+    secret_channel_backend: Literal["env_json", "aws_secrets_manager", "vault_kv"] = Field(
+        default="env_json",
+        validation_alias="SECRET_CHANNEL_BACKEND",
+        description="Backend used to resolve frontend-safe secret bundles",
+    )
+    secret_channel_bundle_ref: str | None = Field(
+        default=None,
+        validation_alias="SECRET_CHANNEL_BUNDLE_REF",
+        description="Bundle reference (JSON payload, AWS secret id, or Vault mount:path)",
+    )
+    secret_channel_aws_region: str | None = Field(
+        default=None,
+        validation_alias="SECRET_CHANNEL_AWS_REGION",
+        description="AWS region used by Secrets Manager backend",
+    )
+    secret_channel_vault_url: str | None = Field(
+        default=None,
+        validation_alias="SECRET_CHANNEL_VAULT_URL",
+        description="Vault URL for KV secret channel backend",
+    )
+    secret_channel_vault_token: str | None = Field(
+        default=None,
+        validation_alias="SECRET_CHANNEL_VAULT_TOKEN",
+        description="Vault token used to read KV secrets",
+    )
 
     # ===========================================
     # CACHE (Redis/Upstash)

@@ -5,6 +5,7 @@ Defines the contract for interacting with stakeholder persistence.
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.stakeholders.domain.models import (  # Assuming RACI will be handled by stakeholder module
     RaciAssignment,
     Stakeholder,
@@ -13,19 +14,19 @@ from src.stakeholders.domain.models import (  # Assuming RACI will be handled by
 
 class IStakeholderRepository(ABC):
     @abstractmethod
-    async def add(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
+    async def add(self, stakeholder: Stakeholder, tenant_id: TenantId) -> None:
         """Adds a new stakeholder to the repository."""
         pass
 
     @abstractmethod
     async def get_by_id(
-        self, stakeholder_id: UUID, tenant_id: UUID | None = None
+        self, stakeholder_id: UUID, tenant_id: TenantId
     ) -> Stakeholder | None:
         """Retrieves a stakeholder by its ID."""
         pass
 
     @abstractmethod
-    async def get_all_stakeholders(self, tenant_id: UUID) -> list[Stakeholder]:
+    async def get_all_stakeholders(self, tenant_id: TenantId) -> list[Stakeholder]:
         """Retrieves all stakeholders for a given tenant."""
         pass
 
@@ -33,33 +34,33 @@ class IStakeholderRepository(ABC):
     async def get_stakeholders_by_project(
         self,
         project_id: UUID,
+        tenant_id: TenantId,
         skip: int = 0,
         limit: int = 100,
-        tenant_id: UUID | None = None,
     ) -> tuple[list[Stakeholder], int]:
         """Retrieves all stakeholders for a given project with pagination."""
         pass
 
     @abstractmethod
-    async def update(self, stakeholder: Stakeholder, tenant_id: UUID | None = None) -> None:
+    async def update(self, stakeholder: Stakeholder, tenant_id: TenantId) -> None:
         """Updates an existing stakeholder with tenant verification."""
         pass
 
     @abstractmethod
-    async def delete(self, stakeholder_id: UUID, tenant_id: UUID | None = None) -> None:
+    async def delete(self, stakeholder_id: UUID, tenant_id: TenantId) -> None:
         """Deletes a stakeholder by its ID."""
         pass
 
     @abstractmethod
     async def add_raci_assignment(
-        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+        self, assignment: RaciAssignment, tenant_id: TenantId
     ) -> None:
         """Adds a new RACI assignment with tenant verification."""
         pass
 
     @abstractmethod
     async def list_raci_assignments(
-        self, project_id: UUID, tenant_id: UUID | None = None
+        self, project_id: UUID, tenant_id: TenantId
     ) -> list[RaciAssignment]:
         """Lists RACI assignments for a project."""
         pass
@@ -70,7 +71,7 @@ class IStakeholderRepository(ABC):
         project_id: UUID,
         wbs_item_id: UUID,
         stakeholder_id: UUID,
-        tenant_id: UUID | None = None,
+        tenant_id: TenantId,
     ) -> RaciAssignment | None:
         """Retrieves a single RACI assignment by composite key."""
         pass
@@ -80,15 +81,15 @@ class IStakeholderRepository(ABC):
         self,
         project_id: UUID,
         wbs_item_id: UUID,
+        tenant_id: TenantId,
         exclude_stakeholder_id: UUID | None = None,
-        tenant_id: UUID | None = None,
     ) -> RaciAssignment | None:
         """Finds an existing ACCOUNTABLE assignment for a task."""
         pass
 
     @abstractmethod
     async def update_raci_assignment(
-        self, assignment: RaciAssignment, tenant_id: UUID | None = None
+        self, assignment: RaciAssignment, tenant_id: TenantId
     ) -> None:
         """Updates an existing RACI assignment with tenant verification."""
         pass

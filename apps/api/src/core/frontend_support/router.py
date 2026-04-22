@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,13 @@ from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
 from src.core.frontend_support.repository import CookieConsentRepository
+from src.core.security.secret_channel import (
+    AwsSecretsManagerBundleProvider,
+    EnvJsonSecretBundleProvider,
+    VaultKvBundleProvider,
+    redact_clerk_bundle,
+)
+from src.config import settings
 
 router = APIRouter(tags=["frontend-support"])
 
@@ -55,6 +62,11 @@ class OnboardingRetryRequest(BaseModel):
     sessionId: str | None = None
 
 
+class SecretChannelClerkResponse(BaseModel):
+    bundle_version: str
+    values: dict[str, str]
+
+
 def _get_consent_repository(
     db: AsyncSession = Depends(get_session),
 ) -> CookieConsentRepository:
@@ -80,6 +92,42 @@ def _trackers_blocked(categories: ConsentCategories) -> list[str]:
     if not categories.marketing:
         blocked.append("marketing")
     return blocked
+
+
+def _resolve_secret_channel_bundle() -> dict[str, str]:
+    bundle_ref = settings.secret_channel_bundle_ref
+    if not bundle_ref:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Secret channel bundle not configured",
+        )
+    if settings.secret_channel_backend == "env_json":
+        provider = EnvJsonSecretBundleProvider()
+    elif settings.secret_channel_backend == "aws_secrets_manager":
+        if not settings.secret_channel_aws_region:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Secret channel AWS region not configured",
+            )
+        provider = AwsSecretsManagerBundleProvider(region=settings.secret_channel_aws_region)
+    else:
+        if not settings.secret_channel_vault_url or not settings.secret_channel_vault_token:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Secret channel Vault settings not configured",
+            )
+        provider = VaultKvBundleProvider(
+            url=settings.secret_channel_vault_url,
+            token=settings.secret_channel_vault_token,
+        )
+    bundle = provider.load_bundle(bundle_ref=bundle_ref)
+    redacted = redact_clerk_bundle(bundle)
+    if not redacted:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Secret channel returned no frontend-safe Clerk values",
+        )
+    return redacted
 
 
 @router.post("/compliance/cookies/consent")
@@ -238,3 +286,19 @@ async def get_sample_project_telemetry(
         "events": ["start", "ready"],
         "elapsedMs": 180000,
     }
+
+
+@router.get("/security/secret-channel/clerk", response_model=SecretChannelClerkResponse)
+async def get_clerk_secret_channel_bundle(
+    x_secret_channel_token: str | None = Header(default=None, alias="X-Secret-Channel-Token"),
+) -> SecretChannelClerkResponse:
+    expected_token = settings.secret_channel_token
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Secret channel token not configured",
+        )
+    if not x_secret_channel_token or x_secret_channel_token != expected_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid secret channel token")
+    values = _resolve_secret_channel_bundle()
+    return SecretChannelClerkResponse(bundle_version="2026-04-21", values=values)

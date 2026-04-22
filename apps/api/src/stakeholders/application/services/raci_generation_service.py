@@ -108,7 +108,10 @@ class RaciGenerationService:
         return await self.document_repository.get_clause_text_map(clause_id_list)
 
     async def _load_stakeholders(self, project_id: UUID) -> list[RaciStakeholderInput]:
-        stakeholders, _ = await self.list_stakeholders_use_case.execute(project_id=project_id)
+        stakeholders, _ = await self.list_stakeholders_use_case.execute(
+            project_id=project_id,
+            tenant_id=self.tenant_id,
+        )
         return [
             RaciStakeholderInput(
                 id=stakeholder.id,
@@ -169,7 +172,10 @@ class RaciGenerationService:
             return
 
         for row in new_rows:
-            await self.stakeholder_repository.add_raci_assignment(row)
+            await self.stakeholder_repository.add_raci_assignment(
+                row,
+                tenant_id=self.tenant_id,
+            )
         await self.stakeholder_repository.commit()
         logger.info(
             "raci_assignments_persisted",

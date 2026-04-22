@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Gauge,
   Grid3X3,
+  LineChart,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { href: '/evidence', label: 'Evidence', icon: Gauge },
   { href: '/alerts', label: 'Alerts', icon: AlertTriangle },
   { href: '/stakeholders', label: 'Stakeholders', icon: Users },
+  { href: '/ai-analytics', label: 'AI Analytics', icon: LineChart },
 ];
 
 export function AppSidebar() {
