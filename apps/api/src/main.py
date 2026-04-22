@@ -29,6 +29,8 @@ from src.config import settings
 
 # Import core routers (always enabled)
 from src.core.auth.router import router as auth_router
+from src.core.ai.analytics_router import router as ai_analytics_router
+from src.core.ai.feedback_router import router as ai_feedback_router
 from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
 from src.core.events import build_event_bus
@@ -296,6 +298,8 @@ def create_application() -> FastAPI:
     app.include_router(project_alerts_router, prefix=api_v1_prefix)
     app.include_router(bulk_operations_router, prefix=api_v1_prefix)
     app.include_router(observability_router, prefix=api_v1_prefix)
+    app.include_router(ai_feedback_router, prefix=api_v1_prefix)
+    app.include_router(ai_analytics_router, prefix=api_v1_prefix)
     app.include_router(frontend_support_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)

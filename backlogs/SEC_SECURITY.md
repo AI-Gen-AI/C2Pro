@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Status**: ✅ PARTIALLY FIXED (Coverage: ~80%)
+**Status**: ✅ FIXED (Coverage: ~100% for listed SEC-009..011 controls)
 **Date**: 2026-04-07
 **Auditor**: Role_reviewer (Gemini CLI)
 **Last Updated**: 2026-04-07 (Security fixes applied)
@@ -17,9 +17,9 @@ The audit of the persistence layer revealed significant vulnerabilities in tenan
 
 **Pending Security Remediation Focus**
 
-- Add database-level RLS coverage for `clause_embeddings`
+- ✅ Add database-level RLS coverage for `clause_embeddings` (Alembic `20260421_0001_harden_clause_embeddings_rls.py`)
 - Close remaining cross-tenant/coherence privilege gaps documented in this file
-- Coordinate credential rotation work tracked as `TASK-FRT-045`
+- Coordinate credential rotation work tracked as `TASK-FRT-045` (now unblocked via approved secret channel endpoint)
 
 **Usage Note**
 

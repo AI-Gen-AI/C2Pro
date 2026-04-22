@@ -4,6 +4,7 @@ Repository port (interface) for WBS operations.
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from src.core.tenants.types import TenantId
 from src.procurement.domain.models import WBSItem
 
 
@@ -14,7 +15,7 @@ class IWBSRepository(ABC):
     """
 
     @abstractmethod
-    async def create(self, wbs_item: WBSItem) -> WBSItem:
+    async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:
         """
         Create a new WBS item.
 
@@ -27,7 +28,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
+    async def get_by_id(self, wbs_id: UUID, tenant_id: TenantId) -> WBSItem | None:
         """
         Retrieve a WBS item by ID.
 
@@ -41,7 +42,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def get_by_project(self, project_id: UUID, tenant_id: TenantId) -> list[WBSItem]:
         """
         Retrieve all WBS items for a project.
 
@@ -55,7 +56,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> WBSItem | None:
+    async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: TenantId) -> WBSItem | None:
         """
         Retrieve a WBS item by its code within a project.
 
@@ -70,7 +71,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_children(self, parent_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def get_children(self, parent_id: UUID, tenant_id: TenantId) -> list[WBSItem]:
         """
         Retrieve all children of a WBS item.
 
@@ -84,7 +85,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_tree(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
+    async def get_tree(self, project_id: UUID, tenant_id: TenantId) -> list[WBSItem]:
         """
         Retrieve the complete WBS tree for a project with hierarchy.
 
@@ -98,7 +99,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> WBSItem | None:
+    async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: TenantId) -> WBSItem | None:
         """
         Update an existing WBS item.
 
@@ -113,7 +114,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def delete(self, wbs_id: UUID, tenant_id: UUID) -> bool:
+    async def delete(self, wbs_id: UUID, tenant_id: TenantId) -> bool:
         """
         Delete a WBS item and its children (cascade).
 
@@ -127,7 +128,7 @@ class IWBSRepository(ABC):
         pass
 
     @abstractmethod
-    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
+    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: TenantId) -> list[WBSItem]:
         """
         Create multiple WBS items at once (used for AI generation).
 

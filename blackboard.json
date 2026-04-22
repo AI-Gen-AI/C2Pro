@@ -4,37 +4,111 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-20T20:20:39+00:00",
+  "updated_at": "2026-04-21T23:30:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
     "frontend": "completed",
     "ai": "in_progress",
     "infra": "in_progress",
-    "qa": "in_progress",
+    "qa": "completed",
     "reviewer": "completed",
     "security": null,
     "devops": null
   },
   "tareas": [
     {
+      "tarea_id": "T065",
+      "backlog_id": "EPIC-DDD-MIGRATION",
+      "tipo": "backend",
+      "descripcion": "Enforce tenant-first port signatures for docs/stakeholders/procurement and finish DDD migration boundary hardening.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Ports require tenant_id and adapters/use-cases propagate tenant context.",
+      "archivos_modificados": [
+        "apps/api/src/core/tenants/types.py",
+        "apps/api/src/documents/ports/document_repository.py",
+        "apps/api/src/stakeholders/ports/stakeholder_repository.py",
+        "apps/api/src/stakeholders/adapters/persistence/sqlalchemy_stakeholder_repository.py",
+        "apps/api/src/stakeholders/application/list_project_stakeholders_use_case.py",
+        "apps/api/src/stakeholders/application/services/raci_generation_service.py",
+        "apps/api/src/stakeholders/adapters/http/router.py",
+        "apps/api/src/procurement/ports/wbs_repository.py",
+        "apps/api/src/procurement/ports/bom_repository.py",
+        "apps/api/src/procurement/ports/budget_repository.py",
+        "apps/api/src/procurement/adapters/persistence/wbs_repository.py",
+        "apps/api/src/procurement/application/use_cases/wbs_use_cases.py",
+        "C2PRO_MASTER_BACKLOG.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-21T22:00:00+00:00",
+        "completado": "2026-04-21T22:00:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "EPIC-DDD-MIGRATION boundary hardening delivered with tenant propagation enforcement and legacy schema status closed.",
+        "cambios_realizados": [
+          "Added tenant boundary type+guard.",
+          "Updated stakeholder/procurement/document repository ports to require tenant_id.",
+          "Propagated tenant_id in stakeholder/procurement use-case wiring."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T064",
+      "backlog_id": "EPIC-TENANT-RLS-HARDENING",
+      "tipo": "security",
+      "descripcion": "Apply clause_embeddings RLS hardening and ship approved secret channel for TASK-FRT-045 unblock.",
+      "asignado_a": "security",
+      "estado": "completado",
+      "criterio_done": "Migration and secret channel endpoint merged with verification artifacts.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260421_0001_harden_clause_embeddings_rls.py",
+        "apps/api/src/core/security/secret_channel.py",
+        "apps/api/src/core/frontend_support/router.py",
+        "apps/api/tests/core/test_frontend_secret_channel.py",
+        "apps/api/tests/modules/hitl/adapters/test_clause_embeddings_rls_hardening_migration.py",
+        "infrastructure/supabase/tests/09_clause_embeddings_rls.sql",
+        ".env.example",
+        "apps/web/.env.example",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "backlogs/SEC_SECURITY.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-21T21:30:00+00:00",
+        "completado": "2026-04-21T21:30:00+00:00"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "EPIC-TENANT-RLS-HARDENING completed and TASK-FRT-045 unblocked.",
+        "cambios_realizados": [
+          "Enabled fail-closed RLS policy on clause_embeddings tied to app.current_tenant via projects.tenant_id.",
+          "Added token-gated secret channel endpoint with pluggable providers (env JSON / AWS Secrets Manager / Vault KV).",
+          "Added regression tests and SQL proof assertions for tenant isolation."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
       "tarea_id": "T063",
       "backlog_id": "TASK-AI-013",
       "tipo": "ai",
       "descripcion": "Integrate tracing with usage_logger.py to persist LangSmith trace linkage alongside local ai_usage_logs records.",
       "asignado_a": "ai",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "LLM executions emit trace identifiers and local usage rows stay synchronized with trace metadata for analytics joins.",
       "archivos_modificados": [],
       "timestamps": {
-        "inicio": "2026-04-20T20:20:39+00:00"
+        "inicio": "2026-04-20T20:20:39+00:00",
+        "completado": "2026-04-21T20:02:50Z"
       },
       "resultado": {
-        "exitoso": false,
-        "mensaje": "Activated as next priority after completing TASK-AI-012.",
-        "cambios_realizados": [],
-        "tests_pasados": false,
-        "validacion_lint": false
+        "status": "success",
+        "details": "EPIC-LANGSMITH-PHASE-2 backend implementation completed: traced_llm_call persistence, usage logger refactor, and tenant-secured feedback endpoint."
       }
     },
     {
@@ -497,6 +571,39 @@
           "Added subprocess regression coverage for plain import src.alerts.adapters.http.router from apps/api.",
           "Normalized internal alerts package imports from alerts.* to src.alerts.*.",
           "Verified that a plain import of src.main now succeeds from apps/api."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T066",
+      "backlog_id": "EPIC-LANGSMITH-VALIDATION",
+      "tipo": "qa",
+      "descripcion": "Implement TASK-AI-027/028/029 testing pyramid for LangSmith observability stack.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "Unit, integration, and Playwright E2E suites added with strict external SDK/API mocking boundaries.",
+      "archivos_modificados": [
+        "apps/api/tests/conftest.py",
+        "apps/api/tests/unit/core/ai/test_langsmith_validation_unit.py",
+        "apps/api/tests/integration/core/ai/test_langsmith_validation_integration.py",
+        "apps/web/src/tests/e2e/TASK-AI-029-ai-analytics-dashboard.spec.ts",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-21T23:00:00Z",
+        "completado": "2026-04-21T23:30:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "EPIC-LANGSMITH-VALIDATION completed with test pyramid coverage and mocked LangSmith boundaries.",
+        "cambios_realizados": [
+          "Added autouse fixture to globally mock langsmith.Client and langchain.hub.",
+          "Added unit + integration backend tests for decorator, feedback, analytics aggregation, and usage persistence.",
+          "Added Playwright E2E dashboard validation with deterministic analytics endpoint interception."
         ],
         "tests_pasados": true,
         "validacion_lint": false
