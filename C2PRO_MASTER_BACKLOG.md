@@ -35,7 +35,7 @@
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `EPIC-TENANT-RLS-HARDENING` | Multi-tenant RLS + credential hygiene | Architecture | P0 | — | Ship Alembic RLS policy on `clause_embeddings`, close SEC-009..011 gaps, and unblock `TASK-FRT-045` via approved secret channel. |
-| `EPIC-CORE-DECOUPLE` | Decouple AI logic from LangGraph nodes (`TASK-IMPL-010` + 14 subtasks) | Refactor | P0 | — | Execute Phases 1–4: domain services → use cases → node delegations → workflow edge + 80% coverage gate. |
+| `EPIC-CORE-DECOUPLE` ✅ | Decouple AI logic from LangGraph nodes (`TASK-IMPL-010` + 14 subtasks) | Refactor | P0 | — | Phases 1–4 completed 2026-04-21; 92% coverage on refactored modules (domain/use-case 100%, nodes 85–87%). Unblocks DDD-MIGRATION, LANGSMITH-PHASE-1, HITL-OBSERVABILITY, DLQ-ADMIN. |
 
 ### Tier 1 — Architectural Refactor
 

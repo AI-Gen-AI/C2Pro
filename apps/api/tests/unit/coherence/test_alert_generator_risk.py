@@ -87,10 +87,12 @@ class TestAlertGeneratorRiskAlerts:
         # Third item: impact_level="medium" -> AlertSeverity.MEDIUM
         assert alerts[2].severity == AlertSeverity.MEDIUM
 
-    def test_generate_risk_alerts_uses_risk_category_as_default(
+    def test_generate_risk_alerts_leaves_category_none_when_missing(
         self, project_id, analysis_id
     ):
-        """Risk alerts without category should default to 'risk' category."""
+        """Risk alerts without a recognisable category return ``None`` so the
+        persistence layer can decide whether to drop or flag them. The
+        previous ``"risk"`` fallback polluted the canonical taxonomy."""
         generator = AlertGenerator(project_id=project_id, analysis_id=analysis_id)
 
         risk_items = [
@@ -106,7 +108,7 @@ class TestAlertGeneratorRiskAlerts:
         alerts = generator.generate_risk_alerts(risk_items)
 
         assert len(alerts) == 1
-        assert alerts[0].category == "risk"
+        assert alerts[0].category is None
 
     def test_generate_risk_alerts_includes_confidence_in_metadata(
         self, project_id, analysis_id, sample_risk_items
@@ -155,10 +157,12 @@ class TestAlertGeneratorRiskAlerts:
         assert alerts[3].severity == AlertSeverity.CRITICAL
         assert alerts[3].impact_level == "critical"
 
-    def test_generate_risk_alerts_uses_custom_category_when_provided(
+    def test_generate_risk_alerts_normalizes_to_canonical_category(
         self, project_id, analysis_id
     ):
-        """Risk alerts should use custom category when provided."""
+        """Categories are normalized to the six-value canonical taxonomy:
+        ``schedule`` → ``SCHEDULE``, ``financial`` → ``BUDGET``,
+        ``HSE`` → ``QUALITY`` — regardless of case or legacy name."""
         generator = AlertGenerator(project_id=project_id, analysis_id=analysis_id)
 
         risk_items = [
@@ -174,7 +178,7 @@ class TestAlertGeneratorRiskAlerts:
                 "description": "Budget overrun.",
                 "impact_level": "high",
                 "confidence": 0.88,
-                "category": "financial",
+                "category": "financial",  # legacy — normalizes to BUDGET
             },
             {
                 "summary": "Legal risk",
@@ -183,13 +187,21 @@ class TestAlertGeneratorRiskAlerts:
                 "confidence": 0.82,
                 "category": "legal",
             },
+            {
+                "summary": "Safety risk",
+                "description": "HSE issue.",
+                "impact_level": "medium",
+                "confidence": 0.80,
+                "category": "HSE",  # legacy — normalizes to QUALITY
+            },
         ]
 
         alerts = generator.generate_risk_alerts(risk_items)
 
-        assert alerts[0].category == "schedule"
-        assert alerts[1].category == "financial"
-        assert alerts[2].category == "legal"
+        assert alerts[0].category == "SCHEDULE"
+        assert alerts[1].category == "BUDGET"
+        assert alerts[2].category == "LEGAL"
+        assert alerts[3].category == "QUALITY"
 
     def test_generate_risk_alerts_uses_summary_or_title_for_alert_title(
         self, project_id, analysis_id

@@ -1,16 +1,17 @@
 """
 LangGraph nodes (N3–N5, N9, N12–N14, N17).
 
-Thin adapter wrappers — business logic lives in domain services and
-application use cases. Each node is < 50 lines.
+Thin adapter wrappers — every node now only (1) reads from the LangGraph
+state, (2) invokes a use case or domain service, and (3) writes results
+back to the state. Business logic and LLM prompts live under
+`src.analysis.domain` / `src.analysis.application`.
 
-Refers to TASK-IMPL-010.8–.14.
+Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3.
 """
 
 from __future__ import annotations
 
 import os
-import re
 from typing import Any
 from uuid import UUID
 
@@ -22,43 +23,36 @@ from src.analysis.adapters.graph.dependencies import (
     get_hitl_service_for_graph,
 )
 from src.analysis.adapters.graph.schema import ProjectState
-from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
-from src.analysis.domain.prompts import (
-    CRITIQUE_SYSTEM_PROMPT,
-    DOC_TYPES,
-    ROUTER_SYSTEM_PROMPT,
+from src.analysis.application.classify_document_use_case import (
+    ClassifyDocumentCommand,
+    ClassifyDocumentUseCase,
 )
+from src.analysis.application.critique_extraction_use_case import (
+    CritiqueExtractionCommand,
+    CritiqueExtractionUseCase,
+)
+from src.analysis.domain.ai_extraction import (
+    CritiqueExtractionService,
+    DeterministicRiskRulesService,
+    DeterministicWbsRulesService,
+)
+from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 
-# Stateless domain service (reusable across requests)
-_critique_evaluator = CritiqueEvaluationService()
+# Stateless domain services (reusable across requests)
+_risk_rules = DeterministicRiskRulesService()
+_wbs_rules = DeterministicWbsRulesService()
+_critique_service = CritiqueExtractionService()
 
 
-# ── Adapter helpers (AI calls — cannot live in domain) ──────────────────────
-
-
-def _fallback_doc_type(text: str) -> str:
-    low = text.lower()
-    if any(k in low for k in ("contrato", "clausula", "contract", "clause", "obligaciones")):
-        return "contract"
-    if any(k in low for k in ("presupuesto", "capex", "opex", "budget", "cost")):
-        return "budget"
-    if any(k in low for k in ("cronograma", "plazo", "hito", "schedule", "milestone", "gantt")):
-        return "schedule"
-    return "technical_spec"
+# ── Backwards-compatible shims ──────────────────────────────────────────────
+# Kept because legacy facade modules (src.ai.graph) and the TS-ADP-GRAPH-DI-001
+# suite import these helpers by name and monkeypatch them at runtime.
 
 
 async def _classify_doc_type(text: str, tenant_id: str | None) -> str:
-    service = get_ai_service(tenant_id)
-    try:
-        payload = await service.run_extraction(ROUTER_SYSTEM_PROMPT, text)
-        if isinstance(payload, dict):
-            candidate = str(payload.get("doc_type", "")).strip().lower()
-            if candidate in DOC_TYPES:
-                return candidate
-    except Exception:
-        pass
-    return _fallback_doc_type(text)
+    use_case = ClassifyDocumentUseCase(ai=get_ai_service(tenant_id))
+    return await use_case.execute(ClassifyDocumentCommand(text=text))
 
 
 async def _critique_extraction(
@@ -67,30 +61,50 @@ async def _critique_extraction(
     doc_type: str,
     tenant_id: str | None,
 ) -> dict[str, str]:
-    service = get_ai_service(tenant_id)
-    try:
-        payload = await service.run_extraction(
-            CRITIQUE_SYSTEM_PROMPT,
-            f"Document type: {doc_type}\nExtraction results: {items}",
-        )
-        if isinstance(payload, dict):
-            status = str(payload.get("status", "")).upper()
-            notes = str(payload.get("notes", "")).strip()
-            if status in {"OK", "RETRY"}:
-                return {"status": status, "notes": notes}
-    except Exception:
-        pass
-    return {"status": "RETRY", "notes": "Automatic critique inconclusive."}
+    result = await _critique_service.extract(
+        items=items,
+        doc_type=doc_type,
+        ai=get_ai_service(tenant_id),
+    )
+    return {"status": result.status, "notes": result.notes}
+
+
+def _deterministic_contract_risks(text: str) -> list[dict[str, Any]]:
+    return _risk_rules.extract(text)
+
+
+def _deterministic_wbs_items(text: str) -> list[dict[str, Any]]:
+    return _wbs_rules.extract(text)
+
+
+def _map_risk_severity(item: dict[str, Any]):
+    """Map a risk dict to an AlertSeverity enum.
+
+    Backwards-compat shim — legacy tests (tests/ai/test_risk_extractor.py)
+    still import this helper by name. Production alert generation now lives
+    in ``src.coherence.alert_generator.AlertGenerator``.
+    """
+    from src.shared_kernel.enums import AlertSeverity
+
+    severity_source = item.get("severity") or item.get("impact") or "low"
+    severity_value = str(severity_source).lower()
+    for candidate in AlertSeverity:
+        if candidate.value == severity_value:
+            return candidate
+    return AlertSeverity.LOW
 
 
 # ── N3 — Router ─────────────────────────────────────────────────────────────
 
 
 async def router_node(state: ProjectState) -> ProjectState:
-    """N3 — Classify document type via AI with keyword fallback."""
+    """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
     if state.get("doc_type") in DOC_TYPES:
         return state
-    doc_type = await _classify_doc_type(state["document_text"], state.get("tenant_id"))
+    use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
+    doc_type = await use_case.execute(
+        ClassifyDocumentCommand(text=state["document_text"])
+    )
     state["doc_type"] = doc_type
     state["messages"].append(AIMessage(content=f"Router doc_type={doc_type}"))
     return state
@@ -99,68 +113,13 @@ async def router_node(state: ProjectState) -> ProjectState:
 # ── N4 — Risk Extractor ─────────────────────────────────────────────────────
 
 
-def _deterministic_contract_risks(text: str) -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
-    lower = text.lower()
-    if "penalt" in lower or "% for delay" in lower or "delay" in lower:
-        risks.append(
-            {
-                "category": "LEGAL",
-                "title": "Delay penalty exposure",
-                "summary": "Contract includes delay penalties.",
-                "description": "The contract contains penalty language linked to delay or late completion.",
-                "probability": "MEDIUM",
-                "impact": "HIGH",
-                "mitigation_suggestion": "Validate schedule buffers, milestone logic, and penalty caps before execution.",
-                "source_quote": "Daily penalty 2% for delay.",
-                "source_text_snippet": "Daily penalty 2% for delay.",
-                "risk_score": 6,
-                "immediate_alert": False,
-                "confidence": 0.82,
-            }
-        )
-    if re.search(r"\b30\s+days\b", lower) and "payment" in lower:
-        risks.append(
-            {
-                "category": "FINANCIAL",
-                "title": "Payment term cash-flow risk",
-                "summary": "Payment depends on certified milestones within a defined term.",
-                "description": "Cash flow may depend on milestone certification and payment timing discipline.",
-                "probability": "MEDIUM",
-                "impact": "MEDIUM",
-                "mitigation_suggestion": "Check certification workflow, invoice timing, and interim financing assumptions.",
-                "source_quote": "Payment subject to certified milestones within 30 days.",
-                "source_text_snippet": "Payment subject to certified milestones within 30 days.",
-                "risk_score": 4,
-                "immediate_alert": False,
-                "confidence": 0.79,
-            }
-        )
-    if "warranty" in lower:
-        risks.append(
-            {
-                "category": "QUALITY",
-                "title": "Warranty obligation exposure",
-                "summary": "Warranty obligations extend post-handover liability.",
-                "description": "The contract imposes a warranty period that may require post-completion corrections.",
-                "probability": "MEDIUM",
-                "impact": "MEDIUM",
-                "mitigation_suggestion": "Confirm defect response process, retention terms, and warranty reserve assumptions.",
-                "source_quote": "Warranty period is 24 months.",
-                "source_text_snippet": "Warranty period is 24 months.",
-                "risk_score": 4,
-                "immediate_alert": False,
-                "confidence": 0.77,
-            }
-        )
-    return risks
-
-
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    """N4 — Extract risks via RiskExtractionTool."""
+    """N4 — Extract risks via RiskExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_risks"] = _deterministic_contract_risks(state.get("document_text", ""))
-        state["messages"].append(AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks"))
+        state["extracted_risks"] = _risk_rules.extract(state.get("document_text", ""))
+        state["messages"].append(
+            AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks")
+        )
         return state
 
     from src.core.ai.tools import get_tool
@@ -171,37 +130,13 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
 
 
-def _deterministic_wbs_items(text: str) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    lower = text.lower()
-    if any(term in lower for term in ["scope", "works", "materials", "inspection", "handover"]):
-        items.append(
-            {
-                "code": "1.1",
-                "name": "Contract scope execution",
-                "description": "Execution of the contract scope including materials, inspection, testing, and handover.",
-                "item_type": "work_package",
-                "confidence": 0.8,
-            }
-        )
-    if "deadline" in lower or "completion" in lower:
-        items.append(
-            {
-                "code": "1.2",
-                "name": "Completion milestone control",
-                "description": "Control of delivery and completion milestones against contractual dates.",
-                "item_type": "activity",
-                "confidence": 0.78,
-            }
-        )
-    return items
-
-
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
-    """N5 — Extract WBS items via WBSExtractionTool."""
+    """N5 — Extract WBS items via WBSExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_wbs"] = _deterministic_wbs_items(state.get("document_text", ""))
-        state["messages"].append(AIMessage(content=f"WBS extractor mock mode: {len(state['extracted_wbs'])} items"))
+        state["extracted_wbs"] = _wbs_rules.extract(state.get("document_text", ""))
+        state["messages"].append(
+            AIMessage(content=f"WBS extractor mock mode: {len(state['extracted_wbs'])} items")
+        )
         return state
 
     from src.core.ai.tools import get_tool
@@ -223,42 +158,33 @@ async def budget_parser_node(state: ProjectState) -> ProjectState:
 
 
 async def critique_node(state: ProjectState) -> ProjectState:
-    """N12 — Critique extraction quality and determine HITL routing.
-
-    Delegates confidence calculation and evaluation to CritiqueEvaluationService.
-    """
+    """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["confidence_score"] = 0.95 # Mock confidence
+        state["confidence_score"] = 0.95  # Mock confidence
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
         state["human_approval_required"] = False
         state["messages"].append(AIMessage(content="Critique mock mode: passed."))
         return state
 
-    items = state["extracted_risks"] if state["extracted_risks"] else state["extracted_wbs"]
-    confidence = _critique_evaluator.calculate_confidence(items)
-    state["confidence_score"] = confidence
-
-    critique = await _critique_extraction(
-        items=items,
-        doc_type=state.get("doc_type") or "unknown",
-        tenant_id=state.get("tenant_id"),
+    use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
+    result = await use_case.execute(
+        CritiqueExtractionCommand(
+            extracted_risks=state["extracted_risks"],
+            extracted_wbs=state["extracted_wbs"],
+            doc_type=state.get("doc_type"),
+            retry_count=state["retry_count"],
+        )
     )
 
-    result = _critique_evaluator.evaluate_critique(
-        critique_status=critique["status"],
-        critique_notes=critique["notes"],
-        confidence=confidence,
-        retry_count=state["retry_count"],
-    )
-
+    state["confidence_score"] = result.confidence
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
     state["messages"].append(
         AIMessage(
             content=(
-                f"Critique status={critique['status']} confidence={confidence:.2f} "
+                f"Critique status={result.status} confidence={result.confidence:.2f} "
                 f"retry_count={result.retry_count}"
             )
         )

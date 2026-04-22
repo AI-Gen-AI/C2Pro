@@ -7,6 +7,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from src.analysis.application.dtos import AlertCreate
+from src.analysis.domain.risk_categories import normalize_category
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertType
 
@@ -114,7 +115,8 @@ class AlertGenerator:
             severity = self._map_risk_severity(item)
             title = item.get("summary") or item.get("title") or "Risk identified"
             description = item.get("description") or "Risk detected by AI extraction."
-            category = item.get("category") or "risk"
+            canonical = normalize_category(item.get("category"))
+            category = canonical.value if canonical is not None else None
             impact_level = item.get("impact_level")
             confidence = item.get("confidence")
 
@@ -251,13 +253,26 @@ class AlertGenerator:
         return RULE_SEVERITIES.get(rule_id, AlertSeverity.LOW)
 
     def _category_for(self, rule_id: str) -> str | None:
-        if rule_id in {"R12", "R14"}:
-            return "schedule"
-        if rule_id in {"R2", "R02", "R15"}:
-            return "financial"
-        if rule_id in {"R6"}:
-            return "legal"
-        return None
+        """Return a canonical RiskCategory value for a coherence rule.
+
+        Coherence rules internally speak the legacy ``TIME`` / ``BUDGET``
+        vocabulary; at the alert-persistence boundary we emit canonical
+        names (``SCHEDULE``, ``BUDGET``, ``LEGAL``) so the API and frontend
+        see a single taxonomy.
+        """
+        rule_to_raw: dict[str, str] = {
+            "R12": "SCHEDULE",
+            "R14": "SCHEDULE",
+            "R2": "BUDGET",
+            "R02": "BUDGET",
+            "R15": "BUDGET",
+            "R6": "LEGAL",
+        }
+        raw = rule_to_raw.get(rule_id)
+        if raw is None:
+            return None
+        canonical = normalize_category(raw)
+        return canonical.value if canonical is not None else None
 
     def _source_clause_id(self, evidence: dict) -> UUID | None:
         clause_id = evidence.get("source_clause_id")
