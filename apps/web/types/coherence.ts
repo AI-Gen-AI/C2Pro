@@ -2,7 +2,7 @@
  * Type definitions for Coherence Score and related entities
  */
 
-export type AlertCategory = 'Legal' | 'Financial' | 'Technical' | 'Schedule' | 'Scope' | 'Quality';
+export type AlertCategory = 'Legal' | 'Schedule' | 'Quality' | 'Scope' | 'Technical' | 'Budget';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -45,7 +45,7 @@ export const MOCK_COHERENCE_DETAIL: CoherenceScoreDetail = {
       impact_percentage: 15,
     },
     {
-      category: 'Financial',
+      category: 'Budget',
       score: 72,
       alert_count: 12,
       severity_breakdown: {

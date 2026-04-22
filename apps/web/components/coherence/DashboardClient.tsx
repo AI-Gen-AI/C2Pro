@@ -18,12 +18,17 @@ import {
 import type { DashboardSummary } from "@/lib/api/contracts";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  SCOPE: "Scope",
-  BUDGET: "Budget",
-  QUALITY: "Quality",
-  TECHNICAL: "Technical",
   LEGAL: "Legal",
-  TIME: "Time",
+  SCHEDULE: "Schedule",
+  QUALITY: "Quality",
+  SCOPE: "Scope",
+  TECHNICAL: "Technical",
+  BUDGET: "Budget",
+  // Legacy aliases — kept so dashboards keep rendering while older
+  // payloads still flow through normalization.
+  TIME: "Schedule",
+  FINANCIAL: "Budget",
+  HSE: "Quality",
 };
 
 type ViewMode = "breakdown" | "radar" | "alerts";

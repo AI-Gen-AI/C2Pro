@@ -6,17 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.analysis.domain.risk_categories import (
+    RiskCategory,
+    normalize_category as _normalize_risk_category,
+)
+
 from .base_agent import BaseAgent
 from .risk_prompts import RISK_SYSTEM_PROMPT
-
-
-class RiskCategory(str, Enum):
-    LEGAL = "LEGAL"
-    FINANCIAL = "FINANCIAL"
-    SCHEDULE = "SCHEDULE"
-    TECHNICAL = "TECHNICAL"
-    HSE = "HSE"
-    QUALITY = "QUALITY"
 
 
 class RiskProbability(str, Enum):
@@ -142,13 +138,7 @@ def _clean_text(value: Any) -> str | None:
 
 
 def _normalize_category(value: Any) -> RiskCategory | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip().upper()
-    for candidate in RiskCategory:
-        if candidate.value == normalized:
-            return candidate
-    return None
+    return _normalize_risk_category(value if isinstance(value, str) else None)
 
 
 def _normalize_probability(value: Any) -> RiskProbability | None:

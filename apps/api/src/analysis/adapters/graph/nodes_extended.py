@@ -10,7 +10,6 @@ Refers to TASK-IMPL-010.8–.14 (node refactoring).
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 import structlog
@@ -22,8 +21,15 @@ from src.analysis.adapters.graph.dependencies import (
     get_pii_detector_service,
 )
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.application.generate_raci_use_case import (
+    GenerateRaciCommand,
+    GenerateRaciUseCase,
+)
+from src.analysis.application.parse_budget_use_case import (
+    ParseBudgetCommand,
+    ParseBudgetUseCase,
+)
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
-from src.analysis.domain.prompts import BUDGET_EXTRACTION_PROMPT, RACI_GENERATION_PROMPT
 
 logger = structlog.get_logger()
 
@@ -140,7 +146,7 @@ async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def raci_generator_node(state: ProjectState) -> ProjectState:
-    """N7 — Generate RACI matrix from extracted stakeholders and WBS."""
+    """N7 — Delegates RACI matrix generation to GenerateRaciUseCase."""
     stakeholders = state.get("extracted_stakeholders", [])
     wbs_items = state.get("extracted_wbs", [])
 
@@ -156,27 +162,14 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
         )
         return state
 
-    try:
-        prompt = (
-            f"{RACI_GENERATION_PROMPT}\n\n"
-            f"Stakeholders: {stakeholders}\n\n"
-            f"WBS Items: {wbs_items}"
-        )
-        service = get_ai_service(state.get("tenant_id"))
-        payload = await service.run_extraction(prompt, "")
-        if isinstance(payload, list):
-            matrix = payload
-        elif isinstance(payload, dict) and "assignments" in payload:
-            matrix = payload["assignments"]
-        else:
-            matrix = [payload] if payload else []
-    except Exception:
-        logger.warning("node_raci_generator_failed", exc_info=True)
-        matrix = []
+    use_case = GenerateRaciUseCase(ai=get_ai_service(state.get("tenant_id")))
+    matrix = await use_case.execute(
+        GenerateRaciCommand(stakeholders=stakeholders, wbs_items=wbs_items)
+    )
 
-    state["raci_matrix"] = matrix if isinstance(matrix, list) else [matrix]
+    state["raci_matrix"] = matrix
     state["messages"].append(
-        AIMessage(content=f"N7 raci_generator: {len(state['raci_matrix'])} assignments generated")
+        AIMessage(content=f"N7 raci_generator: {len(matrix)} assignments generated")
     )
     return state
 
@@ -246,34 +239,18 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
 # ---------------------------------------------------------------------------
 
 async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
-    """N9 — Parse budget data and generate BOM items."""
+    """N9 — Delegates budget parsing + BOM extraction to ParseBudgetUseCase."""
     text = state.get("anonymized_text") or state["document_text"]
     tenant_id = state.get("tenant_id")
 
-    bom_items: list[dict[str, Any]] = []
-    try:
-        service = get_ai_service(tenant_id)
-        payload = await service.run_extraction(BUDGET_EXTRACTION_PROMPT, text)
-        if isinstance(payload, dict):
-            raw_items = payload.get("items", [])
-            bom_items = [
-                {
-                    "name": item.get("name", "Unknown"),
-                    "amount": item.get("amount", 0.0),
-                    "currency": item.get("currency", "EUR"),
-                    "category": item.get("category", "general"),
-                }
-                for item in raw_items
-                if isinstance(item, dict)
-            ]
-    except Exception:
-        logger.warning("node_budget_parser_extended_failed", exc_info=True)
+    use_case = ParseBudgetUseCase(ai=get_ai_service(tenant_id))
+    result = await use_case.execute(ParseBudgetCommand(text=text))
 
-    state["bom_items"] = bom_items
+    state["bom_items"] = result.bom_items
     state["extracted_wbs"] = state.get("extracted_wbs") or []
-    state["confidence_score"] = 0.7 if bom_items else 0.0
+    state["confidence_score"] = result.confidence_score
     state["messages"].append(
-        AIMessage(content=f"N9 budget_parser: {len(bom_items)} BOM items extracted")
+        AIMessage(content=f"N9 budget_parser: {len(result.bom_items)} BOM items extracted")
     )
     return state
 
