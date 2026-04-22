@@ -157,12 +157,17 @@ class BudgetExtractionService:
 
 @dataclass(frozen=True)
 class DeterministicRiskRulesService:
-    """Pure keyword-rule extractor used by N4 mock mode & offline tests."""
+    """Pure keyword-rule extractor used by N4 mock mode & offline tests.
+
+    Emits risks tagged with one of the six canonical categories:
+    LEGAL, SCHEDULE, QUALITY, SCOPE, TECHNICAL, BUDGET.
+    """
 
     def extract(self, text: str) -> list[dict[str, Any]]:
         risks: list[dict[str, Any]] = []
         lower = text.lower()
-        if "penalt" in lower or "% for delay" in lower or "delay" in lower:
+
+        if "penalt" in lower or "% for delay" in lower:
             risks.append(
                 {
                     "category": "LEGAL",
@@ -179,10 +184,11 @@ class DeterministicRiskRulesService:
                     "confidence": 0.82,
                 }
             )
+
         if re.search(r"\b30\s+days\b", lower) and "payment" in lower:
             risks.append(
                 {
-                    "category": "FINANCIAL",
+                    "category": "BUDGET",
                     "title": "Payment term cash-flow risk",
                     "summary": "Payment depends on certified milestones within a defined term.",
                     "description": "Cash flow may depend on milestone certification and payment timing discipline.",
@@ -196,6 +202,7 @@ class DeterministicRiskRulesService:
                     "confidence": 0.79,
                 }
             )
+
         if "warranty" in lower:
             risks.append(
                 {
@@ -213,6 +220,61 @@ class DeterministicRiskRulesService:
                     "confidence": 0.77,
                 }
             )
+
+        if any(term in lower for term in ("deadline", "milestone", "completion date", "delivery date", "schedule")):
+            risks.append(
+                {
+                    "category": "SCHEDULE",
+                    "title": "Tight completion schedule",
+                    "summary": "Binding completion or delivery milestones may leave no float.",
+                    "description": "Hard milestones and delivery dates are referenced; critical-path float should be validated.",
+                    "probability": "MEDIUM",
+                    "impact": "HIGH",
+                    "mitigation_suggestion": "Build critical-path analysis and contingency buffers; document external dependencies.",
+                    "source_quote": "Completion milestones referenced in the contract.",
+                    "source_text_snippet": "Completion milestones referenced in the contract.",
+                    "risk_score": 6,
+                    "immediate_alert": False,
+                    "confidence": 0.76,
+                }
+            )
+
+        if any(term in lower for term in ("scope", "as required", "as necessary", "lo necesario", "alcance")):
+            risks.append(
+                {
+                    "category": "SCOPE",
+                    "title": "Undefined or elastic scope",
+                    "summary": "Open-ended scope language invites scope creep.",
+                    "description": "Terms like 'as required' or 'lo necesario' leave the scope of work elastic and hard to price.",
+                    "probability": "MEDIUM",
+                    "impact": "MEDIUM",
+                    "mitigation_suggestion": "Replace open-ended language with a bounded scope list and a change-order protocol.",
+                    "source_quote": "Scope of work referenced without bounded list.",
+                    "source_text_snippet": "Scope of work referenced without bounded list.",
+                    "risk_score": 4,
+                    "immediate_alert": False,
+                    "confidence": 0.74,
+                }
+            )
+
+        if any(term in lower for term in ("specification", "standard", "compliance", "interface", "especificacion", "tolerance")):
+            risks.append(
+                {
+                    "category": "TECHNICAL",
+                    "title": "Technical specification risk",
+                    "summary": "Referenced specifications may impose unproven or strict requirements.",
+                    "description": "Standards, tolerances, or interface specs are invoked without feasibility confirmation.",
+                    "probability": "MEDIUM",
+                    "impact": "MEDIUM",
+                    "mitigation_suggestion": "Run a constructability and technology-readiness review against the cited standards.",
+                    "source_quote": "Referenced specifications and standards.",
+                    "source_text_snippet": "Referenced specifications and standards.",
+                    "risk_score": 4,
+                    "immediate_alert": False,
+                    "confidence": 0.73,
+                }
+            )
+
         return risks
 
 
