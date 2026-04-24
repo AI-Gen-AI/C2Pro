@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 C2Pro - CostControllerService Unit Tests (Swarm)
 
@@ -32,7 +32,7 @@ Mocking strategy:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -171,7 +171,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_spend_not_reset_within_same_month(self):
         """Same year and same month → ai_spend_current is NOT zeroed."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         last_reset = datetime(now.year, now.month, 1)
         tenant = _make_tenant(spend=5.0, last_reset=last_reset)
         service = _make_service()
@@ -189,7 +189,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_raises_when_estimated_cost_exceeds_remaining_budget(self):
         """spend + estimated_cost > budget → BudgetExceededException raised."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=10.0,
             spend=9.99,
@@ -205,7 +205,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_raises_when_estimated_cost_exactly_equals_remaining_budget_plus_epsilon(self):
         """spend + cost strictly > budget triggers the exception (not equal)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=10.0,
             spend=9.0,
@@ -221,7 +221,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_does_not_raise_when_estimated_cost_within_budget(self):
         """spend + estimated_cost <= budget → no exception raised."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=100.0,
             spend=0.0,
@@ -241,7 +241,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_no_exception_when_usage_below_50_percent(self):
         """usage_percent < 50 → no exception, call completes normally."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=100.0,
             spend=10.0,  # 10% usage
@@ -256,7 +256,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_50_percent(self):
         """usage_percent == 50 → warning threshold triggered but no exception."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=100.0,
             spend=50.0,
@@ -271,7 +271,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_75_percent(self):
         """usage_percent == 75 → warning threshold triggered but no exception."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=100.0,
             spend=75.0,
@@ -286,7 +286,7 @@ class TestCheckBudgetAvailability:
     @pytest.mark.red_phase
     async def test_no_exception_when_usage_at_90_percent(self):
         """usage_percent == 90 → critical threshold triggered but no exception."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tenant = _make_tenant(
             budget=100.0,
             spend=90.0,

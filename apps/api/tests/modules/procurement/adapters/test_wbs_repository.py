@@ -1,11 +1,11 @@
-from datetime import timezone
+
 """
 WBS Repository Integration Tests (TDD - RED Phase)
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -104,8 +104,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         session.add(project_a)
         await session.commit()
@@ -169,8 +169,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         project_b = ProjectORM(
             id=uuid4(),
@@ -187,8 +187,8 @@ class TestWBSRepositoryIntegration:
             coherence_score=None,
             last_analysis_at=None,
             metadata_json={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         session.add_all([project_a, project_b])
         await session.commit()

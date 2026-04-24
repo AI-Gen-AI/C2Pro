@@ -11,7 +11,6 @@ from uuid import UUID
 
 import jwt
 import structlog
-from src.core.auth.token_revocation import is_token_revoked_async
 from passlib.context import CryptContext
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +35,7 @@ from src.core.auth.schemas import (
     TokenResponse,
     UserResponse,
 )
+from src.core.auth.token_revocation import is_token_revoked_async
 from src.core.exceptions import (
     AuthenticationError,
     ConflictError,

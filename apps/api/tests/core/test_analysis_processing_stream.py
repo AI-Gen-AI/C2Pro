@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 TS-INT-DB-CLS-001: Analysis processing stream contract tests.
 """
@@ -6,7 +6,7 @@ TS-INT-DB-CLS-001: Analysis processing stream contract tests.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -45,7 +45,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         status="active",
         currency="EUR",
         coherence_score=78,
-        last_analysis_at=datetime.now(timezone.utc),
+        last_analysis_at=datetime.now(UTC),
     )
     db.add(project)
     await db.flush()
@@ -83,7 +83,7 @@ async def test_processing_stream_returns_stage_and_complete_events(
         result_json={"source": "test"},
         coherence_score=78,
         alerts_count=2,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(UTC),
     )
     db.add(analysis)
     db.add(

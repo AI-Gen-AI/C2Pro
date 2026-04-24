@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
@@ -81,7 +81,7 @@ class UpdateAlertStatusUseCase:
         alert.status = status
 
         if status in {AlertStatus.RESOLVED, AlertStatus.DISMISSED}:
-            alert.resolved_at = datetime.now(timezone.utc)
+            alert.resolved_at = datetime.now(UTC)
             if resolution_notes:
                 alert.resolution_notes = resolution_notes
 

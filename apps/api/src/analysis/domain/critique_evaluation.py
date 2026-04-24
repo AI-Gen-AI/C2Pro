@@ -45,7 +45,7 @@ class CritiqueEvaluationService:
         confidences = [
             item["confidence"]
             for item in items
-            if isinstance(item.get("confidence"), (int, float))
+            if isinstance(item.get("confidence"), int | float)
         ]
         if not confidences:
             return 0.9

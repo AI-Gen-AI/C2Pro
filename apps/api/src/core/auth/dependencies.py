@@ -18,7 +18,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.core.auth.token_revocation import is_token_revoked_async
 
 from src.config import settings
 from src.core.auth.bootstrap_lookup import (
@@ -31,6 +30,7 @@ from src.core.auth.bootstrap_lookup import (
     lookup_user_by_clerk_user_id,
 )
 from src.core.auth.models import Tenant, User
+from src.core.auth.token_revocation import _token_fingerprint, is_token_revoked_async
 from src.core.database import get_session
 
 logger = structlog.get_logger()

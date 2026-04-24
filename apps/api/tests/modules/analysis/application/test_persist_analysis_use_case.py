@@ -97,14 +97,14 @@ from src.analysis.application.persist_analysis_use_case import (
 
 
 def _make_command(**overrides) -> PersistAnalysisCommand:
-    defaults = dict(
-        project_id=uuid4(),
-        tenant_id=uuid4(),
-        extracted_risks=[],
-        extracted_wbs=[],
-        coherence_score=75,
-        coherence_breakdown={"LEGAL": 80},
-    )
+    defaults = {
+        "project_id": uuid4(),
+        "tenant_id": uuid4(),
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "coherence_score": 75,
+        "coherence_breakdown": {"LEGAL": 80},
+    }
     defaults.update(overrides)
     return PersistAnalysisCommand(**defaults)
 

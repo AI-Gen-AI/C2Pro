@@ -2,7 +2,7 @@
 HTTP Adapter for Alerts Module.
 
 FastAPI router using hexagonal architecture use cases.
-Refers to Suite ID: TS-UC-ALR-LST-001, TS-UC-ALR-REV-001, TS-UC-ALR-RSV-001, TS-BUG-ALRT-IMPORT-001.
+Refers to Suite ID: TS-UC-ALR-LST-001, TS-UC-ALR-REV-001, TS-UC-ALR-RSV-001, TS-BUG-ALRT-IMPORT-001, TS-BCK-050-001.
 
 Phase B: Migrating from legacy router.py to hexagonal architecture.
 """
@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.alerts.application.dtos import (
     AlertHistoryResponse,
     AlertListResponse,
@@ -39,10 +43,6 @@ from src.alerts.application.use_cases.review_alert_use_case import (
 from src.alerts.application.use_cases.review_alert_use_case import (
     ReviewAlertUseCase,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src.core.auth.models import Tenant
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
@@ -393,6 +393,7 @@ async def get_alert_history(
 @router.delete(
     "/{alert_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete alert",
 )
 async def delete_alert(

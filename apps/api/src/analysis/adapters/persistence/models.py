@@ -53,9 +53,6 @@ if TYPE_CHECKING:
 from src.core.auth.models import User
 
 
-
-
-
 class Analysis(Base):
     """
     Modelo de Análisis.

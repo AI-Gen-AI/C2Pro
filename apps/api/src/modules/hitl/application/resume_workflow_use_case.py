@@ -2,6 +2,7 @@
 Use case for resuming LangGraph workflows after HITL approval/rejection.
 Part of TASK-BCK-024: Implement HITL workflow resume mechanism after approval.
 Part of TASK-BCK-031: Implement LangGraph checkpoint restoration for HITL resume workflow.
+Refers to Suite ID: TS-BCK-032-001.
 """
 from __future__ import annotations
 
@@ -169,9 +170,11 @@ class ResumeWorkflowUseCase:
             thread_id = review_item.metadata.get("thread_id")
 
             if not checkpoint_id:
+                record_hitl_checkpoint_load_error("missing_checkpoint")
                 record_hitl_resume_error("missing_checkpoint")
                 raise ValueError(self._ERR_MISSING_CHECKPOINT.format(review_id=review_id))
             if not thread_id:
+                record_hitl_checkpoint_load_error("missing_thread")
                 record_hitl_resume_error("missing_thread")
                 raise ValueError(self._ERR_MISSING_THREAD_ID.format(review_id=review_id))
 
@@ -190,6 +193,7 @@ class ResumeWorkflowUseCase:
             )
 
             if not checkpoint:
+                record_hitl_checkpoint_load_error("checkpoint_not_found")
                 record_hitl_resume_error("checkpoint_not_found")
                 record_hitl_checkpoint_load_error("not_found")
                 raise ValueError(self._ERR_CHECKPOINT_NOT_FOUND.format(thread_id=thread_id))

@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Extract Stakeholders Use Case tests.
 
@@ -7,7 +7,7 @@ Refers to Suite ID: TS-UA-STK-UC-001.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -21,7 +21,7 @@ class TestExtractStakeholdersUseCase:
     """Refers to Suite ID: TS-UA-STK-UC-001."""
 
     def _make_stakeholder(self, project_id):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return Stakeholder(
             id=uuid4(),
             project_id=project_id,

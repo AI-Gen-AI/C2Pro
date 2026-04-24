@@ -9,7 +9,6 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-
 from alerts.application.use_cases.create_alert_use_case import CreateAlertUseCase
 from alerts.domain.models import Alert
 

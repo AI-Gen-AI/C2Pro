@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Document Repository + Database Integration Tests (TS-INT-DB-DOC-001)
 
@@ -13,7 +13,7 @@ For full PostgreSQL RLS testing, see test_document_repository.py.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -118,8 +118,8 @@ async def project_a(session: AsyncSession, tenant_a_id: UUID) -> ProjectORM:
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project)
     await session.commit()
@@ -145,8 +145,8 @@ async def project_b(session: AsyncSession, tenant_b_id: UUID) -> ProjectORM:
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project)
     await session.commit()
@@ -170,8 +170,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/contract.pdf",
             file_size_bytes=2048,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={"source": "upload"},
         )
 
@@ -198,8 +198,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.PARSED,
             storage_url="s3://bucket/specs.pdf",
             file_size_bytes=4096,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -229,8 +229,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.PARSED,
             storage_url="s3://bucket/contract_with_clauses.pdf",
             file_size_bytes=8192,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -281,8 +281,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/contract_to_parse.pdf",
             file_size_bytes=1024,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -316,8 +316,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/temp/contract_move.pdf",
             file_size_bytes=1024,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -345,8 +345,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/contract_to_delete.pdf",
             file_size_bytes=1024,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -381,8 +381,8 @@ class TestDocumentRepositoryDB:
                 upload_status=DocumentStatus.UPLOADED,
                 storage_url=f"s3://bucket/spec_{i}.pdf",
                 file_size_bytes=1024 * (i + 1),
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
                 document_metadata={},
             )
             documents.append(doc)
@@ -419,8 +419,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.PARSED,
             storage_url="s3://bucket/contract_for_clause.pdf",
             file_size_bytes=2048,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -456,8 +456,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.PARSED,
             storage_url="s3://bucket/contract_multi_clause.pdf",
             file_size_bytes=4096,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -502,8 +502,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/tenant_a_contract.pdf",
             file_size_bytes=1024,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -515,8 +515,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.UPLOADED,
             storage_url="s3://bucket/tenant_b_contract.pdf",
             file_size_bytes=1024,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 
@@ -556,8 +556,8 @@ class TestDocumentRepositoryDB:
             upload_status=DocumentStatus.PARSED,
             storage_url="s3://bucket/contract_specific_clause.pdf",
             file_size_bytes=2048,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             document_metadata={},
         )
 

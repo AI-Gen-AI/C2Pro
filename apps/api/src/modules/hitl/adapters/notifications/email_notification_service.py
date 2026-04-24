@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 import structlog
+
 try:
     import aiosmtplib
 except ModuleNotFoundError:  # pragma: no cover - optional dependency in tests/dev

@@ -13,7 +13,6 @@ import pytest
 from src.wbs.adapters.persistence.wbs_node_repository import WBSNodeRepository
 from src.wbs.domain.enums import WBSNodeStatus, WBSNodeType
 
-
 pytestmark = pytest.mark.integration
 
 

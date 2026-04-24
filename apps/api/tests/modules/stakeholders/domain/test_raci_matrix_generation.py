@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 RACI matrix generation tests.
 
@@ -7,7 +7,7 @@ Refers to Suite ID: TS-UD-STK-RAC-002.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -26,7 +26,7 @@ class TestRaciMatrixGeneration:
             stakeholder_id=uuid4(),
             wbs_item_id=wbs_item_id,
             raci_role=raci_role,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
     def test_001_groups_assignments_by_wbs_item(self) -> None:
