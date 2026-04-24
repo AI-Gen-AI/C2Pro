@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Test Data Factories
 
@@ -10,7 +10,7 @@ Usage:
     project = await create_project(db, tenant_id=tenant.id, user_id=user.id)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,8 +56,8 @@ async def create_tenant(
         slug=slug,
         subscription_plan=subscription_plan,
         subscription_status=subscription_status,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     db.add(tenant)
@@ -104,8 +104,8 @@ async def create_user(
         hashed_password=hashed_password,
         role=role,
         is_active=is_active,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     db.add(user)
@@ -181,8 +181,8 @@ async def create_project(
         name=name,
         description=description,
         status=status,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     db.add(project)
@@ -239,8 +239,8 @@ async def create_document(
         storage_path=storage_path,
         size_bytes=size_bytes,
         processing_status="completed",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     db.add(document)

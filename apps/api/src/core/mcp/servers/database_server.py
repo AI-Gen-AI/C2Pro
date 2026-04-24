@@ -17,7 +17,7 @@ CTO GATE 3: MCP Security
 import asyncio
 import json
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
 

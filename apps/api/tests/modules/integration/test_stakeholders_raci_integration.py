@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Stakeholders → RACI Integration Tests (TDD - RED Phase)
 
@@ -8,7 +8,7 @@ Refers to Suite ID: TS-INT-MOD-STK-001.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -54,8 +54,8 @@ class TestStakeholdersRaciIntegration:
                 power_level=PowerLevel.HIGH,
                 interest_level=InterestLevel.MEDIUM,
                 approval_status="approved",
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
                 name="Alice",
                 role="Owner",
                 organization="Acme",
@@ -67,8 +67,8 @@ class TestStakeholdersRaciIntegration:
                 power_level=PowerLevel.LOW,
                 interest_level=InterestLevel.HIGH,
                 approval_status="approved",
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
                 name="Bob",
                 role="PM",
                 organization="BuilderCo",

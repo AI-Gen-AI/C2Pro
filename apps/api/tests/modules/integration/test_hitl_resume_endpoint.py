@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Integration tests for HITL workflow resume endpoint.
 Test Suite ID: TS-I11-HITL-HTTP-002
@@ -12,7 +12,7 @@ Tests define requirements for POST /api/v1/hitl/resume endpoint.
 All tests now use authenticated_client fixture for proper JWT authentication.
 """
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -145,7 +145,7 @@ async def test_review_item(db, test_project, test_document, test_tenant):
         current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
         impact_level=ImpactLevel.HIGH,
         confidence=0.65,
-        sla_due_date=datetime.now(timezone.utc),
+        sla_due_date=datetime.now(UTC),
         item_data={},
         review_metadata={
             "stakeholders": ["Alice", "Bob"],
@@ -177,7 +177,7 @@ async def approved_review_item(db, test_project, test_document, test_tenant):
         current_status=ReviewStatus.APPROVED,  # Already processed
         impact_level=ImpactLevel.MEDIUM,
         confidence=0.75,
-        sla_due_date=datetime.now(timezone.utc),
+        sla_due_date=datetime.now(UTC),
         item_data={},
         review_metadata={},
         # TASK-BCK-024: Checkpoint tracking fields
@@ -393,7 +393,7 @@ class TestCheckpointRestoration:
             current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
             impact_level=ImpactLevel.LOW,
             confidence=0.5,
-            sla_due_date=datetime.now(timezone.utc),
+            sla_due_date=datetime.now(UTC),
             item_data={},
             review_metadata={},
             project_id=test_project.id,

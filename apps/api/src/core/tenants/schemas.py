@@ -7,7 +7,6 @@ Refers to TASK-REV-009.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -26,9 +25,9 @@ class TenantCreate(TenantBase):
 
 class TenantUpdate(BaseModel):
     """Schema for updating a tenant."""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    settings: Optional[dict] = None
-    is_active: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    settings: dict | None = None
+    is_active: bool | None = None
 
 
 class TenantResponse(TenantBase):
@@ -65,7 +64,7 @@ class BudgetStatusResponse(BaseModel):
     remaining: float
     usage_percentage: float
     is_over_budget: bool
-    last_reset: Optional[str] = None
+    last_reset: str | None = None
 
 
 class AiSpendUpdate(BaseModel):

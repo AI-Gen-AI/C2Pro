@@ -8,22 +8,23 @@ Tests for token revocation security:
 - Proper fingerprint calculation
 """
 
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
+import jwt
 import pytest
 import pytest_asyncio
-import jwt
-from datetime import datetime, timedelta, UTC
-from uuid import uuid4
 
 from src.config import settings
 from src.core.auth.token_revocation import (
     _memory_fallback,
     _memory_lock,
-    revoke_token,
-    is_token_revoked,
     _token_fingerprint,
     cleanup_expired_tokens,
-    revoke_token_async, # Imported for async tests
-    is_token_revoked_async, # Imported for async tests
+    is_token_revoked,
+    is_token_revoked_async,  # Imported for async tests
+    revoke_token,
+    revoke_token_async,  # Imported for async tests
 )
 
 

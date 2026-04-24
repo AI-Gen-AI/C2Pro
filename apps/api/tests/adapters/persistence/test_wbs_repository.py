@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 WBS Repository Integration Tests (TDD - RED Phase)
 
@@ -7,7 +7,7 @@ Refers to Suite ID: TS-INT-DB-WBS-001.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -107,8 +107,8 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project_a)
     await session.commit()
@@ -171,8 +171,8 @@ async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSess
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project_a)
     await session.commit()

@@ -149,7 +149,7 @@ class CoherenceScoringDerivationService:
         confidences = [
             item.get("confidence", 0.0)
             for item in wbs
-            if isinstance(item.get("confidence"), (int, float))
+            if isinstance(item.get("confidence"), int | float)
         ]
         return sum(confidences) / len(confidences) if confidences else 0.0
 

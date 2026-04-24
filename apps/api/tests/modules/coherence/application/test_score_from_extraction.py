@@ -6,6 +6,8 @@ Thin orchestration over existing CoherenceDerivationService + CoherenceCalculati
 
 from __future__ import annotations
 
+# Lazy import to avoid SQLAlchemy mapper chain in unit tests
+import importlib
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
@@ -15,9 +17,6 @@ from src.analysis.domain.coherence_derivation import (
     CoherenceDerivationResult,
     CoherenceScoringDerivationService,
 )
-
-# Lazy import to avoid SQLAlchemy mapper chain in unit tests
-import importlib
 
 
 def _import_use_case():
@@ -31,34 +30,34 @@ ScoreFromExtractionCommand, ScoreFromExtractionResult, ScoreFromExtractionUseCas
 
 
 def _make_derivation_result(**overrides) -> CoherenceDerivationResult:
-    defaults = dict(
-        scope_defined=True,
-        schedule_within_contract=True,
-        technical_consistent=True,
-        legal_compliant=True,
-        quality_standard_met=True,
-        bom_items=[],
-        contract_price=0.0,
-        has_budget_risks=False,
-        poor_extraction_quality=False,
-        avg_wbs_confidence=0.9,
-        risk_count=0,
-        wbs_count=0,
-        quality_note="",
-    )
+    defaults = {
+        "scope_defined": True,
+        "schedule_within_contract": True,
+        "technical_consistent": True,
+        "legal_compliant": True,
+        "quality_standard_met": True,
+        "bom_items": [],
+        "contract_price": 0.0,
+        "has_budget_risks": False,
+        "poor_extraction_quality": False,
+        "avg_wbs_confidence": 0.9,
+        "risk_count": 0,
+        "wbs_count": 0,
+        "quality_note": "",
+    }
     defaults.update(overrides)
     return CoherenceDerivationResult(**defaults)
 
 
 def _make_command(**overrides) -> ScoreFromExtractionCommand:
-    defaults = dict(
-        project_id=uuid4(),
-        extracted_risks=[{"category": "LEGAL", "impact": "HIGH", "title": "R1"}],
-        extracted_wbs=[{"code": "W1", "confidence": 0.9}],
-        bom_items=[],
-        confidence_score=0.85,
-        document_text="Contract text here.",
-    )
+    defaults = {
+        "project_id": uuid4(),
+        "extracted_risks": [{"category": "LEGAL", "impact": "HIGH", "title": "R1"}],
+        "extracted_wbs": [{"code": "W1", "confidence": 0.9}],
+        "bom_items": [],
+        "confidence_score": 0.85,
+        "document_text": "Contract text here.",
+    }
     defaults.update(overrides)
     return ScoreFromExtractionCommand(**defaults)
 

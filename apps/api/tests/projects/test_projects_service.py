@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 C2Pro - Projects Service Unit Tests
 
@@ -9,7 +9,7 @@ Comprehensive tests for project management service including:
 - Statistics calculation
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -219,7 +219,7 @@ class TestProjectServiceCreate:
         """
         Should create project with all optional fields.
         """
-        start_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC)
         end_date = start_date + timedelta(days=90)
 
         request = ProjectCreateRequest(
@@ -542,7 +542,7 @@ class TestProjectServiceList:
         """
         Should filter projects by creation date range.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         yesterday = now - timedelta(days=1)
         now + timedelta(days=1)
 

@@ -1,6 +1,5 @@
 """Tests for prompt template validator and linter (TASK-FRT-123)."""
 
-import pytest
 
 from src.core.ai.prompts import PromptTemplate
 from src.core.ai.prompts.validator import (
