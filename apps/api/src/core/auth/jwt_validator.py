@@ -12,9 +12,15 @@ from typing import Protocol
 from uuid import UUID
 
 import jwt
-from src.core.auth.token_revocation import is_token_revoked_async
-from src.core.auth.token_revocation import _token_fingerprint # To log the fingerprint of revoked token
+import structlog
 from fastapi import HTTPException
+
+from src.core.auth.token_revocation import (
+    _token_fingerprint,  # To log the fingerprint of revoked token
+    is_token_revoked_async,
+)
+
+logger = structlog.get_logger()
 
 
 class PublicKeyProvider(Protocol):

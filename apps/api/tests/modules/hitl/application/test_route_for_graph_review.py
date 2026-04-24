@@ -20,15 +20,15 @@ from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
 
 def _make_command(**overrides) -> GraphReviewCommand:
-    defaults = dict(
-        document_id=uuid4(),
-        tenant_id=uuid4(),
-        doc_type="contract",
-        confidence=0.6,
-        project_id=str(uuid4()),
-        retry_count=0,
-        critique_notes="",
-    )
+    defaults = {
+        "document_id": uuid4(),
+        "tenant_id": uuid4(),
+        "doc_type": "contract",
+        "confidence": 0.6,
+        "project_id": str(uuid4()),
+        "retry_count": 0,
+        "critique_notes": "",
+    }
     defaults.update(overrides)
     return GraphReviewCommand(**defaults)
 

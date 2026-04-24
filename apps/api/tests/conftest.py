@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 C2Pro - Test Configuration
 
@@ -11,7 +11,7 @@ import json
 import os
 import sys
 from collections.abc import AsyncGenerator, Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest import mock
 from uuid import UUID, uuid4
@@ -100,9 +100,9 @@ os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 # IMPORTS AFTER ENV SETUP
 # ===========================================
 
-from src.config import settings
 from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401
 from src.coherence.adapters.persistence import models as coherence_models  # noqa: F401
+from src.config import settings
 from src.core.ai import models as ai_models  # noqa: F401
 from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.auth.service import hash_password
@@ -599,7 +599,7 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(timezone.utc),
+        last_login=datetime.now(UTC),
     )
 
     db.add(user)
@@ -847,11 +847,11 @@ def generate_token() -> Callable:
         # Calculate expiration
         if expires_delta_seconds is None:
             if token_type == "access":
-                expire = datetime.now(timezone.utc) + timedelta(hours=24)
+                expire = datetime.now(UTC) + timedelta(hours=24)
             else:
-                expire = datetime.now(timezone.utc) + timedelta(days=7)
+                expire = datetime.now(UTC) + timedelta(days=7)
         else:
-            expire = datetime.now(timezone.utc) + timedelta(seconds=expires_delta_seconds)
+            expire = datetime.now(UTC) + timedelta(seconds=expires_delta_seconds)
 
         # Build payload
         payload = {
@@ -860,7 +860,7 @@ def generate_token() -> Callable:
             "email": email,
             "role": role,
             "exp": expire,
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
             "type": token_type,
         }
 

@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
-
 from alerts.application.use_cases.resolve_alert_use_case import (
     AlertNotFoundError,
     ResolveAlertUseCase,
@@ -87,7 +86,7 @@ class TestResolveAlertUseCaseExecute:
         use_case = ResolveAlertUseCase(repository=repository)
         user_id = uuid4()
 
-        result = await use_case.execute(
+        await use_case.execute(
             alert_id=alert.id,
             tenant_id=uuid4(),
             user_id=user_id,
@@ -163,7 +162,7 @@ class TestResolveAlertValidation:
         use_case = ResolveAlertUseCase(repository=repository)
 
         from fastapi import HTTPException
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await use_case.execute(
                 alert_id=alert.id,
@@ -183,7 +182,7 @@ class TestResolveAlertValidation:
         use_case = ResolveAlertUseCase(repository=repository)
 
         from fastapi import HTTPException
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await use_case.execute(
                 alert_id=alert.id,
@@ -220,7 +219,7 @@ class TestResolveAlertValidation:
         use_case = ResolveAlertUseCase(repository=repository)
 
         from fastapi import HTTPException
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await use_case.execute(
                 alert_id=alert.id,
@@ -240,7 +239,7 @@ class TestResolveAlertValidation:
         use_case = ResolveAlertUseCase(repository=repository)
 
         from fastapi import HTTPException
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await use_case.execute(
                 alert_id=alert.id,

@@ -1,8 +1,8 @@
-from datetime import timezone
+
 """Test Suite ID: TASK-1469."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -89,7 +89,7 @@ class _FakeSessionContext:
 async def test_get_project_summary_returns_ranked_open_alerts(monkeypatch) -> None:
     project_id = uuid4()
     tenant_id = uuid4()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     project = _FakeProject(
         id=project_id,
         tenant_id=tenant_id,

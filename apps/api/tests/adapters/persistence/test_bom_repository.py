@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 BOM Repository Integration Tests (TDD - RED Phase)
 
@@ -7,7 +7,7 @@ Refers to Suite ID: TS-INT-DB-BOM-001.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -23,10 +23,8 @@ from testcontainers.postgres import PostgresContainer
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.models import BudgetItemORM
 from src.procurement.adapters.persistence.models import Base as ProcurementBase
-from src.procurement.adapters.persistence.models import WBSItemORM
+from src.procurement.adapters.persistence.models import BOMItemORM, BudgetItemORM, WBSItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -118,8 +116,8 @@ async def test_bom_repository_filters_by_project_wbs_and_tenant(session: AsyncSe
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project_a)
     await session.commit()
@@ -200,8 +198,8 @@ async def test_bom_repository_create_rejects_project_outside_tenant(session: Asy
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project_a)
     await session.commit()

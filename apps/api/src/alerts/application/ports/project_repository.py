@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class IProjectRepository(Protocol):
     """Repository interface for Project operations."""
 
-    async def get_by_id(self, project_id, tenant_id) -> "Project | None":
+    async def get_by_id(self, project_id, tenant_id) -> Project | None:
         """Get project by ID with tenant isolation."""
         ...
 

@@ -58,7 +58,7 @@ class NotificationConfigRequest(BaseModel):
         return list(dict.fromkeys(v))
 
     @model_validator(mode="after")
-    def validate_channel_requirements(self) -> "NotificationConfigRequest":
+    def validate_channel_requirements(self) -> NotificationConfigRequest:
         """Validate per-channel required settings after all fields are parsed."""
         channels = set(self.notification_channels)
         if NotificationChannel.EMAIL in channels and not self.email_recipients:

@@ -54,7 +54,7 @@ async def list_tenants(
     """
     query = select(Tenant)
     if active_only:
-        query = query.where(Tenant.is_active == True)
+        query = query.where(Tenant.is_active is True)
     query = query.order_by(Tenant.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())

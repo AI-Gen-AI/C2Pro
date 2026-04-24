@@ -18,7 +18,7 @@ from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
-from src.documents.adapters.persistence.models import DocumentChunkORM, DocumentORM
+from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 router = APIRouter(

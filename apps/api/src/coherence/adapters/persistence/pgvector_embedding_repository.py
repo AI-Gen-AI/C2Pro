@@ -124,9 +124,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
             ValueError: If embedding dimension is invalid
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot store embedding for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot store embedding for project outside tenant")
 
         if len(embedding) != 1536:
             raise ValueError(
@@ -314,9 +313,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Raises:
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot search embeddings for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot search embeddings for project outside tenant")
 
         if len(embedding) != 1536:
             raise ValueError(
@@ -405,9 +403,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Raises:
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot search embeddings for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot search embeddings for project outside tenant")
 
         start_time = time.time()
 
@@ -476,9 +473,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Raises:
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot access embedding for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot access embedding for project outside tenant")
 
         stmt = sql_text(
             """SELECT clause_id, project_id, document_id, document_type, text,
@@ -588,9 +584,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Raises:
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot delete embeddings for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot delete embeddings for project outside tenant")
 
         stmt = sql_text(
             """DELETE FROM clause_embeddings WHERE project_id = :project_id"""
@@ -625,9 +620,8 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         Raises:
             PermissionError: If project does not belong to current tenant
         """
-        if self.tenant_id is not None:
-            if not await self._verify_project_tenant(project_id):
-                raise PermissionError("Cannot count embeddings for project outside tenant")
+        if self.tenant_id is not None and not await self._verify_project_tenant(project_id):
+            raise PermissionError("Cannot count embeddings for project outside tenant")
 
         stmt = sql_text(
             """SELECT COUNT(*) FROM clause_embeddings WHERE project_id = :project_id"""

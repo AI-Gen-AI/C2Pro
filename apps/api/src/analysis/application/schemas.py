@@ -7,7 +7,7 @@ Includes strict validation for coherence scores and legal traceability.
 Moved from modules/analysis/schemas.py (2026-01-29)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 

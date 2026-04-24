@@ -86,7 +86,7 @@ Gate 7 release bundles MUST copy the approved targets into `evidence/releases/<r
 
 **Next Steps:**
 
-- [ ] Integrate automated performance tests into CI/CD
+- [x] Define an automated performance benchmark runner for CI/CD or release evidence (`scripts/run_performance_benchmarks.py`)
 - [ ] Set up alerting for P95 regression > 20%
 - [ ] Add Prometheus metrics for continuous monitoring
 

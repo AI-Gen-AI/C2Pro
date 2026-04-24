@@ -35,6 +35,18 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ARG001",  # pytest fixtures are often injected for setup/side effects
+    "ARG002",  # protocol/mock implementations intentionally keep interface args
+    "ARG005",  # lambda mocks intentionally mirror callback signatures
+    "B017",    # legacy tests intentionally assert broad exception contracts
+    "E402",    # tests sometimes set env/sys.path before imports
+    "F403",    # verification compatibility re-export tests
+    "F811",    # legacy domain placeholder test doubles
+    "SIM117",  # nested mock contexts are clearer in legacy tests
+]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
