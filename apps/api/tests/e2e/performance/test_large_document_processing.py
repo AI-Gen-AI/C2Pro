@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Large Document Processing E2E Tests (TDD - RED Phase)
 
@@ -8,7 +8,7 @@ Refers to Suite ID: TS-E2E-PER-LRG-001.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -28,8 +28,8 @@ async def test_large_document_upload_and_processing(client, get_auth_headers):
         "project_type": "construction",
         "estimated_budget": 100000.0,
         "currency": "EUR",
-        "start_date": datetime.now(timezone.utc).isoformat(),
-        "end_date": datetime.now(timezone.utc).isoformat(),
+        "start_date": datetime.now(UTC).isoformat(),
+        "end_date": datetime.now(UTC).isoformat(),
     }
     project_response = await client.post("/api/v1/projects", json=project_payload, headers=headers)
     assert project_response.status_code == 201

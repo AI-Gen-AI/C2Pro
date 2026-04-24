@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 E2E Resilience Tests (TDD - RED Phase)
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -130,8 +130,8 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project)
     await session.commit()

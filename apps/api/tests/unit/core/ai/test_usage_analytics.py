@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Tests for Usage Analytics Service.
 
@@ -6,7 +6,7 @@ P3.4: Validates real-time LLM usage tracking and cost analytics.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -31,7 +31,7 @@ class TestUsageRecord:
     def test_usage_record_creation(self):
         """Usage record is created correctly."""
         record = UsageRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             model="claude-sonnet-4-20250514",
             task_name="contract_extraction",
             input_tokens=500,
@@ -48,7 +48,7 @@ class TestUsageRecord:
     def test_usage_record_optional_fields(self):
         """Optional fields default to None."""
         record = UsageRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             model="claude-haiku-4-20250514",
             task_name="test",
             input_tokens=100,
@@ -75,8 +75,8 @@ class TestUsageSummary:
         """Success rate is calculated correctly."""
         summary = UsageSummary(
             period="day",
-            start_time=datetime.now(timezone.utc) - timedelta(days=1),
-            end_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC) - timedelta(days=1),
+            end_time=datetime.now(UTC),
             total_requests=100,
             successful_requests=95,
             failed_requests=5,
@@ -88,8 +88,8 @@ class TestUsageSummary:
         """Success rate is 0 when no requests."""
         summary = UsageSummary(
             period="day",
-            start_time=datetime.now(timezone.utc),
-            end_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
         )
 
         assert summary.success_rate == 0.0
@@ -98,8 +98,8 @@ class TestUsageSummary:
         """Average latency is calculated correctly."""
         summary = UsageSummary(
             period="day",
-            start_time=datetime.now(timezone.utc),
-            end_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
             latency_samples=[100.0, 150.0, 200.0],
         )
 
@@ -109,8 +109,8 @@ class TestUsageSummary:
         """P95 latency is calculated correctly."""
         summary = UsageSummary(
             period="day",
-            start_time=datetime.now(timezone.utc),
-            end_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
             latency_samples=list(range(1, 101)),
         )
 
@@ -120,8 +120,8 @@ class TestUsageSummary:
         """Summary can be converted to dictionary."""
         summary = UsageSummary(
             period="day",
-            start_time=datetime.now(timezone.utc) - timedelta(days=1),
-            end_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC) - timedelta(days=1),
+            end_time=datetime.now(UTC),
             total_requests=50,
             total_cost_usd=0.25,
         )

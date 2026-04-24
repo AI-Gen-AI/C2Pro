@@ -1,11 +1,15 @@
 """
 PDF Parser Adapter.
 
+Refers to Suite ID: TS-UAD-DOC-002.
+
 This adapter provides functionality to extract text and its positional offsets from PDF documents
 using PyMuPDF (Fitz), with OCR fallback for scanned documents using Tesseract.
 """
 
+import io
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -15,12 +19,12 @@ logger = structlog.get_logger()
 
 # OCR imports - optional, will be None if not available
 try:
-    import io
-
     import pytesseract
     from PIL import Image
     OCR_AVAILABLE = True
 except ImportError:
+    Image = SimpleNamespace(open=lambda *_args, **_kwargs: None)
+    pytesseract = None
     OCR_AVAILABLE = False
     logger.warning("ocr_not_available", message="pytesseract/Pillow not installed, OCR disabled")
 
@@ -132,6 +136,8 @@ class PDFFileParser:
     def _ocr_page(self, page, page_num: int) -> str | None:
         """Apply OCR to a PDF page to extract text from images."""
         if not OCR_AVAILABLE:
+            return None
+        if pytesseract is None:
             return None
 
         try:

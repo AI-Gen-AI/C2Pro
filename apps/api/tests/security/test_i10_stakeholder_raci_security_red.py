@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 I10 stakeholder + RACI security hardening tests (RED).
 Test Suite ID: TS-I10-STK-SEC-001
@@ -6,7 +6,7 @@ Test Suite ID: TS-I10-STK-SEC-001
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -19,7 +19,7 @@ from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, 
 
 
 def _stakeholder(project_id, stakeholder_id) -> Stakeholder:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Stakeholder(
         id=stakeholder_id,
         project_id=project_id,

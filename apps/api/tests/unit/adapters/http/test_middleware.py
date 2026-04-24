@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Test Suite: TS-UAD-HTTP-MDW-001 — Middleware (Auth, Tenant)
 Component: HTTP Adapters — TenantIsolationMiddleware
@@ -24,7 +24,7 @@ Testing Approach: Unit tests.  The middleware's settings (jwt_secret_key /
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -69,7 +69,7 @@ def _access_token(
     """
     uid = user_id or uuid4()
     tid = tenant_id or uuid4()
-    exp = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=1))
+    exp = datetime.now(UTC) + (expires_delta or timedelta(hours=1))
 
     token = _sign({
         "sub": str(uid),
@@ -77,7 +77,7 @@ def _access_token(
         "email": email,
         "role": role,
         "exp": exp,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "type": "access",
     })
     return token, tid, uid
@@ -372,8 +372,8 @@ class TestInvalidToken:
             "tenant_id": str(uuid4()),
             "email": "bad@test.com",
             "role": "user",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
             "type": "access",
         }
         bad_token = jwt.encode(payload, "completely-different-secret", algorithm=_ALG)
@@ -558,8 +558,8 @@ class TestTokenTypeValidation:
         refresh = _sign({
             "sub": str(uuid4()),
             "tenant_id": str(uuid4()),
-            "exp": datetime.now(timezone.utc) + timedelta(days=30),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(days=30),
+            "iat": datetime.now(UTC),
             "type": "refresh",
         })
 
@@ -584,8 +584,8 @@ class TestTokenTypeValidation:
             "tenant_id": str(uuid4()),
             "email": "notype@test.com",
             "role": "user",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
             # "type" deliberately omitted
         })
 
@@ -663,8 +663,8 @@ class TestTenantValidation:
             # "tenant_id" deliberately omitted
             "email": "no-tid@test.com",
             "role": "user",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
             "type": "access",
         })
 

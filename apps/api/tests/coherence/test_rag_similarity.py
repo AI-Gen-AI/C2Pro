@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Tests for RAG Similarity Detection — Coherence Engine Phase 6
 
@@ -13,7 +13,7 @@ Location: apps/api/tests/coherence/test_rag_similarity.py
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -77,7 +77,7 @@ def sample_embedding_record(
         embedding=sample_embedding,
         category="BUDGET",
         metadata={"line_total": 100000},
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -183,7 +183,7 @@ async def test_pgvector_store_embedding_truncates_text(
     """Test that store_embedding truncates long text."""
     mock_session = AsyncMock()
     mock_result = MagicMock()
-    mock_result.fetchone.return_value = (datetime.now(timezone.utc),)
+    mock_result.fetchone.return_value = (datetime.now(UTC),)
     mock_session.execute.return_value = mock_result
 
     repo = PgvectorEmbeddingRepository(mock_session)

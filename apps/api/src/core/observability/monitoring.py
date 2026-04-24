@@ -2,6 +2,7 @@
 C2Pro - Observability
 
 Configuración de logging estructurado, métricas y error tracking.
+Refers to Suite ID: TS-BCK-032-001.
 """
 
 import logging
@@ -331,6 +332,18 @@ try:
         ["error_type"],
     )
 
+    HITL_CHECKPOINT_LOAD_ERRORS = Counter(
+        "c2pro_hitl_checkpoint_load_errors_total",
+        "Total HITL checkpoint load errors by type",
+        ["error_type"],
+    )
+
+    HITL_APPROVAL_RATE = Gauge(
+        "c2pro_hitl_approval_rate",
+        "HITL approval rate for the current observation window",
+        ["tenant_id"],
+    )
+
     HITL_REVIEW_ITEMS_PENDING = Gauge(
         "c2pro_hitl_review_items_pending",
         "Number of pending HITL review items",
@@ -405,6 +418,20 @@ def record_hitl_resume_error(error_type: str) -> None:
         "c2pro.hitl.resume_errors",
         tags=[f"error_type:{error_type}"],
     )
+
+
+def record_hitl_checkpoint_load_error(error_type: str) -> None:
+    """TS-BCK-032-001: Record a HITL checkpoint load failure."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        HITL_CHECKPOINT_LOAD_ERRORS.labels(error_type=error_type).inc()
+
+
+def record_hitl_approval_rate(tenant_id: str, approvals: int, rejections: int) -> None:
+    """TS-BCK-032-001: Record the approval ratio for an observation window."""
+    if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
+        total = approvals + rejections
+        approval_rate = approvals / total if total else 0.0
+        HITL_APPROVAL_RATE.labels(tenant_id=tenant_id).set(approval_rate)
 
 
 def update_hitl_pending_gauge(tenant_id: str, count: int) -> None:

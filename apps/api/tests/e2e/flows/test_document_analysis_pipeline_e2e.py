@@ -33,7 +33,7 @@ Test Strategy:
 from __future__ import annotations
 
 import os
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -229,7 +229,7 @@ async def test_001_upload_contract_full_pipeline_with_coherence_and_alerts(
     assert len(result["risks"]) >= 1, "Expected at least 1 risk from mock extraction"
 
     # N12 critique should evaluate confidence
-    assert isinstance(result["confidence_score"], (int, float))
+    assert isinstance(result["confidence_score"], int | float)
     assert 0.0 <= result["confidence_score"] <= 1.0
 
     # N8 coherence_scorer should calculate score (visible in pipeline messages)
@@ -750,7 +750,7 @@ async def test_008_coherence_score_dashboard_evaluation(
     eval_data = eval_resp.json()
 
     # Verify Coherence Score structure
-    assert isinstance(eval_data["overall_score"], (int, float))
+    assert isinstance(eval_data["overall_score"], int | float)
     assert eval_data["overall_score"] >= 0
 
     # Verify category breakdown exists

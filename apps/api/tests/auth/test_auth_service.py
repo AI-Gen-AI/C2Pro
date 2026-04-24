@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 C2Pro - Authentication Service Unit Tests
 TS-E2E-SEC-TNT-001
@@ -12,7 +12,7 @@ Comprehensive tests for auth service including:
 
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -634,9 +634,9 @@ class TestAuthServiceRegistration:
             company_name="Login Co"
         )
 
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         await AuthService.register(db, request)
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         # Get user from database
         user = await get_user_by_email(db, request.email)
@@ -837,7 +837,7 @@ class TestAuthServiceOtherMethods:
         assert response.token_type == "bearer"
 
         # Verify new access token
-        payload = await decode_token(response.access_token)
+        await decode_token(response.access_token)
 
     @pytest.mark.asyncio
     async def test_refresh_access_token_with_access_token(self, db, test_user, test_tenant):
@@ -874,8 +874,8 @@ class TestAuthServiceOtherMethods:
         payload = {
             "sub": str(test_user.id),
             "type": "refresh",
-            "exp": datetime.now(timezone.utc) - timedelta(hours=1),
-            "iat": datetime.now(timezone.utc) - timedelta(hours=2)
+            "exp": datetime.now(UTC) - timedelta(hours=1),
+            "iat": datetime.now(UTC) - timedelta(hours=2)
         }
 
         expired_token = jwt.encode(

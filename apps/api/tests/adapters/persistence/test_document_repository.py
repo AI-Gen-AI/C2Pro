@@ -1,4 +1,4 @@
-from datetime import timezone
+
 """
 Document Repository Integration Tests (TDD - RED Phase)
 
@@ -7,7 +7,7 @@ Refers to Suite ID: TS-INT-DB-DOC-001.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -96,8 +96,8 @@ async def test_document_repository_crud_and_tenant_filtering(session: AsyncSessi
         coherence_score=None,
         last_analysis_at=None,
         metadata_json={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     session.add(project_a)
     await session.commit()
@@ -110,8 +110,8 @@ async def test_document_repository_crud_and_tenant_filtering(session: AsyncSessi
         upload_status=DocumentStatus.UPLOADED,
         storage_url="s3://bucket/contract.pdf",
         file_size_bytes=2048,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         document_metadata={"source": "upload"},
     )
     clause = Clause(

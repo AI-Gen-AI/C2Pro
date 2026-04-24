@@ -1,10 +1,10 @@
-from datetime import timezone
+
 """
 I10 - Stakeholder Resolution + RACI Inference (Domain)
 Test Suite ID: TS-I10-STKH-DOM-001
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from src.stakeholders.domain.models import (
@@ -26,7 +26,7 @@ class RACIValidator:
 
 
 def _make_stakeholder(**overrides) -> Stakeholder:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     base = {
         "id": uuid4(),
         "project_id": uuid4(),
