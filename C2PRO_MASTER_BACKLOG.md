@@ -56,6 +56,7 @@
 | `EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL resume (`TASK-BCK-032/033`) | Feature | P2 | EPIC-CORE-DECOUPLE | Prometheus/DataDog counters from `ResumeWorkflowUseCase`; publish `/hitl/resume/{id}` contract. |
 | `EPIC-DLQ-ADMIN` | DLQ admin endpoints (`TASK-BCK-042`) | Feature | P2 | EPIC-CORE-DECOUPLE | `GET /admin/dlq` + `POST /admin/dlq/{id}/retry` against DLQService, admin scope, contract tests. |
 | `TASK-1481` | Supervisor API keys (Claude/Codex/Gemini) | Feature | P1 | — | Provision keys, verify `shlex.split` + models.yaml CLI syntax, prove green auto-mode run. |
+| `EPIC-COH-V1-CONSOLIDATION` | Coherence Score v1 — pipeline consolidation + InsufficientEvidence + alerts (pre-signature audit only) | Feature | P0 | EPIC-CORE-DECOUPLE | 9-phase orchestration (Codex/Gemini/OpenCode) merging into `coh-v1/consolidation`. Fixes the `score=100` bug, consolidates two parallel pipelines, builds 18 evaluators behind `LLMRulePort`, persists `score_version` with hard cut-off, wires `AlertGeneratorService` + `meta_alert` AUDIT_INCOMPLETE. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. |
 
 ### Tier 3 — Stabilization & Debt
 
@@ -127,12 +128,29 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P2 | `TASK-1480` | UI test stabilization — wrap `act(...)` + raise timeouts in `alerts`/`evidence` page tests. → EPIC-TEST-STABILIZATION. |
 | P1 | `TASK-1481` | Supervisor API key configuration (Claude/Codex/Gemini CLIs). |
 
+### Coherence v1 (EPIC-COH-V1-CONSOLIDATION)
+
+> Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md` · PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`
+
+| Priority | Task ID | Agent | Depends On | Description |
+| -------- | ------- | ----- | ---------- | ----------- |
+| P0 | `[ ] TASK-COH-V1-01` | Codex | — | Delete `engine_v2.py`, `rules.py`, `service.py`, `services/scoring/calculator.py`. ADR-001. |
+| P0 | `[ ] TASK-COH-V1-02` | Gemini 3 Pro | 01 | Rewire N8 → 7-node subgraph. Replace default-100 with `InsufficientEvidence` in `scoring.py:144`, `llm_integration.py:409-414`, `coherence_derivation.py:112-123`. |
+| P0 | `[ ] TASK-COH-V1-03` | Gemini 3 Pro | 01 | Define `LLMRulePort` in domain. Move `AnthropicWrapper` callers to `coherence/adapters/ai/`. Snapshot tests. |
+| P0 | `[ ] TASK-COH-V1-04` | Codex | 01 | Alembic: `score_version` enum + `score_reason` + `score_missing_dimensions`. Repository writes. UI badge stub. ADR-002. |
+| P0 | `[ ] TASK-COH-V1-05` | OpenCode | 02, 03, 04 | Build 12 deterministic + 6 LLM evaluators (3+1 × 6 categories). Wire into registry. Orphan `rule_id` startup check. |
+| P0 | `[ ] TASK-COH-V1-06` | OpenCode | 02, 05 | `format_output` calls `AlertGeneratorService.process_violations`. Add `AlertType.AUDIT_INCOMPLETE`. ADR-003 ledger transition. |
+| P0 | `[ ] TASK-COH-V1-07` | Codex | 02, 04, 05 | Golden-corpus schema: `expected_score_range` + `expected_alerts`. Annotate 15 bundles. CI assertion. |
+| P0 | `[ ] TASK-COH-V1-08` | Gemini 3 Pro | 02 | LangSmith spans on 6 of 7 nodes (skip LLM until rollout=100%). EU-residency attribute allowlist + contract test. Runbook. |
+| P0 | `[ ] TASK-COH-V1-09` | OpenCode | 04, 06, 07 | Dashboard badge + tooltip, alert UX (sort, filter, copy-to-clipboard, AUDIT_INCOMPLETE banner), customer email + FAQ + activated cut-off date. E2E. |
+
 ---
 
 ## Change Log
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-04-25 | **EPIC-COH-V1-CONSOLIDATION created (orchestration plan)** — Coherence Score v1 consolidation epic registered in Tier 2 with 9 sub-tasks (`TASK-COH-V1-01..09`) assigned across Codex / Gemini 3 Pro / OpenCode (Sonnet 4.6). Orchestrator (Claude Opus 4.7) reviews and merges per phase into `coh-v1/consolidation`. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs (self-contained dispatch packs + per-phase report paths + acceptance commands): `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. Reports land in `blackboard/coh-v1/PHASE-N-<agent>-REPORT.md`. Wave plan: A=[1] · B=[2,3,4] · C=[5] · D=[6,7,8] · E=[9]. |
 | 2026-04-21 | **EPIC-LANGSMITH-ROLLOUT complete** — Delivered deterministic canary routing (`src/core/ai/rollout_router.py`) with fail-open fallback for traced-call outages, k6 synthetic load profile (`apps/api/tests/load/langsmith_rollout_load_test.js`) for 10k/day-equivalent staging validation, critical rollout alert rules (`ops/alerts/langsmith_rollout_alerts.yml`) for trace failure and p99 latency regression thresholds, and emergency rollback/operator runbook (`docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md`). Backlog mutation payload: `[STATUS: DONE - EPIC-LANGSMITH-ROLLOUT] [ACTION: LANGSMITH IN PRODUCTION - ROLLOUT AT 10% - MONITORING ACTIVE]`. |
 | 2026-04-21 | **EPIC-LANGSMITH-VALIDATION complete** — Delivered testing pyramid for LangSmith observability: global SDK isolation fixture (`langsmith.Client` + `langchain.hub`), unit tests for traced decorator/feedback/analytics aggregation, integration tests proving `ai_usage_logs` persistence + analytics/feedback API behavior against test DB with mocked external AI layer, and Playwright E2E dashboard validation with deterministic `/api/v1/ai/analytics/*` route interception. Backlog mutation payload: `[STATUS: DONE - EPIC-LANGSMITH-VALIDATION] [ACTION: TEST PYRAMID GREEN - PIPELINE UNBLOCKED]`. |
 | 2026-04-21 | **EPIC-DDD-MIGRATION complete** — Enforced tenant-first port signatures across documents/stakeholders/procurement bounded-context repositories, added tenant boundary type guard (`src/core/tenants/types.py`), and propagated tenant-aware adapter/use-case wiring in stakeholder and procurement flows. Backlog mutation payload: `[STATUS: DONE - EPIC-DDD-MIGRATION] [ACTION: LEGACY SCHEMAS.PY DESTROYED]`. |

@@ -1,0 +1,70 @@
+# Contexto
+Estás actuando como un Orquestador de Arquitectura de Software de Nivel Principal (Principal Software Architect) dentro de un entorno de desarrollo (VS Code). Tu objetivo es descomponer un problema complejo de ingeniería de software para una startup B2B SaaS industrial, explorar el espacio de soluciones desde múltiples ángulos técnicos extremos y converger en una implementación a prueba de balas (Bulletproof Master Plan).
+
+# Rol Asignado
+Principal Software Architect & Lead Orchestrator.
+
+# Tarea
+Simular un proceso de "Diseño y Revisión Adversaria" para el proyecto **ZTWQ (Zero Time, Wise Quotient)**.
+
+<project_description>
+**Nombre del Producto:** ZTWQ (Sistema Inteligente de Auditoría Contractual y Gestión de Compras).
+**Propósito:** "Copiloto" IA que audita, conecta y optimiza el ciclo Contrato → Planificación → Compras para reducir sobrecostes del 15-30% en industria y construcción.
+**Funcionalidad Core:**
+1. **Ingesta Multi-formato:** Parser inteligente de Contratos (PDF, DOCX) y Cronogramas (MS Project, Presto).
+2. **Motor de Coherencia (RAG + Logic):** Cruce dimensional entre cláusulas contractuales, tiempos y presupuesto para detectar riesgos (incoherencias).
+3. **Generación Activa:** Creación automática de Planes de Compra y borradores de RFQs (Solicitudes de Cotización).
+**Stack Inicial Sugerido (MVP a Escala):**
+- Frontend: Streamlit (MVP) -> React/Next.js (Producción).
+- Backend: FastAPI (Asíncrono).
+- Datos: PostgreSQL (Relacional) + Qdrant/Pinecone (Vectorial).
+- IA Core: Orquestación de LLMs (GPT-4o / Llama 3 Fine-tuned).
+**Desafíos Críticos:** Manejo de documentos extensos (latencia), alucinaciones en datos legales críticos, y escalabilidad de ETLs documentales.
+</project_description>
+
+# Instrucciones de Ejecución
+Ejecuta el siguiente workflow secuencialmente. Utiliza etiquetas XML para estructurar tu respuesta. Sé conciso en las propuestas pero exhaustivo en la lógica técnica.
+
+## FASE 1: Diseño Divergente (6 Arquetipos Expertos)
+Genera 6 propuestas arquitectónicas distintas simulando los siguientes arquetipos mentales. Cada uno debe priorizar su dominio obsesivamente, adaptado al contexto de IA y Procesamiento Documental:
+
+1.  **The Pragmatist (MVP Focus):** Prioriza la validación rápida del "Auditor IA". Stack sugerido: Streamlit + GPT-4o directo + almacenamiento local. Objetivo: Time-to-market en <4 semanas.
+2.  **The Scaler (Distributed Systems):** Enfoque en alta concurrencia para parsear cientos de contratos simultáneamente. Uso de colas (Celery/RabbitMQ), procesamiento distribuido (Ray/Dask) y bases de datos OLAP (ClickHouse).
+3.  **The Fort (Security & Privacy):** Enfoque "Zero Trust" para datos confidenciales industriales. Encriptación en reposo/tránsito, anonimización de PII antes de enviar a LLMs, y gestión estricta de RBAC.
+4.  **The Maintainer (Quality Assurance):** Enfoque en Clean Architecture para pipelines de IA. Testing de evaluaciones RAG (RAGAS), tipado estricto (Pydantic), y versionado de datos/modelos.
+5.  **The Optimizer (Latency & Cost):** Enfoque en reducción de tokens y velocidad. Estrategias de "Chunking" inteligente, caché semántico (Redis), y uso de modelos SLM (Small Language Models) para tareas rutinarias.
+6.  **The UX-First (Human-in-the-loop):** Enfoque centrado en la confianza del usuario. Interfaces de "Explainable AI" que citan fuentes exactas (página/párrafo) y flujos de aprobación manual intuitivos.
+
+Para cada uno, provee un bloque conciso:
+<agent name="[Nombre]">
+- Stack Tecnológico Específico:
+- Arquitectura Clave:
+- Pros/Contras para ZTWQ:
+</agent>
+
+## FASE 2: Convergencia y Revisión Adversaria (The Grinder)
+Actúa como un Comité de Revisión Técnica (TRC) que analiza los 6 planes anteriores.
+1.  Sintetiza los mejores componentes en un **Candidato a Plan Maestro** que soporte la transición de MVP a Enterprise.
+2.  Somete este candidato a una ronda de "Red Teaming" (ataque lógico):
+    - **Cuellos de botella en ETL:** ¿Qué pasa si un usuario sube un PDF de 500 páginas escaneado?
+    - **Fallos de Lógica:** ¿Cómo maneja el sistema contradicciones entre dos documentos válidos?
+    - **Dependencia:** Riesgos de depender puramente de APIs externas (OpenAI) vs modelos locales.
+
+Salida esperada:
+<review_round>
+- Candidato Híbrido: [Resumen de la arquitectura ganadora]
+- Vulnerabilidades Críticas (Flags): [Lista de problemas reales detectados]
+- Soluciones: [Mitigaciones técnicas concretas, ej. Hybrid Search, Fallback mechanisms]
+</review_round>
+
+## FASE 3: El Plan Maestro (Ejecución)
+Basado en la Fase 2, genera el plan definitivo para implementación inmediata en VS Code.
+1.  **Estructura de Archivos:** Árbol de directorios ASCII (incluyendo carpetas para `prompts`, `etl_pipeline`, `tests`).
+2.  **Stack Final:** Tecnologías definitivas y versiones (ej. `langchain`, `unstructured`, `pydantic`).
+3.  **Guía Paso a Paso:** Instrucciones secuenciales: Setup entorno -> Pipeline de Ingesta -> Lógica RAG -> API -> UI.
+4.  **Gotchas Específicos:** Advertencias sobre el manejo de tokens, límites de contexto y errores de OCR.
+
+# Refinamiento y Restricciones
+- Si la respuesta es demasiado larga, detente después de la Fase 2 y pregunta si deseas continuar con la Fase 3.
+- Utiliza terminología precisa de Ingeniería de IA (Embeddings, Vector Store, Context Window, Hallucination rates).
+- Prioriza código y estructura sobre explicaciones teóricas en la Fase 3.
