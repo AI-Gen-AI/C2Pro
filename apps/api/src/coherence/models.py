@@ -227,9 +227,13 @@ class CoherenceResult(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp when the score was calculated."
     )
+    score_version: str = Field(
+        default="v0_flag_based",
+        description="Immutable scoring algorithm version used for this result.",
+    )
     score_reason: str | None = Field(
         default=None,
-        description="Machine-readable reason when a score is unavailable.",
+        description="Machine-readable reason when a score is unavailable or version-specific handling applies.",
     )
     score_missing_dimensions: list[str] | None = Field(
         default=None,
@@ -264,9 +268,13 @@ class EnrichedCoherenceResult(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp of calculation"
     )
+    score_version: str = Field(
+        default="v0_flag_based",
+        description="Immutable scoring algorithm version used for this result.",
+    )
     score_reason: str | None = Field(
         default=None,
-        description="Machine-readable reason when a score is unavailable.",
+        description="Machine-readable reason when a score is unavailable or version-specific handling applies.",
     )
     score_missing_dimensions: list[str] | None = Field(
         default=None,
