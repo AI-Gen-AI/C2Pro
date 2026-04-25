@@ -63,6 +63,9 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             is_gaming_detected=result.is_gaming_detected,
             gaming_violations=result.gaming_violations,
             penalty_points=result.penalty_points,
+            score_version=result.score_version,
+            score_reason=result.score_reason,
+            score_missing_dimensions=result.score_missing_dimensions,
             calculated_at=_utcnow_naive(),
         )
 
@@ -184,6 +187,9 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             is_gaming_detected=orm_result.is_gaming_detected,
             gaming_violations=orm_result.gaming_violations,
             penalty_points=orm_result.penalty_points,
+            score_version=orm_result.score_version,
+            score_reason=orm_result.score_reason,
+            score_missing_dimensions=orm_result.score_missing_dimensions,
         )
 
     def _serialize_category_scores(
