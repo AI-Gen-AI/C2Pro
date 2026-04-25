@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-21T23:30:00Z",
+  "updated_at": "2026-04-25T07:28:48Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -608,6 +608,46 @@
         "tests_pasados": true,
         "validacion_lint": false
       }
+    },
+    {
+      "tarea_id": "T067",
+      "backlog_id": "TASK-COH-V1-01",
+      "tipo": "backend",
+      "descripcion": "Delete dead Coherence v0 code and document the canonical replacement paths in ADR-001.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "The four dead coherence files are removed from tracked files, orphan imports are removed, ADR-001 exists, and verification results are reported.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/engine_v2.py",
+        "apps/api/src/coherence/rules.py",
+        "apps/api/src/coherence/service.py",
+        "apps/api/src/coherence/services/scoring/calculator.py",
+        "apps/api/src/coherence/__init__.py",
+        "apps/api/src/coherence/services/__init__.py",
+        "apps/api/tests/coherence/test_engine.py",
+        "apps/api/tests/coherence/test_engine_v2.py",
+        "apps/api/tests/coherence/test_rules.py",
+        "docs/architecture/adr/ADR-001-coherence-deadcode-deletion.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coh-v1/PHASE-1-codex-REPORT.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-25T07:28:48Z",
+        "completado": "2026-04-25T07:28:48Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-01 completed: dead Coherence v0 files and orphan import surfaces were removed, and ADR-001 documents the canonical v1 paths.",
+        "cambios_realizados": [
+          "Deleted engine_v2.py, rules.py, service.py, and services/scoring/calculator.py.",
+          "Removed lazy/package exports and dead-code-specific tests that imported the deleted modules.",
+          "Added ADR-001 with canonical pointers to ScoringService, the 7-node graph, and the rules engine registry."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "apps/api pytest -x is blocked before task-specific tests by existing collection failures: golden.evaluators import shadowing, and HITL Prometheus duplicate timeseries when bypassed."
+      }
     }
   ],
   "backlog_sync": {
@@ -672,7 +712,8 @@
       "TASK-INF-059",
       "TASK-FRT-170",
       "TASK-BCK-048",
-      "TASK-BCK-049"
+      "TASK-BCK-049",
+      "TASK-COH-V1-01"
     ]
   },
   "plan_actual": {
@@ -761,8 +802,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 13,
-    "tareas_completadas": 12,
+    "total_tareas": 14,
+    "tareas_completadas": 13,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,

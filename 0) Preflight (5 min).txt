@@ -1,0 +1,160 @@
+0) Preflight (5 min)
+1. Start backend stack:
+- docker-compose up -d --build
+2. Verify API health:
+- Open http://localhost:8000/health (expect 200)
+3. Open Swagger:
+- http://localhost:8000/docs
+---
+1) Register and Login (Swagger)
+Use Authentication endpoints.
+1. POST /api/v1/auth/register  
+Example body:
+{
+  "company_name": "Audit Company SA",
+  "email": "auditor@example.com",
+  "password": "Password123!",
+  "password_confirm": "Password123!",
+  "first_name": "External",
+  "last_name": "Auditor",
+  "accept_terms": true
+}
+Expect: 201 with tokens.access_token.
+2. POST /api/v1/auth/login (if user already exists)
+{
+  "email": "auditor@example.com",
+  "password": "Password123!"
+}
+Expect: 200, grab tokens.access_token.
+3. Click Authorize in Swagger and paste the token.  
+- Usually token only (without Bearer ) works in Swagger bearer auth.
+- Test auth with GET /api/v1/auth/me → expect 200.
+---
+2) Create Project
+Use projects.
+1. POST /api/v1/projects
+{
+  "name": "External Audit Project 01",
+  "code": "AUD-PRJ-001",
+  "description": "Manual backend audit",
+  "project_type": "construction",
+  "estimated_budget": 500000,
+  "currency": "EUR"
+}
+Expect: 201, save project_id.
+2. GET /api/v1/projects/{project_id}  
+Expect: 200.
+---
+3) Upload Real Contract
+Use documents.
+1. POST /api/v1/projects/{project_id}/documents  
+- document_type: contract
+- file: choose your real PDF (e.g. your sample contract)
+Expect: 202 with id (document_id) and task_id.
+2. Poll processing:
+- GET /api/v1/projects/{project_id}/documents
+- GET /api/v1/documents/{document_id}
+You want status moving to parsed/processed (depending current status mapping).
+---
+4) Run Analysis (LangGraph / LangChain path)
+Use analysis endpoint:
+1. Extract text from the same PDF locally (one-time helper):
+- python scripts/prove_real_contract_flow.py --contract "path/to/your.pdf" already does it all automatically
+- If you want Swagger-only for analyze payload, extract text with any PDF text tool and paste it.
+2. POST /api/v1/analyze
+{
+  "project_id": "<project_id>",
+  "document_id": "<document_id>",
+  "document_text": "<full extracted contract text>"
+}
+Expect:
+- 200
+- analysis_id not null
+- wbs list not empty (often many items)
+- messages present
+---
+5) Verify Coherence Dashboard
+Use Coherence Dashboard.
+1. GET /api/coherence/dashboard/{project_id}  
+Expect:
+- 200
+- fields like global_score, coherence_score, sub_scores, alert_count, document_count.
+---
+6) Verify Alerts
+Use Alerts.
+1. GET /api/v1/alerts/projects/{project_id}  
+2. GET /api/v1/alerts/projects/{project_id}/stats
+Expect:
+- 200
+- list can be empty or non-empty depending document content/rules.
+- stats endpoint should always return counters.
+If there are alerts:
+- PATCH /api/v1/alerts/{alert_id} to ACKNOWLEDGED / RESOLVED and verify mutation works.
+---
+7) Verify HITL
+Use HITL endpoints (/api/v1/hitl/...).
+Even if auto-routing doesn’t trigger for this contract, you can audit HITL pipeline manually:
+1. POST /api/v1/hitl/route
+{
+  "item_id": "11111111-2222-3333-4444-555555555555",
+  "item_type": "analysis_alert",
+  "confidence": 0.42,
+  "impact_level": "HIGH",
+  "item_data": {
+    "project_id": "<project_id>",
+    "reason": "Manual audit test"
+  }
+}
+Expect: 201, item in pending review state.
+2. GET /api/v1/hitl/queue  
+Expect: item appears.
+3. POST /api/v1/hitl/queue/{item_id}/approve
+{
+  "reviewer_name": "External Auditor"
+}
+Expect status transition to APPROVED.
+4. Optional lifecycle:
+- POST /api/v1/hitl/queue/{item_id}/release
+- POST /api/v1/hitl/escalate
+---
+8) Hard Evidence (DB checks)
+Run these in terminal for audit evidence:
+1. Check LangGraph checkpoint growth:
+SELECT
+  (SELECT COUNT(*) FROM checkpoints) AS checkpoints,
+  (SELECT COUNT(*) FROM checkpoint_writes) AS checkpoint_writes,
+  (SELECT COUNT(*) FROM checkpoint_blobs) AS checkpoint_blobs;
+2. Check latest checkpoints by project in metadata:
+SELECT checkpoint_id, metadata->>'project_id' AS project_id, metadata->>'step' AS step
+FROM checkpoints
+WHERE metadata->>'project_id' = '<project_id>'
+ORDER BY checkpoint_id DESC
+LIMIT 10;
+3. Check analyses created:
+SELECT id, project_id, status, created_at, completed_at
+FROM analyses
+WHERE project_id = '<project_id>'
+ORDER BY created_at DESC;
+4. Check dashboard table exists:
+SELECT to_regclass('public.coherence_results');
+---
+**9) LangChain/LangGraph Flow Visibility**
+For backend trace visibility during your run:
+- `docker logs -f c2pro-api`
+Look for:
+- `langgraph_checkpointer_ready`
+- analysis request start/end
+- node/tool execution logs (if enabled)
+- no unhandled exceptions during analyze/dashboard calls
+---
+10) Fast “Single-command audit”
+If you want automated proof too:
+- python scripts/prove_real_contract_flow.py --require-dashboard
+This already validates:
+- real upload
+- analyze 200
+- dashboard 200
+- checkpoint table growth
+---
+If you want, I can now give you a fillable audit checklist template (Pass/Fail + evidence columns) so you can document this run formally like a compliance report.
+▣  Build · gpt-5.3-codex · 2m 17s
