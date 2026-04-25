@@ -1,0 +1,29 @@
+openclaw security Audit
+openclaw configure --section channels
+fmhu nmtm szmw jnxf
+
+
+
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMWFiYjg4Mi1jNzFhLTRmOGUtYjYzYy00NDdjMjdkN2M0OTIiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzcyMzkwMDI4LCJleHAiOjE3ODAxMTM2MDB9.x06nYFicvoqKTsdTQrGSb50M0Ie79H07OS-ulHZ89kg
+
+
+curl.exe -sS --max-time 10 -D - -o NUL -H "Authorization: Bearer TU_API_KEY_REAL" http://127.0.0.1:5678/api/v1/workflows
+
+
+curl.exe -sS --max-time 10 -D - -o NUL -H "X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMWFiYjg4Mi1jNzFhLTRmOGUtYjYzYy00NDdjMjdkN2M0OTIiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzcyMzkwMDI4LCJleHAiOjE3ODAxMTM2MDB9.x06nYFicvoqKTsdTQrGSb50M0Ie79H07OS-ulHZ89kg http://127.0.0.1:5678/api/v1/workflows
+
+
+docker run --rm --network n8n-email-assistant_stack `
+  -e PGPASSWORD=docker run --rm --network n8n-email-assistant_stack `
+  -e PGPASSWORD=X3dz6$$WVXJbJSnvQ6Z82SP18biX`
+  postgres:16 `
+  psql -h postgres -U n8n -d n8n -c "select 1 as ok;"`
+  postgres:16 `
+  psql -h postgres -U n8n -d n8n -c "select 1 as ok;"
+
+
+docker run --rm --network n8n-email-assistant_stack `
+  -e PGPASSWORD=prueba123`
+  postgres:16 `
+  psql -h postgres -U n8n -d n8n -c "select 1 as ok;"

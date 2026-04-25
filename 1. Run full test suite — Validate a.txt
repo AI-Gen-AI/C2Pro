@@ -1,0 +1,62 @@
+ 1. Run full test suite — Validate all 1910 tests
+  2. Generate real agent traces — Execute C2Pro workflow with LangSmith ok 
+  3. Continue with P2 tasks — Evaluation datasets, load tests        
+  4. Review agent rules — Check the agent configurations you highlighted
+
+
+### Priority 4 - Production Hardening (Low)
+
+| # | Task | Owner | Status | Due | Notes ||---|------|-------|--------|-----|-------|
+
+| 4.1 | Circuit breakers for external calls | Performance | :red_circle: PENDING | Month 2 | Resilience |
+| 4.2 | Horizontal scaling readiness | Architect | :red_circle: PENDING | Month 2 | Scale-out |
+| 4.3 | Security penetration testing | Safety | :red_circle: PENDING | Month 2 | External audit |
+| 4.4 | GDPR compliance audit | Safety | :red_circle: PENDING | Month 2 | Legal review |
+| 4.5 | Cost forecasting alerts | Cost Opt | :red_circle: PENDING | Month 2 | Predict overruns |
+
+
+  ❌ NOT IMPLEMENTED (Gaps)
+
+  | Gap                      | Evidence                                                  |
+  |--------------------------|-----------------------------------------------------------|
+  | Golden project files     | tests/golden/project_*.json - NO FILES EXIST              |
+  | Generator not executed   | Script exists but was never run (requires OPENAI_API_KEY) |
+  | Accuracy tests will skip | get_golden_projects() returns empty list → tests skip     |
+
+  📊 VERDICT: PARTIAL
+
+  | Done                          | Pending                                                 |
+  |-------------------------------|---------------------------------------------------------|
+  | Coherence baseline dataset ✅ | Run generate_golden_dataset.py to create project_*.json |
+  | Test harness structure ✅     | Execute generator with OPENAI_API_KEY                   |
+  | Pydantic schemas ✅           | 9 synthetic projects per TEST_SCENARIOS      
+
+
+
+Infrastructure Recovery (40.6% complete):
+)
+  - P4.2-P4.4: Security hardening tasks
+
+  Multi-Agent Committee Review:
+  - P4 Production Hardening tasks (circuit breakers, scaling, security audit)
+
+---------------------------------------------
+
+  Current expected skips remain environment-gated:
+
+  - Docker testcontainers suites (access denied in this non-elevated runtime)
+  - Optional langgraph.checkpoint.postgres dependency
+  - RED-only performance/resilience light-mode skips
+
+
+
+the parallel rerun caused heavy DB contention/timeouts again, so I’m switching to strict serial execution to get
+  trustworthy results for each suite.
+
+docs\INFRASTRUCTURE_AUDIT_2026-03-07.md
+nfrastructure audit complete. The report identifies 2 critical blockers (API and MinIO containers not running) and 1 high-severity issue (dev database has no tables).
+
+  Would you like me to:
+  1. Execute the Priority 1 recovery steps to bring the infrastructure online?
+  2. Extend the committee with additional agents (Kubernetes, Performance, CI/CD)?
+  3. Save this report to a markdown file in the docs directory?

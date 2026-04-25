@@ -1,0 +1,7 @@
+TASK-FRT-005 you have to guide me
+  if is needed, any external action,
+  to close this point. take into
+  account we are in producction and
+  have Clerks. 
+Notice in Clerks Slug I see this enter in Organization information "Slug isn´t enlabed, but exit in this organization"
+That was a testing. Check if that could block, or is already implemented. 

@@ -5,7 +5,7 @@ Motor de análisis de coherencia para proyectos de construcción.
 Detecta inconsistencias, riesgos y problemas en documentos contractuales.
 
 Components:
-- CoherenceEngineV2: Motor principal con soporte determinista + LLM (CE-26)
+- ScoringService: canonical coherence score aggregation
 - CoherenceLLMService: Integración con LLM para análisis cualitativo
 - Rules Engine: Evaluadores de reglas (deterministas y LLM)
 
@@ -27,12 +27,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "Evidence":                ("src.coherence.models", "Evidence"),
     "Alert":                   ("src.coherence.models", "Alert"),
     "CoherenceResult":         ("src.coherence.models", "CoherenceResult"),
-    # Engine V2 (CE-26)
-    "CoherenceEngineV2":       ("src.coherence.engine_v2", "CoherenceEngineV2"),
-    "EnhancedCoherenceEngine": ("src.coherence.engine_v2", "EnhancedCoherenceEngine"),
-    "EngineConfig":            ("src.coherence.engine_v2", "EngineConfig"),
-    "ExecutionMode":           ("src.coherence.engine_v2", "ExecutionMode"),
-    "create_engine_v2":        ("src.coherence.engine_v2", "create_engine_v2"),
     # LLM Service
     "CoherenceLLMService":     ("src.coherence.llm_integration", "CoherenceLLMService"),
     "get_coherence_llm_service": ("src.coherence.llm_integration", "get_coherence_llm_service"),
