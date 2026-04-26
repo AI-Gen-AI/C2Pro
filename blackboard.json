@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-25T07:28:48Z",
+  "updated_at": "2026-04-25T20:29:37Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -648,6 +648,115 @@
         "validacion_lint": false,
         "nota_verificacion": "apps/api pytest -x is blocked before task-specific tests by existing collection failures: golden.evaluators import shadowing, and HITL Prometheus duplicate timeseries when bypassed."
       }
+    },
+    {
+      "tarea_id": "T068",
+      "backlog_id": "TASK-COH-V1-04",
+      "tipo": "backend",
+      "descripcion": "Add Coherence Score v1 audit-trail versioning fields, persistence round-trip coverage, UI badge stub, and ADR-002.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "coherence_results gains score_version, score_reason, score_missing_dimensions; repository writes/reads the fields; ScoreVersionBadge smoke test passes; ADR and report are present.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260425_0001_coherence_score_versioning.py",
+        "apps/api/src/coherence/adapters/persistence/models.py",
+        "apps/api/src/coherence/adapters/persistence/sqlalchemy_coherence_repository.py",
+        "apps/api/src/coherence/application/dtos/coherence_dtos.py",
+        "apps/api/src/coherence/models.py",
+        "apps/api/src/coherence/config.py",
+        "apps/api/tests/integration/coherence/test_repository.py",
+        "apps/web/src/components/coherence/ScoreVersionBadge.tsx",
+        "apps/web/src/components/coherence/ScoreVersionBadge.test.tsx",
+        "docs/architecture/adr/ADR-002-coherence-score-versioning.md",
+        "blackboard/coh-v1/PHASE-4-codex-REPORT.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-25T19:38:44Z",
+        "completado": "2026-04-25T19:38:44Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-04 completed with migration, persistence fields, cut-off constant, UI badge stub, and ADR-002.",
+        "cambios_realizados": [
+          "Added 20260425_0001 migration merging current Alembic heads and adding score-version audit fields.",
+          "Extended CoherenceResultORM, CoherenceCalculationResult, CoherenceResult, and EnrichedCoherenceResult with score_version/score_reason/score_missing_dimensions.",
+          "Updated SqlAlchemyCoherenceRepository save/read mappings and added repository round-trip coverage.",
+          "Added ScoreVersionBadge and Vitest smoke test."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": true,
+        "nota_verificacion": "Frontend badge test and pnpm tsc passed. Repository/Alembic online verification is blocked because no local Postgres/Docker database is available from this shell; offline full SQL generation is also blocked by older offline-incompatible migrations before this revision."
+      }
+    },
+    {
+      "tarea_id": "T069",
+      "backlog_id": "TASK-COH-V1-02",
+      "tipo": "backend",
+      "descripcion": "Consolidate N8 coherence scoring onto the canonical 7-node subgraph and replace default-100 semantics with insufficient-evidence responses.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "N8 delegates to the canonical graph, empty/poor-quality/single-clause paths return null score with reason and missing dimensions, and deprecated flag-based entry points warn.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/scoring.py",
+        "apps/api/src/coherence/graph/state.py",
+        "apps/api/src/coherence/graph/nodes.py",
+        "apps/api/src/coherence/graph/graph.py",
+        "apps/api/src/coherence/llm_schemas.py",
+        "apps/api/src/coherence/llm_integration.py",
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/src/analysis/adapters/graph/schema.py",
+        "apps/api/src/analysis/domain/coherence_derivation.py",
+        "apps/api/tests/unit/coherence/test_insufficient_evidence_semantics.py",
+        "apps/api/tests/unit/analysis/domain/test_coherence_derivation_insufficient_evidence.py",
+        "apps/api/tests/unit/analysis/test_coherence_scorer_node_canonical_subgraph.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coh-v1/PHASE-2-gemini-REPORT.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-25T20:29:37Z",
+        "completado": "2026-04-25T20:29:37Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-02 completed with canonical subgraph delegation and nullable insufficient-evidence scoring semantics.",
+        "cambios_realizados": [
+          "Added ScoringResult and propagated score_reason/score_missing_dimensions through the graph result.",
+          "Rewired analysis N8 to call evaluate_coherence_async with low-budget canonical configuration.",
+          "Changed dimension derivation defaults to None when extraction has no positive evidence.",
+          "Changed single-clause LLM response to overall_coherence_score=None with reason insufficient_clauses."
+        ],
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Targeted RED/GREEN tests and compileall passed. Requested integration suite is blocked by unavailable local Postgres host postgres-test. Requested mypy command still reports broad pre-existing type debt outside this phase."
+      }
+    },
+    {
+      "tarea_id": "T070",
+      "backlog_id": "TASK-BCK-050",
+      "tipo": "backend",
+      "descripcion": "Remove duplicate HITL Prometheus metric registration that blocked coherence test collection.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "monitoring.py imports without duplicate CollectorRegistry errors and keeps TASK-BCK-032 label contracts.",
+      "archivos_modificados": [
+        "apps/api/src/core/observability/monitoring.py",
+        "apps/api/tests/unit/core/observability/test_monitoring_metric_registration.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-25T20:29:37Z",
+        "completado": "2026-04-25T20:29:37Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Duplicate HITL checkpoint-load and approval-rate metric definitions removed; monitoring import regression coverage added.",
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
     }
   ],
   "backlog_sync": {
@@ -713,7 +822,10 @@
       "TASK-FRT-170",
       "TASK-BCK-048",
       "TASK-BCK-049",
-      "TASK-COH-V1-01"
+      "TASK-COH-V1-01",
+      "TASK-COH-V1-04",
+      "TASK-COH-V1-02",
+      "TASK-BCK-050"
     ]
   },
   "plan_actual": {
@@ -802,8 +914,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 14,
-    "tareas_completadas": 13,
+    "total_tareas": 17,
+    "tareas_completadas": 16,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,

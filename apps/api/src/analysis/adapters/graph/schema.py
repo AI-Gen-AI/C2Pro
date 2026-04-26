@@ -46,7 +46,9 @@ class ProjectState(TypedDict):
     raci_matrix: list[RaciEntry]
 
     # ── N8: Coherence Scorer ──
-    coherence_score: int
+    coherence_score: int | float | None
+    coherence_reason: str | None
+    coherence_missing_dimensions: list[str]
     coherence_breakdown: CoherenceBreakdown
 
     # ── N9: Budget Parser (extended) ──

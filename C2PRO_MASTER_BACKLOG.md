@@ -89,7 +89,8 @@
 
 ### Backend (0 pending)
 
-All backend tasks complete as of 2026-04-21. Future backend work will be tracked in the Manifest v3 epics or added here as it surfaces.
+| Priority | Task ID | Depends On | Description |
+| -------- | ------- | ---------- | ----------- |
 
 ### Frontend (2 pending)
 
@@ -135,9 +136,9 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | Priority | Task ID | Agent | Depends On | Description |
 | -------- | ------- | ----- | ---------- | ----------- |
 | P0 | `[x] TASK-COH-V1-01` | Codex | — | Delete `engine_v2.py`, `rules.py`, `service.py`, `services/scoring/calculator.py`. ADR-001. `[x] Implemented (Dead-Code Deletion + ADR)` |
-| P0 | `[ ] TASK-COH-V1-02` | Gemini 3 Pro | 01 | Rewire N8 → 7-node subgraph. Replace default-100 with `InsufficientEvidence` in `scoring.py:144`, `llm_integration.py:409-414`, `coherence_derivation.py:112-123`. |
+| P0 | `[x] TASK-COH-V1-02` | Gemini 3 Pro | 01 | Rewire N8 → 7-node subgraph. Replace default-100 with `InsufficientEvidence` in `scoring.py:144`, `llm_integration.py:409-414`, `coherence_derivation.py:112-123`. `[x] Implemented (Pipeline Consolidation + InsufficientEvidence)` |
 | P0 | `[ ] TASK-COH-V1-03` | Gemini 3 Pro | 01 | Define `LLMRulePort` in domain. Move `AnthropicWrapper` callers to `coherence/adapters/ai/`. Snapshot tests. |
-| P0 | `[ ] TASK-COH-V1-04` | Codex | 01 | Alembic: `score_version` enum + `score_reason` + `score_missing_dimensions`. Repository writes. UI badge stub. ADR-002. |
+| P0 | `[x] TASK-COH-V1-04` | Codex | 01 | Alembic: `score_version` enum + `score_reason` + `score_missing_dimensions`. Repository writes. UI badge stub. ADR-002. `[x] Implemented (Migration + Persistence + UI Stub)` |
 | P0 | `[ ] TASK-COH-V1-05` | OpenCode | 02, 03, 04 | Build 12 deterministic + 6 LLM evaluators (3+1 × 6 categories). Wire into registry. Orphan `rule_id` startup check. |
 | P0 | `[ ] TASK-COH-V1-06` | OpenCode | 02, 05 | `format_output` calls `AlertGeneratorService.process_violations`. Add `AlertType.AUDIT_INCOMPLETE`. ADR-003 ledger transition. |
 | P0 | `[ ] TASK-COH-V1-07` | Codex | 02, 04, 05 | Golden-corpus schema: `expected_score_range` + `expected_alerts`. Annotate 15 bundles. CI assertion. |
@@ -150,6 +151,10 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-04-25 | **TASK-COH-V1-02 complete** — N8 now delegates to the canonical 7-node coherence subgraph, `ScoringService` returns nullable `ScoringResult` with `insufficient_evidence` semantics, single-clause LLM analysis returns `insufficient_clauses`, extraction-derived unknown dimensions default to `None`, and deprecated flag-based entry points now warn on import. Targeted unit/compile/grep verification passed; broader integration verification is blocked by unavailable local Postgres (`postgres-test`). |
+| 2026-04-25 | **TASK-BCK-050 complete** — Removed duplicate HITL Prometheus metric definitions for checkpoint load errors and approval rate, kept the TASK-BCK-032 label contracts, and added an import regression test for `monitoring.py`. |
+| 2026-04-25 | **TASK-COH-V1-04 complete** — Added `coherence_score_version` enum migration and `coherence_results` audit fields (`score_version`, `score_reason`, `score_missing_dimensions`), extended repository/DTO/domain result surfaces, added the TBD v1 cut-off constant, shipped `ScoreVersionBadge` smoke coverage, and documented no-recompute cut-off rationale in ADR-002. |
+| 2026-04-25 | **TASK-BCK-050 filed (P1, Backend)** — Duplicate Prometheus metric registration: `HITL_CHECKPOINT_LOAD_ERRORS` defined twice in `apps/api/src/core/observability/monitoring.py` (lines 335 `["error_type"]` + 361 `["reason"]`, same metric name `c2pro_hitl_checkpoint_load_errors_total`). Blocks `pytest -x` collection at module import. Surfaced during TASK-COH-V1-01 review; pre-existing on `main`. Pending count: 0 → 1. |
 | 2026-04-25 | **TASK-COH-V1-01 complete** — Deleted dead Coherence v0 files (`engine_v2.py`, `rules.py`, `service.py`, `services/scoring/calculator.py`), removed orphan package/test import surfaces, and added `docs/architecture/adr/ADR-001-coherence-deadcode-deletion.md`. Full `apps/api` pytest remains blocked by pre-existing collection issues (`golden.evaluators` path shadowing; HITL Prometheus duplicate metric registration when bypassed). |
 | 2026-04-25 | **EPIC-COH-V1-CONSOLIDATION created (orchestration plan)** — Coherence Score v1 consolidation epic registered in Tier 2 with 9 sub-tasks (`TASK-COH-V1-01..09`) assigned across Codex / Gemini 3 Pro / OpenCode (Sonnet 4.6). Orchestrator (Claude Opus 4.7) reviews and merges per phase into `coh-v1/consolidation`. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs (self-contained dispatch packs + per-phase report paths + acceptance commands): `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. Reports land in `blackboard/coh-v1/PHASE-N-<agent>-REPORT.md`. Wave plan: A=[1] · B=[2,3,4] · C=[5] · D=[6,7,8] · E=[9]. |
 | 2026-04-21 | **EPIC-LANGSMITH-ROLLOUT complete** — Delivered deterministic canary routing (`src/core/ai/rollout_router.py`) with fail-open fallback for traced-call outages, k6 synthetic load profile (`apps/api/tests/load/langsmith_rollout_load_test.js`) for 10k/day-equivalent staging validation, critical rollout alert rules (`ops/alerts/langsmith_rollout_alerts.yml`) for trace failure and p99 latency regression thresholds, and emergency rollback/operator runbook (`docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md`). Backlog mutation payload: `[STATUS: DONE - EPIC-LANGSMITH-ROLLOUT] [ACTION: LANGSMITH IN PRODUCTION - ROLLOUT AT 10% - MONITORING ACTIVE]`. |

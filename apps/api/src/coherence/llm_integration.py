@@ -409,7 +409,8 @@ Evalúa si esta cláusula viola la regla especificada."""
         if len(clauses) < 2:
             return MultiClauseCoherenceLLMResponse(
                 cross_clause_issues=[],
-                overall_coherence_score=100,
+                overall_coherence_score=None,
+                reason="insufficient_clauses",
                 summary="Se requieren al menos 2 cláusulas para análisis cruzado",
             )
 
