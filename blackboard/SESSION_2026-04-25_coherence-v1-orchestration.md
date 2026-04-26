@@ -77,6 +77,12 @@ Wave D:  [6] OpenCode  ║  [7] Codex  ║  [8] Gemini              ← parallel
 Wave E:  [9] OpenCode                                           ← closing gate
 ```
 
+**Current status (2026-04-26)**:
+
+| Phase | Task | Status | Report |
+| ----- | ---- | ------ | ------ |
+| 9 | `TASK-COH-V1-09` | needs-review | `blackboard/coh-v1/PHASE-9-opencode-REPORT.md` |
+
 After Phase 1 lands and is reviewed, the orchestrator creates `coh-v1/consolidation` from `main` and all subsequent phase branches merge into it via PR. Final squash-merge of `coh-v1/consolidation` into `main` happens after Phase 9 + corpus-CI green.
 
 ---
