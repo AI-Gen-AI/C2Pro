@@ -32,6 +32,19 @@
       "description_contains": "Civil works budget exceeds contractual ceiling by 600,000 EUR"
     }
   ],
+  "expected_score_range": {
+    "min": 80.0,
+    "max": 90.0,
+    "reasoning": "Single high cost ceiling breach should create a material but isolated score penalty."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "COST-001",
+      "min_count": 1,
+      "severity": "high"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "civil",
     "tags": ["budget-overrun", "ceiling-breach"]

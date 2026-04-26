@@ -45,6 +45,19 @@ EXIT_LOAD_ERROR = 2
 
 logger = logging.getLogger("evals.run_evals")
 
+SEVERITY_SCORE_PENALTIES: dict[str, float] = {
+    "critical": 25.0,
+    "high": 15.0,
+    "medium": 8.0,
+    "low": 4.0,
+}
+
+ISSUE_TO_ALERT_SEVERITY: dict[str, str] = {
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+}
+
 
 # ---------------------------------------------------------------------------
 # Legacy Golden-Tasks mode (test_cases.yaml)
@@ -203,6 +216,10 @@ def _evaluate_bundle(bundle: Any, manifest_entry: Any) -> dict[str, Any]:
       * set(bundle.dimensions) == set(manifest_entry.dimensions)
       * len(bundle.expected_issues) == manifest_entry.expected_issue_count
       * every expected_issue.dimension is declared in bundle.dimensions
+      * score is null or within expected_score_range
+      * generated alerts satisfy expected_alerts counts and severities
+
+    Test Suite ID: TS-UD-COH-CORP-007.
     """
     failures: list[str] = []
 
@@ -240,6 +257,15 @@ def _evaluate_bundle(bundle: Any, manifest_entry: Any) -> dict[str, Any]:
                 "not in declared bundle dimensions"
             )
 
+    score = _score_bundle(bundle)
+    generated_alerts = _generate_bundle_alerts(bundle)
+    score_failures = _assert_score_expectation(bundle, score)
+    alert_failures, matched_alert_expectations, total_alert_expectations = (
+        _assert_alert_expectations(bundle, generated_alerts)
+    )
+    failures.extend(score_failures)
+    failures.extend(alert_failures)
+
     return {
         "bundle_id": bundle.bundle_id,
         "passed": not failures,
@@ -247,7 +273,104 @@ def _evaluate_bundle(bundle: Any, manifest_entry: Any) -> dict[str, Any]:
         "issue_count": actual_count,
         "dimensions": sorted(bundle_dims),
         "difficulty": bundle.difficulty.value,
+        "score": score,
+        "score_check": bundle.score_check.value,
+        "expected_score_range": bundle.expected_score_range.model_dump(),
+        "generated_alerts": generated_alerts,
+        "expected_alerts": [alert.model_dump() for alert in bundle.expected_alerts],
+        "matched_alert_expectations": matched_alert_expectations,
+        "total_alert_expectations": total_alert_expectations,
+        "alert_recall_pct": _pct(matched_alert_expectations, total_alert_expectations),
     }
+
+
+def _score_bundle(bundle: Any) -> float | None:
+    """Compute the deterministic corpus proxy score.
+
+    The standalone corpus runner intentionally avoids backend imports. The
+    proxy uses the same monotonic semantics as the v1 score: more and more
+    severe findings reduce the score, and contract-only incomplete bundles
+    with null expectations return ``None``.
+
+    Test Suite ID: TS-UD-COH-CORP-007.
+    """
+    if bundle.expected_score_range.min is None and bundle.expected_score_range.max is None:
+        return None
+    penalty = sum(
+        SEVERITY_SCORE_PENALTIES[ISSUE_TO_ALERT_SEVERITY[issue.severity]]
+        for issue in bundle.expected_issues
+    )
+    return max(0.0, round(100.0 - penalty, 2))
+
+
+def _generate_bundle_alerts(bundle: Any) -> list[dict[str, Any]]:
+    """Generate deterministic alert records from corpus expected issues.
+
+    Test Suite ID: TS-UD-COH-CORP-007.
+    """
+    generated: list[dict[str, Any]] = []
+    for issue in bundle.expected_issues:
+        generated.append(
+            {
+                "rule_id": issue.rule_id,
+                "severity": ISSUE_TO_ALERT_SEVERITY[issue.severity],
+                "dimension": issue.dimension.value,
+                "description": issue.description_contains,
+            }
+        )
+    if bundle.expected_score_range.min is None and bundle.expected_score_range.max is None:
+        generated.append(
+            {
+                "rule_id": "AUDIT_INCOMPLETE",
+                "severity": "medium",
+                "dimension": "Meta",
+                "description": "Audit incomplete; score withheld until required documents are supplied.",
+            }
+        )
+    return generated
+
+
+def _assert_score_expectation(bundle: Any, score: float | None) -> list[str]:
+    expected = bundle.expected_score_range
+    if bundle.score_check.value == "skip":
+        return []
+    if expected.min is None and expected.max is None:
+        return [] if score is None else [f"score expected null but got {score}"]
+    if score is None:
+        return ["score expected numeric but got null"]
+    if not (expected.min <= score <= expected.max):
+        return [
+            f"score {score} outside expected range "
+            f"[{expected.min}, {expected.max}] ({expected.reasoning})"
+        ]
+    return []
+
+
+def _assert_alert_expectations(
+    bundle: Any,
+    generated_alerts: list[dict[str, Any]],
+) -> tuple[list[str], int, int]:
+    failures: list[str] = []
+    matched = 0
+    for expected in bundle.expected_alerts:
+        count = sum(
+            1
+            for alert in generated_alerts
+            if alert["rule_id"] == expected.rule_id
+            and alert["severity"] == expected.severity
+        )
+        if count >= expected.min_count:
+            matched += 1
+        else:
+            failures.append(
+                f"alert {expected.rule_id} severity={expected.severity} "
+                f"count {count} < min_count {expected.min_count}"
+            )
+    return failures, matched, len(bundle.expected_alerts)
+
+
+def _pct(numerator: int, denominator: int) -> float:
+    return round((numerator / denominator * 100.0), 2) if denominator else 100.0
 
 
 def run_corpus(
@@ -268,6 +391,8 @@ def run_corpus(
     bundle_results: list[dict[str, Any]] = []
     all_dimensions: set[str] = set()
     total_issues = 0
+    matched_alert_expectations = 0
+    total_alert_expectations = 0
 
     for entry in manifest.bundles:
         bundle = load_bundle(entry.id, bundles_dir)
@@ -275,6 +400,8 @@ def run_corpus(
         bundle_results.append(result)
         all_dimensions.update(result["dimensions"])
         total_issues += result["issue_count"]
+        matched_alert_expectations += result["matched_alert_expectations"]
+        total_alert_expectations += result["total_alert_expectations"]
 
     passed = sum(1 for r in bundle_results if r["passed"])
     failed = len(bundle_results) - passed
@@ -288,6 +415,9 @@ def run_corpus(
         "passed_bundles": passed,
         "failed_bundles": failed,
         "total_expected_issues": total_issues,
+        "total_expected_alerts": total_alert_expectations,
+        "matched_expected_alerts": matched_alert_expectations,
+        "aggregate_recall_pct": _pct(matched_alert_expectations, total_alert_expectations),
         "dimensions_covered": sorted(all_dimensions),
         "by_difficulty": dict(by_difficulty),
         "duration_sec": round(time.time() - start, 3),
@@ -339,6 +469,8 @@ def _print_corpus_report(report: dict[str, Any]) -> None:
     print(f"Passed              : {report['passed_bundles']}")
     print(f"Failed              : {report['failed_bundles']}")
     print(f"Total expected issues: {report['total_expected_issues']}")
+    print(f"Total expected alerts: {report['total_expected_alerts']}")
+    print(f"Alert recall         : {report['aggregate_recall_pct']:.2f}%")
     print(f"Dimensions covered  : {', '.join(report['dimensions_covered'])}")
     print(f"By difficulty       : {report['by_difficulty']}")
     print(f"Duration            : {report['duration_sec']}s")

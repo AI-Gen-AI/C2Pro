@@ -38,6 +38,24 @@
       "description_contains": "Cash flow front-loads payments ahead of progress"
     }
   ],
+  "expected_score_range": {
+    "min": 78.0,
+    "max": 90.0,
+    "reasoning": "Two medium schedule/cost payment-timing issues should produce a moderate penalty."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "SCHED-101",
+      "min_count": 1,
+      "severity": "medium"
+    },
+    {
+      "rule_id": "COST-101",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "building",
     "tags": ["cash-flow", "payment-milestone"]
