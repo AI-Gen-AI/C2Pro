@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +71,21 @@ class CoherenceResultORM(Base):
         ARRAY(String), nullable=False, default=[]
     )
     penalty_points: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Score-version audit trail
+    score_version: Mapped[str] = mapped_column(
+        ENUM(
+            "v0_flag_based",
+            "v1_exponential_decay",
+            name="coherence_score_version",
+            create_type=False,
+        ),
+        nullable=False,
+        default="v0_flag_based",
+        server_default="v0_flag_based",
+    )
+    score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score_missing_dimensions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     # Timestamps
     calculated_at: Mapped[datetime] = mapped_column(
