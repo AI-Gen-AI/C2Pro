@@ -28,6 +28,7 @@ class AlertType(str, Enum):
     COHERENCE = "coherence"
     BUDGET = "budget"
     WBS = "wbs"
+    AUDIT_INCOMPLETE = "audit_incomplete"
 
 
 class RACIRole(str, Enum):

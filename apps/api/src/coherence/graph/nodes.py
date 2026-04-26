@@ -32,6 +32,7 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
+from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
 from ..rules_engine.registry import list_evaluators
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..scoring import ScoringService
@@ -772,6 +773,16 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
     # Convert signals to alerts for backward compat
     alerts = [_signal_to_alert(s) for s in state.all_signals]
 
+    # TASK-COH-V1-06: Handle insufficient_evidence -> AUDIT_INCOMPLETE alert
+    if state.score is None:
+        missing_dims = state.diagnostics.get("missing_dimensions", [])
+        if missing_dims:
+            meta_alert = _create_audit_incomplete_alert(
+                project_id=state.project_id,
+                missing_dimensions=missing_dims,
+            )
+            alerts.append(meta_alert)
+
     # Build category breakdown
     category_breakdown = _build_category_breakdown(state.all_signals, state.score)
 
@@ -828,6 +839,28 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
             source_clause_id=signal.clause_id,
             claim=signal.evidence_summary,
             quote=signal.quote or "",
+        ),
+    )
+
+
+def _create_audit_incomplete_alert(
+    project_id: str,
+    missing_dimensions: list[str],
+) -> Alert:
+    """Create AUDIT_INCOMPLETE meta-alert when score is None."""
+    missing_str = ", ".join(missing_dimensions)
+    return Alert(
+        rule_id="AUDIT_INCOMPLETE",
+        severity="medium",
+        category="general",
+        message=TEMPLATES["AUDIT_INCOMPLETE"].format(missing_dimensions=missing_str),
+        evidence=Evidence(
+            source_clause_id="__AUDIT_INCOMPLETE__",
+            claim=f"Missing dimensions: {missing_str}",
+            quote=(
+                "No defensible Coherence Score can be issued without a full triplet "
+                "(contract + schedule + budget)."
+            ),
         ),
     )
 
