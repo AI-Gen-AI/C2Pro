@@ -44,6 +44,29 @@
       "description_contains": "Budget omits LD accrual implied by the delay"
     }
   ],
+  "expected_score_range": {
+    "min": 56.0,
+    "max": 70.0,
+    "reasoning": "Tri-dimensional cascade with two high issues and one medium issue should materially depress the score."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "SCHED-202",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "SCOPE-201",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "COST-201",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "metro",
     "tags": ["cascade", "tri-dimensional"]

@@ -38,6 +38,19 @@
       "description_contains": "drawings specify 185 mm² cable while contract requires 240 mm²"
     }
   ],
+  "expected_score_range": {
+    "min": 80.0,
+    "max": 90.0,
+    "reasoning": "Single high technical drawing-contract mismatch should materially lower the score."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "TECH-001",
+      "min_count": 1,
+      "severity": "high"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "substation",
     "tags": ["drawings-vs-contract", "spec-mismatch"]

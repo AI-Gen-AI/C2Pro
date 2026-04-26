@@ -44,6 +44,24 @@
       "description_contains": "QA protocol acceptance window is inconsistent with contractual warranty"
     }
   ],
+  "expected_score_range": {
+    "min": 70.0,
+    "max": 84.0,
+    "reasoning": "High legal conflict plus medium quality contradiction should produce a substantial penalty."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "LEG-101",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "QUAL-101",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "water treatment",
     "tags": ["warranty", "qa-protocol", "contradiction"]
