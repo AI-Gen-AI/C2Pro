@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-26T20:30:24Z",
+  "updated_at": "2026-04-26T21:53:55Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -837,6 +837,58 @@
         "validacion_lint": false,
         "nota_verificacion": "Golden corpus passed 15/15 with 30/30 expected alerts matched and 100% aggregate recall. tests/evals/test_golden_corpus.py passed 13/13 including scratch impossible-range CI failure proof. cd apps/api && python -m evals.run_evals passed via the apps/api compatibility entrypoint."
       }
+    },
+    {
+      "tarea_id": "T073",
+      "backlog_id": "TASK-COH-V1-09",
+      "tipo": "frontend",
+      "descripcion": "Ship Coherence v1 customer dashboard UX, alert copy workflow, communication artifacts, cut-off confirmation, screenshots, and E2E coverage.",
+      "asignado_a": "opencode",
+      "estado": "completado",
+      "criterio_done": "ScoreVersionBadge is complete, AUDIT_INCOMPLETE score-null banner renders, alerts sort/filter/copy messages, FAQ/email templates are committed, cut-off is activated, and Phase 9 report includes screenshots plus verification output.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/config.py",
+        "apps/api/src/notifications/templates/coherence_v1_announcement.html",
+        "apps/api/src/notifications/templates/coherence_v1_announcement.txt",
+        "apps/web/app/(app)/projects/[id]/coherence/page.tsx",
+        "apps/web/app/demo/coherence-v1/page.tsx",
+        "apps/web/components/coherence/CoherenceClient.tsx",
+        "apps/web/components/coherence/CoherenceClient.test.tsx",
+        "apps/web/components/coherence/DashboardClient.tsx",
+        "apps/web/components/features/alerts/AlertReviewCenter.tsx",
+        "apps/web/components/features/alerts/AlertReviewCenter.test.tsx",
+        "apps/web/e2e/coherence-v1.spec.ts",
+        "apps/web/lib/api/contracts.ts",
+        "apps/web/lib/api/services/dashboard.ts",
+        "apps/web/lib/api/services/dashboard.test.ts",
+        "apps/web/src/components/coherence/ScoreVersionBadge.tsx",
+        "apps/web/src/components/coherence/ScoreVersionBadge.test.tsx",
+        "apps/web/src/tests/e2e/coherence-v1.spec.ts",
+        "apps/web/vitest.config.mts",
+        "docs/customer/COHERENCE_V1_FAQ.md",
+        "blackboard/coh-v1/PHASE-9-opencode-REPORT.md",
+        "blackboard/coh-v1/screenshots/phase9-audit-incomplete.png",
+        "blackboard/coh-v1/screenshots/phase9-alert-copy.png",
+        "blackboard/coh-v1/screenshots/phase9-email-template-preview.png",
+        "blackboard/coh-v1/screenshots/phase9-v0-historical.png",
+        "blackboard/coh-v1/screenshots/phase9-v1-fresh.png",
+        "blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-26T21:53:55Z",
+        "completado": "2026-04-26T21:53:55Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-09 completed with v1 dashboard polish, alert UX, customer comms, activated cut-off, screenshots, and E2E coverage.",
+        "tests_pasados": false,
+        "validacion_lint": true,
+        "nota_verificacion": "Phase 9 targeted Vitest passed 19/19, pnpm tsc --noEmit passed, and pnpm playwright test e2e/coherence-v1.spec.ts --project=chromium passed. Full pnpm vitest run remains red with 10 unrelated existing frontend suites / 21 failing tests.",
+        "cutoff_activado": "2026-05-01T00:00:00Z"
+      }
     }
   ],
   "backlog_sync": {
@@ -907,7 +959,8 @@
       "TASK-COH-V1-02",
       "TASK-BCK-050",
       "TASK-COH-V1-05",
-      "TASK-COH-V1-07"
+      "TASK-COH-V1-07",
+      "TASK-COH-V1-09"
     ]
   },
   "plan_actual": {
@@ -996,8 +1049,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 17,
-    "tareas_completadas": 16,
+    "total_tareas": 18,
+    "tareas_completadas": 17,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,
