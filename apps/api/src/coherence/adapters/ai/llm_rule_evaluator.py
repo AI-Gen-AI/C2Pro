@@ -12,7 +12,7 @@ from uuid import UUID
 
 import structlog
 
-from src.coherence.domain.ports.llm_rule_port import LLMRulePort, LLMRuleResult
+from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
 from src.coherence.graph.prompts import (
     COHERENCE_SYSTEM_PROMPT,
     build_evaluation_prompt,
@@ -30,10 +30,10 @@ logger = structlog.get_logger()
 class LLMRuleEvaluatorAdapter:
     """
     Concrete implementation of LLMRulePort using AnthropicWrapper.
-    
+
     This adapter bridges the domain port with the infrastructure
     layer's AnthropicWrapper.
-    
+
     Example:
         adapter = LLMRuleEvaluatorAdapter()
         result = await adapter.evaluate(
@@ -48,7 +48,7 @@ class LLMRuleEvaluatorAdapter:
     def __init__(self, wrapper: AnthropicWrapper | None = None):
         """
         Initialize the adapter.
-        
+
         Args:
             wrapper: Custom AnthropicWrapper. If None, uses singleton.
         """
@@ -89,7 +89,7 @@ class LLMRuleEvaluatorAdapter:
     ) -> LLMRuleResult:
         """
         Evaluates a clause against a coherence rule using LLM.
-        
+
         Implements LLMRulePort.evaluate().
         """
         logger.info(
@@ -201,7 +201,7 @@ class LLMRuleEvaluatorAdapter:
 def get_llm_rule_evaluator() -> LLMRuleEvaluatorAdapter:
     """
     Factory to get the LLMRulePort implementation.
-    
+
     Returns:
         LLMRuleEvaluatorAdapter instance implementing LLMRulePort.
     """
