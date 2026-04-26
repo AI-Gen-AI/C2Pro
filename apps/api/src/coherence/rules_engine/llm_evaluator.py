@@ -31,17 +31,16 @@ from uuid import UUID
 
 import structlog
 
-from src.coherence.graph.prompts import (
-    COHERENCE_SYSTEM_PROMPT,
-    build_evaluation_prompt,
-)
+from src.coherence.domain.ports.llm_rule_port import LLMRulePort
 from src.coherence.llm_schemas import LlmEvaluationLegacyResponse, LlmEvaluationV3Response
-from src.coherence.models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
+from src.coherence.models import Clause, CoherenceCategory, FindingSignal
 from src.coherence.rules_engine.base import Finding, RuleEvaluator
-# TODO(TASK-COH-V1-03 OpenCode redispatch): Remove stale infra imports below
-# from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper  # STALE - REMOVE
-# from src.core.ai.model_router import AITaskType  # STALE - REMOVE
-# from src.core.ai.structured_output import LLMSchemaError, parse_llm_json  # STALE - REMOVE
+
+# Infra imports kept for the legacy evaluate_async (v1) path which still calls
+# wrapper directly. v3 path (evaluate_v3_async) goes through LLMRulePort.
+from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
+from src.core.ai.model_router import AITaskType
+from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
 logger = structlog.get_logger()
 
@@ -193,6 +192,7 @@ class LlmRuleEvaluator(RuleEvaluator):
         category: str = "general",
         low_budget_mode: bool = False,
         tenant_id: UUID | None = None,
+        llm_port: LLMRulePort | None = None,
     ):
         """
         Inicializa el evaluador de reglas LLM.
@@ -206,6 +206,8 @@ class LlmRuleEvaluator(RuleEvaluator):
             category: Categoría de la regla (legal, financial, technical, etc.)
             low_budget_mode: Usar modelos más económicos
             tenant_id: ID del tenant para tracking
+            llm_port: Optional LLMRulePort injection (used in tests and DI contexts).
+                      If None, resolved lazily via get_llm_rule_evaluator() at call time.
         """
         self.rule_id = rule_id
         self.rule_name = rule_name
@@ -215,9 +217,10 @@ class LlmRuleEvaluator(RuleEvaluator):
         self.category = category
         self.low_budget_mode = low_budget_mode
         self.tenant_id = tenant_id
+        self._injected_llm_port = llm_port
 
-        # TODO(TASK-COH-V1-03 OpenCode redispatch): Remove direct wrapper - use port via lazy import
-        # self.wrapper = get_anthropic_wrapper()  # STALE - REMOVE
+        # Wrapper kept for legacy evaluate_async (v1) path only.
+        self.wrapper = get_anthropic_wrapper()
 
         # v0.3: Enhanced metrics tracking
         self.metrics = LlmEvaluationMetrics()
@@ -238,6 +241,14 @@ class LlmRuleEvaluator(RuleEvaluator):
     def coherence_category(self) -> CoherenceCategory:
         """Map legacy category to v0.3 CoherenceCategory."""
         return self.CATEGORY_MAP.get(self.category.lower(), "SCOPE")
+
+    @property
+    def _llm_port(self) -> LLMRulePort:
+        """Return the injected port, or lazily resolve the adapter singleton."""
+        if self._injected_llm_port is not None:
+            return self._injected_llm_port
+        from src.coherence.adapters.ai.llm_rule_evaluator import get_llm_rule_evaluator
+        return get_llm_rule_evaluator()
 
     def evaluate(self, clause: Clause) -> Finding | None:
         """
@@ -294,9 +305,7 @@ class LlmRuleEvaluator(RuleEvaluator):
             text_length=len(clause.text),
         )
 
-        # TODO(TASK-COH-V1-03 OpenCode redispatch): Use port - lazy import at call site
-        from src.coherence.adapters.ai.llm_rule_evaluator import get_llm_rule_evaluator
-        port = get_llm_rule_evaluator()
+        port = self._llm_port
 
         try:
             result = await port.evaluate(

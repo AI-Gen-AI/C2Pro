@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
-
 from uuid import UUID
 
 
@@ -19,7 +18,7 @@ from uuid import UUID
 class LLMRuleResult:
     """
     Result from LLM rule evaluation.
-    
+
     Attributes:
         rule_id: The rule that was evaluated.
         clause_id: The clause that was evaluated.
@@ -47,8 +46,8 @@ class LLMRuleResult:
 class LLMRulePort(Protocol):
     """
     Port interface for LLM-based rule evaluation.
-    
-    This Protocol defines the contract for evaluating 
+
+    This Protocol defines the contract for evaluating
     coherence rules using LLMs. Concrete implementations
     are in the adapters layer.
     """
@@ -68,7 +67,7 @@ class LLMRulePort(Protocol):
     ) -> LLMRuleResult:
         """
         Evaluates a clause against a coherence rule using LLM.
-        
+
         Args:
             rule_id: Unique rule identifier.
             rule_name: Human-readable rule name.
@@ -79,7 +78,7 @@ class LLMRulePort(Protocol):
             clause_text: The clause text.
             clause_data: Additional structured data.
             tenant_id: Tenant for tracking.
-        
+
         Returns:
             LLMRuleResult with evaluation outcome.
         """
