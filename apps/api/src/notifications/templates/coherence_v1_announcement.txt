@@ -1,0 +1,16 @@
+Subject: Coherence Score v1 is active for new C2Pro audits
+
+Hello {{ customer_name }},
+
+Coherence Score v1 is now active for new C2Pro project audits created on or after 2026-05-01.
+
+What changes:
+- New scores use weighted finding severity, confidence, and project scope.
+- Contract-only uploads no longer receive a default score. C2Pro withholds the score and creates an AUDIT_INCOMPLETE alert until the schedule and budget evidence are supplied.
+- Historical v0 scores remain unchanged and are labelled as v0 in the dashboard.
+
+Recommended action:
+Upload the full contract, schedule, and budget triplet for each project before vendor review so the score can be calculated defensibly.
+
+Thank you,
+C2Pro Customer Operations
