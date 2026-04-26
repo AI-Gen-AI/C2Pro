@@ -21,6 +21,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
+from src.core.observability.coherence_tracing import traced_coherence_node
+
 from ..models import (
     Alert,
     CategoryBreakdown,
@@ -276,6 +278,7 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     }
 
 
+@traced_coherence_node(node_name="prepare_context")
 def prepare_context(state: CoherenceGraphState) -> NodeOutput:
     """
     Synchronous wrapper for prepare_context_async.
@@ -302,6 +305,7 @@ def prepare_context(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="deterministic_evaluate")
 def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     """
     Run the 12 deterministic v1 evaluators on each clause.
@@ -535,6 +539,7 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     }
 
 
+@traced_coherence_node(node_name="rag_similarity_check")
 def rag_similarity_check(state: CoherenceGraphState) -> NodeOutput:
     """
     Synchronous wrapper for rag_similarity_check_async.
@@ -563,6 +568,7 @@ def rag_similarity_check(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="cross_clause_eval")
 def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
     """
     Analyze relationships between clause pairs for coherence issues.
@@ -692,6 +698,7 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
 # =============================================================================
 
 
+@traced_coherence_node(node_name="scoring_arbiter")
 def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     """
     Calculate final coherence score from all finding signals.
@@ -757,6 +764,7 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="format_output")
 def format_output(state: CoherenceGraphState) -> NodeOutput:
     """
     Format the evaluation results into the final API response structure.
