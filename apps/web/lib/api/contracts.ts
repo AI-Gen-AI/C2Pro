@@ -7,13 +7,16 @@ import type {
 export interface DashboardSummary {
   project_id: string;
   tenant_id: string;
-  coherence_score: number;
-  global_score: number;
+  coherence_score: number | null;
+  global_score: number | null;
   sub_scores: Record<string, number>;
   weights_used: Record<string, number>;
   alert_count: number;
   document_count: number;
   methodology_version: string;
+  score_version?: "v0_flag_based" | "v1_exponential_decay" | string | null;
+  score_reason?: string | null;
+  score_missing_dimensions?: string[];
   last_updated: string | null;
 }
 

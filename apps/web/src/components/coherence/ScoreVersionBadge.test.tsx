@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderWithProviders, screen } from "@/src/tests/test-utils";
+import { fireEvent, renderWithProviders, screen } from "@/src/tests/test-utils";
 import { ScoreVersionBadge } from "./ScoreVersionBadge";
 
 describe("ScoreVersionBadge", () => {
@@ -15,5 +15,19 @@ describe("ScoreVersionBadge", () => {
 
     expect(screen.getByText("(v1)")).toBeInTheDocument();
     expect(screen.getByLabelText(/v1 exponential-decay coherence score/i)).toBeInTheDocument();
+  });
+
+  it("shows customer-facing version guidance and a FAQ link in the tooltip", async () => {
+    renderWithProviders(<ScoreVersionBadge scoreVersion="v1_exponential_decay" />);
+
+    fireEvent.mouseOver(screen.getByLabelText(/v1 exponential-decay coherence score/i));
+
+    expect(
+      (await screen.findAllByText(/v1 uses weighted finding severity/i))[0],
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /what changed/i })[0]).toHaveAttribute(
+      "href",
+      "/docs/customer/COHERENCE_V1_FAQ.md",
+    );
   });
 });

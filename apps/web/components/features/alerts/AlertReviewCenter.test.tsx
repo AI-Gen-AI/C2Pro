@@ -2,7 +2,7 @@
  * Test Suite ID: S3-04
  * Roadmap Reference: S3-04 Alert Review Center + approve/reject modal
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
 import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
 
@@ -233,5 +233,84 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     });
 
     expect(resolveButton).toBeEnabled();
+  });
+
+  it("[TS-UD-COH-V1-09] sorts alerts by severity and filters by status", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj_demo_001"
+        alerts={[
+          {
+            id: "a-low",
+            title: "Low notice wording",
+            severity: "low",
+            status: "pending",
+            clauseId: "c-low",
+            assignee: "project.manager",
+          },
+          {
+            id: "a-critical",
+            title: "Critical LD cap conflict",
+            severity: "critical",
+            status: "approved",
+            clauseId: "c-critical",
+            assignee: "legal.owner",
+          },
+          {
+            id: "a-high",
+            title: "High budget exposure",
+            severity: "high",
+            status: "pending",
+            clauseId: "c-high",
+            assignee: "finance.analyst",
+          },
+        ]}
+      />,
+    );
+
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Critical LD cap conflict"),
+      expect.stringContaining("High budget exposure"),
+      expect.stringContaining("Low notice wording"),
+    ]);
+
+    fireEvent.change(screen.getByLabelText(/status filter/i), {
+      target: { value: "pending" },
+    });
+
+    expect(screen.queryByText(/critical ld cap conflict/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/high budget exposure/i)).toBeInTheDocument();
+    expect(screen.getByText(/low notice wording/i)).toBeInTheDocument();
+  });
+
+  it("[TS-UD-COH-V1-09] copies a procurement-ready alert message", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+
+    render(
+      <AlertReviewCenter
+        projectId="proj_demo_001"
+        alerts={[
+          {
+            id: "a-copy",
+            title: "AUDIT_INCOMPLETE: missing schedule and budget",
+            severity: "medium",
+            status: "pending",
+            clauseId: "audit-meta",
+            assignee: "project.manager",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /copy message a-copy/i }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("AUDIT_INCOMPLETE: missing schedule and budget"),
+    );
+    expect(await screen.findByText(/copied/i)).toBeInTheDocument();
   });
 });
