@@ -11,6 +11,16 @@ from src.analysis.domain.risk_categories import normalize_category
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertType
 
+template_locale_default = "es"  # TASK-COH-V1-06: Bilingualization
+
+
+def get_template(rule_id: str, locale: str | None = None) -> str:
+    """Get template for rule_id, optionally in specified locale."""
+    loc = locale or template_locale_default
+    templates = TEMPLATES_EN if loc == "en" else TEMPLATES
+    return templates.get(rule_id, TEMPLATES.get(rule_id, ""))
+
+
 TEMPLATES: dict[str, str] = {
     "DET-SCP-DELIVERABLES": "El alcance menciona entregables o trabajos sin definicion estructurada verificable.",
     "DET-CRS-SCPBUD": "Hay entregables de alcance sin partida presupuestaria asociada.",
@@ -43,6 +53,7 @@ TEMPLATES: dict[str, str] = {
     "R15": "El item del BOM '{item_name}' no tiene partida presupuestaria asociada.",
     "R20": "La tarea '{task_name}' no tiene responsable asignado.",
     "R6": "Falta una licencia o permiso requerido en el contrato.",
+    "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",  # TBD-EN
 }
 
 RULE_TITLES: dict[str, str] = {
@@ -71,6 +82,7 @@ RULE_TITLES: dict[str, str] = {
     "R15": "Material sin presupuesto",
     "R20": "Tarea sin responsable",
     "R6": "Permisos contractuales incompletos",
+    "AUDIT_INCOMPLETE": "Audit incomplete — full triplet not provided",  # TBD-EN
 }
 
 RULE_SEVERITIES: dict[str, AlertSeverity] = {
@@ -99,6 +111,7 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "R15": AlertSeverity.HIGH,
     "R20": AlertSeverity.MEDIUM,
     "R6": AlertSeverity.MEDIUM,
+    "AUDIT_INCOMPLETE": AlertSeverity.MEDIUM,
 }
 
 SUMMARY_TEMPLATES: dict[str, str] = {
@@ -106,6 +119,12 @@ SUMMARY_TEMPLATES: dict[str, str] = {
     "R14": "Se detectaron {count} materiales con riesgo de lead time. Ejemplos: {examples}.",
     "R15": "Se detectaron {count} items del BOM sin partida presupuestaria asociada. Ejemplos: {examples}.",
     "R20": "Se detectaron {count} tareas sin responsable asignado. Ejemplos: {examples}.",
+}
+
+# TASK-COH-V1-06: English templates for bilingualization (TBD-EN = skeleton only)
+TEMPLATES_EN: dict[str, str] = {
+    "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",
+    # TBD-EN: Add full translations here as they're completed
 }
 
 
