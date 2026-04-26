@@ -32,8 +32,8 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
-from ..rules_engine.config import DEFAULT_CONFIG
-from ..rules_engine.deterministic import get_all_deterministic_evaluators
+from ..rules_engine.registry import list_evaluators
+from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..scoring import ScoringService
 from .state import (
     ClauseWithEmbedding,
@@ -303,7 +303,7 @@ def prepare_context(state: CoherenceGraphState) -> NodeOutput:
 
 def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     """
-    Run all 27 deterministic evaluators on each clause.
+    Run the 12 deterministic v1 evaluators on each clause.
 
     This is Agent A in the coherence architecture - fast, zero LLM cost,
     high confidence rules that catch structural issues.
@@ -314,7 +314,10 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with deterministic_signals
     """
-    evaluators = get_all_deterministic_evaluators(DEFAULT_CONFIG)
+    evaluators = [
+        evaluator for evaluator in list_evaluators()
+        if getattr(evaluator, "source", "deterministic") == "deterministic"
+    ]
     signals: list[FindingSignal] = []
     errors: list[str] = []
 
@@ -378,24 +381,29 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
     total_calls = 0
 
     try:
-        # Import here to avoid circular imports and allow optional LLM
-        from ..rules_engine.llm_evaluator import LlmRuleEvaluator
-
-        evaluator = LlmRuleEvaluator()
+        evaluators: list[LlmRuleEvaluator] = [
+            evaluator for evaluator in list_evaluators(
+                low_budget_mode=state.config.low_budget_mode,
+            )
+            if isinstance(evaluator, LlmRuleEvaluator)
+        ]
 
         for clause in state.clauses:
-            try:
-                signal = await evaluator.evaluate_v3_async(clause)
-                if signal is not None:
-                    signals.append(signal)
-            except Exception as e:
-                error_msg = f"LLM evaluation failed for clause {clause.id}: {e}"
-                logger.warning(error_msg)
-                errors.append(error_msg)
+            for evaluator in evaluators:
+                try:
+                    signal = await evaluator.evaluate_v3_async(clause)
+                    if signal is not None:
+                        signals.append(signal)
+                except Exception as e:
+                    error_msg = (
+                        f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
+                    )
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
 
         # Get cost metrics
-        total_cost = evaluator.total_cost_usd
-        total_calls = evaluator.llm_calls_count
+        total_cost = sum(getattr(evaluator, "total_cost_usd", 0.0) for evaluator in evaluators)
+        total_calls = sum(getattr(evaluator, "llm_calls_count", 0) for evaluator in evaluators)
 
     except ImportError as e:
         logger.warning(f"LLM evaluator not available: {e}")
