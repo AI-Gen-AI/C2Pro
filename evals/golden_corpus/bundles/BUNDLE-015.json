@@ -50,6 +50,29 @@
       "description_contains": "NOx emissions exceed the environmental permit, triggering the unlimited indemnity"
     }
   ],
+  "expected_score_range": {
+    "min": 48.0,
+    "max": 62.0,
+    "reasoning": "Expert legal/cost/technical bundle with three high issues should produce a low non-null score."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "LEG-302",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "COST-302",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "TECH-302",
+      "min_count": 1,
+      "severity": "high"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "refinery",
     "tags": ["indemnity", "ld-cap", "back-to-back"]

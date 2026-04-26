@@ -44,6 +44,24 @@
       "description_contains": "BIM LOD 500 IFC 4.3 requirement is not reflected in the contractual scope"
     }
   ],
+  "expected_score_range": {
+    "min": 70.0,
+    "max": 84.0,
+    "reasoning": "High scope omission plus medium technical mismatch should produce a substantial penalty."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "SCOPE-101",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "TECH-101",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "hospital",
     "tags": ["bim", "scope-gap"]
