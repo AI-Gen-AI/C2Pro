@@ -203,6 +203,36 @@
   evidence_fields: ["clause.text"]
 
 # ===========================================
+# TECHNICAL RULES
+# ===========================================
+
+- id: R-TECHNICAL-SPEC-CLARITY-01
+  name: "Technical Specification Clarity"
+  description: "Las especificaciones técnicas deben identificar normas, materiales y criterios verificables"
+  evaluator_type: llm
+  category: technical
+  severity: high
+  detection_logic: |
+    Verifica que las especificaciones técnicas:
+
+    1. IDENTIFIQUEN MATERIALES O SISTEMAS CONCRETOS:
+       - Tipo, grado, modelo o familia técnica aplicable
+       - NO usar solo "material adecuado" o "equipo apropiado"
+
+    2. REFERENCIEN NORMAS O DOCUMENTOS TÉCNICOS:
+       - ISO, EN, ASTM, UNE, DIN u otra norma aplicable
+       - Planos, fichas técnicas o memorias con código identificable
+
+    3. INCLUYAN CRITERIOS DE VERIFICACIÓN:
+       - Ensayo, inspección, certificado o tolerancia medible
+       - Responsable de aceptación técnica
+
+    Si la especificación es genérica o no permite verificar cumplimiento,
+    la regla está VIOLADA.
+  inputs: []
+  evidence_fields: ["clause.text"]
+
+# ===========================================
 # SCHEDULE RULES
 # ===========================================
 

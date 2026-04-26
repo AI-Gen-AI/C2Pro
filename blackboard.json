@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-25T20:29:37Z",
+  "updated_at": "2026-04-26T15:40:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -757,6 +757,38 @@
         "tests_pasados": true,
         "validacion_lint": false
       }
+    },
+    {
+      "tarea_id": "T071",
+      "backlog_id": "TASK-COH-V1-05",
+      "tipo": "backend",
+      "descripcion": "Expand Coherence Score v1 evaluator registry to 18 entries with 12 deterministic and 6 LLM-backed evaluators plus orphan rule_id validation.",
+      "asignado_a": "opencode",
+      "estado": "completado",
+      "criterio_done": "Registry exposes 18 evaluators, rule IDs have alert templates, graph nodes consume the registry, and rules_engine unit coverage passes.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/rules_engine/registry.py",
+        "apps/api/src/coherence/rules_engine/llm_evaluator.py",
+        "apps/api/src/coherence/rules_engine/__init__.py",
+        "apps/api/src/coherence/graph/nodes.py",
+        "apps/api/src/coherence/qualitative_rules.yaml",
+        "apps/api/src/coherence/alert_generator.py",
+        "apps/api/tests/unit/coherence/rules_engine/test_registry_v1.py",
+        "blackboard/coh-v1/PHASE-5-opencode-REPORT.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-26T15:40:00Z",
+        "completado": "2026-04-26T15:40:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-05 completed with a fixed 18-entry v1 registry, per-category tests, LLMRulePort-backed YAML evaluators, alert-template validation, and graph-node wiring.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "rules_engine unit suite passed 22/22. Integration coherence remains blocked by unavailable postgres-test. mypy src/coherence remains blocked by broad existing type debt."
+      }
     }
   ],
   "backlog_sync": {
@@ -825,7 +857,8 @@
       "TASK-COH-V1-01",
       "TASK-COH-V1-04",
       "TASK-COH-V1-02",
-      "TASK-BCK-050"
+      "TASK-BCK-050",
+      "TASK-COH-V1-05"
     ]
   },
   "plan_actual": {
