@@ -35,6 +35,15 @@ interface AlertReviewCenterProps {
   alerts: ReviewAlert[];
 }
 
+const SEVERITY_RANK: Record<AlertSeverity, number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+type StatusFilter = "all" | AlertStatus;
+
 function findAlert(items: ReviewAlert[], alertId: string): ReviewAlert | undefined {
   return items.find((item) => item.id === alertId);
 }
@@ -42,6 +51,8 @@ function findAlert(items: ReviewAlert[], alertId: string): ReviewAlert | undefin
 export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps) {
   const [items, setItems] = useState<ReviewAlert[]>(alerts);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [copiedAlertId, setCopiedAlertId] = useState<string | null>(null);
   const [approveConfirmed, setApproveConfirmed] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
@@ -57,6 +68,14 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     if (modal.kind === "none" || modal.kind === "create") return undefined;
     return findAlert(items, modal.alertId);
   }, [items, modal]);
+
+  const visibleItems = useMemo(
+    () =>
+      [...items]
+        .filter((item) => statusFilter === "all" || item.status === statusFilter)
+        .sort((left, right) => SEVERITY_RANK[right.severity] - SEVERITY_RANK[left.severity]),
+    [items, statusFilter],
+  );
 
   const closeModal = () => {
     setModal({ kind: "none" });
@@ -190,15 +209,56 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     closeModal();
   };
 
+  const buildProcurementMessage = (alert: ReviewAlert): string =>
+    [
+      `C2Pro coherence alert: ${alert.title}`,
+      `Severity: ${alert.severity.toUpperCase()}`,
+      `Status: ${alert.status}`,
+      `Clause: ${alert.clauseId}`,
+      `Owner: ${alert.assignee}`,
+      "Please review the source evidence and confirm the vendor response or corrective action.",
+    ].join("\n");
+
+  const copyMessage = (alert: ReviewAlert) => {
+    setCopiedAlertId(alert.id);
+    try {
+      const result = navigator.clipboard?.writeText(buildProcurementMessage(alert));
+      if (result && typeof result.catch === "function") {
+        result.catch(() => {
+          // Browser permission can be denied in QA/demo contexts; keep the UI action visible.
+        });
+      }
+    } catch {
+      // Synchronous failure (no clipboard support); UI feedback already shown.
+    }
+  };
+
   return (
     <section aria-label="Alert Review Center" data-project-id={projectId}>
-      <h1>Alert Review Center</h1>
-      <button
-        type="button"
-        onClick={(event) => openCreate(event.currentTarget)}
-      >
-        New Alert
-      </button>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1>Alert Review Center</h1>
+          <label className="mt-2 block text-sm" htmlFor="alert-status-filter">
+            Status filter
+          </label>
+          <select
+            id="alert-status-filter"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+          >
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => openCreate(event.currentTarget)}
+        >
+          New Alert
+        </button>
+      </div>
 
       <table aria-label="Alert Review Center">
         <thead>
@@ -212,7 +272,7 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
           </tr>
         </thead>
         <tbody>
-          {items.map((alert) => (
+          {visibleItems.map((alert) => (
             <tr key={alert.id}>
               <td>{alert.title}</td>
               <td>{alert.severity}</td>
@@ -250,6 +310,13 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
                 >
                   Delete {alert.id}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void copyMessage(alert)}
+                >
+                  Copy message {alert.id}
+                </button>
+                {copiedAlertId === alert.id ? <span>Copied</span> : null}
               </td>
             </tr>
           ))}

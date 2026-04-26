@@ -52,7 +52,7 @@ export default defineConfig({
         fallbackCJS: true,
       },
     },
-    exclude: ["src/tests/e2e/**", "node_modules/**", ".next/**"],
+    exclude: ["src/tests/e2e/**", "e2e/**", "node_modules/**", ".next/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

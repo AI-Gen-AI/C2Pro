@@ -15,7 +15,7 @@ from typing import Literal
 # Type alias for coherence categories
 CoherenceCategory = Literal["BUDGET", "TIME", "LEGAL", "SCOPE", "TECHNICAL", "QUALITY", "CROSS"]
 
-# TBD-final-date: Phase 9 sets the live cut-off after customer comms and QA sign-off.
+# Phase 9 customer communications activate Coherence Score v1 for new audits at this cut-off.
 SCORE_VERSION_V1_CUTOFF = datetime(2026, 5, 1, tzinfo=UTC)
 
 
