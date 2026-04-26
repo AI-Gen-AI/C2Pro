@@ -1,15 +1,22 @@
 """
 C2Pro - Coherence LLM Integration (CE-22)
 
-Integration layer that delegates to LLMRulePort for domain purity.
-Now receives LLMRulePort via injection.
+Integración de LLM para análisis de coherencia cualitativo.
+Utiliza el AnthropicWrapper existente para llamadas a Claude API.
 
-Version: 1.1.0
+Features:
+- Análisis de cláusulas contractuales con LLM
+- Detección de ambigüedades y riesgos implícitos
+- Verificación de coherencia entre documentos
+- Caché inteligente para respuestas similares
+
+Version: 1.0.0
+Sprint: P2-02
 """
 
 from __future__ import annotations
 
-import json
+import json  # still used in analyze_clause prompt formatting
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -22,8 +29,17 @@ from src.coherence.llm_schemas import (
     MultiClauseCoherenceLLMResponse,
 )
 from src.coherence.models import Clause, ProjectContext
-from src.coherence.domain.ports.llm_rule_port import LLMRulePort
-from src.core.ai.anthropic_wrapper import AIRequest, AIResponse
+# TODO(TASK-COH-V1-03 OpenCode redispatch): These infra imports remain in place
+# because the legacy methods on CoherenceLLMService (analyze_clause,
+# check_coherence_rule, analyze_multiple_clauses) still call wrapper APIs
+# directly. A follow-up iteration must route those call sites through
+# LLMRulePort and remove these imports.
+from src.core.ai.anthropic_wrapper import (
+    AIRequest,
+    AIResponse,
+    AnthropicWrapper,
+    get_anthropic_wrapper,
+)
 from src.core.ai.model_router import AITaskType
 from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
@@ -170,11 +186,13 @@ class CoherenceLLMService:
     """
     Servicio de LLM para análisis de coherencia cualitativo.
 
-    Now delegates to LLMRulePort for domain-pure evaluation.
-    Accepts optional llm_port for dependency injection.
+    Utiliza Claude API via AnthropicWrapper para:
+    - Análisis de cláusulas individuales
+    - Verificación de reglas de coherencia
+    - Análisis de coherencia multi-cláusula
 
     Example:
-        service = CoherenceLLMService(llm_port=my_port)
+        service = CoherenceLLMService()
 
         clause = Clause(id="C1", text="El contratista deberá...")
         result = await service.analyze_clause(clause)
@@ -186,17 +204,20 @@ class CoherenceLLMService:
 
     def __init__(
         self,
-        llm_port: LLMRulePort | None = None,
+        wrapper: AnthropicWrapper | None = None,
+        default_task_type: AITaskType = AITaskType.COHERENCE_ANALYSIS,
         low_budget_mode: bool = False,
     ):
         """
         Inicializa el servicio de coherencia LLM.
 
         Args:
-            llm_port: LLMRulePort for evaluation (injects for domain purity)
+            wrapper: AnthropicWrapper personalizado (si None, usa singleton)
+            default_task_type: Tipo de tarea por defecto para routing
             low_budget_mode: Activar modo de bajo presupuesto
         """
-        self._llm_port = llm_port
+        self.wrapper = wrapper or get_anthropic_wrapper()
+        self.default_task_type = default_task_type
         self.low_budget_mode = low_budget_mode
 
         # Statistics
@@ -206,18 +227,9 @@ class CoherenceLLMService:
 
         logger.info(
             "coherence_llm_service_initialized",
+            default_task_type=default_task_type.value,
             low_budget_mode=low_budget_mode,
         )
-
-    @property
-    def llm_port(self) -> LLMRulePort:
-        """Get the injected port or resolve at runtime."""
-        if self._llm_port is None:
-            from src.coherence.adapters.ai.llm_rule_evaluator import (
-                get_llm_rule_evaluator,
-            )
-            return get_llm_rule_evaluator()
-        return self._llm_port
 
     # ===========================================
     # CLAUSE ANALYSIS
@@ -265,7 +277,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         # Make LLM request
         request = AIRequest(
             prompt=prompt,
-            task_type=AITaskType.COHERENCE_ANALYSIS,
+            task_type=self.default_task_type,
             system_prompt=CLAUSE_ANALYSIS_SYSTEM_PROMPT,
             low_budget_mode=self.low_budget_mode,
             tenant_id=tenant_id,
@@ -274,13 +286,7 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         )
 
         try:
-            # TODO(TASK-COH-V1-03 OpenCode redispatch): Replace direct wrapper call
-            # with self._llm_port.evaluate(...) delegation. Module docstring already
-            # claims port delegation but body still calls AnthropicWrapper directly.
-            # See blackboard/coh-v1/PHASE-3-opencode-REDISPATCH.md for acceptance.
-            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
-            wrapper = get_anthropic_wrapper()
-            response = await wrapper.generate(request)
+            response = await self.wrapper.generate(request)
 
             # Update stats
             self.total_tokens += response.total_tokens
@@ -357,12 +363,7 @@ Evalúa si esta cláusula viola la regla especificada."""
         )
 
         try:
-            # TODO(TASK-COH-V1-03 OpenCode redispatch): Route through LLMRulePort.
-            # This is the rule-evaluation hot path — should call self._llm_port.evaluate()
-            # so AnthropicWrapper is hidden behind the port boundary (hexagonal).
-            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
-            wrapper = get_anthropic_wrapper()
-            response = await wrapper.generate(request)
+            response = await self.wrapper.generate(request)
 
             self.total_tokens += response.total_tokens
             self.total_cost += response.cost_usd
@@ -414,8 +415,8 @@ Evalúa si esta cláusula viola la regla especificada."""
             return MultiClauseCoherenceLLMResponse(
                 cross_clause_issues=[],
                 overall_coherence_score=None,
-                summary="Se requieren al menos 2 cláusulas para análisis cruzado.",
                 reason="insufficient_clauses",
+                summary="Se requieren al menos 2 cláusulas para análisis cruzado",
             )
 
         logger.info(
@@ -439,14 +440,9 @@ Evalúa si esta cláusula viola la regla especificada."""
             use_cache=True,
             temperature=0.0,
         )
+
         try:
-            # TODO(TASK-COH-V1-03 OpenCode redispatch): Multi-clause cross-analysis
-            # currently bypasses LLMRulePort. Either (a) extend the port to accept
-            # batched clause sets, or (b) leave wrapper-direct here and document
-            # the carve-out in PHASE-3 report. Decide before merge.
-            from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
-            wrapper = get_anthropic_wrapper()
-            response = await wrapper.generate(request)
+            response = await self.wrapper.generate(request)
 
             self.total_tokens += response.total_tokens
             self.total_cost += response.cost_usd
@@ -685,17 +681,12 @@ Evalúa si esta cláusula viola la regla especificada."""
 
     def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas del servicio."""
-        # TODO(TASK-COH-V1-03 OpenCode redispatch): Stats currently reach into the
-        # AnthropicWrapper directly. Expose a `stats` accessor on LLMRulePort or
-        # aggregate locally so the port stays the only seam to infrastructure.
-        from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
-        wrapper = get_anthropic_wrapper()
         return {
             "total_analyses": self.total_analyses,
             "total_tokens_used": self.total_tokens,
             "total_cost_usd": round(self.total_cost, 4),
             "low_budget_mode": self.low_budget_mode,
-            "wrapper_stats": wrapper.get_statistics(),
+            "wrapper_stats": self.wrapper.get_statistics(),
         }
 
 
@@ -730,3 +721,4 @@ def reset_coherence_llm_service() -> None:
     """Reset singleton (útil para testing)."""
     global _service
     _service = None
+
