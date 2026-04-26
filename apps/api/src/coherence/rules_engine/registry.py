@@ -9,15 +9,27 @@ Version: 1.1.0 (CE-24)
 """
 
 from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
 
+from src.coherence.models import CoherenceCategory
+
 from .base import RuleEvaluator
 from .deterministic import (
+    BomBudgetLinkEvaluator,
+    BudgetLineItemEvaluator,
     BudgetOverrunEvaluator,
-    ContractReviewOverdueEvaluator,
-    ScheduleDelayEvaluator,
+    InspectionFrequencyEvaluator,
+    NoticePeriodEvaluator,
+    PenaltyCapEvaluator,
+    QualityStandardEvaluator,
+    ScheduleDurationEvaluator,
+    ScheduleStatusEvaluator,
+    ScopeDeliverablesEvaluator,
+    ScopeVsBudgetCoverageEvaluator,
+    SpecReferenceEvaluator,
 )
 from .llm_evaluator import LlmRuleEvaluator
 
@@ -28,12 +40,45 @@ logger = structlog.get_logger()
 # DETERMINISTIC EVALUATORS REGISTRY
 # ===========================================
 
-# Maps rule ID to evaluator CLASS for deterministic rules
+# Maps rule ID to evaluator CLASS for deterministic rules.
+# TASK-COH-V1-05 fixes the canonical v1 registry at 12 deterministic
+# evaluators: 2 per category across the six C2Pro categories.
 DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
-    "project-budget-overrun-10": BudgetOverrunEvaluator,
-    "project-schedule-delayed": ScheduleDelayEvaluator,
-    "project-contract-review-overdue": ContractReviewOverdueEvaluator,
+    "DET-SCP-DELIVERABLES": ScopeDeliverablesEvaluator,
+    "DET-CRS-SCPBUD": ScopeVsBudgetCoverageEvaluator,
+    "DET-BUD-OVERRUN": BudgetOverrunEvaluator,
+    "DET-BUD-LINEITEM": BudgetLineItemEvaluator,
+    "DET-TIM-STATUS": ScheduleStatusEvaluator,
+    "DET-TIM-DURATION": ScheduleDurationEvaluator,
+    "DET-TEC-SPEC": SpecReferenceEvaluator,
+    "DET-TEC-BOMBUDGET": BomBudgetLinkEvaluator,
+    "DET-LEG-PENALTY": PenaltyCapEvaluator,
+    "DET-LEG-NOTICE": NoticePeriodEvaluator,
+    "DET-QUA-STANDARD": QualityStandardEvaluator,
+    "DET-QUA-INSPECT": InspectionFrequencyEvaluator,
 }
+
+V1_LLM_RULE_IDS: tuple[str, ...] = (
+    "R-SCOPE-CLARITY-01",
+    "R-PAYMENT-CLARITY-01",
+    "R-SCHEDULE-CLARITY-01",
+    "R-TECHNICAL-SPEC-CLARITY-01",
+    "R-RESPONSIBILITY-01",
+    "R-QUALITY-STANDARDS-01",
+)
+
+C2PRO_CATEGORIES: tuple[CoherenceCategory, ...] = (
+    "SCOPE",
+    "BUDGET",
+    "TIME",
+    "TECHNICAL",
+    "LEGAL",
+    "QUALITY",
+)
+
+
+class OrphanRuleIdError(RuntimeError):
+    """Raised when a registry rule_id is missing alert template metadata."""
 
 
 # ===========================================
@@ -45,7 +90,7 @@ DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
 LLM_EVALUATORS: dict[str, LlmRuleEvaluator] = {}
 
 # Stores LLM rule configurations (loaded from YAML)
-LLM_RULE_CONFIGS: dict[str, dict] = {}
+LLM_RULE_CONFIGS: dict[str, dict[str, Any]] = {}
 
 
 # ===========================================
@@ -127,7 +172,7 @@ def get_any_evaluator(
     rule_id: str,
     low_budget_mode: bool = False,
     tenant_id: UUID | None = None,
-) -> RuleEvaluator | LlmRuleEvaluator | None:
+) -> type[RuleEvaluator] | LlmRuleEvaluator | None:
     """
     Retrieves any evaluator (deterministic or LLM) for a rule ID.
 
@@ -148,7 +193,151 @@ def get_any_evaluator(
     return get_llm_evaluator(rule_id, low_budget_mode, tenant_id)
 
 
-def register_evaluator(rule_id: str, evaluator_class: type[RuleEvaluator]):
+def get_v1_evaluator(
+    rule_id: str,
+    *,
+    low_budget_mode: bool = False,
+    tenant_id: UUID | None = None,
+    llm_port: Any | None = None,
+) -> RuleEvaluator | LlmRuleEvaluator:
+    """
+    Return a configured v1 evaluator by rule_id.
+
+    Test Suite ID: TS-UD-COH-RUL-005.
+    """
+    evaluator_class = DETERMINISTIC_EVALUATORS.get(rule_id)
+    if evaluator_class is not None:
+        return evaluator_class()
+
+    if rule_id not in V1_LLM_RULE_IDS:
+        raise KeyError(f"Unknown v1 evaluator rule_id: {rule_id}")
+
+    if rule_id not in LLM_RULE_CONFIGS:
+        load_qualitative_rules()
+    config = LLM_RULE_CONFIGS[rule_id]
+    evaluator = LlmRuleEvaluator(
+        rule_id=config["id"],
+        rule_name=config.get("name", config["id"]),
+        rule_description=config["description"],
+        detection_logic=config["detection_logic"],
+        default_severity=config.get("severity", "medium"),
+        category=config.get("category", "general"),
+        low_budget_mode=low_budget_mode,
+        tenant_id=tenant_id,
+        llm_port=llm_port,
+    )
+    setattr(evaluator, "source", "llm")
+    return evaluator
+
+
+def list_evaluators(
+    *,
+    low_budget_mode: bool = False,
+    tenant_id: UUID | None = None,
+    llm_port: Any | None = None,
+) -> list[RuleEvaluator | LlmRuleEvaluator]:
+    """
+    Return the fixed 18-entry Coherence Score v1 evaluator registry.
+
+    Test Suite ID: TS-UD-COH-RUL-005.
+    """
+    evaluators: list[RuleEvaluator | LlmRuleEvaluator] = [
+        evaluator_class() for evaluator_class in DETERMINISTIC_EVALUATORS.values()
+    ]
+    evaluators.extend(
+        get_v1_evaluator(
+            rule_id,
+            low_budget_mode=low_budget_mode,
+            tenant_id=tenant_id,
+            llm_port=llm_port,
+        )
+        for rule_id in V1_LLM_RULE_IDS
+    )
+    return evaluators
+
+
+def registry_coverage_by_category(
+    *,
+    low_budget_mode: bool = False,
+    tenant_id: UUID | None = None,
+    llm_port: Any | None = None,
+) -> dict[CoherenceCategory, dict[str, int]]:
+    """
+    Return deterministic/LLM counts by C2Pro category for v1 registry reports.
+
+    Test Suite ID: TS-UD-COH-RUL-005.
+    """
+    coverage: dict[CoherenceCategory, dict[str, int]] = {
+        category: {"deterministic": 0, "llm": 0} for category in C2PRO_CATEGORIES
+    }
+    for evaluator in list_evaluators(
+        low_budget_mode=low_budget_mode,
+        tenant_id=tenant_id,
+        llm_port=llm_port,
+    ):
+        category = _coherence_category_for(evaluator)
+        source = getattr(evaluator, "source", "deterministic")
+        if source not in {"deterministic", "llm"}:
+            raise ValueError(f"Unknown evaluator source: {source}")
+        coverage[category][source] += 1
+    return coverage
+
+
+def assert_v1_rule_ids_have_alert_templates(
+    *,
+    evaluators: list[RuleEvaluator | LlmRuleEvaluator] | None = None,
+    llm_port: Any | None = None,
+) -> None:
+    """
+    Fail fast when a v1 evaluator rule_id is missing alert template metadata.
+
+    Test Suite ID: TS-UD-COH-RUL-005.
+    """
+    from src.coherence.alert_generator import RULE_SEVERITIES, RULE_TITLES, TEMPLATES
+
+    registry_evaluators = evaluators or list_evaluators(llm_port=llm_port)
+    missing: dict[str, list[str]] = {}
+    for evaluator in registry_evaluators:
+        rule_id = evaluator.rule_id
+        template_tables: tuple[tuple[str, dict[str, object]], ...] = (
+            ("RULE_TITLES", cast(dict[str, object], RULE_TITLES)),
+            ("RULE_SEVERITIES", cast(dict[str, object], RULE_SEVERITIES)),
+            ("TEMPLATES", cast(dict[str, object], TEMPLATES)),
+        )
+        for table_name, table in template_tables:
+            if str(rule_id) not in table:
+                missing.setdefault(rule_id, []).append(table_name)
+
+    if missing:
+        details = ", ".join(
+            f"{rule_id}: {', '.join(tables)}" for rule_id, tables in sorted(missing.items())
+        )
+        raise OrphanRuleIdError(f"Orphan coherence rule_id metadata: {details}")
+
+
+def _coherence_category_for(evaluator: RuleEvaluator | LlmRuleEvaluator) -> CoherenceCategory:
+    raw_category = getattr(evaluator, "coherence_category", None) or evaluator.category
+    category_map: dict[str, CoherenceCategory] = {
+        "scope": "SCOPE",
+        "financial": "BUDGET",
+        "budget": "BUDGET",
+        "schedule": "TIME",
+        "time": "TIME",
+        "technical": "TECHNICAL",
+        "tech": "TECHNICAL",
+        "legal": "LEGAL",
+        "quality": "QUALITY",
+        "general": "SCOPE",
+    }
+    mapped = category_map.get(str(raw_category).lower())
+    if mapped is None:
+        if isinstance(raw_category, str) and raw_category in C2PRO_CATEGORIES:
+            return cast(CoherenceCategory, raw_category)
+        raise ValueError(f"Unknown evaluator category: {raw_category}")
+    return mapped
+
+
+def register_evaluator(rule_id: str, evaluator_class: type[RuleEvaluator]) -> None:
     """
     Registers a new deterministic evaluator class for a rule ID.
     """
@@ -161,7 +350,7 @@ def register_evaluator(rule_id: str, evaluator_class: type[RuleEvaluator]):
     logger.info("deterministic_evaluator_registered", rule_id=rule_id)
 
 
-def register_llm_rule(rule_config: dict):
+def register_llm_rule(rule_config: dict[str, Any]) -> None:
     """
     Registers an LLM rule configuration.
 
@@ -190,7 +379,7 @@ def register_llm_rule(rule_config: dict):
 
 def load_qualitative_rules(
     file_path: str | Path | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Loads qualitative (LLM) rules from a YAML file and registers them.
 
@@ -200,7 +389,7 @@ def load_qualitative_rules(
     Returns:
         List of loaded rule configurations.
     """
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 
     if file_path is None:
         # Default path: same directory as coherence module
@@ -222,7 +411,7 @@ def load_qualitative_rules(
         return []
 
     # Register each rule
-    loaded_rules = []
+    loaded_rules: list[dict[str, Any]] = []
     for rule in rules_data:
         if rule.get("evaluator_type") == "llm":
             register_llm_rule(rule)
@@ -261,7 +450,7 @@ def get_all_llm_evaluators(
     return evaluators
 
 
-def get_llm_rules_by_category(category: str) -> list[dict]:
+def get_llm_rules_by_category(category: str) -> list[dict[str, Any]]:
     """
     Gets all LLM rule configs for a specific category.
 
@@ -295,7 +484,7 @@ def get_all_rule_ids() -> dict[str, list[str]]:
 # ===========================================
 
 
-def initialize_registry():
+def initialize_registry() -> None:
     """
     Initializes the registry by loading all rule configurations.
 
@@ -303,11 +492,12 @@ def initialize_registry():
     """
     # Load qualitative rules from default location
     load_qualitative_rules()
+    assert_v1_rule_ids_have_alert_templates()
 
     logger.info(
         "registry_initialized",
         deterministic_rules=len(DETERMINISTIC_EVALUATORS),
-        llm_rules=len(LLM_RULE_CONFIGS),
+        llm_rules=len(V1_LLM_RULE_IDS),
     )
 
 
@@ -316,7 +506,4 @@ def initialize_registry():
 import os  # noqa: E402
 
 if os.environ.get("C2PRO_SKIP_RULE_AUTOLOAD") != "1":
-    try:
-        initialize_registry()
-    except Exception as e:
-        logger.warning("registry_autoload_failed", error=str(e))
+    initialize_registry()
