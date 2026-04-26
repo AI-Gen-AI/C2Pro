@@ -9,6 +9,7 @@ Refers to Suite ID: TS-UA-SVC-COH-001.
 
 from __future__ import annotations
 
+import warnings
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
@@ -25,6 +26,13 @@ from src.coherence.application.use_cases import (
     RecalculateOnAlertUseCase,
 )
 from src.coherence.domain.category_weights import CoherenceCategory
+
+warnings.warn(
+    "CoherenceCalculationService is deprecated for scoring orchestration; use "
+    "the canonical coherence graph subgraph. Removal is scheduled for the next sprint.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class EventPublisher(Protocol):
@@ -66,10 +74,10 @@ class CoherenceCalculationService:
         contract_price: float = 0.0,
         bom_items: list[dict[str, object]] | None = None,
         scope_defined: bool = True,
-        schedule_within_contract: bool = True,
-        technical_consistent: bool = True,
-        legal_compliant: bool = True,
-        quality_standard_met: bool = True,
+        schedule_within_contract: bool | None = True,
+        technical_consistent: bool | None = True,
+        legal_compliant: bool | None = True,
+        quality_standard_met: bool | None = True,
         custom_weights: dict[CoherenceCategory, float] | None = None,
         document_count: int = 0,
         use_cache: bool = False,
@@ -153,10 +161,10 @@ class CoherenceCalculationService:
         contract_price: float = 0.0,
         bom_items: list[dict[str, object]] | None = None,
         scope_defined: bool = True,
-        schedule_within_contract: bool = True,
-        technical_consistent: bool = True,
-        legal_compliant: bool = True,
-        quality_standard_met: bool = True,
+        schedule_within_contract: bool | None = True,
+        technical_consistent: bool | None = True,
+        legal_compliant: bool | None = True,
+        quality_standard_met: bool | None = True,
         custom_weights: dict[CoherenceCategory, float] | None = None,
         document_count: int = 0,
     ) -> RecalculateOnAlertResult:

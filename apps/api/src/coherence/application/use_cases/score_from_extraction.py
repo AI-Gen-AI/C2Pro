@@ -9,6 +9,7 @@ Refers to TASK-IMPL-010.5.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -18,6 +19,13 @@ from src.analysis.domain.coherence_derivation import (
     CoherenceScoringDerivationService,
 )
 from src.coherence.application.services import CoherenceCalculationService
+
+warnings.warn(
+    "ScoreFromExtractionUseCase is deprecated; N8 now delegates to the "
+    "canonical coherence graph subgraph. Removal is scheduled for the next sprint.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +44,7 @@ class ScoreFromExtractionCommand:
 class ScoreFromExtractionResult:
     """Coherence Score™ result with quality metadata."""
 
-    score: int | float
+    score: int | float | None
     breakdown: dict[str, Any]
     poor_extraction_quality: bool
     quality_note: str

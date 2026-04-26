@@ -25,6 +25,8 @@ import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import total_ordering
+from typing import Any
 
 # Temporarily add the parent directory to sys.path to allow relative imports when run directly
 script_dir = os.path.dirname(__file__)
@@ -54,13 +56,58 @@ from src.coherence.models import (  # noqa: E402
 
 
 @dataclass
+@total_ordering
+class ScoringResult:
+    """
+    Score contract returned by the canonical Coherence v1 scoring path.
+
+    Refers to Suite ID: TS-UA-COH-UC-001.
+    """
+
+    score: float | None
+    reason: str | None = None
+    missing_dimensions: list[str] | None = None
+
+    def _numeric_score(self) -> float:
+        if self.score is None:
+            raise TypeError("insufficient evidence result has no numeric score")
+        return self.score
+
+    def __float__(self) -> float:
+        return self._numeric_score()
+
+    def __round__(self, ndigits: int | None = None) -> float:
+        return round(self._numeric_score(), ndigits) if ndigits is not None else round(self._numeric_score())
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, ScoringResult):
+            return (
+                self.score == other.score
+                and self.reason == other.reason
+                and self.missing_dimensions == other.missing_dimensions
+            )
+        if isinstance(other, int | float):
+            return self.score == float(other)
+        return False
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, ScoringResult):
+            if other.score is None:
+                raise TypeError("cannot compare against insufficient evidence result")
+            return self._numeric_score() < other.score
+        if isinstance(other, int | float):
+            return self._numeric_score() < float(other)
+        return NotImplemented
+
+
+@dataclass
 class ScoringDiagnostics:
     """
     Detailed breakdown of how the score was calculated.
 
     Useful for debugging, dashboards, and score curve validation.
     """
-    score: float
+    score: float | None
     total_findings: int
     deterministic_findings: int
     llm_findings: int
@@ -71,6 +118,8 @@ class ScoringDiagnostics:
     penalty_density: float
     raw_penalty_sum: float
     category_contributions: dict[str, float]
+    reason: str | None = None
+    missing_dimensions: list[str] | None = None
 
 
 # =============================================================================
@@ -125,7 +174,9 @@ class ScoringService:
         signals: list[FindingSignal],
         num_clauses: int = 1,
         num_rules: int = 5,
-    ) -> float:
+        poor_extraction_quality: bool = False,
+        missing_dimensions: list[str] | None = None,
+    ) -> ScoringResult:
         """
         Calculate coherence score from FindingSignal objects.
 
@@ -138,10 +189,14 @@ class ScoringService:
             num_rules: Number of rules evaluated (for diagnostics)
 
         Returns:
-            float: Score between config.min_score and 100.0
+            ScoringResult: score contract with nullable score on insufficient evidence.
         """
-        if not signals:
-            return 100.0
+        if not signals or poor_extraction_quality:
+            return ScoringResult(
+                score=None,
+                reason="insufficient_evidence",
+                missing_dimensions=missing_dimensions or ["schedule", "budget"],
+            )
 
         # Step 1: Calculate raw weighted penalty sum
         raw_penalty = 0.0
@@ -164,13 +219,15 @@ class ScoringService:
         score = max(raw_score, self.config.min_score)
 
         # Round to 1 decimal for clean API output
-        return round(score, 1)
+        return ScoringResult(score=round(score, 1))
 
     def calculate_detailed(
         self,
         signals: list[FindingSignal],
         num_clauses: int = 1,
         num_rules: int = 5,
+        poor_extraction_quality: bool = False,
+        missing_dimensions: list[str] | None = None,
     ) -> ScoringDiagnostics:
         """
         Calculate score with full diagnostic breakdown.
@@ -186,9 +243,9 @@ class ScoringService:
         Returns:
             ScoringDiagnostics with score and breakdown
         """
-        if not signals:
+        if not signals or poor_extraction_quality:
             return ScoringDiagnostics(
-                score=100.0,
+                score=None,
                 total_findings=0,
                 deterministic_findings=0,
                 llm_findings=0,
@@ -199,6 +256,8 @@ class ScoringService:
                 penalty_density=0.0,
                 raw_penalty_sum=0.0,
                 category_contributions={},
+                reason="insufficient_evidence",
+                missing_dimensions=missing_dimensions or ["schedule", "budget"],
             )
 
         # Compute raw penalty and track category contributions
@@ -281,7 +340,7 @@ class ScoringService:
         alerts: list[Alert],
         num_clauses: int = 1,
         num_rules: int = 5,
-    ) -> float:
+    ) -> ScoringResult:
         """
         Backward-compatible scoring from Alert objects using v0.3 formula.
 
@@ -293,10 +352,14 @@ class ScoringService:
             num_rules: Number of rules evaluated
 
         Returns:
-            float: Score between config.min_score and 100.0
+            ScoringResult: score contract with nullable score on insufficient evidence.
         """
         if not alerts:
-            return 100.0
+            return ScoringResult(
+                score=None,
+                reason="insufficient_evidence",
+                missing_dimensions=["schedule", "budget"],
+            )
 
         signals = [self._alert_to_signal(alert) for alert in alerts]
         return self.calculate_from_signals(signals, num_clauses, num_rules)
