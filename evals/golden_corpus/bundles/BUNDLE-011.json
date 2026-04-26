@@ -38,6 +38,24 @@
       "description_contains": "Schedule float allocation assumes recoveries beyond contractual FM cap"
     }
   ],
+  "expected_score_range": {
+    "min": 64.0,
+    "max": 76.0,
+    "reasoning": "Two high legal/schedule contradictions should produce a severe but not catastrophic penalty."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "LEG-201",
+      "min_count": 1,
+      "severity": "high"
+    },
+    {
+      "rule_id": "SCHED-201",
+      "min_count": 1,
+      "severity": "high"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "lng",
     "tags": ["force-majeure", "float", "contradiction"]
