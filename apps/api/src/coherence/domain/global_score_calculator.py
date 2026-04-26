@@ -101,7 +101,7 @@ class GlobalScoreCalculator:
             The final global coherence score, a float between 0.0 and 100.0.
         """
         if not subscores:
-            return 100.0
+            return self._max_score()
 
         normalized_weights = self._resolve_weights(
             subscores=subscores,
@@ -119,7 +119,7 @@ class GlobalScoreCalculator:
             total_score += clamped_score * weight
 
         if math.isclose(total_score, 100.0, rel_tol=1e-12, abs_tol=1e-12):
-            return 100.0
+            return self._max_score()
         if math.isclose(total_score, 0.0, rel_tol=1e-12, abs_tol=1e-12):
             return 0.0
         return total_score
@@ -140,3 +140,7 @@ class GlobalScoreCalculator:
 
     def get_weight_history(self) -> list[WeightConfig]:
         return list(self._weight_history)
+
+    @staticmethod
+    def _max_score() -> float:
+        return float(100)

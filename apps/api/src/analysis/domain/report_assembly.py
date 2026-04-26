@@ -24,7 +24,7 @@ class ReportInput:
     extracted_wbs: list[dict[str, Any]]
     extracted_stakeholders: list[dict[str, Any]]
     bom_items: list[dict[str, Any]]
-    coherence_score: int | float
+    coherence_score: int | float | None
     confidence_score: float
     citation_validation_passed: bool
     pii_redactions: list[dict[str, Any]]
@@ -42,7 +42,7 @@ class ReportInput:
 class DecisionPackageInput:
     """Input data for decision package assembly."""
 
-    coherence_score: int | float
+    coherence_score: int | float | None
     extracted_risks: list[dict[str, Any]]
     extracted_stakeholders: list[dict[str, Any]]
     extracted_wbs: list[dict[str, Any]]

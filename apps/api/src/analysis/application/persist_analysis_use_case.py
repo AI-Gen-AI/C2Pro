@@ -29,7 +29,7 @@ class PersistAnalysisCommand:
     tenant_id: UUID
     extracted_risks: list[dict[str, Any]]
     extracted_wbs: list[dict[str, Any]]
-    coherence_score: int | float
+    coherence_score: int | float | None
     coherence_breakdown: dict[str, Any]
 
 

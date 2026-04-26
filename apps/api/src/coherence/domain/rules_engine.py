@@ -12,7 +12,16 @@ Refers to Suite ID: TS-UD-COH-SCR-001.
 
 from __future__ import annotations
 
+import warnings
+
 from pydantic import BaseModel, Field
+
+warnings.warn(
+    "CoherenceRulesEngine is deprecated; use the canonical coherence graph "
+    "subgraph and ScoringService instead. Removal is scheduled for the next sprint.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class CoherenceContext(BaseModel):
@@ -21,10 +30,10 @@ class CoherenceContext(BaseModel):
     contract_price: float = 0.0
     bom_items: list[dict[str, object]] = Field(default_factory=list)
     scope_defined: bool = True
-    schedule_within_contract: bool = True
-    technical_consistent: bool = True
-    legal_compliant: bool = True
-    quality_standard_met: bool = True
+    schedule_within_contract: bool | None = True
+    technical_consistent: bool | None = True
+    legal_compliant: bool | None = True
+    quality_standard_met: bool | None = True
 
 
 class CoherenceEvaluationResult(BaseModel):

@@ -26,10 +26,10 @@ class CoherenceDerivationInput:
 class CoherenceDerivationResult:
     """Result of coherence derivation."""
     scope_defined: bool
-    schedule_within_contract: bool
-    technical_consistent: bool
-    legal_compliant: bool
-    quality_standard_met: bool
+    schedule_within_contract: bool | None
+    technical_consistent: bool | None
+    legal_compliant: bool | None
+    quality_standard_met: bool | None
     bom_items: list[dict[str, Any]]
     contract_price: float
     has_budget_risks: bool
@@ -109,16 +109,16 @@ class CoherenceScoringDerivationService:
         has_budget_risks = self._has_high_risk_in_categories(risks, self.RISK_CATEGORIES["BUDGET"])
         bom_items = self._mark_bom_unassigned_if_needed(bom, has_budget_risks)
 
-        schedule_within_contract = not self._has_high_risk_in_categories(
+        schedule_within_contract = self._derive_dimension_flag(
             risks, self.RISK_CATEGORIES["SCHEDULE"]
         )
-        technical_consistent = not self._has_high_risk_in_categories(
+        technical_consistent = self._derive_dimension_flag(
             risks, self.RISK_CATEGORIES["TECHNICAL"]
         )
-        legal_compliant = not self._has_high_risk_in_categories(
+        legal_compliant = self._derive_dimension_flag(
             risks, self.RISK_CATEGORIES["LEGAL"]
         )
-        quality_standard_met = not self._has_high_risk_in_categories(
+        quality_standard_met = self._derive_dimension_flag(
             risks, self.RISK_CATEGORIES["QUALITY"]
         )
 
@@ -161,6 +161,21 @@ class CoherenceScoringDerivationService:
             if cat in categories and impact in ("HIGH", "CRITICAL"):
                 return True
         return False
+
+    def _derive_dimension_flag(
+        self,
+        risks: list[dict],
+        categories: set[str],
+    ) -> bool | None:
+        """Derive a dimension flag only when extraction provides evidence."""
+        matching_risks = [
+            risk
+            for risk in risks
+            if (risk.get("category") or "").upper() in categories
+        ]
+        if not matching_risks:
+            return None
+        return not self._has_high_risk_in_categories(matching_risks, categories)
 
     def _derive_scope_defined(
         self,

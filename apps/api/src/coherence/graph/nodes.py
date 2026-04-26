@@ -713,6 +713,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
         signals=all_signals,
         num_clauses=len(state.clauses),
         num_rules=27,  # 27 deterministic rules
+        poor_extraction_quality=state.config.poor_extraction_quality,
+        missing_dimensions=state.config.missing_dimensions or _missing_dimensions(state),
     )
 
     logger.info(
@@ -735,6 +737,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
             "penalty_density": diagnostics.penalty_density,
             "raw_penalty_sum": diagnostics.raw_penalty_sum,
             "category_contributions": diagnostics.category_contributions,
+            "reason": diagnostics.reason,
+            "missing_dimensions": diagnostics.missing_dimensions,
         },
     }
 
@@ -769,6 +773,9 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         alerts=alerts,
         category_breakdown=category_breakdown,
         calculated_at=datetime.now(UTC),
+        score_version="v1_exponential_decay",
+        score_reason=state.diagnostics.get("reason"),
+        score_missing_dimensions=state.diagnostics.get("missing_dimensions"),
         finding_signals=state.all_signals,
         deterministic_findings_count=len(state.deterministic_signals),
         llm_findings_count=len(state.llm_signals),
@@ -819,9 +826,12 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
 
 def _build_category_breakdown(
     signals: list[FindingSignal],
-    overall_score: float,
+    overall_score: float | None,
 ) -> list[CategoryBreakdown]:
     """Build category breakdown from signals."""
+    if overall_score is None:
+        return []
+
     expanded_signals: list[tuple[str, FindingSignal]] = []
     for signal in signals:
         affected_categories = signal.raw_data.get("affected_categories") if isinstance(signal.raw_data, dict) else None
@@ -875,6 +885,17 @@ def _build_category_breakdown(
     breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
 
     return breakdown
+
+
+def _missing_dimensions(state: CoherenceGraphState) -> list[str]:
+    """Infer missing audit dimensions from prepared clauses."""
+    present = {infer_document_type(clause) for clause in state.clauses}
+    missing: list[str] = []
+    if "schedule" not in present:
+        missing.append("schedule")
+    if "budget" not in present:
+        missing.append("budget")
+    return missing
 
 
 # =============================================================================

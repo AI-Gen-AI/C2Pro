@@ -247,9 +247,12 @@ def evaluate_coherence(
         # Fallback: create minimal result
         from datetime import datetime
         result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score", 100.0),
+            overall_score=final_state.get("score"),
             alerts=final_state.get("alerts", []),
             calculated_at=datetime.now(UTC),
+            score_version="v1_exponential_decay",
+            score_reason=final_state.get("diagnostics", {}).get("reason"),
+            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
             finding_signals=final_state.get("all_signals", []),
         )
 
@@ -293,9 +296,12 @@ async def evaluate_coherence_async(
     if result is None:
         from datetime import datetime
         result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score", 100.0),
+            overall_score=final_state.get("score"),
             alerts=final_state.get("alerts", []),
             calculated_at=datetime.now(UTC),
+            score_version="v1_exponential_decay",
+            score_reason=final_state.get("diagnostics", {}).get("reason"),
+            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
             finding_signals=final_state.get("all_signals", []),
         )
 
