@@ -132,7 +132,20 @@ TEST_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYvDqLTMK
 def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
     sdk_client = mock.MagicMock(name="langsmith_client")
-    langsmith_module = SimpleNamespace(Client=mock.MagicMock(return_value=sdk_client))
+    langsmith_module = SimpleNamespace(
+        Client=mock.MagicMock(return_value=sdk_client),
+        RunTree=mock.MagicMock,
+        get_tracing_context=mock.MagicMock(return_value={}),
+        run_helpers=SimpleNamespace(
+            get_tracing_context=mock.MagicMock(return_value={}),
+            tracing_context=mock.MagicMock(),
+        ),
+        run_trees=SimpleNamespace(RunTree=mock.MagicMock),
+        utils=SimpleNamespace(
+            get_tracer_project=mock.MagicMock(return_value="test"),
+            tracing_is_enabled=mock.MagicMock(return_value=False),
+        ),
+    )
     langchain_hub = mock.MagicMock(name="langchain_hub")
     langchain_module = SimpleNamespace(hub=langchain_hub)
 
@@ -1188,3 +1201,24 @@ async def create_test_user_and_tenant(db):
         return user, tenant
 
     return _create
+
+
+
+@pytest.fixture(scope="function", autouse=True)
+def clear_prometheus_registry():
+    """
+    Clears the default prometheus registry to avoid duplicate metric errors
+    between tests.
+    """
+    from prometheus_client import REGISTRY
+    
+    # Unregister all collectors.
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        REGISTRY.unregister(collector)
+    
+    # Re-register default collectors.
+    from prometheus_client import gc_collector, platform_collector, process_collector
+    process_collector.ProcessCollector(registry=REGISTRY)
+    platform_collector.PlatformCollector(registry=REGISTRY)
+    gc_collector.GCCollector(registry=REGISTRY)

@@ -567,10 +567,10 @@ Block conditions (orchestrator does not merge):
 
 | # | Phase | Agent | Branch | Status | PR | Report |
 |---|-------|-------|--------|--------|-----|--------|
-| 1 | Dead-code deletion | Codex | `coh-v1/phase-1-codex` | not started | — | — |
-| 2 | Pipeline consolidation | Gemini | `coh-v1/phase-2-gemini` | blocked on 1 | — | — |
-| 3 | LLMRulePort | Gemini | `coh-v1/phase-3-gemini` | blocked on 1 | — | — |
-| 4 | score_version migration | Codex | `coh-v1/phase-4-codex` | blocked on 1 | — | — |
+| 1 | Dead-code deletion | Codex | `coh-v1/phase-1-codex` | ✅ merged into `coh-v1/consolidation` @ `ce28d54b` (2026-04-25) | local | `blackboard/coh-v1/PHASE-1-codex-REPORT.md` |
+| 2 | Pipeline consolidation | Gemini | `coh-v1/phase-2-gemini` | needs-review (implemented locally by Codex @ 2026-04-25; tests partly blocked by local Postgres/mypy debt) | local | `blackboard/coh-v1/PHASE-2-gemini-REPORT.md` |
+| 3 | LLMRulePort | Gemini | `coh-v1/phase-3-gemini` | ready to dispatch | — | — |
+| 4 | score_version migration | Codex | `coh-v1/phase-4-codex` | ready to dispatch | — | — |
 | 5 | Registry → 18 | OpenCode | `coh-v1/phase-5-opencode` | blocked on 2,3,4 | — | — |
 | 6 | Alert wiring + meta_alert | OpenCode | `coh-v1/phase-6-opencode` | blocked on 2,5 | — | — |
 | 7 | Golden corpus | Codex | `coh-v1/phase-7-codex` | blocked on 2,4,5 | — | — |
