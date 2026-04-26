@@ -573,6 +573,6 @@ Block conditions (orchestrator does not merge):
 | 4 | score_version migration | Codex | `coh-v1/phase-4-codex` | ✅ implemented locally (2026-04-25; DB verification blocked by local Postgres) | local | `blackboard/coh-v1/PHASE-4-codex-REPORT.md` |
 | 5 | Registry → 18 | OpenCode | `coh-v1/phase-5-opencode` | needs-review (implemented locally by Codex @ 2026-04-26; integration blocked by local Postgres/mypy debt) | local | `blackboard/coh-v1/PHASE-5-opencode-REPORT.md` |
 | 6 | Alert wiring + meta_alert | OpenCode | `coh-v1/phase-6-opencode` | blocked on 2,5 | — | — |
-| 7 | Golden corpus | Codex | `coh-v1/phase-7-codex` | blocked on 2,4,5 | — | — |
+| 7 | Golden corpus | Codex | `coh-v1/phase-7-codex` | needs-review (implemented locally @ 2026-04-26; 15/15 corpus bundles green, 100% alert recall) | local | `blackboard/coh-v1/PHASE-7-codex-REPORT.md` |
 | 8 | Telemetry | Gemini | `coh-v1/phase-8-gemini` | blocked on 2 | — | — |
 | 9 | UX + comms | OpenCode | `coh-v1/phase-9-opencode` | blocked on 4,6,7 | — | — |
