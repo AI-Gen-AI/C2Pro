@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-26T15:40:00Z",
+  "updated_at": "2026-04-26T20:30:24Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -789,6 +789,54 @@
         "validacion_lint": false,
         "nota_verificacion": "rules_engine unit suite passed 22/22. Integration coherence remains blocked by unavailable postgres-test. mypy src/coherence remains blocked by broad existing type debt."
       }
+    },
+    {
+      "tarea_id": "T072",
+      "backlog_id": "TASK-COH-V1-07",
+      "tipo": "qa",
+      "descripcion": "Extend golden-corpus bundle schema with expected_score_range and expected_alerts, annotate the 15 bundles, and enforce CI assertions.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "All 15 corpus bundles carry score and alert expectations, runner fails on deviations, README/report/tracking are updated, and apps/api module entrypoint exits green.",
+      "archivos_modificados": [
+        ".github/workflows/golden-corpus-evals.yml",
+        "apps/api/evals/__init__.py",
+        "apps/api/evals/run_evals.py",
+        "evals/README.md",
+        "evals/golden_corpus/schema.py",
+        "evals/golden_corpus/bundles/BUNDLE-001.json",
+        "evals/golden_corpus/bundles/BUNDLE-002.json",
+        "evals/golden_corpus/bundles/BUNDLE-003.json",
+        "evals/golden_corpus/bundles/BUNDLE-004.json",
+        "evals/golden_corpus/bundles/BUNDLE-005.json",
+        "evals/golden_corpus/bundles/BUNDLE-006.json",
+        "evals/golden_corpus/bundles/BUNDLE-007.json",
+        "evals/golden_corpus/bundles/BUNDLE-008.json",
+        "evals/golden_corpus/bundles/BUNDLE-009.json",
+        "evals/golden_corpus/bundles/BUNDLE-010.json",
+        "evals/golden_corpus/bundles/BUNDLE-011.json",
+        "evals/golden_corpus/bundles/BUNDLE-012.json",
+        "evals/golden_corpus/bundles/BUNDLE-013.json",
+        "evals/golden_corpus/bundles/BUNDLE-014.json",
+        "evals/golden_corpus/bundles/BUNDLE-015.json",
+        "evals/run_evals.py",
+        "tests/evals/test_golden_corpus.py",
+        "blackboard/coh-v1/PHASE-7-codex-REPORT.md",
+        "blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-04-26T20:30:24Z",
+        "completado": "2026-04-26T20:30:24Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-COH-V1-07 completed: schema, 15 annotated bundles, CI score/alert assertions, README guidance, apps/api entrypoint, and Phase 7 report are in place.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "Golden corpus passed 15/15 with 30/30 expected alerts matched and 100% aggregate recall. tests/evals/test_golden_corpus.py passed 13/13 including scratch impossible-range CI failure proof. cd apps/api && python -m evals.run_evals passed via the apps/api compatibility entrypoint."
+      }
     }
   ],
   "backlog_sync": {
@@ -858,7 +906,8 @@
       "TASK-COH-V1-04",
       "TASK-COH-V1-02",
       "TASK-BCK-050",
-      "TASK-COH-V1-05"
+      "TASK-COH-V1-05",
+      "TASK-COH-V1-07"
     ]
   },
   "plan_actual": {
