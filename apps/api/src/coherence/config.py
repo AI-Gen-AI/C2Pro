@@ -9,10 +9,14 @@ Location: apps/api/src/coherence/config.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Literal
 
 # Type alias for coherence categories
 CoherenceCategory = Literal["BUDGET", "TIME", "LEGAL", "SCOPE", "TECHNICAL", "QUALITY", "CROSS"]
+
+# Phase 9 customer communications activate Coherence Score v1 for new audits at this cut-off.
+SCORE_VERSION_V1_CUTOFF = datetime(2026, 5, 1, tzinfo=UTC)
 
 
 # ===========================================

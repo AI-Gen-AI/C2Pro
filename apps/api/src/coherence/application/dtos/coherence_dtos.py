@@ -31,10 +31,10 @@ class CalculateCoherenceCommand(BaseModel):
     contract_price: float = 0.0
     bom_items: list[dict[str, object]] = Field(default_factory=list)
     scope_defined: bool = True
-    schedule_within_contract: bool = True
-    technical_consistent: bool = True
-    legal_compliant: bool = True
-    quality_standard_met: bool = True
+    schedule_within_contract: bool | None = True
+    technical_consistent: bool | None = True
+    legal_compliant: bool | None = True
+    quality_standard_met: bool | None = True
     custom_weights: dict[CoherenceCategory, float] | None = None
     document_count: int = 0
 
@@ -58,6 +58,9 @@ class CoherenceCalculationResult(BaseModel):
     is_gaming_detected: bool
     gaming_violations: list[str]
     penalty_points: int
+    score_version: str = "v0_flag_based"
+    score_reason: str | None = None
+    score_missing_dimensions: list[str] | None = None
 
 
 class RecalculateOnAlertCommand(BaseModel):
@@ -71,10 +74,10 @@ class RecalculateOnAlertCommand(BaseModel):
     contract_price: float = 0.0
     bom_items: list[dict[str, object]] = Field(default_factory=list)
     scope_defined: bool = True
-    schedule_within_contract: bool = True
-    technical_consistent: bool = True
-    legal_compliant: bool = True
-    quality_standard_met: bool = True
+    schedule_within_contract: bool | None = True
+    technical_consistent: bool | None = True
+    legal_compliant: bool | None = True
+    quality_standard_met: bool | None = True
     custom_weights: dict[CoherenceCategory, float] | None = None
     document_count: int = 0
 

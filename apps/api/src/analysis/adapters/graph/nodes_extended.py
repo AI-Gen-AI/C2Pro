@@ -10,6 +10,7 @@ Refers to TASK-IMPL-010.8–.14 (node refactoring).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
@@ -32,6 +33,9 @@ from src.analysis.application.parse_budget_use_case import (
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
 
 logger = structlog.get_logger()
+
+if TYPE_CHECKING:
+    from src.coherence.models import Clause
 
 # ── Domain service instances (stateless, reusable) ──────────────────────────
 
@@ -175,35 +179,37 @@ async def raci_generator_node(state: ProjectState) -> ProjectState:
 
 
 # ---------------------------------------------------------------------------
-# N8 — Coherence Scorer (delegates to ScoreFromExtractionUseCase)
+# N8 — Coherence Scorer (delegates to canonical 7-node subgraph)
 # ---------------------------------------------------------------------------
 
 async def coherence_scorer_node(state: ProjectState) -> ProjectState:
-    """N8 — Calculate Coherence Score via ScoreFromExtractionUseCase."""
+    """N8 — Calculate Coherence Score via the canonical 7-node subgraph.
+
+    Refers to Suite ID: TS-UA-ANA-UC-001.
+    """
     project_id = state.get("project_id")
 
     if not project_id:
-        state["coherence_score"] = 0
+        state["coherence_score"] = None
         state["coherence_breakdown"] = {}
+        state["coherence_reason"] = "missing_project_id"
+        state["coherence_missing_dimensions"] = ["schedule", "budget"]
         state["messages"].append(
             AIMessage(content="N8 coherence_scorer: skipped (missing project_id)")
         )
         return state
 
     try:
-        from src.analysis.domain.coherence_derivation import CoherenceScoringDerivationService
-        from src.coherence.application.dependencies import build_coherence_calculation_service
-        from src.coherence.application.use_cases.score_from_extraction import (
-            ScoreFromExtractionCommand,
-            ScoreFromExtractionUseCase,
+        from src.analysis.domain.coherence_derivation import (
+            CoherenceDerivationInput,
+            CoherenceScoringDerivationService,
         )
+        from src.coherence.graph.graph import evaluate_coherence_async
+        from src.coherence.graph.state import EvaluationConfig
+        from src.coherence.models import Clause
 
-        result = ScoreFromExtractionUseCase(
-            derivation_service=CoherenceScoringDerivationService(),
-            calculation_service=build_coherence_calculation_service(),
-        ).execute(
-            ScoreFromExtractionCommand(
-                project_id=UUID(project_id),
+        derivation = CoherenceScoringDerivationService().derive(
+            CoherenceDerivationInput(
                 extracted_risks=state.get("extracted_risks", []),
                 extracted_wbs=state.get("extracted_wbs", []),
                 bom_items=state.get("bom_items", []),
@@ -211,20 +217,43 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
                 document_text=state.get("document_text", ""),
             )
         )
-        score = result.score
-        breakdown = result.breakdown
-        quality_note = result.quality_note
+
+        clauses = _build_coherence_clauses(state)
+        missing_dimensions = _missing_audit_dimensions(state)
+        result = await evaluate_coherence_async(
+            clauses=clauses,
+            project_id=project_id,
+            config=EvaluationConfig(
+                low_budget_mode=True,
+                tenant_id=state.get("tenant_id"),
+                project_id=project_id,
+                poor_extraction_quality=derivation.poor_extraction_quality,
+                missing_dimensions=missing_dimensions,
+            ),
+        )
+        score = result.overall_score
+        breakdown: dict[str, Any] = {
+            item.category: item.score
+            for item in result.category_breakdown
+        }
+        quality_note = derivation.quality_note
+        reason = result.score_reason
+        result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
     except Exception:
         logger.warning("node_coherence_scorer_failed", exc_info=True)
-        score = 0
+        score = None
         breakdown = {}
         quality_note = ""
+        reason = "coherence_evaluation_failed"
+        result_missing_dimensions = ["schedule", "budget"]
 
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
 
     state["coherence_score"] = score
     state["coherence_breakdown"] = breakdown
+    state["coherence_reason"] = reason
+    state["coherence_missing_dimensions"] = result_missing_dimensions
     state["messages"].append(
         AIMessage(
             content=f"N8 coherence_scorer: score={score} "
@@ -232,6 +261,37 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
         )
     )
     return state
+
+
+def _build_coherence_clauses(state: ProjectState) -> list["Clause"]:
+    """Build canonical subgraph clauses from the analysis graph state."""
+    from src.coherence.models import Clause
+
+    document_id = state.get("document_id") or "document"
+    doc_type = state.get("doc_type") or state.get("document_category") or "contract"
+    return [
+        Clause(
+            id=f"{doc_type}-{document_id}",
+            text=state.get("anonymized_text") or state.get("document_text", ""),
+            data={
+                "document_type": doc_type,
+                "risks": state.get("extracted_risks", []),
+                "wbs": state.get("extracted_wbs", []),
+                "bom_items": state.get("bom_items", []),
+            },
+        )
+    ]
+
+
+def _missing_audit_dimensions(state: ProjectState) -> list[str]:
+    """Infer missing schedule/budget dimensions for contract-only uploads."""
+    doc_type = (state.get("doc_type") or state.get("document_category") or "").lower()
+    missing: list[str] = []
+    if doc_type != "schedule" and not state.get("extracted_wbs"):
+        missing.append("schedule")
+    if doc_type != "budget" and not state.get("bom_items"):
+        missing.append("budget")
+    return missing
 
 
 # ---------------------------------------------------------------------------

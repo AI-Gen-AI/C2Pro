@@ -21,6 +21,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
+from src.core.observability.coherence_tracing import traced_coherence_node
+
 from ..models import (
     Alert,
     CategoryBreakdown,
@@ -32,8 +34,9 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
-from ..rules_engine.config import DEFAULT_CONFIG
-from ..rules_engine.deterministic import get_all_deterministic_evaluators
+from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
+from ..rules_engine.registry import list_evaluators
+from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..scoring import ScoringService
 from .state import (
     ClauseWithEmbedding,
@@ -275,6 +278,7 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     }
 
 
+@traced_coherence_node(node_name="prepare_context")
 def prepare_context(state: CoherenceGraphState) -> NodeOutput:
     """
     Synchronous wrapper for prepare_context_async.
@@ -301,9 +305,10 @@ def prepare_context(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="deterministic_evaluate")
 def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     """
-    Run all 27 deterministic evaluators on each clause.
+    Run the 12 deterministic v1 evaluators on each clause.
 
     This is Agent A in the coherence architecture - fast, zero LLM cost,
     high confidence rules that catch structural issues.
@@ -314,7 +319,10 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with deterministic_signals
     """
-    evaluators = get_all_deterministic_evaluators(DEFAULT_CONFIG)
+    evaluators = [
+        evaluator for evaluator in list_evaluators()
+        if getattr(evaluator, "source", "deterministic") == "deterministic"
+    ]
     signals: list[FindingSignal] = []
     errors: list[str] = []
 
@@ -378,24 +386,29 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
     total_calls = 0
 
     try:
-        # Import here to avoid circular imports and allow optional LLM
-        from ..rules_engine.llm_evaluator import LlmRuleEvaluator
-
-        evaluator = LlmRuleEvaluator()
+        evaluators: list[LlmRuleEvaluator] = [
+            evaluator for evaluator in list_evaluators(
+                low_budget_mode=state.config.low_budget_mode,
+            )
+            if isinstance(evaluator, LlmRuleEvaluator)
+        ]
 
         for clause in state.clauses:
-            try:
-                signal = await evaluator.evaluate_v3_async(clause)
-                if signal is not None:
-                    signals.append(signal)
-            except Exception as e:
-                error_msg = f"LLM evaluation failed for clause {clause.id}: {e}"
-                logger.warning(error_msg)
-                errors.append(error_msg)
+            for evaluator in evaluators:
+                try:
+                    signal = await evaluator.evaluate_v3_async(clause)
+                    if signal is not None:
+                        signals.append(signal)
+                except Exception as e:
+                    error_msg = (
+                        f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
+                    )
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
 
         # Get cost metrics
-        total_cost = evaluator.total_cost_usd
-        total_calls = evaluator.llm_calls_count
+        total_cost = sum(getattr(evaluator, "total_cost_usd", 0.0) for evaluator in evaluators)
+        total_calls = sum(getattr(evaluator, "llm_calls_count", 0) for evaluator in evaluators)
 
     except ImportError as e:
         logger.warning(f"LLM evaluator not available: {e}")
@@ -526,6 +539,7 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     }
 
 
+@traced_coherence_node(node_name="rag_similarity_check")
 def rag_similarity_check(state: CoherenceGraphState) -> NodeOutput:
     """
     Synchronous wrapper for rag_similarity_check_async.
@@ -554,6 +568,7 @@ def rag_similarity_check(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="cross_clause_eval")
 def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
     """
     Analyze relationships between clause pairs for coherence issues.
@@ -683,6 +698,7 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
 # =============================================================================
 
 
+@traced_coherence_node(node_name="scoring_arbiter")
 def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     """
     Calculate final coherence score from all finding signals.
@@ -713,6 +729,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
         signals=all_signals,
         num_clauses=len(state.clauses),
         num_rules=27,  # 27 deterministic rules
+        poor_extraction_quality=state.config.poor_extraction_quality,
+        missing_dimensions=state.config.missing_dimensions or _missing_dimensions(state),
     )
 
     logger.info(
@@ -735,6 +753,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
             "penalty_density": diagnostics.penalty_density,
             "raw_penalty_sum": diagnostics.raw_penalty_sum,
             "category_contributions": diagnostics.category_contributions,
+            "reason": diagnostics.reason,
+            "missing_dimensions": diagnostics.missing_dimensions,
         },
     }
 
@@ -744,6 +764,7 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
+@traced_coherence_node(node_name="format_output")
 def format_output(state: CoherenceGraphState) -> NodeOutput:
     """
     Format the evaluation results into the final API response structure.
@@ -760,6 +781,16 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
     # Convert signals to alerts for backward compat
     alerts = [_signal_to_alert(s) for s in state.all_signals]
 
+    # TASK-COH-V1-06: Handle insufficient_evidence -> AUDIT_INCOMPLETE alert
+    if state.score is None:
+        missing_dims = state.diagnostics.get("missing_dimensions", [])
+        if missing_dims:
+            meta_alert = _create_audit_incomplete_alert(
+                project_id=state.project_id,
+                missing_dimensions=missing_dims,
+            )
+            alerts.append(meta_alert)
+
     # Build category breakdown
     category_breakdown = _build_category_breakdown(state.all_signals, state.score)
 
@@ -769,6 +800,9 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         alerts=alerts,
         category_breakdown=category_breakdown,
         calculated_at=datetime.now(UTC),
+        score_version="v1_exponential_decay",
+        score_reason=state.diagnostics.get("reason"),
+        score_missing_dimensions=state.diagnostics.get("missing_dimensions"),
         finding_signals=state.all_signals,
         deterministic_findings_count=len(state.deterministic_signals),
         llm_findings_count=len(state.llm_signals),
@@ -817,11 +851,36 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
     )
 
 
+def _create_audit_incomplete_alert(
+    project_id: str,
+    missing_dimensions: list[str],
+) -> Alert:
+    """Create AUDIT_INCOMPLETE meta-alert when score is None."""
+    missing_str = ", ".join(missing_dimensions)
+    return Alert(
+        rule_id="AUDIT_INCOMPLETE",
+        severity="medium",
+        category="general",
+        message=TEMPLATES["AUDIT_INCOMPLETE"].format(missing_dimensions=missing_str),
+        evidence=Evidence(
+            source_clause_id="__AUDIT_INCOMPLETE__",
+            claim=f"Missing dimensions: {missing_str}",
+            quote=(
+                "No defensible Coherence Score can be issued without a full triplet "
+                "(contract + schedule + budget)."
+            ),
+        ),
+    )
+
+
 def _build_category_breakdown(
     signals: list[FindingSignal],
-    overall_score: float,
+    overall_score: float | None,
 ) -> list[CategoryBreakdown]:
     """Build category breakdown from signals."""
+    if overall_score is None:
+        return []
+
     expanded_signals: list[tuple[str, FindingSignal]] = []
     for signal in signals:
         affected_categories = signal.raw_data.get("affected_categories") if isinstance(signal.raw_data, dict) else None
@@ -875,6 +934,17 @@ def _build_category_breakdown(
     breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
 
     return breakdown
+
+
+def _missing_dimensions(state: CoherenceGraphState) -> list[str]:
+    """Infer missing audit dimensions from prepared clauses."""
+    present = {infer_document_type(clause) for clause in state.clauses}
+    missing: list[str] = []
+    if "schedule" not in present:
+        missing.append("schedule")
+    if "budget" not in present:
+        missing.append("budget")
+    return missing
 
 
 # =============================================================================

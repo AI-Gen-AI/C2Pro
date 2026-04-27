@@ -286,8 +286,9 @@ class TestLlmRuleEvaluatorResponseParsing:
         valid_json = '{"rule_violated": true, "severity": "high"}'
         result = evaluator._parse_evaluation_response(valid_json)
 
-        assert result["rule_violated"] is True
-        assert result["severity"] == "high"
+        # _parse_evaluation_response returns LlmEvaluationLegacyResponse (Pydantic)
+        assert result.rule_violated is True
+        assert result.severity == "high"
 
     def test_parse_json_with_markdown_code_block(self, patch_anthropic_wrapper):
         """Test parsing JSON wrapped in markdown code block."""
@@ -303,10 +304,10 @@ class TestLlmRuleEvaluatorResponseParsing:
         markdown_json = '```json\n{"rule_violated": true}\n```'
         result = evaluator._parse_evaluation_response(markdown_json)
 
-        assert result["rule_violated"] is True
+        assert result.rule_violated is True
 
     def test_parse_invalid_json_returns_safe_default(self, patch_anthropic_wrapper):
-        """Test that invalid JSON returns safe default."""
+        """Test that invalid JSON returns safe default (rule_violated=False)."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
         evaluator = LlmRuleEvaluator(
@@ -319,8 +320,8 @@ class TestLlmRuleEvaluatorResponseParsing:
         invalid_json = "This is not valid JSON"
         result = evaluator._parse_evaluation_response(invalid_json)
 
-        assert result["rule_violated"] is False
-        assert "parse_error" in result
+        # _parse_evaluation_response returns LlmEvaluationLegacyResponse safe default
+        assert result.rule_violated is False
 
 
 # ===========================================

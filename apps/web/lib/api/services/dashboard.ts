@@ -16,6 +16,9 @@ type DashboardSummaryResponse = Partial<DashboardSummary> & {
   weights_used?: Record<string, unknown> | null;
   alert_count?: number | string | null;
   document_count?: number | string | null;
+  score_version?: string | null;
+  score_reason?: string | null;
+  score_missing_dimensions?: unknown;
 };
 
 type ProjectQuickViewSummaryResponse = Partial<ProjectQuickViewSummary> & {
@@ -89,15 +92,18 @@ export async function getDashboardSummary(
   return {
     project_id: String(summary.project_id ?? projectId),
     tenant_id: String(summary.tenant_id ?? ""),
-    coherence_score: Number(
-      summary.coherence_score ?? summary.global_score ?? 0,
-    ),
-    global_score: Number(summary.global_score ?? summary.coherence_score ?? 0),
+    coherence_score: normalizeNullableNumber(summary.coherence_score ?? summary.global_score),
+    global_score: normalizeNullableNumber(summary.global_score ?? summary.coherence_score),
     sub_scores: normalizeNumberMap(summary.sub_scores),
     weights_used: normalizeNumberMap(summary.weights_used),
     alert_count: Number(summary.alert_count ?? 0),
     document_count: Number(summary.document_count ?? 0),
     methodology_version: String(summary.methodology_version ?? "unknown"),
+    score_version:
+      typeof summary.score_version === "string" ? summary.score_version : null,
+    score_reason:
+      typeof summary.score_reason === "string" ? summary.score_reason : null,
+    score_missing_dimensions: normalizeStringList(summary.score_missing_dimensions),
     last_updated:
       typeof summary.last_updated === "string" ? summary.last_updated : null,
   };
@@ -148,4 +154,15 @@ function normalizeNumberMap(value: unknown): Record<string, number> {
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [key, Number(entry ?? 0)]),
   );
+}
+
+function normalizeNullableNumber(value: number | string | null | undefined): number | null {
+  return value == null ? null : Number(value);
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
 }

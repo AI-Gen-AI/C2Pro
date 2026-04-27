@@ -28,6 +28,11 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "DETERMINISTIC_EVALUATORS":     ("src.coherence.rules_engine.registry", "DETERMINISTIC_EVALUATORS"),
     "RULE_EVALUATORS":              ("src.coherence.rules_engine.registry", "RULE_EVALUATORS"),
     "get_evaluator":                ("src.coherence.rules_engine.registry", "get_evaluator"),
+    "get_v1_evaluator":             ("src.coherence.rules_engine.registry", "get_v1_evaluator"),
+    "list_evaluators":              ("src.coherence.rules_engine.registry", "list_evaluators"),
+    "registry_coverage_by_category": ("src.coherence.rules_engine.registry", "registry_coverage_by_category"),
+    "assert_v1_rule_ids_have_alert_templates": ("src.coherence.rules_engine.registry", "assert_v1_rule_ids_have_alert_templates"),
+    "OrphanRuleIdError":            ("src.coherence.rules_engine.registry", "OrphanRuleIdError"),
     "register_evaluator":           ("src.coherence.rules_engine.registry", "register_evaluator"),
     # LLM registry (CE-24)
     "LLM_EVALUATORS":              ("src.coherence.rules_engine.registry", "LLM_EVALUATORS"),

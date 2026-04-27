@@ -212,6 +212,29 @@
 
 ## 2. Specifications
 
+### Coherence Score v1 Customer UX (2026-04-26)
+
+**Task**: `TASK-COH-V1-09`
+
+**Scope**:
+
+- Completed the Coherence score-version pill with tooltip copy, v0/v1 distinction, and a customer FAQ link.
+- Added the Coherence v1 in-app announcement and nullable-score rendering for insufficient-evidence results.
+- Added an AUDIT_INCOMPLETE banner that points users to supply missing schedule and budget dimensions before a full score is unlocked.
+- Extended the alert review surface with severity-first sorting, status filtering, and copy-to-clipboard vendor-message support.
+- Added customer communication artifacts: HTML/TXT announcement templates and `docs/customer/COHERENCE_V1_FAQ.md`.
+- Added a non-production demo route for manual QA screenshots and a Playwright E2E covering contract-only upload state through schedule/budget completion.
+
+**Verification**:
+
+- `cd apps/web && pnpm tsc --noEmit`
+- `cd apps/web && pnpm vitest run src/components/coherence/ScoreVersionBadge.test.tsx components/coherence/CoherenceClient.test.tsx components/features/alerts/AlertReviewCenter.test.tsx lib/api/services/dashboard.test.ts --configLoader native`
+- `cd apps/web && pnpm playwright test e2e/coherence-v1.spec.ts --project=chromium`
+
+**Residual Risk**:
+
+- Full `cd apps/web && pnpm vitest run` remains red in unrelated existing suites: root auth redirect, ProjectTabs count, alert hook endpoint, document entity hook shape, RACI disabled-state expectations, budget hook wiring, WBS route params, documents page spacing, and settings payload shape. Phase 9 targeted tests are green.
+
 ### Vercel Build Parity Follow-up (2026-04-09)
 
 **Task**: `TASK-FRT-168`

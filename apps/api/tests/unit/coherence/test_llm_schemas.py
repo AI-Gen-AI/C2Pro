@@ -136,9 +136,10 @@ class TestMultiClauseCoherenceLLMResponse:
         assert r.overall_coherence_score == 60
 
     def test_empty_defaults(self):
+        """TS-UA-COH-UC-001: Empty multi-clause output withholds score."""
         r = MultiClauseCoherenceLLMResponse.model_validate({})
         assert r.cross_clause_issues == []
-        assert r.overall_coherence_score == 100
+        assert r.overall_coherence_score is None
         assert r.summary == ""
 
     def test_score_ge_0_le_100(self):

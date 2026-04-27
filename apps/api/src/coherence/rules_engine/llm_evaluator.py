@@ -26,21 +26,15 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
 
-from src.coherence.graph.prompts import (
-    COHERENCE_SYSTEM_PROMPT,
-    build_evaluation_prompt,
-)
+from src.coherence.domain.ports.llm_rule_port import LLMRulePort
 from src.coherence.llm_schemas import LlmEvaluationLegacyResponse, LlmEvaluationV3Response
-from src.coherence.models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
+from src.coherence.models import Clause, CoherenceCategory, FindingSignal
 from src.coherence.rules_engine.base import Finding, RuleEvaluator
-from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
-from src.core.ai.model_router import AITaskType
-from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
 logger = structlog.get_logger()
 
@@ -192,6 +186,7 @@ class LlmRuleEvaluator(RuleEvaluator):
         category: str = "general",
         low_budget_mode: bool = False,
         tenant_id: UUID | None = None,
+        llm_port: LLMRulePort | None = None,
     ):
         """
         Inicializa el evaluador de reglas LLM.
@@ -205,18 +200,19 @@ class LlmRuleEvaluator(RuleEvaluator):
             category: Categoría de la regla (legal, financial, technical, etc.)
             low_budget_mode: Usar modelos más económicos
             tenant_id: ID del tenant para tracking
+            llm_port: Optional LLMRulePort injection (used in tests and DI contexts).
+                      If None, resolved lazily via get_llm_rule_evaluator() at call time.
         """
-        self.rule_id = rule_id
-        self.rule_name = rule_name
+        self.rule_id = rule_id  # type: ignore[misc]
+        self.rule_name = rule_name  # type: ignore[misc]
         self.rule_description = rule_description
         self.detection_logic = detection_logic
         self.default_severity = default_severity
-        self.category = category
+        self.category = cast(CoherenceCategory, self.CATEGORY_MAP.get(category.lower(), "SCOPE"))  # type: ignore[misc]
+        self.rule_category = category
         self.low_budget_mode = low_budget_mode
         self.tenant_id = tenant_id
-
-        # Get wrapper
-        self.wrapper = get_anthropic_wrapper()
+        self._injected_llm_port = llm_port
 
         # v0.3: Enhanced metrics tracking
         self.metrics = LlmEvaluationMetrics()
@@ -236,7 +232,15 @@ class LlmRuleEvaluator(RuleEvaluator):
     @property
     def coherence_category(self) -> CoherenceCategory:
         """Map legacy category to v0.3 CoherenceCategory."""
-        return self.CATEGORY_MAP.get(self.category.lower(), "SCOPE")
+        return self.CATEGORY_MAP.get(self.rule_category.lower(), "SCOPE")
+
+    @property
+    def _llm_port(self) -> LLMRulePort:
+        """Return the injected port, or lazily resolve the adapter singleton."""
+        if self._injected_llm_port is not None:
+            return self._injected_llm_port
+        from src.coherence.adapters.ai.llm_rule_evaluator import get_llm_rule_evaluator
+        return get_llm_rule_evaluator()
 
     def evaluate(self, clause: Clause) -> Finding | None:
         """
@@ -278,10 +282,7 @@ class LlmRuleEvaluator(RuleEvaluator):
         """
         v0.3 async evaluation returning FindingSignal with continuous scoring.
 
-        Returns a FindingSignal with:
-        - impact_score: 0.0-1.0 continuous severity
-        - confidence: 0.0-1.0 certainty level
-        - severity: Derived from impact_score via impact_to_severity()
+        Uses LLMRulePort for domain-pure evaluation.
 
         Args:
             clause: The clause to evaluate
@@ -296,49 +297,35 @@ class LlmRuleEvaluator(RuleEvaluator):
             text_length=len(clause.text),
         )
 
-        # Build optimized prompt
-        prompt = build_evaluation_prompt(
-            rule_id=self.rule_id,
-            rule_name=self.rule_name,
-            rule_description=self.rule_description,
-            detection_logic=self.detection_logic,
-            category=self.coherence_category,
-            clause_id=clause.id,
-            clause_text=clause.text,
-            clause_data=clause.data if clause.data else None,
-        )
-
-        # Make LLM request
-        request = AIRequest(
-            prompt=prompt,
-            task_type=AITaskType.COHERENCE_CHECK,
-            system_prompt=COHERENCE_SYSTEM_PROMPT,
-            low_budget_mode=self.low_budget_mode,
-            tenant_id=self.tenant_id,
-            use_cache=True,
-            temperature=0.0,
-        )
+        port = self._llm_port
 
         try:
-            response = await self.wrapper.generate(request)
-
-            # Parse and validate response against schema
-            result = self._parse_v3_response(response.content)
+            result = await port.evaluate(
+                rule_id=self.rule_id,
+                rule_name=self.rule_name,
+                rule_description=self.rule_description,
+                detection_logic=self.detection_logic,
+                category=self.rule_category,
+                clause_id=clause.id,
+                clause_text=clause.text,
+                clause_data=clause.data if clause.data else None,
+                tenant_id=self.tenant_id,
+            )
 
             impact_score = result.impact_score
             confidence = result.confidence
 
-            # Record metrics
+            raw_data = result.raw_data or {}
+
             self.metrics.record_evaluation(
-                cost=response.cost_usd,
-                cached=response.cached,
+                cost=raw_data.get("cost_usd", 0.0),
+                cached=raw_data.get("cached", False),
                 impact_score=impact_score if impact_score > 0 else None,
                 confidence=confidence if impact_score > 0 else None,
             )
 
-            # Update legacy counters
             self.evaluations_count += 1
-            self.total_cost += response.cost_usd
+            self.total_cost += raw_data.get("cost_usd", 0.0)
 
             if impact_score < 0.05:
                 logger.debug(
@@ -357,17 +344,11 @@ class LlmRuleEvaluator(RuleEvaluator):
                 source="llm",
                 impact_score=impact_score,
                 confidence=confidence,
-                severity=impact_to_severity(impact_score),
-                category=self.coherence_category,
-                evidence_summary=result.evidence.explanation,
-                quote=result.evidence.quote,
-                raw_data={
-                    "rule_name": self.rule_name,
-                    "recommendation": result.recommendation,
-                    "model_used": response.model_used,
-                    "cached": response.cached,
-                    "cost_usd": response.cost_usd,
-                },
+                severity=cast(Any, result.severity),
+                category=cast(Any, result.category),
+                evidence_summary=result.evidence_summary,
+                quote=result.quote or "",
+                raw_data=raw_data,
             )
 
         except Exception as e:
@@ -377,7 +358,6 @@ class LlmRuleEvaluator(RuleEvaluator):
                 clause_id=clause.id,
                 error=str(e),
             )
-            # Return None on error (graceful fallback)
             return None
 
     def _parse_v3_response(self, content: str) -> LlmEvaluationV3Response:
@@ -388,8 +368,8 @@ class LlmRuleEvaluator(RuleEvaluator):
         so the evaluation pipeline never hard-crashes on a bad LLM response.
         """
         try:
-            return parse_llm_json(content, LlmEvaluationV3Response)
-        except LLMSchemaError as e:
+            return LlmEvaluationV3Response.model_validate(json.loads(content))
+        except Exception as e:
             logger.warning(
                 "llm_response_parse_failed_v3",
                 rule_id=self.rule_id,
@@ -409,84 +389,24 @@ class LlmRuleEvaluator(RuleEvaluator):
         Returns:
             Finding si la regla es violada, None si no hay violación
         """
-        # Update both legacy and v0.3 metrics
-        self.evaluations_count += 1
-        self.metrics.evaluations_count += 1
-
-        logger.info(
-            "llm_evaluating_clause",
-            rule_id=self.rule_id,
-            clause_id=clause.id,
-            text_length=len(clause.text),
-        )
-
-        # Build prompt
-        prompt = self._build_evaluation_prompt(clause)
-        system_prompt = self._build_system_prompt()
-
-        # Make LLM request
-        request = AIRequest(
-            prompt=prompt,
-            task_type=AITaskType.COHERENCE_CHECK,  # Uses Haiku for speed
-            system_prompt=system_prompt,
-            low_budget_mode=self.low_budget_mode,
-            tenant_id=self.tenant_id,
-            use_cache=True,
-            temperature=0.0,  # Deterministic
-        )
-
-        try:
-            response = await self.wrapper.generate(request)
-            self.total_cost += response.cost_usd
-            self.metrics.total_cost_usd += response.cost_usd
-            self.metrics.llm_calls_count += 1
-
-            # Parse and validate against schema
-            result = self._parse_evaluation_response(response.content)
-
-            if result.rule_violated:
-                self.violations_found += 1
-                self.metrics.violations_found += 1
-                self.metrics._impact_sum += 1.0  # legacy v1 has no impact_score
-                self.metrics._confidence_sum += result.confidence
-
-                logger.info(
-                    "llm_rule_violation_detected",
-                    rule_id=self.rule_id,
-                    clause_id=clause.id,
-                    severity=result.severity,
-                )
-
-                return Finding(
-                    triggered_clause=clause,
-                    raw_data={
-                        "rule_id": self.rule_id,
-                        "rule_name": self.rule_name,
-                        "category": self.category,
-                        "severity": result.severity,
-                        "evidence": result.evidence.model_dump(),
-                        "confidence": result.confidence,
-                        "recommendation": result.recommendation,
-                        "model_used": response.model_used,
-                        "cached": response.cached,
-                    },
-                )
-
-            logger.debug(
-                "llm_rule_no_violation",
-                rule_id=self.rule_id,
-                clause_id=clause.id,
-            )
+        signal = await self.evaluate_v3_async(clause)
+        if signal is None:
             return None
-
-        except Exception as e:
-            logger.error(
-                "llm_evaluation_failed",
-                rule_id=self.rule_id,
-                clause_id=clause.id,
-                error=str(e),
-            )
-            raise
+        return Finding(
+            triggered_clause=clause,
+            raw_data={
+                "rule_id": signal.rule_id,
+                "rule_name": self.rule_name,
+                "category": signal.category,
+                "severity": signal.severity,
+                "evidence": {
+                    "quote": signal.quote,
+                    "explanation": signal.evidence_summary,
+                },
+                "confidence": signal.confidence,
+                "recommendation": signal.raw_data.get("recommendation", ""),
+            },
+        )
 
     def _build_system_prompt(self) -> str:
         """Construye el system prompt para la evaluación."""
@@ -497,7 +417,7 @@ Evaluar si una cláusula específica viola la siguiente regla de coherencia:
 
 REGLA: {self.rule_name}
 DESCRIPCIÓN: {self.rule_description}
-CATEGORÍA: {self.category}
+CATEGORÍA: {self.rule_category}
 
 PROCESO:
 1. Lee la cláusula cuidadosamente
@@ -548,8 +468,8 @@ Evalúa si esta cláusula viola la regla y responde en JSON:
     def _parse_evaluation_response(self, content: str) -> LlmEvaluationLegacyResponse:
         """Parse and Pydantic-validate the v1 LLM evaluation response."""
         try:
-            return parse_llm_json(content, LlmEvaluationLegacyResponse)
-        except LLMSchemaError as e:
+            return LlmEvaluationLegacyResponse.model_validate(json.loads(content))
+        except Exception as e:
             logger.warning(
                 "llm_response_parse_failed",
                 rule_id=self.rule_id,

@@ -65,6 +65,14 @@ def test_every_bundle_validates_against_schema() -> None:
         bundle = _load_bundle(entry.id)
         assert bundle.bundle_id == entry.id
         assert bundle.synthetic is True
+        assert bundle.score_check.value in {"required", "skip"}
+        if bundle.score_check.value == "required":
+            assert bundle.expected_score_range is not None
+            assert bundle.expected_score_range.reasoning
+        else:
+            assert bundle.expected_score_range is not None
+            assert bundle.expected_score_range.reasoning
+        assert bundle.expected_alerts
 
 
 def test_all_six_dimensions_are_covered_across_corpus() -> None:
@@ -138,6 +146,7 @@ def test_run_evals_ci_mode_exits_zero_on_clean_corpus(tmp_path: Path) -> None:
     report = json.loads(json_path.read_text(encoding="utf-8"))
     assert report["total_bundles"] == 15
     assert report["failed_bundles"] == 0
+    assert "aggregate_recall_pct" in report
     assert set(report["dimensions_covered"]) == {
         "Legal",
         "Quality",
@@ -146,6 +155,49 @@ def test_run_evals_ci_mode_exits_zero_on_clean_corpus(tmp_path: Path) -> None:
         "Cost",
         "Technical",
     }
+    for bundle_result in report["bundles"]:
+        assert "score" in bundle_result
+        assert "score_check" in bundle_result
+        assert "alert_recall_pct" in bundle_result
+        assert "generated_alerts" in bundle_result
+
+
+def test_run_evals_ci_mode_fails_on_impossible_score_range(tmp_path: Path) -> None:
+    """A score outside expected_score_range must fail the CI corpus command."""
+    import shutil
+
+    corpus_copy = tmp_path / "golden_corpus"
+    shutil.copytree(CORPUS_DIR, corpus_copy)
+    victim = corpus_copy / "bundles" / "BUNDLE-001.json"
+    data = json.loads(victim.read_text(encoding="utf-8"))
+    data["expected_score_range"] = {
+        "min": 99.9,
+        "max": 100.0,
+        "reasoning": "Intentional impossible range for regression test.",
+    }
+    victim.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    script = tmp_path / "run_evals_shim.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(EVALS_DIR)!r})\n"
+        "import run_evals\n"
+        f"run_evals.CORPUS_DIR = __import__('pathlib').Path({str(corpus_copy)!r})\n"
+        "run_evals.BUNDLES_DIR = run_evals.CORPUS_DIR / 'bundles'\n"
+        "run_evals.MANIFEST_PATH = run_evals.CORPUS_DIR / 'manifest.yaml'\n"
+        "sys.exit(run_evals.main(['--corpus', '--ci', '--output', "
+        f"{str(tmp_path / 'results')!r}]))\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(  # noqa: S603 - trusted local script
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "score" in result.stdout + result.stderr
+    assert "BUNDLE-001" in result.stdout + result.stderr
 
 
 def test_run_evals_ci_mode_reports_missing_bundle(tmp_path: Path) -> None:
