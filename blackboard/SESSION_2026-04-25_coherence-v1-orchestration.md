@@ -77,6 +77,12 @@ Wave D:  [6] OpenCode  ║  [7] Codex  ║  [8] Gemini              ← parallel
 Wave E:  [9] OpenCode                                           ← closing gate
 ```
 
+**Current status (2026-04-26)**:
+
+| Phase | Task | Status | Report |
+| ----- | ---- | ------ | ------ |
+| 9 | `TASK-COH-V1-09` | needs-review | `blackboard/coh-v1/PHASE-9-opencode-REPORT.md` |
+
 After Phase 1 lands and is reviewed, the orchestrator creates `coh-v1/consolidation` from `main` and all subsequent phase branches merge into it via PR. Final squash-merge of `coh-v1/consolidation` into `main` happens after Phase 9 + corpus-CI green.
 
 ---
@@ -567,12 +573,12 @@ Block conditions (orchestrator does not merge):
 
 | # | Phase | Agent | Branch | Status | PR | Report |
 |---|-------|-------|--------|--------|-----|--------|
-| 1 | Dead-code deletion | Codex | `coh-v1/phase-1-codex` | not started | — | — |
-| 2 | Pipeline consolidation | Gemini | `coh-v1/phase-2-gemini` | blocked on 1 | — | — |
-| 3 | LLMRulePort | Gemini | `coh-v1/phase-3-gemini` | blocked on 1 | — | — |
-| 4 | score_version migration | Codex | `coh-v1/phase-4-codex` | blocked on 1 | — | — |
-| 5 | Registry → 18 | OpenCode | `coh-v1/phase-5-opencode` | blocked on 2,3,4 | — | — |
+| 1 | Dead-code deletion | Codex | `coh-v1/phase-1-codex` | ✅ merged into `coh-v1/consolidation` @ `ce28d54b` (2026-04-25) | local | `blackboard/coh-v1/PHASE-1-codex-REPORT.md` |
+| 2 | Pipeline consolidation | Gemini | `coh-v1/phase-2-gemini` | needs-review (implemented locally by Codex @ 2026-04-25; tests partly blocked by local Postgres/mypy debt) | local | `blackboard/coh-v1/PHASE-2-gemini-REPORT.md` |
+| 3 | LLMRulePort | Gemini | `coh-v1/phase-3-gemini` | ✅ merged into `coh-v1/consolidation` (2026-04-26) | local | `blackboard/coh-v1/PHASE-3-opencode-REPORT.md` |
+| 4 | score_version migration | Codex | `coh-v1/phase-4-codex` | ✅ implemented locally (2026-04-25; DB verification blocked by local Postgres) | local | `blackboard/coh-v1/PHASE-4-codex-REPORT.md` |
+| 5 | Registry → 18 | OpenCode | `coh-v1/phase-5-opencode` | needs-review (implemented locally by Codex @ 2026-04-26; integration blocked by local Postgres/mypy debt) | local | `blackboard/coh-v1/PHASE-5-opencode-REPORT.md` |
 | 6 | Alert wiring + meta_alert | OpenCode | `coh-v1/phase-6-opencode` | blocked on 2,5 | — | — |
-| 7 | Golden corpus | Codex | `coh-v1/phase-7-codex` | blocked on 2,4,5 | — | — |
+| 7 | Golden corpus | Codex | `coh-v1/phase-7-codex` | needs-review (implemented locally @ 2026-04-26; 15/15 corpus bundles green, 100% alert recall) | local | `blackboard/coh-v1/PHASE-7-codex-REPORT.md` |
 | 8 | Telemetry | Gemini | `coh-v1/phase-8-gemini` | blocked on 2 | — | — |
 | 9 | UX + comms | OpenCode | `coh-v1/phase-9-opencode` | blocked on 4,6,7 | — | — |

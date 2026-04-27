@@ -32,6 +32,19 @@
       "description_contains": "Phase A milestone date in schedule exceeds contractual milestone"
     }
   ],
+  "expected_score_range": {
+    "min": 88.0,
+    "max": 96.0,
+    "reasoning": "Single medium schedule mismatch should reduce confidence but not imply severe project incoherence."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "SCHED-001",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "rail",
     "tags": ["milestone", "schedule-contract-mismatch"]

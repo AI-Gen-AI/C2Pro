@@ -38,6 +38,19 @@
       "description_contains": "Quality Plan lacks acceptance criteria for commissioning tests"
     }
   ],
+  "expected_score_range": {
+    "min": 88.0,
+    "max": 96.0,
+    "reasoning": "Single medium quality-plan gap should lower the score modestly."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "QUAL-001",
+      "min_count": 1,
+      "severity": "medium"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "power plant",
     "tags": ["quality-plan", "missing-criteria"]

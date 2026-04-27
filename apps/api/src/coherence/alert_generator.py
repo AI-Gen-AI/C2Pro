@@ -11,7 +11,35 @@ from src.analysis.domain.risk_categories import normalize_category
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
 from src.shared_kernel.enums import AlertSeverity, AlertType
 
+template_locale_default = "es"  # TASK-COH-V1-06: Bilingualization
+
+
+def get_template(rule_id: str, locale: str | None = None) -> str:
+    """Get template for rule_id, optionally in specified locale."""
+    loc = locale or template_locale_default
+    templates = TEMPLATES_EN if loc == "en" else TEMPLATES
+    return templates.get(rule_id, TEMPLATES.get(rule_id, ""))
+
+
 TEMPLATES: dict[str, str] = {
+    "DET-SCP-DELIVERABLES": "El alcance menciona entregables o trabajos sin definicion estructurada verificable.",
+    "DET-CRS-SCPBUD": "Hay entregables de alcance sin partida presupuestaria asociada.",
+    "DET-BUD-OVERRUN": "El presupuesto actual supera el presupuesto planificado.",
+    "DET-BUD-LINEITEM": "La partida presupuestaria no cuadra con precio unitario por cantidad.",
+    "DET-TIM-STATUS": "El cronograma tiene estado de riesgo o retraso.",
+    "DET-TIM-DURATION": "La duracion del hito o actividad es incoherente.",
+    "DET-TEC-SPEC": "La clausula tecnica no referencia una especificacion o norma verificable.",
+    "DET-TEC-BOMBUDGET": "Hay items de BOM sin partida presupuestaria asociada.",
+    "DET-LEG-PENALTY": "La clausula de penalizacion expone responsabilidad no acotada o excesiva.",
+    "DET-LEG-NOTICE": "El periodo de notificacion contractual esta fuera de rango.",
+    "DET-QUA-STANDARD": "La clausula de calidad usa estandares genericos sin referencia especifica.",
+    "DET-QUA-INSPECT": "La clausula de inspeccion no define frecuencia o metodo.",
+    "R-SCOPE-CLARITY-01": "El alcance contiene ambiguedades que impiden validar entregables.",
+    "R-PAYMENT-CLARITY-01": "Las condiciones de pago no especifican montos, plazos o condiciones suficientes.",
+    "R-SCHEDULE-CLARITY-01": "Los plazos o hitos del cronograma son ambiguos o incompletos.",
+    "R-TECHNICAL-SPEC-CLARITY-01": "La especificacion tecnica no permite verificar cumplimiento de forma objetiva.",
+    "R-RESPONSIBILITY-01": "Las responsabilidades no estan asignadas a una parte especifica.",
+    "R-QUALITY-STANDARDS-01": "Los estandares de calidad no estan definidos con referencias verificables.",
     "R14": (
         "El material '{material}' tiene un Lead Time de {lead_time} dias, "
         "lo que retrasa la entrega en {delay_days} dias (fecha requerida: {needed_date})."
@@ -25,9 +53,28 @@ TEMPLATES: dict[str, str] = {
     "R15": "El item del BOM '{item_name}' no tiene partida presupuestaria asociada.",
     "R20": "La tarea '{task_name}' no tiene responsable asignado.",
     "R6": "Falta una licencia o permiso requerido en el contrato.",
+    "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",  # TBD-EN
 }
 
 RULE_TITLES: dict[str, str] = {
+    "DET-SCP-DELIVERABLES": "Entregables de alcance incompletos",
+    "DET-CRS-SCPBUD": "Alcance sin cobertura presupuestaria",
+    "DET-BUD-OVERRUN": "Sobrecoste presupuestario",
+    "DET-BUD-LINEITEM": "Error aritmetico de partida",
+    "DET-TIM-STATUS": "Cronograma en riesgo",
+    "DET-TIM-DURATION": "Duracion incoherente",
+    "DET-TEC-SPEC": "Especificacion tecnica incompleta",
+    "DET-TEC-BOMBUDGET": "BOM sin presupuesto",
+    "DET-LEG-PENALTY": "Penalizacion contractual riesgosa",
+    "DET-LEG-NOTICE": "Periodo de notificacion fuera de rango",
+    "DET-QUA-STANDARD": "Estandar de calidad generico",
+    "DET-QUA-INSPECT": "Inspeccion incompleta",
+    "R-SCOPE-CLARITY-01": "Alcance ambiguo",
+    "R-PAYMENT-CLARITY-01": "Pagos ambiguos",
+    "R-SCHEDULE-CLARITY-01": "Cronograma ambiguo",
+    "R-TECHNICAL-SPEC-CLARITY-01": "Especificacion tecnica ambigua",
+    "R-RESPONSIBILITY-01": "Responsabilidad ambigua",
+    "R-QUALITY-STANDARDS-01": "Calidad ambigua",
     "R14": "Orden de material critica retrasada",
     "R2": "Desviacion presupuestaria",
     "R02": "Desviacion presupuestaria",
@@ -35,9 +82,28 @@ RULE_TITLES: dict[str, str] = {
     "R15": "Material sin presupuesto",
     "R20": "Tarea sin responsable",
     "R6": "Permisos contractuales incompletos",
+    "AUDIT_INCOMPLETE": "Audit incomplete — full triplet not provided",  # TBD-EN
 }
 
 RULE_SEVERITIES: dict[str, AlertSeverity] = {
+    "DET-SCP-DELIVERABLES": AlertSeverity.MEDIUM,
+    "DET-CRS-SCPBUD": AlertSeverity.HIGH,
+    "DET-BUD-OVERRUN": AlertSeverity.HIGH,
+    "DET-BUD-LINEITEM": AlertSeverity.HIGH,
+    "DET-TIM-STATUS": AlertSeverity.HIGH,
+    "DET-TIM-DURATION": AlertSeverity.CRITICAL,
+    "DET-TEC-SPEC": AlertSeverity.MEDIUM,
+    "DET-TEC-BOMBUDGET": AlertSeverity.HIGH,
+    "DET-LEG-PENALTY": AlertSeverity.HIGH,
+    "DET-LEG-NOTICE": AlertSeverity.HIGH,
+    "DET-QUA-STANDARD": AlertSeverity.MEDIUM,
+    "DET-QUA-INSPECT": AlertSeverity.MEDIUM,
+    "R-SCOPE-CLARITY-01": AlertSeverity.HIGH,
+    "R-PAYMENT-CLARITY-01": AlertSeverity.HIGH,
+    "R-SCHEDULE-CLARITY-01": AlertSeverity.HIGH,
+    "R-TECHNICAL-SPEC-CLARITY-01": AlertSeverity.HIGH,
+    "R-RESPONSIBILITY-01": AlertSeverity.MEDIUM,
+    "R-QUALITY-STANDARDS-01": AlertSeverity.MEDIUM,
     "R14": AlertSeverity.CRITICAL,
     "R12": AlertSeverity.CRITICAL,
     "R2": AlertSeverity.HIGH,
@@ -45,6 +111,7 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "R15": AlertSeverity.HIGH,
     "R20": AlertSeverity.MEDIUM,
     "R6": AlertSeverity.MEDIUM,
+    "AUDIT_INCOMPLETE": AlertSeverity.MEDIUM,
 }
 
 SUMMARY_TEMPLATES: dict[str, str] = {
@@ -52,6 +119,12 @@ SUMMARY_TEMPLATES: dict[str, str] = {
     "R14": "Se detectaron {count} materiales con riesgo de lead time. Ejemplos: {examples}.",
     "R15": "Se detectaron {count} items del BOM sin partida presupuestaria asociada. Ejemplos: {examples}.",
     "R20": "Se detectaron {count} tareas sin responsable asignado. Ejemplos: {examples}.",
+}
+
+# TASK-COH-V1-06: English templates for bilingualization (TBD-EN = skeleton only)
+TEMPLATES_EN: dict[str, str] = {
+    "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",
+    # TBD-EN: Add full translations here as they're completed
 }
 
 
@@ -261,6 +334,24 @@ class AlertGenerator:
         see a single taxonomy.
         """
         rule_to_raw: dict[str, str] = {
+            "DET-SCP-DELIVERABLES": "SCOPE",
+            "DET-CRS-SCPBUD": "SCOPE",
+            "DET-BUD-OVERRUN": "BUDGET",
+            "DET-BUD-LINEITEM": "BUDGET",
+            "DET-TIM-STATUS": "SCHEDULE",
+            "DET-TIM-DURATION": "SCHEDULE",
+            "DET-TEC-SPEC": "TECHNICAL",
+            "DET-TEC-BOMBUDGET": "TECHNICAL",
+            "DET-LEG-PENALTY": "LEGAL",
+            "DET-LEG-NOTICE": "LEGAL",
+            "DET-QUA-STANDARD": "QUALITY",
+            "DET-QUA-INSPECT": "QUALITY",
+            "R-SCOPE-CLARITY-01": "SCOPE",
+            "R-PAYMENT-CLARITY-01": "BUDGET",
+            "R-SCHEDULE-CLARITY-01": "SCHEDULE",
+            "R-TECHNICAL-SPEC-CLARITY-01": "TECHNICAL",
+            "R-RESPONSIBILITY-01": "LEGAL",
+            "R-QUALITY-STANDARDS-01": "QUALITY",
             "R12": "SCHEDULE",
             "R14": "SCHEDULE",
             "R2": "BUDGET",

@@ -32,7 +32,7 @@ def test_checkpoint_load_errors_are_recorded(monkeypatch) -> None:
 
     monitoring.record_hitl_checkpoint_load_error("checkpoint_not_found")
 
-    assert metric.labels_calls == [{"error_type": "checkpoint_not_found"}]
+    assert metric.labels_calls == [{"reason": "checkpoint_not_found"}]
     assert metric.increments == [1.0]
 
 

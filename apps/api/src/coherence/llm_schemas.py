@@ -139,7 +139,8 @@ class MultiClauseCoherenceLLMResponse(BaseModel):
     """
 
     cross_clause_issues: list[CrossClauseIssue] = Field(default_factory=list)
-    overall_coherence_score: int = Field(default=100, ge=0, le=100)
+    overall_coherence_score: int | None = Field(default=None, ge=0, le=100)
+    reason: str | None = Field(default=None)
     summary: str = Field(default="")
 
 

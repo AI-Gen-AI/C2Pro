@@ -1,14 +1,22 @@
 """
-Unit tests for coherence_scorer_node.
+Unit tests for coherence_scorer_node (LEGACY).
 
-Tests that the coherence scorer properly derives compliance flags
-from extracted risks and passes them to the coherence calculation service.
+DEPRECATED: TASK-COH-V1-02 rewrote N8 to delegate to the canonical
+`/coherence/evaluate` 7-node subgraph via `evaluate_coherence_async`.
+The pre-v1 path through `build_coherence_calculation_service` no longer
+runs in N8, so these flag-based assertions no longer match production.
+
+Replacement: tests/unit/analysis/test_coherence_scorer_node_canonical_subgraph.py
 """
 
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Legacy N8 flag-based tests; replaced by test_coherence_scorer_node_canonical_subgraph.py (TASK-COH-V1-02)."
+)
 
 
 @pytest.fixture

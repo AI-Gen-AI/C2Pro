@@ -214,7 +214,10 @@ class CoherenceResult(BaseModel):
     Represents the complete result of a coherence evaluation, including alerts and the final score.
     """
 
-    overall_score: float = Field(..., description="The overall calculated coherence score for the project.")
+    overall_score: float | None = Field(
+        ...,
+        description="The overall calculated coherence score for the project, or null when evidence is insufficient.",
+    )
     alerts: list[Alert] = Field(..., description="List of alerts generated during the evaluation.")
     category_breakdown: list[CategoryBreakdown] = Field(
         default_factory=list,
@@ -223,6 +226,18 @@ class CoherenceResult(BaseModel):
     calculated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp when the score was calculated."
+    )
+    score_version: str = Field(
+        default="v0_flag_based",
+        description="Immutable scoring algorithm version used for this result.",
+    )
+    score_reason: str | None = Field(
+        default=None,
+        description="Machine-readable reason when a score is unavailable or version-specific handling applies.",
+    )
+    score_missing_dimensions: list[str] | None = Field(
+        default=None,
+        description="Dimensions that prevented a complete score, when applicable.",
     )
 
 
@@ -235,11 +250,11 @@ class EnrichedCoherenceResult(BaseModel):
     """
 
     # Core result (same as CoherenceResult)
-    overall_score: float = Field(
+    overall_score: float | None = Field(
         ...,
         ge=0.0,
         le=100.0,
-        description="The granular coherence score (5.0-97.0 typical range)"
+        description="The granular coherence score (5.0-97.0 typical range), or null when evidence is insufficient"
     )
     alerts: list[Alert] = Field(
         default_factory=list,
@@ -252,6 +267,18 @@ class EnrichedCoherenceResult(BaseModel):
     calculated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp of calculation"
+    )
+    score_version: str = Field(
+        default="v0_flag_based",
+        description="Immutable scoring algorithm version used for this result.",
+    )
+    score_reason: str | None = Field(
+        default=None,
+        description="Machine-readable reason when a score is unavailable or version-specific handling applies.",
+    )
+    score_missing_dimensions: list[str] | None = Field(
+        default=None,
+        description="Dimensions that prevented a complete score, when applicable.",
     )
 
     # v0.3 diagnostic fields

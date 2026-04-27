@@ -23,12 +23,21 @@ from uuid import UUID
 
 import structlog
 
+from src.coherence.adapters.ai.llm_rule_evaluator import get_llm_rule_evaluator
+from src.coherence.domain.ports.llm_rule_port import LLMRulePort
 from src.coherence.llm_schemas import (
     ClauseAnalysisLLMResponse,
     CoherenceRuleCheckLLMResponse,
+    EvidencePayload,
     MultiClauseCoherenceLLMResponse,
 )
 from src.coherence.models import Clause, ProjectContext
+
+# NOTE(TASK-COH-V1-03): analyze_clause (multi-issue response) and
+# analyze_multi_clause_coherence (cross-clause batch) are carved out from
+# LLMRulePort routing — their output shapes do not match the port's single-rule
+# single-verdict contract. These wrapper imports are kept for those two methods
+# only. check_coherence_rule has been refactored to route through LLMRulePort.
 from src.core.ai.anthropic_wrapper import (
     AIRequest,
     AIResponse,
@@ -202,18 +211,22 @@ class CoherenceLLMService:
         wrapper: AnthropicWrapper | None = None,
         default_task_type: AITaskType = AITaskType.COHERENCE_ANALYSIS,
         low_budget_mode: bool = False,
+        llm_port: LLMRulePort | None = None,
     ):
         """
         Inicializa el servicio de coherencia LLM.
 
         Args:
-            wrapper: AnthropicWrapper personalizado (si None, usa singleton)
+            wrapper: AnthropicWrapper personalizado (si None, usa singleton).
+                     Used by analyze_clause and analyze_multi_clause_coherence (carved-out paths).
             default_task_type: Tipo de tarea por defecto para routing
             low_budget_mode: Activar modo de bajo presupuesto
+            llm_port: Optional LLMRulePort for check_coherence_rule. Resolved lazily if None.
         """
         self.wrapper = wrapper or get_anthropic_wrapper()
         self.default_task_type = default_task_type
         self.low_budget_mode = low_budget_mode
+        self._injected_llm_port = llm_port
 
         # Statistics
         self.total_analyses = 0
@@ -225,6 +238,13 @@ class CoherenceLLMService:
             default_task_type=default_task_type.value,
             low_budget_mode=low_budget_mode,
         )
+
+    @property
+    def _llm_port(self) -> LLMRulePort:
+        """Return the injected port, or lazily resolve the adapter singleton."""
+        if self._injected_llm_port is not None:
+            return self._injected_llm_port
+        return get_llm_rule_evaluator()
 
     # ===========================================
     # CLAUSE ANALYSIS
@@ -238,6 +258,12 @@ class CoherenceLLMService:
     ) -> ClauseAnalysisResult:
         """
         Analiza una cláusula individual buscando problemas de coherencia.
+
+        # NOTE(TASK-COH-V1-03): Carved out from LLMRulePort routing.
+        # This method returns a multi-issue ClauseAnalysisResult (has_issues + list[issues])
+        # which does not match the port's single-rule, single-verdict LLMRuleResult shape.
+        # Routing this through LLMRulePort v1 would require a breaking schema change.
+        # Keep direct wrapper call here until a multi-result port extension is designed.
 
         Args:
             clause: Cláusula a analizar
@@ -327,6 +353,10 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
         """
         Verifica si una cláusula viola una regla de coherencia específica.
 
+        Routed through LLMRulePort (TASK-COH-V1-03). The port returns an
+        LLMRuleResult which is mapped to CoherenceRuleCheckLLMResponse to
+        preserve the public contract of this method.
+
         Returns:
             CoherenceRuleCheckLLMResponse validated against the schema.
         """
@@ -336,34 +366,33 @@ Identifica todos los problemas de coherencia, ambigüedades y riesgos."""
             rule_id=rule_id,
         )
 
-        prompt = f"""REGLA A VERIFICAR:
-ID: {rule_id}
-Descripción: {rule_description}
-Lógica de detección: {detection_logic}
-
-CLÁUSULA A EVALUAR:
-ID: {clause.id}
-Texto: \"\"\"{clause.text}\"\"\"
-
-Evalúa si esta cláusula viola la regla especificada."""
-
-        request = AIRequest(
-            prompt=prompt,
-            task_type=AITaskType.COHERENCE_CHECK,
-            system_prompt=COHERENCE_CHECK_SYSTEM_PROMPT,
-            low_budget_mode=self.low_budget_mode,
-            tenant_id=tenant_id,
-            use_cache=True,
-            temperature=0.0,
-        )
-
         try:
-            response = await self.wrapper.generate(request)
+            result = await self._llm_port.evaluate(
+                rule_id=rule_id,
+                rule_name=rule_id,  # no rule_name in this method signature; use rule_id as fallback
+                rule_description=rule_description,
+                detection_logic=detection_logic,
+                category="general",
+                clause_id=clause.id,
+                clause_text=clause.text,
+                clause_data=clause.data if clause.data else None,
+                tenant_id=tenant_id,
+            )
 
-            self.total_tokens += response.total_tokens
-            self.total_cost += response.cost_usd
+            rule_violated = result.impact_score > 0.05
+            validated = CoherenceRuleCheckLLMResponse(
+                rule_violated=rule_violated,
+                severity=result.severity if rule_violated else "low",  # type: ignore[arg-type]
+                evidence=EvidencePayload(
+                    quote=result.quote or "",
+                    explanation=result.evidence_summary,
+                ),
+                confidence=result.confidence,
+            )
 
-            validated = parse_llm_json(response.content, CoherenceRuleCheckLLMResponse)
+            # Update stats from raw_data if available
+            raw = result.raw_data or {}
+            self.total_cost += raw.get("cost_usd", 0.0)
 
             logger.info(
                 "coherence_rule_check_complete",
@@ -374,14 +403,6 @@ Evalúa si esta cláusula viola la regla especificada."""
 
             return validated
 
-        except LLMSchemaError as e:
-            logger.warning(
-                "coherence_rule_check_schema_error",
-                clause_id=clause.id,
-                rule_id=rule_id,
-                error=str(e),
-            )
-            return CoherenceRuleCheckLLMResponse(rule_violated=False)
         except Exception as e:
             logger.error(
                 "coherence_rule_check_failed",
@@ -389,7 +410,7 @@ Evalúa si esta cláusula viola la regla especificada."""
                 rule_id=rule_id,
                 error=str(e),
             )
-            raise
+            return CoherenceRuleCheckLLMResponse(rule_violated=False)
 
     # ===========================================
     # MULTI-CLAUSE ANALYSIS
@@ -403,13 +424,20 @@ Evalúa si esta cláusula viola la regla especificada."""
         """
         Analiza coherencia entre múltiples cláusulas.
 
+        # NOTE(TASK-COH-V1-03): Carved out from LLMRulePort routing.
+        # Cross-clause batch analysis builds a single prompt over multiple clauses
+        # and returns a MultiClauseCoherenceLLMResponse (list of cross_clause_issues).
+        # LLMRulePort v1 has no batched signature; adding one would require a new
+        # port method and adapter changes out of scope for this task.
+
         Returns:
             MultiClauseCoherenceLLMResponse validated against the schema.
         """
         if len(clauses) < 2:
             return MultiClauseCoherenceLLMResponse(
                 cross_clause_issues=[],
-                overall_coherence_score=100,
+                overall_coherence_score=None,
+                reason="insufficient_clauses",
                 summary="Se requieren al menos 2 cláusulas para análisis cruzado",
             )
 

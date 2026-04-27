@@ -73,5 +73,7 @@ jobs:
           print(f"- **Failed:** {data['failed_bundles']}")
           print(f"- **Dimensions covered:** {', '.join(data['dimensions_covered'])}")
           print(f"- **Expected issues total:** {data['total_expected_issues']}")
+          print(f"- **Expected alerts total:** {data['total_expected_alerts']}")
+          print(f"- **Alert recall:** {data['aggregate_recall_pct']}%")
           PY
           fi

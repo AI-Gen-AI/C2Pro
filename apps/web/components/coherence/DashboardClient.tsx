@@ -128,6 +128,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   const [view, setView] = useState<ViewMode>("breakdown");
   const [layout, setLayout] = useState<LayoutMode>("overview");
   const [template, setTemplate] = useState<TemplateMode>("executive");
+  const score = data.coherence_score ?? 0;
 
   const barData = Object.entries(data.sub_scores).map(([k, score]) => ({
     name: CATEGORY_LABELS[k] ?? k,
@@ -194,7 +195,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
     <div class="summary">
       <div class="card">
         <div class="label">Coherence Score</div>
-        <div class="value">${data.coherence_score}</div>
+        <div class="value">${score}</div>
       </div>
       <div class="card">
         <div class="label">Documents</div>
@@ -234,7 +235,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   <Worksheet ss:Name="Dashboard">
     <Table>
       <Row><Cell><Data ss:Type="String">Project</Data></Cell><Cell><Data ss:Type="String">${escapeXml(projectName)}</Data></Cell></Row>
-      <Row><Cell><Data ss:Type="String">Coherence Score</Data></Cell><Cell><Data ss:Type="Number">${data.coherence_score}</Data></Cell></Row>
+      <Row><Cell><Data ss:Type="String">Coherence Score</Data></Cell><Cell><Data ss:Type="Number">${score}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Documents</Data></Cell><Cell><Data ss:Type="Number">${data.document_count}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Alerts</Data></Cell><Cell><Data ss:Type="Number">${data.alert_count}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Category</Data></Cell><Cell><Data ss:Type="String">Score</Data></Cell><Cell><Data ss:Type="String">Weight</Data></Cell></Row>
@@ -360,7 +361,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
         )}
       >
         <CoherenceGauge
-          score={data.coherence_score}
+          score={score}
           documentsAnalyzed={data.document_count}
           dataPointsChecked={0}
           calculatedAt={

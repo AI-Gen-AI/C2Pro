@@ -116,6 +116,8 @@ class EvaluationConfig:
     parallel_evaluation: bool = True
     include_cross_clause: bool = True
     include_rag_similarity: bool = True
+    poor_extraction_quality: bool = False
+    missing_dimensions: list[str] | None = None
     llm_batch_size: int = 5
     similarity_threshold: float = 0.85
     max_cross_pairs: int = 20
@@ -153,7 +155,7 @@ class CoherenceGraphState:
 
         # Scoring (from scoring_arbiter)
         all_signals: Combined signals from all sources
-        score: Final coherence score (5.0-97.0)
+        score: Final coherence score (5.0-97.0), or None when evidence is insufficient
         diagnostics: Detailed scoring breakdown
 
         # Output (from format_output)
@@ -188,7 +190,7 @@ class CoherenceGraphState:
 
     # Scoring output
     all_signals: list[FindingSignal] = field(default_factory=list)
-    score: float = 100.0
+    score: float | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
     # Final output

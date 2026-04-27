@@ -32,6 +32,19 @@
       "description_contains": "liability cap and subcontractor liability regime are missing"
     }
   ],
+  "expected_score_range": {
+    "min": 80.0,
+    "max": 90.0,
+    "reasoning": "Single high legal exposure should materially lower the score while remaining isolated."
+  },
+  "expected_alerts": [
+    {
+      "rule_id": "LEG-001",
+      "min_count": 1,
+      "severity": "high"
+    }
+  ],
+  "score_check": "required",
   "metadata": {
     "sector": "offices",
     "tags": ["missing-clause", "liability"]
