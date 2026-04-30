@@ -131,8 +131,9 @@ class TestSLACalculatorCalculateDueAt:
 class TestSLACalculatorCalculate:
     """Tests for calculate method with full SLA information."""
 
+    @freeze_time("2026-04-08T12:00:00+00:00")
     def test_calculate_not_overdue(self) -> None:
-        """Test calculation for alert that is not yet overdue."""
+        """TS-UD-ALR-SLA-001: Test calculation for alert that is not yet overdue."""
         created_at = datetime.now(UTC) - timedelta(hours=1)
         
         result = SLACalculator.calculate("critical", created_at)
@@ -142,8 +143,9 @@ class TestSLACalculatorCalculate:
         assert result.hours_remaining == 1
         assert result.is_overdue is False
 
+    @freeze_time("2026-04-08T12:00:00+00:00")
     def test_calculate_overdue(self) -> None:
-        """Test calculation for alert that is overdue."""
+        """TS-UD-ALR-SLA-001: Test calculation for alert that is overdue."""
         created_at = datetime.now(UTC) - timedelta(hours=3)
         
         result = SLACalculator.calculate("critical", created_at)

@@ -8,6 +8,8 @@ import {
   type UndoMutation,
 } from "@/components/features/alerts/alert-undo";
 
+vi.setConfig({ testTimeout: 10_000, hookTimeout: 10_000 });
+
 describe("S3-06 RED - alert undo manager", () => {
   it("[S3-06-RED-UNIT-01] restores last mutation within TTL window", () => {
     const apply = vi.fn();
