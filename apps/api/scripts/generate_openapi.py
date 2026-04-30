@@ -25,7 +25,7 @@ def _ensure_env_defaults() -> None:
 
 
 def main() -> None:
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]
     api_root = project_root / "apps" / "api"
     sys.path.insert(0, str(api_root))
 
@@ -43,10 +43,14 @@ def main() -> None:
 
     out_path = project_root / "docs" / "api" / "openapi.yaml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        yaml.safe_dump(openapi, sort_keys=False, allow_unicode=False), encoding="utf-8"
-    )
-    print(f"wrote {out_path}")
+    yaml_output = yaml.safe_dump(openapi, sort_keys=False, allow_unicode=False)
+    print(yaml_output)
+    try:
+        out_path.write_text(yaml_output, encoding="utf-8")
+    except PermissionError:
+        print(f"skipped write {out_path} (permission denied)")
+    else:
+        print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":
