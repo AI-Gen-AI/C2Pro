@@ -146,6 +146,22 @@ def get_version() -> str:
 try:
     from prometheus_client import Counter, Gauge, Histogram, Info
 
+    class _CheckpointLoadErrorCounter:
+        """TS-BCK-032-001: Compatibility wrapper for legacy error_type labels."""
+
+        def __init__(self) -> None:
+            self._metric = Counter(
+                "c2pro_hitl_checkpoint_load_errors_total",
+                "Failed LangGraph checkpoint loads during HITL resume",
+                ["reason"],
+            )
+
+        def labels(self, **labels: str) -> Any:
+            reason = labels.get("reason") or labels.get("error_type")
+            if reason is None:
+                return self._metric.labels(**labels)
+            return self._metric.labels(reason=reason)
+
     # App info
     APP_INFO = Info("c2pro_app", "Application information")
     APP_INFO.info(
@@ -346,11 +362,7 @@ try:
 
     # TASK-BCK-032: Named error counters (complement the generic HITL_RESUME_ERRORS
     # by splitting the two most critical failure modes reviewers page on).
-    HITL_CHECKPOINT_LOAD_ERRORS = Counter(
-        "c2pro_hitl_checkpoint_load_errors_total",
-        "Failed LangGraph checkpoint loads during HITL resume",
-        ["reason"],
-    )
+    HITL_CHECKPOINT_LOAD_ERRORS = _CheckpointLoadErrorCounter()
 
     HITL_WORKFLOW_RESUME_ERRORS = Counter(
         "c2pro_hitl_workflow_resume_errors_total",
@@ -441,7 +453,7 @@ _hitl_reject_counts: dict[str, int] = defaultdict(int)
 def record_hitl_checkpoint_load_error(reason: str) -> None:
     """Record a failed checkpoint load (not_found, db_error, etc.)."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
-        HITL_CHECKPOINT_LOAD_ERRORS.labels(reason=reason).inc()
+        HITL_CHECKPOINT_LOAD_ERRORS.labels(error_type=reason).inc()
     _datadog_increment("c2pro.hitl.checkpoint_load_errors", tags=[f"reason:{reason}"])
 
 
