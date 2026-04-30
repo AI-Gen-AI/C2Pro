@@ -2,9 +2,21 @@
  * Test Suite ID: S3-04
  * Roadmap Reference: S3-04 Alert Review Center + approve/reject modal
  */
+<<<<<<< HEAD
+=======
+import { act } from "react";
+>>>>>>> 39961be9 (fix(tests): TASK-QA-077 + TASK-1480 — flake stabilization)
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
 import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
+
+vi.setConfig({ testTimeout: 10_000, hookTimeout: 10_000 });
+
+function fireInAct(action: () => void) {
+  act(() => {
+    action();
+  });
+}
 
 describe("S3-04 RED - AlertReviewCenter", () => {
   it("[S3-04-RED-UNIT-01] renders review table with required columns", () => {
@@ -48,7 +60,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /approve a-1/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /approve a-1/i })));
 
     expect(screen.getByRole("dialog", { name: /approve alert/i })).toBeInTheDocument();
     expect(screen.getByTestId("alert-modal-context")).toHaveTextContent("Delay penalty mismatch");
@@ -72,14 +84,16 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /reject a-2/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /reject a-2/i })));
 
     const rejectButton = screen.getByRole("button", { name: /confirm reject/i });
     expect(rejectButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/rejection reason/i), {
-      target: { value: "Insufficient evidence and false positive" },
-    });
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/rejection reason/i), {
+        target: { value: "Insufficient evidence and false positive" },
+      }),
+    );
 
     expect(rejectButton).toBeEnabled();
   });
@@ -101,14 +115,18 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /edit a-3/i }));
-    fireEvent.change(screen.getByLabelText(/title/i), {
-      target: { value: "Updated warranty language mismatch" },
-    });
-    fireEvent.change(screen.getByLabelText(/severity/i), {
-      target: { value: "high" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /edit a-3/i })));
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/title/i), {
+        target: { value: "Updated warranty language mismatch" },
+      }),
+    );
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/severity/i), {
+        target: { value: "high" },
+      }),
+    );
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /save changes/i })));
 
     expect(screen.getByRole("row", { name: /updated warranty language mismatch/i })).toHaveTextContent(
       /high/i,
@@ -132,13 +150,13 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /delete a-4/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /delete a-4/i })));
 
     expect(screen.getByRole("dialog", { name: /delete alert/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm delete/i })).toBeEnabled();
     expect(screen.getByRole("row", { name: /bid timeline conflict/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /confirm delete/i })));
     expect(screen.queryByRole("row", { name: /bid timeline conflict/i })).not.toBeInTheDocument();
   });
 
@@ -161,12 +179,12 @@ describe("S3-04 RED - AlertReviewCenter", () => {
 
     const trigger = screen.getByRole("button", { name: /approve a-5/i });
     trigger.focus();
-    fireEvent.click(trigger);
+    fireInAct(() => fireEvent.click(trigger));
 
     const dialog = screen.getByRole("dialog", { name: /approve alert/i });
     expect(dialog).toHaveAttribute("aria-modal", "true");
 
-    fireEvent.keyDown(dialog, { key: "Escape" });
+    fireInAct(() => fireEvent.keyDown(dialog, { key: "Escape" }));
     expect(screen.queryByRole("dialog", { name: /approve alert/i })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
@@ -188,20 +206,24 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /resolve a-6/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /resolve a-6/i })));
 
     const resolveButton = screen.getByRole("button", { name: /confirm resolve/i });
     expect(screen.getByLabelText(/root cause/i)).toBeInTheDocument();
     expect(resolveButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/resolution notes/i), {
-      target: { value: "Contract amendment issued and workflow updated." },
-    });
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/resolution notes/i), {
+        target: { value: "Contract amendment issued and workflow updated." },
+      }),
+    );
     expect(resolveButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/root cause/i), {
-      target: { value: "scope_change" },
-    });
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/root cause/i), {
+        target: { value: "scope_change" },
+      }),
+    );
     expect(resolveButton).toBeEnabled();
   });
 
@@ -222,15 +244,17 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /resolve a-7/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /resolve a-7/i })));
 
     expect(screen.queryByLabelText(/root cause/i)).not.toBeInTheDocument();
     const resolveButton = screen.getByRole("button", { name: /confirm resolve/i });
     expect(resolveButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/resolution notes/i), {
-      target: { value: "Reviewed with owner and marked resolved." },
-    });
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/resolution notes/i), {
+        target: { value: "Reviewed with owner and marked resolved." },
+      }),
+    );
 
     expect(resolveButton).toBeEnabled();
   });
@@ -275,9 +299,11 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       expect.stringContaining("Low notice wording"),
     ]);
 
-    fireEvent.change(screen.getByLabelText(/status filter/i), {
-      target: { value: "pending" },
-    });
+    fireInAct(() =>
+      fireEvent.change(screen.getByLabelText(/status filter/i), {
+        target: { value: "pending" },
+      }),
+    );
 
     expect(screen.queryByText(/critical ld cap conflict/i)).not.toBeInTheDocument();
     expect(screen.getByText(/high budget exposure/i)).toBeInTheDocument();
@@ -306,7 +332,7 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /copy message a-copy/i }));
+    fireInAct(() => fireEvent.click(screen.getByRole("button", { name: /copy message a-copy/i })));
 
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("AUDIT_INCOMPLETE: missing schedule and budget"),
