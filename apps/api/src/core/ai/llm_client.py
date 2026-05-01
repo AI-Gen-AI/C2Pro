@@ -30,8 +30,12 @@ from anthropic.types import Message
 from src.config import settings
 from src.core.ai.model_router import ModelRouter, ModelTier
 from src.core.ai.token_counter import get_token_counter
+from src.core.observability.langsmith_decorator import traced_llm_call
 from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
+from src.core.ai.langsmith_client import LangSmithClient
+from src.core.ai.usage_logger import AIUsageLogger
+
 
 logger = structlog.get_logger()
 
@@ -97,6 +101,7 @@ class LLMRequest:
     # Request tracking
     request_id: str | None = None
     tenant_id: UUID | None = None
+    project_id: UUID | None = None
     task_type: str | None = None
 
     def __post_init__(self):
@@ -207,6 +212,10 @@ class LLMClient:
         self.client = Anthropic(api_key=self.api_key, timeout=timeout_seconds)
         self.model_router = ModelRouter()
 
+        # Observability clients
+        self.langsmith_client = LangSmithClient()
+        self.usage_logger = AIUsageLogger()
+
         # Circuit breaker (using centralized resilience infrastructure)
         self.circuit_breaker = self._init_circuit_breaker() if enable_circuit_breaker else None
 
@@ -221,6 +230,7 @@ class LLMClient:
             timeout_seconds=timeout_seconds,
             circuit_breaker_enabled=enable_circuit_breaker,
         )
+
 
     def _init_circuit_breaker(self):
         """Initialize circuit breaker using centralized resilience infrastructure."""
@@ -247,6 +257,7 @@ class LLMClient:
     # MAIN METHOD
     # ===========================================
 
+    @traced_llm_call(task_type="llm_generation")
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """
         Genera respuesta del LLM con retry automático.
