@@ -6,9 +6,13 @@ import os
 from dataclasses import dataclass
 from typing import Any
 import functools
+
+import structlog
 from langsmith import Client as NativeLangSmithClient
 from langsmith.run_helpers import get_current_run_tree
 from langsmith.schemas import Run
+
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -30,6 +34,30 @@ class LangSmithConfig:
             project_name=project_name,
             tracing_enabled=tracing_enabled,
         )
+
+
+LLM_SPAN_ATTRIBUTE_ALLOWLIST = {
+    # Core request identifiers
+    "request_id",
+    "tenant_id",
+    "project_name",
+    # Execution context
+    "task_type",
+    "environment",
+    "span_name",
+    "function_name",
+    "run_id",
+    # Model and parameters
+    "model_name",
+    "model_params",
+    # Performance and cost metrics
+    "cost_usd",
+    "latency_ms",
+    "cached",
+    # Status and errors
+    "status",
+    "error",
+}
 
 
 class LangSmithClient:
@@ -135,7 +163,32 @@ class LangSmithClient:
         }
         if extra:
             metadata.update(extra)
-        return metadata
+
+        # Filter metadata to only include allow-listed attributes
+        return {
+            key: value
+            for key, value in metadata.items()
+            if key in LLM_SPAN_ATTRIBUTE_ALLOWLIST and value is not None
+        }
+
+    def create_feedback(
+        self, *, run_id: str, key: str, score: float | None = None, comment: str | None = None
+    ) -> None:
+        """Create feedback for a given run."""
+        if not self.enabled:
+            logger.warning("langsmith_client_disabled_feedback_skipped", run_id=run_id, key=key)
+            return
+
+        # In a real implementation, this would call the LangSmith SDK.
+        # For now, we just log it.
+        logger.info(
+            "langsmith_feedback_created",
+            run_id=run_id,
+            key=key,
+            score=score,
+            comment=comment,
+        )
+
 
 @functools.lru_cache(maxsize=1)
 def get_client() -> LangSmithClient:

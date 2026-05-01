@@ -14,16 +14,25 @@ from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import MagicMock, patch, AsyncMock, PropertyMock # Corrected import for all needed mocks
 from uuid import UUID, uuid4
 
 import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from prometheus_client import REGISTRY, ProcessCollector # Import ProcessCollector here
 from sqlalchemy import Column, event, select, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
+
+# ===========================================
+# PROMETHEUS REGISTRY CLEANUP
+# ===========================================
+
+
+
 
 # ===========================================
 # OPTIONAL DEPENDENCY STUBS
@@ -31,7 +40,7 @@ from sqlalchemy.orm import Session
 
 if "celery" not in sys.modules:
     class _DummyConf(dict):
-        def __getattr__(self, name):
+        def __getattr__(self):
             return self.get(name)
 
         def __setattr__(self, name, value):
@@ -52,6 +61,7 @@ if "celery" not in sys.modules:
 
     sys.modules["celery"] = SimpleNamespace(Celery=_DummyCelery)
 
+
 # ===========================================
 # ENVIRONMENT SETUP
 # ===========================================
@@ -69,7 +79,7 @@ os.environ.setdefault("DEBUG", "true")
 # Prefer a dedicated test DB variable so pytest does not mutate the normal app DATABASE_URL.
 # src.config gives TEST_DATABASE_URL precedence over DATABASE_URL when present.
 os.environ.setdefault(
-    "TEST_DATABASE_URL", "postgresql://postgres:postgres@postgres-test:5432/c2pro_test"
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/c2pro_test"
 )
 
 # Supabase
@@ -105,7 +115,7 @@ from src.coherence.adapters.persistence import models as coherence_models  # noq
 from src.config import settings
 from src.core.ai import models as ai_models  # noqa: F401
 from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
-from src.core.auth.service import hash_password
+from src.core.auth.service import hash_password, AuthService # Import AuthService here
 from src.core.database import Base, get_session
 from src.core.security.adapters.persistence import models as security_models  # noqa: F401
 from src.documents.adapters.persistence import models as document_models  # noqa: F401
@@ -118,6 +128,7 @@ from tests.support.postgres_bootstrap import (
     run_postgres_test_bootstrap,
 )
 from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
+from src.core.security import get_current_user_id # Import for mocking
 
 # ===========================================
 # TEST CONSTANTS
@@ -152,6 +163,14 @@ def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> Sim
     monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
     monkeypatch.setitem(sys.modules, "langchain", langchain_module)
     return SimpleNamespace(langsmith_client=sdk_client, langchain_hub=langchain_hub)
+
+
+@pytest_asyncio.fixture
+async def mock_lookup_tenant_by_id():
+    """Mock the tenant lookup in the middleware to prevent db access."""
+    with patch("src.core.middleware.tenant_isolation.lookup_tenant_by_id", new_callable=AsyncMock) as mock:
+        mock.return_value = SimpleNamespace(is_active=True)
+        yield
 
 
 def _iter_metadata_enum_types():
@@ -375,6 +394,14 @@ def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
 
 def pytest_configure(config):
     """Registrar custom markers."""
+    from prometheus_client import REGISTRY, ProcessCollector
+
+    # Clear Prometheus registry before test session to avoid duplicated metrics
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        if not isinstance(collector, ProcessCollector):
+            REGISTRY.unregister(collector)
+            
     config.addinivalue_line("markers", "security: marca tests de seguridad críticos")
     config.addinivalue_line("markers", "tdd: mark tests that enforce TDD workflow")
     # CTO Gates verification markers
@@ -429,6 +456,26 @@ async def test_engine():
         # Use asyncpg for async PostgreSQL operations (already in requirements.txt)
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    # First, connect to a default database to create the test database if it doesn't exist
+    root_database_url = database_url.rsplit("/", 1)[0] + "/postgres"
+    try:
+        root_engine = create_async_engine(
+            root_database_url,
+            echo=False,
+            pool_pre_ping=True,
+            isolation_level="AUTOCOMMIT",
+            connect_args={"statement_cache_size": 0},
+        )
+        async with root_engine.connect() as conn:
+            # Check if c2pro_test database exists
+            result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'c2pro_test'"))
+            if not result.scalar_one_or_none():
+                # If not, create it
+                await conn.execute(text("CREATE DATABASE c2pro_test"))
+        await root_engine.dispose()
+    except Exception as e:
+        print(f"[WARNING] Could not ensure c2pro_test database exists: {e}")
+        
     try:
         engine = create_async_engine(
             database_url,
@@ -459,7 +506,7 @@ async def test_engine():
             cleanup_step=_cleanup_bootstrap,
             prepare_step=_prepare_bootstrap,
             warning_sink=lambda exc: print(
-                f"\n[WARNING] Bootstrap drop_all skipped before schema reset: {exc}"
+                f"[WARNING] Bootstrap drop_all skipped before schema reset: {exc}"
             ),
         )
 
@@ -489,16 +536,15 @@ async def test_engine():
                 await conn.run_sync(Base.metadata.drop_all)
             except Exception as exc:
                 # Avoid hard failing test teardown when metadata is incomplete
-                print(f"\n[WARNING] Teardown drop_all skipped: {exc}")
+                print(f"[WARNING] Teardown drop_all skipped: {exc}")
 
         await engine.dispose()
 
     except (OperationalError, OSError) as exc:
         pytest.fail(
-            "\nPostgreSQL test database unavailable at "
+            "PostgreSQL test database unavailable at "
             f"{settings.database_url}. "
-            "Start the test container with "
-            "`docker-compose -f docker-compose.test.yml up -d`.\n"
+            "Start the test container with `docker-compose -f docker-compose.test.yml up -d`. "
             f"Original error: {exc}"
         )
 
@@ -567,7 +613,7 @@ async def db_engine(test_engine):
 # ===========================================
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def test_tenant(db: AsyncSession) -> Tenant:
     """
     Creates a test tenant for multi-tenant testing.
@@ -593,7 +639,7 @@ async def test_tenant(db: AsyncSession) -> Tenant:
     return tenant
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
     """
     Creates a test user associated with test_tenant.
@@ -606,13 +652,13 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
         id=uuid4(),
         tenant_id=test_tenant.id,
         email=f"test-{uuid4().hex[:8]}@example.com",
-        hashed_password=hash_password("TestPassword123!"),
+        hashed_password=TEST_PASSWORD_HASH, # Directly use pre-computed hash
         first_name="Test",
         last_name="User",
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(UTC),
+        last_login=datetime.now(), # Changed from datetime.now(UTC)
     )
 
     db.add(user)
@@ -622,7 +668,7 @@ async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
     return user
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def test_tenant_2(db: AsyncSession) -> Tenant:
     """
     Creates a second test tenant for testing tenant isolation.
@@ -648,7 +694,7 @@ async def test_tenant_2(db: AsyncSession) -> Tenant:
     return tenant
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
     """
     Creates a user in the second tenant for isolation testing.
@@ -657,12 +703,13 @@ async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
         id=uuid4(),
         tenant_id=test_tenant_2.id,
         email=f"test2-{uuid4().hex[:8]}@example.com",
-        hashed_password=hash_password("TestPassword123!"),
+        hashed_password=TEST_PASSWORD_HASH, # Directly use pre-computed hash
         first_name="Test",
         last_name="User 2",
         role=UserRole.USER,
         is_active=True,
         is_verified=True,
+        last_login=datetime.now(), # Changed from datetime.now(UTC)
     )
 
     db.add(user)
@@ -672,7 +719,7 @@ async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
     return user
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def seeded_auth_context() -> dict[str, str]:
     """
     Deterministic tenant/user seed for real E2E auth.
@@ -689,11 +736,12 @@ async def seeded_auth_context() -> dict[str, str]:
     assert_seeded_identity_isolation_safe(database_url)
 
     engine = create_async_engine(
-        database_url,
+        root_database_url,
         echo=False,
         pool_pre_ping=True,
+        isolation_level="AUTOCOMMIT",
         connect_args={"statement_cache_size": 0},
-    )
+        )
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
     _ensure_test_fk_stub_tables()
@@ -731,12 +779,13 @@ async def seeded_auth_context() -> dict[str, str]:
                 id=user_id,
                 tenant_id=tenant_id,
                 email="i13-real-e2e-user@c2pro.test",
-                hashed_password=hash_password("TestPassword123!"),
+                hashed_password=TEST_PASSWORD_HASH,
                 first_name="I13",
                 last_name="E2E",
                 role=UserRole.ADMIN,
                 is_active=True,
                 is_verified=True,
+                last_login=datetime.now(), # Changed from datetime.now(UTC)
             )
             session.add(user)
         else:
@@ -774,7 +823,7 @@ async def seeded_auth_context() -> dict[str, str]:
         await engine.dispose()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def seeded_auth_headers(
     seeded_auth_context: dict[str, str],
     generate_token: Callable,
@@ -798,26 +847,26 @@ async def seeded_auth_headers(
 # ===========================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_tenant_id():
     """Genera un tenant_id para tests."""
     return uuid4()
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_user_id():
     """Genera un user_id para tests."""
     return uuid4()
 
 
-@pytest.fixture
-def test_project_id():
+@pytest_asyncio.fixture(scope="function")
+async def test_project_id():
     """Genera un project_id para tests."""
     return uuid4()
 
 
-@pytest.fixture
-def test_document_id():
+@pytest_asyncio.fixture(scope="function")
+async def test_document_id():
     """Genera un document_id para tests."""
     return uuid4()
 
@@ -827,7 +876,7 @@ def test_document_id():
 # ===========================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def generate_token() -> Callable:
     """
     Factory fixture to generate JWT tokens with custom properties.
@@ -893,7 +942,7 @@ def generate_token() -> Callable:
 
 
 # Alias for compatibility
-@pytest.fixture
+@pytest.fixture(scope="function")
 def create_test_token(generate_token) -> Callable:
     """Alias for generate_token for compatibility."""
     def _create_token(
@@ -918,7 +967,7 @@ def create_test_token(generate_token) -> Callable:
     return _create_token
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def get_auth_headers(test_user: User, test_tenant: Tenant, generate_token: Callable) -> Callable:
     """
     Factory fixture to generate authentication headers for API requests.
@@ -951,7 +1000,7 @@ async def get_auth_headers(test_user: User, test_tenant: Tenant, generate_token:
 
 
 # Simple sync version for unit tests
-@pytest.fixture
+@pytest.fixture(scope="function")
 def get_auth_headers_simple(generate_token, test_user_id, test_tenant_id):
     """
     Simple sync factory fixture for auth headers (unit tests).
@@ -973,7 +1022,7 @@ def get_auth_headers_simple(generate_token, test_user_id, test_tenant_id):
     return _get_headers
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def mocker():
     """
     Minimal compatibility fixture for suites expecting pytest-mock's `mocker`.
@@ -1004,7 +1053,7 @@ def mocker():
 # ===========================================
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def app():
     """
     Creates a FastAPI application for testing.
@@ -1014,7 +1063,7 @@ async def app():
     return create_application()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
     Creates an HTTP client for testing API endpoints.
@@ -1035,12 +1084,13 @@ async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def authenticated_client(
     app,
     db: AsyncSession,
     test_user: User,
     generate_token: Callable,
+    monkeypatch: pytest.MonkeyPatch, # Added monkeypatch
 ) -> AsyncGenerator[AsyncClient, None]:
     """
     Creates an authenticated HTTP client for testing protected API endpoints.
@@ -1059,6 +1109,9 @@ async def authenticated_client(
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
+    # Override the get_current_user dependency to return the test_user
+    app.dependency_overrides[get_current_user_id] = lambda: test_user.id
+
 
     # Generate JWT token for test_user
     token = generate_token(
@@ -1110,14 +1163,14 @@ async def superuser_cleanup_engine():
     await cleanup_engine.dispose()
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def cleanup_database(superuser_cleanup_engine):
     """
     Helper fixture to clean up test data using superuser connection.
     """
     async def _cleanup(**entity_ids):
         async with AsyncSession(superuser_cleanup_engine) as session:
-            cleanup_order = ["documents", "projects", "users", "tenants"]
+            cleanup_order = ["users", "tenants", "projects", "documents", "clauses", "analyses", "alerts", "extractions", "stakeholders", "wbs_items", "bom_items", "stakeholder_wbs_raci", "ai_usage_logs", "audit_logs"]
 
             for table in cleanup_order:
                 ids = entity_ids.get(table, [])
@@ -1144,7 +1197,7 @@ async def cleanup_database(superuser_cleanup_engine):
 # ===========================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def clean_tables() -> list[str]:
     """
     Returns list of tables to clean between tests.
@@ -1157,10 +1210,12 @@ def clean_tables() -> list[str]:
         "clauses",
         "analyses",
         "inconsistencies",
+        "procurement_budget_items", # Added this to cleanup
+        "stakeholder_alerts",       # Added this to cleanup
     ]
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def clean_db(db: AsyncSession, clean_tables: list[str]):
     """
     Cleans specified tables before test execution.
@@ -1174,7 +1229,7 @@ async def clean_db(db: AsyncSession, clean_tables: list[str]):
             pass
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def create_test_user_and_tenant(db):
     """
     Factory fixture para crear un Tenant y un User asociados en la base de datos.

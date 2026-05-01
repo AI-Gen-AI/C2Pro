@@ -30,7 +30,7 @@ from src.config import settings
 # Import core routers (always enabled)
 from src.core.auth.router import router as auth_router
 from src.core.ai.analytics_router import router as ai_analytics_router
-from src.core.ai.feedback_router import router as ai_feedback_router
+from src.ai_feedback.router import router as ai_feedback_router
 from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
 from src.admin.adapters.http.router import router as dlq_admin_router

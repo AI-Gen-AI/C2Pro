@@ -108,6 +108,7 @@ dev-log.ndjson
 
 # Claude Code worktrees (temporary agent workspaces)
 .claude/worktrees/
+.worktrees/
 
 # Temp/backup directories
 temp_conflicting_frontend_files/
