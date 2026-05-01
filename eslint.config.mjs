@@ -6,6 +6,8 @@ export default [
       "everything-claude-code/**",
       "tmp-gh-artifacts/**",
       "apps/api/.pytest-tmp-local/**",
+      ".worktrees/**",
+      ".claude/worktrees/**",
     ],
   },
   {
