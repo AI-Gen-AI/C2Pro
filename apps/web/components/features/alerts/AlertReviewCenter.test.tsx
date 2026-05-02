@@ -2,10 +2,7 @@
  * Test Suite ID: S3-04
  * Roadmap Reference: S3-04 Alert Review Center + approve/reject modal
  */
-<<<<<<< HEAD
-=======
 import { act } from "react";
->>>>>>> 39961be9 (fix(tests): TASK-QA-077 + TASK-1480 — flake stabilization)
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@/src/tests/test-utils";
 import { AlertReviewCenter } from "@/components/features/alerts/AlertReviewCenter";
