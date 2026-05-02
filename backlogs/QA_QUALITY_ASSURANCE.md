@@ -20,11 +20,47 @@ The audit of 82 remaining Ruff errors has been completed. The errors have been c
 - `TASK-QA-099`
 - `TASK-QA-102`
 - `TASK-QA-103`
+- `TASK-QA-077`
+- `TASK-1480`
 
 **Pending QA Tasks**
 
 - `TASK-QA-100`
 - `TASK-QA-101`
+
+## TASK-QA-077 + TASK-1480: Test Stabilization Leftovers
+
+**Status**: ✅ COMPLETE
+**Date**: 2026-04-30 (PR #93)
+**Executor**: OpenCode (Sonnet 4.6); MASTER-reviewed inline (Opus 4.7)
+
+### Scope
+
+- `TASK-QA-077`: stabilize remaining SLA boundary/relative-time tests after `TASK-BCK-044`
+- `TASK-1480`: stabilize alert React tests by wrapping state-changing interactions in `act()` and adding targeted timeout headroom
+
+### Changes
+
+1. SLA flake prevention
+   - Added `freezegun.freeze_time` to the remaining `SLACalculator.calculate()` tests that derived `created_at` from live `datetime.now(UTC)`
+   - Kept the fix in `apps/api/tests/unit/alerts/domain/test_sla_calculator.py`; no production SLA code changed
+2. Alert UI test stabilization
+   - Wrapped state-changing `fireEvent` calls in React `act()` in `AlertReviewCenter.test.tsx` (including two new test cases added by PR #91 for status-filter and copy-to-clipboard, wrapped during MASTER's rebase conflict resolution)
+   - Wrapped the keyboard undo interaction in `AlertUndoToast.test.tsx`
+   - Raised targeted Vitest timeout/hook timeout to `10_000ms` for the alert test files
+
+### Verification
+
+- `python -m pytest tests/unit/alerts/domain/test_sla_calculator.py tests/unit/alerts/domain/test_sla_serialization.py --count=5`: `365 passed`
+- `pnpm vitest run components/features/alerts/AlertReviewCenter.test.tsx components/features/alerts/AlertUndoToast.test.tsx components/features/alerts/alert-undo.test.ts`: `5` consecutive runs green, `0` React `act()` warnings
+- `pnpm tsc --noEmit`: passed
+- Lint clean post-merge
+
+### Notes
+
+- `pytest-repeat` was used only for local acceptance verification (5x repeat). It is not a CI dependency.
+- `freezegun` was already in `apps/api/requirements.txt` since `TASK-BCK-044`.
+- Pre-existing out-of-scope blockers documented for separate tickets: (a) `tests/golden/__init__.py` shadowing `src/golden` blocks broad `pytest -k`; (b) `axios@1.15.0` lockfile resolution prevents `pnpm install --offline`.
 
 **Pending Cross-Role Remediation Inputs**
 

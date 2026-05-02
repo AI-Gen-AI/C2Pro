@@ -13,13 +13,13 @@ u# Backend Tasks & Knowledge Base
 
 ## 0. Status View
 
-**Pending Tasks**: 6
+**Pending Tasks**: 5
 
-- IDs: `TASK-BCK-020`, `TASK-BCK-040`-`TASK-BCK-044`
+- IDs: `TASK-BCK-020`, `TASK-BCK-040`, `TASK-BCK-041`, `TASK-BCK-043`, `TASK-BCK-044`
 
-**Completed Tasks**: 43
+**Completed Tasks**: 44
 
-- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-049`
+- IDs: `TASK-BCK-001`-`TASK-BCK-019`, `TASK-BCK-021`-`TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-039`, `TASK-BCK-042`, `TASK-BCK-045`-`TASK-BCK-049`
 
 **Usage Note**:
 
@@ -70,7 +70,7 @@ u# Backend Tasks & Knowledge Base
 | [x]    | P1       | `TASK-BCK-039` | QA Support, `TASK-BCK-038` | Gate 4 traceability: Sync `AuditLogORM` with SQL schema (fix column mismatches) and ensure both audit_logs and ai_usage_logs are imported in conftest.py `[x] @2026-04-06 - Synced AuditLogORM with migration schema. test_gate4_traceability.py (12 passed).`                                                                                            | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T006                                  |
 | [ ]    | P1       | `TASK-BCK-040` | QA Support, `TASK-BCK-039` | Resolve Ruff linting debt (2692 errors found) - systematic cleanup of code quality violations across codebase. Auto-fix safe issues, manually review remaining. Target: <50 errors.                                                                                                                                                                       | Sprint 1 - Quality Gate Resolution (2026-04-06)                                                                                                                         | Blackboard T007                                  |
 | [ ]    | P2       | `TASK-BCK-041` | QA Support                 | **Ruff ARG Error Audit - tenant_id/user_id Review**: Audit 25 ARG errors involving tenant*id/user_id to determine real security bugs vs design patterns. Requires second opinion before implementing fixes. Result: 0 security bugs - 17 design correct, 8 interface contracts. FIX: Use `*` prefix for all 25 errors. Pending second opinion.            | Post-T007 Audit (2026-04-07)                                                                                                                                            | Role Backend                                     |
-| [ ]    | P2       | `TASK-BCK-042` | Backend                    | **DLQ Admin Endpoints**: Implement 2 admin endpoints for Dead Letter Queue management. `GET /api/v1/admin/dlq` (list tasks by status) and `POST /api/v1/admin/dlq/{id}/retry` (manual retry). Service layer exists (DLQService). Need: router, DTOs, admin authorization, tests.                                                                           | DLQ Integration Review (2026-04-09)                                                                                                                                     | Role Backend                                     |
+| [x]    | P2       | `TASK-BCK-042` | Backend                    | **DLQ Admin Endpoints**: Implement 2 admin endpoints for Dead Letter Queue management. `GET /api/v1/admin/dlq` (list tasks by status) and `POST /api/v1/admin/dlq/{id}/retry` (manual retry). Service layer exists (DLQService). Need: router, DTOs, admin authorization, tests. `[x] @2026-04-27 - Implemented `src.admin` bounded context with Pydantic v2 DTOs, Protocol-backed `ListDLQEntriesUseCase` + `RetryDLQEntryUseCase`, HTTP adapter mounted at `/api/v1/admin/dlq`, `DLQServiceAdminAdapter` wrapping existing `DLQService` (no internals modified), admin role enforced via `require_admin_user`. Bundled BCK-050 fix collapsed duplicate Prometheus registration of `c2pro_hitl_checkpoint_load_errors_total` via dual-label compat wrapper. Acceptance: 7/7 admin tests + 18/18 monitoring tests + 403 auth coverage all pass; OpenAPI snapshot verified. PR #92.` | DLQ Integration Review (2026-04-09)                                                                                                                                     | Role Backend                                     |
 | [x]    | P2       | `TASK-BCK-043` | Backend, DB Infra          | **WBS Integration Tests Hang Without DB**: `tests/unit/wbs/test_wbs_node_repository.py` (9 tests) are marked `pytest.mark.integration` but live in `tests/unit/`. They require `async_session` fixture with real PostgreSQL. Fix: either (a) move to `tests/integration/` and skip in unit runs, or (b) add a skip marker when DB is unavailable. `[x] @2026-04-21 - Relocated to `apps/api/tests/integration/wbs/test_wbs_node_repository.py` via `git mv`; removed empty `tests/unit/wbs/` directory. Tests retain `pytestmark = pytest.mark.integration` so they no longer load during the unit suite.` | Frontend Audit (2026-04-09)                                                                                                                                             | **COMPLETED** 2026-04-21                         |
 | [x]    | P3       | `TASK-BCK-044` | Backend, Alerts            | **Flaky SLA Calculator Test**: `tests/unit/alerts/domain/test_sla_calculator.py::test_calculate_at_exact_due_time` fails intermittently under load (timing-sensitive boundary condition at exact due time). Passes when run alone. `[x] @2026-04-21 - Added `freezegun==1.5.1` to `apps/api/requirements.txt` and decorated the boundary test with `@freeze_time("2026-04-08T12:00:00+00:00")` so the calculator's internal `datetime.now(UTC)` matches the test's reference instant exactly. Added a `due_at == now` assertion to lock the boundary contract.` | Frontend Audit (2026-04-09)                                                                                                                                             | **COMPLETED** 2026-04-21                         |
 | [x]    | P0       | `TASK-BCK-045` | Backend, Alerts            | **Railway Alerts Import Crash**: fix the backend startup regression where `src.main` imports `src.alerts.adapters.http.router`, but legacy top-level `alerts.*` imports inside `src/alerts` crash the container with `ModuleNotFoundError: No module named 'alerts'`. `[x] Implemented (subprocess regression test + import normalization to \`src.alerts.*\`)` | Railway log `logs.1775857904790.json` (2026-04-10)                                                                                                                      | Role Backend                                     |
@@ -82,8 +82,8 @@ u# Backend Tasks & Knowledge Base
 **Statistics**:
 
 - Total: 49 tasks
-- Active: 7 (14.3%)
-- Completed: 42 (85.7%)
+- Active: 6 (12.2%)
+- Completed: 43 (87.8%)
 - Blocked: 0
 
 ---

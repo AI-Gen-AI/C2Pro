@@ -13,13 +13,13 @@
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 46 | 32 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 7 | 21 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 6 | 22 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
 | Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 163 | 26 | 137 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 18 | 41 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
-| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 96 | 35 | 61 |
+| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 96 | 34 | 62 |
 | Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
 | Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 0 | 0 | 0 |
 
@@ -48,13 +48,13 @@
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (`TASK-AI-003/010/011`) | Feature | P1 | EPIC-CORE-DECOUPLE | Provision org + API keys per env, register prompt metadata/tags, configure A/B experiment scaffolding. |
-| `EPIC-LANGSMITH-PHASE-2` | Tracing + `ai_usage_logs` integration (`TASK-AI-013/014/015`, `TASK-AI-044`, `TASK-INF-012`) | Feature | P1 | PHASE-1 | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, expose `POST /api/v1/ai/feedback`. |
+| `EPIC-LANGSMITH-PHASE-2` ✅ | Tracing + `ai_usage_logs` integration (`TASK-AI-013/014/015`, `TASK-AI-044`, `TASK-INF-012`) | Feature | P1 | PHASE-1 | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, expose `POST /api/v1/ai/feedback`. Completed 2026-05-01 via PR #94. |
 | `EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. |
 | `EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. |
 | `EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. |
 | `EPIC-LC-WORKFLOWS` | Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. |
 | `EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL resume (`TASK-BCK-032/033`) | Feature | P2 | EPIC-CORE-DECOUPLE | Prometheus/DataDog counters from `ResumeWorkflowUseCase`; publish `/hitl/resume/{id}` contract. |
-| `EPIC-DLQ-ADMIN` | DLQ admin endpoints (`TASK-BCK-042`) | Feature | P2 | EPIC-CORE-DECOUPLE | `GET /admin/dlq` + `POST /admin/dlq/{id}/retry` against DLQService, admin scope, contract tests. |
+| `EPIC-DLQ-ADMIN` ✅ | DLQ admin endpoints (`TASK-BCK-042`) | Feature | P2 | EPIC-CORE-DECOUPLE | `GET /admin/dlq` + `POST /admin/dlq/{id}/retry` against DLQService, admin scope, contract tests. Completed 2026-04-27. |
 | `TASK-1481` | Supervisor API keys (Claude/Codex/Gemini) | Feature | P1 | — | Provision keys, verify `shlex.split` + models.yaml CLI syntax, prove green auto-mode run. |
 | `EPIC-COH-V1-CONSOLIDATION` | Coherence Score v1 — pipeline consolidation + InsufficientEvidence + alerts (pre-signature audit only) | Feature | P0 | EPIC-CORE-DECOUPLE | 9-phase orchestration (Codex/Gemini/OpenCode) merging into `coh-v1/consolidation`. Fixes the `score=100` bug, consolidates two parallel pipelines, builds 18 evaluators behind `LLMRulePort`, persists `score_version` with hard cut-off, wires `AlertGeneratorService` + `meta_alert` AUDIT_INCOMPLETE. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. |
 
@@ -62,7 +62,7 @@
 
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
-| `EPIC-TEST-STABILIZATION` | WBS misplacement + flaky SLA + React `act()` (`TASK-BCK-043/044`, `TASK-QA-077`, `TASK-1480`) | Bug | P2 | DDD-MIGRATION | Relocate WBS integration tests, freeze time on SLA boundary, wrap React updates in `act()` with raised timeouts. |
+| `EPIC-TEST-STABILIZATION` ✅ | WBS misplacement + flaky SLA + React `act()` (`TASK-BCK-043/044`, `TASK-QA-077`, `TASK-1480`) | Bug | P2 | DDD-MIGRATION | Completed 2026-04-30; WBS relocation + initial SLA freeze shipped 2026-04-21, remaining SLA boundary cases frozen and alert React tests wrapped in `act()` with raised Vitest timeouts (PR #93). |
 | `EPIC-QA-CONTRACT-COVERAGE` | Contract tests + wireframe TCs + quality-gate reports (`TASK-QA-028/034/050..064/069/070/084..095`) | Refactor | P2 | DDD-MIGRATION | Re-plan 20+ stubs as one contract-test deliverable (schemathesis/pact), migrate DB bootstrap, publish report pipeline. |
 | `EPIC-COVERAGE-GATES` | 70% module coverage + regression proof (merged `AI-048..051`, `INF-016..019`, `FRT-132..135`) | Feature | P3 | QA-CONTRACT-COVERAGE | Target 70% on listed modules, ship coverage-plan tests, prove zero regression. |
 | `EPIC-SENTRY-PERF` | Sentry auth alerts + perf benchmarks (`TASK-INF-055/056`) | Feature | P3 | TENANT-RLS-HARDENING | Sentry alerts for auth-failure patterns; codify benchmark harness + baselines. |
@@ -116,7 +116,6 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 ### Quality Assurance
 
 - `TASK-QA-028/034/050..064/069/070/084..095` → EPIC-QA-CONTRACT-COVERAGE (single deliverable; current entries are stubs needing replan).
-- `TASK-QA-077` → EPIC-TEST-STABILIZATION.
 - Full detail: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md).
 
 ### Cross-Category
@@ -126,7 +125,6 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P1 | `TASK-DDD-004` | Hexagonal refactor of `documents` — router/service migration pending. → EPIC-DDD-MIGRATION. |
 | P1 | `TASK-DDD-005` | Hexagonal refactor of `stakeholders` — `schemas.py` deletion + router migration pending. → EPIC-DDD-MIGRATION. |
 | P1 | `TASK-DDD-006` | Hexagonal refactor of `procurement` — analysis + migration pending. → EPIC-DDD-MIGRATION. |
-| P2 | `TASK-1480` | UI test stabilization — wrap `act(...)` + raise timeouts in `alerts`/`evidence` page tests. → EPIC-TEST-STABILIZATION. |
 | P1 | `TASK-1481` | Supervisor API key configuration (Claude/Codex/Gemini CLIs). |
 
 ### Coherence v1 (EPIC-COH-V1-CONSOLIDATION)
@@ -151,6 +149,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-05-02 | **B1 + B2 + B3 wave landed** — three parallel-agent PRs merged into main: PR #92 `feat(admin): TASK-BCK-042 — DLQ admin endpoints + BCK-050 metric dedup` (Codex), PR #93 `fix(tests): TASK-QA-077 + TASK-1480 — flake stabilization` (OpenCode), PR #94 `feat(ai): EPIC-LANGSMITH-PHASE-2 — @traced_llm_call decorator + AI feedback endpoint` (Gemini 3 Pro). MASTER (Opus 4.7) reviewed inline due to org Sonnet quota; B3 unblocked by wiring the existing `mock_lookup_tenant_by_id` fixture in `tests/conftest.py`. Reports: `blackboard/dlq-admin/CODEX-REPORT.md`, `blackboard/test-stab/OPENCODE-REPORT.md`, `blackboard/langsmith-phase2/GEMINI-REPORT.md`. |
+| 2026-04-27 | **TASK-BCK-042 complete** — Added the `src.admin` bounded context for DLQ administration with Pydantic v2 DTOs, Protocol-backed list/retry use cases, admin HTTP router mounted at `/api/v1/admin/dlq`, and non-admin 403 coverage for both endpoints. The list endpoint is intentionally cross-tenant for admin review; retry delegates to existing `DLQService.increment_retry`. Acceptance: admin unit/integration suite 7/7 passed; OpenAPI snapshot includes `/api/v1/admin/dlq` and `/api/v1/admin/dlq/{dlq_id}/retry`. Bundled BCK-050 fix collapses duplicate Prometheus registration of `c2pro_hitl_checkpoint_load_errors_total` via dual-label compat wrapper. See `blackboard/dlq-admin/CODEX-REPORT.md`. |
 | 2026-04-27 | **TASK-COH-V1-09 merged to consolidation** (OpenCode/Sonnet 4.6 delivery + MASTER recovery) — `coh-v1/phase-9-opencode` (commit `1caa8a13`) merged with `--no-ff` (merge `1b771354`). Final state: completed `ScoreVersionBadge` pill + tooltip + customer FAQ link; `CoherenceClient` v1 announcement banner, nullable-score "Score withheld" state, AUDIT_INCOMPLETE CTA; `AlertReviewCenter` severity sort + status filter + copy-to-clipboard with synchronous toast; nullable `score_version` / `score_reason` / `score_missing_dimensions` in dashboard contracts; `/demo/coherence-v1` QA route; customer FAQ at `docs/customer/COHERENCE_V1_FAQ.md`; HTML+TXT announcement templates at `apps/api/src/notifications/templates/`; activated cut-off confirmed at `2026-05-01T00:00:00Z`. **MASTER recovery:** OpenCode reported Playwright e2e/coherence-v1 as 1 passed, but a fresh run failed at line 28 of the spec — the copy-to-clipboard handler awaited `navigator.clipboard.writeText` before calling `setCopiedAlertId`, and in headless chromium without granted clipboard-write permission `writeText` hangs indefinitely (neither resolves nor rejects), so the "Copied" toast never rendered. Repaired in `AlertReviewCenter.tsx` by inverting the order — set state synchronously, then fire-and-forget the clipboard write with attached `.catch()` — so UI feedback always shows regardless of clipboard outcome. Re-verified: 19/19 targeted Vitest pass, `pnpm tsc --noEmit` clean, Playwright 1/1 pass (7.3s). Repository-wide `pnpm vitest run` remains red on 10 pre-existing unrelated frontend suites (21 failing tests, none touching Phase 9 surface). Originally delivered off-pattern on consolidation working tree → wave-branch reconstructed. See `blackboard/coh-v1/PHASE-9-opencode-REPORT.md`. EPIC-COH-V1-CONSOLIDATION fully complete. |
 | 2026-04-26 | **TASK-COH-V1-07 complete** — Extended golden-corpus bundle schema with `expected_score_range`, `expected_alerts`, and `score_check`; annotated all 15 existing bundles; added CI assertions for score ranges and expected alert recall; added `apps/api` compatibility entrypoint for `python -m evals.run_evals`; documented bundle-authoring rules in `evals/README.md`. Verification: 15/15 bundles passed, 30/30 expected alerts matched, aggregate alert recall 100%; `tests/evals/test_golden_corpus.py` passed 13/13 including scratch impossible-range failure proof. See `blackboard/coh-v1/PHASE-7-codex-REPORT.md`. |
 | 2026-04-26 | **TASK-COH-V1-08 merged to consolidation** (Gemini 3 Pro delivery + MASTER recovery) — `coh-v1/phase-8-gemini` (commit `1dcad3a4`) merged with `--no-ff` (merge `3abd71fe`). Final state: `@traced_coherence_node` decorator (`apps/api/src/core/observability/coherence_tracing.py`) wraps 6 of 7 subgraph nodes (prepare_context, deterministic_evaluate, rag_similarity_check, cross_clause_eval, scoring_arbiter, format_output; `llm_semantic_evaluate` skipped per spec). EU-residency-safe attribute allowlist (`COHERENCE_SPAN_ATTRIBUTE_ALLOWLIST` + Pydantic models) in `coherence_span_schema.py`. `LangSmithClient` extended with `start_span` / `end_span` / `update_span_metadata` / `create_event` and cached `get_client()` singleton. **MASTER recovery:** preserved `enabled` property as backwards-compat alias for the renamed `is_enabled` (caller `prompt_registry.py:89` would have broken otherwise). Discrete alert events emitted from `format_output` on high/critical-severity findings. Contract tests 5/5 pass; 33/33 combined Phase 5+6+8 tests green. Originally delivered off-pattern on consolidation working tree → wave-branch reconstructed. Runbook at `docs/runbooks/COHERENCE_TELEMETRY.md`. See `blackboard/coh-v1/PHASE-8-gemini-REPORT.md`. |
