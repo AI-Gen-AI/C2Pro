@@ -9,15 +9,19 @@ Características:
 - Caché de respuestas completas de Claude
 - Métricas de hit/miss
 - Fallback a Redis o memoria
+- Flash layer: in-memory con contenido-hash keys (1 hora TTL)
 
-Version: 1.0.0
+Version: 1.1.0
+TS-AI-FLASH-001
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
@@ -32,13 +36,342 @@ logger = structlog.get_logger()
 # ===========================================
 
 CACHE_TYPE_PROMPT = "ai_prompt"
+CACHE_TYPE_FLASH = "ai_flash"
 PROMPT_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 horas
 PROMPT_CACHE_KEY_PREFIX = "prompt"
+FLASH_CACHE_KEY_PREFIX = "flash"
+
+# Flash cache TTL (1 hour default)
+FLASH_CACHE_TTL_SECONDS = int(os.getenv("FLASH_CACHE_TTL_SECONDS", 3600))
+FLASH_CACHE_BYPASS_TEMPERATURE = 0.3
 
 
 # ===========================================
-# CACHE KEY GENERATION
+# FLASH CACHE DATA STRUCTURES
 # ===========================================
+
+
+@dataclass
+class FlashCacheEntry:
+    """TS-AI-FLASH-001: In-memory cache entry with metadata."""
+
+    content: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    cached_at: float
+    original_execution_time_ms: float
+    request_id: str
+
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired."""
+        return time.time() - self.cached_at > FLASH_CACHE_TTL_SECONDS
+
+
+# ===========================================
+# FLASH CACHE KEY GENERATION
+# ===========================================
+
+
+def build_flash_cache_key(
+    model_id: str,
+    system_prompt: str | None,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    temperature: float,
+) -> str:
+    """
+    TS-AI-FLASH-001: Build content-hash cache key.
+
+    Key components:
+    - model_id: The model identifier
+    - system_prompt: System prompt content
+    - messages: User messages (JSON-serialized)
+    - tools: Tools definition (JSON-serialized)
+    - temperature: Rounded to 1 decimal
+
+    Returns:
+        SHA-256 hex digest (64 chars)
+    """
+    temp_rounded = round(temperature * 10) / 10
+
+    components = {
+        "model": model_id,
+        "system": system_prompt or "",
+        "messages": json.dumps(messages, sort_keys=True, ensure_ascii=False),
+        "tools": json.dumps(tools or [], sort_keys=True, ensure_ascii=False) if tools else "[]",
+        "temperature": temp_rounded,
+    }
+
+    json_str = json.dumps(components, sort_keys=True, ensure_ascii=True)
+    hash_digest = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+
+    logger.debug(
+        "flash_cache_key_generated",
+        key_prefix=hash_digest[:16],
+        model=model_id,
+        has_system=bool(system_prompt),
+        messages_count=len(messages),
+        has_tools=bool(tools),
+        temperature=temp_rounded,
+    )
+
+    return hash_digest
+
+
+def should_bypass_flash_cache(
+    temperature: float,
+    bypass_cache: bool,
+    model: str,
+) -> bool:
+    """
+    TS-AI-FLASH-001: Determine if cache should be bypassed.
+
+    Bypass conditions:
+    - temperature > 0.3 (non-deterministic)
+    - bypass_cache flag is True
+    - model is a streaming variant (contains "stream")
+    """
+    if bypass_cache:
+        logger.debug("flash_cache_bypassed", reason="bypass_cache_flag")
+        return True
+
+    if temperature > FLASH_CACHE_BYPASS_TEMPERATURE:
+        logger.debug(
+            "flash_cache_bypassed",
+            reason="high_temperature",
+            temperature=temperature,
+            threshold=FLASH_CACHE_BYPASS_TEMPERATURE,
+        )
+        return True
+
+    if "stream" in model.lower():
+        logger.debug("flash_cache_bypassed", reason="streaming_model", model=model)
+        return True
+
+    return False
+
+
+# ===========================================
+# FLASH CACHE SERVICE
+# ===========================================
+
+
+class FlashCacheService:
+    """
+    TS-AI-FLASH-001: In-memory LLM response cache with optional Redis backend.
+
+    Features:
+    - Content-hash keyed (SHA-256 of model + system + messages + tools + temp)
+    - In-memory with TTL (1 hour default)
+    - Optional Redis persistence if REDIS_URL is set
+    - Bypass on temperature > 0.3 or bypass_cache=True
+    - Tracks hit/miss for observability
+    """
+
+    def __init__(self, redis_url: str | None = None):
+        self._memory: dict[str, FlashCacheEntry] = {}
+        self._redis_url = redis_url
+        self._redis = None
+        self._hits = 0
+        self._misses = 0
+        self._evictions = 0
+
+        if redis_url:
+            try:
+                import redis.asyncio as redis_async
+
+                self._redis = redis_async.from_url(
+                    redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                )
+                logger.info("flash_cache_redis_enabled", backend="redis")
+            except Exception as exc:
+                logger.warning("flash_cache_redis_init_failed", error=str(exc))
+
+    @property
+    def size(self) -> int:
+        return len(self._memory)
+
+    @property
+    def hits(self) -> int:
+        return self._hits
+
+    @property
+    def misses(self) -> int:
+        return self._misses
+
+    async def get(
+        self,
+        model_id: str,
+        system_prompt: str | None,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        temperature: float,
+        bypass_cache: bool = False,
+    ) -> FlashCacheEntry | None:
+        """Get cached response if available."""
+        if should_bypass_flash_cache(temperature, bypass_cache, model_id):
+            self._misses += 1
+            return None
+
+        cache_key = build_flash_cache_key(
+            model_id=model_id,
+            system_prompt=system_prompt,
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+        )
+
+        entry = self._memory.get(cache_key)
+        if entry and not entry.is_expired():
+            self._hits += 1
+            logger.info(
+                "flash_cache_hit",
+                key_prefix=cache_key[:16],
+                model=model_id,
+                age_seconds=time.time() - entry.cached_at,
+            )
+            return entry
+
+        if self._redis:
+            try:
+                redis_key = f"{FLASH_CACHE_KEY_PREFIX}:{cache_key}"
+                data = await self._redis.get(redis_key)
+                if data:
+                    cached_data = json.loads(data)
+                    entry = FlashCacheEntry(
+                        content=cached_data["content"],
+                        model=cached_data["model"],
+                        input_tokens=cached_data["input_tokens"],
+                        output_tokens=cached_data["output_tokens"],
+                        cost_usd=cached_data["cost_usd"],
+                        cached_at=cached_data["cached_at"],
+                        original_execution_time_ms=cached_data["original_execution_time_ms"],
+                        request_id=cached_data["request_id"],
+                    )
+                    if not entry.is_expired():
+                        self._memory[cache_key] = entry
+                        self._hits += 1
+                        logger.info("flash_cache_hit_redis", key_prefix=cache_key[:16], model=model_id)
+                        return entry
+            except Exception as exc:
+                logger.warning("flash_cache_redis_get_failed", error=str(exc))
+
+        self._misses += 1
+        logger.debug("flash_cache_miss", key_prefix=cache_key[:16], model=model_id)
+        return None
+
+    async def set(
+        self,
+        model_id: str,
+        system_prompt: str | None,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        temperature: float,
+        content: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        execution_time_ms: float,
+        request_id: str,
+    ) -> None:
+        """Store response in cache."""
+        if should_bypass_flash_cache(temperature, False, model_id):
+            return
+
+        cache_key = build_flash_cache_key(
+            model_id=model_id,
+            system_prompt=system_prompt,
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+        )
+
+        entry = FlashCacheEntry(
+            content=content,
+            model=model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            cached_at=time.time(),
+            original_execution_time_ms=execution_time_ms,
+            request_id=request_id,
+        )
+
+        self._memory[cache_key] = entry
+
+        if self._redis:
+            try:
+                redis_key = f"{FLASH_CACHE_KEY_PREFIX}:{cache_key}"
+                data = {
+                    "content": content,
+                    "model": model_id,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cost_usd": cost_usd,
+                    "cached_at": entry.cached_at,
+                    "original_execution_time_ms": execution_time_ms,
+                    "request_id": request_id,
+                }
+                await self._redis.setex(
+                    redis_key,
+                    FLASH_CACHE_TTL_SECONDS,
+                    json.dumps(data, ensure_ascii=True),
+                )
+            except Exception as exc:
+                logger.warning("flash_cache_redis_set_failed", error=str(exc))
+
+        logger.info(
+            "flash_cache_set",
+            key_prefix=cache_key[:16],
+            model=model_id,
+            cost_usd=cost_usd,
+        )
+
+    async def clear_expired(self) -> int:
+        """Remove expired entries from memory cache."""
+        expired_keys = [
+            key for key, entry in self._memory.items() if entry.is_expired()
+        ]
+        for key in expired_keys:
+            del self._memory[key]
+
+        if expired_keys:
+            self._evictions += len(expired_keys)
+            logger.info("flash_cache_evicted", count=len(expired_keys), reason="ttl_expiry")
+
+        return len(expired_keys)
+
+    async def close(self) -> None:
+        """Close Redis connection if open."""
+        if self._redis:
+            try:
+                await self._redis.close()
+            except Exception as exc:
+                logger.warning("flash_cache_redis_close_failed", error=str(exc))
+
+
+# ===========================================
+# SINGLETON INSTANCE
+# ===========================================
+
+
+_flash_cache_service: FlashCacheService | None = None
+
+
+def get_flash_cache_service() -> FlashCacheService:
+    """Get singleton FlashCacheService instance."""
+    global _flash_cache_service
+
+    if _flash_cache_service is None:
+        redis_url = os.getenv("REDIS_URL")
+        _flash_cache_service = FlashCacheService(redis_url=redis_url)
+
+    return _flash_cache_service
 
 
 def build_prompt_hash(
@@ -505,11 +838,6 @@ def get_prompt_cache_service() -> PromptCacheService:
         _prompt_cache_service = PromptCacheService(cache_service)
 
     return _prompt_cache_service
-
-
-# ===========================================
-# CACHE-AWARE DECORATOR (opcional)
-# ===========================================
 
 
 def with_prompt_cache(func):
