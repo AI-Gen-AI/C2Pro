@@ -12,14 +12,14 @@
 
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
-| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 46 | 32 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 28 | 6 | 22 |
+| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 44 | 34 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 49 | 5 | 44 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 163 | 26 | 137 |
-| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 18 | 41 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 169 | 16 | 153 |
+| Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
-| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 96 | 34 | 62 |
+| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 12 | 2 | 10 |
 | Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
 | Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 0 | 0 | 0 |
 
@@ -34,29 +34,28 @@
 
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
-| `EPIC-TENANT-RLS-HARDENING` | Multi-tenant RLS + credential hygiene | Architecture | P0 | — | Ship Alembic RLS policy on `clause_embeddings`, close SEC-009..011 gaps, and unblock `TASK-FRT-045` via approved secret channel. |
+| `✅ EPIC-TENANT-RLS-HARDENING` | Multi-tenant RLS + credential hygiene | Architecture | P0 | — | Ship Alembic RLS policy on `clause_embeddings`, close SEC-009..011 gaps, and unblock `TASK-FRT-045` via approved secret channel. Completed 2026-04-21 via Change Log EPIC-TENANT-RLS-HARDENING entry. |
 | `EPIC-CORE-DECOUPLE` ✅ | Decouple AI logic from LangGraph nodes (`TASK-IMPL-010` + 14 subtasks) | Refactor | P0 | — | Phases 1–4 completed 2026-04-21; 92% coverage on refactored modules (domain/use-case 100%, nodes 85–87%). Unblocks DDD-MIGRATION, LANGSMITH-PHASE-1, HITL-OBSERVABILITY, DLQ-ADMIN. |
 
 ### Tier 1 — Architectural Refactor
 
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
-| `EPIC-DDD-MIGRATION` | Finish hexagonal refactor (docs/stakeholders/procurement) — `TASK-DDD-004/005/006` | Refactor | P1 | EPIC-CORE-DECOUPLE | Complete router/service migration, delete legacy `schemas.py`, enforce tenant propagation on every port. |
+| `✅ EPIC-DDD-MIGRATION` | Finish hexagonal refactor (docs/stakeholders/procurement) — `TASK-DDD-004/005/006` | Refactor | P1 | EPIC-CORE-DECOUPLE | Complete router/service migration, delete legacy `schemas.py`, enforce tenant propagation on every port. Completed 2026-04-21 via Change Log EPIC-DDD-MIGRATION entry and 2026-05-02 source spot-check. |
 
 ### Tier 2 — Features on Stabilized Base
 
 | Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
-| `EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (`TASK-AI-003/010/011`) | Feature | P1 | EPIC-CORE-DECOUPLE | Provision org + API keys per env, register prompt metadata/tags, configure A/B experiment scaffolding. |
+| `✅ EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (`TASK-AI-003/010/011`) | Feature | P1 | EPIC-CORE-DECOUPLE | Provision org + API keys per env, register prompt metadata/tags, configure A/B experiment scaffolding. Completed 2026-04-21 via PR #81 merged 2026-04-21. |
 | `EPIC-LANGSMITH-PHASE-2` ✅ | Tracing + `ai_usage_logs` integration (`TASK-AI-013/014/015`, `TASK-AI-044`, `TASK-INF-012`) | Feature | P1 | PHASE-1 | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, expose `POST /api/v1/ai/feedback`. Completed 2026-05-01 via PR #94. |
-| `EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. |
-| `EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. |
-| `EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. |
-| `EPIC-LC-WORKFLOWS` | Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. |
-| `EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL resume (`TASK-BCK-032/033`) | Feature | P2 | EPIC-CORE-DECOUPLE | Prometheus/DataDog counters from `ResumeWorkflowUseCase`; publish `/hitl/resume/{id}` contract. |
+| `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-04-21 via PR #83 merged 2026-04-21. |
+| `✅ EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-VALIDATION entry. |
+| `✅ EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-ROLLOUT entry (PR #86). |
+| `EPIC-LC-WORKFLOWS` | [PHASE 2 DEFERRED] Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. Deferred to Phase 2 — not on critical path to launch. Re-evaluate after current Coherence Score / alerts / HITL features prove stable in production. |
+| `✅ EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL resume (`TASK-BCK-032/033`) | Feature | P2 | EPIC-CORE-DECOUPLE | Prometheus/DataDog counters from `ResumeWorkflowUseCase`; publish `/hitl/resume/{id}` contract. Completed 2026-04-21 via TASK-BCK-032 + TASK-BCK-033 Change Log entries. |
 | `EPIC-DLQ-ADMIN` ✅ | DLQ admin endpoints (`TASK-BCK-042`) | Feature | P2 | EPIC-CORE-DECOUPLE | `GET /admin/dlq` + `POST /admin/dlq/{id}/retry` against DLQService, admin scope, contract tests. Completed 2026-04-27. |
-| `TASK-1481` | Supervisor API keys (Claude/Codex/Gemini) | Feature | P1 | — | Provision keys, verify `shlex.split` + models.yaml CLI syntax, prove green auto-mode run. |
-| `EPIC-COH-V1-CONSOLIDATION` | Coherence Score v1 — pipeline consolidation + InsufficientEvidence + alerts (pre-signature audit only) | Feature | P0 | EPIC-CORE-DECOUPLE | 9-phase orchestration (Codex/Gemini/OpenCode) merging into `coh-v1/consolidation`. Fixes the `score=100` bug, consolidates two parallel pipelines, builds 18 evaluators behind `LLMRulePort`, persists `score_version` with hard cut-off, wires `AlertGeneratorService` + `meta_alert` AUDIT_INCOMPLETE. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. |
+| `✅ EPIC-COH-V1-CONSOLIDATION` | Coherence Score v1 — pipeline consolidation + InsufficientEvidence + alerts (pre-signature audit only) | Feature | P0 | EPIC-CORE-DECOUPLE | 9-phase orchestration (Codex/Gemini/OpenCode) merging into `coh-v1/consolidation`. Fixes the `score=100` bug, consolidates two parallel pipelines, builds 18 evaluators behind `LLMRulePort`, persists `score_version` with hard cut-off, wires `AlertGeneratorService` + `meta_alert` AUDIT_INCOMPLETE. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. Completed 2026-04-27 via all 9 V1-01..09 tasks marked [x] and Change Log EPIC-COH-V1-CONSOLIDATION complete evidence. |
 
 ### Tier 3 — Stabilization & Debt
 
@@ -80,6 +79,7 @@
 | `TASK-INF-049` / `050` / `051` | Duplicate execution lanes of completed `TASK-DDD-004/005/006`. |
 | `TASK-AI-039` / `TASK-INF-007` | Validator already shipped @2026-04-09 via `TASK-FRT-123`. |
 | `TASK-FRT-091` | Already marked `[x]` @2026-04-06 in master; detail drift only. |
+| `TASK-1481` | Experimental supervisor API key configuration — not needed for product launch (decided 2026-05-02). |
 
 ---
 
@@ -122,10 +122,6 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Priority | Task ID | Description |
 | -------- | ------- | ----------- |
-| P1 | `TASK-DDD-004` | Hexagonal refactor of `documents` — router/service migration pending. → EPIC-DDD-MIGRATION. |
-| P1 | `TASK-DDD-005` | Hexagonal refactor of `stakeholders` — `schemas.py` deletion + router migration pending. → EPIC-DDD-MIGRATION. |
-| P1 | `TASK-DDD-006` | Hexagonal refactor of `procurement` — analysis + migration pending. → EPIC-DDD-MIGRATION. |
-| P1 | `TASK-1481` | Supervisor API key configuration (Claude/Codex/Gemini CLIs). |
 
 ### Coherence v1 (EPIC-COH-V1-CONSOLIDATION)
 
@@ -149,6 +145,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-05-02 | **Backlog drift cleanup + Phase 2 reframing** — Marked 8 de-facto-complete epics as ✅ in Manifest v3 (TENANT-RLS-HARDENING, LANGSMITH-PHASE-1/ANALYTICS/VALIDATION/ROLLOUT, HITL-OBSERVABILITY, COH-V1-CONSOLIDATION, DDD-MIGRATION pending verification). Reconciled Quick Navigation counts against per-category files. Parked EPIC-LC-WORKFLOWS (Procurement + RACI + Stakeholder LangChain flows) as [PHASE 2 DEFERRED] — not on critical path to launch. Marked TASK-1481 (experimental supervisor API keys) as WONT-DO. Authored by Haiku doc-updater per orchestration model-routing rule. |
 | 2026-05-02 | **B1 + B2 + B3 wave landed** — three parallel-agent PRs merged into main: PR #92 `feat(admin): TASK-BCK-042 — DLQ admin endpoints + BCK-050 metric dedup` (Codex), PR #93 `fix(tests): TASK-QA-077 + TASK-1480 — flake stabilization` (OpenCode), PR #94 `feat(ai): EPIC-LANGSMITH-PHASE-2 — @traced_llm_call decorator + AI feedback endpoint` (Gemini 3 Pro). MASTER (Opus 4.7) reviewed inline due to org Sonnet quota; B3 unblocked by wiring the existing `mock_lookup_tenant_by_id` fixture in `tests/conftest.py`. Reports: `blackboard/dlq-admin/CODEX-REPORT.md`, `blackboard/test-stab/OPENCODE-REPORT.md`, `blackboard/langsmith-phase2/GEMINI-REPORT.md`. |
 | 2026-04-27 | **TASK-BCK-042 complete** — Added the `src.admin` bounded context for DLQ administration with Pydantic v2 DTOs, Protocol-backed list/retry use cases, admin HTTP router mounted at `/api/v1/admin/dlq`, and non-admin 403 coverage for both endpoints. The list endpoint is intentionally cross-tenant for admin review; retry delegates to existing `DLQService.increment_retry`. Acceptance: admin unit/integration suite 7/7 passed; OpenAPI snapshot includes `/api/v1/admin/dlq` and `/api/v1/admin/dlq/{dlq_id}/retry`. Bundled BCK-050 fix collapses duplicate Prometheus registration of `c2pro_hitl_checkpoint_load_errors_total` via dual-label compat wrapper. See `blackboard/dlq-admin/CODEX-REPORT.md`. |
 | 2026-04-27 | **TASK-COH-V1-09 merged to consolidation** (OpenCode/Sonnet 4.6 delivery + MASTER recovery) — `coh-v1/phase-9-opencode` (commit `1caa8a13`) merged with `--no-ff` (merge `1b771354`). Final state: completed `ScoreVersionBadge` pill + tooltip + customer FAQ link; `CoherenceClient` v1 announcement banner, nullable-score "Score withheld" state, AUDIT_INCOMPLETE CTA; `AlertReviewCenter` severity sort + status filter + copy-to-clipboard with synchronous toast; nullable `score_version` / `score_reason` / `score_missing_dimensions` in dashboard contracts; `/demo/coherence-v1` QA route; customer FAQ at `docs/customer/COHERENCE_V1_FAQ.md`; HTML+TXT announcement templates at `apps/api/src/notifications/templates/`; activated cut-off confirmed at `2026-05-01T00:00:00Z`. **MASTER recovery:** OpenCode reported Playwright e2e/coherence-v1 as 1 passed, but a fresh run failed at line 28 of the spec — the copy-to-clipboard handler awaited `navigator.clipboard.writeText` before calling `setCopiedAlertId`, and in headless chromium without granted clipboard-write permission `writeText` hangs indefinitely (neither resolves nor rejects), so the "Copied" toast never rendered. Repaired in `AlertReviewCenter.tsx` by inverting the order — set state synchronously, then fire-and-forget the clipboard write with attached `.catch()` — so UI feedback always shows regardless of clipboard outcome. Re-verified: 19/19 targeted Vitest pass, `pnpm tsc --noEmit` clean, Playwright 1/1 pass (7.3s). Repository-wide `pnpm vitest run` remains red on 10 pre-existing unrelated frontend suites (21 failing tests, none touching Phase 9 surface). Originally delivered off-pattern on consolidation working tree → wave-branch reconstructed. See `blackboard/coh-v1/PHASE-9-opencode-REPORT.md`. EPIC-COH-V1-CONSOLIDATION fully complete. |

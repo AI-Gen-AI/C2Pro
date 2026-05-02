@@ -85,10 +85,10 @@
 | [ ] | P1 | `TASK-IMPL-010.15` | Phase 3 | Remove dead code from nodes.py and nodes_extended.py | TASK-IMPL-010 Phase 4 |
 | [ ] | P0 | `TASK-IMPL-010.16` | Phase 3 | Full regression test run + 80%+ coverage verification | TASK-IMPL-010 Phase 4 |
 | [ ] | P2 | `TASK-AI-039` | None | Template validator and linter for prompt templates | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | P2 | `TASK-AI-040` | None | Multi-language prompt templates in English and Spanish | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | P2 | `TASK-AI-041` | Planned | Implement Procurement Plan flow with LangChain | Planning |
-| [ ] | P2 | `TASK-AI-042` | Planned | Implement RACI flow with LangChain | Planning |
-| [ ] | P2 | `TASK-AI-043` | Planned | Implement Stakeholder Resolution flow with LangChain | Planning |
+| [ ] | P2 | `TASK-AI-040` | None | [PHASE 2 DEFERRED] Multi-language prompt templates in English and Spanish | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
+| [ ] | P2 | `TASK-AI-041` | Planned | [PHASE 2 DEFERRED] Implement Procurement Plan flow with LangChain | Planning |
+| [ ] | P2 | `TASK-AI-042` | Planned | [PHASE 2 DEFERRED] Implement RACI flow with LangChain | Planning |
+| [ ] | P2 | `TASK-AI-043` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
 | [x] | P3 | `TASK-AI-044` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Refactored to centralized `AIUsageLogger` persistence path used by service and traced decorator for successful calls.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
 | [x] | P3 | `TASK-AI-045` | Env Setup | A/B testing framework for prompt versions `[x] @2026-04-21 - Implemented deterministic percentage-based tenant routing and fail-open fallback in `src/core/ai/rollout_router.py`, enabling controlled 10% → 50% → 100% traced canary progression.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-AI-046` | None | Prompt optimization suggestions from usage metrics | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
