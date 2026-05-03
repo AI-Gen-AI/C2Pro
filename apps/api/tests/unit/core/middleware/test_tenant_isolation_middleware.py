@@ -77,6 +77,26 @@ async def test_tenant_isolation_middleware_missing_token():
     assert content["detail"] == "Not authenticated"
     call_next.assert_not_called()
 
+
+@pytest.mark.asyncio
+async def test_tenant_isolation_middleware_missing_token_sentry_call():
+    """Rutas protegidas sin token deben llamar a record_auth_failure."""
+    middleware = TenantIsolationMiddleware(None)
+    call_next = AsyncMock()
+    request = create_mock_request("/api/v1/projects")
+
+    with patch("src.core.middleware.tenant_isolation.record_auth_failure") as mock_record_auth:
+        response = await middleware.dispatch(request, call_next)
+
+        assert response.status_code == 401
+        mock_record_auth.assert_called_once_with(
+            reason_code="missing_or_invalid_token",
+            tenant_id=None,
+            path="/api/v1/projects",
+            ip="127.0.0.1",
+        )
+
+
 @pytest.mark.asyncio
 async def test_tenant_isolation_middleware_valid_local_jwt():
     """JWT local válido debe inyectar tenant_id en request state."""

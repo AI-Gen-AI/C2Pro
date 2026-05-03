@@ -27,6 +27,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from src.config import settings
 from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
+from src.core.observability.sentry_alerts import record_auth_failure
 
 logger = structlog.get_logger()
 
@@ -368,6 +369,12 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 "clerk_auth_missing",
                 path=request.url.path,
             )
+            record_auth_failure(
+                reason_code="clerk_auth_missing",
+                tenant_id=None,
+                path=request.url.path,
+                ip=request.client.host if request.client else None,
+            )
             return Response(
                 content='{"detail": "Missing or invalid Authorization header"}',
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -405,6 +412,17 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 error=e.detail,
             )
+            
+            # Generate a snake_case reason_code from the exception detail
+            reason_code = e.detail.lower().replace(" ", "_")
+            
+            record_auth_failure(
+                reason_code=f"clerk_{reason_code}",
+                tenant_id=None, # Tenant ID is not available at this stage
+                path=request.url.path,
+                ip=request.client.host if request.client else None,
+            )
+
             return Response(
                 content=f'{{"detail": "{e.detail}"}}',
                 status_code=e.status_code,
