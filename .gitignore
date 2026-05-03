@@ -44,6 +44,8 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+.benchmarks/
+apps/api/.benchmarks/
 __pycache__/
 *.pyc
 *.pyo
