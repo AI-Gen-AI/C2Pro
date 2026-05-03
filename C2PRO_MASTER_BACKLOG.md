@@ -8,6 +8,14 @@
 
 ---
 
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-05-03 | **W8c: EPIC-LANGSMITH-ANALYTICS Epic Close** — Marked TASK-AI-002, TASK-AI-016..026, TASK-AI-046 [x] with W8a (PR#104) + W8b (PR#105) verification. Updated Manifest v3 EPIC-LANGSMITH-ANALYTICS to reflect final completion (backend cache decorator + analytics endpoints + frontend dashboard components + trace deep-link). All 12 subtasks verified; LANGSMITH-VALIDATION and LANGSMITH-ROLLOUT remain stable. Epic is now complete. |
+
+---
+
 ## Quick Navigation
 
 | Category | File | Owner | Total | Active | Completed |
@@ -49,7 +57,7 @@
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `✅ EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (`TASK-AI-003/010/011`) | Feature | P1 | EPIC-CORE-DECOUPLE | Provision org + API keys per env, register prompt metadata/tags, configure A/B experiment scaffolding. Completed 2026-04-21 via PR #81 merged 2026-04-21. |
 | `EPIC-LANGSMITH-PHASE-2` ✅ | Tracing + `ai_usage_logs` integration (`TASK-AI-013/014/015`, `TASK-AI-044`, `TASK-INF-012`) | Feature | P1 | PHASE-1 | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, expose `POST /api/v1/ai/feedback`. Completed 2026-05-01 via PR #94. |
-| `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-04-21 via PR #83 merged 2026-04-21. |
+| `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-05-03 via PR #104 (W8a: backend cache + endpoints) and PR #105 (W8b: frontend dashboard components + trace deep-link). All 12 subtasks (TASK-AI-002, AI-016..026, AI-046) marked [x] with full verification. |
 | `✅ EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-VALIDATION entry. |
 | `✅ EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-ROLLOUT entry (PR #86). |
 | `EPIC-LC-WORKFLOWS` | [PHASE 2 DEFERRED] Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. Deferred to Phase 2 — not on critical path to launch. Re-evaluate after current Coherence Score / alerts / HITL features prove stable in production. |
