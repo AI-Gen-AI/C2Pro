@@ -1,0 +1,54 @@
+# Sentry Alert Rules for C2Pro Authentication Failures
+# See: docs/runbooks/SENTRY_AUTH_ALERTS.md
+
+- name: "[Auth] High rate of auth failures for a single tenant"
+  entity: "event"
+  query: "event.type:error"
+  dataset: "errors"
+  aggregate: "count()"
+  time_window: "5m"
+  thresholds:
+    - "critical": ">50"
+  filters:
+    - "has:tenant.id"
+    - "tenant.id:!anonymous"
+  group_by: ["tenant.id"]
+  owner: "team:security"
+  actions:
+    - type: "slack"
+      channel: "#c2pro-security-alerts"
+      message: "Critical: High rate of authentication failures for tenant {{tenant.id}}. {{count}} failures in the last 5 minutes."
+
+- name: "[Auth] Bootstrap fallback blocked"
+  entity: "event"
+  query: "auth.reason:auth_bootstrap_fallback_blocked"
+  dataset: "errors"
+  aggregate: "count()"
+  time_window: "1m"
+  thresholds:
+    - "critical": ">0"
+  filters:
+    - "environment:production"
+  owner: "team:security"
+  actions:
+    - type: "slack"
+      channel: "#c2pro-security-alerts"
+      message: "CRITICAL: An `auth_bootstrap_fallback_blocked` event was detected in production. This indicates a potential system misconfiguration or attack."
+    - type: "pagerduty"
+      service_name: "c2pro-oncall"
+
+- name: "[Auth] High rate of anonymous auth failures"
+  entity: "event"
+  query: "event.type:error"
+  dataset: "errors"
+  aggregate: "count()"
+  time_window: "5m"
+  thresholds:
+    - "critical": ">200"
+  filters:
+    - "tenant.id:anonymous"
+  owner: "team:security"
+  actions:
+    - type: "slack"
+      channel: "#c2pro-security-alerts"
+      message: "Warning: High rate of anonymous authentication failures detected. {{count}} failures in the last 5 minutes. This could indicate scanning or a brute-force attack."

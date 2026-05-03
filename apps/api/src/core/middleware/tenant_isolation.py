@@ -25,6 +25,8 @@ from src.core.auth.bootstrap_lookup import (
 from src.core.auth.token_revocation import is_token_revoked_async
 from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
+from src.core.observability.sentry_alerts import record_auth_failure
+
 
 logger = structlog.get_logger()
 
@@ -95,6 +97,12 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                 error_code=error_code,
                 error=message,
             )
+            record_auth_failure(
+                reason_code=error_code,
+                tenant_id=tenant_id,
+                path=request.url.path,
+                ip=request.client.host if request.client else None,
+            )
             return self._unauthorized_response(message, error_code)
 
         if tenant_id is None and user_id is None:
@@ -103,6 +111,12 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                 path=request.url.path,
                 reason="missing_or_invalid_token",
                 error="Not authenticated",
+            )
+            record_auth_failure(
+                reason_code="missing_or_invalid_token",
+                tenant_id=None,
+                path=request.url.path,
+                ip=request.client.host if request.client else None,
             )
             return self._unauthorized_response("Not authenticated", "missing_or_invalid_token")
 
@@ -114,6 +128,12 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                     path=request.url.path,
                     reason="tenant_inactive_or_missing",
                     tenant_id=str(tenant_id),
+                )
+                record_auth_failure(
+                    reason_code="tenant_inactive_or_missing",
+                    tenant_id=tenant_id,
+                    path=request.url.path,
+                    ip=request.client.host if request.client else None,
                 )
                 return self._unauthorized_response(
                     "Invalid authentication context", "tenant_inactive_or_missing"
