@@ -8,7 +8,7 @@
 #   make dev         # Iniciar desarrollo
 #   make test        # Ejecutar todos los tests
 
-.PHONY: help setup dev test clean
+.PHONY: help setup dev test clean perf-bench
 
 # Default
 .DEFAULT_GOAL := help
@@ -158,6 +158,9 @@ test-web: ## Tests del frontend
 
 test-e2e: ## Tests end-to-end
 	cd apps/web && npm run test:e2e
+
+perf-bench: ## Ejecutar benchmarks backend y guardar baseline
+	cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/perf/ --benchmark-only --benchmark-save=baseline_2026_05_03
 
 # ===========================================
 # LINTING & FORMATTING

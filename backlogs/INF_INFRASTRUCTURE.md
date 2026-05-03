@@ -455,7 +455,7 @@ reporting:
 
 **Initiative**: Production monitoring for auth failures and performance
 
-**Status**: Both pending
+**Status**: TASK-INF-055 blocked; TASK-INF-056 completed with release runner plus W5b pytest-benchmark harness.
 
 **Auth Monitoring Specification** (TASK-INF-055):
 
@@ -512,12 +512,14 @@ api_response_times:
 - Reports use nearest-rank P50/P95/P99 calculations and render release-ready Markdown compatible with `evidence/releases/<release-id>/performance.md`.
 - Added unit coverage in `apps/api/tests/unit/test_performance_benchmark_runner.py` under Test Suite ID `TS-INF-PERF-056-001`.
 - Local synthetic benchmark run passed with `api_health`, `api_list`, and `worker_acceptance` samples under run ID `TASK-INF-056-local`.
+- W5b supplement (2026-05-03): added pytest-benchmark hot-path coverage in `apps/api/tests/perf/` for coherence scoring, analysis derivation, and disabled-tracing LLM wrapper overhead. Root cause investigation found `langchain_core.tracers.context._get_tracer_project()` indexes `get_tracing_context()["parent"]`; repeated pytest-benchmark rounds can reuse stale/missing LangChain parent-run context. The perf conftest disables LangChain/LangSmith tracing before test imports and runs async benchmark rounds in fresh event-loop/context boundaries. Acceptance passed with baseline `.benchmarks/Windows-CPython-3.11-64bit/0001_baseline_2026_05_03.json`.
 
 **Verification**:
 
 - RED: `.\apps\api\.venv\Scripts\python.exe -m pytest apps\api\tests\unit\test_performance_benchmark_runner.py -q` failed because `scripts/run_performance_benchmarks.py` did not exist.
 - GREEN: `.\apps\api\.venv\Scripts\python.exe -m pytest apps\api\tests\unit\test_performance_benchmark_runner.py -q`
 - Run: `.\apps\api\.venv\Scripts\python.exe scripts\run_performance_benchmarks.py --samples-json <temp-json> --environment local-synthetic --run-id TASK-INF-056-local`
+- W5b GREEN: `cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/perf/ --benchmark-only --benchmark-save=baseline_2026_05_03` (3 passed; baseline saved).
 
 ---
 
@@ -866,6 +868,7 @@ _ADRs for this category will be documented here_
 |------|--------|
 | 2026-04-20 | **TASK-INF-055 Blocked** — Confirmed Sentry SDK lifecycle is already present, but auth-failure monitoring completion requires backend/security-owned instrumentation under protected application code plus an external Sentry DSN and alert destination. Infra can resume with runtime secret validation after those prerequisites exist. |
 | 2026-04-20 | **TASK-INF-056 Completed** — Added `scripts/run_performance_benchmarks.py` for release-oriented performance smoke benchmarks, including HTTP sampling, deterministic `--samples-json` evaluation, P50/P95/P99 nearest-rank calculations, target pass/fail checks, and Markdown output for release evidence. Added `TS-INF-PERF-056-001` unit coverage and ran a local synthetic benchmark pass under run ID `TASK-INF-056-local`. |
+| 2026-05-03 | **TASK-INF-056 W5b supplement** — Added pytest-benchmark hot-path suite under `apps/api/tests/perf/`, pinned `pytest-benchmark==4.0.0`, added `make perf-bench`, and documented `docs/runbooks/PERF_BENCHMARKS.md`. LangChain root cause isolated to tracing parent context lookup; perf tests disable LangSmith/LangChain callbacks and isolate async rounds. Acceptance saved `baseline_2026_05_03` under `apps/api/.benchmarks/`. |
 | 2026-04-05 | **TASK-INF-006 Completed** — Enhanced Python MCP naming convention documentation with mandatory {service}_mcp pattern enforcement. Added comprehensive sections: ⚠️ MANDATORY REQUIREMENT header, 6 correct examples, 8 anti-pattern examples with ❌ markers, Python vs Node.js rationale (snake_case vs kebab-case), 5-step migration checklist, naming guidelines (general/descriptive/inferrable/stable/unique), and 5 common mistakes section (mixing conventions/over-specification/redundant suffixes/ambiguous names/case sensitivity). Infrastructure agent (role_infra) executed as part of Infrastructure Priority Sprint 2026-04-05. File updated: Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md |
 | 2026-04-04 | UNIFY-007 completed: Automated sync script core/sync_backlog_to_blackboard.py implemented - enables bidirectional task tracking between blackboard.json and all category backlogs |
 | 2026-04-04 | Category backlog created from master backlog migration |
