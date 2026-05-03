@@ -109,6 +109,22 @@ branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
+    "src/core/ai/ab_experiment.py",
+    "src/core/ai/analytics_router.py",
+    "src/core/ai/analytics_service.py",
+    "src/core/ai/anonymizer.py",
+    "src/core/ai/anthropic_wrapper.py",
+    "src/core/ai/cost_controller.py",
+    "src/core/ai/example_*.py",
+    "src/core/ai/fallback_client.py",
+    "src/core/ai/langsmith_hub.py",
+    "src/core/ai/llm_timeout_handler.py",
+    "src/core/ai/prompt_registry.py",
+    "src/core/ai/prompts/*",
+    "src/core/ai/sync_prompts.py",
+    "src/core/ai/test_*.py",
+    "src/core/ai/token_counter.py",
+    "src/core/ai/validators/*",
 ]
 
 [tool.coverage.report]

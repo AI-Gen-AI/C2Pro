@@ -37,11 +37,12 @@ from src.core.ai.model_router import (
     TaskType,
     get_model_router,
 )
-from src.core.ai.usage_logger import AIUsageLogRecord, AIUsageLogger
 from src.core.ai.prompt_cache import (
     get_prompt_cache_service,
 )
+from src.core.ai.usage_logger import AIUsageLogger, AIUsageLogRecord
 from src.core.cache import get_cache_service
+from src.core.database import get_session_with_tenant  # noqa: F401
 from src.core.exceptions import AIServiceError
 
 logger = structlog.get_logger()
@@ -530,22 +531,30 @@ class AIService:
             return
 
         operation_str = operation.value if isinstance(operation, TaskType) else str(operation)
-        await self.usage_logger.log_success(
-            AIUsageLogRecord(
-                tenant_id=tenant_id,
-                project_id=project_id,
+        try:
+            await self.usage_logger.log_success(
+                AIUsageLogRecord(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    model=model,
+                    operation=operation_str,
+                    prompt_version=prompt_version,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=cost_usd,
+                    cached=cached,
+                    latency_ms=latency_ms,
+                    trace_id=trace_id,
+                    trace_url=trace_url,
+                )
+            )
+        except Exception:
+            logger.error(
+                "ai_usage_log_save_failed",
+                tenant_id=str(tenant_id),
                 model=model,
                 operation=operation_str,
-                prompt_version=prompt_version,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost_usd=cost_usd,
-                cached=cached,
-                latency_ms=latency_ms,
-                trace_id=trace_id,
-                trace_url=trace_url,
             )
-        )
 
     def _parse_json_response(self, raw: str) -> Any:
         """

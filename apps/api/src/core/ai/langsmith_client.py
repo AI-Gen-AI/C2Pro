@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass
 from typing import Any
-import functools
 
 import structlog
 from langsmith import Client as NativeLangSmithClient
@@ -25,7 +25,7 @@ class LangSmithConfig:
     tracing_enabled: bool
 
     @classmethod
-    def from_env(cls, *, project_name: str) -> "LangSmithConfig":
+    def from_env(cls, *, project_name: str) -> LangSmithConfig:
         tracing_value = os.getenv("LANGSMITH_TRACING", "true").strip().lower()
         tracing_enabled = tracing_value in {"1", "true", "yes", "on"}
         return cls(
@@ -63,10 +63,22 @@ LLM_SPAN_ATTRIBUTE_ALLOWLIST = {
 class LangSmithClient:
     """TS-AI-LANGSMITH-001: Lightweight wrapper used by AI pipelines."""
 
-    def __init__(self, *, project_name: str = "c2pro") -> None:
+    def __init__(
+        self,
+        *,
+        project_name: str = "c2pro",
+        enabled: bool | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+    ) -> None:
+        if project is not None:
+            project_name = project
+        if environment is not None:
+            os.environ["ENVIRONMENT"] = environment
+        self._enabled_override = enabled
         self.config = LangSmithConfig.from_env(project_name=project_name)
         self._client: NativeLangSmithClient | None = None
-        if self.is_enabled:
+        if self.config.api_key and self.config.tracing_enabled:
             self._client = NativeLangSmithClient(
                 api_key=self.config.api_key,
                 api_url=self.config.endpoint,
@@ -75,6 +87,8 @@ class LangSmithClient:
     @property
     def is_enabled(self) -> bool:
         """Return True when tracing can be used safely."""
+        if self._enabled_override is not None:
+            return self._enabled_override
         return bool(self.config.api_key and self.config.tracing_enabled)
 
     @property
@@ -86,7 +100,7 @@ class LangSmithClient:
         """Starts a new span."""
         if not self.is_enabled or not self._client:
             return None
-        
+
         parent_run = get_current_run_tree()
         run = self._client.create_run(
             name=name,
@@ -101,7 +115,7 @@ class LangSmithClient:
         """Ends a span, marking as error if one occurred."""
         if not self.is_enabled or not self._client or not span:
             return
-        
+
         error_message = str(error) if error else None
         self._client.end_run(run_id=span.id, error=error_message)
 
@@ -109,17 +123,17 @@ class LangSmithClient:
         """Updates the metadata of an existing span."""
         if not self.is_enabled or not self._client or not span:
             return
-        
+
         self._client.update_run(run_id=span.id, metadata=metadata)
-        
+
     def create_event(self, name: str, metadata: dict[str, Any], event_type: str) -> None:
         """Creates a discrete event in the trace."""
         if not self.is_enabled or not self._client:
             return
-            
+
         current_run = get_current_run_tree()
         if not current_run:
-            return 
+            return
 
         self._client.create_feedback(
             run_id=current_run.id,
@@ -127,7 +141,7 @@ class LangSmithClient:
             comment=name,
             source_info={"metadata": metadata}
         )
-        
+
     def build_tags(
         self,
         *,
@@ -142,6 +156,7 @@ class LangSmithClient:
         if task_type:
             tags.append(f"task:{task_type}")
         if tenant_id:
+            tags.append("tenant")
             tags.append(f"tenant:{tenant_id}")
         return tags
 
