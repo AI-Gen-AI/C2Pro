@@ -1,4 +1,5 @@
-"""
+"""TS-AI-020.
+
 C2Pro - Cache Layer
 
 Redis/Upstash cache with SSL/TLS support and safe in-memory fallback.
@@ -22,10 +23,13 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from functools import wraps
 import hashlib
+import inspect
 import json
 import time
-from typing import Any
+from typing import Any, get_type_hints
 
 import redis.asyncio as redis
 import structlog
@@ -42,6 +46,7 @@ logger = structlog.get_logger()
 CACHE_TYPE_EXTRACTION = "document_extraction"
 CACHE_TYPE_PROJECT = "project"
 CACHE_TYPE_ANALYSIS = "analysis"
+CACHE_TYPE_AI_ANALYTICS = "ai_analytics"
 
 # TTL constants (in seconds)
 EXTRACTION_TTL_SECONDS = 60 * 60 * 24  # 24 hours
@@ -539,6 +544,81 @@ def build_rate_limit_key(user_id: str, endpoint: str) -> str:
         Formatted cache key: "ratelimit:{user_id}:{endpoint}"
     """
     return f"{NAMESPACE_RATE_LIMIT}:{user_id}:{endpoint}"
+
+
+def build_endpoint_cache_key(*, endpoint: str, query_params: dict[str, Any], tenant_id: Any) -> str:
+    """
+    TS-AI-020: Build a stable route cache key from endpoint, query params, and tenant.
+    """
+    normalized_payload = {
+        "endpoint": endpoint,
+        "query_params": query_params,
+        "tenant_id": str(tenant_id),
+    }
+    digest = hashlib.sha256(
+        json.dumps(normalized_payload, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return f"endpoint:{endpoint.strip('/').replace('/', ':')}:{digest}"
+
+
+def cached(*, ttl: int, endpoint: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
+    """
+    TS-AI-020: Cache async route responses by endpoint, query params, and tenant_id.
+
+    The decorator intentionally fails open: cache outages never block the route.
+    """
+
+    def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+        signature = inspect.signature(func)
+        type_hints = get_type_hints(func, include_extras=True)
+        evaluated_parameters = [
+            parameter.replace(annotation=type_hints.get(name, parameter.annotation))
+            for name, parameter in signature.parameters.items()
+        ]
+        evaluated_signature = signature.replace(
+            parameters=evaluated_parameters,
+            return_annotation=type_hints.get("return", signature.return_annotation),
+        )
+
+        @wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            bound = signature.bind_partial(*args, **kwargs)
+            bound.apply_defaults()
+
+            tenant_id = bound.arguments.get("tenant_id")
+            query_params = {
+                key: value
+                for key, value in bound.arguments.items()
+                if key not in {"tenant_id", "service"} and not key.startswith("_")
+            }
+            cache_key = build_endpoint_cache_key(endpoint=endpoint, query_params=query_params, tenant_id=tenant_id)
+            cache = get_cache_service()
+            cache_type = f"{CACHE_TYPE_AI_ANALYTICS}:{endpoint.strip('/')}"
+
+            if cache is not None:
+                try:
+                    cached_payload = await cache.get(cache_key)
+                    if cached_payload is not None:
+                        record_cache_hit(cache_type)
+                        return cached_payload
+                    record_cache_miss(cache_type)
+                except Exception as exc:
+                    logger.warning("route_cache_get_failed", endpoint=endpoint, cache_key=cache_key, error=str(exc))
+
+            payload = await func(*args, **kwargs)
+
+            if cache is not None:
+                try:
+                    await cache.set(cache_key, payload, ttl=ttl)
+                except Exception as exc:
+                    logger.warning("route_cache_set_failed", endpoint=endpoint, cache_key=cache_key, error=str(exc))
+
+            return payload
+
+        wrapper.__signature__ = evaluated_signature  # type: ignore[attr-defined]
+        return wrapper
+
+    return decorator
 
 
 # =============================================

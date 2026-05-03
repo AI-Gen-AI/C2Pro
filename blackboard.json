@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-04-26T21:53:55Z",
+  "updated_at": "2026-05-03T13:05:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -889,6 +889,34 @@
         "nota_verificacion": "Phase 9 targeted Vitest passed 19/19, pnpm tsc --noEmit passed, and pnpm playwright test e2e/coherence-v1.spec.ts --project=chromium passed. Full pnpm vitest run remains red with 10 unrelated existing frontend suites / 21 failing tests.",
         "cutoff_activado": "2026-05-01T00:00:00Z"
       }
+    },
+    {
+      "tarea_id": "T074",
+      "backlog_id": "TASK-AI-020",
+      "tipo": "ai",
+      "descripcion": "Implement Redis-backed route-level cache for LangSmith analytics endpoints and document W8a backend audit.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Analytics routes use @cached(ttl=...) with endpoint/query/tenant cache keys, Prometheus hit/miss counters, and integration proof for a second identical cache hit.",
+      "archivos_modificados": [
+        "apps/api/src/core/cache.py",
+        "apps/api/src/core/ai/analytics_router.py",
+        "apps/api/tests/integration/ai/test_analytics_cache.py",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-03T13:05:00Z",
+        "completado": "2026-05-03T13:05:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "TASK-AI-020 completed with route-level CacheService decorator, W8a analytics audit, tenant/query endpoint cache keys, 60s/300s TTL policy, and hit/miss metric coverage.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "Targeted pytest for analytics router/cache passed. pnpm tsc --noEmit passed from apps/web; repo-root pnpm tsc --noEmit prints TypeScript help because no root tsconfig is present."
+      }
     }
   ],
   "backlog_sync": {
@@ -960,7 +988,8 @@
       "TASK-BCK-050",
       "TASK-COH-V1-05",
       "TASK-COH-V1-07",
-      "TASK-COH-V1-09"
+      "TASK-COH-V1-09",
+      "TASK-AI-020"
     ]
   },
   "plan_actual": {

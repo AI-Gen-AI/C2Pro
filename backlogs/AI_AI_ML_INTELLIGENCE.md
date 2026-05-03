@@ -12,13 +12,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 44
+**Pending Tasks**: 43
 
-- IDs: `TASK-AI-002`-`TASK-AI-003`, `TASK-AI-007`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
+- IDs: `TASK-AI-002`-`TASK-AI-003`, `TASK-AI-007`-`TASK-AI-019`, `TASK-AI-021`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
 
-**Completed Tasks**: 34
+**Completed Tasks**: 35
 
-- IDs: `TASK-AI-001`, `TASK-AI-004`-`TASK-AI-006`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
+- IDs: `TASK-AI-001`, `TASK-AI-004`-`TASK-AI-006`, `TASK-AI-020`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
 
 **Usage Note**:
 
@@ -48,7 +48,7 @@
 | [ ] | P1 | `TASK-AI-017` | `TASK-216` | Implement `GET /api/v1/ai/analytics/comparison` to compare two prompt versions | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
 | [ ] | P1 | `TASK-AI-018` | `TASK-216` | Implement `GET /api/v1/ai/analytics/cost-breakdown` for cost by version & model | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
 | [ ] | P1 | `TASK-AI-019` | `TASK-216` | Implement `GET /api/v1/ai/analytics/quality-drift` for quality trend over time | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P2 | `TASK-AI-020` | `TASK-216` | Add caching layer (Redis) for expensive analytics queries | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P2 | `TASK-AI-020` | `TASK-216` | Add caching layer (Redis) for expensive analytics queries `[x] @2026-05-03 - Implemented route-level @cached(ttl=...) decorator backed by core CacheService; analytics cache keys include endpoint, query params, and tenant_id; TTLs set to 60s for quality-drift and 300s for cost/versions/comparison; hit/miss Prometheus hooks added and integration covered.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
 | [ ] | P1 | `TASK-AI-021` | `TASK-216` | Create `PromptAnalyticsDashboard` page route `/analytics/prompts` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
 | [ ] | P1 | `TASK-AI-022` | `TASK-216` | Implement `VersionComparisonView` component with dropdown, date range, comparison table, delta indicators | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
 | [ ] | P1 | `TASK-AI-023` | `TASK-216` | Implement `CostAnalysisView` component with stacked bar chart and pie chart | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
@@ -127,13 +127,25 @@
 
 **Statistics**:
 - Total: 95 tasks (+17 from TASK-IMPL-010)
-- Active: 63 (66.3%)
-- Completed: 32 (33.7%)
+- Active: 62 (65.3%)
+- Completed: 33 (34.7%)
 - Blocked: 0 (0%)
 
 ---
 
 ## 2. Specifications
+
+### W8a Backend Analytics Audit - TASK-AI-020 (2026-05-03)
+
+**Scope**: `analytics_router.py`, `analytics_service.py`, and `usage_analytics.py` were read end-to-end for the backend cache task.
+
+**Route contracts**: The FastAPI router exposes four tenant-scoped `GET /api/v1/ai/analytics/*` endpoints. `/cost` accepts `timeframe` with default `7d` and returns `{timeframe, window_start, series[], summary{total_cost,total_tokens,total_requests}}`. `/versions` accepts `timeframe=30d` and returns `{timeframe, window_start, versions[]}` with prompt version/tag, run counts, success rate, latency, cost, and feedback averages. `/comparison` accepts required `baseline_version` and `candidate_version` plus `timeframe=30d`, and returns `{timeframe, baseline, candidate, delta}`. `/quality-drift` accepts `timeframe=30d` and returns `{timeframe, window_start, series[], alerts[]}`. Validation errors from timeframe parsing are mapped to HTTP 400; missing comparison versions are FastAPI 422.
+
+**Parameter and tenancy contract**: Every analytics SQL query in `AIAnalyticsService` filters `ai_usage_logs` by `tenant_id = :tenant_id` and `created_at >= :window_start`. Timeframe parsing accepts only numeric `h`, `d`, or `w` suffixes. The router obtains `tenant_id` through `CurrentTenantId`; route cache keys now include endpoint, effective query params, and tenant ID to prevent cross-tenant reuse.
+
+**Drift noted**: Backlog/spec `TASK-AI-018` names `/cost-breakdown`, while the implemented and tested route is `/cost`. Existing integration coverage and frontend route interception use `/cost`, so W8a preserves `/cost` and records this as route-name/spec drift rather than changing the public contract in this cache task.
+
+**Implementation decision**: `TASK-AI-020` is implemented as a route-level `@cached(ttl=...)` decorator in `core/cache.py` using the existing `CacheService`/Redis abstraction. TTLs are `/quality-drift` 60s and `/cost`, `/versions`, `/comparison` 300s. Cache hit/miss Prometheus counters reuse the existing `record_cache_hit`/`record_cache_miss` hooks with `ai_analytics:<endpoint>` labels. The analytics router no longer injects service-level cache so the route TTL contract is authoritative.
 
 ### Frontend Priority Session - LangChain Workflows (2026-04-05)
 
