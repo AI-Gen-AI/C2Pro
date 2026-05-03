@@ -13,6 +13,7 @@ Test Scenarios:
 4. Multi-checkpoint state recovery
 """
 
+import os
 import sys
 from types import SimpleNamespace
 from uuid import uuid4
@@ -24,7 +25,14 @@ from src.analysis.adapters.graph import workflow as workflow_module
 from src.analysis.adapters.graph.workflow import _build_checkpointer, compile_workflow
 from src.config import settings
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        os.getenv("C2PRO_AI_MOCK") == "1",
+        reason="TS-AI-051: PostgreSQL checkpointer verification is integration-only.",
+    ),
+]
 
 
 class TestLangGraphCheckpointer:
