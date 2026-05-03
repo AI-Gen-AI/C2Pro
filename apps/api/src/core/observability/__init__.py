@@ -21,6 +21,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "record_ai_metric":      ("src.core.observability.monitoring", "record_ai_metric"),
     "record_cache_hit":      ("src.core.observability.monitoring", "record_cache_hit"),
     "record_cache_miss":     ("src.core.observability.monitoring", "record_cache_miss"),
+    "record_ai_cache_hit":     ("src.core.observability.monitoring", "record_ai_cache_hit"),
+    "record_ai_cache_miss":     ("src.core.observability.monitoring", "record_ai_cache_miss"),
+    "record_ai_cache_size":     ("src.core.observability.monitoring", "record_ai_cache_size"),
+    "record_ai_cache_eviction":     ("src.core.observability.monitoring", "record_ai_cache_eviction"),
     "METRICS_AVAILABLE":     ("src.core.observability.monitoring", "METRICS_AVAILABLE"),
     # HITL (TASK-BCK-032)
     "record_hitl_resume_attempt":         ("src.core.observability.monitoring", "record_hitl_resume_attempt"),

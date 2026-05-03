@@ -35,6 +35,15 @@ from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
 from src.core.ai.langsmith_client import LangSmithClient
 from src.core.ai.usage_logger import AIUsageLogger
+from src.core.ai.prompt_cache import (
+    FlashCacheService,
+    get_flash_cache_service,
+)
+from src.core.observability import (
+    record_ai_cache_hit,
+    record_ai_cache_miss,
+    record_ai_cache_size,
+)
 
 
 logger = structlog.get_logger()
@@ -103,6 +112,8 @@ class LLMRequest:
     tenant_id: UUID | None = None
     project_id: UUID | None = None
     task_type: str | None = None
+    bypass_cache: bool = False
+    tools: list[dict[str, Any]] | None = None
 
     def __post_init__(self):
         if self.request_id is None:
@@ -215,6 +226,7 @@ class LLMClient:
         # Observability clients
         self.langsmith_client = LangSmithClient()
         self.usage_logger = AIUsageLogger()
+        self.flash_cache = get_flash_cache_service()
 
         # Circuit breaker (using centralized resilience infrastructure)
         self.circuit_breaker = self._init_circuit_breaker() if enable_circuit_breaker else None
@@ -282,6 +294,45 @@ class LLMClient:
 
         # Track request
         self.total_requests += 1
+
+        # TS-AI-FLASH-001: Check flash cache first
+        tenant_id_str = str(request.tenant_id) if request.tenant_id else ""
+        cached_entry = await self.flash_cache.get(
+            model_id=request.model,
+            system_prompt=request.system,
+            messages=request.messages,
+            tools=request.tools,
+            temperature=request.temperature,
+            bypass_cache=request.bypass_cache,
+        )
+
+        if cached_entry:
+            # Cache hit - return cached response
+            self.flash_cache._hits += 1
+            record_ai_cache_hit(tenant_id_str, request.model)
+            record_ai_cache_size(self.flash_cache.size)
+
+            logger.info(
+                "llm_cache_hit",
+                request_id=request.request_id,
+                model=request.model,
+                original_cost_usd=cached_entry.cost_usd,
+            )
+
+            return LLMResponse(
+                content=cached_entry.content,
+                model=cached_entry.model,
+                input_tokens=cached_entry.input_tokens,
+                output_tokens=cached_entry.output_tokens,
+                cost_usd=0.0,  # No cost for cached response
+                request_id=cached_entry.request_id,
+                execution_time_ms=0.0,  # Instant return
+                retries=0,
+                cached=True,
+            )
+
+        # Cache miss - proceed with normal flow
+        record_ai_cache_miss(tenant_id_str, request.model)
 
         # Pre-execution token counting and cost estimation
         token_counter = get_token_counter()
@@ -384,6 +435,22 @@ class LLMClient:
                     estimated_cost_usd=pre_estimate.total_cost_usd,
                     input_estimation_accuracy_pct=round(input_accuracy, 1),
                 )
+
+                # TS-AI-FLASH-001: Cache the response for future use
+                await self.flash_cache.set(
+                    model_id=request.model,
+                    system_prompt=request.system,
+                    messages=request.messages,
+                    tools=request.tools,
+                    temperature=request.temperature,
+                    content=content,
+                    input_tokens=raw_response.usage.input_tokens,
+                    output_tokens=raw_response.usage.output_tokens,
+                    cost_usd=cost_usd,
+                    execution_time_ms=execution_time_ms,
+                    request_id=request.request_id,
+                )
+                record_ai_cache_size(self.flash_cache.size)
 
                 return LLMResponse(
                     content=content,
