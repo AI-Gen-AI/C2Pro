@@ -235,6 +235,30 @@ try:
         ["service", "from_state", "to_state"],
     )
 
+    # AI Flash cache metrics (TS-AI-FLASH-001)
+    AI_CACHE_HITS = Counter(
+        "c2pro_ai_cache_hits_total",
+        "Total AI flash cache hits",
+        ["tenant_id", "model"],
+    )
+
+    AI_CACHE_MISSES = Counter(
+        "c2pro_ai_cache_misses_total",
+        "Total AI flash cache misses",
+        ["tenant_id", "model"],
+    )
+
+    AI_CACHE_SIZE = Gauge(
+        "c2pro_ai_cache_size_entries",
+        "Current number of entries in AI flash cache",
+    )
+
+    AI_CACHE_EVICTIONS = Counter(
+        "c2pro_ai_cache_evictions_total",
+        "Total AI flash cache evictions",
+        ["reason"],
+    )
+
     METRICS_AVAILABLE = True
 
 except ImportError:
@@ -285,6 +309,30 @@ def record_cache_miss(cache_type: str) -> None:
     """Registra un cache miss."""
     if METRICS_AVAILABLE:
         CACHE_MISS.labels(cache_type=cache_type).inc()
+
+
+def record_ai_cache_hit(tenant_id: str, model: str) -> None:
+    """TS-AI-FLASH-001: Record an AI flash cache hit."""
+    if METRICS_AVAILABLE:
+        AI_CACHE_HITS.labels(tenant_id=tenant_id or "", model=model).inc()
+
+
+def record_ai_cache_miss(tenant_id: str, model: str) -> None:
+    """TS-AI-FLASH-001: Record an AI flash cache miss."""
+    if METRICS_AVAILABLE:
+        AI_CACHE_MISSES.labels(tenant_id=tenant_id or "", model=model).inc()
+
+
+def record_ai_cache_size(size: int) -> None:
+    """TS-AI-FLASH-001: Record current AI flash cache size."""
+    if METRICS_AVAILABLE:
+        AI_CACHE_SIZE.set(size)
+
+
+def record_ai_cache_eviction(reason: str) -> None:
+    """TS-AI-FLASH-001: Record an AI flash cache eviction."""
+    if METRICS_AVAILABLE:
+        AI_CACHE_EVICTIONS.labels(reason=reason).inc()
 
 
 def record_circuit_breaker_state(service: str, state: str) -> None:
