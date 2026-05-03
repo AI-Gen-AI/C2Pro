@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AICostAnalytics, AIQualityDrift, AIVersionPerformance } from "@/lib/api/contracts";
-import { getCostAnalytics, getQualityDrift, getVersionPerformance } from "@/lib/api/services/ai-analytics";
+import type { AICostAnalytics, AIQualityDrift, AIVersionPerformance, AIUsageMetric } from "@/lib/api/contracts";
+import { getCostAnalytics, getQualityDrift, getUsageMetrics, getVersionPerformance } from "@/lib/api/services/ai-analytics";
 import { CostDashboard } from "@/components/features/ai-analytics/CostDashboard";
 import { DriftDetector } from "@/components/features/ai-analytics/DriftDetector";
 import { VersionMonitor } from "@/components/features/ai-analytics/VersionMonitor";
+import { UsageMetricsTable } from "@/components/features/ai-analytics/UsageMetricsTable";
 
 const EMPTY_COST: AICostAnalytics = {
   timeframe: "30d",
@@ -23,6 +24,9 @@ export default function AIAnalyticsPage() {
   const [cost, setCost] = useState<AICostAnalytics>(EMPTY_COST);
   const [versions, setVersions] = useState<AIVersionPerformance>(EMPTY_VERSIONS);
   const [drift, setDrift] = useState<AIQualityDrift>(EMPTY_DRIFT);
+  const [usageMetrics, setUsageMetrics] = useState<AIUsageMetric[]>([]);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +60,30 @@ export default function AIAnalyticsPage() {
     };
   }, [timeframe]);
 
+  useEffect(() => {
+    let active = true;
+    setUsageLoading(true);
+    setUsageError(null);
+
+    getUsageMetrics(timeframe)
+      .then((data) => {
+        if (!active) return;
+        setUsageMetrics(data?.metrics ?? []);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setUsageError(err instanceof Error ? err.message : "Failed to load usage metrics.");
+        setUsageMetrics([]);
+      })
+      .finally(() => {
+        if (active) setUsageLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [timeframe]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -74,6 +102,7 @@ export default function AIAnalyticsPage() {
       <CostDashboard data={cost} loading={loading} error={error} />
       <VersionMonitor data={versions} loading={loading} error={error} />
       <DriftDetector data={drift} loading={loading} error={error} />
+      <UsageMetricsTable metrics={usageMetrics} loading={usageLoading} error={usageError} />
     </div>
   );
 }

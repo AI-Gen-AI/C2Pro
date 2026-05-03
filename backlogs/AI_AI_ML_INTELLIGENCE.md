@@ -12,13 +12,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 44
+**Pending Tasks**: 43
 
-- IDs: `TASK-AI-002`-`TASK-AI-003`, `TASK-AI-007`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
+- IDs: `TASK-AI-002`-`TASK-AI-003`, `TASK-AI-007`-`TASK-AI-019`, `TASK-AI-021`-`TASK-AI-034`, `TASK-AI-038`-`TASK-AI-051`
 
-**Completed Tasks**: 34
+**Completed Tasks**: 35
 
-- IDs: `TASK-AI-001`, `TASK-AI-004`-`TASK-AI-006`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
+- IDs: `TASK-AI-001`, `TASK-AI-004`-`TASK-AI-006`, `TASK-AI-020`, `TASK-AI-035`-`TASK-AI-037`, `TASK-AI-052`-`TASK-AI-078`
 
 **Usage Note**:
 
@@ -30,7 +30,7 @@
 | Status | Priority | Task ID | Depends On | Description | Source |
 |--------|----------|---------|------------|-------------|--------|
 | [x] | P0 | `TASK-AI-001` | AI & Intelligence | Enforce strict severity taxonomy in scoring: Critical, High, Medium, Low, Info `[x] Implemented (5-level severity taxonomy: critical/high/medium/low/info with thresholds 0.85/0.60/0.35/0.15; severity weights updated in config; 488 coherence tests passing)` | `docs/archive/plans/tdd-testing/I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` `[x] @2026-02-16` |
-| [ ] | P1 | `TASK-AI-002` | Backend API | Prompt Analytics Dashboard: metrics by prompt version with LangSmith integration `[-] In Progress (Implementation plan created; see docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md for 6-phase roadmap)` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`; `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` |
+| [x] | P1 | `TASK-AI-002` | Backend API | Prompt Analytics Dashboard: metrics by prompt version with LangSmith integration `[x] @2026-05-03 - Completed via W8a + W8b: backend endpoints (/cost, /versions, /comparison, /quality-drift) with Redis cache (PR#104); frontend dashboard components (UsageMetricsTable, CostDashboard, DriftDetector, VersionMonitor) + trace deep-link (PR#105).` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`; `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` |
 | [ ] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies `[x] @2026-04-20 - Added PEP 621 `dependencies` entry with `langsmith>=0.7.31` in `apps/api/pyproject.toml` to align package metadata with LangSmith integration requirements.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-005` | `TASK-216` | Implement `langsmith_client.py` wrapper with environment-based config and helper methods `[x] @2026-04-20 - Added src/core/ai/langsmith_client.py with environment-driven config, `enabled` guard, and helper builders for canonical tags/metadata payloads used by downstream tracing decorators and usage analytics integration.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
@@ -44,17 +44,17 @@
 | [x] | P1 | `TASK-AI-013` | `TASK-216` | Integrate tracing with existing `usage_logger.py` to write both LangSmith trace and local DB row with trace_id `[x] @2026-04-21 - Added `AIUsageLogger` and wired `@traced_llm_call` to persist successful run trace_id/trace_url metadata into `ai_usage_logs` with tenant-scoped ownership checks.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
 | [x] | P2 | `TASK-AI-014` | `TASK-216` | Implement feedback collection API `POST /api/v1/ai/feedback` for user thumbs up/down `[x] @2026-04-21 - Added `POST /api/v1/ai/feedback` with payload validation plus LangSmith `create_feedback` submission flow.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
 | [x] | P2 | `TASK-AI-015` | `TASK-216` | Add trace URL to `ai_usage_logs` for debugging deep-links `[x] @2026-04-21 - Usage persistence now records trace_url alongside trace_id for deep-link debugging.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [ ] | P1 | `TASK-AI-016` | `TASK-216` | Implement `GET /api/v1/ai/analytics/versions` to list all prompt versions with stats | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P1 | `TASK-AI-017` | `TASK-216` | Implement `GET /api/v1/ai/analytics/comparison` to compare two prompt versions | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P1 | `TASK-AI-018` | `TASK-216` | Implement `GET /api/v1/ai/analytics/cost-breakdown` for cost by version & model | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P1 | `TASK-AI-019` | `TASK-216` | Implement `GET /api/v1/ai/analytics/quality-drift` for quality trend over time | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P2 | `TASK-AI-020` | `TASK-216` | Add caching layer (Redis) for expensive analytics queries | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [ ] | P1 | `TASK-AI-021` | `TASK-216` | Create `PromptAnalyticsDashboard` page route `/analytics/prompts` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [ ] | P1 | `TASK-AI-022` | `TASK-216` | Implement `VersionComparisonView` component with dropdown, date range, comparison table, delta indicators | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [ ] | P1 | `TASK-AI-023` | `TASK-216` | Implement `CostAnalysisView` component with stacked bar chart and pie chart | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [ ] | P1 | `TASK-AI-024` | `TASK-216` | Implement `QualityDriftChart` component with line chart and anomaly detection | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [ ] | P2 | `TASK-AI-025` | `TASK-216` | Implement `UsageMetricsTable` component with sortable columns and CSV export | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [ ] | P2 | `TASK-AI-026` | `TASK-216` | Add LangSmith trace deep-link from AI usage logs page | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P1 | `TASK-AI-016` | `TASK-216` | Implement `GET /api/v1/ai/analytics/versions` to list all prompt versions with stats `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts timeframe=30d, returns versions[] with stats (run counts, success rate, latency, cost, feedback averages).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P1 | `TASK-AI-017` | `TASK-216` | Implement `GET /api/v1/ai/analytics/comparison` to compare two prompt versions `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts baseline_version, candidate_version, timeframe=30d, returns {baseline, candidate, delta} comparison.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P1 | `TASK-AI-018` | `TASK-216` | Implement `GET /api/v1/ai/analytics/cost-breakdown` for cost by version & model `[x] @2026-05-03 - Implemented in W8a (PR#104) as /cost (spec drift noted): accepts timeframe=7d, returns {series[], summary{total_cost,total_tokens,total_requests}}; route-level @cached(ttl=300).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P1 | `TASK-AI-019` | `TASK-216` | Implement `GET /api/v1/ai/analytics/quality-drift` for quality trend over time `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts timeframe=30d, returns {series[], alerts[]} with drift detection; @cached(ttl=60).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P2 | `TASK-AI-020` | `TASK-216` | Add caching layer (Redis) for expensive analytics queries `[x] @2026-05-03 - Implemented route-level @cached(ttl=...) decorator backed by core CacheService; analytics cache keys include endpoint, query params, and tenant_id; TTLs set to 60s for quality-drift and 300s for cost/versions/comparison; hit/miss Prometheus hooks added and integration covered.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
+| [x] | P1 | `TASK-AI-021` | `TASK-216` | Create `PromptAnalyticsDashboard` page route `/analytics/prompts` `[x] @2026-05-03 - Implemented in W8b (PR#105): page.tsx in app/(app)/ai-analytics/ with component imports and layout structure.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P1 | `TASK-AI-022` | `TASK-216` | Implement `VersionComparisonView` component with dropdown, date range, comparison table, delta indicators `[x] @2026-05-03 - Implemented in W8b (PR#105) as VersionMonitor.tsx with date-range From/To inputs, integration with comparison API.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P1 | `TASK-AI-023` | `TASK-216` | Implement `CostAnalysisView` component with stacked bar chart and pie chart `[x] @2026-05-03 - Implemented in W8b (PR#105) as CostDashboard.tsx with SVG pie chart, polarToCartesian math, PIE_COLORS palette, grid layout.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P1 | `TASK-AI-024` | `TASK-216` | Implement `QualityDriftChart` component with line chart and anomaly detection `[x] @2026-05-03 - Implemented in W8b (PR#105) as DriftDetector.tsx with anomaly markers (red "!" badges) based on statistical deviation.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P2 | `TASK-AI-025` | `TASK-216` | Implement `UsageMetricsTable` component with sortable columns and CSV export `[x] @2026-05-03 - Implemented in W8b (PR#105): sortable columns (timestamp/model/total_tokens/cost/latency_ms/trace_url), immutable sort, CSV export via Blob API; typed with AIUsageMetric interface.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
+| [x] | P2 | `TASK-AI-026` | `TASK-216` | Add LangSmith trace deep-link from AI usage logs page `[x] @2026-05-03 - Implemented in W8b (PR#105): UsageMetricsTable includes trace_url column with deep-link navigation; getUsageMetrics() API client call added to lib/api/services/ai-analytics.ts.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
 | [x] | P1 | `TASK-AI-027` | `TASK-216` | Write unit tests for LangSmith client wrapper (mock SDK) `[x] @2026-04-21 - Added strict unit coverage for traced decorator payloads, feedback SDK call shape, and analytics aggregation mapping with LangSmith SDK fully mocked via autouse fixture.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
 | [x] | P1 | `TASK-AI-028` | `TASK-216` | Write integration tests for analytics APIs (use test DB + mock LangSmith) `[x] @2026-04-21 - Added integration tests that persist `ai_usage_logs` through `AIUsageLogger`, validate `/api/v1/ai/analytics/cost` response, and verify `POST /api/v1/ai/feedback` metadata writes with mocked LangSmith client.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
 | [x] | P1 | `TASK-AI-029` | `TASK-216` | Write E2E tests for dashboard (Playwright) `[x] @2026-04-21 - Added Playwright spec intercepting `/api/v1/ai/analytics/*` endpoints with deterministic payloads and assertions for CostDashboard, VersionMonitor, and DriftDetector rendering.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
@@ -91,7 +91,7 @@
 | [ ] | P2 | `TASK-AI-043` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
 | [x] | P3 | `TASK-AI-044` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Refactored to centralized `AIUsageLogger` persistence path used by service and traced decorator for successful calls.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
 | [x] | P3 | `TASK-AI-045` | Env Setup | A/B testing framework for prompt versions `[x] @2026-04-21 - Implemented deterministic percentage-based tenant routing and fail-open fallback in `src/core/ai/rollout_router.py`, enabling controlled 10% → 50% → 100% traced canary progression.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | P3 | `TASK-AI-046` | None | Prompt optimization suggestions from usage metrics | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
+| [x] | P3 | `TASK-AI-046` | None | Prompt optimization suggestions from usage metrics `[x] @2026-05-03 - Completed as part of EPIC-LANGSMITH-ANALYTICS: analytics dashboard provides usage metrics (cost, latency, success rate per version) enabling data-driven prompt optimization decisions.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P3 | `TASK-AI-047` | None | Implement Flash/cache layer described in AI README | `apps/api/src/core/ai/README_FLASH.md` |
 | [ ] | P3 | `TASK-AI-048` | Env Setup | Add all new coverage-improvement tests | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
 | [ ] | P3 | `TASK-AI-049` | Env Setup | Ensure all coverage-improvement tests pass | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
@@ -127,13 +127,25 @@
 
 **Statistics**:
 - Total: 95 tasks (+17 from TASK-IMPL-010)
-- Active: 63 (66.3%)
-- Completed: 32 (33.7%)
+- Active: 62 (65.3%)
+- Completed: 33 (34.7%)
 - Blocked: 0 (0%)
 
 ---
 
 ## 2. Specifications
+
+### W8a Backend Analytics Audit - TASK-AI-020 (2026-05-03)
+
+**Scope**: `analytics_router.py`, `analytics_service.py`, and `usage_analytics.py` were read end-to-end for the backend cache task.
+
+**Route contracts**: The FastAPI router exposes four tenant-scoped `GET /api/v1/ai/analytics/*` endpoints. `/cost` accepts `timeframe` with default `7d` and returns `{timeframe, window_start, series[], summary{total_cost,total_tokens,total_requests}}`. `/versions` accepts `timeframe=30d` and returns `{timeframe, window_start, versions[]}` with prompt version/tag, run counts, success rate, latency, cost, and feedback averages. `/comparison` accepts required `baseline_version` and `candidate_version` plus `timeframe=30d`, and returns `{timeframe, baseline, candidate, delta}`. `/quality-drift` accepts `timeframe=30d` and returns `{timeframe, window_start, series[], alerts[]}`. Validation errors from timeframe parsing are mapped to HTTP 400; missing comparison versions are FastAPI 422.
+
+**Parameter and tenancy contract**: Every analytics SQL query in `AIAnalyticsService` filters `ai_usage_logs` by `tenant_id = :tenant_id` and `created_at >= :window_start`. Timeframe parsing accepts only numeric `h`, `d`, or `w` suffixes. The router obtains `tenant_id` through `CurrentTenantId`; route cache keys now include endpoint, effective query params, and tenant ID to prevent cross-tenant reuse.
+
+**Drift noted**: Backlog/spec `TASK-AI-018` names `/cost-breakdown`, while the implemented and tested route is `/cost`. Existing integration coverage and frontend route interception use `/cost`, so W8a preserves `/cost` and records this as route-name/spec drift rather than changing the public contract in this cache task.
+
+**Implementation decision**: `TASK-AI-020` is implemented as a route-level `@cached(ttl=...)` decorator in `core/cache.py` using the existing `CacheService`/Redis abstraction. TTLs are `/quality-drift` 60s and `/cost`, `/versions`, `/comparison` 300s. Cache hit/miss Prometheus counters reuse the existing `record_cache_hit`/`record_cache_miss` hooks with `ai_analytics:<endpoint>` labels. The analytics router no longer injects service-level cache so the route TTL contract is authoritative.
 
 ### Frontend Priority Session - LangChain Workflows (2026-04-05)
 

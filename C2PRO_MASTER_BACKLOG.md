@@ -12,7 +12,7 @@
 
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
-| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 44 | 34 |
+| AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 43 | 35 |
 | Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 49 | 5 | 44 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
@@ -49,7 +49,7 @@
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `✅ EPIC-LANGSMITH-PHASE-1` | LangSmith Hub foundation (`TASK-AI-003/010/011`) | Feature | P1 | EPIC-CORE-DECOUPLE | Provision org + API keys per env, register prompt metadata/tags, configure A/B experiment scaffolding. Completed 2026-04-21 via PR #81 merged 2026-04-21. |
 | `EPIC-LANGSMITH-PHASE-2` ✅ | Tracing + `ai_usage_logs` integration (`TASK-AI-013/014/015`, `TASK-AI-044`, `TASK-INF-012`) | Feature | P1 | PHASE-1 | Wire `@traced_llm_call` into `usage_logger.py`, persist `trace_id`/`trace_url`, expose `POST /api/v1/ai/feedback`. Completed 2026-05-01 via PR #94. |
-| `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-04-21 via PR #83 merged 2026-04-21. |
+| `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-05-03 via PR #104 (W8a: backend cache + endpoints) and PR #105 (W8b: frontend dashboard components + trace deep-link). All 12 subtasks (TASK-AI-002, AI-016..026, AI-046) marked [x] with full verification. |
 | `✅ EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-VALIDATION entry. |
 | `✅ EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-ROLLOUT entry (PR #86). |
 | `EPIC-LC-WORKFLOWS` | [PHASE 2 DEFERRED] Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. Deferred to Phase 2 — not on critical path to launch. Re-evaluate after current Coherence Score / alerts / HITL features prove stable in production. |
@@ -102,7 +102,7 @@
 ### AI / ML Intelligence
 
 Grouped under LangSmith epics (see Manifest v3 §Tier 2):
-- `TASK-AI-002`, `TASK-AI-003`, `TASK-AI-010..034`, `TASK-AI-040..047` — split across EPIC-LANGSMITH-PHASE-1/2/ANALYTICS/VALIDATION/ROLLOUT + EPIC-LC-WORKFLOWS + EPIC-AI-CACHE.
+- `TASK-AI-002`, `TASK-AI-003`, `TASK-AI-010..019`, `TASK-AI-021..034`, `TASK-AI-040..047` — split across EPIC-LANGSMITH-PHASE-1/2/ANALYTICS/VALIDATION/ROLLOUT + EPIC-LC-WORKFLOWS + EPIC-AI-CACHE.
 - `TASK-IMPL-010` plus 14 subtasks (`.3`..`.16`) → EPIC-CORE-DECOUPLE.
 - Full detail: [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md).
 
@@ -145,6 +145,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-05-03 | **TASK-AI-020 complete** — W8a backend analytics audit documented in `backlogs/AI_AI_ML_INTELLIGENCE.md`; route-level `@cached(ttl=...)` decorator added on `/api/v1/ai/analytics/{cost,versions,comparison,quality-drift}` using `CacheService`; cache keys include endpoint, query params, and tenant_id; TTLs are 60s for quality drift and 300s for cost/version/comparison routes; Prometheus cache hit/miss hooks covered by integration test. |
 | 2026-05-03 | **EPIC-QA-CONTRACT-COVERAGE replanned (W7 MASTER deliverable)** — 31 legacy QA stubs (`TASK-QA-028/034/050..064/069/070/084..095`) had no specs anywhere; collapsed into 13 planned subtasks (`TASK-QA-200..213`) across 3 tracks: (A) Schemathesis-driven API contract coverage from `docs/api/openapi.yaml` (42 paths / 56 operations across 19 routers), (B) wireframe-traceability TCs for the 6 wireframes in `docs/wireframes/0*.md` plus CE-S2-010 evidence-viewer dossier, (C) quality-gate report pipeline (composite GH Action + PR-comment + CI gate). DB bootstrap migration (refactor `tests/conftest.py` from 1279 LOC) folded into Track A. Pact-style consumer-driven contracts marked WONT-DO (single-consumer monorepo). Dispatch slate: Track A → Sonnet (~31h), Track B → OpenCode (~22h), Track C → Codex (~7h). Full spec inline in `backlogs/QA_QUALITY_ASSURANCE.md`. |
 | 2026-05-03 | **TASK-INF-056 W5b perf benchmark harness completed** — Added pytest-benchmark suite for coherence scoring, analysis derivation, and mocked traced LLM wrapper overhead; pinned `pytest-benchmark==4.0.0`; added `make perf-bench`; documented `docs/runbooks/PERF_BENCHMARKS.md`. LangChain investigation found tracing parent-context lookup at `langchain_core.tracers.context._get_tracer_project()`; perf conftest disables LangSmith/LangChain tracing and isolates async rounds. Acceptance: `cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/perf/ --benchmark-only --benchmark-save=baseline_2026_05_03` passed 3/3 and wrote `.benchmarks/Windows-CPython-3.11-64bit/0001_baseline_2026_05_03.json`. |
 | 2026-05-02 | **B1 + B2 + B3 wave landed** — three parallel-agent PRs merged into main: PR #92 `feat(admin): TASK-BCK-042 — DLQ admin endpoints + BCK-050 metric dedup` (Codex), PR #93 `fix(tests): TASK-QA-077 + TASK-1480 — flake stabilization` (OpenCode), PR #94 `feat(ai): EPIC-LANGSMITH-PHASE-2 — @traced_llm_call decorator + AI feedback endpoint` (Gemini 3 Pro). MASTER (Opus 4.7) reviewed inline due to org Sonnet quota; B3 unblocked by wiring the existing `mock_lookup_tenant_by_id` fixture in `tests/conftest.py`. Reports: `blackboard/dlq-admin/CODEX-REPORT.md`, `blackboard/test-stab/OPENCODE-REPORT.md`, `blackboard/langsmith-phase2/GEMINI-REPORT.md`. |
