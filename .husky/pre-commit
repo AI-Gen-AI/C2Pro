@@ -1,5 +1,16 @@
 #!/usr/bin/env sh
 echo "🔍 Running Quality Gates (pre-commit)..."
-echo "📝 Checking code style..."
-pnpm run lint || { echo "❌ ESLint failed!"; exit 1; }
+
+# Backend lint (ruff) — always run when Python files are staged
+if git diff --cached --name-only | grep -qE '\.py$'; then
+  echo "📝 Checking Python style (ruff)..."
+  cd apps/api && python -m ruff check . && cd ../..
+fi
+
+# Frontend lint (ESLint) — only run when JS/TS/TSX files are staged
+if git diff --cached --name-only | grep -qE '\.(tsx?|jsx?|mjs|cjs)$'; then
+  echo "📝 Checking frontend style (ESLint)..."
+  pnpm run lint || { echo "❌ ESLint failed!"; exit 1; }
+fi
+
 echo "✅ Pre-commit gates passed!"
