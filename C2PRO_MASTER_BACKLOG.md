@@ -8,14 +8,6 @@
 
 ---
 
-## Change Log
-
-| Date | Change |
-|------|--------|
-| 2026-05-03 | **W8c: EPIC-LANGSMITH-ANALYTICS Epic Close** — Marked TASK-AI-002, TASK-AI-016..026, TASK-AI-046 [x] with W8a (PR#104) + W8b (PR#105) verification. Updated Manifest v3 EPIC-LANGSMITH-ANALYTICS to reflect final completion (backend cache decorator + analytics endpoints + frontend dashboard components + trace deep-link). All 12 subtasks verified; LANGSMITH-VALIDATION and LANGSMITH-ROLLOUT remain stable. Epic is now complete. |
-
----
-
 ## Quick Navigation
 
 | Category | File | Owner | Total | Active | Completed |
