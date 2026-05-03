@@ -126,3 +126,23 @@ export interface AIQualityDrift {
   series: AIQualityDriftPoint[];
   alerts: AIQualityDriftAlert[];
 }
+
+export interface AIUsageMetric {
+  id: string;
+  timestamp: string;
+  model: string;
+  prompt_version: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost: number;
+  latency_ms: number;
+  trace_url: string | null;
+}
+
+export interface AIUsageMetricsResponse {
+  metrics: AIUsageMetric[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
