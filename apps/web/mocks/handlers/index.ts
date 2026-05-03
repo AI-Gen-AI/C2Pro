@@ -10,6 +10,7 @@ import { s312A11yResponsiveHandlers } from "./custom/s3-12-a11y-responsive";
 import { documentViewerHandlers } from "./custom/document-viewer";
 import { observabilityHandlers } from "./custom/observability";
 import { raciHandlers } from "./custom/raci";
+import { aiAnalyticsHandlers } from "./custom/ai-analytics";
 
 export const browserHandlers = [
   healthHandler,
@@ -21,6 +22,7 @@ export const browserHandlers = [
   ...s312A11yResponsiveHandlers,
   ...observabilityHandlers,
   ...raciHandlers,
+  ...aiAnalyticsHandlers,
 ];
 
 export const testHandlers = [
