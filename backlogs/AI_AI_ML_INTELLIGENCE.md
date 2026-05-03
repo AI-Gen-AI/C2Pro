@@ -642,6 +642,5 @@ _ADRs for this category will be documented here_
 
 | Date | Change |
 |------|--------|
-| 2026-05-03 | **W8c: EPIC-LANGSMITH-ANALYTICS Epic Close** — Completed TASK-AI-002, TASK-AI-016..019 (backend analytics endpoints), TASK-AI-021..026 (frontend dashboard components + trace deep-link), TASK-AI-046 (optimization suggestions via metrics). W8a (PR#104): route-level @cached() decorator with Redis, endpoints /cost/versions/comparison/quality-drift, tenant-scoped cache keys, Prometheus hit/miss counters. W8b (PR#105): UsageMetricsTable (sortable, CSV export), CostDashboard (SVG pie chart), DriftDetector (anomaly markers), VersionMonitor (date-range picker), MSW handlers, Vitest + Playwright tests. All 12 subtasks + 2 parent tasks verified. |
 | 2026-04-09 | Added TASK-IMPL-010 (17 subtasks): Decouple AI Logic from LangGraph Nodes — CORE task with Coherence Score™ use case, HITL use case, 4 domain services, 3 application use cases, 29.5h estimated. Updated statistics (78→95 tasks). |
 | 2026-04-04 | Category backlog created from master backlog migration |
