@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
-from langchain import hub
+try:
+    from langchain import hub
+except ImportError:
+    try:
+        import langchain.hub as hub
+    except ImportError:
+        hub = SimpleNamespace(pull=lambda _handle: (_ for _ in ()).throw(RuntimeError("LangChain Hub unavailable")))
 
 
 @dataclass(frozen=True)
@@ -22,7 +30,7 @@ class LangSmithEnvProfile:
     endpoint: str
 
     @classmethod
-    def from_runtime_env(cls) -> "LangSmithEnvProfile":
+    def from_runtime_env(cls) -> LangSmithEnvProfile:
         environment = os.getenv("ENVIRONMENT", "development").strip().lower()
         if environment in {"prod", "production"}:
             env_key = "PROD"
