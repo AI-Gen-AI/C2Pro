@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-03T09:54:02Z",
+  "updated_at": "2026-05-03T13:05:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -892,41 +892,30 @@
     },
     {
       "tarea_id": "T074",
-      "backlog_id": "TASK-INF-056",
-      "tipo": "infra",
-      "descripcion": "Add pytest-benchmark hot-path perf harness and resolve LangChain tracing parent-context failure for W5b benchmarks.",
+      "backlog_id": "TASK-AI-020",
+      "tipo": "ai",
+      "descripcion": "Implement Redis-backed route-level cache for LangSmith analytics endpoints and document W8a backend audit.",
       "asignado_a": "codex",
       "estado": "completado",
-      "criterio_done": "Perf tests run under C2PRO_AI_MOCK=1 with --benchmark-only and save baseline_2026_05_03 under apps/api/.benchmarks.",
+      "criterio_done": "Analytics routes use @cached(ttl=...) with endpoint/query/tenant cache keys, Prometheus hit/miss counters, and integration proof for a second identical cache hit.",
       "archivos_modificados": [
-        "apps/api/requirements.txt",
-        "apps/api/tests/perf/conftest.py",
-        "apps/api/tests/perf/test_coherence_perf.py",
-        "apps/api/tests/perf/test_analysis_perf.py",
-        "apps/api/tests/perf/test_llm_client_perf.py",
-        "apps/api/tests/perf/baselines/.gitkeep",
-        ".gitignore",
-        "Makefile",
-        "docs/runbooks/PERF_BENCHMARKS.md",
-        "backlogs/INF_INFRASTRUCTURE.md",
+        "apps/api/src/core/cache.py",
+        "apps/api/src/core/ai/analytics_router.py",
+        "apps/api/tests/integration/ai/test_analytics_cache.py",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
         "C2PRO_MASTER_BACKLOG.md",
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-05-03T09:54:02Z",
-        "completado": "2026-05-03T09:54:02Z"
+        "inicio": "2026-05-03T13:05:00Z",
+        "completado": "2026-05-03T13:05:00Z"
       },
       "resultado": {
         "exitoso": true,
-        "mensaje": "TASK-INF-056 W5b pytest-benchmark harness completed with LangChain/LangSmith tracing disabled for perf rounds and fresh async event-loop/context isolation.",
-        "cambios_realizados": [
-          "Added deterministic pytest-benchmark coverage for coherence scoring, analysis coherence derivation, and mocked traced LLM wrapper overhead.",
-          "Added tests/perf conftest that disables LangChain/LangSmith tracing at the installed langchain_core.tracers.context callsites and isolates async rounds.",
-          "Added perf-bench Make target and PERF_BENCHMARKS runbook."
-        ],
+        "mensaje": "TASK-AI-020 completed with route-level CacheService decorator, W8a analytics audit, tenant/query endpoint cache keys, 60s/300s TTL policy, and hit/miss metric coverage.",
         "tests_pasados": true,
         "validacion_lint": false,
-        "nota_verificacion": "cd apps/api; C2PRO_AI_MOCK=1 python -m pytest tests/perf/ --benchmark-only --benchmark-save=baseline_2026_05_03 passed 3/3 and wrote .benchmarks/Windows-CPython-3.11-64bit/0001_baseline_2026_05_03.json. Root cause: langchain_core.tracers.context._get_tracer_project indexes get_tracing_context()[\"parent\"], while pytest-benchmark repeats a traced callable inside one pytest item; disabling tracing and resetting async context per round avoids stale/missing parent state."
+        "nota_verificacion": "Targeted pytest for analytics router/cache passed. pnpm tsc --noEmit passed from apps/web; repo-root pnpm tsc --noEmit prints TypeScript help because no root tsconfig is present."
       }
     }
   ],
@@ -999,7 +988,8 @@
       "TASK-BCK-050",
       "TASK-COH-V1-05",
       "TASK-COH-V1-07",
-      "TASK-COH-V1-09"
+      "TASK-COH-V1-09",
+      "TASK-AI-020"
     ]
   },
   "plan_actual": {
