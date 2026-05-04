@@ -861,16 +861,3 @@ _ADRs for this category will be documented here_
 - **Verification**: Run `alembic history` after the fix to confirm a single HEAD.
 
 ---
-
-## Change Log
-
-| Date | Change |
-|------|--------|
-| 2026-04-20 | **TASK-INF-055 Blocked** — Confirmed Sentry SDK lifecycle is already present, but auth-failure monitoring completion requires backend/security-owned instrumentation under protected application code plus an external Sentry DSN and alert destination. Infra can resume with runtime secret validation after those prerequisites exist. |
-| 2026-04-20 | **TASK-INF-056 Completed** — Added `scripts/run_performance_benchmarks.py` for release-oriented performance smoke benchmarks, including HTTP sampling, deterministic `--samples-json` evaluation, P50/P95/P99 nearest-rank calculations, target pass/fail checks, and Markdown output for release evidence. Added `TS-INF-PERF-056-001` unit coverage and ran a local synthetic benchmark pass under run ID `TASK-INF-056-local`. |
-| 2026-05-03 | **TASK-INF-056 W5b supplement** — Added pytest-benchmark hot-path suite under `apps/api/tests/perf/`, pinned `pytest-benchmark==4.0.0`, added `make perf-bench`, and documented `docs/runbooks/PERF_BENCHMARKS.md`. LangChain root cause isolated to tracing parent context lookup; perf tests disable LangSmith/LangChain callbacks and isolate async rounds. Acceptance saved `baseline_2026_05_03` under `apps/api/.benchmarks/`. |
-| 2026-04-05 | **TASK-INF-006 Completed** — Enhanced Python MCP naming convention documentation with mandatory {service}_mcp pattern enforcement. Added comprehensive sections: ⚠️ MANDATORY REQUIREMENT header, 6 correct examples, 8 anti-pattern examples with ❌ markers, Python vs Node.js rationale (snake_case vs kebab-case), 5-step migration checklist, naming guidelines (general/descriptive/inferrable/stable/unique), and 5 common mistakes section (mixing conventions/over-specification/redundant suffixes/ambiguous names/case sensitivity). Infrastructure agent (role_infra) executed as part of Infrastructure Priority Sprint 2026-04-05. File updated: Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md |
-| 2026-04-04 | UNIFY-007 completed: Automated sync script core/sync_backlog_to_blackboard.py implemented - enables bidirectional task tracking between blackboard.json and all category backlogs |
-| 2026-04-04 | Category backlog created from master backlog migration |
-| 2026-04-04 | TASK-INF-001 completed: Category-specific backlog architecture fully implemented - 444 tasks migrated to 6 category backlogs, 9 role profiles updated, master backlog simplified to index + cross-category tasks |
-| 2026-04-05 | **Infrastructure Priority Sprint Added** — Added comprehensive 3-phase priority plan to section "2. Specifications": Phase 1 (Hexagonal Architecture completion for 3 modules: documents, stakeholders, procurement - 40 hours), Phase 2 (AI/ML infrastructure with prompt validator and multi-language templates - 56 hours), Phase 3 (CI/CD quality gates with Codecov, Sentry, benchmarks - 30 hours). Total 126 hours across 21 pending tasks. Includes execution order, dependencies, risk mitigation, success metrics, and deliverables. Planner: role_planner. Plan ready for Infrastructure agent execution. |

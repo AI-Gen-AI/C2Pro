@@ -232,9 +232,3 @@ _ADRs for this category will be documented here_
 
 ---
 
-## Change Log
-
-| Date | Change |
-|------|--------|
-| 2026-04-04 | Category backlog created from master backlog migration |
-| 2026-04-05 | **Specifications Added** — Documented completed DevOps initiatives (TASK-DEV-001: Coherence subgraph standalone execution with sync/async/streaming modes; TASK-DEV-002: Sentry DSN validation guard preventing startup crashes with placeholder values). Added implementation details, verification checklists, and future DevOps priorities. |
