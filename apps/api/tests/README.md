@@ -97,13 +97,39 @@ The test configuration is defined in `pyproject.toml`:
 
 ### Test Fixtures
 
-Key fixtures are defined in `tests/conftest.py`:
+Fixtures are split across several plugin modules (all auto-loaded by `conftest.py`):
 
-- `test_engine` - Async database engine for tests
-- `test_session_factory` - Session factory for database operations
-- `db` - Database session for individual tests
-- `client` - Async HTTP client for API testing
-- `generate_token` - JWT token generator for authentication testing
+| Module | Contents |
+|--------|----------|
+| `tests/conftest.py` | Env setup, tenant/user/client fixtures (≤700 LOC) |
+| `tests/_bootstrap.py` | DB engine/session fixtures, schema helpers, markers |
+| `tests/fixtures/sdk_isolators.py` | Autouse LangSmith/Prometheus isolation |
+| `tests/fixtures/auth.py` | JWT factories, simple ID fixtures |
+
+Key fixtures:
+- `test_engine` — async database engine (via `_bootstrap.py`)
+- `db` / `db_session` — per-test session with rollback
+- `client` / `authenticated_client` — ASGI HTTP clients
+- `generate_token` — JWT factory (via `fixtures/auth.py`)
+
+### Contract Tests (Schemathesis)
+
+Schemathesis suites live in `tests/contract/schemathesis/`. They test every
+OpenAPI operation against the live ASGI app without an external server.
+
+```bash
+# Run all contract tests
+pytest tests/contract/schemathesis/ -v -m contract
+
+# Run smoke test only (health endpoints)
+pytest tests/contract/schemathesis/test_smoke.py -v
+
+# Generate coverage JSON
+pytest tests/contract/schemathesis/ --tb=short
+# → tests/contract-coverage.json
+```
+
+Prerequisites: `pip install schemathesis` and `make openapi` to generate the schema.
 
 ## Known Issues & Fixes
 
