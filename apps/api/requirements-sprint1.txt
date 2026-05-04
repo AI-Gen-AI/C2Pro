@@ -25,3 +25,6 @@ structlog>=24.4.0
 # Utilities
 python-dotenv>=1.0.1
 asgi-lifespan==2.1.0
+
+# Contract Testing
+schemathesis>=3.38.0  # TASK-QA-200: OpenAPI-driven property-based API contract testing

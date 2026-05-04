@@ -1,0 +1,89 @@
+name: OpenAPI Drift Gate
+
+# TASK-QA-205: Fail PR if docs/api/openapi.yaml drifts from the live app.
+# Escape hatch: commit message containing "[openapi]" skips the diff check
+# (use when intentionally regenerating the spec).
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "apps/api/src/**"
+      - "apps/api/requirements*.txt"
+      - "docs/api/openapi.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openapi-drift:
+    name: OpenAPI Drift Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for [openapi] escape hatch
+        id: escape
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          if echo "$MSG" | grep -q '\[openapi\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Commit contains [openapi] — drift check skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python 3.11
+        if: steps.escape.outputs.skip == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        if: steps.escape.outputs.skip == 'false'
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyyaml
+
+      - name: Regenerate OpenAPI YAML
+        if: steps.escape.outputs.skip == 'false'
+        working-directory: apps/api
+        env:
+          ENVIRONMENT: test
+          DEBUG: "true"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/c2pro_test"
+          SUPABASE_URL: "https://test.supabase.co"
+          SUPABASE_ANON_KEY: "test"
+          SUPABASE_SERVICE_ROLE_KEY: "test"
+          JWT_SECRET_KEY: "test-secret-key-min-32-chars-required-for-testing-purposes-only"
+          JWT_ALGORITHM: "HS256"
+          ANTHROPIC_API_KEY: "sk-ant-test-mock"
+          REDIS_URL: "redis://localhost:6379/0"
+        run: python scripts/generate_openapi.py
+
+      - name: Check for OpenAPI drift
+        if: steps.escape.outputs.skip == 'false'
+        run: |
+          if git diff --exit-code docs/api/openapi.yaml; then
+            echo "OK: docs/api/openapi.yaml is in sync with the live app."
+          else
+            echo ""
+            echo "FAIL: docs/api/openapi.yaml has drifted from the live app."
+            echo ""
+            echo "Fix options:"
+            echo "  1. Run 'make openapi' locally and commit the updated YAML."
+            echo "  2. If this is intentional, include '[openapi]' in your commit message."
+            echo ""
+            git diff docs/api/openapi.yaml
+            exit 1
+          fi

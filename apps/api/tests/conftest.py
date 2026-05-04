@@ -1,623 +1,101 @@
-
 """
-C2Pro - Test Configuration
+C2Pro - Test Configuration  (TASK-QA-206: refactored to ≤ 700 LOC)
 
-Pytest fixtures for testing the C2Pro API.
-Provides test database, authenticated clients, and test data.
+Heavy fixtures are split into separate plugin modules loaded via pytest_plugins:
+  - tests._bootstrap          DB helpers, engine/session/db fixtures, markers
+  - tests.fixtures.sdk_isolators  autouse SDK-isolation + Prometheus cleanup
+  - tests.fixtures.auth       JWT helpers, simple ID fixtures
 """
+
+from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 from collections.abc import AsyncGenerator, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
-from unittest import mock
-from unittest.mock import MagicMock, patch, AsyncMock, PropertyMock # Corrected import for all needed mocks
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
-import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from prometheus_client import REGISTRY, ProcessCollector # Import ProcessCollector here
-from sqlalchemy import Column, event, select, text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session
 
-# ===========================================
-# PROMETHEUS REGISTRY CLEANUP
-# ===========================================
+# =============================================================
+# ENVIRONMENT SETUP  (must run before any src.* import)
+# =============================================================
 
-
-
-
-# ===========================================
-# OPTIONAL DEPENDENCY STUBS
-# ===========================================
-
-if "celery" not in sys.modules:
-    class _DummyConf(dict):
-        def __getattr__(self):
-            return self.get(name)
-
-        def __setattr__(self, name, value):
-            self[name] = value
-
-    class _DummyCelery:
-        def __init__(self, *args, **kwargs) -> None:
-            self.conf = _DummyConf()
-
-        def task(self, *args, **kwargs):
-            def decorator(fn):
-                fn.delay = lambda *a, **k: SimpleNamespace(id="test-task")
-                return fn
-            return decorator
-
-        def start(self):
-            return None
-
-    sys.modules["celery"] = SimpleNamespace(Celery=_DummyCelery)
-
-
-# ===========================================
-# ENVIRONMENT SETUP
-# ===========================================
-
-# Fix for Windows asyncpg issues
-# Use Selector event loop instead of Proactor on Windows
-if sys.platform == 'win32':
+if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# Configurar variables de entorno antes de importar la app
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("DEBUG", "true")
-
-# Database
-# Prefer a dedicated test DB variable so pytest does not mutate the normal app DATABASE_URL.
-# src.config gives TEST_DATABASE_URL precedence over DATABASE_URL when present.
 os.environ.setdefault(
     "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/c2pro_test"
 )
-
-# Supabase
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_ANON_KEY", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock")
 os.environ.setdefault(
     "SUPABASE_SERVICE_ROLE_KEY", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service"
 )
-
-# JWT
 os.environ.setdefault(
     "JWT_SECRET_KEY", "test-secret-key-min-32-chars-required-for-testing-purposes-only"
 )
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
 os.environ.setdefault("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60")
-
-# Anthropic (mock)
 os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test-mock-key")
-
-# Redis (opcional para tests)
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
-# Rate Limiting
 os.environ.setdefault("RATE_LIMIT_ENABLED", "true")
 os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100")
 
-# ===========================================
-# IMPORTS AFTER ENV SETUP
-# ===========================================
+# =============================================================
+# SRC IMPORTS  (after env setup)
+# =============================================================
 
-from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401
-from src.coherence.adapters.persistence import models as coherence_models  # noqa: F401
-from src.config import settings
-from src.core.ai import models as ai_models  # noqa: F401
-from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
-from src.core.auth.service import hash_password, AuthService # Import AuthService here
-from src.core.database import Base, get_session
-from src.core.security.adapters.persistence import models as security_models  # noqa: F401
-from src.documents.adapters.persistence import models as document_models  # noqa: F401
-from src.procurement.adapters.persistence import models as procurement_models  # noqa: F401
-from src.projects.adapters.persistence import models as project_models  # noqa: F401
-from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401
-from tests.support.postgres_bootstrap import (
-    ensure_pgvector_extension,
-    reset_public_schema,
-    run_postgres_test_bootstrap,
-)
-from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe
-from src.core.security import get_current_user_id # Import for mocking
+from src.analysis.adapters.persistence import models as analysis_models  # noqa: F401, E402
+from src.coherence.adapters.persistence import models as coherence_models  # noqa: F401, E402
+from src.config import settings  # noqa: E402
+from src.core.ai import models as ai_models  # noqa: F401, E402
+from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole  # noqa: E402
+from src.core.auth.service import AuthService, hash_password  # noqa: F401, E402
+from src.core.database import Base, get_session  # noqa: E402
+from src.core.security.adapters.persistence import models as security_models  # noqa: F401, E402
+from src.documents.adapters.persistence import models as document_models  # noqa: F401, E402
+from src.procurement.adapters.persistence import models as procurement_models  # noqa: F401, E402
+from src.projects.adapters.persistence import models as project_models  # noqa: F401, E402
+from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401, E402
+from src.core.security import get_current_user_id  # noqa: E402
+from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe  # noqa: E402
+from tests.support.postgres_bootstrap import ensure_pgvector_extension  # noqa: E402
+from tests._bootstrap import _ensure_test_fk_stub_tables  # noqa: E402
 
-# ===========================================
-# TEST CONSTANTS
-# ===========================================
+# =============================================================
+# CONSTANTS
+# =============================================================
 
-# Pre-computed bcrypt hash for "Password123!" to avoid bcrypt initialization
-# issues during fixture setup (bcrypt 4.0+ compatibility with passlib)
 TEST_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYvDqLTMKKe"
 
-
-@pytest.fixture(autouse=True)
-def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
-    sdk_client = mock.MagicMock(name="langsmith_client")
-    langsmith_module = SimpleNamespace(
-        Client=mock.MagicMock(return_value=sdk_client),
-        RunTree=mock.MagicMock,
-        get_tracing_context=mock.MagicMock(return_value={}),
-        run_helpers=SimpleNamespace(
-            get_tracing_context=mock.MagicMock(return_value={}),
-            tracing_context=mock.MagicMock(),
-        ),
-        run_trees=SimpleNamespace(RunTree=mock.MagicMock),
-        utils=SimpleNamespace(
-            get_tracer_project=mock.MagicMock(return_value="test"),
-            tracing_is_enabled=mock.MagicMock(return_value=False),
-        ),
-    )
-    langchain_hub = mock.MagicMock(name="langchain_hub")
-    langchain_module = SimpleNamespace(hub=langchain_hub)
-
-    monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
-    monkeypatch.setitem(sys.modules, "langchain", langchain_module)
-    return SimpleNamespace(langsmith_client=sdk_client, langchain_hub=langchain_hub)
-
-
-@pytest_asyncio.fixture
-async def mock_lookup_tenant_by_id():
-    """Mock the tenant lookup in the middleware to prevent db access."""
-    with patch("src.core.middleware.tenant_isolation.lookup_tenant_by_id", new_callable=AsyncMock) as mock:
-        mock.return_value = SimpleNamespace(is_active=True)
-        yield
-
-
-def _iter_metadata_enum_types():
-    """Yield unique PostgreSQL enum types declared in SQLAlchemy metadata."""
-    seen: set[str] = set()
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            column_type = column.type
-            enum_name = getattr(column_type, "name", None)
-            has_enum_values = getattr(column_type, "enums", None) is not None
-            if not enum_name or not has_enum_values or enum_name in seen:
-                continue
-            seen.add(str(enum_name))
-            yield column_type
-
-
-def _collect_metadata_enum_type_names() -> list[str]:
-    """Collect PostgreSQL enum type names declared in SQLAlchemy metadata."""
-    return sorted(str(enum_type.name) for enum_type in _iter_metadata_enum_types())
-
-
-async def _reset_metadata_enum_types(conn) -> None:
-    """Drop metadata enum types to avoid duplicate CREATE TYPE races in test DB setup."""
-    for enum_name in _collect_metadata_enum_type_names():
-        safe_name = enum_name.replace('"', '""')
-        await conn.execute(text(f'DROP TYPE IF EXISTS public."{safe_name}" CASCADE'))
-
-
-async def _create_metadata_enum_types(conn) -> None:
-    """Create metadata enum types once before table DDL runs."""
-
-    def _create(sync_conn) -> None:
-        for enum_type in _iter_metadata_enum_types():
-            enum_type.create(sync_conn, checkfirst=True)
-
-    await conn.run_sync(_create)
-
-
-def _set_metadata_enum_create_type(enabled: bool) -> None:
-    """Toggle automatic enum DDL during metadata.create_all/drop_all."""
-    for enum_type in _iter_metadata_enum_types():
-        enum_type.create_type = enabled
-
-
-async def _table_exists(conn, table_name: str) -> bool:
-    result = await conn.execute(
-        text("SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename=:table_name"),
-        {"table_name": table_name},
-    )
-    return result.first() is not None
-
-
-async def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    result = await conn.execute(
-        text(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema='public' AND table_name=:table_name AND column_name=:column_name
-            """
-        ),
-        {"table_name": table_name, "column_name": column_name},
-    )
-    return result.first() is not None
-
-
-async def _ensure_rls_and_audit_compatibility(conn) -> None:
-    """Create minimal RLS metadata/policies and audit table compatibility columns for tests."""
-    rls_tables = (
-        "tenants",
-        "users",
-        "projects",
-        "documents",
-        "clauses",
-        "analyses",
-        "alerts",
-        "extractions",
-        "stakeholders",
-        "wbs_items",
-        "bom_items",
-        "stakeholder_wbs_raci",
-        "ai_usage_logs",
-        "audit_logs",
-    )
-    for table_name in rls_tables:
-        if not await _table_exists(conn, table_name):
-            continue
-        await conn.execute(text(f'ALTER TABLE public."{table_name}" ENABLE ROW LEVEL SECURITY'))
-        await conn.execute(text(f'ALTER TABLE public."{table_name}" FORCE ROW LEVEL SECURITY'))
-        policy_name = f"{table_name}_allow_all"
-        existing_policy = await conn.execute(
-            text(
-                """
-                SELECT 1
-                FROM pg_policies
-                WHERE schemaname='public' AND tablename=:table_name AND policyname=:policy_name
-                """
-            ),
-            {"table_name": table_name, "policy_name": policy_name},
-        )
-        if existing_policy.first() is None:
-            await conn.execute(
-                text(
-                    f'CREATE POLICY "{policy_name}" ON public."{table_name}" USING (true) WITH CHECK (true)'
-                )
-            )
-
-    if await _table_exists(conn, "audit_logs"):
-        if not await _column_exists(conn, "audit_logs", "user_id"):
-            await conn.execute(text('ALTER TABLE public.audit_logs ADD COLUMN user_id UUID'))
-        if not await _column_exists(conn, "audit_logs", "changes"):
-            await conn.execute(
-                text(
-                    "ALTER TABLE public.audit_logs "
-                    "ADD COLUMN changes JSONB DEFAULT '{}'::jsonb"
-                )
-            )
-        if not await _column_exists(conn, "audit_logs", "created_at"):
-            await conn.execute(
-                text(
-                    "ALTER TABLE public.audit_logs "
-                    "ADD COLUMN created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()"
-                )
-            )
-
-
-def _ensure_test_fk_stub_tables() -> None:
-    """Register minimal stub tables required by cross-module FKs in test metadata."""
-    if "wbs_items" not in Base.metadata.tables:
-        # Stakeholder RACI model references this table via FK, but the canonical
-        # table model is not part of Base metadata in this test layout.
-        from sqlalchemy import Table
-
-        Table(
-            "wbs_items",
-            Base.metadata,
-            Column("id", PGUUID(as_uuid=True), primary_key=True),
-            extend_existing=True,
-        )
-
-
-def _auth_schema_available(session: Session) -> bool:
-    cached = session.info.get("auth_schema_available")
-    if cached is not None:
-        return cached
-    try:
-        result = session.execute(
-            text("SELECT 1 FROM pg_namespace WHERE nspname = 'auth'")
-        ).first()
-        available = bool(result)
-    except Exception:
-        available = False
-    session.info["auth_schema_available"] = available
-    return available
-
-
-def _auth_user_trigger_enabled(session: Session) -> bool:
-    cached = session.info.get("auth_user_trigger_enabled")
-    if cached is not None:
-        return cached
-    try:
-        result = session.execute(
-            text(
-                """
-                SELECT 1
-                FROM pg_trigger t
-                JOIN pg_class c ON c.oid = t.tgrelid
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'auth'
-                  AND c.relname = 'users'
-                  AND t.tgname = 'on_auth_user_created'
-                  AND t.tgenabled <> 'D'
-                """
-            )
-        ).first()
-        enabled = bool(result)
-    except Exception:
-        enabled = False
-    session.info["auth_user_trigger_enabled"] = enabled
-    return enabled
-
-
-@event.listens_for(Session, "before_flush")
-def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
-    if session.bind is None or session.bind.dialect.name != "postgresql":
-        return
-    if not _auth_schema_available(session):
-        return
-    new_users = [obj for obj in session.new if isinstance(obj, User)]
-    if not new_users:
-        return
-    for user in new_users:
-        if user.role is None:
-            role_value = "user"
-        else:
-            role_value = user.role.value if hasattr(user.role, "value") else str(user.role)
-        meta = json.dumps({"tenant_id": str(user.tenant_id), "role": role_value})
-        trigger_enabled = _auth_user_trigger_enabled(session)
-        if trigger_enabled:
-            try:
-                session.execute(text("SET LOCAL session_replication_role = replica"))
-            except Exception:
-                trigger_enabled = False
-        session.execute(
-            text(
-                """
-                INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
-                VALUES (:id, :email, CAST(:meta AS jsonb), NOW(), NOW())
-                ON CONFLICT (id) DO NOTHING
-                """
-            ),
-            {"id": user.id, "email": user.email, "meta": meta},
-        )
-        if trigger_enabled:
-            session.execute(text("SET LOCAL session_replication_role = origin"))
-
-# ===========================================
-# PYTEST CONFIGURATION
-# ===========================================
-
-
-def pytest_configure(config):
-    """Registrar custom markers."""
-    from prometheus_client import REGISTRY, ProcessCollector
-
-    # Clear Prometheus registry before test session to avoid duplicated metrics
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        if not isinstance(collector, ProcessCollector):
-            REGISTRY.unregister(collector)
-            
-    config.addinivalue_line("markers", "security: marca tests de seguridad críticos")
-    config.addinivalue_line("markers", "tdd: mark tests that enforce TDD workflow")
-    # CTO Gates verification markers
-    config.addinivalue_line("markers", "gate_verification: CTO security gates verification tests")
-    config.addinivalue_line("markers", "gate1_rls: Gate 1 - Row Level Security verification")
-    config.addinivalue_line(
-        "markers", "gate2_identity: Gate 2 - Identity & Authentication verification"
-    )
-    config.addinivalue_line("markers", "gate3_mcp: Gate 3 - MCP Security verification")
-    config.addinivalue_line(
-        "markers", "gate4_traceability: Gate 4 - Traceability & Audit Logging verification"
-    )
-
-
-@pytest.fixture(scope="session")
-def anyio_backend():
-    """Configura backend para pytest-anyio."""
-    return "asyncio"
-
-
-# Configuración de pytest-asyncio para estabilidad
-pytest_plugins = ("pytest_asyncio",)
-
-
-@pytest.fixture(scope="function")
-def event_loop():
-    """
-    Create an instance of the event loop for each test function.
-    This avoids issues with event loop reuse and futures attached to different loops.
-    """
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
-
-
-# ===========================================
-# DATABASE FIXTURES
-# ===========================================
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_engine():
-    """
-    Create a test database engine.
-    Uses a separate test database to avoid polluting development data.
-    """
-    from sqlalchemy.exc import OperationalError
-
-    database_url = settings.database_url
-    if database_url.startswith("postgresql://"):
-        # Use asyncpg for async PostgreSQL operations (already in requirements.txt)
-        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-    # First, connect to a default database to create the test database if it doesn't exist
-    root_database_url = database_url.rsplit("/", 1)[0] + "/postgres"
-    try:
-        root_engine = create_async_engine(
-            root_database_url,
-            echo=False,
-            pool_pre_ping=True,
-            isolation_level="AUTOCOMMIT",
-            connect_args={"statement_cache_size": 0},
-        )
-        async with root_engine.connect() as conn:
-            # Check if c2pro_test database exists
-            result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'c2pro_test'"))
-            if not result.scalar_one_or_none():
-                # If not, create it
-                await conn.execute(text("CREATE DATABASE c2pro_test"))
-        await root_engine.dispose()
-    except Exception as e:
-        print(f"[WARNING] Could not ensure c2pro_test database exists: {e}")
-        
-    try:
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-            connect_args={"statement_cache_size": 0},  # asyncpg config for test isolation
-        )
-
-        # Test connection and create tables
-        _ensure_test_fk_stub_tables()
-        async def _cleanup_bootstrap(conn) -> None:
-            await reset_public_schema(conn)
-
-        async def _prepare_bootstrap(conn) -> None:
-            await _reset_metadata_enum_types(conn)
-            await _create_metadata_enum_types(conn)
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
-            await _ensure_rls_and_audit_compatibility(conn)
-
-        await run_postgres_test_bootstrap(
-            engine,
-            cleanup_step=_cleanup_bootstrap,
-            prepare_step=_prepare_bootstrap,
-            warning_sink=lambda exc: print(
-                f"[WARNING] Bootstrap drop_all skipped before schema reset: {exc}"
-            ),
-        )
-
-        # Recreate the engine after schema reset/bootstrap so test sessions do not
-        # reuse pooled connections that were opened before DROP/CREATE SCHEMA public.
-        await engine.dispose()
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-            connect_args={"statement_cache_size": 0},
-        )
-        async with engine.begin() as conn:
-            _set_metadata_enum_create_type(False)
-            try:
-                await conn.run_sync(Base.metadata.create_all)
-            finally:
-                _set_metadata_enum_create_type(True)
-
-        yield engine
-
-        # Cleanup: Drop all tables after tests
-        async with engine.begin() as conn:
-            try:
-                await conn.run_sync(Base.metadata.drop_all)
-            except Exception as exc:
-                # Avoid hard failing test teardown when metadata is incomplete
-                print(f"[WARNING] Teardown drop_all skipped: {exc}")
-
-        await engine.dispose()
-
-    except (OperationalError, OSError) as exc:
-        pytest.fail(
-            "PostgreSQL test database unavailable at "
-            f"{settings.database_url}. "
-            "Start the test container with `docker-compose -f docker-compose.test.yml up -d`. "
-            f"Original error: {exc}"
-        )
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_session_factory(test_engine):
-    """
-    Create a session factory for tests.
-    """
-    factory = async_sessionmaker(
-        bind=test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-    # Keep core.database global session factory aligned for suites that import
-    # and call `src.core.database._session_factory()` directly.
-    from src.core import database as core_database
-
-    previous_factory = core_database._session_factory
-    core_database._session_factory = factory
-    try:
-        yield factory
-    finally:
-        core_database._session_factory = previous_factory
-
-
-@pytest_asyncio.fixture
-async def db(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provides a database session for tests with automatic rollback.
-
-    Each test gets a fresh session that is rolled back after the test,
-    ensuring test isolation.
-    """
-    async with test_session_factory() as session:
-        try:
-            yield session
-        finally:
-            # Ensure any open transaction is rolled back between tests
-            await session.rollback()
-
-
-# Alias for compatibility
-@pytest_asyncio.fixture
-async def db_session(db) -> AsyncGenerator[AsyncSession, None]:
-    """Alias for db fixture for compatibility."""
-    yield db
-
-
-@pytest_asyncio.fixture
-async def async_session(db) -> AsyncGenerator[AsyncSession, None]:
-    """Backward-compatible async session fixture for legacy repository unit suites."""
-    yield db
-
-
-@pytest_asyncio.fixture
-async def db_engine(test_engine):
-    """Alias for engine fixture used by DB probe tests."""
-    return test_engine
-
-
-# ===========================================
-# TEST DATA FIXTURES
-# ===========================================
+# =============================================================
+# PLUGIN LOADING — heavy fixtures live in these modules
+# =============================================================
+
+pytest_plugins = (
+    "pytest_asyncio",
+    "tests._bootstrap",
+    "tests.fixtures.sdk_isolators",
+    "tests.fixtures.auth",
+)
+
+# =============================================================
+# TENANT / USER FIXTURES
+# =============================================================
 
 
 @pytest_asyncio.fixture(scope="function")
 async def test_tenant(db: AsyncSession) -> Tenant:
-    """
-    Creates a test tenant for multi-tenant testing.
-    """
     tenant = Tenant(
         id=uuid4(),
         name="Test Company",
@@ -631,48 +109,34 @@ async def test_tenant(db: AsyncSession) -> Tenant:
         max_storage_gb=100,
         is_active=True,
     )
-
     db.add(tenant)
     await db.commit()
     await db.refresh(tenant)
-
     return tenant
 
 
 @pytest_asyncio.fixture(scope="function")
 async def test_user(db: AsyncSession, test_tenant: Tenant) -> User:
-    """
-    Creates a test user associated with test_tenant.
-
-    Default credentials:
-        - Email: test-<uuid>@example.com
-        - Password: TestPassword123!
-    """
     user = User(
         id=uuid4(),
         tenant_id=test_tenant.id,
         email=f"test-{uuid4().hex[:8]}@example.com",
-        hashed_password=TEST_PASSWORD_HASH, # Directly use pre-computed hash
+        hashed_password=TEST_PASSWORD_HASH,
         first_name="Test",
         last_name="User",
         role=UserRole.ADMIN,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(), # Changed from datetime.now(UTC)
+        last_login=datetime.now(),
     )
-
     db.add(user)
     await db.commit()
     await db.refresh(user)
-
     return user
 
 
 @pytest_asyncio.fixture(scope="function")
 async def test_tenant_2(db: AsyncSession) -> Tenant:
-    """
-    Creates a second test tenant for testing tenant isolation.
-    """
     tenant = Tenant(
         id=uuid4(),
         name="Test Company 2",
@@ -686,52 +150,47 @@ async def test_tenant_2(db: AsyncSession) -> Tenant:
         max_storage_gb=50,
         is_active=True,
     )
-
     db.add(tenant)
     await db.commit()
     await db.refresh(tenant)
-
     return tenant
 
 
 @pytest_asyncio.fixture(scope="function")
 async def test_user_2(db: AsyncSession, test_tenant_2: Tenant) -> User:
-    """
-    Creates a user in the second tenant for isolation testing.
-    """
     user = User(
         id=uuid4(),
         tenant_id=test_tenant_2.id,
         email=f"test2-{uuid4().hex[:8]}@example.com",
-        hashed_password=TEST_PASSWORD_HASH, # Directly use pre-computed hash
+        hashed_password=TEST_PASSWORD_HASH,
         first_name="Test",
         last_name="User 2",
         role=UserRole.USER,
         is_active=True,
         is_verified=True,
-        last_login=datetime.now(), # Changed from datetime.now(UTC)
+        last_login=datetime.now(),
     )
-
     db.add(user)
     await db.commit()
     await db.refresh(user)
-
     return user
+
+
+# =============================================================
+# SEEDED AUTH FIXTURES  (TS-I13-E2E-REAL-001)
+# =============================================================
 
 
 @pytest_asyncio.fixture(scope="function")
 async def seeded_auth_context() -> dict[str, str]:
-    """
-    Deterministic tenant/user seed for real E2E auth.
-
-    Refers to Suite ID: TS-I13-E2E-REAL-001.
-    """
+    """Deterministic tenant/user seed for real E2E auth (TS-I13-E2E-REAL-001)."""
     tenant_id = UUID("00000000-0000-0000-0000-00000000a113")
     user_id = UUID("00000000-0000-0000-0000-00000000b113")
 
     database_url = settings.database_url
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    root_database_url = database_url.rsplit("/", 1)[0] + "/postgres"
 
     assert_seeded_identity_isolation_safe(database_url)
 
@@ -741,7 +200,7 @@ async def seeded_auth_context() -> dict[str, str]:
         pool_pre_ping=True,
         isolation_level="AUTOCOMMIT",
         connect_args={"statement_cache_size": 0},
-        )
+    )
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
     _ensure_test_fk_stub_tables()
@@ -785,7 +244,7 @@ async def seeded_auth_context() -> dict[str, str]:
                 role=UserRole.ADMIN,
                 is_active=True,
                 is_verified=True,
-                last_login=datetime.now(), # Changed from datetime.now(UTC)
+                last_login=datetime.now(),
             )
             session.add(user)
         else:
@@ -809,17 +268,14 @@ async def seeded_auth_context() -> dict[str, str]:
     try:
         yield payload
     finally:
-        async with session_factory() as cleanup_session:
-            seeded_user = await cleanup_session.get(User, user_id)
+        async with session_factory() as cleanup:
+            seeded_user = await cleanup.get(User, user_id)
             if seeded_user is not None:
-                await cleanup_session.delete(seeded_user)
-
-            seeded_tenant = await cleanup_session.get(Tenant, tenant_id)
+                await cleanup.delete(seeded_user)
+            seeded_tenant = await cleanup.get(Tenant, tenant_id)
             if seeded_tenant is not None:
-                await cleanup_session.delete(seeded_tenant)
-
-            await cleanup_session.commit()
-
+                await cleanup.delete(seeded_tenant)
+            await cleanup.commit()
         await engine.dispose()
 
 
@@ -828,11 +284,7 @@ async def seeded_auth_headers(
     seeded_auth_context: dict[str, str],
     generate_token: Callable,
 ) -> dict[str, str]:
-    """
-    Build deterministic auth headers aligned with seeded tenant/user IDs.
-
-    Refers to Suite ID: TS-I13-E2E-REAL-001.
-    """
+    """Auth headers for the deterministic seeded identity (TS-I13-E2E-REAL-001)."""
     token = generate_token(
         user_id=UUID(seeded_auth_context["user_id"]),
         tenant_id=UUID(seeded_auth_context["tenant_id"]),
@@ -842,222 +294,13 @@ async def seeded_auth_headers(
     return {"Authorization": f"Bearer {token}"}
 
 
-# ===========================================
-# SIMPLE ID FIXTURES (for unit tests)
-# ===========================================
-
-
-@pytest.fixture(scope="function")
-def test_tenant_id():
-    """Genera un tenant_id para tests."""
-    return uuid4()
-
-
-@pytest.fixture(scope="function")
-def test_user_id():
-    """Genera un user_id para tests."""
-    return uuid4()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_project_id():
-    """Genera un project_id para tests."""
-    return uuid4()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_document_id():
-    """Genera un document_id para tests."""
-    return uuid4()
-
-
-# ===========================================
-# JWT TOKEN UTILITIES
-# ===========================================
-
-
-@pytest.fixture(scope="function")
-def generate_token() -> Callable:
-    """
-    Factory fixture to generate JWT tokens with custom properties.
-
-    Useful for testing various token scenarios:
-    - Expired tokens
-    - Invalid signatures
-    - Missing claims
-    - Tokens for non-existent tenants
-    """
-    def _generate_token(
-        user_id: UUID | None = None,
-        tenant_id: UUID | None = None,
-        email: str = "test@example.com",
-        role: str = "admin",
-        expires_delta_seconds: int | None = None,
-        secret_key: str | None = None,
-        algorithm: str | None = None,
-        extra_claims: dict | None = None,
-        token_type: str = "access",
-    ) -> str:
-        """
-        Generate a JWT token with custom properties.
-        """
-        if user_id is None:
-            user_id = uuid4()
-        if tenant_id is None:
-            tenant_id = uuid4()
-
-        # Calculate expiration
-        if expires_delta_seconds is None:
-            if token_type == "access":
-                expire = datetime.now(UTC) + timedelta(hours=24)
-            else:
-                expire = datetime.now(UTC) + timedelta(days=7)
-        else:
-            expire = datetime.now(UTC) + timedelta(seconds=expires_delta_seconds)
-
-        # Build payload
-        payload = {
-            "sub": str(user_id),
-            "tenant_id": str(tenant_id),
-            "email": email,
-            "role": role,
-            "exp": expire,
-            "iat": datetime.now(UTC),
-            "type": token_type,
-        }
-
-        # Add extra claims if provided
-        if extra_claims:
-            payload.update(extra_claims)
-
-        # Use custom or default secret key
-        key = secret_key if secret_key is not None else settings.jwt_secret_key
-        algo = algorithm if algorithm is not None else settings.jwt_algorithm
-
-        # Encode token
-        encoded_jwt = jwt.encode(payload, key, algorithm=algo)
-        return encoded_jwt
-
-    return _generate_token
-
-
-# Alias for compatibility
-@pytest.fixture(scope="function")
-def create_test_token(generate_token) -> Callable:
-    """Alias for generate_token for compatibility."""
-    def _create_token(
-        user_id: UUID,
-        tenant_id: UUID,
-        email: str = "test@example.com",
-        role: str = "admin",
-        secret_key: str | None = None,
-        expires_delta: timedelta | None = None,
-        token_type: str = "access",
-    ) -> str:
-        expires_seconds = int(expires_delta.total_seconds()) if expires_delta else None
-        return generate_token(
-            user_id=user_id,
-            tenant_id=tenant_id,
-            email=email,
-            role=role,
-            secret_key=secret_key,
-            expires_delta_seconds=expires_seconds,
-            token_type=token_type,
-        )
-    return _create_token
-
-
-@pytest_asyncio.fixture(scope="function")
-async def get_auth_headers(test_user: User, test_tenant: Tenant, generate_token: Callable) -> Callable:
-    """
-    Factory fixture to generate authentication headers for API requests.
-    """
-    def _get_headers(
-        user: User | None = None,
-        tenant: Tenant | None = None,
-        user_id: UUID | None = None,
-        tenant_id: UUID | None = None,
-        email: str | None = None,
-        role: str | None = None,
-    ) -> dict[str, str]:
-        u = user or test_user
-        t = tenant or test_tenant
-        resolved_user_id = user_id or u.id
-        resolved_tenant_id = tenant_id or t.id
-        resolved_email = email or u.email
-        resolved_role = role or (u.role.value if hasattr(u.role, "value") else u.role)
-
-        token = generate_token(
-            user_id=resolved_user_id,
-            tenant_id=resolved_tenant_id,
-            email=resolved_email,
-            role=resolved_role,
-        )
-
-        return {"Authorization": f"Bearer {token}"}
-
-    return _get_headers
-
-
-# Simple sync version for unit tests
-@pytest.fixture(scope="function")
-def get_auth_headers_simple(generate_token, test_user_id, test_tenant_id):
-    """
-    Simple sync factory fixture for auth headers (unit tests).
-    """
-    def _get_headers(
-        user_id: UUID | None = None,
-        tenant_id: UUID | None = None,
-        email: str = "test@example.com",
-        role: str = "admin",
-    ) -> dict[str, str]:
-        token = generate_token(
-            user_id=user_id or test_user_id,
-            tenant_id=tenant_id or test_tenant_id,
-            email=email,
-            role=role,
-        )
-        return {"Authorization": f"Bearer {token}"}
-
-    return _get_headers
-
-
-@pytest.fixture(scope="function")
-def mocker():
-    """
-    Minimal compatibility fixture for suites expecting pytest-mock's `mocker`.
-    """
-    patchers: list[mock._patch] = []
-
-    class _Mocker:
-        Mock = mock.Mock
-        AsyncMock = mock.AsyncMock
-        MagicMock = mock.MagicMock
-        call = mock.call
-        ANY = mock.ANY
-
-        @staticmethod
-        def patch(target, *args, **kwargs):
-            patcher = mock.patch(target, *args, **kwargs)
-            patchers.append(patcher)
-            return patcher.start()
-
-    yield _Mocker()
-
-    for patcher in reversed(patchers):
-        patcher.stop()
-
-
-# ===========================================
+# =============================================================
 # HTTP CLIENT FIXTURES
-# ===========================================
+# =============================================================
 
 
 @pytest_asyncio.fixture(scope="function")
 async def app():
-    """
-    Creates a FastAPI application for testing.
-    """
     from src.main import create_application
 
     return create_application()
@@ -1065,22 +308,13 @@ async def app():
 
 @pytest_asyncio.fixture(scope="function")
 async def client(app, db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """
-    Creates an HTTP client for testing API endpoints.
-    """
     async def override_get_session():
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
-
     transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-        timeout=30.0,
-    ) as test_client:
-        yield test_client
-
+    async with AsyncClient(transport=transport, base_url="http://testserver", timeout=30.0) as c:
+        yield c
     app.dependency_overrides.clear()
 
 
@@ -1090,190 +324,140 @@ async def authenticated_client(
     db: AsyncSession,
     test_user: User,
     generate_token: Callable,
-    monkeypatch: pytest.MonkeyPatch, # Added monkeypatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncGenerator[AsyncClient, None]:
-    """
-    Creates an authenticated HTTP client for testing protected API endpoints.
-
-    Automatically includes JWT authentication headers for test_user.
-    Useful for testing endpoints that require authentication.
-
-    TASK-BCK-030: Authenticated test fixtures for HITL resume tests.
-
-    Usage:
-        async def test_protected_endpoint(authenticated_client: AsyncClient):
-            response = await authenticated_client.get("/api/v1/protected/resource")
-            assert response.status_code == 200
-    """
+    """Authenticated client for protected endpoint tests (TASK-BCK-030)."""
     async def override_get_session():
         yield db
 
     app.dependency_overrides[get_session] = override_get_session
-    # Override the get_current_user dependency to return the test_user
     app.dependency_overrides[get_current_user_id] = lambda: test_user.id
 
-
-    # Generate JWT token for test_user
     token = generate_token(
         user_id=test_user.id,
         tenant_id=test_user.tenant_id,
         email=test_user.email,
         role=test_user.role.value,
     )
-
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
         base_url="http://testserver",
         timeout=30.0,
         headers={"Authorization": f"Bearer {token}"},
-    ) as test_client:
-        yield test_client
-
+    ) as c:
+        yield c
     app.dependency_overrides.clear()
 
 
-# ===========================================
-# SUPERUSER CLEANUP FIXTURES (for RLS testing)
-# ===========================================
+# =============================================================
+# CLEANUP FIXTURES
+# =============================================================
 
 
 @pytest.fixture(scope="function")
 async def superuser_cleanup_engine():
-    """
-    Create a database engine using the SUPERUSER account for test cleanup.
-    """
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    from src.config import settings
+    from sqlalchemy.ext.asyncio import create_async_engine as _eng
 
     cleanup_url = settings.database_url
     if cleanup_url.startswith("postgresql://"):
         cleanup_url = cleanup_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-    cleanup_engine = create_async_engine(
-        cleanup_url,
-        echo=False,
-        pool_pre_ping=True,
-        pool_size=2,
-        max_overflow=0,
-    )
-
-    yield cleanup_engine
-    await cleanup_engine.dispose()
+    engine = _eng(cleanup_url, echo=False, pool_pre_ping=True, pool_size=2, max_overflow=0)
+    yield engine
+    await engine.dispose()
 
 
 @pytest.fixture(scope="function")
 async def cleanup_database(superuser_cleanup_engine):
-    """
-    Helper fixture to clean up test data using superuser connection.
-    """
     async def _cleanup(**entity_ids):
         async with AsyncSession(superuser_cleanup_engine) as session:
-            cleanup_order = ["users", "tenants", "projects", "documents", "clauses", "analyses", "alerts", "extractions", "stakeholders", "wbs_items", "bom_items", "stakeholder_wbs_raci", "ai_usage_logs", "audit_logs"]
-
-            for table in cleanup_order:
+            order = [
+                "users", "tenants", "projects", "documents", "clauses",
+                "analyses", "alerts", "extractions", "stakeholders", "wbs_items",
+                "bom_items", "stakeholder_wbs_raci", "ai_usage_logs", "audit_logs",
+            ]
+            for table in order:
                 ids = entity_ids.get(table, [])
-                if ids:
-                    if not isinstance(ids, list):
-                        ids = [ids]
-
-                    if len(ids) == 1:
-                        query = text(f"DELETE FROM {table} WHERE id = :id")
-                        await session.execute(query, {"id": ids[0]})
-                    else:
-                        placeholders = ", ".join([f":id_{i}" for i in range(len(ids))])
-                        query = text(f"DELETE FROM {table} WHERE id IN ({placeholders})")
-                        params = {f"id_{i}": id_val for i, id_val in enumerate(ids)}
-                        await session.execute(query, params)
-
+                if not ids:
+                    continue
+                if not isinstance(ids, list):
+                    ids = [ids]
+                if len(ids) == 1:
+                    await session.execute(
+                        text(f"DELETE FROM {table} WHERE id = :id"), {"id": ids[0]}
+                    )
+                else:
+                    placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
+                    await session.execute(
+                        text(f"DELETE FROM {table} WHERE id IN ({placeholders})"),
+                        {f"id_{i}": v for i, v in enumerate(ids)},
+                    )
             await session.commit()
 
     return _cleanup
 
 
-# ===========================================
+# =============================================================
 # UTILITY FIXTURES
-# ===========================================
+# =============================================================
+
+
+@pytest.fixture(scope="function")
+def mocker():
+    """Minimal compatibility fixture for suites expecting pytest-mock's `mocker`."""
+    from unittest import mock as _mock
+
+    patchers: list = []
+
+    class _Mocker:
+        Mock = _mock.Mock
+        AsyncMock = _mock.AsyncMock
+        MagicMock = _mock.MagicMock
+        call = _mock.call
+        ANY = _mock.ANY
+
+        @staticmethod
+        def patch(target, *args, **kwargs):
+            patcher = _mock.patch(target, *args, **kwargs)
+            patchers.append(patcher)
+            return patcher.start()
+
+    yield _Mocker()
+    for patcher in reversed(patchers):
+        patcher.stop()
 
 
 @pytest.fixture(scope="function")
 def clean_tables() -> list[str]:
-    """
-    Returns list of tables to clean between tests.
-    """
     return [
-        "users",
-        "tenants",
-        "projects",
-        "documents",
-        "clauses",
-        "analyses",
-        "inconsistencies",
-        "procurement_budget_items", # Added this to cleanup
-        "stakeholder_alerts",       # Added this to cleanup
+        "users", "tenants", "projects", "documents", "clauses", "analyses",
+        "inconsistencies", "procurement_budget_items", "stakeholder_alerts",
     ]
 
 
 @pytest_asyncio.fixture(scope="function")
 async def clean_db(db: AsyncSession, clean_tables: list[str]):
-    """
-    Cleans specified tables before test execution.
-    """
     for table in clean_tables:
         try:
             await db.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
             await db.commit()
         except Exception:
             await db.rollback()
-            pass
 
 
 @pytest.fixture(scope="function")
 async def create_test_user_and_tenant(db):
-    """
-    Factory fixture para crear un Tenant y un User asociados en la base de datos.
-    """
     async def _create(tenant_name: str, user_email: str):
-        tenant_id = uuid4()
-        user_id = uuid4()
-
-        tenant = Tenant(id=tenant_id, name=tenant_name)
+        t_id = uuid4()
+        u_id = uuid4()
+        tenant = Tenant(id=t_id, name=tenant_name)
         db.add(tenant)
         await db.commit()
         await db.refresh(tenant)
-
-        user = User(
-            id=user_id,
-            email=user_email,
-            tenant_id=tenant_id,
-            hashed_password="hashedpassword",
-        )
+        user = User(id=u_id, email=user_email, tenant_id=t_id, hashed_password="hashedpassword")
         db.add(user)
         await db.commit()
         await db.refresh(user)
-
         return user, tenant
 
     return _create
-
-
-
-@pytest.fixture(scope="function", autouse=True)
-def clear_prometheus_registry():
-    """
-    Clears the default prometheus registry to avoid duplicate metric errors
-    between tests.
-    """
-    from prometheus_client import REGISTRY
-    
-    # Unregister all collectors.
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        REGISTRY.unregister(collector)
-    
-    # Re-register default collectors.
-    from prometheus_client import gc_collector, platform_collector, process_collector
-    process_collector.ProcessCollector(registry=REGISTRY)
-    platform_collector.PlatformCollector(registry=REGISTRY)
-    gc_collector.GCCollector(registry=REGISTRY)
