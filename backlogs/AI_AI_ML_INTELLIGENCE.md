@@ -638,9 +638,3 @@ _ADRs for this category will be documented here_
 
 ---
 
-## Change Log
-
-| Date | Change |
-|------|--------|
-| 2026-04-09 | Added TASK-IMPL-010 (17 subtasks): Decouple AI Logic from LangGraph Nodes — CORE task with Coherence Score™ use case, HITL use case, 4 domain services, 3 application use cases, 29.5h estimated. Updated statistics (78→95 tasks). |
-| 2026-04-04 | Category backlog created from master backlog migration |

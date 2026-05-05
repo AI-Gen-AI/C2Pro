@@ -1,0 +1,119 @@
+"""
+TASK-QA-206: Autouse SDK-isolator fixtures extracted from conftest.py.
+
+These fixtures prevent external SDK HTTP calls from leaking during tests and
+ensure Prometheus metrics are clean between test functions. They are loaded
+by conftest.py via pytest_plugins and apply to the entire test session.
+"""
+
+from __future__ import annotations
+
+import sys
+from types import SimpleNamespace
+from unittest import mock
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# LangSmith / LangChain SDK isolation (autouse — every test)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
+    sdk_client = mock.MagicMock(name="langsmith_client")
+    langsmith_module = SimpleNamespace(
+        Client=mock.MagicMock(return_value=sdk_client),
+        RunTree=mock.MagicMock,
+        get_tracing_context=mock.MagicMock(return_value={}),
+        run_helpers=SimpleNamespace(
+            get_tracing_context=mock.MagicMock(return_value={}),
+            tracing_context=mock.MagicMock(),
+        ),
+        run_trees=SimpleNamespace(RunTree=mock.MagicMock),
+        utils=SimpleNamespace(
+            get_tracer_project=mock.MagicMock(return_value="test"),
+            tracing_is_enabled=mock.MagicMock(return_value=False),
+        ),
+    )
+    langchain_hub = mock.MagicMock(name="langchain_hub")
+    langchain_module = SimpleNamespace(hub=langchain_hub)
+
+    monkeypatch.setitem(sys.modules, "langsmith", langsmith_module)
+    monkeypatch.setitem(sys.modules, "langchain", langchain_module)
+    return SimpleNamespace(langsmith_client=sdk_client, langchain_hub=langchain_hub)
+
+
+# ---------------------------------------------------------------------------
+# Tenant-isolation middleware mock (autouse — prevents DB access in middleware)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def mock_lookup_tenant_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock the tenant lookup in the middleware to prevent db access."""
+    with mock.patch(
+        "src.core.middleware.tenant_isolation.lookup_tenant_by_id",
+        new_callable=mock.AsyncMock,
+    ) as mocked:
+        mocked.return_value = SimpleNamespace(is_active=True)
+        yield
+
+
+# ---------------------------------------------------------------------------
+# Prometheus registry cleanup (autouse — avoids duplicate metric errors)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="function", autouse=True)
+def clear_prometheus_registry() -> None:
+    """Clear the Prometheus registry before each test to avoid duplicate metrics."""
+    from prometheus_client import REGISTRY
+    from prometheus_client import gc_collector, platform_collector, process_collector
+
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        REGISTRY.unregister(collector)
+
+    process_collector.ProcessCollector(registry=REGISTRY)
+    platform_collector.PlatformCollector(registry=REGISTRY)
+    gc_collector.GCCollector(registry=REGISTRY)
+
+
+# ---------------------------------------------------------------------------
+# Celery stub — prevent Celery imports from failing in test environments
+# ---------------------------------------------------------------------------
+
+
+def _install_celery_stub() -> None:
+    """Patch sys.modules with a minimal Celery stub before any import."""
+    if "celery" in sys.modules:
+        return
+
+    class _DummyConf(dict):
+        def __getattr__(self, name: str):  # noqa: ANN001
+            return self.get(name)
+
+        def __setattr__(self, name: str, value: object) -> None:
+            self[name] = value
+
+    class _DummyCelery:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.conf = _DummyConf()
+
+        def task(self, *args: object, **kwargs: object):  # noqa: ANN201
+            def decorator(fn):  # noqa: ANN001, ANN202
+                fn.delay = lambda *a, **k: SimpleNamespace(id="test-task")
+                return fn
+
+            return decorator
+
+        def start(self) -> None:
+            return None
+
+    sys.modules["celery"] = SimpleNamespace(Celery=_DummyCelery)  # type: ignore[assignment]
+
+
+_install_celery_stub()
