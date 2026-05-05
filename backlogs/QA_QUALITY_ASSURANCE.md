@@ -409,11 +409,11 @@ Move `apps/api/scripts/bootstrap_test_infra.py` invocation into a `tests/_bootst
 
 **Track B — Wireframe TCs (Frontend)**
 
-- [ ] `TASK-QA-207` — Wireframe TC convention + `scripts/wireframe_coverage.ts` tracker + CI hook. Replaces QA-084. Est 3h. Owner: OpenCode.
-- [ ] `TASK-QA-208` — Wireframe TCs for `01-dashboard.md` + `02-projects.md`. Replaces QA-085, QA-086. Est 4h. Owner: OpenCode.
-- [ ] `TASK-QA-209` — Wireframe TCs for `03-evidence-viewer.md` + CE-S2-010 dossier (PDF viewer, highlights, keyboard nav). Replaces QA-087, QA-088. Est 6h. Owner: OpenCode.
-- [ ] `TASK-QA-210` — Wireframe TCs for `04-alerts.md`. Replaces QA-089, QA-090. Est 4h. Owner: OpenCode.
-- [ ] `TASK-QA-211` — Wireframe TCs for `05-stakeholders.md` + `06-raci-matrix.md`. Replaces QA-091..093. Est 5h. Owner: OpenCode.
+- [x] `TASK-QA-207` — Wireframe TC convention + `scripts/wireframe_coverage.ts` tracker + CI hook. Replaces QA-084. Est 3h. Owner: Sonnet (MASTER). @2026-05-05 branch `qa-coverage/track-b-wireframes`: `apps/web/scripts/wireframe_coverage.ts` + `.github/workflows/wireframe-coverage.yml`.
+- [x] `TASK-QA-208` — Wireframe TCs for `01-dashboard.md` + `02-projects.md`. Replaces QA-085, QA-086. Est 4h. Owner: Sonnet (MASTER). @2026-05-05 `src/tests/wireframes/WF-01-dashboard.wireframe.test.tsx` + `WF-02-projects.wireframe.test.tsx`.
+- [x] `TASK-QA-209` — Wireframe TCs for `03-evidence-viewer.md` + CE-S2-010 dossier (PDF viewer, highlights, keyboard nav). Replaces QA-087, QA-088. Est 6h. Owner: Sonnet (MASTER). @2026-05-05 `src/tests/wireframes/WF-03-evidence-viewer.wireframe.test.tsx`.
+- [x] `TASK-QA-210` — Wireframe TCs for `04-alerts.md`. Replaces QA-089, QA-090. Est 4h. Owner: Sonnet (MASTER). @2026-05-05 `src/tests/wireframes/WF-04-alerts.wireframe.test.tsx`.
+- [x] `TASK-QA-211` — Wireframe TCs for `05-stakeholders.md` + `06-raci-matrix.md`. Replaces QA-091..093. Est 5h. Owner: Sonnet (MASTER). @2026-05-05 `src/tests/wireframes/WF-05-stakeholders.wireframe.test.tsx` + `WF-06-raci-matrix.wireframe.test.tsx`.
 
 **Track C — Report Pipeline (Infra)**
 
