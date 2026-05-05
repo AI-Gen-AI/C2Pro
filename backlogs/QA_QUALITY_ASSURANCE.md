@@ -399,13 +399,13 @@ Move `apps/api/scripts/bootstrap_test_infra.py` invocation into a `tests/_bootst
 
 **Track A — Schemathesis (Backend)**
 
-- [ ] `TASK-QA-200` — Add `schemathesis` to `requirements-sprint1.txt`; create `tests/contract/schemathesis/conftest.py` with auth/tenant hooks; smoke-test `/health/live`. Replaces QA-028, QA-050. Est 3h. Owner: Sonnet.
-- [ ] `TASK-QA-201` — Schemathesis suite for `auth`, `projects`, `documents` routers + JUnit + coverage JSON. Replaces QA-051..053. Est 5h. Owner: Sonnet.
-- [ ] `TASK-QA-202` — Schemathesis suite for `analysis`, `coherence`, `alerts`, `hitl` routers (stateful where applicable). Replaces QA-054..057. Est 6h. Owner: Sonnet.
+- [x] `TASK-QA-200` — Add `schemathesis` to `requirements-sprint1.txt`; create `tests/contract/schemathesis/conftest.py` with auth/tenant hooks; smoke-test `/health/live`. Replaces QA-028, QA-050. Est 3h. Owner: Sonnet. @2026-05-04 branch `qa-coverage/track-a-schemathesis`.
+- [x] `TASK-QA-201` — Schemathesis suite for `auth`, `projects`, `documents` routers + JUnit + coverage JSON. Replaces QA-051..053. Est 5h. Owner: Sonnet. @2026-05-04 same branch.
+- [x] `TASK-QA-202` — Schemathesis suite for `analysis`, `coherence`, `alerts`, `hitl` routers (stateful where applicable). Replaces QA-054..057. Est 6h. Owner: Sonnet. @2026-05-04 same branch.
 - [ ] `TASK-QA-203` — Schemathesis suite for `wbs`, `procurement`, `stakeholders`, `decision_intelligence`, `bulk_operations` routers. Replaces QA-058..062. Est 6h. Owner: Codex.
 - [ ] `TASK-QA-204` — Schemathesis suite for `mcp`, `ai_feedback`, `dlq`, `frontend_support`, `observability`, `tenants`, `admin` routers. Replaces QA-063..064, QA-069..070. Est 5h. Owner: Codex.
-- [ ] `TASK-QA-205` — OpenAPI drift gate: regenerate YAML in CI, fail PR if `git diff` non-empty unless commit message contains `[openapi]`. Replaces QA-034. Est 2h. Owner: Sonnet.
-- [ ] `TASK-QA-206` — DB bootstrap migration: refactor `conftest.py`, extract fixtures to `tests/fixtures/sdk_isolators.py`, document in `tests/README.md`. Cross-cutting. Est 4h. Owner: Sonnet.
+- [x] `TASK-QA-205` — OpenAPI drift gate: regenerate YAML in CI, fail PR if `git diff` non-empty unless commit message contains `[openapi]`. Replaces QA-034. Est 2h. Owner: Sonnet. @2026-05-04 `.github/workflows/openapi-drift.yml`.
+- [x] `TASK-QA-206` — DB bootstrap migration: refactor `conftest.py` (463 LOC ≤700), extract fixtures to `tests/fixtures/sdk_isolators.py`, `tests/_bootstrap.py`, `tests/fixtures/auth.py`; documented in `tests/README.md`. Cross-cutting. Est 4h. Owner: Sonnet. @2026-05-04 same branch.
 
 **Track B — Wireframe TCs (Frontend)**
 
