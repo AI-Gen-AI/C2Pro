@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-05-05T19:42:34.280Z",
+  "total_wireframes": 6,
+  "covered": 6,
+  "uncovered": 0,
+  "coverage_pct": 100,
+  "wireframes": [
+    {
+      "wireframe": "docs/wireframes/01-dashboard.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-01-dashboard.wireframe.test.tsx"
+      ]
+    },
+    {
+      "wireframe": "docs/wireframes/02-projects.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-02-projects.wireframe.test.tsx"
+      ]
+    },
+    {
+      "wireframe": "docs/wireframes/03-evidence-viewer.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-03-evidence-viewer.wireframe.test.tsx"
+      ]
+    },
+    {
+      "wireframe": "docs/wireframes/04-alerts.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-04-alerts.wireframe.test.tsx"
+      ]
+    },
+    {
+      "wireframe": "docs/wireframes/05-stakeholders.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-05-stakeholders.wireframe.test.tsx"
+      ]
+    },
+    {
+      "wireframe": "docs/wireframes/06-raci-matrix.md",
+      "covered": true,
+      "tests": [
+        "apps/web/src/tests/wireframes/WF-06-raci-matrix.wireframe.test.tsx"
+      ]
+    }
+  ]
+}

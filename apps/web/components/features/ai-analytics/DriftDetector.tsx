@@ -44,7 +44,6 @@ export function DriftDetector({ data, loading, error }: Props) {
   if (data.series.length === 0) return <div className="rounded-md border p-4 text-sm text-muted-foreground">No drift telemetry available.</div>;
 
   const anomalyIndices = detectAnomalies(data.series);
-  const hasAnomalies = anomalyIndices.size > 0;
 
   return (
     <section className="space-y-3 rounded-md border p-4">

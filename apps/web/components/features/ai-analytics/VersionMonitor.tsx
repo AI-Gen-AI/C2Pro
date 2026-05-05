@@ -18,7 +18,7 @@ export function VersionMonitor({ data, loading, error }: Props) {
 
   const windowStart = data.window_start ? new Date(data.window_start) : null;
   const filteredVersions = dateRange
-    ? data.versions.filter((v) => {
+    ? data.versions.filter(() => {
         if (!windowStart) return true;
         const versionDate = windowStart;
         return versionDate >= new Date(dateRange.start) && versionDate <= new Date(dateRange.end);
