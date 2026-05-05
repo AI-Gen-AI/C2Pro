@@ -1,0 +1,46 @@
+name: Wireframe Coverage Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "apps/web/src/tests/wireframes/**"
+      - "apps/web/components/**"
+      - "apps/web/app/**"
+      - "docs/wireframes/0*.md"
+
+concurrency:
+  group: wireframe-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wireframe-coverage:
+    name: Wireframe TC Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Install root deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run wireframe coverage tracker
+        run: npx tsx apps/web/scripts/wireframe_coverage.ts --ci
+        working-directory: ${{ github.workspace }}
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireframe-coverage
+          path: apps/web/wireframe-coverage.json
+          retention-days: 30
