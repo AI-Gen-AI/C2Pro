@@ -10,7 +10,7 @@ fi
 # Frontend lint (ESLint) — only run when JS/TS/TSX files are staged
 if git diff --cached --name-only | grep -qE '\.(tsx?|jsx?|mjs|cjs)$'; then
   echo "📝 Checking frontend style (ESLint)..."
-  pnpm run lint || { echo "❌ ESLint failed!"; exit 1; }
+  pnpm --filter c2pro-web run lint || { echo "❌ ESLint failed!"; exit 1; }
 fi
 
 echo "✅ Pre-commit gates passed!"
