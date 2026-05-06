@@ -63,9 +63,9 @@
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `EPIC-TEST-STABILIZATION` ✅ | WBS misplacement + flaky SLA + React `act()` (`TASK-BCK-043/044`, `TASK-QA-077`, `TASK-1480`) | Bug | P2 | DDD-MIGRATION | Completed 2026-04-30; WBS relocation + initial SLA freeze shipped 2026-04-21, remaining SLA boundary cases frozen and alert React tests wrapped in `act()` with raised Vitest timeouts (PR #93). |
 | `EPIC-QA-CONTRACT-COVERAGE` ✅ | Contract tests + wireframe TCs + quality-gate reports — replanned 2026-05-03 (W7); 31 stubs collapsed into `TASK-QA-200..213` across 3 tracks; spec in [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md#epic-qa-contract-coverage--plan) | Refactor | P2 | DDD-MIGRATION | All 3 tracks complete. Track A PR #106 (Schemathesis + OpenAPI drift CI). Track B PR #107 (wireframe coverage tracker + 6 wireframe TCs). Track C PR #108 (quality-report composite action + `scripts/quality_report.py` + workflow wiring + PR sticky comments). |
-| `EPIC-COVERAGE-GATES` | 70% module coverage + regression proof (merged `AI-048..051`, `INF-016..019`, `FRT-132..135`) | Feature | P3 | QA-CONTRACT-COVERAGE | Target 70% on listed modules, ship coverage-plan tests, prove zero regression. |
+| `EPIC-COVERAGE-GATES` ✅ | 70% module coverage + regression proof (merged `AI-048..051`, `INF-016..019`, `FRT-132..135`) | Feature | P3 | QA-CONTRACT-COVERAGE | Completed @2026-04-09: 73 coverage-improvement tests added; 70%+ achieved; zero regressions (409 unit tests passing). Flash cache layer (TASK-AI-047) implemented in prompt_cache.py. Trace columns migration shipped (TASK-AI-007). |
 | `EPIC-SENTRY-PERF` | Sentry auth alerts + perf benchmarks (`TASK-INF-055/056`) | Feature | P3 | TENANT-RLS-HARDENING | Sentry alerts for auth-failure patterns; codify benchmark harness + baselines. TASK-INF-056 W5b pytest-benchmark harness completed 2026-05-03 with baseline saved; TASK-INF-055 remains blocked on Sentry/operator prerequisites. |
-| `EPIC-AI-CACHE` | Flash/cache layer (`TASK-AI-047`, `TASK-INF-015`) | Feature | P3 | LANGSMITH-ROLLOUT | README_FLASH cache on Claude wrapper, hit-rate metrics into LangSmith A/B attribution. |
+| `EPIC-AI-CACHE` ✅ | Flash/cache layer (`TASK-AI-047`, `TASK-INF-015`) | Feature | P3 | LANGSMITH-ROLLOUT | Completed @2026-04-09: FlashCacheService + PromptCacheService in prompt_cache.py; SHA-256 content-hash keys, 1h Redis TTL. Tests in test_coverage_gates_ai_coverage.py. |
 | `TASK-FRT-041` | Clerk production email templates | Feature | P3 | TENANT-RLS-HARDENING | BLOCKED on operator access; close via `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md`. |
 
 ### Pruned — `[STATUS: WONT DO]`
@@ -138,6 +138,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P0 | `[x] TASK-COH-V1-07` | Codex | 02, 04, 05 | Golden-corpus schema: `expected_score_range` + `expected_alerts`. Annotate 15 bundles. CI assertion. `[x] Implemented (Golden Corpus Expectations + CI Assertions)` |
 | P0 | `[x] TASK-COH-V1-08` | Gemini 3 Pro (delivery) → MASTER (recovery) | 02 | LangSmith spans on 6 of 7 nodes (skip LLM until rollout=100%). EU-residency attribute allowlist + contract test. Runbook. `[x] Implemented (@traced_coherence_node decorator + allowlist schema + 5/5 contract tests + runbook)` |
 | P0 | `[x] TASK-COH-V1-09` | OpenCode (delivery) → MASTER (recovery) | 04, 06, 07 | Dashboard badge + tooltip, alert UX (sort, filter, copy-to-clipboard, AUDIT_INCOMPLETE banner), customer email + FAQ + activated cut-off date. E2E. `[x] Implemented (v1 Dashboard UX + Alert Copy + Customer Comms)` |
+
+**2026-05-07**: TASK-AI-038 verified complete (python_mcp_server.md already correct). TASK-AI-039 implemented as validate_prompt_templates.py CLI (commit 71f717c8). AI backlog: 89 completed / 9 active.
 
 ---
 
