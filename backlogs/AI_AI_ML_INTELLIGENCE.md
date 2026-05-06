@@ -579,13 +579,13 @@ Phase 4 (after Phase 3):                      │
 #### Success Criteria
 
 - [x] Domain services usable in sync contexts (no framework deps) — already met for 3 services
-- [ ] Business logic portable to other frameworks — all 7 domain services framework-free
-- [ ] LangGraph nodes < 50 lines each — 0 nodes over target
-- [ ] All extraction/prompt logic moved to domain — 4 prompts centralized
-- [ ] Coherence Score™ has dedicated use case — `ScoreFromExtractionUseCase`
-- [ ] HITL has dedicated use case — `RouteForGraphReviewUseCase`
-- [ ] 41-50 new tests, 80%+ coverage on new code
-- [ ] Zero test regressions
+- [x] Business logic portable to other frameworks — all 7 domain services framework-free
+- [x] LangGraph nodes < 50 lines each — 0 nodes over target
+- [x] All extraction/prompt logic moved to domain — 4 prompts centralized
+- [x] Coherence Score™ has dedicated use case — `ScoreFromExtractionUseCase`
+- [x] HITL has dedicated use case — `RouteForGraphReviewUseCase`
+- [x] 41-50 new tests, 80%+ coverage on new code
+- [x] Zero test regressions
 
 ---
 
