@@ -1,0 +1,64 @@
+name: Quality Report
+description: Render and publish the C2Pro quality gate markdown report.
+
+inputs:
+  contract-coverage-json:
+    description: Path to contract-coverage.json.
+    required: false
+    default: contract-coverage.json
+  wireframe-coverage-json:
+    description: Path to wireframe-coverage.json.
+    required: false
+    default: apps/web/wireframe-coverage.json
+  coverage-glob:
+    description: Glob for coverage.xml files.
+    required: false
+    default: "**/coverage.xml"
+  junit-glob:
+    description: Glob for JUnit XML files.
+    required: false
+    default: "**/*test-results*.xml"
+  output:
+    description: Output markdown report path.
+    required: false
+    default: quality-report.md
+  base-contract-coverage:
+    description: Base branch contract coverage percentage.
+    required: false
+    default: ""
+  fail-on-contract-drop:
+    description: Fail when contract coverage drops by more than the threshold.
+    required: false
+    default: "false"
+  max-contract-drop:
+    description: Maximum allowed contract coverage drop percentage.
+    required: false
+    default: "2.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Render quality report
+      shell: bash
+      run: |
+        set -euo pipefail
+        args=(
+          scripts/quality_report.py
+          --contract-coverage "${{ inputs.contract-coverage-json }}"
+          --wireframe-coverage "${{ inputs.wireframe-coverage-json }}"
+          --coverage-glob "${{ inputs.coverage-glob }}"
+          --junit-glob "${{ inputs.junit-glob }}"
+          --output "${{ inputs.output }}"
+          --max-contract-drop "${{ inputs.max-contract-drop }}"
+        )
+        if [ -n "${{ inputs.base-contract-coverage }}" ]; then
+          args+=(--base-contract-coverage "${{ inputs.base-contract-coverage }}")
+        fi
+        if [ "${{ inputs.fail-on-contract-drop }}" = "true" ]; then
+          args+=(--fail-on-contract-drop)
+        fi
+        python "${args[@]}"
+
+    - name: Append quality report to job summary
+      shell: bash
+      run: cat "${{ inputs.output }}" >> "$GITHUB_STEP_SUMMARY"

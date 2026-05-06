@@ -115,7 +115,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 ### Quality Assurance
 
-- `EPIC-QA-CONTRACT-COVERAGE` — replanned 2026-05-03 (W7); 31 stubs collapsed into `TASK-QA-200..213` across 3 tracks. **Track A (TASK-QA-200..206)** ✅ complete — PR #106 (Schemathesis harness + OpenAPI drift CI). **Track B (TASK-QA-207..211)** ✅ complete — PR #107 (wireframe coverage tracker, CI gate, 6 wireframe test files, 100% coverage). **Track C (QA-212..213)** pending (Codex). Full spec: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md#epic-qa-contract-coverage--plan).
+- `EPIC-QA-CONTRACT-COVERAGE` — replanned 2026-05-03 (W7); 31 stubs collapsed into `TASK-QA-200..213` across 3 tracks. **Track A (TASK-QA-200..206)** ✅ complete — PR #106 (Schemathesis harness + OpenAPI drift CI). **Track B (TASK-QA-207..211)** ✅ complete — PR #107 (wireframe coverage tracker, CI gate, 6 wireframe test files, 100% coverage). **Track C (QA-212..213)** ✅ complete — branch `coverage-gates/ai-codex` (quality-report composite action, markdown renderer, workflow artifacts, PR sticky comments). Full spec: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md#epic-qa-contract-coverage--plan).
 - Full detail: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md).
 
 ### Cross-Category

@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   secrets-scan:
@@ -213,6 +214,9 @@ jobs:
     if: always()
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all test results
         uses: actions/download-artifact@v4
         with:
@@ -262,6 +266,30 @@ jobs:
           os.makedirs("release-evidence", exist_ok=True)
           with open("release-evidence/backend-release-summary.txt", "w", encoding="utf-8") as f:
               f.write("\n".join(lines) + "\n")
+
+      - name: Render quality gate report
+        if: always()
+        uses: ./.github/actions/quality-report
+        with:
+          coverage-glob: "test-results/**/coverage.xml"
+          junit-glob: "test-results/**/*.xml"
+          output: quality-report.md
+          fail-on-contract-drop: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+
+      - name: Comment quality gate report
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: c2pro-quality-report-backend
+          path: quality-report.md
+
+      - name: Upload quality gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-report
+          path: quality-report.md
+          retention-days: 90
 
       - name: Upload backend release summary
         if: always()
