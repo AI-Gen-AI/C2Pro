@@ -417,8 +417,8 @@ Move `apps/api/scripts/bootstrap_test_infra.py` invocation into a `tests/_bootst
 
 **Track C — Report Pipeline (Infra)**
 
-- [ ] `TASK-QA-212` — `.github/actions/quality-report/action.yml` + `scripts/quality_report.py` markdown render. Replaces QA-094. Est 4h. Owner: Codex.
-- [ ] `TASK-QA-213` — Wire report into `tests.yml`, `frontend-ci.yml`, `qa-swarm.yml`; PR comment via `marocchino/sticky-pull-request-comment`. Replaces QA-095. Est 3h. Owner: Codex.
+- [x] `TASK-QA-212` — `.github/actions/quality-report/action.yml` + `scripts/quality_report.py` markdown render. Replaces QA-094. Est 4h. Owner: Codex. @2026-05-06 branch `coverage-gates/ai-codex`: markdown report renderer with contract/wireframe/coverage/JUnit summaries and >2% contract-drop gate. `[x] Implemented (Quality Report Renderer + Composite Action)`
+- [x] `TASK-QA-213` — Wire report into `tests.yml`, `frontend-ci.yml`, `qa-swarm.yml`; PR comment via `marocchino/sticky-pull-request-comment`. Replaces QA-095. Est 3h. Owner: Codex. @2026-05-06 branch `coverage-gates/ai-codex`: backend/frontend/QA workflows render artifacts and PR sticky comments. `[x] Implemented (Workflow Wiring + PR Comment Gate)`
 
 ### Dispatch Slate (suggested)
 

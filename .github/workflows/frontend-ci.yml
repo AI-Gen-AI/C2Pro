@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   # Typecheck and lint run in parallel — they are independent static checks
@@ -132,6 +133,28 @@ jobs:
           frontend_ci=pass
           includes=typecheck,lint,unit-integration,e2e,api-generation-drift
           EOF
+
+      - name: Render quality gate report
+        if: always()
+        uses: ./.github/actions/quality-report
+        with:
+          wireframe-coverage-json: apps/web/wireframe-coverage.json
+          output: quality-report.md
+
+      - name: Comment quality gate report
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: c2pro-quality-report-frontend
+          path: quality-report.md
+
+      - name: Upload quality gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-quality-report
+          path: quality-report.md
+          retention-days: 90
 
       - name: Upload frontend release summary
         if: always()
