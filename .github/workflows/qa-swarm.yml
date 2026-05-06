@@ -108,6 +108,28 @@ jobs:
           path: apps/api/coverage.xml
           retention-days: 7
 
+      - name: Render quality gate report
+        if: always()
+        uses: ./.github/actions/quality-report
+        with:
+          coverage-glob: "apps/api/coverage.xml"
+          output: quality-report.md
+
+      - name: Comment quality gate report
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: c2pro-quality-report-qa-swarm
+          path: quality-report.md
+
+      - name: Upload quality gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-swarm-quality-report
+          path: quality-report.md
+          retention-days: 90
+
   # ───────────────────────────────────────────────────────────────────────────
   # Job 2: QA Swarm execution
   # ───────────────────────────────────────────────────────────────────────────
