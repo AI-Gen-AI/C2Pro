@@ -1,17 +1,18 @@
 """TS-AI-FLASH-001: Tests for Flash cache layer."""
 
-import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+import pytest_asyncio
+
 from src.core.ai.prompt_cache import (
+    FLASH_CACHE_BYPASS_TEMPERATURE,
+    FLASH_CACHE_TTL_SECONDS,
     FlashCacheEntry,
     FlashCacheService,
     build_flash_cache_key,
-    should_bypass_flash_cache,
     get_flash_cache_service,
-    FLASH_CACHE_TTL_SECONDS,
-    FLASH_CACHE_BYPASS_TEMPERATURE,
+    should_bypass_flash_cache,
 )
 
 

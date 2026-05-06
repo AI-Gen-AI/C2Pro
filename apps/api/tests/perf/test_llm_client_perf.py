@@ -6,7 +6,6 @@ import pytest
 
 from tests.perf.conftest import run_async_benchmark_round
 
-
 pytestmark = pytest.mark.performance
 
 

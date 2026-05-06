@@ -20,14 +20,12 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
-
-from pydantic import BaseModel
-
 from uuid import UUID, uuid4
 
 import structlog
 from anthropic import AsyncAnthropic
 from anthropic.types import Message
+from pydantic import BaseModel
 
 from src.anonymizer.application.anonymization_service import AnonymizationService
 from src.anonymizer.domain.pii_detector_service import PiiDetectorService

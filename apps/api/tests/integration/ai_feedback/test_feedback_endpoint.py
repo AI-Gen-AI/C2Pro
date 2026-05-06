@@ -1,13 +1,14 @@
 """Integration tests for the AI feedback endpoint."""
 from __future__ import annotations
 
-from unittest.mock import patch, PropertyMock
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from httpx import AsyncClient
 
 # Import your FastAPI app
 from src.main import app
+
 
 @pytest.mark.asyncio
 @patch("src.ai_feedback.service.AIFeedbackService.submit_feedback")
@@ -54,8 +55,8 @@ async def test_submit_feedback_unauthenticated():
 @patch("src.core.ai.langsmith_client.LangSmithClient.enabled", new_callable=PropertyMock, return_value=True)
 def test_feedback_service_calls_langsmith_client(mock_enabled, mock_create_feedback):
     """Test that the service calls the LangSmith client."""
-    from src.ai_feedback.service import AIFeedbackService
     from src.ai_feedback.schemas import AIFeedbackCreate
+    from src.ai_feedback.service import AIFeedbackService
 
     service = AIFeedbackService()
     feedback_data = AIFeedbackCreate(
@@ -64,7 +65,7 @@ def test_feedback_service_calls_langsmith_client(mock_enabled, mock_create_feedb
         score=0.5,
         comment="test comment"
     )
-    
+
     service.submit_feedback(feedback_data)
     mock_create_feedback.assert_called_once_with(
         run_id="trace-123",

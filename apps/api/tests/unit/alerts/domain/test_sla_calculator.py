@@ -8,17 +8,16 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from freezegun import freeze_time
-
 from alerts.domain.services.sla_calculator import (
     CRITICAL_SLA,
     HIGH_SLA,
     LOW_SLA,
     MEDIUM_SLA,
-    SLACalculator,
-    SLACalculation,
     AlertSeverityLevel,
+    SLACalculation,
+    SLACalculator,
 )
+from freezegun import freeze_time
 
 
 class TestSLACalculatorGetPolicy:
@@ -38,7 +37,7 @@ class TestSLACalculatorGetPolicy:
     def test_get_policy_by_string_severity(self, severity: str, expected_hours: int) -> None:
         """Test getting SLA policy by string severity (case insensitive)."""
         policy = SLACalculator.get_sla_policy(severity)
-        
+
         assert policy is not None
         assert policy.response_hours == expected_hours
 
@@ -53,7 +52,7 @@ class TestSLACalculatorGetPolicy:
     ) -> None:
         """Test getting SLA policy by enum severity."""
         policy = SLACalculator.get_sla_policy(severity)
-        
+
         assert policy is not None
         assert policy.response_hours == expected_hours
 
@@ -69,13 +68,13 @@ class TestSLACalculatorGetPolicy:
     ) -> None:
         """Test that invalid severity returns None."""
         policy = SLACalculator.get_sla_policy(invalid_severity)
-        
+
         assert policy is None
 
     def test_get_policy_with_random_string(self) -> None:
         """Test that random strings return None."""
         policy = SLACalculator.get_sla_policy(str(uuid4()))
-        
+
         assert policy is None
 
 
@@ -85,45 +84,45 @@ class TestSLACalculatorCalculateDueAt:
     def test_calculate_critical_due_at(self) -> None:
         """Test SLA due date calculation for critical severity."""
         created_at = datetime(2026, 4, 8, 10, 0, 0, tzinfo=UTC)
-        
+
         policy_name, due_at = SLACalculator.calculate_due_at("critical", created_at)
-        
+
         assert policy_name == "Critical severity: first response in 2 hours"
         assert due_at == datetime(2026, 4, 8, 12, 0, 0, tzinfo=UTC)
 
     def test_calculate_high_due_at(self) -> None:
         """Test SLA due date calculation for high severity."""
         created_at = datetime(2026, 4, 8, 10, 0, 0, tzinfo=UTC)
-        
+
         policy_name, due_at = SLACalculator.calculate_due_at("high", created_at)
-        
+
         assert policy_name == "High severity: response in 24 hours"
         assert due_at == datetime(2026, 4, 9, 10, 0, 0, tzinfo=UTC)
 
     def test_calculate_medium_due_at(self) -> None:
         """Test SLA due date calculation for medium severity."""
         created_at = datetime(2026, 4, 8, 10, 0, 0, tzinfo=UTC)
-        
+
         policy_name, due_at = SLACalculator.calculate_due_at("medium", created_at)
-        
+
         assert policy_name == "Medium severity: response in 72 hours"
         assert due_at == datetime(2026, 4, 11, 10, 0, 0, tzinfo=UTC)
 
     def test_calculate_low_due_at(self) -> None:
         """Test SLA due date calculation for low severity."""
         created_at = datetime(2026, 4, 8, 10, 0, 0, tzinfo=UTC)
-        
+
         policy_name, due_at = SLACalculator.calculate_due_at("low", created_at)
-        
+
         assert policy_name == "Low severity: response in 120 hours"
         assert due_at == datetime(2026, 4, 13, 10, 0, 0, tzinfo=UTC)
 
     def test_calculate_due_at_invalid_severity(self) -> None:
         """Test that invalid severity returns (None, datetime.min)."""
         created_at = datetime(2026, 4, 8, 10, 0, 0, tzinfo=UTC)
-        
+
         policy_name, due_at = SLACalculator.calculate_due_at("invalid", created_at)
-        
+
         assert policy_name is None
         assert due_at == datetime.min
 
@@ -135,9 +134,9 @@ class TestSLACalculatorCalculate:
     def test_calculate_not_overdue(self) -> None:
         """TS-UD-ALR-SLA-001: Test calculation for alert that is not yet overdue."""
         created_at = datetime.now(UTC) - timedelta(hours=1)
-        
+
         result = SLACalculator.calculate("critical", created_at)
-        
+
         assert result.policy_name is not None
         assert result.due_at is not None
         assert result.hours_remaining == 1
@@ -147,9 +146,9 @@ class TestSLACalculatorCalculate:
     def test_calculate_overdue(self) -> None:
         """TS-UD-ALR-SLA-001: Test calculation for alert that is overdue."""
         created_at = datetime.now(UTC) - timedelta(hours=3)
-        
+
         result = SLACalculator.calculate("critical", created_at)
-        
+
         assert result.policy_name is not None
         assert result.due_at is not None
         assert result.hours_remaining == -1
@@ -177,9 +176,9 @@ class TestSLACalculatorCalculate:
     def test_calculate_invalid_severity(self) -> None:
         """Test calculation with invalid severity returns empty result."""
         created_at = datetime.now(UTC)
-        
+
         result = SLACalculator.calculate("invalid", created_at)
-        
+
         assert result.policy_name is None
         assert result.due_at is None
         assert result.hours_remaining is None
@@ -192,14 +191,14 @@ class TestSLACalculatorGetAllPolicies:
     def test_get_all_policies_returns_four_policies(self) -> None:
         """Test that all four SLA policies are returned."""
         policies = SLACalculator.get_all_policies()
-        
+
         assert len(policies) == 4
 
     def test_get_all_policies_contains_all_severities(self) -> None:
         """Test that all severity levels are present."""
         policies = SLACalculator.get_all_policies()
         policy_names = [p.name for p in policies]
-        
+
         assert CRITICAL_SLA.name in policy_names
         assert HIGH_SLA.name in policy_names
         assert MEDIUM_SLA.name in policy_names
@@ -209,7 +208,7 @@ class TestSLACalculatorGetAllPolicies:
         """Test response hours for each policy."""
         policies = SLACalculator.get_all_policies()
         hours_map = {p.name: p.response_hours for p in policies}
-        
+
         assert hours_map[CRITICAL_SLA.name] == 2
         assert hours_map[HIGH_SLA.name] == 24
         assert hours_map[MEDIUM_SLA.name] == 72
@@ -280,14 +279,14 @@ class TestSLACalculationDataclass:
     def test_sla_calculation_with_all_fields(self) -> None:
         """Test SLACalculation with all fields populated."""
         due_at = datetime(2026, 4, 8, 12, 0, 0, tzinfo=UTC)
-        
+
         result = SLACalculation(
             policy_name="Test Policy",
             due_at=due_at,
             hours_remaining=5,
             is_overdue=False,
         )
-        
+
         assert result.policy_name == "Test Policy"
         assert result.due_at == due_at
         assert result.hours_remaining == 5
@@ -301,7 +300,7 @@ class TestSLACalculationDataclass:
             hours_remaining=-1,
             is_overdue=True,
         )
-        
+
         assert result.is_overdue is True
         assert result.hours_remaining == -1
 
@@ -313,7 +312,7 @@ class TestSLACalculationDataclass:
             hours_remaining=None,
             is_overdue=False,
         )
-        
+
         assert result.policy_name is None
         assert result.due_at is None
         assert result.hours_remaining is None

@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from src.core.ai.langsmith_client import LangSmithClient
+
 from .schemas import AIFeedbackCreate
 
 
 class AIFeedbackService:
     """
     Service for handling AI feedback.
-    
+
     This service is responsible for taking feedback submissions and sending them
     to the appropriate observability platform (LangSmith).
     """
@@ -22,7 +23,7 @@ class AIFeedbackService:
 
         Args:
             feedback: The feedback data to submit.
-        
+
         Raises:
             ValueError: If the LangSmith client is not enabled.
         """

@@ -31,7 +31,6 @@ def _import_modules():
     """Import validator modules after path is configured."""
     # Trigger template registration by importing the prompts package
     import src.core.ai.prompts  # noqa: F401 — registers all templates as side-effect
-
     from src.core.ai.prompts import PROMPT_REGISTRY
     from src.core.ai.prompts.validator import (
         ValidationResult,

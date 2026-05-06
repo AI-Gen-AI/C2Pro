@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 
 from src.config import settings
 from src.core.database import Base, get_session
-
 from tests.support.postgres_bootstrap import (
     ensure_pgvector_extension,
     reset_public_schema,

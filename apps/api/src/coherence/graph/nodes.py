@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 
 from src.core.observability.coherence_tracing import traced_coherence_node
 
+from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
 from ..models import (
     Alert,
     CategoryBreakdown,
@@ -34,9 +35,8 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
-from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
-from ..rules_engine.registry import list_evaluators
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
+from ..rules_engine.registry import list_evaluators
 from ..scoring import ScoringService
 from .state import (
     ClauseWithEmbedding,
@@ -475,9 +475,13 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     errors: list[str] = []
 
     try:
-        from ...adapters.persistence.pgvector_embedding_repository import PgvectorEmbeddingRepository
-        from src.core.database import _session_factory
         from uuid import UUID
+
+        from src.core.database import _session_factory
+
+        from ...adapters.persistence.pgvector_embedding_repository import (
+            PgvectorEmbeddingRepository,
+        )
 
         project_uuid = UUID(state.project_id) if state.project_id else None
         if not project_uuid:
@@ -493,7 +497,7 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
 
         async with _session_factory() as session:
             repo = PgvectorEmbeddingRepository(session, tenant_id=tenant_uuid)
-            
+
             embedding_matches = await repo.find_cross_document_pairs(
                 project_id=project_uuid,
                 similarity_threshold=state.config.similarity_threshold,
@@ -519,7 +523,7 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
                             match_reason=match.match_reason,
                         )
                     )
-            
+
     except ValueError as e:
         error_msg = f"Invalid format: {e}"
         logger.warning(error_msg)

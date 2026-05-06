@@ -19,7 +19,6 @@ from src.coherence.llm_schemas import (
 )
 from src.core.ai.structured_output import parse_llm_json
 
-
 # ---------------------------------------------------------------------------
 # ClauseAnalysisLLMResponse
 # ---------------------------------------------------------------------------

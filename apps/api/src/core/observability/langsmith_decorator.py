@@ -5,8 +5,9 @@ from __future__ import annotations
 import functools
 import inspect
 import time
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, ParamSpec, Protocol, TypeVar
+from typing import Any, ParamSpec, Protocol, TypeVar
 from uuid import uuid4
 
 from src.core.ai.langsmith_client import LangSmithClient
@@ -241,7 +242,7 @@ def traced_llm_call(
                     span_client.end_span(span, outputs={"status": "success", **usage_metrics})
                     trace_id, trace_url = _extract_trace_identifiers(span, run_id=run_id)
                     _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
-                    
+
                     tenant_uuid = getattr(request_obj, "tenant_id", None)
                     project_id = getattr(request_obj, "project_id", None)
                     prompt_version = getattr(request_obj, "prompt_version", None)

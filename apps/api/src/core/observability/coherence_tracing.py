@@ -5,7 +5,8 @@ with strict validation against an allowlisted schema to prevent data leakage.
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.core.ai.langsmith_client import get_client
 from src.core.observability.coherence_span_schema import COHERENCE_SPAN_ATTRIBUTE_ALLOWLIST
@@ -54,7 +55,7 @@ def traced_coherence_node(
                 )
 
                 result = func(*args, **kwargs)
-                
+
                 # In format_output, also create alert events
                 if node_name == "format_output" and "alerts" in result:
                     for alert in result.get("alerts", []):
@@ -72,7 +73,7 @@ def traced_coherence_node(
                     _validate_attributes(output_attributes)
                     if span:
                         langsmith_client.update_span_metadata(span, output_attributes)
-                
+
                 return result
             except Exception as e:
                 if span:

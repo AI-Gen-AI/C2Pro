@@ -27,7 +27,6 @@ from src.core.database import get_raw_session
 from src.core.middleware.clerk_auth import verify_clerk_token
 from src.core.observability.sentry_alerts import record_auth_failure
 
-
 logger = structlog.get_logger()
 
 

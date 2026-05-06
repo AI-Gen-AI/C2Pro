@@ -23,12 +23,12 @@ Usage:
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from functools import wraps
 import hashlib
 import inspect
 import json
 import time
+from collections.abc import Awaitable, Callable
+from functools import wraps
 from typing import Any, get_type_hints
 
 import redis.asyncio as redis

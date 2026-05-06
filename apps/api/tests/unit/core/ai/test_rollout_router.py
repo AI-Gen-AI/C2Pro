@@ -7,7 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from src.core.ai.rollout_router import LangSmithCanaryRouter, LangSmithRolloutConfig, should_trace_request
+from src.core.ai.rollout_router import (
+    LangSmithCanaryRouter,
+    LangSmithRolloutConfig,
+    should_trace_request,
+)
 
 
 def test_should_trace_request_is_deterministic_for_same_tenant() -> None:

@@ -7,7 +7,7 @@ Test Suite ID: TS-HITL-EMAIL-NOTIFY-001
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID, uuid4
@@ -41,7 +41,7 @@ def test_review_item():
         current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
         confidence=0.65,
         impact_level=ImpactLevel.HIGH,
-        sla_due_date=datetime.now(timezone.utc) + timedelta(hours=24),
+        sla_due_date=datetime.now(UTC) + timedelta(hours=24),
         approved_by=None,
         approved_at=None,
         item_data={

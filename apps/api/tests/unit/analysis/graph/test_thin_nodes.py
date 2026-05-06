@@ -384,7 +384,8 @@ class TestExtractorAIToolDelegation:
             return _fake_tool
 
         # Patch the lazy import site.
-        import sys, types
+        import sys
+        import types
         fake_mod = types.ModuleType("src.core.ai.tools")
         fake_mod.get_tool = _fake_get_tool
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
@@ -406,7 +407,8 @@ class TestExtractorAIToolDelegation:
             assert (name, version) == ("wbs_extraction", "1.0")
             return _fake_tool
 
-        import sys, types
+        import sys
+        import types
         fake_mod = types.ModuleType("src.core.ai.tools")
         fake_mod.get_tool = _fake_get_tool
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)

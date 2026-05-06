@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -18,7 +19,7 @@ from src.modules.hitl.adapters.notifications.recipient_resolver import (
 
 
 class _FakeSession:
-    async def __aenter__(self) -> "_FakeSession":
+    async def __aenter__(self) -> _FakeSession:
         return self
 
     async def __aexit__(self, *args: Any) -> None:
@@ -110,7 +111,7 @@ class TestEmailNotificationServiceRecipientWiring:
             current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
             confidence=0.7,
             impact_level=ImpactLevel.MEDIUM,
-            sla_due_date=datetime.now(timezone.utc) + timedelta(hours=24),
+            sla_due_date=datetime.now(UTC) + timedelta(hours=24),
             item_data={},
         )
         kwargs.update(overrides)
