@@ -7,8 +7,10 @@ describe("Vitest Environment Base URL", () => {
     try {
       const url = new URL("/api/v1/health", window.location.origin);
       expect(url.toString()).toContain("/api/v1/health");
-    } catch (e) {
-      throw new Error(`Failed to parse relative URL: ${e}`);
+    } catch (error) {
+      throw new Error(`Failed to parse relative URL: ${error}`, {
+        cause: error,
+      });
     }
   });
 
