@@ -263,7 +263,7 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
     return state
 
 
-def _build_coherence_clauses(state: ProjectState) -> list["Clause"]:
+def _build_coherence_clauses(state: ProjectState) -> list[Clause]:
     """Build canonical subgraph clauses from the analysis graph state."""
     from src.coherence.models import Clause
 

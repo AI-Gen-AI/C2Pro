@@ -10,9 +10,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-import pytest
 
 from src.admin.adapters.http.router import get_dlq_admin_port, router
 from src.core.auth.dependencies import get_current_user

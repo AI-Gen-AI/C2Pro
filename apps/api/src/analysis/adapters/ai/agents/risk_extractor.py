@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.analysis.domain.risk_categories import (
     RiskCategory,
+)
+from src.analysis.domain.risk_categories import (
     normalize_category as _normalize_risk_category,
 )
 

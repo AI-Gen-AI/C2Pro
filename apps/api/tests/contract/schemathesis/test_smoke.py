@@ -9,8 +9,8 @@ Replaces: TASK-QA-028, TASK-QA-050.
 from __future__ import annotations
 
 import pytest
-import schemathesis
 
+import schemathesis
 from tests.contract.schemathesis.conftest import SCHEMA_PATH
 
 pytestmark = [pytest.mark.contract]

@@ -1,7 +1,8 @@
 """TS-AI-FLASH-003: Tests for AI cache metrics."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.core.observability import monitoring
 

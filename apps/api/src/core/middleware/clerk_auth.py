@@ -25,9 +25,9 @@ from jwt.algorithms import RSAAlgorithm
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
+from src.core.observability.sentry_alerts import record_auth_failure
 from src.core.resilience import CircuitBreakerConfig, CircuitBreakerRegistry
 from src.core.resilience.config import get_circuit_breaker_settings
-from src.core.observability.sentry_alerts import record_auth_failure
 
 logger = structlog.get_logger()
 
@@ -412,10 +412,10 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 error=e.detail,
             )
-            
+
             # Generate a snake_case reason_code from the exception detail
             reason_code = e.detail.lower().replace(" ", "_")
-            
+
             record_auth_failure(
                 reason_code=f"clerk_{reason_code}",
                 tenant_id=None, # Tenant ID is not available at this stage

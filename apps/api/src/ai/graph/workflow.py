@@ -10,16 +10,15 @@ from typing import Literal
 
 from langgraph.graph import END, StateGraph
 
+# Re-imported AFTER the star import so the legacy facade's critique_node
+# (which resolves _critique_extraction via sys.modules at call time and
+# therefore supports monkeypatching) is the one bound on this module.
+from src.ai.graph.nodes import critique_node  # noqa: E402, F401
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.graph.workflow import *  # noqa: F401, F403
 from src.analysis.adapters.graph.workflow import (
     _persist_graph_diagram,
 )
-
-# Re-imported AFTER the star import so the legacy facade's critique_node
-# (which resolves _critique_extraction via sys.modules at call time and
-# therefore supports monkeypatching) is the one bound on this module.
-from src.ai.graph.nodes import critique_node  # noqa: E402, F401
 
 
 def _next_after_critique(state: ProjectState) -> Literal[

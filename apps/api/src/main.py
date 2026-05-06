@@ -17,6 +17,8 @@ from sentry_sdk.utils import BadDsn
 
 # Import AI tools to trigger registration via @register_tool decorators
 import src.analysis.adapters.ai.tools  # noqa: F401
+from src.admin.adapters.http.router import router as dlq_admin_router
+from src.ai_feedback.router import router as ai_feedback_router
 from src.alerts.adapters.http.router import project_alerts_router
 from src.alerts.adapters.http.router import router as alerts_router
 from src.analysis.adapters.graph.workflow import (
@@ -26,14 +28,12 @@ from src.analysis.adapters.graph.workflow import (
 from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
 from src.bulk_operations.router import router as bulk_operations_router
 from src.config import settings
+from src.core.ai.analytics_router import router as ai_analytics_router
 
 # Import core routers (always enabled)
 from src.core.auth.router import router as auth_router
-from src.core.ai.analytics_router import router as ai_analytics_router
-from src.ai_feedback.router import router as ai_feedback_router
 from src.core.cache import close_cache, init_cache
 from src.core.database import close_db, init_db
-from src.admin.adapters.http.router import router as dlq_admin_router
 from src.core.events import build_event_bus
 from src.core.frontend_support.router import router as frontend_support_router
 from src.core.handlers import register_exception_handlers

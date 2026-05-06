@@ -19,7 +19,7 @@ LLM_SPAN_ATTRIBUTE_ALLOWLIST = {
     "llm.prompt_version",
     "llm.span_name",
     "llm.function_name",
-    
+
     # Performance and cost
     "llm.is_cached",
 }
@@ -38,7 +38,7 @@ class LlmSpanAttributes(BaseModel):
     task_type: str = Field(..., description="The high-level task type (e.g., 'summarization').", alias="llm.task_type")
     model_name: str | None = Field(None, description="The name of the LLM used.", alias="llm.model_name")
     prompt_version: str | None = Field(None, description="The version of the prompt template used.", alias="llm.prompt_version")
-    
+
     span_name: str = Field(..., description="The name of the span.", alias="llm.span_name")
     function_name: str = Field(..., description="The name of the decorated function.", alias="llm.function_name")
 
@@ -51,7 +51,7 @@ class LlmSpanAttributes(BaseModel):
 def validate_llm_span_attributes(metadata: dict[str, Any]) -> None:
     """
     Raises ValueError if any key in the metadata dictionary is not in the allowlist.
-    
+
     This serves as the contract to prevent leaking sensitive data into span metadata.
     """
     for key in metadata:
@@ -59,12 +59,12 @@ def validate_llm_span_attributes(metadata: dict[str, Any]) -> None:
             # Allow model parameters to be passed through, but they should be reviewed separately.
             # Example: llm.model_params.temperature
             pass
-    
+
     # Additionally, use the Pydantic model for stricter validation of core attributes.
     # LlmSpanAttributes.parse_obj(metadata)
     # ^-- Disabling for now as the decorator builds metadata incrementally.
     # The key-based check is the primary enforcement mechanism.
-    
+
     # Check for disallowed prefixes
     invalid_prefixes = ("user_", "pii_", "customer_")
     for key in metadata:

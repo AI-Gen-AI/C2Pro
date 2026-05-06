@@ -17,9 +17,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
-from src.core.auth.models import User
-from src.core.auth.models import Tenant
-
+from src.core.auth.models import Tenant, User
 
 # ---------------------------------------------------------------------------
 # Simple ID fixtures
@@ -105,7 +103,7 @@ def create_test_token(generate_token: Callable) -> Callable:
         email: str = "test@example.com",
         role: str = "admin",
         secret_key: str | None = None,
-        expires_delta: "timedelta | None" = None,
+        expires_delta: timedelta | None = None,
         token_type: str = "access",
     ) -> str:
         expires_seconds = int(expires_delta.total_seconds()) if expires_delta else None
@@ -131,8 +129,8 @@ async def get_auth_headers(
     """Factory: build auth headers for any user/tenant combo."""
 
     def _get_headers(
-        user: "User | None" = None,
-        tenant: "Tenant | None" = None,
+        user: User | None = None,
+        tenant: Tenant | None = None,
         user_id: UUID | None = None,
         tenant_id: UUID | None = None,
         email: str | None = None,

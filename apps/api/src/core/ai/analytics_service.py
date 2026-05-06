@@ -179,7 +179,7 @@ class AIAnalyticsService:
         baseline_version: str,
         candidate_version: str,
     ) -> dict[str, Any]:
-        compare_scope = hashlib.sha1(f"{baseline_version}:{candidate_version}".encode("utf-8")).hexdigest()[:12]
+        compare_scope = hashlib.sha1(f"{baseline_version}:{candidate_version}".encode()).hexdigest()[:12]
         key = self._cache_key(
             tenant_id=tenant_id,
             metric="comparison",

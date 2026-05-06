@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from src.core.ai.structured_output import LLMSchemaError, _strip_markdown_json, parse_llm_json
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helper schemas
 # ---------------------------------------------------------------------------

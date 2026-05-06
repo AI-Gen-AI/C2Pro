@@ -25,11 +25,11 @@ from src.admin.application.use_cases.retry_dlq_entry import (
     DLQEntryNotFoundError,
     RetryDLQEntryUseCase,
 )
+from src.core.auth.dependencies import get_current_user
+from src.core.auth.models import User, UserRole
 from src.core.database import get_raw_session
 from src.core.dlq.dlq_service import DLQService
 from src.core.dlq.models import DLQFailedTask
-from src.core.auth.dependencies import get_current_user
-from src.core.auth.models import User, UserRole
 from src.core.security import security_scheme
 
 

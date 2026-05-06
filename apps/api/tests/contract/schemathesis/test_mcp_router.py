@@ -17,8 +17,8 @@ Notes:
 from __future__ import annotations
 
 import pytest
-import schemathesis
 
+import schemathesis
 from tests.contract.schemathesis.conftest import SCHEMA_PATH
 
 pytestmark = [pytest.mark.contract]

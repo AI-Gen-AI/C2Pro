@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from uuid import UUID
 
 from src.core.tenants.types import TenantId
-
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 
 

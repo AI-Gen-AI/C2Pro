@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 T = TypeVar("T")
@@ -19,7 +20,7 @@ class LangSmithRolloutConfig:
     fail_open_enabled: bool
 
     @classmethod
-    def from_env(cls) -> "LangSmithRolloutConfig":
+    def from_env(cls) -> LangSmithRolloutConfig:
         rollout_raw = os.getenv("LANGSMITH_ROLLOUT_PERCENTAGE", "0").strip()
         fail_open_raw = os.getenv("LANGSMITH_ROLLOUT_FAIL_OPEN", "true").strip().lower()
 

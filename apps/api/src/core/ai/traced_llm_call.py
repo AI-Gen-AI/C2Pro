@@ -5,8 +5,9 @@ from __future__ import annotations
 import functools
 import inspect
 import time
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, ParamSpec, Protocol, TypeVar
+from typing import Any, ParamSpec, Protocol, TypeVar
 from uuid import uuid4
 
 from src.core.ai.langsmith_client import LangSmithClient

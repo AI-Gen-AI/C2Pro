@@ -57,7 +57,7 @@ async def test_traced_llm_call_async_success(mock_langsmith_client_enabled, mock
     request = LLMRequest(
         model="test_model", messages=[], tenant_id=MOCK_TENANT_ID, project_id="proj_123"
     )
-    
+
     await client.sample_method(request)
 
     mock_span_client.start_span.assert_called_once()
@@ -125,7 +125,7 @@ async def test_attribute_allowlist(mock_span_client):
         "disallowed_key": "pii_value",
         "tenant_id": MOCK_TENANT_ID,
     }
-    
+
     with patch("src.core.observability.langsmith_decorator.LangSmithClient") as mock_class:
         instance = mock_class.return_value
         instance.enabled = True
@@ -136,9 +136,9 @@ async def test_attribute_allowlist(mock_span_client):
             return {
                 k: v for k, v in metadata.items() if k in LLM_SPAN_ATTRIBUTE_ALLOWLIST and v is not None
             }
-        
+
         instance.build_metadata.side_effect = side_effect
-        
+
         @traced_llm_call(task_type="test_task")
         async def sample_function(langsmith_client: MagicMock, **kwargs):
             return {}
@@ -146,12 +146,12 @@ async def test_attribute_allowlist(mock_span_client):
         # The decorator will create its own LangSmithClient, which is mocked by mock_class.
         # We also pass a span_client to be extracted.
         await sample_function(langsmith_client=mock_span_client, **extra_metadata)
-        
+
         mock_span_client.start_span.assert_called_once()
         call_kwargs = mock_span_client.start_span.call_args.kwargs
-        
+
         metadata_sent_to_span = call_kwargs.get("metadata", {})
-        
+
         assert "allowed_key" not in metadata_sent_to_span
         assert "disallowed_key" not in metadata_sent_to_span
         assert "tenant_id" in metadata_sent_to_span

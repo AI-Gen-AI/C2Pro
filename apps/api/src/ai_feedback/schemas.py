@@ -12,7 +12,7 @@ class AIFeedbackCreate(BaseModel):
         description="The LangSmith trace ID of the AI interaction that this feedback refers to.",
         examples=["e2a6f3b6-1b6a-4b0a-8a0a-9c7d8f3b6a1e"],
     )
-    
+
     key: str = Field(
         "user_feedback",
         description="The key or name for the feedback, used for grouping in LangSmith.",

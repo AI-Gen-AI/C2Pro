@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -25,7 +26,6 @@ from src.core.security.secret_channel import (
     VaultKvBundleProvider,
     redact_clerk_bundle,
 )
-from src.config import settings
 
 router = APIRouter(tags=["frontend-support"])
 

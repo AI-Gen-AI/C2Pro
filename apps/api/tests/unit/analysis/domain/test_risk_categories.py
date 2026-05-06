@@ -15,7 +15,6 @@ from src.analysis.domain.risk_categories import (
     normalize_category,
 )
 
-
 CANONICAL_SET = {"LEGAL", "SCHEDULE", "QUALITY", "SCOPE", "TECHNICAL", "BUDGET"}
 
 

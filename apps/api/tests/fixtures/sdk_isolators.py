@@ -14,7 +14,6 @@ from unittest import mock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # LangSmith / LangChain SDK isolation (autouse — every test)
 # ---------------------------------------------------------------------------
@@ -70,8 +69,7 @@ def mock_lookup_tenant_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(scope="function", autouse=True)
 def clear_prometheus_registry() -> None:
     """Clear the Prometheus registry before each test to avoid duplicate metrics."""
-    from prometheus_client import REGISTRY
-    from prometheus_client import gc_collector, platform_collector, process_collector
+    from prometheus_client import REGISTRY, gc_collector, platform_collector, process_collector
 
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:

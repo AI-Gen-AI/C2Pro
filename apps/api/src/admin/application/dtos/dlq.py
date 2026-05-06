@@ -11,7 +11,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-
 DLQStatus = Literal["pending", "retrying", "exhausted"]
 
 

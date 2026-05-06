@@ -2,8 +2,11 @@
 Sentry Alerting Utilities
 """
 from uuid import UUID
+
 import sentry_sdk
+
 from src.config import settings
+
 
 def record_auth_failure(
     reason_code: str,

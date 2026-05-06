@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from src.core.ai.feedback_router import get_feedback_client
 from src.core.ai.models import AIUsageLogORM
-from src.core.ai.usage_logger import AIUsageLogRecord, AIUsageLogger
+from src.core.ai.usage_logger import AIUsageLogger, AIUsageLogRecord
 from src.core.database import get_session
 
 

@@ -25,7 +25,7 @@ def test_validate_attributes_passes_with_allowlisted_keys():
         "coherence.alert.rule_id": "alert-rule-1",
         "coherence.alert.severity": "high",
     }
-    
+
     try:
         _validate_attributes(valid_attributes)
     except ValueError:
@@ -42,7 +42,7 @@ def test_validate_attributes_fails_with_non_allowlisted_key():
         "coherence.tenant_id": "tenant-abc",
         "coherence.pii_leak": "user@example.com",  # This key is not in the allowlist
     }
-    
+
     with pytest.raises(ValueError, match="Attribute 'coherence.pii_leak' is not in the allowlisted schema."):
         _validate_attributes(invalid_attributes)
 
@@ -55,7 +55,7 @@ def test_validate_attributes_fails_with_slightly_different_key():
     almost_valid_attributes = {
         "coherence.node-name": "test_node",  # Hyphen instead of underscore
     }
-    
+
     with pytest.raises(ValueError, match="Attribute 'coherence.node-name' is not in the allowlisted schema."):
         _validate_attributes(almost_valid_attributes)
 
@@ -80,7 +80,7 @@ def test_validate_attributes_succeeds_with_subset_of_keys():
         "coherence.node_name": "test_node",
         "coherence.tenant_id": "tenant-abc",
     }
-    
+
     try:
         _validate_attributes(subset_attributes)
     except ValueError:

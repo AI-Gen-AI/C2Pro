@@ -6,7 +6,7 @@ a running database or external services.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -33,8 +33,8 @@ def _make_review_item(**overrides) -> ReviewItem:
         "current_status": ReviewStatus.PENDING_REVIEW_REQUIRED,
         "confidence": 0.4,
         "impact_level": ImpactLevel.MEDIUM,
-        "created_at": datetime.now(timezone.utc),
-        "sla_due_date": datetime.now(timezone.utc) + timedelta(days=3),
+        "created_at": datetime.now(UTC),
+        "sla_due_date": datetime.now(UTC) + timedelta(days=3),
         "item_data": {"project_id": str(uuid4())},
     }
     defaults.update(overrides)
@@ -141,7 +141,7 @@ class TestRepositoryMappers:
             SqlAlchemyReviewQueueRepository,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         orm = ReviewItemORM(
             item_id=uuid4(),
             item_type="coherence_alert",
@@ -250,7 +250,7 @@ class TestHITLServiceIntegration:
         self, hitl_service, mock_repo, mock_notification
     ):
         overdue = _make_review_item(
-            sla_due_date=datetime.now(timezone.utc) - timedelta(days=1),
+            sla_due_date=datetime.now(UTC) - timedelta(days=1),
         )
         mock_repo.get_overdue_items.return_value = [overdue]
 
@@ -278,7 +278,7 @@ class TestHITLServiceIntegration:
         approved = _make_review_item(
             current_status=ReviewStatus.APPROVED,
             approved_by="Admin",
-            approved_at=datetime.now(timezone.utc),
+            approved_at=datetime.now(UTC),
         )
         mock_repo.get_review_item.return_value = approved
 
@@ -344,7 +344,7 @@ class TestHTTPSchemas:
     def test_review_item_response_serializes(self):
         from src.modules.hitl.adapters.http.schemas import ReviewItemResponse
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         resp = ReviewItemResponse(
             item_id=uuid4(),
             item_type="budget_parse",
