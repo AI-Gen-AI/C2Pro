@@ -1,15 +1,16 @@
 /**
  * Test Suite ID: TASK-FRT-170
+ * Coverage Trace: TS-FRT-COV-001 / TASK-FRT-132..135
  * Purpose: expose the direct backend API base URL to browser-only upload flows.
  */
 
 import { NextResponse } from "next/server";
 
-function trimTrailingSlash(value: string): string {
+export function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function normalizeAbsoluteApiBaseUrl(rawValue: string | undefined): string | null {
+export function normalizeAbsoluteApiBaseUrl(rawValue: string | undefined): string | null {
   const value = rawValue?.trim();
 
   if (!value || value.startsWith("/")) {
@@ -30,9 +31,9 @@ function normalizeAbsoluteApiBaseUrl(rawValue: string | undefined): string | nul
 }
 
 export async function GET(): Promise<NextResponse> {
-  const apiBaseUrl = normalizeAbsoluteApiBaseUrl(
-    process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL,
-  );
+  const apiBaseUrl =
+    normalizeAbsoluteApiBaseUrl(process.env.BACKEND_URL) ??
+    normalizeAbsoluteApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
 
   return NextResponse.json(
     { apiBaseUrl },

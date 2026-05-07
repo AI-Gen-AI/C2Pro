@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-06T20:37:59Z",
+  "updated_at": "2026-05-07T06:11:42Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -949,6 +949,36 @@
         "validacion_lint": true,
         "nota_verificacion": "Targeted Track C pytest passed 3/3; ruff passed on the new Python script/test; pnpm --filter c2pro-web run lint passed after node_modules was restored. pnpm install --frozen-lockfile populated dependencies but failed at husky prepare with Windows spawn EPERM."
       }
+    },
+    {
+      "tarea_id": "T076",
+      "backlog_id": "TASK-FRT-132,TASK-FRT-133,TASK-FRT-134,TASK-FRT-135",
+      "tipo": "frontend",
+      "descripcion": "Recover Wave 3 frontend coverage work from the stale OpenCode worktree on top of current main without package, lockfile, or Vitest config churn.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Frontend route/API coverage tests pass, targeted coverage is at least 70% on the selected files, lint and web regression tests pass, and the branch is rebased onto current origin/main.",
+      "archivos_modificados": [
+        "apps/web/app/api/runtime/backend-url/route.ts",
+        "apps/web/app/api/runtime/backend-url/backend-url.test.ts",
+        "apps/web/lib/api/index.ts",
+        "apps/web/lib/api/index.test.ts",
+        "backlogs/FRT_FRONTEND.md",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/WAVE-3-FRT-OpenCode-REPORT.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T06:11:42Z",
+        "completado": "2026-05-07T06:11:42Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Salvaged useful frontend coverage behavior from OpenCode, discarded stale pnpm/package/lockfile/vitest-config changes, rebased onto origin/main be68867b, and added focused tests against real route/API helpers.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "Targeted Vitest passed 15/15. Targeted coverage: statements 80.20%, branches 70.66%, functions 93.75%, lines 79.56%. pnpm --filter c2pro-web test passed 50 files / 124 tests. pnpm --filter c2pro-web run lint passed."
+      }
     }
   ],
   "backlog_sync": {
@@ -1021,7 +1051,11 @@
       "TASK-COH-V1-05",
       "TASK-COH-V1-07",
       "TASK-COH-V1-09",
-      "TASK-AI-020"
+      "TASK-AI-020",
+      "TASK-FRT-132",
+      "TASK-FRT-133",
+      "TASK-FRT-134",
+      "TASK-FRT-135"
     ]
   },
   "plan_actual": {
