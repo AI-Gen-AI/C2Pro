@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T10:31:13Z",
+  "updated_at": "2026-05-07T11:13:19Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1087,6 +1087,34 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed on NULL documents.created_by. GREEN passed: targeted upload pytest 2/2; document_flow pytest 4/4; targeted Ruff passed."
+      }
+    },
+    {
+      "tarea_id": "T081",
+      "backlog_id": "TASK-OPS-DOCFLOW-006",
+      "tipo": "backend",
+      "descripcion": "Add real document parsing and anonymization-before-AI integration coverage.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Uploaded real PDF is parsed through the production parser path, structured text sections are present, PII is redacted, and downstream AI input receives anonymized text.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_parsing_anonymization.py",
+        "apps/api/tests/fixtures/documents/real/manifest.yaml",
+        "apps/api/tests/fixtures/documents/real/sample-construction-contract.pdf",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T11:13:19Z",
+        "completado": "2026-05-07T11:13:19Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real parsing/anonymization integration coverage now proves uploaded PDF parsing through CompositeFileParser, extracted text/section metadata, production PII redaction, and anonymized text handoff into an AI-facing graph node.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed because parsed PDF text lacked supported PII. GREEN passed: targeted parsing/anonymization pytest 1/1; document_flow pytest 5/5; targeted Ruff passed."
       }
     }
   ],

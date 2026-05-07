@@ -19,8 +19,8 @@
       }
     ],
     "pii_expectations": {
-      "raw_contains": ["Project Manager"],
-      "anonymized_excludes": ["Project Manager"]
+      "raw_contains": ["Project Manager", "privacy.officer@example.com"],
+      "anonymized_excludes": ["privacy.officer@example.com"]
     }
   },
   {
