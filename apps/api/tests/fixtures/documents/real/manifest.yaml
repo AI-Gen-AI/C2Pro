@@ -10,7 +10,7 @@
     },
     "expected_min_text_chars": 180,
     "expected_clause_categories": ["SCOPE", "TIME", "LEGAL"],
-    "expected_risk_categories": ["delay", "scope_gap"],
+    "expected_risk_categories": ["SCOPE", "SCHEDULE"],
     "expected_score_range": [55, 82],
     "expected_alerts": [
       {

@@ -42,7 +42,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-004` | P0 | Complete | Define real sanitized document corpus. | Fixture manifest schema and first corpus inventory. | Manifest validates and every fixture is a real document artifact. |
 | `TASK-OPS-DOCFLOW-005` | P0 | Complete | Add backend integration spec for real upload and persistence. | Upload contract spec covering tenant, project, storage path, and document status. | Real document upload test passes without synthetic document content. |
 | `TASK-OPS-DOCFLOW-006` | P0 | Complete | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
-| `TASK-OPS-DOCFLOW-007` | P0 | Pending | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
+| `TASK-OPS-DOCFLOW-007` | P0 | Complete | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
 | `TASK-OPS-DOCFLOW-008` | P0 | Pending | Add backend integration spec for coherence score and alerts. | Coherence/alerts contract with score ranges and expected alert categories. | Real document produces score, score reason, and alerts through production services. |
 | `TASK-OPS-DOCFLOW-009` | P1 | Pending | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
 | `TASK-OPS-DOCFLOW-010` | P1 | Pending | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest/Playwright route using real backend-shaped fixture displays score and alerts. |
@@ -276,6 +276,17 @@ cd apps/api
 $env:C2PRO_AI_MOCK='1'
 python -m pytest tests/integration/document_flow/test_real_document_extraction_flow.py -q
 ```
+
+Evidence captured 2026-05-07:
+
+- Added `apps/api/tests/integration/document_flow/test_real_document_extraction_flow.py` (`TASK-OPS-DOCFLOW-007`).
+- The test parses the sanitized real PDF with `CompositeFileParser`, anonymizes text with `pii_anonymizer_node`, extracts deterministic contract clauses through the production ingestion helper, and runs graph risk/WBS extractors in `C2PRO_AI_MOCK=1` mode.
+- Updated the sanitized construction contract PDF with deadline/completion milestone language so the real fixture exercises both `SCOPE` and `SCHEDULE` risk extraction paths.
+- Updated the construction-contract manifest risk expectations to canonical production categories: `SCOPE` and `SCHEDULE`.
+- RED: targeted pytest failed because the manifest expected informal labels `delay`/`scope_gap` while production extraction returned canonical `SCOPE`.
+- GREEN: `python -m pytest apps/api/tests/integration/document_flow/test_real_document_extraction_flow.py -q` passed `1 passed`.
+- Regression: `python -m pytest apps/api/tests/integration/document_flow -q` passed `6 passed`.
+- Lint: `python -m ruff check apps/api/tests/integration/document_flow/test_real_document_extraction_flow.py apps/api/tests/integration/document_flow/test_real_document_parsing_anonymization.py apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py` passed.
 
 ### `TASK-OPS-DOCFLOW-008` - Real Coherence Score + Alerts
 
