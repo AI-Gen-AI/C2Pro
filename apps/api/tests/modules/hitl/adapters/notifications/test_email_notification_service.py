@@ -7,7 +7,7 @@ Test Suite ID: TS-HITL-EMAIL-NOTIFY-001
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID, uuid4

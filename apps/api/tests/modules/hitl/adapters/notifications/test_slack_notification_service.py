@@ -7,7 +7,7 @@ Test Suite ID: TS-HITL-SLACK-NOTIFY-001
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 

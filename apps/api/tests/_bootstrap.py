@@ -18,15 +18,14 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Column, event, select, text
+from sqlalchemy import Column, event, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
 from src.config import settings
-from src.core.database import Base, get_session
+from src.core.database import Base
 from tests.support.postgres_bootstrap import (
-    ensure_pgvector_extension,
     reset_public_schema,
     run_postgres_test_bootstrap,
 )

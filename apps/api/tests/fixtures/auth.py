@@ -14,7 +14,6 @@ from uuid import UUID, uuid4
 import jwt
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
 from src.core.auth.models import Tenant, User
