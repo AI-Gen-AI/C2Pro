@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T06:11:42Z",
+  "updated_at": "2026-05-07T10:02:03Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -979,6 +979,31 @@
         "validacion_lint": true,
         "nota_verificacion": "Targeted Vitest passed 15/15. Targeted coverage: statements 80.20%, branches 70.66%, functions 93.75%, lines 79.56%. pnpm --filter c2pro-web test passed 50 files / 124 tests. pnpm --filter c2pro-web run lint passed."
       }
+    },
+    {
+      "tarea_id": "T077",
+      "backlog_id": "EPIC-OPS-DOCFLOW,TASK-OPS-DOCFLOW-003,TASK-OPS-DOCFLOW-004,TASK-OPS-DOCFLOW-005,TASK-OPS-DOCFLOW-006,TASK-OPS-DOCFLOW-007,TASK-OPS-DOCFLOW-008,TASK-OPS-DOCFLOW-009,TASK-OPS-DOCFLOW-010,TASK-OPS-DOCFLOW-011,TASK-OPS-DOCFLOW-012",
+      "tipo": "planning",
+      "descripcion": "Reconcile real-document operability plan into the authoritative master backlog after coverage-gates PR #109 merged.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Pending task register from blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md is represented in C2PRO_MASTER_BACKLOG.md with dependencies and source references.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T10:02:03Z",
+        "completado": "2026-05-07T10:02:03Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "The plan contains 10 remaining actionable tasks: TASK-OPS-DOCFLOW-003 through TASK-OPS-DOCFLOW-012. TASK-OPS-DOCFLOW-001 and TASK-OPS-DOCFLOW-002 are already complete in the plan evidence.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "No implementation tests were run; this was a backlog reconciliation and task-discovery step."
+      }
     }
   ],
   "backlog_sync": {
@@ -1055,7 +1080,18 @@
       "TASK-FRT-132",
       "TASK-FRT-133",
       "TASK-FRT-134",
-      "TASK-FRT-135"
+      "TASK-FRT-135",
+      "EPIC-OPS-DOCFLOW",
+      "TASK-OPS-DOCFLOW-003",
+      "TASK-OPS-DOCFLOW-004",
+      "TASK-OPS-DOCFLOW-005",
+      "TASK-OPS-DOCFLOW-006",
+      "TASK-OPS-DOCFLOW-007",
+      "TASK-OPS-DOCFLOW-008",
+      "TASK-OPS-DOCFLOW-009",
+      "TASK-OPS-DOCFLOW-010",
+      "TASK-OPS-DOCFLOW-011",
+      "TASK-OPS-DOCFLOW-012"
     ]
   },
   "plan_actual": {
