@@ -1,0 +1,122 @@
+[
+  {
+    "document_id": "real-doc-contract-001",
+    "filename": "sample-construction-contract.pdf",
+    "document_type": "construction_contract",
+    "language": "en",
+    "expected_upload": {
+      "supported": true,
+      "content_type": "application/pdf"
+    },
+    "expected_min_text_chars": 180,
+    "expected_clause_categories": ["SCOPE", "TIME", "LEGAL"],
+    "expected_risk_categories": ["delay", "scope_gap"],
+    "expected_score_range": [55, 82],
+    "expected_alerts": [
+      {
+        "category": "TIME",
+        "severity": "medium"
+      }
+    ],
+    "pii_expectations": {
+      "raw_contains": ["Project Manager"],
+      "anonymized_excludes": ["Project Manager"]
+    }
+  },
+  {
+    "document_id": "real-doc-budget-scope-001",
+    "filename": "budget-scope-summary.txt",
+    "document_type": "budget_scope",
+    "language": "en",
+    "expected_upload": {
+      "supported": true,
+      "content_type": "text/plain"
+    },
+    "expected_min_text_chars": 220,
+    "expected_clause_categories": ["SCOPE", "BUDGET", "QUALITY"],
+    "expected_risk_categories": ["budget_overrun", "scope_gap"],
+    "expected_score_range": [60, 88],
+    "expected_alerts": [
+      {
+        "category": "BUDGET",
+        "severity": "medium"
+      }
+    ],
+    "pii_expectations": {
+      "raw_contains": ["Site Supervisor"],
+      "anonymized_excludes": ["Site Supervisor"]
+    }
+  },
+  {
+    "document_id": "real-doc-schedule-001",
+    "filename": "schedule-programme.docx",
+    "document_type": "schedule_program",
+    "language": "en",
+    "expected_upload": {
+      "supported": true,
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    "expected_min_text_chars": 160,
+    "expected_clause_categories": ["TIME", "SCOPE"],
+    "expected_risk_categories": ["delay"],
+    "expected_score_range": [62, 90],
+    "expected_alerts": [
+      {
+        "category": "TIME",
+        "severity": "low"
+      }
+    ],
+    "pii_expectations": {
+      "raw_contains": ["Planner"],
+      "anonymized_excludes": ["Planner"]
+    }
+  },
+  {
+    "document_id": "real-doc-contradiction-001",
+    "filename": "contradiction-heavy-notice.txt",
+    "document_type": "contradiction_heavy",
+    "language": "en",
+    "expected_upload": {
+      "supported": true,
+      "content_type": "text/plain"
+    },
+    "expected_min_text_chars": 260,
+    "expected_clause_categories": ["SCOPE", "TIME", "BUDGET", "LEGAL"],
+    "expected_risk_categories": ["contradiction", "delay", "budget_overrun"],
+    "expected_score_range": [15, 45],
+    "expected_alerts": [
+      {
+        "category": "SCOPE",
+        "severity": "high"
+      },
+      {
+        "category": "TIME",
+        "severity": "high"
+      }
+    ],
+    "pii_expectations": {
+      "raw_contains": ["Contract Administrator"],
+      "anonymized_excludes": ["Contract Administrator"]
+    }
+  },
+  {
+    "document_id": "real-doc-unsupported-001",
+    "filename": "unsupported-cad-export.bin",
+    "document_type": "unsupported",
+    "language": "en",
+    "expected_upload": {
+      "supported": false,
+      "content_type": "application/octet-stream",
+      "expected_error": "unsupported_document_type"
+    },
+    "expected_min_text_chars": 100,
+    "expected_clause_categories": ["SCOPE"],
+    "expected_risk_categories": [],
+    "expected_score_range": [0, 0],
+    "expected_alerts": [],
+    "pii_expectations": {
+      "raw_contains": [],
+      "anonymized_excludes": []
+    }
+  }
+]
