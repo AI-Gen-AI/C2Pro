@@ -39,7 +39,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-001` | P0 | Complete | Clean `coverage-gates/inf-gemini` branch scope before further work. | Branch hygiene spec listing intended files, out-of-scope files, and cleanup decisions. | `git status --short` shows only approved INF/report files. |
 | `TASK-OPS-DOCFLOW-002` | P0 | Complete | Fix backend full-suite collection blocker in `tests/golden`. | Import/package spec for golden evaluators. | `cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/ -x -q` proceeds past the `tests/golden` blocker and exposes the next stale contract. |
 | `TASK-OPS-DOCFLOW-003` | P0 | Complete | Restore root lint execution in the worktree. | Tooling bootstrap spec for Node/pnpm dependencies. | `pnpm lint` starts ESLint and reports real lint results, not missing binary errors. |
-| `TASK-OPS-DOCFLOW-004` | P0 | Pending | Define real sanitized document corpus. | Fixture manifest schema and first corpus inventory. | Manifest validates and every fixture is a real document artifact. |
+| `TASK-OPS-DOCFLOW-004` | P0 | Complete | Define real sanitized document corpus. | Fixture manifest schema and first corpus inventory. | Manifest validates and every fixture is a real document artifact. |
 | `TASK-OPS-DOCFLOW-005` | P0 | Pending | Add backend integration spec for real upload and persistence. | Upload contract spec covering tenant, project, storage path, and document status. | Real document upload test passes without synthetic document content. |
 | `TASK-OPS-DOCFLOW-006` | P0 | Pending | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
 | `TASK-OPS-DOCFLOW-007` | P0 | Pending | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
@@ -193,6 +193,19 @@ Manifest fields:
 Acceptance:
 
 Manifest validation test passes and fixtures are real files, not inline fake text.
+
+Evidence captured 2026-05-07:
+
+- Added `apps/api/tests/fixtures/documents/real/manifest.yaml` with five sanitized corpus entries:
+  - construction contract PDF
+  - budget/scope TXT
+  - schedule/program DOCX
+  - contradiction-heavy TXT
+  - unsupported binary artifact
+- Added `apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py` (`TASK-OPS-DOCFLOW-004`) to validate required manifest fields, document type coverage, fixture existence, and artifact signatures.
+- RED: targeted pytest failed with `FileNotFoundError` for the missing manifest.
+- GREEN: `python -m pytest apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py -q` passed `2 passed`.
+- Lint: `python -m ruff check apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py` passed.
 
 ### `TASK-OPS-DOCFLOW-005` - Real Upload + Persistence
 

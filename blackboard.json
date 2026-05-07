@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T10:08:11Z",
+  "updated_at": "2026-05-07T10:15:48Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1028,6 +1028,38 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "pnpm install --frozen-lockfile exited 0 with non-fatal supabase bin-link warnings; pnpm lint exited 0 via eslint .."
+      }
+    },
+    {
+      "tarea_id": "T079",
+      "backlog_id": "TASK-OPS-DOCFLOW-004",
+      "tipo": "qa",
+      "descripcion": "Define and validate the sanitized real document corpus inventory for the real-document operability gate.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Manifest validates and every listed fixture is a real document artifact, not inline fake text.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py",
+        "apps/api/tests/fixtures/documents/real/manifest.yaml",
+        "apps/api/tests/fixtures/documents/real/sample-construction-contract.pdf",
+        "apps/api/tests/fixtures/documents/real/budget-scope-summary.txt",
+        "apps/api/tests/fixtures/documents/real/schedule-programme.docx",
+        "apps/api/tests/fixtures/documents/real/contradiction-heavy-notice.txt",
+        "apps/api/tests/fixtures/documents/real/unsupported-cad-export.bin",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T10:15:48Z",
+        "completado": "2026-05-07T10:15:48Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Added the sanitized real document corpus manifest and first fixture inventory covering PDF, DOCX, TXT, contradiction-heavy, and unsupported artifact cases.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED pytest failed on missing manifest. GREEN pytest passed 2/2. Targeted Ruff passed for the new manifest validation test."
       }
     }
   ],
