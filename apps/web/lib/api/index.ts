@@ -1,4 +1,5 @@
 /**
+ * Test Suite ID: TS-FRT-COV-002 / TASK-FRT-132..135
  * API utilities and helpers
  * Centralized API functions for data fetching
  */
@@ -508,7 +509,7 @@ export async function updateBOMItem(
   return response.data;
 }
 
-function extractEvidenceLocation(alert: Alert): {
+export function extractEvidenceLocation(alert: Alert): {
   page_number: number;
   bbox: [number, number, number, number];
   normalized?: boolean;
@@ -530,7 +531,7 @@ function extractEvidenceLocation(alert: Alert): {
   };
 }
 
-function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
+export function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -561,7 +562,7 @@ function parseEvidenceLocation(value: unknown): EvidenceLocation | null {
   };
 }
 
-function severityToColor(severity: Alert["severity"]): string {
+export function severityToColor(severity: Alert["severity"] | string | undefined): string {
   const normalized = String(severity).toLowerCase();
   switch (normalized) {
     case "critical":
