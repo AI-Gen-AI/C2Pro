@@ -41,7 +41,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-003` | P0 | Complete | Restore root lint execution in the worktree. | Tooling bootstrap spec for Node/pnpm dependencies. | `pnpm lint` starts ESLint and reports real lint results, not missing binary errors. |
 | `TASK-OPS-DOCFLOW-004` | P0 | Complete | Define real sanitized document corpus. | Fixture manifest schema and first corpus inventory. | Manifest validates and every fixture is a real document artifact. |
 | `TASK-OPS-DOCFLOW-005` | P0 | Complete | Add backend integration spec for real upload and persistence. | Upload contract spec covering tenant, project, storage path, and document status. | Real document upload test passes without synthetic document content. |
-| `TASK-OPS-DOCFLOW-006` | P0 | Pending | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
+| `TASK-OPS-DOCFLOW-006` | P0 | Complete | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
 | `TASK-OPS-DOCFLOW-007` | P0 | Pending | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
 | `TASK-OPS-DOCFLOW-008` | P0 | Pending | Add backend integration spec for coherence score and alerts. | Coherence/alerts contract with score ranges and expected alert categories. | Real document produces score, score reason, and alerts through production services. |
 | `TASK-OPS-DOCFLOW-009` | P1 | Pending | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
@@ -249,6 +249,16 @@ Acceptance:
 cd apps/api
 python -m pytest tests/integration/document_flow/test_real_document_parsing_anonymization.py -q
 ```
+
+Evidence captured 2026-05-07:
+
+- Added `apps/api/tests/integration/document_flow/test_real_document_parsing_anonymization.py` (`TASK-OPS-DOCFLOW-006`).
+- The test uploads the sanitized real PDF through the product document upload route, parses the stored uploaded file with `CompositeFileParser`, verifies parsed text length and section metadata, then runs `pii_anonymizer_node` before an AI-facing budget parser node.
+- Updated the sanitized construction contract PDF and manifest with a non-real supported PII token: `privacy.officer@example.com`.
+- RED: targeted pytest failed because the parsed real PDF text did not contain the expected supported PII token.
+- GREEN: `python -m pytest apps/api/tests/integration/document_flow/test_real_document_parsing_anonymization.py -q` passed `1 passed`.
+- Regression: `python -m pytest apps/api/tests/integration/document_flow -q` passed `5 passed`.
+- Lint: `python -m ruff check apps/api/tests/integration/document_flow/test_real_document_parsing_anonymization.py apps/api/tests/integration/document_flow/test_real_document_corpus_manifest.py` passed.
 
 ### `TASK-OPS-DOCFLOW-007` - Real Extraction Outputs
 
