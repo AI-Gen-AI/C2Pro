@@ -123,7 +123,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 |Status|Priority|ID|Dependency|Task|Source|
 |---|---|---|---|---|---|
-|[ ]|P0|`TASK-OPS-DOCFLOW-003`|`TASK-OPS-DOCFLOW-002`|Restore root lint execution in the worktree; `pnpm lint` must start ESLint and report real diagnostics, not missing binaries.|`blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md`|
+|[x]|P0|`TASK-OPS-DOCFLOW-003`|`TASK-OPS-DOCFLOW-002`|Restore root lint execution in the worktree; `pnpm lint` starts ESLint and passes on current main/worktree. `[x] Implemented (Tooling Bootstrap Verification)`|`blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md`|
 |[ ]|P0|`TASK-OPS-DOCFLOW-004`|`TASK-OPS-DOCFLOW-003`|Define the sanitized real document corpus manifest and first inventory of real PDF/DOCX/TXT fixtures.|`blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md`|
 |[ ]|P0|`TASK-OPS-DOCFLOW-005`|`TASK-OPS-DOCFLOW-004`|Add backend integration spec for real document upload and tenant-safe persistence/storage metadata.|`blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md`|
 |[ ]|P0|`TASK-OPS-DOCFLOW-006`|`TASK-OPS-DOCFLOW-005`|Add backend integration spec for real parsing and anonymization before AI analysis.|`blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md`|

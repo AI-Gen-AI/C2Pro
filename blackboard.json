@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T10:02:03Z",
+  "updated_at": "2026-05-07T10:08:11Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1003,6 +1003,31 @@
         "tests_pasados": false,
         "validacion_lint": false,
         "nota_verificacion": "No implementation tests were run; this was a backlog reconciliation and task-discovery step."
+      }
+    },
+    {
+      "tarea_id": "T078",
+      "backlog_id": "TASK-OPS-DOCFLOW-003",
+      "tipo": "tooling",
+      "descripcion": "Verify root lint bootstrap for the real-document operability gate.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "pnpm install --frozen-lockfile completes and pnpm lint starts ESLint rather than failing on missing binaries.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T10:08:11Z",
+        "completado": "2026-05-07T10:08:11Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Root lint bootstrap is restored. pnpm install --frozen-lockfile completed and pnpm lint executed ESLint successfully from the repository root.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "pnpm install --frozen-lockfile exited 0 with non-fatal supabase bin-link warnings; pnpm lint exited 0 via eslint .."
       }
     }
   ],
