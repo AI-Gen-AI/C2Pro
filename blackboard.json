@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T10:15:48Z",
+  "updated_at": "2026-05-07T10:31:13Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1060,6 +1060,33 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED pytest failed on missing manifest. GREEN pytest passed 2/2. Targeted Ruff passed for the new manifest validation test."
+      }
+    },
+    {
+      "tarea_id": "T080",
+      "backlog_id": "TASK-OPS-DOCFLOW-005",
+      "tipo": "backend",
+      "descripcion": "Add real document upload and tenant-safe persistence integration coverage.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Real document upload test passes without synthetic document content and verifies tenant/project/storage/status persistence.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_upload_flow.py",
+        "apps/api/src/documents/application/upload_document_use_case.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T10:31:13Z",
+        "completado": "2026-05-07T10:31:13Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real upload/persistence integration coverage now proves sanitized PDF upload, tenant-owned project linkage, storage path/file bytes, uploaded/queued statuses, unsupported artifact rejection, and created_by audit persistence.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on NULL documents.created_by. GREEN passed: targeted upload pytest 2/2; document_flow pytest 4/4; targeted Ruff passed."
       }
     }
   ],
