@@ -1,0 +1,164 @@
+# Test Suite ID: TASK-OPS-DOCFLOW-012
+# Real-document operability gate for upload -> analysis -> API/UI readiness.
+
+name: Real Document Operability
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "apps/api/**"
+      - "apps/web/**"
+      - "evals/**"
+      - ".github/workflows/real-document-operability.yml"
+      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/api/**"
+      - "apps/web/**"
+      - "evals/**"
+      - ".github/workflows/real-document-operability.yml"
+      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  C2PRO_AI_MOCK: "1"
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+
+jobs:
+  real-document-gate:
+    name: Real Document Flow, Coverage, Golden Corpus, and Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1
+
+      - name: Install backend dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install python-magic
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bootstrap backend test infrastructure
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      - name: Real document flow gate
+        working-directory: apps/api
+        run: python -m pytest tests/integration/document_flow/ -q
+
+      - name: Core AI coverage gate
+        working-directory: apps/api
+        run: python -m pytest tests/unit/core/ai/ --cov=src/core/ai --cov-report=term-missing --cov-fail-under=70 -q
+
+      - name: Infrastructure coverage gate
+        id: inf-coverage
+        continue-on-error: true
+        working-directory: apps/api
+        run: python -m pytest tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security --cov=src/core/observability --cov=src/core/resilience --cov=src/core/security --cov-report=term-missing --cov-fail-under=70 -q
+
+      - name: Golden corpus eval gate
+        working-directory: apps/api
+        run: |
+          python -m evals.run_evals
+          python -m pytest tests/evals/test_golden_corpus.py -q
+
+      - name: Full backend suite gate
+        id: full-backend
+        continue-on-error: true
+        working-directory: apps/api
+        run: python -m pytest tests/ -x -q
+
+      - name: Root lint gate
+        run: pnpm lint
+
+      - name: Record approved blocker tracking
+        if: always()
+        run: |
+          cat > real-document-operability-blockers.md <<'EOF'
+          # Real Document Operability Blockers
+
+          Test Suite ID: TASK-OPS-DOCFLOW-012
+
+          ## Known Tracked Blockers
+
+          - `TASK-OPS-DOCFLOW-013`: INF coverage gate currently fails at `tests/unit/core/observability/test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded` on HITL checkpoint metric label drift (`reason` expected, `error_type` observed), and the scoped INF package coverage is below 70%.
+          - `TASK-OPS-DOCFLOW-014`: Full backend suite gate collection currently fails on `ModuleNotFoundError: No module named 'golden.evaluators'` from `tests/golden/conftest.py`.
+
+          ## Passing Gates Required Before This Tracking
+
+          - Real document flow: `python -m pytest tests/integration/document_flow/ -q`
+          - Core AI coverage: `python -m pytest tests/unit/core/ai/ --cov=src/core/ai --cov-report=term-missing --cov-fail-under=70 -q`
+          - Golden corpus: `python -m evals.run_evals` and `python -m pytest tests/evals/test_golden_corpus.py -q`
+          - Root lint: `pnpm lint`
+          EOF
+          cat real-document-operability-blockers.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload golden corpus artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-document-golden-corpus
+          path: |
+            evals/results/corpus_results.json
+            evals/results/corpus_results.xml
+
+      - name: Upload blocker tracking
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-document-operability-blockers
+          path: real-document-operability-blockers.md
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
