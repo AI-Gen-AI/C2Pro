@@ -11,7 +11,7 @@ import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib
 import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
 
 /**
- * Test Suite ID: TASK-1347
+ * Test Suite ID: TASK-1347, TASK-OPS-DOCFLOW-010
  * Route Coverage: Project analysis route uses generated backend queries.
  */
 export default function AnalysisPage() {
@@ -61,11 +61,25 @@ export default function AnalysisPage() {
     dashboard.sub_scores && typeof dashboard.sub_scores === "object"
       ? (dashboard.sub_scores as Record<string, number>)
       : {};
+  const scoreVersion =
+    typeof (dashboard as { score_version?: unknown }).score_version === "string"
+      ? (dashboard as { score_version: string }).score_version
+      : null;
+  const missingDimensions = Array.isArray(
+    (dashboard as { score_missing_dimensions?: unknown })
+      .score_missing_dimensions,
+  )
+    ? (dashboard as { score_missing_dimensions: unknown[] })
+        .score_missing_dimensions.filter(
+          (dimension): dimension is string => typeof dimension === "string",
+        )
+    : [];
   const budgetUsed = 100 - (subScores["BUDGET"] ?? 0);
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
   }));
+  const formattedScoreVersion = scoreVersion?.replace(/_/g, " ");
 
   const statCards = [
     {
@@ -163,6 +177,19 @@ export default function AnalysisPage() {
                 {documentCount}
               </span>
             </div>
+            {formattedScoreVersion ? (
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                <span>Score version</span>
+                <Badge variant="outline" className="capitalize">
+                  {formattedScoreVersion}
+                </Badge>
+              </div>
+            ) : null}
+            {missingDimensions.length > 0 ? (
+              <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-warning-foreground">
+                Missing evidence: {missingDimensions.join(", ")}
+              </p>
+            ) : null}
             <p>
               Use the processing stream link to watch the project pipeline emit
               live analysis state from the backend.

@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T16:35:41Z",
+  "updated_at": "2026-05-07T16:45:58Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1202,6 +1202,33 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed first on missing dashboard score_version, then on cross-tenant document detail leakage. GREEN passed: targeted API contract pytest 1/1; document_flow pytest 8/8; targeted Ruff passed."
+      }
+    },
+    {
+      "tarea_id": "T085",
+      "backlog_id": "TASK-OPS-DOCFLOW-010",
+      "tipo": "frontend",
+      "descripcion": "Add frontend display contract for real backend-shaped coherence and alerts payloads.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Vitest route/component coverage proves score metadata, missing-dimension diagnostics, and alert payloads render through product UI paths.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/analysis/page.tsx",
+        "apps/web/app/(app)/projects/[id]/analysis/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T16:45:58Z",
+        "completado": "2026-05-07T16:45:58Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Frontend real output display now renders backend-shaped score version, missing evidence diagnostics, coherence metrics, and alert payloads without using demo-only UI paths.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on missing v1 exponential decay score metadata display. GREEN passed: targeted analysis Vitest 2/2; acceptance Vitest components/coherence components/features/alerts 6 files / 25 tests; pnpm lint passed from apps/web."
       }
     }
   ],

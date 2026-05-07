@@ -45,7 +45,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-007` | P0 | Complete | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
 | `TASK-OPS-DOCFLOW-008` | P0 | Complete | Add backend integration spec for coherence score and alerts. | Coherence/alerts contract with score ranges and expected alert categories. | Real document produces score, score reason, and alerts through production services. |
 | `TASK-OPS-DOCFLOW-009` | P1 | Complete | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
-| `TASK-OPS-DOCFLOW-010` | P1 | Pending | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest/Playwright route using real backend-shaped fixture displays score and alerts. |
+| `TASK-OPS-DOCFLOW-010` | P1 | Complete | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest route using real backend-shaped fixture displays score metadata and alerts. |
 | `TASK-OPS-DOCFLOW-011` | P1 | Pending | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
 | `TASK-OPS-DOCFLOW-012` | P1 | Pending | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates. |
 
@@ -364,6 +364,13 @@ Acceptance:
 cd apps/web
 pnpm vitest run components/coherence components/features/alerts
 ```
+
+Evidence captured 2026-05-07:
+
+- RED: `pnpm vitest run 'app/(app)/projects/[id]/analysis/page.test.tsx' --configLoader native` failed on missing `v1 exponential decay` score metadata display.
+- GREEN: `pnpm vitest run 'app/(app)/projects/[id]/analysis/page.test.tsx' --configLoader native` passed `2 passed`.
+- Acceptance: `pnpm vitest run components/coherence components/features/alerts --configLoader native` passed `6 passed / 25 tests`.
+- Lint: `pnpm lint` from `apps/web` passed.
 
 ### `TASK-OPS-DOCFLOW-011` - Golden Regression Outputs
 
