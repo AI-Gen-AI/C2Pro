@@ -46,7 +46,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-008` | P0 | Complete | Add backend integration spec for coherence score and alerts. | Coherence/alerts contract with score ranges and expected alert categories. | Real document produces score, score reason, and alerts through production services. |
 | `TASK-OPS-DOCFLOW-009` | P1 | Complete | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
 | `TASK-OPS-DOCFLOW-010` | P1 | Complete | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest route using real backend-shaped fixture displays score metadata and alerts. |
-| `TASK-OPS-DOCFLOW-011` | P1 | Pending | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
+| `TASK-OPS-DOCFLOW-011` | P1 | Complete | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
 | `TASK-OPS-DOCFLOW-012` | P1 | Pending | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates. |
 
 ## Task Details
@@ -388,6 +388,13 @@ cd apps/api
 python -m evals.run_evals
 python -m pytest tests/evals/test_golden_corpus.py -q
 ```
+
+Evidence captured 2026-05-07:
+
+- RED: `python -m pytest tests/evals/test_golden_corpus.py -q` failed on missing `run_real_document_corpus` export.
+- GREEN: `python -m pytest tests/evals/test_golden_corpus.py -q` passed `2 passed`.
+- Acceptance: `python -m evals.run_evals` passed `15/15` golden corpus bundles and wrote JSON/JUnit artifacts under `evals/results`.
+- Lint: `python -m ruff check evals/run_evals.py apps/api/evals/run_evals.py apps/api/tests/evals/test_golden_corpus.py` passed.
 
 ### `TASK-OPS-DOCFLOW-012` - CI Quality Gate
 

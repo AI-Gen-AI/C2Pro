@@ -31,5 +31,13 @@ def main(argv: list[str] | None = None) -> int:
     return int(_load_root_runner().main(effective_argv))
 
 
+def run_real_document_corpus() -> dict:
+    """Run the real-document golden regression report.
+
+    Test Suite ID: TASK-OPS-DOCFLOW-011.
+    """
+    return _load_root_runner().run_real_document_corpus()
+
+
 if __name__ == "__main__":
     sys.exit(main())
