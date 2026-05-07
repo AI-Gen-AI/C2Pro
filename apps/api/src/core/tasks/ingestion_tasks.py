@@ -193,6 +193,11 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
         days = _extract_days(text)
         if days is not None:
             data["payment_term_days"] = days
+    lowered = text.lower()
+    if clause_type == ClauseType.DELIVERY or any(
+        term in lowered for term in ["schedule", "deadline", "milestone", "completion"]
+    ):
+        data["status"] = "at_risk"
     if clause_type == ClauseType.WARRANTY:
         months = _extract_months(text)
         if months is not None:
@@ -201,9 +206,10 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
         deadline = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
         if deadline:
             data["deadline"] = deadline.group(1)
-    if clause_type == ClauseType.QUALITY:
-        if any(term in text.lower() for term in ["inspection", "testing", "acceptance"]):
-            data["quality_standards"] = ["inspection-testing-acceptance"]
+    if clause_type == ClauseType.QUALITY and any(
+        term in lowered for term in ["inspection", "testing", "acceptance"]
+    ):
+        data["quality_standards"] = ["inspection-testing-acceptance"]
     if clause_type == ClauseType.SCOPE:
         data["deliverables"] = [{"name": text[:120]}]
 

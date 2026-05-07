@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T11:21:22Z",
+  "updated_at": "2026-05-07T11:38:28Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1143,6 +1143,35 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed on manifest taxonomy drift: delay/scope_gap versus canonical SCOPE. GREEN passed: targeted extraction pytest 1/1; document_flow pytest 6/6; targeted Ruff passed."
+      }
+    },
+    {
+      "tarea_id": "T083",
+      "backlog_id": "TASK-OPS-DOCFLOW-008",
+      "tipo": "backend",
+      "descripcion": "Add real document coherence score and alert integration coverage.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Real extracted/anonymized document clauses produce v1 coherence score metadata, missing-dimension diagnostics, category breakdown, and manifest-backed alerts.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_coherence_alerts_flow.py",
+        "apps/api/src/coherence/scoring.py",
+        "apps/api/src/core/tasks/ingestion_tasks.py",
+        "apps/api/tests/fixtures/documents/real/manifest.yaml",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T11:38:28Z",
+        "completado": "2026-05-07T11:38:28Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real coherence integration coverage now proves the production v1 subgraph returns score version, numeric score range, missing schedule/budget diagnostics, category breakdown, and manifest-backed TIME/medium alert output from sanitized real document clauses.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED exposed LangChain tracing leakage, missing_dimensions loss on numeric scores, and score calibration drift. GREEN passed: targeted coherence pytest 1/1; document_flow pytest 7/7; targeted Ruff passed."
       }
     }
   ],
