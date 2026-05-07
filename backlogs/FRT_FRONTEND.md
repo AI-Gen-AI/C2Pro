@@ -212,6 +212,30 @@
 
 ## 2. Specifications
 
+### EPIC-COVERAGE-GATES Wave 3 Frontend Recovery (2026-05-06)
+
+**Task**: `TASK-FRT-132..135`
+
+**Scope**:
+
+- Recovered useful test intent from `coverage-gates/frt-opencode` without taking stale package manager workarounds.
+- Added real production-module tests for `apps/web/app/api/runtime/backend-url/route.ts`.
+- Added real production-module tests for `apps/web/lib/api/index.ts`, covering highlight mapping, API wrapper payloads, field mapping, and generated approval delegation.
+- Exported narrowly scoped helper functions needed for direct coverage assertions.
+- Improved runtime backend URL fallback so blank or relative `BACKEND_URL` values do not block a valid `NEXT_PUBLIC_API_URL`.
+
+**Verification**:
+
+- `pnpm --filter c2pro-web exec vitest run app/api/runtime/backend-url/backend-url.test.ts lib/api/index.test.ts --config vitest.config.mts --configLoader native` — 2 files / 15 tests passed.
+- `pnpm --filter c2pro-web exec vitest run app/api/runtime/backend-url/backend-url.test.ts lib/api/index.test.ts --coverage --coverage.include=app/api/runtime/backend-url/route.ts --coverage.include=lib/api/index.ts --config vitest.config.mts --configLoader native` — targeted coverage: statements 80.20%, branches 70.66%, functions 93.75%, lines 79.56%.
+- `pnpm --filter c2pro-web test` — 50 integration files / 124 tests passed.
+- `pnpm --filter c2pro-web run lint` — passed.
+
+**Residual Risk**:
+
+- `lib/api/index.ts` branch coverage is 66.15% in isolation; overall targeted branch coverage is 70.66%. Remaining uncovered branches are primarily upload/error and optional wrapper branches.
+- Local sandboxed Vitest invocations can hit Windows process-spawn `EPERM`; escalated execution succeeds.
+
 ### Coherence Score v1 Customer UX (2026-04-26)
 
 **Task**: `TASK-COH-V1-09`
