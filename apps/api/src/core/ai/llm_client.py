@@ -31,7 +31,6 @@ from src.config import settings
 from src.core.ai.langsmith_client import LangSmithClient
 from src.core.ai.model_router import ModelRouter, ModelTier
 from src.core.ai.prompt_cache import (
-    FlashCacheService,
     get_flash_cache_service,
 )
 from src.core.ai.token_counter import get_token_counter

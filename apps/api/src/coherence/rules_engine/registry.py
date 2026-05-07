@@ -226,7 +226,7 @@ def get_v1_evaluator(
         tenant_id=tenant_id,
         llm_port=llm_port,
     )
-    setattr(evaluator, "source", "llm")
+    evaluator.source = "llm"
     return evaluator
 
 

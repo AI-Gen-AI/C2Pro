@@ -32,7 +32,7 @@ from src.anonymizer.domain.pii_detector_service import PiiDetectorService
 from src.config import settings
 from src.core.ai.llm_client import LLMClient, LLMRequest
 from src.core.ai.model_router import AITaskType, ModelTier, get_model_router
-from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
+from src.core.ai.structured_output import parse_llm_json
 from src.core.cache import get_cache_service
 
 _T = TypeVar("_T", bound=BaseModel)
