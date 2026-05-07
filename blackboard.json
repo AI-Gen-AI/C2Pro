@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T21:37:00Z",
+  "updated_at": "2026-05-07T21:46:31Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1258,6 +1258,33 @@
         "validacion_lint": true,
         "nota_verificacion": "RED failed on missing run_real_document_corpus export. GREEN passed: tests/evals/test_golden_corpus.py 2/2. Acceptance python -m evals.run_evals passed 15/15 corpus bundles. Targeted Ruff passed."
       }
+    },
+    {
+      "tarea_id": "T087",
+      "backlog_id": "TASK-OPS-DOCFLOW-012",
+      "tipo": "devops",
+      "descripcion": "Add CI quality gate for real document flow plus coverage, lint, and full backend-suite evidence or approved blocker tracking.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Workflow runs real-document, coverage, golden corpus, full backend, and lint gates while publishing explicit blocker artifacts for known open blockers.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T21:46:31Z",
+        "completado": "2026-05-07T21:46:31Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real-document operability CI workflow now runs the required gates and records known blocker artifacts for INF coverage and full backend collection.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on missing workflow. GREEN passed: backend CI guard 5/5; document_flow 8/8; core AI coverage 71.95%; golden corpus 15/15 plus eval test 2/2; pnpm lint passed. Blockers tracked as TASK-OPS-DOCFLOW-013 and TASK-OPS-DOCFLOW-014."
+      }
     }
   ],
   "backlog_sync": {
@@ -1345,7 +1372,9 @@
       "TASK-OPS-DOCFLOW-009",
       "TASK-OPS-DOCFLOW-010",
       "TASK-OPS-DOCFLOW-011",
-      "TASK-OPS-DOCFLOW-012"
+      "TASK-OPS-DOCFLOW-012",
+      "TASK-OPS-DOCFLOW-013",
+      "TASK-OPS-DOCFLOW-014"
     ]
   },
   "plan_actual": {
