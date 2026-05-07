@@ -206,7 +206,6 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
         )
         from src.coherence.graph.graph import evaluate_coherence_async
         from src.coherence.graph.state import EvaluationConfig
-        from src.coherence.models import Clause
 
         derivation = CoherenceScoringDerivationService().derive(
             CoherenceDerivationInput(
