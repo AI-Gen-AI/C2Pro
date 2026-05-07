@@ -10,14 +10,12 @@ Scenarios:
 4. Supplying schedule + budget after AUDIT_INCOMPLETE → that alert auto-resolves
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from src.coherence.graph.nodes import _create_audit_incomplete_alert, format_output
 from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
-from src.coherence.models import CoherenceCategory, EnrichedCoherenceResult, FindingSignal
 
 
 class TestAlertWiring:
@@ -93,7 +91,7 @@ class TestBilingualization:
 
     def test_get_template_with_locale(self):
         """Test locale-aware template lookup."""
-        from src.coherence.alert_generator import TEMPLATES_EN, get_template
+        from src.coherence.alert_generator import get_template
 
         # Default (Spanish)
         template = get_template("AUDIT_INCOMPLETE")

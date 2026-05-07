@@ -97,7 +97,7 @@ class TestEmailNotificationServiceRecipientWiring:
         return EmailNotificationService(**kwargs)
 
     def _review_item(self, **overrides: Any):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from src.modules.hitl.domain.entities import (
             ImpactLevel,

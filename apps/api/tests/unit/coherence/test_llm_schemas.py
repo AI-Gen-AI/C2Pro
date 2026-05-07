@@ -9,10 +9,7 @@ import pytest
 
 from src.coherence.llm_schemas import (
     ClauseAnalysisLLMResponse,
-    CoherenceIssue,
     CoherenceRuleCheckLLMResponse,
-    CrossClauseIssue,
-    EvidencePayload,
     LlmEvaluationLegacyResponse,
     LlmEvaluationV3Response,
     MultiClauseCoherenceLLMResponse,
