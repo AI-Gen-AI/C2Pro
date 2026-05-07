@@ -48,6 +48,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-010` | P1 | Complete | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest route using real backend-shaped fixture displays score metadata and alerts. |
 | `TASK-OPS-DOCFLOW-011` | P1 | Complete | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
 | `TASK-OPS-DOCFLOW-012` | P1 | Complete | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates and tracks known blockers. |
+| `TASK-OPS-DOCFLOW-013` | P1 | Complete | Fix INF coverage blocker. | HITL metric label contract plus observability/resilience/security coverage restoration. | Scoped INF coverage gate passes at `>=70%` and CI treats it as a hard gate. |
 
 ## Task Details
 
@@ -432,6 +433,33 @@ Evidence captured 2026-05-07:
 - Tracked blocker `TASK-OPS-DOCFLOW-013`: INF coverage gate currently fails on `tests/unit/core/observability/test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded` and reports `56.23%` coverage against `70%`.
 - Tracked blocker `TASK-OPS-DOCFLOW-014`: full backend suite currently fails during collection with `ModuleNotFoundError: No module named 'golden.evaluators'` from `tests/golden/conftest.py`.
 
+### `TASK-OPS-DOCFLOW-013` - INF Coverage Blocker Closure
+
+SPEC:
+
+- Align the HITL checkpoint load error metric label contract on `reason`.
+- Add focused unit coverage for scoped observability/resilience/security packages without broad coverage excludes.
+- Promote the real-document operability workflow INF coverage step back to a hard gate.
+- Keep only still-open approved blockers in the blocker artifact.
+
+Acceptance:
+
+```powershell
+cd apps/api
+$env:C2PRO_AI_MOCK='1'
+python -m pytest tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security --cov=src/core/observability --cov=src/core/resilience --cov=src/core/security --cov-report=term-missing --cov-fail-under=70 -q
+```
+
+Evidence captured 2026-05-07:
+
+- Stakeholder DDD branch review: `refactor/stakeholders-ddd-migration` had no useful changes for `apps/api/src/core/{observability,resilience,security}` or the INF coverage tests; combining it would only remove newer TASK-012 workflow/guard files.
+- RED: `python -m pytest tests/unit/core/observability/test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded -q` failed because production emitted `{"error_type": "checkpoint_not_found"}` instead of `{"reason": "checkpoint_not_found"}`.
+- RED: `python -m pytest tests/unit/test_backend_ci_guards.py::test_real_document_operability_workflow_runs_required_quality_gates -q` failed while the workflow still tracked `TASK-OPS-DOCFLOW-013` as an approved blocker.
+- Added focused coverage tests for `src/core/security/anonymizer.py`, `src/core/security/audit_trail.py`, `src/core/security/secret_channel.py`, and `src/core/resilience/decorators.py`.
+- GREEN: `python -m pytest tests/unit/core/observability/test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded tests/unit/test_backend_ci_guards.py::test_real_document_operability_workflow_runs_required_quality_gates -q` passed `2 passed`.
+- Acceptance: `python -m pytest tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security --cov=src/core/observability --cov=src/core/resilience --cov=src/core/security --cov-report=term-missing --cov-fail-under=70 -q` passed `109 passed` at `73.24%`.
+- CI workflow now runs the INF coverage step without `continue-on-error`; blocker artifact now tracks only `TASK-OPS-DOCFLOW-014`.
+
 ## Sequencing
 
 1. `TASK-OPS-DOCFLOW-001`
@@ -446,6 +474,7 @@ Evidence captured 2026-05-07:
 10. `TASK-OPS-DOCFLOW-010`
 11. `TASK-OPS-DOCFLOW-011`
 12. `TASK-OPS-DOCFLOW-012`
+13. `TASK-OPS-DOCFLOW-013`
 
 ## Definition Of Operative
 

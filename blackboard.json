@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T21:46:31Z",
+  "updated_at": "2026-05-07T22:18:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1284,6 +1284,39 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed on missing workflow. GREEN passed: backend CI guard 5/5; document_flow 8/8; core AI coverage 71.95%; golden corpus 15/15 plus eval test 2/2; pnpm lint passed. Blockers tracked as TASK-OPS-DOCFLOW-013 and TASK-OPS-DOCFLOW-014."
+      }
+    },
+    {
+      "tarea_id": "T088",
+      "backlog_id": "TASK-OPS-DOCFLOW-013",
+      "tipo": "qa",
+      "descripcion": "Fix INF coverage blocker by aligning HITL checkpoint metric labels and restoring the scoped observability/resilience/security coverage gate to >=70%.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "HITL metric label contract uses reason, scoped INF package coverage passes >=70%, and CI treats INF coverage as a hard gate.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/src/core/observability/monitoring.py",
+        "apps/api/tests/unit/core/observability/test_hitl_resume_metrics.py",
+        "apps/api/tests/unit/core/resilience/test_decorators.py",
+        "apps/api/tests/unit/core/security/test_anonymizer.py",
+        "apps/api/tests/unit/core/security/test_audit_trail.py",
+        "apps/api/tests/unit/core/security/test_secret_channel.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T22:18:00Z",
+        "completado": "2026-05-07T22:18:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "INF coverage blocker is closed: HITL checkpoint load errors now emit the reason label, focused security/resilience tests raise scoped coverage above 70%, and the CI workflow no longer treats INF coverage as an approved blocker.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED confirmed HITL label drift and workflow blocker tracking. GREEN passed metric/workflow guard 2/2 and INF coverage gate 109/109 at 73.24%. refactor/stakeholders-ddd-migration had no reusable INF changes."
       }
     }
   ],
