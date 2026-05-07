@@ -44,7 +44,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-006` | P0 | Complete | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
 | `TASK-OPS-DOCFLOW-007` | P0 | Complete | Add backend integration spec for real extraction outputs. | Clause/risk extraction contract with minimum expected categories per document. | Real document produces structured clauses/risks matching manifest expectations. |
 | `TASK-OPS-DOCFLOW-008` | P0 | Complete | Add backend integration spec for coherence score and alerts. | Coherence/alerts contract with score ranges and expected alert categories. | Real document produces score, score reason, and alerts through production services. |
-| `TASK-OPS-DOCFLOW-009` | P1 | Pending | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
+| `TASK-OPS-DOCFLOW-009` | P1 | Complete | Add API contract spec for retrieving real analysis results. | API response contract for document, coherence result, and project alerts endpoints. | Authenticated API calls return tenant-scoped score and alerts for the processed document. |
 | `TASK-OPS-DOCFLOW-010` | P1 | Pending | Add frontend display spec for real analysis output. | UI contract for score badge, alert list, empty/loading/error states. | Vitest/Playwright route using real backend-shaped fixture displays score and alerts. |
 | `TASK-OPS-DOCFLOW-011` | P1 | Pending | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
 | `TASK-OPS-DOCFLOW-012` | P1 | Pending | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates. |
@@ -335,6 +335,20 @@ cd apps/api
 $env:C2PRO_AI_MOCK='1'
 python -m pytest tests/integration/document_flow/test_real_document_api_contract.py -q
 ```
+
+Evidence captured 2026-05-07:
+
+- Added `apps/api/tests/integration/document_flow/test_real_document_api_contract.py` (`TASK-OPS-DOCFLOW-009`).
+- The test uploads the sanitized real PDF through the product API, persists processed document/coherence/alert records, and retrieves them through authenticated document detail, coherence dashboard, and project alerts API paths.
+- The contract verifies tenant A receives the analyzed document, persisted v1 score fields (`score_version`, `score_reason`, `score_missing_dimensions`), and generated project alerts.
+- The contract verifies tenant B cannot read tenant A's document or dashboard and receives no project alerts for tenant A's project.
+- GREEN production fixes:
+  - Coherence dashboard now exposes persisted score audit fields from `coherence_results`.
+  - Document detail retrieval now passes explicit `tenant_id` through the use case and repository for tenant-scoped document and clause reads.
+- RED: targeted pytest first failed because the coherence dashboard omitted `score_version`, then failed because tenant B could read tenant A's document detail.
+- GREEN: `python -m pytest apps/api/tests/integration/document_flow/test_real_document_api_contract.py -q` passed `1 passed`.
+- Regression: `python -m pytest apps/api/tests/integration/document_flow -q` passed `8 passed`.
+- Lint: `python -m ruff check apps/api/tests/integration/document_flow/test_real_document_api_contract.py apps/api/src/coherence/router.py apps/api/src/documents/adapters/http/router.py apps/api/src/documents/application/get_document_with_clauses_use_case.py apps/api/src/documents/adapters/persistence/sqlalchemy_document_repository.py` passed.
 
 ### `TASK-OPS-DOCFLOW-010` - Frontend Real Output Display
 

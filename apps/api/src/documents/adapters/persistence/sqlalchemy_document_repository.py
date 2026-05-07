@@ -3,6 +3,7 @@ SQLAlchemy implementation of the IDocumentRepository port.
 Handles persistence for Document and Clause entities.
 
 Refers to Suite ID: TS-INT-DB-CLS-001, TS-INT-DB-DOC-001.
+Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from datetime import UTC, datetime
 from uuid import UUID
@@ -53,8 +54,8 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         except ValueError:
             return None
 
-    async def _apply_document_tenant_filter(self, stmt):
-        tenant_id = await self._get_current_tenant_id()
+    async def _apply_document_tenant_filter(self, stmt, explicit_tenant_id: UUID | None = None):
+        tenant_id = explicit_tenant_id or await self._get_current_tenant_id()
         if tenant_id is None:
             return stmt
         projects = table("projects", column("id"), column("tenant_id"))
@@ -62,8 +63,8 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             projects.c.tenant_id == tenant_id
         )
 
-    async def _apply_clause_tenant_filter(self, stmt):
-        tenant_id = await self._get_current_tenant_id()
+    async def _apply_clause_tenant_filter(self, stmt, explicit_tenant_id: UUID | None = None):
+        tenant_id = explicit_tenant_id or await self._get_current_tenant_id()
         if tenant_id is None:
             return stmt
         projects = table("projects", column("id"), column("tenant_id"))
@@ -207,15 +208,27 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         orm_document = result.scalar_one_or_none()
         return self._to_domain_document(orm_document)
 
-    async def get_document_with_clauses(self, document_id: UUID) -> Document | None:
-        stmt = select(DocumentORM).where(DocumentORM.id == document_id)
-        stmt = await self._apply_document_tenant_filter(stmt)
+    async def get_document_with_clauses(
+        self,
+        tenant_id_or_document_id: UUID,
+        document_id: UUID | None = None,
+    ) -> Document | None:
+        explicit_tenant_id = tenant_id_or_document_id if document_id is not None else None
+        target_document_id = document_id or tenant_id_or_document_id
+        stmt = select(DocumentORM).where(DocumentORM.id == target_document_id)
+        stmt = await self._apply_document_tenant_filter(stmt, explicit_tenant_id)
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
         if orm_document is None:
             return None
         domain_document = self._to_domain_document(orm_document)
-        domain_document.clauses = await self.list_clauses_for_document(document_id)
+        if explicit_tenant_id is None:
+            domain_document.clauses = await self.list_clauses_for_document(target_document_id)
+        else:
+            domain_document.clauses = await self.list_clauses_for_document(
+                explicit_tenant_id,
+                target_document_id,
+            )
         return domain_document
 
     async def get_history_snapshot(self, document_id: UUID) -> DocumentHistorySnapshot | None:
@@ -454,9 +467,15 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         orm_clause = result.scalar_one_or_none()
         return self._to_domain_clause(orm_clause) if orm_clause else None
 
-    async def list_clauses_for_document(self, document_id: UUID) -> list[Clause]:
-        stmt = select(ClauseORM).where(ClauseORM.document_id == document_id)
-        stmt = await self._apply_clause_tenant_filter(stmt)
+    async def list_clauses_for_document(
+        self,
+        tenant_id_or_document_id: UUID,
+        document_id: UUID | None = None,
+    ) -> list[Clause]:
+        explicit_tenant_id = tenant_id_or_document_id if document_id is not None else None
+        target_document_id = document_id or tenant_id_or_document_id
+        stmt = select(ClauseORM).where(ClauseORM.document_id == target_document_id)
+        stmt = await self._apply_clause_tenant_filter(stmt, explicit_tenant_id)
         result = await self.session.execute(stmt)
         return [self._to_domain_clause(orm) for orm in result.scalars().all()]
 
