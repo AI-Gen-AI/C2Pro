@@ -42,7 +42,7 @@ def test_openapi_schema_examples_do_not_use_jwt_like_placeholders() -> None:
 
 
 def test_real_document_operability_workflow_runs_required_quality_gates() -> None:
-    """Test Suite ID: TASK-OPS-DOCFLOW-012."""
+    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013."""
 
     repo_root = Path(__file__).resolve().parents[4]
     workflow = repo_root / ".github" / "workflows" / "real-document-operability.yml"
@@ -65,4 +65,6 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     assert "pnpm lint" in contents
     assert "real-document-operability-blockers.md" in contents
     assert "golden.evaluators" in contents
-    assert "test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded" in contents
+    assert "TASK-OPS-DOCFLOW-014" in contents
+    assert "TASK-OPS-DOCFLOW-013" not in contents
+    assert "test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded" not in contents
