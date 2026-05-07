@@ -38,7 +38,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 |---|---:|---|---|---|---|
 | `TASK-OPS-DOCFLOW-001` | P0 | Complete | Clean `coverage-gates/inf-gemini` branch scope before further work. | Branch hygiene spec listing intended files, out-of-scope files, and cleanup decisions. | `git status --short` shows only approved INF/report files. |
 | `TASK-OPS-DOCFLOW-002` | P0 | Complete | Fix backend full-suite collection blocker in `tests/golden`. | Import/package spec for golden evaluators. | `cd apps/api && C2PRO_AI_MOCK=1 python -m pytest tests/ -x -q` proceeds past the `tests/golden` blocker and exposes the next stale contract. |
-| `TASK-OPS-DOCFLOW-003` | P0 | Pending | Restore root lint execution in the worktree. | Tooling bootstrap spec for Node/pnpm dependencies. | `pnpm lint` starts ESLint and reports real lint results, not missing binary errors. |
+| `TASK-OPS-DOCFLOW-003` | P0 | Complete | Restore root lint execution in the worktree. | Tooling bootstrap spec for Node/pnpm dependencies. | `pnpm lint` starts ESLint and reports real lint results, not missing binary errors. |
 | `TASK-OPS-DOCFLOW-004` | P0 | Pending | Define real sanitized document corpus. | Fixture manifest schema and first corpus inventory. | Manifest validates and every fixture is a real document artifact. |
 | `TASK-OPS-DOCFLOW-005` | P0 | Pending | Add backend integration spec for real upload and persistence. | Upload contract spec covering tenant, project, storage path, and document status. | Real document upload test passes without synthetic document content. |
 | `TASK-OPS-DOCFLOW-006` | P0 | Pending | Add backend integration spec for real parsing and anonymization. | Extraction/anonymization spec proving sensitive text is redacted before AI analysis. | Parsed text exists, anonymized output exists, and PII assertions pass. |
@@ -146,6 +146,12 @@ pnpm lint
 ```
 
 If lint fails, it must fail on real source diagnostics, not missing binaries.
+
+Evidence captured 2026-05-07:
+
+- `pnpm install --frozen-lockfile` completed successfully with the lockfile up to date and `husky` prepare passing.
+- Install emitted non-fatal `supabase` bin-link warnings for a missing local `supabase.EXE`; these did not block dependency bootstrap or lint execution.
+- `pnpm lint` started root ESLint via `eslint .` and exited successfully.
 
 ### `TASK-OPS-DOCFLOW-004` - Real Document Corpus
 
