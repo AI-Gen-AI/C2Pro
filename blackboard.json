@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T16:45:58Z",
+  "updated_at": "2026-05-07T21:37:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1229,6 +1229,34 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed on missing v1 exponential decay score metadata display. GREEN passed: targeted analysis Vitest 2/2; acceptance Vitest components/coherence components/features/alerts 6 files / 25 tests; pnpm lint passed from apps/web."
+      }
+    },
+    {
+      "tarea_id": "T086",
+      "backlog_id": "TASK-OPS-DOCFLOW-011",
+      "tipo": "qa",
+      "descripcion": "Add golden regression spec for structured real-document outputs using score ranges and alert category/severity assertions.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Golden regression test validates real-document score ranges, alert category/severity contracts, schema stability, and tenant-safe output fields.",
+      "archivos_modificados": [
+        "evals/run_evals.py",
+        "apps/api/evals/run_evals.py",
+        "apps/api/tests/evals/test_golden_corpus.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T21:37:00Z",
+        "completado": "2026-05-07T21:37:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real-document golden regression coverage now exposes a structured corpus report with range-based score assertions, alert category/severity contracts, stable schema keys, and tenant-safe outputs.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on missing run_real_document_corpus export. GREEN passed: tests/evals/test_golden_corpus.py 2/2. Acceptance python -m evals.run_evals passed 15/15 corpus bundles. Targeted Ruff passed."
       }
     }
   ],
