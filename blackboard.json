@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T11:13:19Z",
+  "updated_at": "2026-05-07T11:21:22Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1115,6 +1115,34 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED failed because parsed PDF text lacked supported PII. GREEN passed: targeted parsing/anonymization pytest 1/1; document_flow pytest 5/5; targeted Ruff passed."
+      }
+    },
+    {
+      "tarea_id": "T082",
+      "backlog_id": "TASK-OPS-DOCFLOW-007",
+      "tipo": "backend",
+      "descripcion": "Add real document extraction integration coverage for clauses, risks, WBS, and manifest categories.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Real parsed/anonymized PDF produces structured contract clauses, risk categories, and WBS outputs matching the corpus manifest.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_extraction_flow.py",
+        "apps/api/tests/fixtures/documents/real/manifest.yaml",
+        "apps/api/tests/fixtures/documents/real/sample-construction-contract.pdf",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T11:21:22Z",
+        "completado": "2026-05-07T11:21:22Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real extraction integration coverage now proves production parser input feeds anonymization, deterministic contract clause extraction, graph risk extraction, and graph WBS extraction with manifest-backed category assertions.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on manifest taxonomy drift: delay/scope_gap versus canonical SCOPE. GREEN passed: targeted extraction pytest 1/1; document_flow pytest 6/6; targeted Ruff passed."
       }
     }
   ],
