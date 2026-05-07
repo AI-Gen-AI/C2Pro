@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T11:38:28Z",
+  "updated_at": "2026-05-07T16:35:41Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1172,6 +1172,36 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED exposed LangChain tracing leakage, missing_dimensions loss on numeric scores, and score calibration drift. GREEN passed: targeted coherence pytest 1/1; document_flow pytest 7/7; targeted Ruff passed."
+      }
+    },
+    {
+      "tarea_id": "T084",
+      "backlog_id": "TASK-OPS-DOCFLOW-009",
+      "tipo": "backend",
+      "descripcion": "Add authenticated API retrieval contract for processed real document results.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Authenticated API calls return tenant-scoped processed document details, persisted coherence score fields, and project alerts.",
+      "archivos_modificados": [
+        "apps/api/tests/integration/document_flow/test_real_document_api_contract.py",
+        "apps/api/src/coherence/router.py",
+        "apps/api/src/documents/adapters/http/router.py",
+        "apps/api/src/documents/application/get_document_with_clauses_use_case.py",
+        "apps/api/src/documents/adapters/persistence/sqlalchemy_document_repository.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-07T16:35:41Z",
+        "completado": "2026-05-07T16:35:41Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Real API retrieval coverage now proves tenant-scoped document detail, coherence dashboard score audit fields, and generated project alerts for processed real-document results.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed first on missing dashboard score_version, then on cross-tenant document detail leakage. GREEN passed: targeted API contract pytest 1/1; document_flow pytest 8/8; targeted Ruff passed."
       }
     }
   ],

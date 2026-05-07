@@ -1,20 +1,31 @@
 """
 Use Case for retrieving a document with its clauses.
+
+Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.core.tenants.types import TenantId
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 
 
 class GetDocumentWithClausesUseCase:
+    """Test Suite ID: TASK-OPS-DOCFLOW-009."""
+
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
 
-    async def execute(self, document_id: UUID) -> Document:
-        document = await self.document_repository.get_document_with_clauses(document_id)
+    async def execute(self, document_id: UUID, tenant_id: TenantId | None = None) -> Document:
+        if tenant_id is None:
+            document = await self.document_repository.get_document_with_clauses(document_id)
+        else:
+            document = await self.document_repository.get_document_with_clauses(
+                tenant_id,
+                document_id,
+            )
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
         return document

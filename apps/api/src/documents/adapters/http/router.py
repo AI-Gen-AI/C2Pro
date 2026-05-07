@@ -1,5 +1,7 @@
 """
 HTTP adapter (FastAPI router) for the Documents module.
+
+Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 from __future__ import annotations
 
@@ -445,9 +447,10 @@ async def reupload_document_file(
 async def get_document_endpoint(
     document_id: UUID,
     _user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> DocumentDetailResponse:
-    document = await use_case.execute(document_id)
+    document = await use_case.execute(document_id, tenant_id)
     response_data = DocumentResponse.model_validate(document).model_dump()
     response_data["clauses"] = [
         {
@@ -637,8 +640,8 @@ async def parse_document_endpoint(
 async def reprocess_document_endpoint(
     project_id: UUID,
     document_id: UUID,
-    user_id: CurrentUserId,
-    tenant_id: CurrentTenantId,
+    _user_id: CurrentUserId,
+    _tenant_id: CurrentTenantId,
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
 ) -> DocumentQueuedResponse:
     """
