@@ -291,6 +291,7 @@ def traced_llm_call(
             model_params = _extract_model_params(kwargs, request=request_obj)
             span = None
             started_at = time.perf_counter()
+            token = _TRACE_CONTEXT.set(None)
 
             if resolved_client.enabled and span_client is not None:
                 tags = resolved_client.build_tags(
@@ -319,29 +320,32 @@ def traced_llm_call(
                 )
 
             try:
-                result = func(*args, **kwargs)
-            except Exception as exc:
+                try:
+                    result = func(*args, **kwargs)
+                except Exception as exc:
+                    if span_client is not None and span is not None:
+                        latency_ms = int((time.perf_counter() - started_at) * 1000)
+                        span_client.end_span(
+                            span,
+                            outputs={
+                                "status": "error",
+                                "error": str(exc),
+                                "latency_ms": latency_ms,
+                            },
+                        )
+                    raise
+
                 if span_client is not None and span is not None:
-                    latency_ms = int((time.perf_counter() - started_at) * 1000)
-                    span_client.end_span(
-                        span,
-                        outputs={
-                            "status": "error",
-                            "error": str(exc),
-                            "latency_ms": latency_ms,
-                        },
-                    )
-                raise
+                    usage_metrics = _extract_usage_metrics(result)
+                    usage_metrics["model_name"] = _extract_model_name(kwargs, result, request=request_obj)
+                    usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
+                    span_client.end_span(span, outputs={"status": "success", **usage_metrics})
+                    trace_id, trace_url = _extract_trace_identifiers(span)
+                    _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
 
-            if span_client is not None and span is not None:
-                usage_metrics = _extract_usage_metrics(result)
-                usage_metrics["model_name"] = _extract_model_name(kwargs, result, request=request_obj)
-                usage_metrics["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
-                span_client.end_span(span, outputs={"status": "success", **usage_metrics})
-                trace_id, trace_url = _extract_trace_identifiers(span)
-                _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
-
-            return result
+                return result
+            finally:
+                _TRACE_CONTEXT.reset(token)
 
         runner = _run_async if inspect.iscoroutinefunction(func) else _run_sync
         wrapped = functools.wraps(func)(runner)
