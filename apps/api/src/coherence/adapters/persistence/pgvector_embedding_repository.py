@@ -382,7 +382,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         project_id: UUID,
         similarity_threshold: float = 0.85,
         max_pairs: int = 20,
-        categories_to_compare: list[tuple[str, str]] | None = None,
+        categories_to_compare: list[tuple[str, str]] | None = None,  # noqa: ARG002
     ) -> list[EmbeddingMatch]:
         """
         Find similar clauses across different document types with tenant verification.
@@ -532,7 +532,7 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         if not clause_ids:
             return {}
 
-        if self.tenant_id is not None:
+        if self.tenant_id is not None:  # noqa: SIM102
             if not await self._verify_project_tenant(project_id):
                 raise PermissionError(
                     "Cannot access embeddings for project outside tenant"

@@ -856,7 +856,7 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
 
 
 def _create_audit_incomplete_alert(
-    project_id: str,
+    project_id: str,  # noqa: ARG001
     missing_dimensions: list[str],
 ) -> Alert:
     """Create AUDIT_INCOMPLETE meta-alert when score is None."""

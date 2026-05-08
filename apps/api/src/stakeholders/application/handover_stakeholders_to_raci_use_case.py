@@ -26,7 +26,7 @@ class HandoverStakeholdersToRaciUseCase:
     async def execute(
         self,
         *,
-        project_id: UUID,
+        project_id: UUID,  # noqa: ARG002
         wbs_items: list[RaciWBSItemInput],
         stakeholders: list[Stakeholder],
     ) -> RaciGenerationResult:

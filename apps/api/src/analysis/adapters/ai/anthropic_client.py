@@ -234,7 +234,7 @@ class AIService:
 
         raise AIServiceError(message="No JSON block found in AI response.")
 
-    def _mock_extraction(self, system_prompt: str, user_content: str) -> Any:
+    def _mock_extraction(self, system_prompt: str, user_content: str) -> Any:  # noqa: ARG002
         prompt = system_prompt.lower()
         if "riesgo" in prompt or "risk" in prompt:
             return [

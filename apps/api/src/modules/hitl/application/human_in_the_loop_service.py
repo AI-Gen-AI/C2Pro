@@ -99,7 +99,27 @@ class HumanInTheLoopService:
             item.current_status = ReviewStatus.ESCALATED
             item.metadata["escalated_at"] = datetime.now().isoformat()
             await self.review_queue_repo.update_review_item(item)
-            await self.notification_service.send_escalation_alert(item)
+
+            # Extract tenant_id from metadata for routed notification
+            tenant_id_raw = item.metadata.get("tenant_id")
+            tenant_id = None
+            if tenant_id_raw:
+                try:  # noqa: SIM105
+                    tenant_id = UUID(str(tenant_id_raw))
+                except (ValueError, TypeError):
+                    pass
+
+            if tenant_id:
+                await self.notification_service.send_escalation_alert(item, tenant_id)
+            else:
+                # Fallback or log if tenant context is missing
+                import structlog
+                logger = structlog.get_logger()
+                logger.warning(
+                    "hitl_escalation_missing_tenant_context",
+                    item_id=str(item.item_id),
+                )
+
             results.append(
                 SLACheckResult(
                     item_id=item.item_id,
