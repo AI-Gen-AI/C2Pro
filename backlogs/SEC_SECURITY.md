@@ -1,16 +1,17 @@
 # Security Backlog: Tenant Isolation Audit (TASK-REV-SECURITY-001)
 
-**Status**: 🔶 7 hardening tasks open (post-audit 2026-05-08)
-**Last Updated**: 2026-05-08
+**Status**: 🔶 5 hardening tasks open (post-audit 2026-05-08)
+**Last Updated**: 2026-05-09
 
 ---
 
 ## Status View
 
-**Pending Tasks**: 7 (TASK-SEC-012..018) — post-audit hardening
+**Pending Tasks**: 5 (TASK-SEC-012..016) — post-audit hardening
 
 - P1: TASK-SEC-012 (missing SQL RLS test), TASK-SEC-013 (cookie consent auth), TASK-SEC-014 (disclaimer persistence), TASK-SEC-015 (SecretStr)
-- P2: TASK-SEC-016 (VaultKv guard), TASK-SEC-017 (clause_embeddings RLS migration), TASK-SEC-018 (AuditLogORM sync)
+- P2: TASK-SEC-016 (VaultKv guard)
+- Completed 2026-05-09: TASK-SEC-017 (tenant_id + RLS migration), TASK-SEC-018 (AuditLogORM sync)
 
 Prior vulnerabilities SEC-009..011 fixed. Completed work in [COMPLETED.md](COMPLETED.md).
 
@@ -25,8 +26,8 @@ Prior vulnerabilities SEC-009..011 fixed. Completed work in [COMPLETED.md](COMPL
 | [ ] | P1 | `TASK-SEC-014` | Persist disclaimer acceptance to DB (currently in-process memory — breaks multi-pod) | Audit finding (HIGH) |
 | [ ] | P1 | `TASK-SEC-015` | Use `SecretStr` for `secret_channel_token` + `secret_channel_vault_token` in `config.py` | Audit finding (HIGH) |
 | [ ] | P2 | `TASK-SEC-016` | Guard `VaultKvBundleProvider.load_bundle` against malformed `bundle_ref` (no `:`) — currently raises unhandled `ValueError` | Audit finding (HIGH) |
-| [ ] | P2 | `TASK-SEC-017` | Add RLS migration: `tenant_id` column on `clause_embeddings` + align policy to direct-column pattern | Audit finding (HIGH) |
-| [ ] | P2 | `TASK-SEC-018` | Fix `SQLAlchemyAuditRepository` — sync with current `AuditLogORM` model | Pre-existing finding |
+| [x] | P2 | `TASK-SEC-017` | Add RLS migration: `tenant_id` on `clause_embeddings`, `analysis`, `alert`, `coherence_results` + Alembic migration | ✅ 2026-05-09 PR#112 |
+| [x] | P2 | `TASK-SEC-018` | Fix `SQLAlchemyAuditRepository` — AuditLogORM tagged with `rls_policy` metadata | ✅ 2026-05-09 PR#112 |
 
 ---
 
