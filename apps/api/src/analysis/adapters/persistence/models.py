@@ -6,6 +6,7 @@ Incluye trazabilidad legal mediante FKs a clauses (ROADMAP §5.3).
 
 Refers to Suite ID: TS-INT-DB-CLS-001.
 """
+# ruff: noqa: E402  — _utcnow helper must be defined before SQLAlchemy models that use it as a default
 
 from datetime import UTC, datetime
 

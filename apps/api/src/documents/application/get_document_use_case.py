@@ -13,7 +13,7 @@ class GetDocumentUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
 
-    async def execute(self, document_id: UUID, user_id: UUID) -> Document: # user_id for potential audit/permissions
+    async def execute(self, document_id: UUID, user_id: UUID) -> Document:  # noqa: ARG002 — user_id reserved for future audit/permissions
         """
         Retrieves a document record from the database.
         """

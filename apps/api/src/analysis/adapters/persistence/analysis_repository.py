@@ -29,7 +29,7 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
 
     async def add_analysis(self, analysis: Analysis, tenant_id: UUID | None = None) -> None:
         effective_tenant_id = tenant_id or self.tenant_id
-        if effective_tenant_id is not None:
+        if effective_tenant_id is not None:  # noqa: SIM102
             if not await self._verify_project_ownership(analysis.project_id):
                 raise PermissionError("Cannot add analysis for project outside tenant")
         self.session.add(analysis)
@@ -38,7 +38,7 @@ class SqlAlchemyAnalysisRepository(IAnalysisRepository):
         effective_tenant_id = tenant_id or self.tenant_id
         alert_list = list(alerts)
         for alert in alert_list:
-            if effective_tenant_id is not None:
+            if effective_tenant_id is not None:  # noqa: SIM102
                 if not await self._verify_project_ownership(alert.project_id):
                     raise PermissionError("Cannot add alert for project outside tenant")
         self.session.add_all(alert_list)

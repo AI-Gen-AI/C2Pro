@@ -430,7 +430,7 @@ class DatabaseMCPServer:
     # ===========================================
 
     async def _execute_view_query(
-        self, request: ViewQueryRequest, tenant_id: UUID, user_id: UUID | None, db: AsyncSession
+        self, request: ViewQueryRequest, tenant_id: UUID, user_id: UUID | None, db: AsyncSession  # noqa: ARG002
     ) -> QueryResult:
         """Ejecuta query de vista con límites de seguridad."""
         # Configurar query limits
@@ -499,7 +499,7 @@ class DatabaseMCPServer:
         )
 
     async def _execute_function_call(
-        self, request: FunctionCallRequest, tenant_id: UUID, user_id: UUID | None, db: AsyncSession
+        self, request: FunctionCallRequest, tenant_id: UUID, user_id: UUID | None, db: AsyncSession  # noqa: ARG002
     ) -> QueryResult:
         """Ejecuta llamada a función con validación de parámetros."""
         # Configurar timeout
