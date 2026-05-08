@@ -6,11 +6,8 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  GET,
-  normalizeAbsoluteApiBaseUrl,
-  trimTrailingSlash,
-} from "./route";
+import { GET } from "./route";
+import { normalizeAbsoluteApiBaseUrl, trimTrailingSlash } from "./utils";
 
 const ORIGINAL_BACKEND_URL = process.env.BACKEND_URL;
 const ORIGINAL_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL;
