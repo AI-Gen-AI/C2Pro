@@ -399,8 +399,9 @@ describe("API wrapper contracts", () => {
 
   it("delegates approval resource reviews and CRUD helpers to generated/API clients", async () => {
     mockedReviewApproval.mockResolvedValueOnce({
+      resource_type: "alert",
       resource_id: "alert-1",
-      status: "approved",
+      status: "APPROVED",
     });
     mockedApiClient.delete.mockResolvedValueOnce({ data: undefined });
     mockedApiClient.patch.mockResolvedValueOnce({ data: { id: "stakeholder-1" } });
@@ -409,11 +410,11 @@ describe("API wrapper contracts", () => {
       .mockResolvedValueOnce({ data: { id: "bom-1" } });
 
     await expect(
-      reviewApprovalResource("alert", "alert-1", "approved", {
+      reviewApprovalResource("alert", "alert-1", "APPROVED", {
         correctionData: { field: "value" },
-        feedbackComment: "approved",
+        feedbackComment: "APPROVED",
       }),
-    ).resolves.toEqual({ resource_id: "alert-1", status: "approved" });
+    ).resolves.toEqual({ resource_type: "alert", resource_id: "alert-1", status: "APPROVED" });
     await expect(deleteDocument("doc-1")).resolves.toBeUndefined();
     await expect(
       updateStakeholder("stakeholder-1", { name: "ACME" }),

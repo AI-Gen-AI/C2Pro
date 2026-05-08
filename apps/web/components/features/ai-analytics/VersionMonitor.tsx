@@ -26,7 +26,11 @@ export function VersionMonitor({ data, loading, error }: Props) {
     : data.versions;
 
   const handleDateRangeChange = (field: "start" | "end", value: string) => {
-    setDateRange((prev) => ({ ...prev, [field]: value }));
+    setDateRange((prev) => ({
+      start: prev?.start ?? "",
+      end: prev?.end ?? "",
+      [field]: value,
+    }));
   };
 
   return (

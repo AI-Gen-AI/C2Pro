@@ -228,9 +228,7 @@ describe("WF-03  Evidence Viewer — Watermark overlay (CE-S2-010 security)", ()
   it("[WF-03-WM-01] renders watermark overlay with tenant label", () => {
     renderWithProviders(
       <EvidenceWatermarkOverlay
-        tenantName="BuildCo S.A."
-        userName="Carlos M."
-        documentId="doc-001"
+        watermark={{ pseudonymId: "BuildCo S.A. — Carlos M.", documentId: "doc-001" }}
       />,
     );
 
@@ -241,9 +239,7 @@ describe("WF-03  Evidence Viewer — Watermark overlay (CE-S2-010 security)", ()
   it("[WF-03-WM-02] overlay renders confidential label", () => {
     renderWithProviders(
       <EvidenceWatermarkOverlay
-        tenantName="BuildCo S.A."
-        userName="Carlos M."
-        documentId="doc-001"
+        watermark={{ pseudonymId: "BuildCo S.A. — Carlos M.", documentId: "doc-001" }}
       />,
     );
 
