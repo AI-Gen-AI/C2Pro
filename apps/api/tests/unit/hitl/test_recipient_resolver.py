@@ -85,14 +85,14 @@ class TestDbRecipientResolver:
 @pytest.mark.asyncio
 class TestEmailNotificationServiceRecipientWiring:
     def _service(self, resolver, **overrides: Any) -> EmailNotificationService:
-        kwargs = dict(
-            smtp_host="smtp.example.com",
-            smtp_port=587,
-            smtp_user="noreply@example.com",
-            smtp_password="pw",
-            from_email="noreply@example.com",
-            recipient_resolver=resolver,
-        )
+        kwargs = {
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 587,
+            "smtp_user": "noreply@example.com",
+            "smtp_password": "pw",
+            "from_email": "noreply@example.com",
+            "recipient_resolver": resolver,
+        }
         kwargs.update(overrides)
         return EmailNotificationService(**kwargs)
 
@@ -105,15 +105,15 @@ class TestEmailNotificationServiceRecipientWiring:
             ReviewStatus,
         )
 
-        kwargs: dict[str, Any] = dict(
-            item_id=uuid4(),
-            item_type="risk",
-            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
-            confidence=0.7,
-            impact_level=ImpactLevel.MEDIUM,
-            sla_due_date=datetime.now(UTC) + timedelta(hours=24),
-            item_data={},
-        )
+        kwargs: dict[str, Any] = {
+            "item_id": uuid4(),
+            "item_type": "risk",
+            "current_status": ReviewStatus.PENDING_REVIEW_REQUIRED,
+            "confidence": 0.7,
+            "impact_level": ImpactLevel.MEDIUM,
+            "sla_due_date": datetime.now(UTC) + timedelta(hours=24),
+            "item_data": {},
+        }
         kwargs.update(overrides)
         return ReviewItem(**kwargs)
 

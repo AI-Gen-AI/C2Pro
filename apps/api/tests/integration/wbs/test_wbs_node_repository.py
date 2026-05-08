@@ -459,14 +459,14 @@ class TestWBSNodeRepositoryMove:
 
         assert moved.parent_id == child2.id
         assert moved.depth == 2
-        
+
         # Verify tree order: 1, 1.2, 1.1
         tree = await repo.get_tree(project_id, tenant_id)
         assert len(tree) == 3
         assert tree[0].id == root.id
         assert tree[1].id == child2.id
         assert tree[2].id == child1.id
-        
+
         # Verify nested set integrity
         assert tree[0].lft == 1
         assert tree[0].rgt == 6
