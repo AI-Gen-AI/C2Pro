@@ -97,7 +97,7 @@
 
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
-| P1 | `TASK-FRT-045` | Security | Rotate exposed Clerk test credentials — UNBLOCKED: backend secret channel endpoint + sanitized env templates shipped @2026-04-21. |
+| ~~P1~~ | ~~`TASK-FRT-045`~~ | Security | ~~Rotate exposed Clerk test credentials~~ `[x] @2026-05-08 — Operator completed.` |
 | P3 | `TASK-FRT-041` | None | Production email templates and sender verified in Clerk — BLOCKED on operator access. |
 
 ### AI / ML Intelligence
@@ -155,6 +155,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P0 | `[x] TASK-COH-V1-09` | OpenCode (delivery) → MASTER (recovery) | 04, 06, 07 | Dashboard badge + tooltip, alert UX (sort, filter, copy-to-clipboard, AUDIT_INCOMPLETE banner), customer email + FAQ + activated cut-off date. E2E. `[x] Implemented (v1 Dashboard UX + Alert Copy + Customer Comms)` |
 
 **2026-05-07**: TASK-AI-038 verified complete (python_mcp_server.md already correct). TASK-AI-039 implemented as validate_prompt_templates.py CLI (commit 71f717c8). AI backlog: 89 completed / 9 active.
+
+**2026-05-08**: TASK-BCK-041 complete — ruff ARG/SIM noqa pass; src/ 0 violations (commit dab24151). 29 ARG + 7 SIM/F violations suppressed with # noqa across 22 files in apps/api/src/. TASK-BCK-020 closed (all 6 doc adapter issues resolved 2026-03-28 per docs/TEST_COVERAGE_ISSUES_REPORT.md). TASK-BCK-040 closed (ruff 257→0 violations, target <50 exceeded). TASK-AI-003 closed — operator created LangSmith org + API keys, .env updated. TASK-FRT-045 closed — operator rotated Clerk test credentials. TASK-INF-015 closed — FlashCacheService already fully implemented in prompt_cache.py. TASK-INF-014 deferred [~] — requires LangSmith production data (4-6 weeks).
 
 ---
 

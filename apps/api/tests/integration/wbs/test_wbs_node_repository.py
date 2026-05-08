@@ -17,15 +17,31 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def tenant_id():
+async def tenant_id(async_session):
     """Fixture for tenant ID."""
-    return uuid4()
+    from src.core.auth.models import Tenant
+    tenant = Tenant(
+        id=uuid4(),
+        name="Test Tenant",
+        slug=f"test-tenant-{uuid4().hex[:6]}",
+    )
+    async_session.add(tenant)
+    await async_session.commit()
+    return tenant.id
 
 
 @pytest.fixture
-def project_id():
+async def project_id(async_session, tenant_id):
     """Fixture for project ID."""
-    return uuid4()
+    from src.projects.adapters.persistence.models import ProjectORM
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        name="Test Project",
+    )
+    async_session.add(project)
+    await async_session.commit()
+    return project.id
 
 
 class TestWBSNodeRepositoryCreate:
@@ -421,3 +437,101 @@ class TestWBSNodeRepositoryDelete:
         # Verify grandchild is also deleted
         grandchild_check = await repo.get_by_id(grandchild.id, tenant_id)
         assert grandchild_check is None
+
+
+class TestWBSNodeRepositoryMove:
+    """Test WBS node move operations in nested set."""
+
+    async def test_move_node_to_new_parent(self, async_session, project_id, tenant_id):
+        """Test moving a node to a different parent."""
+        repo = WBSNodeRepository(async_session)
+
+        # Create structure:
+        # 1
+        # ├── 1.1
+        # └── 1.2 (target parent)
+        root = await repo.create(project_id, tenant_id, "1", "Root", None, WBSNodeType.WORK_PACKAGE)
+        child1 = await repo.create(project_id, tenant_id, "1.1", "Child 1", root.id, WBSNodeType.ACTIVITY)
+        child2 = await repo.create(project_id, tenant_id, "1.2", "Child 2", root.id, WBSNodeType.ACTIVITY)
+
+        # Move 1.1 to be child of 1.2
+        moved = await repo.move_node(child1.id, tenant_id, child2.id)
+
+        assert moved.parent_id == child2.id
+        assert moved.depth == 2
+
+        # Verify tree order: 1, 1.2, 1.1
+        tree = await repo.get_tree(project_id, tenant_id)
+        assert len(tree) == 3
+        assert tree[0].id == root.id
+        assert tree[1].id == child2.id
+        assert tree[2].id == child1.id
+
+        # Verify nested set integrity
+        assert tree[0].lft == 1
+        assert tree[0].rgt == 6
+        assert tree[1].lft == 2
+        assert tree[1].rgt == 5
+        assert tree[2].lft == 3
+        assert tree[2].rgt == 4
+
+    async def test_move_subtree(self, async_session, project_id, tenant_id):
+        """Test moving a node that has its own children."""
+        repo = WBSNodeRepository(async_session)
+
+        # Create structure:
+        # A
+        # ├── B
+        # │   └── C
+        # └── D (target parent)
+        node_a = await repo.create(project_id, tenant_id, "A", "A", None, WBSNodeType.WORK_PACKAGE)
+        node_b = await repo.create(project_id, tenant_id, "B", "B", node_a.id, WBSNodeType.DELIVERABLE)
+        node_c = await repo.create(project_id, tenant_id, "C", "C", node_b.id, WBSNodeType.ACTIVITY)
+        node_d = await repo.create(project_id, tenant_id, "D", "D", node_a.id, WBSNodeType.DELIVERABLE)
+
+        # Move B to D
+        await repo.move_node(node_b.id, tenant_id, node_d.id)
+
+        # Verify C moved with B
+        node_c_updated = await repo.get_by_id(node_c.id, tenant_id)
+        assert node_c_updated.parent_id == node_b.id
+        assert node_c_updated.depth == 3 # A(0) -> D(1) -> B(2) -> C(3)
+
+        tree = await repo.get_tree(project_id, tenant_id)
+        # Expected order: A, D, B, C
+        assert [n.name for n in tree] == ["A", "D", "B", "C"]
+
+    async def test_move_to_root(self, async_session, project_id, tenant_id):
+        """Test moving a child node to root."""
+        repo = WBSNodeRepository(async_session)
+
+        root = await repo.create(project_id, tenant_id, "1", "Root", None, WBSNodeType.WORK_PACKAGE)
+        child = await repo.create(project_id, tenant_id, "1.1", "Child", root.id, WBSNodeType.ACTIVITY)
+
+        # Move child to root
+        moved = await repo.move_node(child.id, tenant_id, None)
+
+        assert moved.parent_id is None
+        assert moved.depth == 0
+
+        tree = await repo.get_tree(project_id, tenant_id)
+        assert len(tree) == 2
+        assert tree[0].depth == 0
+        assert tree[1].depth == 0
+
+    async def test_invalid_move_to_self(self, async_session, project_id, tenant_id):
+        """Test that moving a node to itself fails."""
+        repo = WBSNodeRepository(async_session)
+        node = await repo.create(project_id, tenant_id, "1", "Node", None, WBSNodeType.WORK_PACKAGE)
+
+        with pytest.raises(ValueError, match="Cannot move node to itself"):
+            await repo.move_node(node.id, tenant_id, node.id)
+
+    async def test_invalid_move_to_descendant(self, async_session, project_id, tenant_id):
+        """Test that moving a node to its own descendant fails."""
+        repo = WBSNodeRepository(async_session)
+        parent = await repo.create(project_id, tenant_id, "1", "Parent", None, WBSNodeType.WORK_PACKAGE)
+        child = await repo.create(project_id, tenant_id, "1.1", "Child", parent.id, WBSNodeType.ACTIVITY)
+
+        with pytest.raises(ValueError, match="Cannot move node to its own descendant"):
+            await repo.move_node(parent.id, tenant_id, child.id)

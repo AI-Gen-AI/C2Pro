@@ -4,6 +4,7 @@ TS-INT-DB-CLS-001: Analysis alert mutation authz tests.
 
 from __future__ import annotations
 
+from datetime import UTC
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -85,8 +86,8 @@ async def test_admin_can_update_alert() -> None:
                 "resolved_at": None,
                 "resolved_by": None,
                 "resolution_notes": "done",
-                "created_at": __import__("datetime").datetime.now(timezone.utc),
-                "updated_at": __import__("datetime").datetime.now(timezone.utc),
+                "created_at": __import__("datetime").datetime.now(UTC),
+                "updated_at": __import__("datetime").datetime.now(UTC),
             }
         )
     )

@@ -12,14 +12,14 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 9 (incl. 3 human-operator-blocked, 4 deferred Phase 2)
+**Pending Tasks**: 8 (incl. 2 human-operator-blocked, 4 deferred Phase 2, 1 deferred for data)
 
-- Blocked (human access required): `TASK-AI-003`, `TASK-AI-010`, `TASK-AI-011`
+- Blocked (human access required): `TASK-AI-010`, `TASK-AI-011` (LangSmith Hub dashboard)
 - Deferred: `TASK-AI-040`..`TASK-AI-043` (Phase 2 LangChain flows)
 
-**Completed Tasks**: 89 (93.7%)
+**Completed Tasks**: 90 (94.7%)
 
-- IDs: All TASK-AI-001..078 except 003/010/011/040..043; TASK-IMPL-010 + all 14 subtasks (.1-.16)
+- IDs: All TASK-AI-001..078 except 010/011/040..043; TASK-IMPL-010 + all 14 subtasks (.1-.16)
 
 **Usage Note**:
 
@@ -32,7 +32,7 @@
 |--------|----------|---------|------------|-------------|--------|
 | [x] | P0 | `TASK-AI-001` | AI & Intelligence | Enforce strict severity taxonomy in scoring: Critical, High, Medium, Low, Info `[x] Implemented (5-level severity taxonomy: critical/high/medium/low/info with thresholds 0.85/0.60/0.35/0.15; severity weights updated in config; 488 coherence tests passing)` | `docs/archive/plans/tdd-testing/I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` `[x] @2026-02-16` |
 | [x] | P1 | `TASK-AI-002` | Backend API | Prompt Analytics Dashboard: metrics by prompt version with LangSmith integration `[x] @2026-05-03 - Completed via W8a + W8b: backend endpoints (/cost, /versions, /comparison, /quality-drift) with Redis cache (PR#104); frontend dashboard components (UsageMetricsTable, CostDashboard, DriftDetector, VersionMonitor) + trace deep-link (PR#105).` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`; `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` |
-| [ ] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
+| [x] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod `[x] @2026-05-08 - Operator completed: LangSmith org created, API keys generated, LANGCHAIN_API_KEY + LANGCHAIN_PROJECT vars added to apps/api/.env.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies `[x] @2026-04-20 - Added PEP 621 `dependencies` entry with `langsmith>=0.7.31` in `apps/api/pyproject.toml` to align package metadata with LangSmith integration requirements.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-005` | `TASK-216` | Implement `langsmith_client.py` wrapper with environment-based config and helper methods `[x] @2026-04-20 - Added src/core/ai/langsmith_client.py with environment-driven config, `enabled` guard, and helper builders for canonical tags/metadata payloads used by downstream tracing decorators and usage analytics integration.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
 | [x] | P1 | `TASK-AI-006` | `TASK-216` | Create `@traced_llm_call` decorator for automatic tracing of all LLM calls `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with signature-preserving sync/async decorators that standardize LangSmith tags + metadata via `LangSmithClient` and finalize spans for both success and exception paths, with dedicated unit coverage in `src/core/ai/test_traced_llm_call.py`.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |

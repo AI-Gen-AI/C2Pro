@@ -34,7 +34,7 @@ class SlackNotificationService:
         self.timeout = timeout
 
     async def send_notification(
-        self, recipient_id: UUID, message: str, item: ReviewItem
+        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID | None = None  # noqa: ARG002
     ) -> None:
         """Send notification to Slack channel."""
         payload = self._format_notification_payload(recipient_id, message, item)
@@ -47,7 +47,7 @@ class SlackNotificationService:
             item_id=str(item.item_id),
         )
 
-    async def send_escalation_alert(self, item: ReviewItem) -> None:
+    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID | None = None) -> None:  # noqa: ARG002
         """Send urgent escalation alert to Slack with @channel mention."""
         payload = self._format_escalation_payload(item)
 

@@ -190,7 +190,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
     async def create(self, alert: Alert, tenant_id: UUID | None = None) -> Alert:
         """Create a new alert with tenant verification."""
         effective_tenant_id = tenant_id or self._tenant_id
-        if effective_tenant_id is not None:
+        if effective_tenant_id is not None:  # noqa: SIM102
             if not await self._verify_project_ownership(alert.project_id):
                 raise PermissionError("Cannot create alert for project outside tenant")
         orm_alert = AlertORM(
@@ -216,7 +216,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         effective_tenant_id = tenant_id or self._tenant_id
         orm_alert = await self._session.get(AlertORM, alert.id)
         if orm_alert:
-            if effective_tenant_id is not None:
+            if effective_tenant_id is not None:  # noqa: SIM102
                 if not await self._verify_project_ownership(orm_alert.project_id):
                     raise PermissionError("Cannot save alert for project outside tenant")
             orm_alert.status = alert.status.value if hasattr(alert.status, "value") else alert.status

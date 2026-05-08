@@ -173,7 +173,7 @@ class ScoringService:
         self,
         signals: list[FindingSignal],
         num_clauses: int = 1,
-        num_rules: int = 5,
+        num_rules: int = 5,  # noqa: ARG002
         poor_extraction_quality: bool = False,
         missing_dimensions: list[str] | None = None,
     ) -> ScoringResult:
@@ -226,7 +226,7 @@ class ScoringService:
         self,
         signals: list[FindingSignal],
         num_clauses: int = 1,
-        num_rules: int = 5,
+        num_rules: int = 5,  # noqa: ARG002
         poor_extraction_quality: bool = False,
         missing_dimensions: list[str] | None = None,
     ) -> ScoringDiagnostics:
