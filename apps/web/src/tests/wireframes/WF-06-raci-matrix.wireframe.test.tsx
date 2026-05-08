@@ -47,7 +47,7 @@ const DEMO_COLS = [
   { id: "s-miguel", label: "Miguel" },
 ];
 
-const DEMO_VALUES = {
+const DEMO_VALUES: Record<string, Record<string, "R" | "A" | "C" | "I" | "">> = {
   "wbs-1.0": { "s-carlos": "A", "s-ana": "I", "s-miguel": "R" },
   "wbs-1.1": { "s-carlos": "A", "s-ana": "I", "s-miguel": "R" },
   "wbs-1.2": { "s-carlos": "A", "s-ana": "I", "s-miguel": "R" },
