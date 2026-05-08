@@ -1,37 +1,46 @@
 # Security Backlog: Tenant Isolation Audit (TASK-REV-SECURITY-001)
 
-**Status**: ✅ All named vulnerabilities fixed (SEC-009..011)
+**Status**: 🔶 7 hardening tasks open (post-audit 2026-05-08)
 **Last Updated**: 2026-05-08
 
 ---
 
 ## Status View
 
-**Pending Tasks**: 0 named tasks
+**Pending Tasks**: 7 (TASK-SEC-012..018) — post-audit hardening
 
-All three critical vulnerabilities (SEC-009, SEC-010, SEC-011) are fixed.
-Completed work archived in [COMPLETED.md](COMPLETED.md).
+- P1: TASK-SEC-012 (missing SQL RLS test), TASK-SEC-013 (cookie consent auth), TASK-SEC-014 (disclaimer persistence), TASK-SEC-015 (SecretStr)
+- P2: TASK-SEC-016 (VaultKv guard), TASK-SEC-017 (clause_embeddings RLS migration), TASK-SEC-018 (AuditLogORM sync)
+
+Prior vulnerabilities SEC-009..011 fixed. Completed work in [COMPLETED.md](COMPLETED.md).
 
 ---
 
-## Remaining Work (No Formal Task IDs)
+## Active Tasks (Post-Audit Hardening — 2026-05-08)
 
-These items were identified during the audit but have not been assigned task IDs:
+| Status | Priority | Task ID | Description | Source |
+|--------|----------|---------|-------------|--------|
+| [ ] | P1 | `TASK-SEC-012` | Add SQL RLS test `supabase/tests/09_clause_embeddings_rls.sql` — cross-tenant isolation + fail-closed | Audit finding (CRITICAL) |
+| [ ] | P1 | `TASK-SEC-013` | Add auth guard to cookie consent endpoints (`POST/GET/PATCH /compliance/cookies/consent`) — currently unauthenticated | Audit finding (HIGH) |
+| [ ] | P1 | `TASK-SEC-014` | Persist disclaimer acceptance to DB (currently in-process memory — breaks multi-pod) | Audit finding (HIGH) |
+| [ ] | P1 | `TASK-SEC-015` | Use `SecretStr` for `secret_channel_token` + `secret_channel_vault_token` in `config.py` | Audit finding (HIGH) |
+| [ ] | P2 | `TASK-SEC-016` | Guard `VaultKvBundleProvider.load_bundle` against malformed `bundle_ref` (no `:`) — currently raises unhandled `ValueError` | Audit finding (HIGH) |
+| [ ] | P2 | `TASK-SEC-017` | Add RLS migration: `tenant_id` column on `clause_embeddings` + align policy to direct-column pattern | Audit finding (HIGH) |
+| [ ] | P2 | `TASK-SEC-018` | Fix `SQLAlchemyAuditRepository` — sync with current `AuditLogORM` model | Pre-existing finding |
+
+---
+
+## Remaining Work (Pre-existing, No Formal Task IDs)
 
 ### Database Migrations Required
 
-1. **Enable RLS on tables**: `clause_embeddings`, `analysis`, `alerts`, `audit_logs`
-2. **Add `tenant_id` column to `clause_embeddings` table**: Migration script needed
-
-### High Priority Code Quality
-
-3. **`SQLAlchemyAuditRepository` broken**: Matches a non-existent version of `AuditLogORM`. Synchronize models and repositories.
+1. **Enable RLS on tables**: `analysis`, `alerts`, `audit_logs` (beyond clause_embeddings covered by TASK-SEC-017)
 
 ---
 
 ## Architecture Criterion Pending
 
-- `[ ]` All tables have `tenant_id` and RLS enabled (RLS migration not yet created)
+- `[ ]` All tables have `tenant_id` and RLS enabled (blocked on TASK-SEC-017)
 
 ---
 
