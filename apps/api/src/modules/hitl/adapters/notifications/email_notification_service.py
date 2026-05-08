@@ -60,7 +60,7 @@ class EmailNotificationService:
         self.escalation_recipients = list(escalation_recipients or [])
 
     async def send_notification(
-        self, recipient_id: UUID, message: str, item: ReviewItem
+        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID | None = None  # noqa: ARG002
     ) -> None:
         """Send notification email for review item."""
         to_address = await self._resolve_recipient_email(recipient_id)
@@ -89,7 +89,7 @@ class EmailNotificationService:
             smtp_host=self.smtp_host,
         )
 
-    async def send_escalation_alert(self, item: ReviewItem) -> None:
+    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID | None = None) -> None:  # noqa: ARG002
         """Send urgent escalation alert email to configured escalation list."""
         subject = f"URGENT ESCALATION: HITL Review Overdue - {item.item_type}"
         body = self._format_escalation_body(item)

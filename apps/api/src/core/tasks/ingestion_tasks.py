@@ -206,10 +206,9 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
         deadline = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
         if deadline:
             data["deadline"] = deadline.group(1)
-    if clause_type == ClauseType.QUALITY and any(
-        term in lowered for term in ["inspection", "testing", "acceptance"]
-    ):
-        data["quality_standards"] = ["inspection-testing-acceptance"]
+    if clause_type == ClauseType.QUALITY:  # noqa: SIM102
+        if any(term in text.lower() for term in ["inspection", "testing", "acceptance"]):
+            data["quality_standards"] = ["inspection-testing-acceptance"]
     if clause_type == ClauseType.SCOPE:
         data["deliverables"] = [{"name": text[:120]}]
 

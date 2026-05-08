@@ -70,7 +70,7 @@ class TestNotificationRouterUnit:
 
         # Verify email service was called
         mock_email_service.send_notification.assert_awaited_once_with(
-            recipient_id, message, test_review_item
+            recipient_id, message, test_review_item, tenant_id
         )
 
     @pytest.mark.asyncio
@@ -94,10 +94,13 @@ class TestNotificationRouterUnit:
             config_repository=mock_config_repo,
         )
 
-        await router.send_notification(uuid4(), "Review required", test_review_item, tenant_id)
+        recipient_id = uuid4()
+        await router.send_notification(recipient_id, "Review required", test_review_item, tenant_id)
 
         # Verify Slack service was called
-        mock_slack_service.send_notification.assert_awaited_once()
+        mock_slack_service.send_notification.assert_awaited_once_with(
+            recipient_id, "Review required", test_review_item, tenant_id
+        )
 
     @pytest.mark.asyncio
     async def test_routes_to_webhook_when_webhook_enabled(self, test_review_item, tenant_id):
@@ -120,10 +123,13 @@ class TestNotificationRouterUnit:
             config_repository=mock_config_repo,
         )
 
-        await router.send_notification(uuid4(), "Review required", test_review_item, tenant_id)
+        recipient_id = uuid4()
+        await router.send_notification(recipient_id, "Review required", test_review_item, tenant_id)
 
         # Verify webhook service was called
-        mock_webhook_service.send_notification.assert_awaited_once()
+        mock_webhook_service.send_notification.assert_awaited_once_with(
+            recipient_id, "Review required", test_review_item, tenant_id
+        )
 
     @pytest.mark.asyncio
     async def test_routes_to_multiple_channels_when_all_enabled(self, test_review_item, tenant_id):

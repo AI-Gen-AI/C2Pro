@@ -640,8 +640,8 @@ async def parse_document_endpoint(
 async def reprocess_document_endpoint(
     project_id: UUID,
     document_id: UUID,
-    _user_id: CurrentUserId,
-    _tenant_id: CurrentTenantId,
+    user_id: CurrentUserId,  # noqa: ARG001
+    tenant_id: CurrentTenantId,  # noqa: ARG001
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
 ) -> DocumentQueuedResponse:
     """

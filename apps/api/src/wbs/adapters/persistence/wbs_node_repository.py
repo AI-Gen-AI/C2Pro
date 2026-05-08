@@ -363,6 +363,157 @@ class WBSNodeRepository:
         await self.session.flush()
         return True
 
+    async def move_node(
+        self, node_id: UUID, tenant_id: UUID, new_parent_id: UUID | None
+    ) -> WBSNode | None:
+        """
+        Move a WBS node and its entire subtree to a new parent.
+
+        Nested Set move logic:
+        1. Detach subtree (shift lft/rgt to negative range)
+        2. Close gap in original position
+        3. Open gap in new position
+        4. Re-attach subtree (shift from negative range to new lft/rgt)
+        """
+        node_orm = await self.session.get(WBSNodeORM, node_id)
+        if not node_orm or node_orm.tenant_id != tenant_id:
+            return None
+
+        if node_orm.parent_id == new_parent_id:
+            return self._to_domain(node_orm)
+
+        # 1. Validation: Cannot move to self or descendant
+        if new_parent_id:
+            if new_parent_id == node_id:
+                raise ValueError("Cannot move node to itself")
+
+            new_parent = await self.session.get(WBSNodeORM, new_parent_id)
+            if not new_parent or new_parent.tenant_id != tenant_id:
+                raise ValueError("New parent not found")
+
+            if new_parent.lft >= node_orm.lft and new_parent.rgt <= node_orm.rgt:
+                raise ValueError("Cannot move node to its own descendant")
+
+            target_lft = new_parent.rgt
+            new_depth = new_parent.depth + 1
+        else:
+            # Moving to root - place at the end
+            stmt = select(WBSNodeORM.rgt).where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                )
+            ).order_by(WBSNodeORM.rgt.desc()).limit(1)
+            result = await self.session.execute(stmt)
+            max_rgt = result.scalar() or 0
+            target_lft = max_rgt + 1
+            new_depth = 0
+
+        width = node_orm.rgt - node_orm.lft + 1
+        _distance = target_lft - node_orm.lft  # computed but unused in current impl
+        depth_change = new_depth - node_orm.depth
+
+        # Use a temporary shift to move the subtree "out of the way"
+        # We'll use a large negative offset
+        tmp_offset = 1000000
+
+        # Mark nodes in subtree
+        subtree_stmt = (
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft >= node_orm.lft,
+                    WBSNodeORM.rgt <= node_orm.rgt,
+                )
+            )
+            .values(
+                lft=WBSNodeORM.lft - tmp_offset,
+                rgt=WBSNodeORM.rgt - tmp_offset,
+                depth=WBSNodeORM.depth + depth_change,
+            )
+        )
+        await self.session.execute(subtree_stmt)
+
+        # 2. Close gap in original position
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft > node_orm.rgt,
+                )
+            )
+            .values(lft=WBSNodeORM.lft - width)
+        )
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.rgt > node_orm.rgt,
+                )
+            )
+            .values(rgt=WBSNodeORM.rgt - width)
+        )
+
+        # Adjust target_lft if it was shifted by the gap closure
+        if target_lft > node_orm.rgt:
+            target_lft -= width
+
+        # 3. Open gap in new position
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft >= target_lft,
+                )
+            )
+            .values(lft=WBSNodeORM.lft + width)
+        )
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.rgt >= target_lft,
+                )
+            )
+            .values(rgt=WBSNodeORM.rgt + width)
+        )
+
+        # 4. Re-attach subtree
+        final_distance = target_lft - (node_orm.lft - tmp_offset)
+
+        await self.session.execute(
+            update(WBSNodeORM)
+            .where(
+                and_(
+                    WBSNodeORM.project_id == node_orm.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                    WBSNodeORM.lft < 0, # Subtree nodes are negative
+                )
+            )
+            .values(
+                lft=WBSNodeORM.lft + tmp_offset + final_distance,
+                rgt=WBSNodeORM.rgt + tmp_offset + final_distance,
+            )
+        )
+
+        # Update parent_id
+        node_orm.parent_id = new_parent_id
+
+        await self.session.flush()
+        await self.session.refresh(node_orm)
+
+        return self._to_domain(node_orm)
+
     def _to_domain(self, orm: WBSNodeORM) -> WBSNode:
         """Convert ORM model to domain model."""
         return WBSNode(

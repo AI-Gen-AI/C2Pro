@@ -73,16 +73,17 @@ class TestLogNotificationService:
     async def test_send_notification_does_not_raise(self):
         svc = LogNotificationService()
         item = _make_review_item()
-        await svc.send_notification(uuid4(), "Test message", item)
+        await svc.send_notification(uuid4(), "Test message", item, uuid4())
 
     @pytest.mark.asyncio
     async def test_send_escalation_alert_does_not_raise(self):
         svc = LogNotificationService()
         item = _make_review_item()
-        await svc.send_escalation_alert(item)
+        await svc.send_escalation_alert(item, uuid4())
 
 
 # ── ORM Model (requires settings) ────────────────────────────────────────────
+
 
 
 class TestReviewItemORM:
@@ -249,8 +250,10 @@ class TestHITLServiceIntegration:
     async def test_escalate_overdue_items(
         self, hitl_service, mock_repo, mock_notification
     ):
+        tenant_id = uuid4()
         overdue = _make_review_item(
             sla_due_date=datetime.now(UTC) - timedelta(days=1),
+            metadata={"tenant_id": str(tenant_id)},
         )
         mock_repo.get_overdue_items.return_value = [overdue]
 
@@ -259,7 +262,7 @@ class TestHITLServiceIntegration:
         assert len(results) == 1
         assert results[0].new_status == ReviewStatus.ESCALATED
         assert results[0].escalation_triggered is True
-        mock_notification.send_escalation_alert.assert_called_once_with(overdue)
+        mock_notification.send_escalation_alert.assert_called_once_with(overdue, tenant_id)
 
     @pytest.mark.asyncio
     async def test_release_requires_reviewer_info(self, hitl_service, mock_repo):

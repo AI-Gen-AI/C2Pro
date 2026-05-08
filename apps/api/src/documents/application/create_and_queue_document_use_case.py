@@ -20,7 +20,7 @@ class CreateAndQueueDocumentUseCase:
         project_id: UUID,
         file: UploadFile,
         document_type: DocumentType,
-        user_id: UUID,
+        user_id: UUID,  # noqa: ARG002
     ) -> Document:
         """
         Creates a document record with QUEUED status.

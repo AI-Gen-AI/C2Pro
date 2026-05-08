@@ -71,6 +71,7 @@ async def test_i11_int_sla_escalation_sets_metadata_and_is_idempotent_red() -> N
     """
     service, review_queue_repo, notification_service = _configured_service()
     item_id = uuid4()
+    tenant_id = uuid4()
     overdue_item = ReviewItem(
         item_id=item_id,
         item_type="CoherenceAlert",
@@ -80,7 +81,7 @@ async def test_i11_int_sla_escalation_sets_metadata_and_is_idempotent_red() -> N
         created_at=datetime.now() - timedelta(days=4),
         sla_due_date=datetime.now() - timedelta(hours=3),
         item_data={},
-        metadata={},
+        metadata={"tenant_id": str(tenant_id)},
     )
 
     review_queue_repo.get_overdue_items.side_effect = [
@@ -95,7 +96,10 @@ async def test_i11_int_sla_escalation_sets_metadata_and_is_idempotent_red() -> N
                 created_at=overdue_item.created_at,
                 sla_due_date=overdue_item.sla_due_date,
                 item_data={},
-                metadata={"escalated_at": datetime.now().isoformat()},
+                metadata={
+                    "tenant_id": str(tenant_id),
+                    "escalated_at": datetime.now().isoformat(),
+                },
             )
         ],
     ]
@@ -107,7 +111,7 @@ async def test_i11_int_sla_escalation_sets_metadata_and_is_idempotent_red() -> N
     assert first[0].new_status == ReviewStatus.ESCALATED
     assert first[0].escalation_triggered is True
     assert len(second) == 0
-    notification_service.send_escalation_alert.assert_awaited_once()
+    notification_service.send_escalation_alert.assert_awaited_once_with(overdue_item, tenant_id)
 
 
 @pytest.mark.asyncio

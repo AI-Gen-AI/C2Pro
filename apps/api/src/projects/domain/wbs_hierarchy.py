@@ -304,7 +304,7 @@ class WBSHierarchy:
         cls,
         codes: list[str],
         *,
-        strict: bool = True
+        strict: bool = True  # noqa: ARG003
     ) -> None:
         """
         Validate a list of WBS codes forms a consistent hierarchy tree.
