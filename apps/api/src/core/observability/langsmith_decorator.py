@@ -128,6 +128,18 @@ def _extract_request_id(call_kwargs: dict[str, Any], request: Any | None = None)
 
 
 def _extract_usage_metrics(result: Any) -> dict[str, Any]:
+    # Handle LLMResponse dataclass (primary production path)
+    if hasattr(result, "input_tokens") and hasattr(result, "output_tokens"):
+        return {
+            "output": getattr(result, "content", None),
+            "tokens_input": int(getattr(result, "input_tokens", 0)),
+            "tokens_output": int(getattr(result, "output_tokens", 0)),
+            "tokens_total": int(getattr(result, "input_tokens", 0)) + int(getattr(result, "output_tokens", 0)),
+            "cost_usd": float(getattr(result, "cost_usd", 0.0)),
+            "operation": None,
+            "cached": bool(getattr(result, "cached", False)),
+        }
+
     if not isinstance(result, dict):
         return {}
 

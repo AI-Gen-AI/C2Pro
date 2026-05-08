@@ -8,6 +8,7 @@ TASK-REV-020: Cookie consent now persisted to database.
 """
 from __future__ import annotations
 
+import secrets
 from typing import Annotated
 from uuid import UUID
 
@@ -298,7 +299,7 @@ async def get_clerk_secret_channel_bundle(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Secret channel token not configured",
         )
-    if not x_secret_channel_token or x_secret_channel_token != expected_token:
+    if not x_secret_channel_token or not secrets.compare_digest(x_secret_channel_token, expected_token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid secret channel token")
     values = _resolve_secret_channel_bundle()
     return SecretChannelClerkResponse(bundle_version="2026-04-21", values=values)
