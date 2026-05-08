@@ -160,8 +160,8 @@ class TestValidateAndLint:
         results = validate_and_lint(template)
         # Errors should come first
         levels = [r.level for r in results]
-        error_indices = [i for i, l in enumerate(levels) if l == "error"]
-        non_error_indices = [i for i, l in enumerate(levels) if l != "error"]
+        error_indices = [i for i, lv in enumerate(levels) if lv == "error"]
+        non_error_indices = [i for i, lv in enumerate(levels) if lv != "error"]
         if error_indices and non_error_indices:
             assert max(error_indices) < min(non_error_indices)
 

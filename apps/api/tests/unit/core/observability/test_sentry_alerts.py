@@ -19,8 +19,8 @@ def test_record_auth_failure_sends_event_when_dsn_is_set(monkeypatch):
     mock_push_scope = MagicMock()
     mock_capture_event = MagicMock()
 
-    with patch("src.core.observability.sentry_alerts.sentry_sdk.push_scope", mock_push_scope) as p1, \
-         patch("src.core.observability.sentry_alerts.sentry_sdk.capture_event", mock_capture_event) as p2:
+    with patch("src.core.observability.sentry_alerts.sentry_sdk.push_scope", mock_push_scope) as _p1, \
+         patch("src.core.observability.sentry_alerts.sentry_sdk.capture_event", mock_capture_event) as _p2:
 
         scope_manager = mock_push_scope.return_value.__enter__.return_value
 
