@@ -141,7 +141,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 
 **2026-05-07**: TASK-AI-038 verified complete (python_mcp_server.md already correct). TASK-AI-039 implemented as validate_prompt_templates.py CLI (commit 71f717c8). AI backlog: 89 completed / 9 active.
 
-**2026-05-08**: TASK-BCK-041 complete — ruff ARG/SIM noqa pass; src/ 0 violations (commit dab24151). 29 ARG + 7 SIM/F violations suppressed with # noqa across 22 files in apps/api/src/.
+**2026-05-08**: TASK-BCK-041 complete — ruff ARG/SIM noqa pass; src/ 0 violations (commit dab24151). 29 ARG + 7 SIM/F violations suppressed with # noqa across 22 files in apps/api/src/. TASK-BCK-020 closed (all 6 doc adapter issues resolved 2026-03-28 per docs/TEST_COVERAGE_ISSUES_REPORT.md). TASK-BCK-040 closed (ruff 257→0 violations, target <50 exceeded).
 
 ---
 
