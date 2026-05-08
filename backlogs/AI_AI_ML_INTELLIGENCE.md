@@ -12,8 +12,9 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 6
+**Pending Tasks**: 11
 
+- P1 hardening: `TASK-AI-044`..`TASK-AI-048` (LangSmith core bugs — post-audit 2026-05-08)
 - Blocked (human access required): `TASK-AI-010`, `TASK-AI-011` (LangSmith Hub dashboard)
 - Deferred Phase 2: `TASK-AI-040`..`TASK-AI-043` (LangChain flows)
 
@@ -28,6 +29,11 @@
 
 | Status | Priority | Task ID | Depends On | Description | Source |
 |--------|----------|---------|------------|-------------|--------|
+| [ ] | P1 | `TASK-AI-044` | None | Fix `langsmith_hub.py`: replace `os.environ` mutation with SDK client-level `api_key`/`endpoint` args — concurrency hazard in async server | Audit 2026-05-08 (HIGH) |
+| [ ] | P1 | `TASK-AI-045` | None | Implement real `create_feedback` in `langsmith_client.py` — currently a stub that silently does nothing | Audit 2026-05-08 (HIGH) |
+| [ ] | P1 | `TASK-AI-046` | None | Fix `coherence_tracing.py`: double `end_span` on exception path — call `end_span` only in `finally`, not in both `except` and `finally` | Audit 2026-05-08 (HIGH) |
+| [ ] | P1 | `TASK-AI-047` | None | Fix `_run_sync` in `langsmith_decorator.py`: reset `_TRACE_CONTEXT` token in `finally` block (currently leaks on exception) | Audit 2026-05-08 (MEDIUM) |
+| [ ] | P1 | `TASK-AI-048` | None | Fix `langsmith_adapter.py`: broken retry (catches wrong exception type) + `dict` passed to `update_run` instead of run object | Audit 2026-05-08 (HIGH) |
 | [ ] | P2 | `TASK-AI-010` | `TASK-216` | Add prompt metadata to LangSmith Hub (owner, description, tags) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-011` | `TASK-216` | Implement A/B test config in LangSmith Hub for gradual rollout | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-040` | None | [PHASE 2 DEFERRED] Multi-language prompt templates in English and Spanish | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
@@ -36,9 +42,9 @@
 | [ ] | P2 | `TASK-AI-043` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
 
 **Statistics**:
-- Total: 95 tasks (+17 from TASK-IMPL-010)
-- Active: 6 (6.3%) — TASK-AI-010/011 (human LangSmith access required), TASK-AI-040..043 (DEFERRED Phase 2)
-- Completed: 89 (93.7%)
+- Total: 100 tasks
+- Active: 11 (11%) — TASK-AI-044..048 (P1 hardening), TASK-AI-010/011 (human access), TASK-AI-040..043 (Phase 2)
+- Completed: 89 (89%)
 - Blocked: 2 (TASK-AI-010/011 — human dashboard access required)
 
 ---
