@@ -2,7 +2,7 @@
 
 **Category**: Frontend (FRT)
 **Owner Role**: frontend
-**Last Updated**: 2026-04-04
+**Last Updated**: 2026-05-08
 
 **Quick Links**:
 
@@ -13,13 +13,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 16
+**Pending Tasks**: 1
 
-- IDs: `TASK-FRT-041`, `TASK-FRT-045`, `TASK-FRT-091`, `TASK-FRT-123`-`TASK-FRT-135`
+- IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
 
-**Completed Tasks**: 153
+**Completed Tasks**: 169
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-044`, `TASK-FRT-046`-`TASK-FRT-090`, `TASK-FRT-092`-`TASK-FRT-122`, `TASK-FRT-136`-`TASK-FRT-170`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-170`
 
 **Usage Note**:
 

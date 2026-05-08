@@ -25,8 +25,7 @@ The audit of 82 remaining Ruff errors has been completed. The errors have been c
 
 **Pending QA Tasks**
 
-- `TASK-QA-100`
-- `TASK-QA-101`
+- `TASK-QA-204` (partially blocked — mcp router done; ai_feedback/dlq/frontend_support/observability/tenants/admin routers not yet in OpenAPI schema)
 
 ## TASK-QA-077 + TASK-1480: Test Stabilization Leftovers
 
