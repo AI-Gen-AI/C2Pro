@@ -30,10 +30,13 @@
 
 ---
 
-## Verbose Change Log (archived from master, 2026-04-04 → 2026-04-20)
+## Verbose Change Log (archived from master, 2026-04-04 → 2026-05-08)
 
 | Date | Milestone |
 | ---- | --------- |
+| 2026-05-08 | **Phase 1 Backlog Cleanup** — All `[x]` tasks stripped from active backlog files; each category now shows pending-only. FRT: Phase 1 complete (FRT-041 blocked on Clerk dashboard access). BCK: fully complete (0 pending). QA: fully complete (QA-204 closed this session with new schemathesis tests + OpenAPI regeneration). REV: fully complete (25/25 done). DEV: fully complete (2/2 done). SEC: all named vulns fixed; 3 untracked items remain (RLS migration, AuditLogORM sync). AI: Phase 2 items pending (AI-010/011/040-043). INF: Phase 2 items pending (INF-008-011, INF-055). PLN: Wave plan complete; Phase 2 plan TBD. Blackboard archived to `blackboard/archive/`. |
+| 2026-05-08 | **TASK-QA-204 completed** — OpenAPI schema regenerated (commit 32b7b9fc); schemathesis contract test `test_observability_admin_router.py` added covering observability, ai_feedback, admin/dlq, frontend-support surfaces. |
+
 | 2026-04-20 | **TASK-BCK-028 reconciled** — 8-test E2E suite `test_document_analysis_pipeline_e2e.py` already authored; master status flipped to `[x]`. |
 | 2026-04-20 | **TASK-1474 + TASK-1479 reconciled** — Both satisfied by TASK-QA-071/076 on 2026-04-06 (AuditLogORM sync + conftest imports); flipped to `[x]`. |
 | 2026-04-20 | **TASK-BCK-020 reconciled** — Document adapter contract issues resolved on 2026-03-28 per `docs/TEST_COVERAGE_ISSUES_REPORT.md`; flipped to `[x]`. |

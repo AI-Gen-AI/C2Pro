@@ -2,7 +2,7 @@
 
 **Category**: AI/ML Intelligence (AI)
 **Owner Role**: ai
-**Last Updated**: 2026-05-07
+**Last Updated**: 2026-05-08
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -12,14 +12,12 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 8 (incl. 2 human-operator-blocked, 4 deferred Phase 2, 1 deferred for data)
+**Pending Tasks**: 6
 
 - Blocked (human access required): `TASK-AI-010`, `TASK-AI-011` (LangSmith Hub dashboard)
-- Deferred: `TASK-AI-040`..`TASK-AI-043` (Phase 2 LangChain flows)
+- Deferred Phase 2: `TASK-AI-040`..`TASK-AI-043` (LangChain flows)
 
-**Completed Tasks**: 90 (94.7%)
-
-- IDs: All TASK-AI-001..078 except 010/011/040..043; TASK-IMPL-010 + all 14 subtasks (.1-.16)
+**Completed Tasks**: 89 (93.7%) — see COMPLETED.md
 
 **Usage Note**:
 
@@ -30,125 +28,24 @@
 
 | Status | Priority | Task ID | Depends On | Description | Source |
 |--------|----------|---------|------------|-------------|--------|
-| [x] | P0 | `TASK-AI-001` | AI & Intelligence | Enforce strict severity taxonomy in scoring: Critical, High, Medium, Low, Info `[x] Implemented (5-level severity taxonomy: critical/high/medium/low/info with thresholds 0.85/0.60/0.35/0.15; severity weights updated in config; 488 coherence tests passing)` | `docs/archive/plans/tdd-testing/I7_RISK_SCORING_IMPLEMENTATION_CHECKLIST_2026-02-16.md` `[x] @2026-02-16` |
-| [x] | P1 | `TASK-AI-002` | Backend API | Prompt Analytics Dashboard: metrics by prompt version with LangSmith integration `[x] @2026-05-03 - Completed via W8a + W8b: backend endpoints (/cost, /versions, /comparison, /quality-drift) with Redis cache (PR#104); frontend dashboard components (UsageMetricsTable, CostDashboard, DriftDetector, VersionMonitor) + trace deep-link (PR#105).` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md`; `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` |
-| [x] | P1 | `TASK-AI-003` | `TASK-216` | Create LangSmith organization account and generate API keys for dev/staging/prod `[x] @2026-05-08 - Operator completed: LangSmith org created, API keys generated, LANGCHAIN_API_KEY + LANGCHAIN_PROJECT vars added to apps/api/.env.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [x] | P1 | `TASK-AI-004` | `TASK-216` | Add `langsmith` SDK to `apps/api/pyproject.toml` dependencies `[x] @2026-04-20 - Added PEP 621 `dependencies` entry with `langsmith>=0.7.31` in `apps/api/pyproject.toml` to align package metadata with LangSmith integration requirements.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [x] | P1 | `TASK-AI-005` | `TASK-216` | Implement `langsmith_client.py` wrapper with environment-based config and helper methods `[x] @2026-04-20 - Added src/core/ai/langsmith_client.py with environment-driven config, `enabled` guard, and helper builders for canonical tags/metadata payloads used by downstream tracing decorators and usage analytics integration.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [x] | P1 | `TASK-AI-006` | `TASK-216` | Create `@traced_llm_call` decorator for automatic tracing of all LLM calls `[x] @2026-04-20 - Added `src/core/ai/traced_llm_call.py` with signature-preserving sync/async decorators that standardize LangSmith tags + metadata via `LangSmithClient` and finalize spans for both success and exception paths, with dedicated unit coverage in `src/core/ai/test_traced_llm_call.py`.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [x] | P2 | `TASK-AI-007` | `TASK-216` | Add `trace_id` and `trace_url` columns to `ai_usage_logs` table (nullable, indexed) `[x] @2026-04-07 - Migration 20260407_0002_add_ai_usage_trace_columns.py adds trace_id VARCHAR(255) + trace_url TEXT to ai_usage_logs.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 1) |
-| [x] | P1 | `TASK-AI-008` | `TASK-216` | Implement `prompt_registry.py` to sync Jinja2 templates to LangSmith Prompt Hub `[x] @2026-04-20 - Added `src/core/ai/prompt_registry.py` with template discovery, canonical metadata builders, and sync/pull/version APIs backed by a Prompt Hub adapter contract plus in-memory client for tests.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
-| [x] | P1 | `TASK-AI-009` | `TASK-216` | Create CLI command `python -m core.ai.sync_prompts` to push all templates on deployment `[x] @2026-04-20 - Added `src/core/ai/sync_prompts.py` CLI entrypoint with discovery + bulk sync orchestration via `PromptRegistry` and JSON deployment summary output; added tests for sync success, empty-template runs, and LangSmith enablement guardrails.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-010` | `TASK-216` | Add prompt metadata to LangSmith Hub (owner, description, tags) | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
 | [ ] | P2 | `TASK-AI-011` | `TASK-216` | Implement A/B test config in LangSmith Hub for gradual rollout | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 2) |
-| [x] | P1 | `TASK-AI-012` | `TASK-216` | Enhance `@traced_llm_call` decorator to capture input prompt, model params, output, tokens, cost, latency `[x] @2026-04-20 - Extended decorator span payloads to capture prompt/model inputs, emitted output + token/cost metrics on completion, and added latency_ms for success/error paths with dedicated unit coverage.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [x] | P1 | `TASK-AI-013` | `TASK-216` | Integrate tracing with existing `usage_logger.py` to write both LangSmith trace and local DB row with trace_id `[x] @2026-04-21 - Added `AIUsageLogger` and wired `@traced_llm_call` to persist successful run trace_id/trace_url metadata into `ai_usage_logs` with tenant-scoped ownership checks.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [x] | P2 | `TASK-AI-014` | `TASK-216` | Implement feedback collection API `POST /api/v1/ai/feedback` for user thumbs up/down `[x] @2026-04-21 - Added `POST /api/v1/ai/feedback` with payload validation plus LangSmith `create_feedback` submission flow.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [x] | P2 | `TASK-AI-015` | `TASK-216` | Add trace URL to `ai_usage_logs` for debugging deep-links `[x] @2026-04-21 - Usage persistence now records trace_url alongside trace_id for deep-link debugging.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 3) |
-| [x] | P1 | `TASK-AI-016` | `TASK-216` | Implement `GET /api/v1/ai/analytics/versions` to list all prompt versions with stats `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts timeframe=30d, returns versions[] with stats (run counts, success rate, latency, cost, feedback averages).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [x] | P1 | `TASK-AI-017` | `TASK-216` | Implement `GET /api/v1/ai/analytics/comparison` to compare two prompt versions `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts baseline_version, candidate_version, timeframe=30d, returns {baseline, candidate, delta} comparison.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [x] | P1 | `TASK-AI-018` | `TASK-216` | Implement `GET /api/v1/ai/analytics/cost-breakdown` for cost by version & model `[x] @2026-05-03 - Implemented in W8a (PR#104) as /cost (spec drift noted): accepts timeframe=7d, returns {series[], summary{total_cost,total_tokens,total_requests}}; route-level @cached(ttl=300).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [x] | P1 | `TASK-AI-019` | `TASK-216` | Implement `GET /api/v1/ai/analytics/quality-drift` for quality trend over time `[x] @2026-05-03 - Implemented in W8a (PR#104): route accepts timeframe=30d, returns {series[], alerts[]} with drift detection; @cached(ttl=60).` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [x] | P2 | `TASK-AI-020` | `TASK-216` | Add caching layer (Redis) for expensive analytics queries `[x] @2026-05-03 - Implemented route-level @cached(ttl=...) decorator backed by core CacheService; analytics cache keys include endpoint, query params, and tenant_id; TTLs set to 60s for quality-drift and 300s for cost/versions/comparison; hit/miss Prometheus hooks added and integration covered.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 4) |
-| [x] | P1 | `TASK-AI-021` | `TASK-216` | Create `PromptAnalyticsDashboard` page route `/analytics/prompts` `[x] @2026-05-03 - Implemented in W8b (PR#105): page.tsx in app/(app)/ai-analytics/ with component imports and layout structure.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P1 | `TASK-AI-022` | `TASK-216` | Implement `VersionComparisonView` component with dropdown, date range, comparison table, delta indicators `[x] @2026-05-03 - Implemented in W8b (PR#105) as VersionMonitor.tsx with date-range From/To inputs, integration with comparison API.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P1 | `TASK-AI-023` | `TASK-216` | Implement `CostAnalysisView` component with stacked bar chart and pie chart `[x] @2026-05-03 - Implemented in W8b (PR#105) as CostDashboard.tsx with SVG pie chart, polarToCartesian math, PIE_COLORS palette, grid layout.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P1 | `TASK-AI-024` | `TASK-216` | Implement `QualityDriftChart` component with line chart and anomaly detection `[x] @2026-05-03 - Implemented in W8b (PR#105) as DriftDetector.tsx with anomaly markers (red "!" badges) based on statistical deviation.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P2 | `TASK-AI-025` | `TASK-216` | Implement `UsageMetricsTable` component with sortable columns and CSV export `[x] @2026-05-03 - Implemented in W8b (PR#105): sortable columns (timestamp/model/total_tokens/cost/latency_ms/trace_url), immutable sort, CSV export via Blob API; typed with AIUsageMetric interface.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P2 | `TASK-AI-026` | `TASK-216` | Add LangSmith trace deep-link from AI usage logs page `[x] @2026-05-03 - Implemented in W8b (PR#105): UsageMetricsTable includes trace_url column with deep-link navigation; getUsageMetrics() API client call added to lib/api/services/ai-analytics.ts.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 5) |
-| [x] | P1 | `TASK-AI-027` | `TASK-216` | Write unit tests for LangSmith client wrapper (mock SDK) `[x] @2026-04-21 - Added strict unit coverage for traced decorator payloads, feedback SDK call shape, and analytics aggregation mapping with LangSmith SDK fully mocked via autouse fixture.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P1 | `TASK-AI-028` | `TASK-216` | Write integration tests for analytics APIs (use test DB + mock LangSmith) `[x] @2026-04-21 - Added integration tests that persist `ai_usage_logs` through `AIUsageLogger`, validate `/api/v1/ai/analytics/cost` response, and verify `POST /api/v1/ai/feedback` metadata writes with mocked LangSmith client.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P1 | `TASK-AI-029` | `TASK-216` | Write E2E tests for dashboard (Playwright) `[x] @2026-04-21 - Added Playwright spec intercepting `/api/v1/ai/analytics/*` endpoints with deterministic payloads and assertions for CostDashboard, VersionMonitor, and DriftDetector rendering.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P2 | `TASK-AI-030` | `TASK-216` | Load testing: 10k LLM calls/day with tracing enabled `[x] @2026-04-21 - Added k6 synthetic load harness `apps/api/tests/load/langsmith_rollout_load_test.js` with 10k/day-equivalent arrival-rate profile, synthetic request tagging, and p95 latency/failure-rate thresholds for staging validation.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P1 | `TASK-AI-031` | `TASK-216` | Deploy to staging and verify traces appear in LangSmith `[x] @2026-04-21 - Added operator runbook `docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md` with staging rollout gates, k6 verification command, and explicit rollback controls for trace outage response.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P1 | `TASK-AI-032` | `TASK-216` | Gradual rollout to production (10% → 50% → 100%) `[x] @2026-04-21 - Added deterministic tenant canary router (`src/core/ai/rollout_router.py`) for 10/50/100 rollout percentages with fail-open fallback to legacy path when traced execution fails.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P2 | `TASK-AI-033` | `TASK-216` | Documentation: usage guide for data scientists and PM `[x] @2026-04-21 - Added `docs/runbooks/LANGSMITH_ROLLOUT_EMERGENCY.md` covering rollout sequence, load-test command, alert references, and emergency rollback workflow.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P2 | `TASK-AI-034` | `TASK-216` | Set up monitoring alerts for trace failures or high latency `[x] @2026-04-21 - Added Prometheus alert rules in `ops/alerts/langsmith_rollout_alerts.yml` for trace failure rate >1%/5m and p99 latency regression >300ms over baseline.` | `docs/prompt_analytics/LANGSMITH_INTEGRATION_PLAN.md` (Phase 6) |
-| [x] | P1 | `TASK-AI-035` | None | MCP tools must enable complete workflows, not just endpoint wrappers `[x] Implemented (added comprehensive "Complete Workflows vs Endpoint Wrappers" section to Node MCP reference with design patterns, anti-patterns, and refactoring checklist)` | `Skills/.agents/skills/mcp-builder/reference/node_mcp_server.md` `[x] @2026-04-04` |
-| [x] | P1 | `TASK-AI-036` | None | Node MCP server naming follows `{service}-mcp-server` `[x] Implemented (enhanced naming convention section with rationale, anti-patterns, and fixed all code examples to use correct '{service}-mcp-server' format instead of inconsistent 'example-mcp')` | `Skills/.agents/skills/mcp-builder/reference/node_mcp_server.md` `[x] @2026-04-04` |
-| [x] | P1 | `TASK-AI-037` | None | Python MCP tools must enable complete workflows, not just endpoint wrappers `[x] Implemented (added comprehensive "Complete Workflows vs Endpoint Wrappers" section to Python MCP reference with FastMCP examples, design patterns, and refactoring checklist)` | `Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md` `[x] @2026-04-04` |
-| [x] | P1 | `TASK-AI-038` | None | Python MCP server naming follows `{service}_mcp` `[x] Verified @2026-05-07 — python_mcp_server.md already contained the correct {service}_mcp (underscore) convention throughout: Server Naming Convention section, all code examples, Quality Checklist. No code change needed.` | `Skills/.agents/skills/mcp-builder/reference/python_mcp_server.md` |
-| [x] | P0 | `TASK-IMPL-010` | None | **CORE**: Decouple AI Logic from LangGraph Nodes — 16 subtasks, 4 phases, 29.5h `[x] @2026-04-20 - EPIC-CORE-DECOUPLE complete: all 7 domain services implemented, nodes.py/nodes_extended.py/workflow.py refactored, 80%+ coverage verified.` | `backlogs/AI_AI_ML_INTELLIGENCE.md §3.1` |
-| [x] | P0 | `TASK-IMPL-010.1` | None | Create prompt templates registry (`analysis/domain/prompts.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/prompts.py with centralized domain prompt constants and no framework dependencies.` | TASK-IMPL-010 Phase 1 |
-| [x] | P0 | `TASK-IMPL-010.2` | None | Create document augmentation service (`analysis/domain/document_augmentation.py`) `[x] @2026-04-20 - Verified implemented in apps/api/src/analysis/domain/document_augmentation.py with `DocumentAugmentationService` + `RiskItemConverter` domain services.` | TASK-IMPL-010 Phase 1 |
-| [x] | P0 | `TASK-IMPL-010.3` | None | Create critique evaluation service (`analysis/domain/critique_evaluation.py`) `[x] @2026-04-20 - Verified: apps/api/src/analysis/domain/critique_evaluation.py exists with CritiqueEvaluationService.` | TASK-IMPL-010 Phase 1 |
-| [x] | P1 | `TASK-IMPL-010.4` | None | Create report assembly services (`analysis/domain/report_assembly.py`) `[x] @2026-04-20 - Verified: apps/api/src/analysis/domain/report_assembly.py exists.` | TASK-IMPL-010 Phase 1 |
-| [x] | P0 | `TASK-IMPL-010.5` | `.3` | Create Coherence Score™ extraction use case (`coherence/application/use_cases/score_from_extraction.py`) `[x] @2026-04-20 - Verified: apps/api/src/coherence/application/use_cases/score_from_extraction.py exists.` | TASK-IMPL-010 Phase 2 |
-| [x] | P0 | `TASK-IMPL-010.6` | None | Create HITL graph routing use case (`modules/hitl/application/route_for_graph_review_use_case.py`) `[x] @2026-04-20 - Verified: apps/api/src/modules/hitl/application/route_for_graph_review_use_case.py exists.` | TASK-IMPL-010 Phase 2 |
-| [x] | P0 | `TASK-IMPL-010.7` | None | Create persistence use case (`analysis/application/persist_analysis_use_case.py`) `[x] @2026-04-20 - Verified: apps/api/src/analysis/application/persist_analysis_use_case.py exists.` | TASK-IMPL-010 Phase 2 |
-| [x] | P0 | `TASK-IMPL-010.8` | `.1,.2,.3` | Refactor `nodes.py` — critique_node delegation `[x] @2026-04-20 - critique_node delegates to CritiqueExtractionUseCase (verified in nodes.py:160-192).` | TASK-IMPL-010 Phase 3 |
-| [x] | P0 | `TASK-IMPL-010.9` | `.6` | Refactor `nodes.py` — human_interrupt_node delegation `[x] @2026-04-20 - human_interrupt_node delegates to get_hitl_service_for_graph (verified in nodes.py:198-).` | TASK-IMPL-010 Phase 3 |
-| [x] | P0 | `TASK-IMPL-010.10` | `.7` | Refactor `nodes.py` — save_to_db_node delegation `[x] @2026-04-20 - save_to_db_node delegates to PersistAnalysisUseCase (verified in nodes.py:256-).` | TASK-IMPL-010 Phase 3 |
-| [x] | P0 | `TASK-IMPL-010.11` | `.5` | Refactor `nodes_extended.py` — coherence_scorer_node (Coherence Score™) `[x] @2026-04-20 - coherence_scorer_node present in nodes_extended.py:185.` | TASK-IMPL-010 Phase 3 |
-| [x] | P1 | `TASK-IMPL-010.12` | `.1,.4` | Refactor raci/budget/assembler nodes — prompt + assembly extraction `[x] @2026-04-20 - Refactored as part of EPIC-CORE-DECOUPLE; report_assembly.py + prompts.py handle extraction.` | TASK-IMPL-010 Phase 3 |
-| [x] | P1 | `TASK-IMPL-010.13` | `.4` | Refactor decision_intelligence_node — assembly delegation `[x] @2026-04-20 - decision_intelligence_node delegates via report_assembly.py (EPIC-CORE-DECOUPLE complete).` | TASK-IMPL-010 Phase 3 |
-| [x] | P0 | `TASK-IMPL-010.14` | `.3` | Update workflow.py conditional edge — CritiqueEvaluationService `[x] @2026-04-20 - workflow.py imports CritiqueEvaluationService; conditional edge delegates to _critique_evaluator (workflow.py:32,39,51).` | TASK-IMPL-010 Phase 3 |
-| [x] | P1 | `TASK-IMPL-010.15` | Phase 3 | Remove dead code from nodes.py and nodes_extended.py `[x] @2026-04-20 - Dead code removed as part of Phase 3/4 completion; nodes < 50 lines target met.` | TASK-IMPL-010 Phase 4 |
-| [x] | P0 | `TASK-IMPL-010.16` | Phase 3 | Full regression test run + 80%+ coverage verification `[x] @2026-04-20 - All regression tests pass; 80%+ coverage verified on new domain services (FRT-132..135 ✅).` | TASK-IMPL-010 Phase 4 |
-| [x] | P2 | `TASK-AI-039` | None | Template validator and linter for prompt templates `[x] @2026-05-07 CLI script implemented: apps/api/scripts/validate_prompt_templates.py (2-pass validation, 6/6 tests passing, commit 71f717c8)` | `apps/api/scripts/validate_prompt_templates.py` |
 | [ ] | P2 | `TASK-AI-040` | None | [PHASE 2 DEFERRED] Multi-language prompt templates in English and Spanish | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [ ] | P2 | `TASK-AI-041` | Planned | [PHASE 2 DEFERRED] Implement Procurement Plan flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-042` | Planned | [PHASE 2 DEFERRED] Implement RACI flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-043` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
-| [x] | P3 | `TASK-AI-044` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Refactored to centralized `AIUsageLogger` persistence path used by service and traced decorator for successful calls.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
-| [x] | P3 | `TASK-AI-045` | Env Setup | A/B testing framework for prompt versions `[x] @2026-04-21 - Implemented deterministic percentage-based tenant routing and fail-open fallback in `src/core/ai/rollout_router.py`, enabling controlled 10% → 50% → 100% traced canary progression.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [x] | P3 | `TASK-AI-046` | None | Prompt optimization suggestions from usage metrics `[x] @2026-05-03 - Completed as part of EPIC-LANGSMITH-ANALYTICS: analytics dashboard provides usage metrics (cost, latency, success rate per version) enabling data-driven prompt optimization decisions.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [x] | P3 | `TASK-AI-047` | None | Implement Flash/cache layer described in AI README `[x] @2026-04-09 - FlashCacheService + PromptCacheService implemented in apps/api/src/core/ai/prompt_cache.py with SHA-256 content-hash keys and 1h Redis TTL.` | `apps/api/src/core/ai/README_FLASH.md` |
-| [x] | P3 | `TASK-AI-048` | Env Setup | Add all new coverage-improvement tests `[x] @2026-04-09 - 73 coverage-improvement tests added; see apps/api/tests/unit/core/ai/test_coverage_gates_ai_coverage.py and apps/api/tests/unit/adapters/documents/test_coverage_push.py.` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [x] | P3 | `TASK-AI-049` | Env Setup | Ensure all coverage-improvement tests pass `[x] @2026-04-09 - All 73 coverage-improvement tests passing (FRT-132..135 ✅).` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [x] | P3 | `TASK-AI-050` | None | Reach at least 70 percent coverage on targeted area `[x] @2026-04-09 - 70%+ coverage achieved on targeted core AI modules; confirmed by CI coverage gate (--cov-fail-under=60 passed).` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [x] | P3 | `TASK-AI-051` | Env Setup | Prove no regression in existing tests `[x] @2026-04-09 - Zero regressions; full unit test suite (409 tests) clean after coverage-improvement additions (FRT-135 ✅).` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [x] | P3 | `TASK-AI-052` | None | Score formula uses exponential penalty density model `[x] Verified (apps/api/src/coherence/config.py uses score = 100 × e^(-λ × penalty_density) with calibrated λ=1.5)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-053` | None | Score floor remains 5.0, never reaches 0 `[x] Verified (ScoringConfig.score_floor = 5.0)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-054` | None | Score ceiling remains 97.0 when findings exist `[x] Verified (ScoringConfig.score_ceiling = 97.0)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-055` | None | Larger scope absorbs findings better `[x] Verified (scope_normalization implemented in scoring formula)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-056` | None | Low-confidence findings have reduced impact `[x] Verified (confidence weighting in signal aggregation)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-057` | None | Deterministic signals weighted above LLM output `[x] Verified (deterministic rules have higher severity_weights)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-058` | None | Diagnostics include penalty density, scope factor, severity distribution `[x] Verified (EnrichedCoherenceResult exposes all diagnostic fields)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-059` | None | LLM returns `impact_score` and `confidence` floats `[x] Verified (FindingSignal schema enforces 0.0-1.0 range)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-060` | None | Responses validated and clamped to `[0.0, 1.0]` `[x] Verified (validation in llm_evaluator.py)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-061` | None | Batch prompt reduces token usage `[x] Verified (batch evaluation implemented)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-062` | None | Cost tracking per evaluation `[x] Verified (dual counter sync fixed in llm_evaluator.py; statistics now return accurate cost)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-063` | None | Graceful fallback on parse errors `[x] Verified (error handling in LLM evaluator)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-064` | None | Implement target graph topology for coherence subgraph `[x] Verified (graph.py: prepare_context → deterministic → llm → rag → cross_clause → scoring → format)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-065` | None | Coherence subgraph compiles without errors `[x] Verified (get_coherence_subgraph() compiles successfully; 507/508 tests passing)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-066` | None | Coherence subgraph callable standalone and from main pipeline `[x] Verified (evaluate_coherence(), evaluate_coherence_async() and streaming mode all functional)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-067` | None | pgvector cosine similarity query implemented `[x] Verified (PgvectorEmbeddingRepository with cosine similarity 1-(embedding <=> target))` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-068` | None | Similarity threshold configurable with default `0.85` `[x] Verified (EvaluationConfig.similarity_threshold = 0.85)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-069` | None | Cross-document pairs fed into cross-clause evaluation `[x] Verified (rag_similarity_check → cross_clause_eval flow; 20/20 RAG tests passing)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-070` | None | `/v0/coherence/evaluate` preserves output contract `[x] Verified (v0.3 API contract tests passing)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-071` | None | Coherence score is granular float, not binary 0/100 `[x] Verified (scores range 5.0-100.0 with proper calibration)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-072` | None | `low_budget_mode` defaults to true `[x] Verified (ScoringConfig.low_budget_mode = True)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-073` | None | Diagnostics exposed via query param or secondary endpoint `[x] Verified (EnrichedCoherenceResult provides diagnostic fields)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-074` | Env Setup | Golden tests for 0, moderate, and severe findings `[x] Verified (GOLD_PERFECT_PROJECT scores 95-100; GOLD_MODERATE scores 50-80; GOLD_SEVERE scores 10-35; all golden tests passing with calibrated λ=1.5)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-075` | None | Edge cases: empty clauses, missing data, malformed dates `[x] Verified (edge case tests in test_edge_cases.py; dynamic date helpers prevent time-based failures)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-076` | None | Low budget mode cost under $0.01 per project `[x] Verified (cost tracking in LlmEvaluationMetrics)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P3 | `TASK-AI-077` | Env Setup | All existing tests still pass after coherence changes `[x] Verified (481/481 coherence tests passing; all regression tests passing after λ=1.5 calibration and LLM evaluator fix)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
-| [x] | P2 | `TASK-AI-078` | None | Phase 8: Testing & Validation complete with ≥80% coverage on v0.3 modules `[x] Verified (507/508 tests passing; core modules 84-94% coverage; golden tests for all score ranges; edge cases; cost tracking; zero regressions; Phase 8 completion report at docs/coherence_engine/PHASE_8_COMPLETION.md)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
 
 **Statistics**:
 - Total: 95 tasks (+17 from TASK-IMPL-010)
-- Active: 9 (9.5%) — TASK-AI-003/010/011 (require human LangSmith access), TASK-AI-040..043 (DEFERRED Phase 2)
+- Active: 6 (6.3%) — TASK-AI-010/011 (human LangSmith access required), TASK-AI-040..043 (DEFERRED Phase 2)
 - Completed: 89 (93.7%)
-- Blocked: 3 (TASK-AI-003/010/011 — operator/human action required)
+- Blocked: 2 (TASK-AI-010/011 — human dashboard access required)
 
 ---
 
 ## 2. Specifications
 
-### W8a Backend Analytics Audit - TASK-AI-020 (2026-05-03)
-
-**Scope**: `analytics_router.py`, `analytics_service.py`, and `usage_analytics.py` were read end-to-end for the backend cache task.
-
-**Route contracts**: The FastAPI router exposes four tenant-scoped `GET /api/v1/ai/analytics/*` endpoints. `/cost` accepts `timeframe` with default `7d` and returns `{timeframe, window_start, series[], summary{total_cost,total_tokens,total_requests}}`. `/versions` accepts `timeframe=30d` and returns `{timeframe, window_start, versions[]}` with prompt version/tag, run counts, success rate, latency, cost, and feedback averages. `/comparison` accepts required `baseline_version` and `candidate_version` plus `timeframe=30d`, and returns `{timeframe, baseline, candidate, delta}`. `/quality-drift` accepts `timeframe=30d` and returns `{timeframe, window_start, series[], alerts[]}`. Validation errors from timeframe parsing are mapped to HTTP 400; missing comparison versions are FastAPI 422.
-
-**Parameter and tenancy contract**: Every analytics SQL query in `AIAnalyticsService` filters `ai_usage_logs` by `tenant_id = :tenant_id` and `created_at >= :window_start`. Timeframe parsing accepts only numeric `h`, `d`, or `w` suffixes. The router obtains `tenant_id` through `CurrentTenantId`; route cache keys now include endpoint, effective query params, and tenant ID to prevent cross-tenant reuse.
-
-**Drift noted**: Backlog/spec `TASK-AI-018` names `/cost-breakdown`, while the implemented and tested route is `/cost`. Existing integration coverage and frontend route interception use `/cost`, so W8a preserves `/cost` and records this as route-name/spec drift rather than changing the public contract in this cache task.
-
-**Implementation decision**: `TASK-AI-020` is implemented as a route-level `@cached(ttl=...)` decorator in `core/cache.py` using the existing `CacheService`/Redis abstraction. TTLs are `/quality-drift` 60s and `/cost`, `/versions`, `/comparison` 300s. Cache hit/miss Prometheus counters reuse the existing `record_cache_hit`/`record_cache_miss` hooks with `ai_analytics:<endpoint>` labels. The analytics router no longer injects service-level cache so the route TTL contract is authoritative.
-
-### Frontend Priority Session - LangChain Workflows (2026-04-05)
+### Frontend Priority Session - LangChain Workflows (Phase 2 Reference)
 
 **Session**: `session_20260405_frontend_priority`
 **Blackboard Tasks**: T009, T012, T013, T014
@@ -164,10 +61,10 @@
 - No handoff complexity
 - Modern AI agents are full-stack capable
 
-#### T009 - LangChain Prompt Templates (`TASK-AI-052`)
+#### T009 - LangChain Prompt Templates (`TASK-AI-040`)
 
 *Estimated Hours*: 12
-*Priority*: P1
+*Priority*: P2 (Phase 2)
 *Depends On*: None
 
 ```python
@@ -198,10 +95,10 @@
 - Total cost: ~$0.037 per full evaluation
 ```
 
-#### T012 - Procurement Plan Workflow (Full-Stack) (`TASK-FRT-125`)
+#### T012 - Procurement Plan Workflow (Full-Stack) (`TASK-AI-041`)
 
 *Estimated Hours*: 16
-*Priority*: P1
+*Priority*: P2 (Phase 2)
 *Depends On*: T009
 
 **FULL-STACK OWNERSHIP**: AI agent implements backend + frontend
@@ -227,10 +124,6 @@ Tech Stack:
 - React Query for API calls
 - Tailwind CSS + shadcn/ui
 
-State Management:
-- React Query for backend integration
-- Local state for editing suggestions
-
 # Observability
 - LangSmith tracing enabled
 - Metrics: generation_time, user_edit_rate, plan_acceptance_rate
@@ -240,10 +133,10 @@ State Management:
 - Frontend: Vitest + Playwright >=80%
 ```
 
-#### T013 - RACI Auto-Assignment Workflow (Full-Stack) (`TASK-FRT-126`)
+#### T013 - RACI Auto-Assignment Workflow (Full-Stack) (`TASK-AI-042`)
 
 *Estimated Hours*: 12
-*Priority*: P1
+*Priority*: P2 (Phase 2)
 *Depends On*: T009
 
 **FULL-STACK OWNERSHIP**: AI agent implements backend + frontend
@@ -264,11 +157,6 @@ Components:
 - ConflictWarnings (overload alerts)
 - RACIMatrixPreview (preview with accept/reject)
 
-Tech Stack:
-- Next.js 14 + React + TypeScript + LangChain.js
-- React Query + optimistic updates
-- Tailwind CSS + color-blind safe indicators
-
 # Observability
 - LangSmith tracing enabled
 - Metrics: assignment_accuracy, conflict_detection_rate, user_override_rate
@@ -281,10 +169,10 @@ Tech Stack:
 - Frontend: Vitest + Playwright >=80%
 ```
 
-#### T014 - Stakeholder Resolution Workflow (Full-Stack) (`TASK-FRT-127`)
+#### T014 - Stakeholder Resolution Workflow (Full-Stack) (`TASK-AI-043`)
 
 *Estimated Hours*: 12
-*Priority*: P1
+*Priority*: P2 (Phase 2)
 *Depends On*: T009
 
 **FULL-STACK OWNERSHIP**: AI agent implements backend + frontend
@@ -307,11 +195,6 @@ Components:
 - AIResolutionSuggestions (recommended actions)
 - ConflictResolutionTimeline (history)
 
-Tech Stack:
-- Next.js 14 + React + TypeScript + LangChain.js
-- React Query + WebSocket for real-time conflicts
-- Tailwind CSS + alert styling
-
 # Observability
 - LangSmith tracing enabled
 - Metrics: conflict_detection_precision, resolution_acceptance_rate, time_to_resolution
@@ -324,7 +207,7 @@ Tech Stack:
 - Frontend: Vitest + Playwright >=80%
 ```
 
-#### Execution Timeline
+#### Execution Timeline (Phase 2)
 
 **Phase 1 (Week 1)**: Parallel with Backend APIs
 - T009: LangChain prompt templates - 12 hours
@@ -346,246 +229,6 @@ Tech Stack:
 - [ ] Generated data persists to project
 - [ ] Test coverage >=80% (backend + frontend)
 - [ ] LangSmith tracing enabled
-
----
-
-### 3.1 TASK-IMPL-010: Decouple AI Logic from LangGraph Nodes (CORE)
-
-**Agent**: Role_backend
-**Priority**: P0 (Architecture Violation - ARCH-V02)
-**Estimated Hours**: 29.5
-**Status**: 🔲 PLANNED
-**Source**: TASK-REV-BACKEND-001, LangGraph Orchestration Audit (§7)
-
-#### Business Context
-
-- **Coherence Score™** is the trademarked, foundational feature of C2Pro — THE core value proposition
-- **Human-in-the-Loop (HITL)** is how C2Pro is sold and marketed for critical issues
-- Both features must be first-class domain concepts with proper domain services and use cases
-- Current state: business logic embedded in LangGraph adapter nodes, bypassing existing domain layers
-
-#### Architecture Target
-
-```
-LangGraph Node (< 50 lines each)
-  └─► Application Use Case (orchestration)
-       └─► Domain Service (pure business logic, no framework deps)
-            └─► Domain Entities (Coherence Score™, HITL ReviewItem, etc.)
-```
-
-#### Current State
-
-| File | Lines | Nodes > 50 lines | Embedded domain logic |
-|---|---|---|---|
-| `nodes.py` | 345 | `save_to_db_node` (75), `human_interrupt_node` (50) | critique confidence calc, HITL threshold, prompts, helpers |
-| `nodes_extended.py` | 586 | `coherence_scorer_node` (115), `final_assembler_node` (55) | RACI prompt, budget prompt, assembly logic, coherence glue |
-
-#### Files to Create (7 new)
-
-| File | Type | Purpose |
-|---|---|---|
-| `analysis/domain/critique_evaluation.py` | Domain Service | Confidence calc, retry logic, HITL threshold |
-| `analysis/domain/prompts.py` | Domain Constants | All 4 prompt templates centralized |
-| `analysis/domain/report_assembly.py` | Domain Service | Final report + decision package assembly |
-| `analysis/domain/document_augmentation.py` | Domain Service | Text augmentation + risk converter |
-| `coherence/application/use_cases/score_from_extraction.py` | Use Case | **Coherence Score™ pipeline entry point** — thin orchestration over existing services |
-| `modules/hitl/application/route_for_graph_review_use_case.py` | Use Case | **HITL graph routing** — uses ConfidenceRouter + HumanInTheLoopService |
-| `analysis/application/persist_analysis_use_case.py` | Use Case | DB persistence orchestration |
-
-#### Files to Modify (3 existing)
-
-- `analysis/adapters/graph/nodes.py` — slim all nodes < 50 lines
-- `analysis/adapters/graph/nodes_extended.py` — slim all nodes < 50 lines
-- `analysis/adapters/graph/workflow.py` — delegate routing to CritiqueEvaluationService
-
-#### Existing Services Reused (NOT duplicated)
-
-- `CoherenceCalculationService` (TASK-AI-052) via `build_coherence_calculation_service()`
-- `CalculateCoherenceUseCase` (TASK-AI-053)
-- `CoherenceDerivationService` (existing `analysis/domain/coherence_derivation.py`)
-- `ConfidenceRouter` (existing `modules/hitl/domain/services.py`)
-- `HumanInTheLoopService` (existing `modules/hitl/application/`)
-- `AlertGenerator` (existing `coherence/alert_generator.py`)
-
-#### Phase 1: Pure Domain Services (7.5h, parallel)
-
-**TASK-IMPL-010.1: Prompt Templates Registry** (1h)
-- File: `analysis/domain/prompts.py`
-- Extract: `ROUTER_SYSTEM_PROMPT`, `CRITIQUE_SYSTEM_PROMPT`, `RACI_GENERATION_PROMPT`, `BUDGET_EXTRACTION_PROMPT`
-- Tests: 4 tests verifying non-empty strings with expected keywords
-- Success: All 4 prompts centralized, no framework imports, < 60 lines
-
-**TASK-IMPL-010.2: Document Augmentation Service** (1.5h)
-- File: `analysis/domain/document_augmentation.py`
-- Extract: `_augment_document()` → `DocumentAugmentationService.augment()`, `_risk_item_to_dict()` → `RiskItemConverter.to_dict()`
-- Tests: 5 tests (augment with/without critique+feedback, risk converter with None fields)
-- Success: Stateless, no framework imports, 100% branch coverage
-
-**TASK-IMPL-010.3: Critique Evaluation Service** (3h)
-- File: `analysis/domain/critique_evaluation.py`
-- Extract: `_average_confidence()`, HITL threshold logic, `_next_after_critique` routing
-- Classes: `CritiqueEvaluationService` + `CritiqueEvaluationResult` (frozen dataclass)
-- Methods: `calculate_confidence()`, `evaluate_critique()`, `determine_next_step()`
-- CRITICAL: `skip_hitl` is injectable param, NOT env-var read in domain
-- Tests: 8-10 tests (confidence calc, RETRY logic, HITL thresholds, routing per doc_type)
-- Success: No `os`/`langgraph`/`langchain` imports, configurable thresholds
-
-**TASK-IMPL-010.4: Report Assembly Services** (2h)
-- File: `analysis/domain/report_assembly.py`
-- Extract: `final_assembler_node` dict → `ReportAssemblyService.assemble()`, `decision_intelligence_node` dict → `DecisionPackageAssemblyService.assemble()`
-- Data: `ReportInput`, `DecisionPackageInput` (frozen dataclasses)
-- Tests: 6-8 tests (full data, empty state, summary counts, human feedback flag)
-- Success: Stateless, pure functions, < 150 lines
-
-#### Phase 2: Application Use Cases (8.5h, parallel after Phase 1)
-
-**TASK-IMPL-010.5: Coherence Score™ Extraction Use Case** (3h)
-- File: `coherence/application/use_cases/score_from_extraction.py`
-- Class: `ScoreFromExtractionUseCase(derivation_service, calculation_service)`
-- Orchestrates: `CoherenceDerivationInput` → `derivation_service.derive()` → `calculation_service.calculate_coherence()`
-- Data: `ScoreFromExtractionCommand`, `ScoreFromExtractionResult` (frozen)
-- CROSS-REF: Reuses TASK-AI-052..078 services — ZERO new calculation logic
-- Tests: 6-8 tests (with risks, empty extraction, flag propagation, quality metadata)
-- Success: < 80 lines, no LangGraph imports, delegates to existing services only
-
-**TASK-IMPL-010.6: HITL Graph Routing Use Case** (2.5h)
-- File: `modules/hitl/application/route_for_graph_review_use_case.py`
-- Class: `RouteForGraphReviewUseCase(hitl_service, high_impact_threshold=0.5)`
-- Orchestrates: impact determination → `ConfidenceRouter` → `HumanInTheLoopService.route_for_review()`
-- CRITICAL: `Interrupt` raise stays in the node — use case handles only domain/application work
-- Data: `GraphReviewCommand`, `GraphReviewResult` (frozen)
-- Tests: 5-6 tests (LOW/MEDIUM/HIGH impact, review persistence, missing tenant)
-- Success: No `langgraph` imports, configurable impact threshold
-
-**TASK-IMPL-010.7: Persistence Use Case** (3h)
-- File: `analysis/application/persist_analysis_use_case.py`
-- Class: `PersistAnalysisUseCase(analysis_repo, wbs_repo, session)`
-- Orchestrates: Analysis creation → AlertGenerator → WBS bulk create → commit
-- Data: `PersistAnalysisCommand`, `PersistAnalysisResult` (frozen)
-- CRITICAL: Session received via injection — node keeps `async with` lifecycle
-- Tests: 7-8 tests (risks+alerts, WBS replace, both, empty, missing tenant, type detection)
-- Success: < 80 lines, no LangGraph imports
-
-#### Phase 3: Node Refactoring (10.5h, after Phase 2)
-
-**TASK-IMPL-010.8: Refactor critique_node** (2h) — Depends: .1, .2, .3
-- `critique_node`: 30 → ~15 lines. Delegates to `CritiqueEvaluationService`
-- Import prompts from `analysis.domain.prompts`
-- Remove: `_average_confidence`, `_next_after_critique` from nodes.py
-
-**TASK-IMPL-010.9: Refactor human_interrupt_node** (1.5h) — Depends: .6
-- 50 → ~20 lines. Delegates HITL to `RouteForGraphReviewUseCase`
-- `Interrupt` raise is the ONLY LangGraph-specific call remaining
-- Remove dead code after `raise Interrupt` (lines 226-228)
-
-**TASK-IMPL-010.10: Refactor save_to_db_node** (1.5h) — Depends: .7
-- 75 → ~20 lines. Delegates to `PersistAnalysisUseCase`
-- Session `async with` stays in node (proper lifecycle scope)
-
-**TASK-IMPL-010.11: Refactor coherence_scorer_node** (2h) — Depends: .5
-- 115 → ~30 lines. Delegates to `ScoreFromExtractionUseCase`
-- Remove `_coherence_derivation` module-level instance
-- Update 16 existing test mock targets
-
-**TASK-IMPL-010.12: Refactor raci/budget/assembler nodes** (2h) — Depends: .1, .4
-- `raci_generator_node`: import prompt from `analysis.domain.prompts`
-- `budget_parser_extended_node`: import prompt from `analysis.domain.prompts`
-- `final_assembler_node`: 55 → ~15 lines via `ReportAssemblyService`
-
-**TASK-IMPL-010.13: Refactor decision_intelligence_node** (1h) — Depends: .4
-- 35 → ~12 lines via `DecisionPackageAssemblyService`
-
-**TASK-IMPL-010.14: Update workflow.py conditional edge** (0.5h) — Depends: .3
-- Replace `_next_after_critique_v2` with `CritiqueEvaluationService().determine_next_step()`
-
-#### Phase 4: Cleanup & Verification (3h, after Phase 3)
-
-**TASK-IMPL-010.15: Dead Code Removal** (1h)
-- Remove from `nodes.py`: prompts, `_average_confidence`, `_fallback_doc_type`, `_augment_document`, `_risk_item_to_dict`, `_next_after_critique`
-- Remove from `nodes_extended.py`: module-level `_coherence_derivation`, `_citation_validator` singletons
-- Target: `nodes.py` 345 → ~100 lines, `nodes_extended.py` 586 → ~300 lines
-
-**TASK-IMPL-010.16: Regression + Coverage Verification** (2h)
-- Full `pytest apps/api/tests/ -v`
-- Coverage: `pytest --cov=apps/api/src --cov-report=term-missing`
-- Target: 0 regressions, 90%+ on new domain services, 85%+ on new use cases
-
-#### Test Strategy
-
-| Deliverable | Test Count | Type |
-|---|---|---|
-| D1 Critique Evaluation | 8-10 | Unit (pure) |
-| D2 Prompts | 4 | Unit (pure) |
-| D3 Report Assembly | 6-8 | Unit (pure) |
-| D4 Document Augmentation | 5-6 | Unit (pure) |
-| D5 ScoreFromExtraction | 6-8 | Unit (mocked) |
-| D6 RouteForGraphReview | 5-6 | Unit (mocked) |
-| D7 PersistAnalysis | 7-8 | Unit (mocked) |
-| D8 Node refactoring | ~30 updated | Integration |
-| **Total** | **41-50 new + ~30 updated** | |
-
-#### Expected Metrics
-
-| Metric | Before | After |
-|---|---|---|
-| `nodes.py` lines | 345 | ~100 |
-| `nodes_extended.py` lines | 586 | ~300 |
-| Nodes > 50 lines | 4 | 0 |
-| Domain service files | 3 | 7 (+4) |
-| Application use case files | 4 | 7 (+3) |
-| New tests | 0 | 41-50 |
-| Domain logic in adapters | ~300 lines | ~0 |
-| Coherence Score™ own use case | No | Yes |
-| HITL own use case | No | Yes |
-
-#### Risk Assessment
-
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Coherence Score duplication | HIGH | Use case ONLY orchestrates existing services. Zero new calc logic. Code review gate. |
-| Test regression on coherence_scorer_node | MEDIUM | Update mock targets in .11. Run tests after each change. |
-| Circular imports between analysis.domain and coherence.application | MEDIUM | Domain services have ZERO cross-module imports. Constructor injection only. |
-| Transaction scope in PersistAnalysisUseCase | MEDIUM | Node keeps `async with` context manager. Use case receives session, doesn't own lifecycle. |
-| Dead code after `raise Interrupt` in human_interrupt_node | LOW | Already unreachable. Clean removal in .9. |
-
-#### Dependency Graph
-
-```
-Phase 1 (parallel):
-  .1 (prompts) ──────────────────────────────┐
-  .2 (augmentation) ─────────────────────────┤
-  .3 (critique eval) ───┬───────────────────┤
-  .4 (report assembly) ─┤                    │
-                         │                    │
-Phase 2 (parallel):      │                    │
-  .5 (Coherence Score™)──┘ needs .3          │
-  .6 (HITL routing) ────────────────────────┤
-  .7 (persistence) ─────────────────────────┤
-                                              │
-Phase 3 (after Phase 2):                      │
-  .8  (critique_node) ──── needs .1,.2,.3    │
-  .9  (human_interrupt) ── needs .6          │
-  .10 (save_to_db) ─────── needs .7          │
-  .11 (coherence_scorer) ─ needs .5          │
-  .12 (raci/budget/asm) ── needs .1,.4       │
-  .13 (decision_intel) ─── needs .4          │
-  .14 (workflow.py) ─────── needs .3         │
-                                              │
-Phase 4 (after Phase 3):                      │
-  .15 (dead code removal) ───────────────────┘
-  .16 (regression + coverage)
-```
-
-#### Success Criteria
-
-- [x] Domain services usable in sync contexts (no framework deps) — already met for 3 services
-- [x] Business logic portable to other frameworks — all 7 domain services framework-free
-- [x] LangGraph nodes < 50 lines each — 0 nodes over target
-- [x] All extraction/prompt logic moved to domain — 4 prompts centralized
-- [x] Coherence Score™ has dedicated use case — `ScoreFromExtractionUseCase`
-- [x] HITL has dedicated use case — `RouteForGraphReviewUseCase`
-- [x] 41-50 new tests, 80%+ coverage on new code
-- [x] Zero test regressions
 
 ---
 
@@ -611,8 +254,8 @@ _ADRs for this category will be documented here_
 ## 6. Metrics
 
 - **Total Tasks**: 95
-- **Completed**: 31 (32.6%)
-- **Average Completion Time**: TBD
+- **Completed**: 89 (93.7%)
+- **Active/Deferred**: 6 (6.3%)
 - **Test Coverage**: TBD
 
 ---
@@ -621,21 +264,18 @@ _ADRs for this category will be documented here_
 
 ### LangGraph Orchestration Audit (TASK-REV-AI-001)
 **Date**: 2026-04-07
-**Status**: ⚠️ 65% Domain Pure
+**Status**: ✅ RESOLVED (TASK-IMPL-010 complete)
 
-#### Findings:
-1. **Business Logic in Nodes (High Risk)**: While progress has been made extracting logic to domain services (Citation, Coherence), several nodes still harbor critical logic:
-   - `nodes.py`: `router_node` and `critique_node` contain hardcoded prompts and logic for confidence calculation.
-   - `nodes_extended.py`: `raci_generator_node` and `budget_parser_extended_node` contain raw Jinja-like prompts and manual DTO-to-dict mapping logic.
-2. **Infrastructure Coupling (Critical)**: `save_to_db_node` (N17) interacts directly with SQLAlchemy sessions, repositories, and ORM models. This node is 70+ lines of infrastructure code that should be delegated to a Use Case.
-3. **State Management**: ✅ EXCELLENT. `ProjectState` is correctly defined using `TypedDict` and ensures all fields are JSON-serializable for checkpointing.
-4. **Checkpoint Restoration**: ✅ OPERATIONAL. The `AsyncPostgresSaver` is correctly configured with a connection pool in `workflow.py`. `human_interrupt_node` (N13/14) uses standard LangGraph `Interrupt` for HITL.
-5. **Orchestration Duplication**: ✅ RESOLVED. Confirmed that `core/ai/orchestration` was deleted on 2026-04-06.
+#### Findings (historical):
+1. **Business Logic in Nodes (High Risk)**: While progress has been made extracting logic to domain services (Citation, Coherence), several nodes still harbored critical logic:
+   - `nodes.py`: `router_node` and `critique_node` contained hardcoded prompts and logic for confidence calculation.
+   - `nodes_extended.py`: `raci_generator_node` and `budget_parser_extended_node` contained raw Jinja-like prompts and manual DTO-to-dict mapping logic.
+2. **Infrastructure Coupling (Critical)**: `save_to_db_node` (N17) interacted directly with SQLAlchemy sessions, repositories, and ORM models.
+3. **State Management**: ✅ EXCELLENT. `ProjectState` is correctly defined using `TypedDict`.
+4. **Checkpoint Restoration**: ✅ OPERATIONAL. `AsyncPostgresSaver` correctly configured.
+5. **Orchestration Duplication**: ✅ RESOLVED. `core/ai/orchestration` was deleted on 2026-04-06.
 
-#### Recommendations:
-- **Centralize Prompts**: Move `ROUTER_SYSTEM_PROMPT`, `CRITIQUE_SYSTEM_PROMPT`, and RACI/Budget prompts to a dedicated `PromptService`.
-- **Use Case Delegation**: Refactor `save_to_db_node` to call `PersistAnalysisUseCase`.
-- **Domain Services**: Create `RaciMatrixGeneratorService` and `BudgetParserService` in the domain layer to house the logic currently in nodes.
+#### Resolution:
+- TASK-IMPL-010 (all 16 subtasks) completed 2026-04-20. All domain services extracted, nodes slimmed to <50 lines, zero test regressions.
 
 ---
-
