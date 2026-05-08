@@ -31,7 +31,7 @@ class ParseDocumentUseCase:
         self.entity_extraction_service = entity_extraction_service
         self.rag_ingestion_service = rag_ingestion_service
 
-    async def execute(self, document_id: UUID, user_id: UUID) -> None: # user_id might be needed for audit logs or permissions
+    async def execute(self, document_id: UUID, user_id: UUID) -> None:  # noqa: ARG002 — user_id reserved for future audit/permissions
         # 1. Get document and ensure it exists
         document = await self.document_repository.get_by_id(document_id)
         if not document:

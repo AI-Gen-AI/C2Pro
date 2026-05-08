@@ -59,7 +59,7 @@ def test_traced_llm_call_records_successful_async_span(monkeypatch: pytest.Monke
         extra_tags=["suite:TS-AI-LANGSMITH-002"],
         client=langsmith_wrapper,
     )
-    async def _evaluate(*, tenant_id: str, langsmith_client: _RecordingSpanClient) -> dict[str, str]:
+    async def _evaluate(*, tenant_id: str, langsmith_client: _RecordingSpanClient) -> dict[str, str]:  # noqa: ARG001
         return {"status": "ok"}
 
     result = asyncio.run(_evaluate(tenant_id="tenant-123", langsmith_client=span_client))
@@ -81,7 +81,7 @@ def test_traced_llm_call_records_error_path(monkeypatch: pytest.MonkeyPatch) -> 
     langsmith_wrapper = LangSmithClient(project_name="c2pro-test")
 
     @traced_llm_call(task_type="extraction", client=langsmith_wrapper)
-    async def _boom(*, langsmith_client: _RecordingSpanClient) -> None:
+    async def _boom(*, langsmith_client: _RecordingSpanClient) -> None:  # noqa: ARG001
         raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -98,7 +98,7 @@ def test_traced_llm_call_preserves_sync_function_name(monkeypatch: pytest.Monkey
     langsmith_wrapper = LangSmithClient(project_name="c2pro-test")
 
     @traced_llm_call(task_type="routing", client=langsmith_wrapper)
-    def _sync_call(*, langsmith_client: _RecordingSpanClient) -> str:
+    def _sync_call(*, langsmith_client: _RecordingSpanClient) -> str:  # noqa: ARG001
         return "done"
 
     assert _sync_call.__name__ == "_sync_call"
@@ -122,11 +122,11 @@ def test_traced_llm_call_captures_prompt_model_usage_and_latency(monkeypatch: py
     )
     async def _evaluate(
         *,
-        tenant_id: str,
-        prompt: str,
+        tenant_id: str,  # noqa: ARG001
+        prompt: str,  # noqa: ARG001
         model_name: str,
-        model_params: dict[str, Any],
-        langsmith_client: _RecordingSpanClient,
+        model_params: dict[str, Any],  # noqa: ARG001
+        langsmith_client: _RecordingSpanClient,  # noqa: ARG001
     ) -> dict[str, Any]:
         time.sleep(0.001)
         return {
@@ -174,10 +174,10 @@ def test_traced_llm_call_persists_trace_to_usage_logger(monkeypatch: pytest.Monk
     @traced_llm_call(task_type="coherence", client=langsmith_wrapper)
     async def _evaluate(
         *,
-        tenant_id: Any,
-        prompt_version: str,
-        langsmith_client: _RecordingSpanClient,
-        usage_logger: _RecordingUsageLogger,
+        tenant_id: Any,  # noqa: ARG001
+        prompt_version: str,  # noqa: ARG001
+        langsmith_client: _RecordingSpanClient,  # noqa: ARG001
+        usage_logger: _RecordingUsageLogger,  # noqa: ARG001
     ) -> dict[str, Any]:
         return {
             "output": "analysis completed",
