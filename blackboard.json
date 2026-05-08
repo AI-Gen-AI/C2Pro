@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-07T22:18:00Z",
+  "updated_at": "2026-05-08T00:15:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1318,6 +1318,35 @@
         "validacion_lint": true,
         "nota_verificacion": "RED confirmed HITL label drift and workflow blocker tracking. GREEN passed metric/workflow guard 2/2 and INF coverage gate 109/109 at 73.24%. refactor/stakeholders-ddd-migration had no reusable INF changes."
       }
+    },
+    {
+      "tarea_id": "T089",
+      "backlog_id": "TASK-OPS-DOCFLOW-014",
+      "tipo": "qa",
+      "descripcion": "Fix full backend suite golden package collection blocker by preventing tests/golden from shadowing production src/golden imports.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Full backend collection proceeds past tests/golden conftest imports and newly exposed blockers are tracked separately.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/pyproject.toml",
+        "apps/api/tests/golden/test_golden_runner.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-08T00:15:00Z",
+        "completado": "2026-05-08T00:15:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Golden package collection blocker is closed with pytest importlib mode; tests/golden no longer shadows production src/golden during full-suite collection.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED full suite failed on golden.evaluators. Diagnostic importlib collection passed golden and exposed schemathesis/stale-import blockers. tests/golden passed after importlib mode and Core-100 runner expectation updates. TASK-015 and TASK-016 were added for the newly exposed blockers."
+      }
     }
   ],
   "backlog_sync": {
@@ -1407,7 +1436,9 @@
       "TASK-OPS-DOCFLOW-011",
       "TASK-OPS-DOCFLOW-012",
       "TASK-OPS-DOCFLOW-013",
-      "TASK-OPS-DOCFLOW-014"
+      "TASK-OPS-DOCFLOW-014",
+      "TASK-OPS-DOCFLOW-015",
+      "TASK-OPS-DOCFLOW-016"
     ]
   },
   "plan_actual": {
