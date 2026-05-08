@@ -190,15 +190,13 @@ class LangSmithClient:
         self, *, run_id: str, key: str, score: float | None = None, comment: str | None = None
     ) -> None:
         """Create feedback for a given run."""
-        if not self.enabled:
+        if not self.enabled or not self._client:
             logger.warning("langsmith_client_disabled_feedback_skipped", run_id=run_id, key=key)
             return
 
-        # In a real implementation, this would call the LangSmith SDK.
-        # For now, we just log it.
-        logger.info(
-            "langsmith_feedback_created",
-            run_id=run_id,
+        from uuid import UUID
+        self._client.create_feedback(
+            run_id=UUID(run_id),
             key=key,
             score=score,
             comment=comment,
