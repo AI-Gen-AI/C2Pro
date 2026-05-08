@@ -13,9 +13,9 @@ from src.modules.hitl.domain.entities import ReviewItem
 
 class INotificationService(Protocol):
     async def send_notification(
-        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID
+        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID | None = None
     ) -> None:
         ...
 
-    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID) -> None:
+    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID | None = None) -> None:
         ...

@@ -42,8 +42,8 @@
 | [ ] | P2 | `TASK-INF-011` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
 | [x] | P3 | `TASK-INF-012` | None | Persist AI usage into `ai_usage_logs` `[x] @2026-04-21 - Added centralized usage logger + tenant trace ownership checks and trace metadata persistence used by AI tracing pipeline.` | `apps/api/src/core/ai/CE-S2-008_IMPLEMENTATION_SUMMARY.md` |
 | [x] | P3 | `TASK-INF-013` | Env Setup | A/B testing framework for prompt versions `[x] @2026-04-21 - Shipped rollout control primitives (`LANGSMITH_ROLLOUT_PERCENTAGE`, fail-open fallback router) plus production alerts in `ops/alerts/langsmith_rollout_alerts.yml` for trace failures and p99 latency regressions.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | P3 | `TASK-INF-014` | None | Prompt optimization suggestions from usage metrics | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
-| [ ] | P3 | `TASK-INF-015` | None | Implement Flash/cache layer described in AI README | `apps/api/src/core/ai/README_FLASH.md` |
+| [~] | P3 | `TASK-INF-014` | None | Prompt optimization suggestions from usage metrics `[~ DEFERRED] @2026-05-08 — Requires LangSmith production data (4-6 weeks). Revisit once traces accumulate.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
+| [x] | P3 | `TASK-INF-015` | None | Implement Flash/cache layer described in AI README `[x] @2026-05-08 — Already implemented: FlashCacheService in apps/api/src/core/ai/prompt_cache.py with in-memory + Redis fallback, SHA-256 content keys, 1h TTL, hit/miss metrics, integrated in llm_client.py.` | `apps/api/src/core/ai/README_FLASH.md` |
 | [ ] | P3 | `TASK-INF-016` | Env Setup | Add all new coverage-improvement tests | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
 | [ ] | P3 | `TASK-INF-017` | Env Setup | Ensure all coverage-improvement tests pass | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
 | [ ] | P3 | `TASK-INF-018` | None | Reach at least 70 percent coverage on targeted area | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |

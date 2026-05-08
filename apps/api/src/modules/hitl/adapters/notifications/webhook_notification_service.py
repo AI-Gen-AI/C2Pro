@@ -45,10 +45,9 @@ class WebhookNotificationService:
         self.retry_backoff_factor = retry_backoff_factor
 
     async def send_notification(
-        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID
+        self, recipient_id: UUID, message: str, item: ReviewItem, tenant_id: UUID | None = None  # noqa: ARG002
     ) -> None:
         """Send notification to webhook endpoint."""
-        _ = tenant_id
         payload = self._format_notification_payload(recipient_id, message, item)
 
         await self._post_to_webhook(payload)
@@ -60,9 +59,8 @@ class WebhookNotificationService:
             webhook_url=self.webhook_url,
         )
 
-    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID) -> None:
+    async def send_escalation_alert(self, item: ReviewItem, tenant_id: UUID | None = None) -> None:  # noqa: ARG002
         """Send urgent escalation alert to webhook endpoint."""
-        _ = tenant_id
         payload = self._format_escalation_payload(item)
 
         await self._post_to_webhook(payload)
