@@ -129,7 +129,8 @@ jobs:
 
           ## Known Tracked Blockers
 
-          - `TASK-OPS-DOCFLOW-014`: Full backend suite gate collection currently fails on `ModuleNotFoundError: No module named 'golden.evaluators'` from `tests/golden/conftest.py`.
+          - `TASK-OPS-DOCFLOW-015`: Full backend suite gate collection currently fails locally on `ModuleNotFoundError: No module named 'schemathesis'` in `tests/contract/schemathesis/*`; adding or installing this dependency requires approved dependency workflow.
+          - `TASK-OPS-DOCFLOW-016`: Full backend suite gate collection also exposes stale legacy contract imports for removed/relocated modules such as `src.alerts.router` and `get_bom_repository` from `src.procurement.adapters.http.router`.
 
           ## Passing Gates Required Before This Tracking
 

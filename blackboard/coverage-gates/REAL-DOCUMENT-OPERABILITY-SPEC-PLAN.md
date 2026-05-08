@@ -49,6 +49,9 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-011` | P1 | Complete | Add golden regression spec for real document outputs. | Golden snapshot policy for structured outputs only. | Golden runner validates score ranges, alert categories, and schema stability. |
 | `TASK-OPS-DOCFLOW-012` | P1 | Complete | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates and tracks known blockers. |
 | `TASK-OPS-DOCFLOW-013` | P1 | Complete | Fix INF coverage blocker. | HITL metric label contract plus observability/resilience/security coverage restoration. | Scoped INF coverage gate passes at `>=70%` and CI treats it as a hard gate. |
+| `TASK-OPS-DOCFLOW-014` | P1 | Complete | Fix golden package collection blocker. | Pytest import mode isolates `tests/golden` from production `src/golden`. | Full backend collection proceeds past `golden.evaluators` and exposes the next blockers. |
+| `TASK-OPS-DOCFLOW-015` | P1 | Pending | Fix Schemathesis dependency blocker. | Dependency/install or test-gating decision for `tests/contract/schemathesis/*`. | Full backend collection no longer fails on missing `schemathesis`. |
+| `TASK-OPS-DOCFLOW-016` | P1 | Pending | Fix stale legacy contract imports. | Updated tests or compatibility shims for relocated alert/procurement router contracts. | Full backend collection no longer fails on `src.alerts.router` or `get_bom_repository` imports. |
 
 ## Task Details
 
@@ -460,6 +463,35 @@ Evidence captured 2026-05-07:
 - Acceptance: `python -m pytest tests/unit/core/observability tests/unit/core/resilience tests/unit/core/security --cov=src/core/observability --cov=src/core/resilience --cov=src/core/security --cov-report=term-missing --cov-fail-under=70 -q` passed `109 passed` at `73.24%`.
 - CI workflow now runs the INF coverage step without `continue-on-error`; blocker artifact now tracks only `TASK-OPS-DOCFLOW-014`.
 
+### `TASK-OPS-DOCFLOW-014` - Golden Package Collection Restored
+
+SPEC:
+
+- Restore full-suite collection past the `tests/golden/conftest.py` import of `golden.evaluators`.
+- Preserve the current production `src/golden` implementation instead of duplicating evaluator shims in tests.
+- Record the next exposed full-suite blockers as separate backlog tasks.
+
+Acceptance:
+
+```powershell
+cd apps/api
+$env:C2PRO_AI_MOCK='1'
+python -m pytest tests/ -x -q
+```
+
+Evidence captured 2026-05-08:
+
+- RED: `python -m pytest tests/ -x -q` failed during collection at `tests/golden/conftest.py` with `ModuleNotFoundError: No module named 'golden.evaluators'`.
+- Diagnostic: `python -m pytest tests/ --collect-only --import-mode=importlib -q` collected past all `tests/golden/*` modules, proving the blocker was test-package shadowing of production `src/golden`.
+- GREEN config: added `--import-mode=importlib` to `apps/api/pyproject.toml` pytest `addopts`.
+- Migrated stale golden runner assertions from the prior Core-25 counts to the current Core-100 corpus counts (`100` total, `20` easy).
+- GREEN guard: `python -m pytest tests/unit/test_backend_ci_guards.py::test_backend_pytest_uses_importlib_mode_for_golden_package_isolation tests/unit/test_backend_ci_guards.py::test_real_document_operability_workflow_runs_required_quality_gates -q` passed after the config/workflow updates.
+- Golden package regression: `python -m pytest tests/golden -q` passed after the import-mode and Core-100 expectation updates.
+- Acceptance rerun: `python -m pytest tests/ -x -q` now proceeds past the golden import blocker and stops first on `ModuleNotFoundError: No module named 'schemathesis'` from `tests/contract/schemathesis/test_alerts_router.py`.
+- Newly tracked blockers:
+  - `TASK-OPS-DOCFLOW-015`: missing `schemathesis` dependency for contract suite collection.
+  - `TASK-OPS-DOCFLOW-016`: stale legacy contract imports for relocated alert/procurement router APIs exposed during importlib-mode collection.
+
 ## Sequencing
 
 1. `TASK-OPS-DOCFLOW-001`
@@ -475,6 +507,9 @@ Evidence captured 2026-05-07:
 11. `TASK-OPS-DOCFLOW-011`
 12. `TASK-OPS-DOCFLOW-012`
 13. `TASK-OPS-DOCFLOW-013`
+14. `TASK-OPS-DOCFLOW-014`
+15. `TASK-OPS-DOCFLOW-015`
+16. `TASK-OPS-DOCFLOW-016`
 
 ## Definition Of Operative
 
