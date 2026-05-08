@@ -31,6 +31,10 @@ from src.wbs.application.use_cases.get_wbs_tree import (
     GetWBSTreeRequest,
     GetWBSTreeUseCase,
 )
+from src.wbs.application.use_cases.move_wbs_node import (
+    MoveWBSNodeRequest,
+    MoveWBSNodeUseCase,
+)
 from src.wbs.application.use_cases.update_wbs_node import (
     UpdateWBSNodeRequest,
     UpdateWBSNodeUseCase,
@@ -88,6 +92,12 @@ class UpdateWBSNodeInput(BaseModel):
     budget_allocated: float | None = Field(None, ge=0)
     budget_spent: float | None = Field(None, ge=0)
     metadata: dict | None = None
+
+
+class MoveWBSNodeInput(BaseModel):
+    """Input model for moving/reordering a WBS node."""
+
+    new_parent_id: str | None = Field(None, description="New parent node UUID (None for root)")
 
 
 class WBSNodeOutput(BaseModel):
@@ -438,4 +448,52 @@ async def delete_wbs_node(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"WBS node with ID {node_id} not found",
+        )
+
+
+@router.patch("/projects/{project_id}/nodes/{node_id}/reorder", response_model=WBSNodeOutput)
+async def reorder_wbs_node(
+    project_id: str,
+    node_id: str,
+    input_data: MoveWBSNodeInput,
+    current_user: Annotated[User, Depends(get_current_user)],
+    repository: Annotated[WBSNodeRepository, Depends(get_wbs_node_repository)],
+) -> WBSNodeOutput:
+    """
+    Move a WBS node and its subtree to a new parent.
+
+    Updates the nested set tree structure.
+    """
+    node_uuid = _parse_uuid(node_id, "node_id")
+    new_parent_uuid = _parse_uuid(input_data.new_parent_id, "new_parent_id") if input_data.new_parent_id else None
+
+    # Verify node exists and belongs to project
+    existing = await repository.get_by_id(node_uuid, UUID(str(current_user.tenant_id)))
+    if existing is None or str(existing.project_id) != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"WBS node with ID {node_id} not found",
+        )
+
+    try:
+        use_case = MoveWBSNodeUseCase(repository)
+        request = MoveWBSNodeRequest(
+            node_id=node_uuid,
+            tenant_id=UUID(str(current_user.tenant_id)),
+            new_parent_id=new_parent_uuid,
+        )
+
+        node = await use_case.execute(request)
+        if node is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"WBS node with ID {node_id} not found",
+            )
+
+        return _map_node_to_output(node)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
         )

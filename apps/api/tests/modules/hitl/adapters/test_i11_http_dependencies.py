@@ -15,6 +15,9 @@ from src.modules.hitl.adapters.http.dependencies import (
 from src.modules.hitl.adapters.notifications.log_notification_service import (
     LogNotificationService,
 )
+from src.modules.hitl.adapters.notifications.notification_router import (
+    NotificationRouter,
+)
 from src.modules.hitl.domain.services import ConfidenceRouter
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
@@ -26,7 +29,7 @@ def test_i11_notification_dependency_returns_adapter_instance() -> None:
     """
     service = get_notification_service()
 
-    assert isinstance(service, LogNotificationService)
+    assert isinstance(service, NotificationRouter)
 
 
 def test_i11_confidence_router_dependency_returns_domain_router() -> None:

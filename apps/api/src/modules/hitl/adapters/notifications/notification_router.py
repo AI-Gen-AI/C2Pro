@@ -63,7 +63,7 @@ class NotificationRouter:
         # In development, use log-only
         if self.environment == "development":
             if self.log_service:
-                await self.log_service.send_notification(recipient_id, message, item)
+                await self.log_service.send_notification(recipient_id, message, item, tenant_id)
             return
 
         # Get tenant configuration
@@ -73,7 +73,7 @@ class NotificationRouter:
         # If no channels configured, fall back to log-only
         if not channels:
             if self.log_service:
-                await self.log_service.send_notification(recipient_id, message, item)
+                await self.log_service.send_notification(recipient_id, message, item, tenant_id)
                 logger.info(
                     "notification_fallback_to_log",
                     tenant_id=str(tenant_id),
@@ -88,7 +88,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "email",
-                    self.email_service.send_notification(recipient_id, message, item),
+                    self.email_service.send_notification(recipient_id, message, item, tenant_id),
                     tenant_id,
                 )
             )
@@ -97,7 +97,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "slack",
-                    self.slack_service.send_notification(recipient_id, message, item),
+                    self.slack_service.send_notification(recipient_id, message, item, tenant_id),
                     tenant_id,
                 )
             )
@@ -106,7 +106,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "webhook",
-                    self.webhook_service.send_notification(recipient_id, message, item),
+                    self.webhook_service.send_notification(recipient_id, message, item, tenant_id),
                     tenant_id,
                 )
             )
@@ -128,7 +128,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "email",
-                    self.email_service.send_escalation_alert(item),
+                    self.email_service.send_escalation_alert(item, tenant_id),
                     tenant_id,
                 )
             )
@@ -137,7 +137,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "slack",
-                    self.slack_service.send_escalation_alert(item),
+                    self.slack_service.send_escalation_alert(item, tenant_id),
                     tenant_id,
                 )
             )
@@ -146,7 +146,7 @@ class NotificationRouter:
             tasks.append(
                 self._send_with_error_handling(
                     "webhook",
-                    self.webhook_service.send_escalation_alert(item),
+                    self.webhook_service.send_escalation_alert(item, tenant_id),
                     tenant_id,
                 )
             )

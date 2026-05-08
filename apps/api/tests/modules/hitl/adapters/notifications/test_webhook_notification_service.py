@@ -285,7 +285,7 @@ class TestWebhookNotificationServiceIntegration:
             # Always fail to test backoff
             mock_post.return_value = AsyncMock(status_code=500)
 
-            try:
+            try:  # noqa: SIM105
                 await service.send_notification(
                     uuid4(), "Test message", test_review_item
                 )

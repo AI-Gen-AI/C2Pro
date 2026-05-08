@@ -50,3 +50,8 @@ class BudgetRepository(Protocol):
     async def get_by_id(self, item_id: UUID, tenant_id: TenantId) -> dict | None:
         """Get a budget item by ID."""
         ...
+
+    @abstractmethod
+    async def get_total_spent_by_project(self, project_id: UUID, tenant_id: TenantId) -> Decimal:
+        """Get the total spent amount for all WBS items in a project."""
+        ...
