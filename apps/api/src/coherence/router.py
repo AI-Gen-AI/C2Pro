@@ -1,4 +1,8 @@
-# apps/api/src/coherence/router.py
+"""Coherence HTTP routes.
+
+Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
+"""
+
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -540,6 +544,9 @@ async def get_coherence_dashboard(
                     CoherenceResultORM.global_score,
                     CoherenceResultORM.category_scores,
                     CoherenceResultORM.calculated_at,
+                    CoherenceResultORM.score_version,
+                    CoherenceResultORM.score_reason,
+                    CoherenceResultORM.score_missing_dimensions,
                 )
                 .where(CoherenceResultORM.project_id == project_id)
                 .order_by(CoherenceResultORM.calculated_at.desc())
@@ -613,5 +620,10 @@ async def get_coherence_dashboard(
         "alert_count": alert_count,
         "document_count": document_count,
         "methodology_version": "3.0",  # Updated to 3.0 for v0.3 engine
+        "score_version": coherence_result.score_version if coherence_result else None,
+        "score_reason": coherence_result.score_reason if coherence_result else None,
+        "score_missing_dimensions": (
+            coherence_result.score_missing_dimensions if coherence_result else None
+        ),
         "last_updated": last_updated.isoformat(),
     }

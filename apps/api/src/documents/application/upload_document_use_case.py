@@ -75,6 +75,7 @@ class UploadDocumentUseCase:
             upload_status=DocumentStatus.QUEUED,  # Start as QUEUED as per new plan
             parsed_at=None,
             parsing_error=None,
+            created_by=user_id,
             # Other fields from the original Document model
             file_format=file_extension,
             file_size_bytes=file_size,

@@ -191,6 +191,7 @@ class ScoringService:
         Returns:
             ScoringResult: score contract with nullable score on insufficient evidence.
         """
+        _ = num_rules
         if not signals or poor_extraction_quality:
             return ScoringResult(
                 score=None,
@@ -243,6 +244,7 @@ class ScoringService:
         Returns:
             ScoringDiagnostics with score and breakdown
         """
+        _ = num_rules
         if not signals or poor_extraction_quality:
             return ScoringDiagnostics(
                 score=None,
@@ -296,6 +298,7 @@ class ScoringService:
             penalty_density=round(penalty_density, 3),
             raw_penalty_sum=round(raw_penalty, 3),
             category_contributions=dict(category_contributions),
+            missing_dimensions=missing_dimensions,
         )
 
     def _compute_signal_contribution(self, signal: FindingSignal) -> float:
