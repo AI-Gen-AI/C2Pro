@@ -46,6 +46,13 @@ class CoherenceResultORM(Base):
         index=True,
     )
 
+    # Tenant reference
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
     # Global score
     global_score: Mapped[int] = mapped_column(
         Integer,
@@ -95,6 +102,8 @@ class CoherenceResultORM(Base):
     # Indexes for efficient querying
     __table_args__ = (
         Index("ix_coherence_results_project_calculated", "project_id", "calculated_at"),
+        Index("ix_coherence_results_tenant", "tenant_id"),
+        {"info": {"rls_policy": "tenant_isolation"}},
     )
 
 
@@ -110,6 +119,9 @@ class ClauseEmbeddingORM(Base):
 
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, index=True
     )
     clause_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     project_id: Mapped[UUID] = mapped_column(
@@ -133,4 +145,6 @@ class ClauseEmbeddingORM(Base):
 
     __table_args__ = (
         UniqueConstraint("clause_id", "project_id", name="uq_clause_embeddings_clause_project"),
+        Index("ix_clause_embeddings_tenant", "tenant_id"),
+        {"info": {"rls_policy": "tenant_isolation"}},
     )

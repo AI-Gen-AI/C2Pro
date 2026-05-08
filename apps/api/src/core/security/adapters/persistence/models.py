@@ -39,3 +39,8 @@ class AuditLogORM(Base):
 
     def __repr__(self):
         return f"<AuditLog {self.id} action={self.action} resource={self.resource_type}>"
+
+    __table_args__ = (
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
