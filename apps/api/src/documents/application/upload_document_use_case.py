@@ -30,7 +30,7 @@ class UploadDocumentUseCase:
         project_id: UUID,
         file: UploadFile,
         document_type: DocumentType,
-        user_id: UUID,
+        user_id: UUID,  # noqa: ARG002
         tenant_id: UUID,
         metadata: dict | None = None,
     ) -> Document:

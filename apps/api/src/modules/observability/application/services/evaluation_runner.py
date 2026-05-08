@@ -445,7 +445,7 @@ class EvaluationRunner:
         self,
         config: EvalRunConfig,
         examples: list[dict[str, Any]],
-        corpus: list[dict[str, Any]] | None = None,
+        corpus: list[dict[str, Any]] | None = None,  # noqa: ARG002
     ) -> EvalRunResult:
         """
         Run hybrid retrieval evaluation.
