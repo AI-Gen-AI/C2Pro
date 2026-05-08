@@ -12,14 +12,13 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.application.dtos import (
     AlertHistoryResponse,
     AlertListResponse,
     AlertResponse,
+    AlertWorkspaceSettingsPayload,
     BulkOperationResponse,
     BulkResolveRequest,
     BulkReviewRequest,
@@ -29,7 +28,17 @@ from src.alerts.application.dtos import (
 )
 from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.application.ports.tenant_repository import ITenantRepository
+from src.alerts.application.use_cases.bulk_resolve_alerts_use_case import (
+    BulkResolveAlertsUseCase,
+)
+from src.alerts.application.use_cases.bulk_review_alerts_use_case import (
+    BulkReviewAlertsUseCase,
+)
 from src.alerts.application.use_cases.create_alert_use_case import CreateAlertUseCase
+from src.alerts.application.use_cases.get_alert_workspace_settings_use_case import (
+    GetAlertWorkspaceSettingsUseCase,
+)
 from src.alerts.application.use_cases.list_alerts_use_case import ListAlertsUseCase
 from src.alerts.application.use_cases.resolve_alert_use_case import (
     AlertNotFoundError as ResolveAlertNotFoundError,
@@ -43,7 +52,9 @@ from src.alerts.application.use_cases.review_alert_use_case import (
 from src.alerts.application.use_cases.review_alert_use_case import (
     ReviewAlertUseCase,
 )
-from src.core.auth.models import Tenant
+from src.alerts.application.use_cases.update_alert_workspace_settings_use_case import (
+    UpdateAlertWorkspaceSettingsUseCase,
+)
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId
 
@@ -51,32 +62,18 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 project_alerts_router = APIRouter(prefix="/projects", tags=["alerts"])
 
 
-class AlertRuleConfigPayload(BaseModel):
-    id: str
-    name: str
-    description: str
-    enabled: bool
-    threshold: int
-    severity: str
-
-
-class AlertSubscriptionConfigPayload(BaseModel):
-    emailEnabled: bool = False
-    emailAddress: str = ""
-    slackEnabled: bool = False
-    slackChannel: str = ""
-
-
-class AlertWorkspaceSettingsPayload(BaseModel):
-    rules: list[AlertRuleConfigPayload] = Field(default_factory=list)
-    subscriptions: AlertSubscriptionConfigPayload | None = None
-
-
 def get_alert_repository(
     session: AsyncSession = Depends(get_session),
 ) -> IAlertRepository:
     from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
     return SqlAlchemyAlertRepository(session=session)
+
+
+def get_tenant_repository(
+    session: AsyncSession = Depends(get_session),
+) -> ITenantRepository:
+    from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
+    return SqlAlchemyTenantRepository(session=session)
 
 
 def get_list_alerts_use_case(
@@ -103,23 +100,28 @@ def get_resolve_alert_use_case(
     return ResolveAlertUseCase(repository=repository)
 
 
-async def _get_tenant(
-    session: AsyncSession,
-    tenant_id: UUID,
-) -> Tenant | None:
-    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
-    return result.scalar_one_or_none()
+def get_bulk_review_use_case(
+    repository: IAlertRepository = Depends(get_alert_repository),
+) -> BulkReviewAlertsUseCase:
+    return BulkReviewAlertsUseCase(repository=repository)
 
 
-def _get_workspace_settings_payload(tenant: Tenant) -> AlertWorkspaceSettingsPayload:
-    settings = dict(tenant.settings or {})
-    workspace_settings = settings.get("alerts_workspace", {})
-    return AlertWorkspaceSettingsPayload.model_validate(
-        {
-            "rules": workspace_settings.get("rules", []),
-            "subscriptions": workspace_settings.get("subscriptions"),
-        }
-    )
+def get_bulk_resolve_use_case(
+    repository: IAlertRepository = Depends(get_alert_repository),
+) -> BulkResolveAlertsUseCase:
+    return BulkResolveAlertsUseCase(repository=repository)
+
+
+def get_get_settings_use_case(
+    repository: ITenantRepository = Depends(get_tenant_repository),
+) -> GetAlertWorkspaceSettingsUseCase:
+    return GetAlertWorkspaceSettingsUseCase(repository=repository)
+
+
+def get_update_settings_use_case(
+    repository: ITenantRepository = Depends(get_tenant_repository),
+) -> UpdateAlertWorkspaceSettingsUseCase:
+    return UpdateAlertWorkspaceSettingsUseCase(repository=repository)
 
 
 @router.get(
@@ -129,13 +131,12 @@ def _get_workspace_settings_payload(tenant: Tenant) -> AlertWorkspaceSettingsPay
 )
 async def get_alert_workspace_settings(
     tenant_id: CurrentTenantId,
-    session: AsyncSession = Depends(get_session),
+    use_case: GetAlertWorkspaceSettingsUseCase = Depends(get_get_settings_use_case),
 ) -> AlertWorkspaceSettingsPayload:
-    tenant = await _get_tenant(session, tenant_id)
-    if tenant is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    return _get_workspace_settings_payload(tenant)
+    try:
+        return await use_case.execute(tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put(
@@ -146,19 +147,12 @@ async def get_alert_workspace_settings(
 async def put_alert_workspace_settings(
     payload: AlertWorkspaceSettingsPayload,
     tenant_id: CurrentTenantId,
-    session: AsyncSession = Depends(get_session),
+    use_case: UpdateAlertWorkspaceSettingsUseCase = Depends(get_update_settings_use_case),
 ) -> AlertWorkspaceSettingsPayload:
-    tenant = await _get_tenant(session, tenant_id)
-    if tenant is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    settings = dict(tenant.settings or {})
-    settings["alerts_workspace"] = payload.model_dump(mode="json")
-    tenant.settings = settings
-    await session.commit()
-    await session.refresh(tenant)
-
-    return _get_workspace_settings_payload(tenant)
+    try:
+        return await use_case.execute(tenant_id, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post(
@@ -288,28 +282,14 @@ async def bulk_review_alerts(
     request: BulkReviewRequest,
     tenant_id: CurrentTenantId,
     user_id: CurrentUserId,
-    review_use_case: ReviewAlertUseCase = Depends(get_review_alert_use_case),
+    use_case: BulkReviewAlertsUseCase = Depends(get_bulk_review_use_case),
 ) -> BulkOperationResponse:
-    processed = 0
-    errors = []
-    for alert_id_str in request.alert_ids:
-        try:
-            alert_id = UUID(alert_id_str)
-            await review_use_case.execute(
-                alert_id=alert_id,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                decision=request.decision,
-                comment=request.comment,
-            )
-            processed += 1
-        except (ReviewAlertNotFoundError, ValueError):
-            errors.append(alert_id_str)
-
-    return BulkOperationResponse(
-        processed_count=processed,
+    return await use_case.execute(
+        alert_ids=request.alert_ids,
+        tenant_id=tenant_id,
+        user_id=user_id,
         decision=request.decision,
-        warning=f"{len(errors)} alerts not found" if errors else None,
+        comment=request.comment,
     )
 
 
@@ -344,28 +324,14 @@ async def resolve_alert(
 async def bulk_resolve_alerts(
     request: BulkResolveRequest,
     tenant_id: CurrentTenantId,
-    resolve_use_case: ResolveAlertUseCase = Depends(get_resolve_alert_use_case),
+    use_case: BulkResolveAlertsUseCase = Depends(get_bulk_resolve_use_case),
 ) -> BulkOperationResponse:
-    processed = 0
-    errors = []
-    for alert_id_str in request.alert_ids:
-        try:
-            alert_id = UUID(alert_id_str)
-            await resolve_use_case.execute(
-                alert_id=alert_id,
-                tenant_id=tenant_id,
-                user_id=tenant_id,
-                resolution=request.resolution,
-                root_cause=request.root_cause,
-            )
-            processed += 1
-        except (ResolveAlertNotFoundError, ValueError):
-            errors.append(alert_id_str)
-
-    return BulkOperationResponse(
-        processed_count=processed,
-        status="resolved",
-        warning=f"{len(errors)} alerts not found" if errors else None,
+    return await use_case.execute(
+        alert_ids=request.alert_ids,
+        tenant_id=tenant_id,
+        user_id=tenant_id,  # System-level or tenant-level resolution
+        resolution=request.resolution,
+        root_cause=request.root_cause,
     )
 
 

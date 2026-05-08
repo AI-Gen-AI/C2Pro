@@ -12,6 +12,27 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class AlertRuleConfigPayload(BaseModel):
+    id: str
+    name: str
+    description: str
+    enabled: bool
+    threshold: int
+    severity: str
+
+
+class AlertSubscriptionConfigPayload(BaseModel):
+    emailEnabled: bool = False
+    emailAddress: str = ""
+    slackEnabled: bool = False
+    slackChannel: str = ""
+
+
+class AlertWorkspaceSettingsPayload(BaseModel):
+    rules: list[AlertRuleConfigPayload] = Field(default_factory=list)
+    subscriptions: AlertSubscriptionConfigPayload | None = None
+
+
 class CreateAlertRequest(BaseModel):
     project_id: UUID
     rule_code: str

@@ -165,7 +165,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     }
 
     out_path = Path(__file__).parents[3] / "contract-coverage.json"
-    try:
+    try:  # noqa: SIM105
         out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     except OSError:
         pass

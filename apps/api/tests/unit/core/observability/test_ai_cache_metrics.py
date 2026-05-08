@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-
 from src.core.observability import monitoring
 
 

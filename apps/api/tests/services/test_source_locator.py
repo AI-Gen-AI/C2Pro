@@ -8,7 +8,7 @@ from src.documents.domain.models import Clause, ClauseType
 
 # Ensure rapidfuzz is imported or mocked
 try:
-    from rapidfuzz import fuzz, process
+    from rapidfuzz import fuzz, process  # noqa: F401
 except ImportError:
     pytest.fail("rapidfuzz not installed. Please install it with 'pip install rapidfuzz'")
 
