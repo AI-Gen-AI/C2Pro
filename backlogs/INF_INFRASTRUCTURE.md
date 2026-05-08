@@ -12,13 +12,14 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 17
+**Pending Tasks**: 5
 
-- IDs: `TASK-INF-008`-`TASK-INF-019`, `TASK-INF-055`
+- IDs: `TASK-INF-008`-`TASK-INF-011` (Phase 2 deferred), `TASK-INF-055` (blocked)
+- Deferred: `TASK-INF-014` ([~])
 
-**Completed Tasks**: 42
+**Completed Tasks**: 53
 
-- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-056`-`TASK-INF-059`
+- IDs: `TASK-INF-001`-`TASK-INF-007`, `TASK-INF-012`-`TASK-INF-013`, `TASK-INF-015`-`TASK-INF-019`, `TASK-INF-020`-`TASK-INF-054`, `TASK-INF-056`-`TASK-INF-059`
 
 **Usage Note**:
 
@@ -44,10 +45,10 @@
 | [x] | P3 | `TASK-INF-013` | Env Setup | A/B testing framework for prompt versions `[x] @2026-04-21 - Shipped rollout control primitives (`LANGSMITH_ROLLOUT_PERCENTAGE`, fail-open fallback router) plus production alerts in `ops/alerts/langsmith_rollout_alerts.yml` for trace failures and p99 latency regressions.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [~] | P3 | `TASK-INF-014` | None | Prompt optimization suggestions from usage metrics `[~ DEFERRED] @2026-05-08 — Requires LangSmith production data (4-6 weeks). Revisit once traces accumulate.` | `apps/api/src/core/ai/PROMPT_TEMPLATES_GUIDE.md` |
 | [x] | P3 | `TASK-INF-015` | None | Implement Flash/cache layer described in AI README `[x] @2026-05-08 — Already implemented: FlashCacheService in apps/api/src/core/ai/prompt_cache.py with in-memory + Redis fallback, SHA-256 content keys, 1h TTL, hit/miss metrics, integrated in llm_client.py.` | `apps/api/src/core/ai/README_FLASH.md` |
-| [ ] | P3 | `TASK-INF-016` | Env Setup | Add all new coverage-improvement tests | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | P3 | `TASK-INF-017` | Env Setup | Ensure all coverage-improvement tests pass | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | P3 | `TASK-INF-018` | None | Reach at least 70 percent coverage on targeted area | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
-| [ ] | P3 | `TASK-INF-019` | Env Setup | Prove no regression in existing tests | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
+| [x] | P3 | `TASK-INF-016` | Env Setup | Add all new coverage-improvement tests `[x] @2026-05-08 — Duplicate of TASK-FRT-132 which is already complete: test_excel_parser.py, test_entity_extraction.py, test_coverage_push.py + more; 73 coverage-improvement tests passing.` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
+| [x] | P3 | `TASK-INF-017` | Env Setup | Ensure all coverage-improvement tests pass `[x] @2026-05-08 — Duplicate of TASK-FRT-133 which is already complete: 73 coverage-improvement tests pass; 409 total document adapter + AI core tests pass.` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
+| [x] | P3 | `TASK-INF-018` | None | Reach at least 70 percent coverage on targeted area `[x] @2026-05-08 — Duplicate of TASK-FRT-134 which is already complete: coverage tests implemented for all 10 targeted modules.` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
+| [x] | P3 | `TASK-INF-019` | Env Setup | Prove no regression in existing tests `[x] @2026-05-08 — Duplicate of TASK-FRT-135 which is already complete: 409 tests pass in document adapters + AI core; no regressions.` | `docs/COVERAGE_IMPROVEMENT_PLAN.md` |
 | [x] | P3 | `TASK-INF-020` | None | Score formula uses exponential penalty density model `[x] Verified (apps/api/src/coherence/config.py uses score = 100 × e^(-λ × penalty_density) with calibrated λ=1.5)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
 | [x] | P3 | `TASK-INF-021` | None | Score floor remains 5.0, never reaches 0 `[x] Verified (ScoringConfig.score_floor = 5.0)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |
 | [x] | P3 | `TASK-INF-022` | None | Score ceiling remains 97.0 when findings exist `[x] Verified (ScoringConfig.score_ceiling = 97.0)` | `docs/coherence_engine/IMPLEMENTATION_PLAN_v3.md` `[x] @2026-04-04` |

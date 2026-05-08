@@ -1,8 +1,8 @@
-u# Backend Tasks & Knowledge Base
+# Backend Tasks & Knowledge Base
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-04-06
+**Last Updated**: 2026-05-08
 
 **Quick Links**:
 
@@ -13,13 +13,11 @@ u# Backend Tasks & Knowledge Base
 
 ## 0. Status View
 
-**Pending Tasks**: 2
+**Pending Tasks**: 0
 
-- IDs: `TASK-BCK-043`, `TASK-BCK-044`
+**Completed Tasks**: 49
 
-**Completed Tasks**: 47
-
-- IDs: `TASK-BCK-001`-`TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-042`, `TASK-BCK-045`-`TASK-BCK-049`
+- IDs: `TASK-BCK-001`-`TASK-BCK-033`, `TASK-BCK-035`-`TASK-BCK-049`
 
 **Usage Note**:
 
