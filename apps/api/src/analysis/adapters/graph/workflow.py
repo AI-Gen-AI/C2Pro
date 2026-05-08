@@ -61,7 +61,7 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
 # ── Graph builder ────────────────────────────────────────────────────────────
 
 def build_workflow() -> StateGraph:
-    """Build the full N1–N17 orchestration graph.
+    """Build the full N1–N17 orchestration graph with parallel enrichment.
 
     Graph topology::
 
@@ -75,24 +75,26 @@ def build_workflow() -> StateGraph:
                               │
               ┌───────────────┼──────────────┐
               ▼               ▼              ▼
-         (retry N4/5/9)   N13/14 (HITL)   N6 (stakeholder_extractor)
+         (retry N4/5/9)   N13/14 (HITL)   [Parallel Enrichment Start]
                               │              │
-                              ▼              ▼
-                         N6 (stakeholder)  N7 (raci_generator)
-                                             │
-                                            N8 (coherence_scorer)
-                                             │
-                                           N15 (citation_validator)
-                                             │
-                                           N10 (knowledge_graph)
-                                             │
-                                           N17 (save_to_db)
-                                             │
-                                           N11 (decision_intelligence)
-                                             │
-                                           N16 (final_assembler)
-                                             │
-                                            END
+                              ▼              ├───────────────┐
+              ┌───────────────┴──────────────┤               │
+              ▼                              ▼               ▼
+        N6 (stakeholder)              N8 (coherence)   N15 (citation)
+              │                              │               │
+        N7 (raci_generator)                  │               │
+              │                              │               │
+              └───────────────┬──────────────┴───────────────┘
+                              ▼
+                        N10 (knowledge_graph)
+                              │
+                        N17 (save_to_db)
+                              │
+                        N11 (decision_intelligence)
+                              │
+                        N16 (final_assembler)
+                              │
+                             END
     """
     workflow = StateGraph(ProjectState)
 
@@ -111,13 +113,13 @@ def build_workflow() -> StateGraph:
     workflow.add_node("critique", critique_node)                        # N12
     workflow.add_node("human_interrupt", human_interrupt_node)          # N13/N14
 
-    # Enrichment
+    # Enrichment (Parallelizable)
     workflow.add_node("stakeholder_extractor", stakeholder_extractor_node)  # N6
     workflow.add_node("raci_generator", raci_generator_node)                # N7
     workflow.add_node("coherence_scorer", coherence_scorer_node)            # N8
+    workflow.add_node("citation_validator", citation_validator_node)        # N15
 
     # Validation & persistence
-    workflow.add_node("citation_validator", citation_validator_node)    # N15
     workflow.add_node("knowledge_graph", knowledge_graph_builder_node)  # N10
     workflow.add_node("save_to_db", save_to_db_node)                   # N17
 
@@ -149,7 +151,7 @@ def build_workflow() -> StateGraph:
     workflow.add_edge("wbs_extractor", "critique")
     workflow.add_edge("budget_parser", "critique")
 
-    # ── Critique (N12) → retry / HITL / enrichment ──
+    # ── Critique (N12) → retry / HITL / enrichment branches ──
     workflow.add_conditional_edges(
         "critique",
         _next_after_critique_v2,
@@ -162,16 +164,34 @@ def build_workflow() -> StateGraph:
         },
     )
 
-    # ── HITL (N13/14) → enrichment ──
+    # ── Parallel Branch 1: Stakeholders & RACI ──
+    # If no HITL required, Critique goes directly to stakeholder_extractor
+    # If HITL required, human_interrupt goes to stakeholder_extractor
     workflow.add_edge("human_interrupt", "stakeholder_extractor")
-
-    # ── Enrichment chain: N6 → N7 → N8 ──
     workflow.add_edge("stakeholder_extractor", "raci_generator")
-    workflow.add_edge("raci_generator", "coherence_scorer")
+    workflow.add_edge("raci_generator", "knowledge_graph")
 
-    # ── Validation & persistence: N8 → N15 → N10 → N17 ──
-    workflow.add_edge("coherence_scorer", "citation_validator")
+    # ── Parallel Branch 2: Coherence Scorer ──
+    # Critique and HITL both fan-out to coherence_scorer
+    workflow.add_conditional_edges(
+        "critique",
+        lambda state: "coherence_scorer" if _next_after_critique_v2(state) == "stakeholder_extractor" else None,
+        {"coherence_scorer": "coherence_scorer"},
+    )
+    workflow.add_edge("human_interrupt", "coherence_scorer")
+    workflow.add_edge("coherence_scorer", "knowledge_graph")
+
+    # ── Parallel Branch 3: Citation Validator ──
+    # Critique and HITL both fan-out to citation_validator
+    workflow.add_conditional_edges(
+        "critique",
+        lambda state: "citation_validator" if _next_after_critique_v2(state) == "stakeholder_extractor" else None,
+        {"citation_validator": "citation_validator"},
+    )
+    workflow.add_edge("human_interrupt", "citation_validator")
     workflow.add_edge("citation_validator", "knowledge_graph")
+
+    # ── Join & persistence: N10 → N17 ──
     workflow.add_edge("knowledge_graph", "save_to_db")
 
     # ── Assembly: N17 → N11 → N16 → END ──

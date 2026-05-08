@@ -87,14 +87,13 @@ class PromptHubResolver:
         handle = f"{prompt_repo}:{prompt_tag}"
 
         profile = LangSmithEnvProfile.from_runtime_env()
+        pull_kwargs: dict[str, Any] = {"api_url": profile.endpoint}
         if profile.api_key:
-            os.environ["LANGCHAIN_API_KEY"] = profile.api_key
-        os.environ["LANGCHAIN_PROJECT"] = profile.project
-        os.environ["LANGCHAIN_ENDPOINT"] = profile.endpoint
+            pull_kwargs["api_key"] = profile.api_key
 
         try:
             with ThreadPoolExecutor(max_workers=1) as executor:
-                fetched = executor.submit(hub.pull, handle).result(timeout=self.timeout_seconds)
+                fetched = executor.submit(hub.pull, handle, **pull_kwargs).result(timeout=self.timeout_seconds)
             prompt_text = self._coerce_prompt_text(fetched)
             self._prompt_cache[handle] = prompt_text
             self._persist_cache()
