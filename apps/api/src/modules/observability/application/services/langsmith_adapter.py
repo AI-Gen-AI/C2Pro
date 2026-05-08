@@ -54,22 +54,13 @@ class LangSmithAdapter(ILangSmithGateway):
     ) -> LangSmithRunProtocol:
         safe_inputs = self._sanitize_payload(inputs)
         safe_metadata = self._sanitize_payload(metadata)
-        try:
-            return self._create_run_once(
-                name=name,
-                run_type=run_type,
-                inputs=safe_inputs,
-                parent_run_id=parent_run_id,
-                metadata=safe_metadata,
-            )
-        except TimeoutError:
-            return self._create_run_once(
-                name=name,
-                run_type=run_type,
-                inputs=safe_inputs,
-                parent_run_id=parent_run_id,
-                metadata=safe_metadata,
-            )
+        return self._create_run_once(
+            name=name,
+            run_type=run_type,
+            inputs=safe_inputs,
+            parent_run_id=parent_run_id,
+            metadata=safe_metadata,
+        )
 
     def _create_run_once(
         self,
@@ -98,9 +89,9 @@ class LangSmithAdapter(ILangSmithGateway):
 
     async def log_eval_result(self, dataset_name: str, eval_result: EvalMetricResult, run_id: UUID) -> None:
         self.client.update_run(
-            run={"id": run_id},  # type: ignore[arg-type]
-            dataset=dataset_name,
-            eval_result=eval_result.model_dump(mode="json"),
+            run_id,
+            dataset_name=dataset_name,
+            outputs=eval_result.model_dump(mode="json"),
         )
 
     async def get_dataset_eval_metrics(self, dataset_name: str) -> dict[str, dict[str, float]]:

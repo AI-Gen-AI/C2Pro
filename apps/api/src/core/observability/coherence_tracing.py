@@ -46,6 +46,7 @@ def traced_coherence_node(
             }
 
             span = None
+            caught_error: Exception | None = None
             try:
                 _validate_attributes(span_attributes)
                 span = langsmith_client.start_span(
@@ -76,12 +77,11 @@ def traced_coherence_node(
 
                 return result
             except Exception as e:
-                if span:
-                    langsmith_client.end_span(span, error=e)
+                caught_error = e
                 raise
             finally:
                 if span:
-                    langsmith_client.end_span(span)
+                    langsmith_client.end_span(span, error=caught_error)
 
         return wrapper
     return decorator

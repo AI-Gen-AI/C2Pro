@@ -67,6 +67,13 @@ class Analysis(Base):
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -168,6 +175,13 @@ class Alert(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
