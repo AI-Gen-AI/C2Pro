@@ -76,6 +76,7 @@ async def test_i11_stale_review_task_triggers_escalation(
     mock_notification_service: AsyncMock,
 ) -> None:
     """Refers to I11.3: overdue review items must escalate and notify reviewers."""
+    tenant_id = uuid4()
     overdue_item = ReviewItem(
         item_id=uuid4(),
         item_type="CoherenceAlert",
@@ -85,6 +86,7 @@ async def test_i11_stale_review_task_triggers_escalation(
         created_at=datetime.now() - timedelta(days=3),
         sla_due_date=datetime.now() - timedelta(days=1),
         item_data={},
+        metadata={"tenant_id": str(tenant_id)},
     )
     mock_review_queue_repo.get_overdue_items.return_value = [overdue_item]
 
@@ -93,7 +95,7 @@ async def test_i11_stale_review_task_triggers_escalation(
     assert len(results) == 1
     assert results[0].new_status == ReviewStatus.ESCALATED
     mock_review_queue_repo.update_review_item.assert_called_once()
-    mock_notification_service.send_escalation_alert.assert_called_once_with(overdue_item)
+    mock_notification_service.send_escalation_alert.assert_called_once_with(overdue_item, tenant_id)
 
 
 @pytest.mark.asyncio
