@@ -8,10 +8,23 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import get_settings
 from src.core.database import get_session
 from src.core.security import CurrentTenantId
+from src.modules.hitl.adapters.notifications.email_notification_service import (
+    EmailNotificationService,
+)
 from src.modules.hitl.adapters.notifications.log_notification_service import (
     LogNotificationService,
+)
+from src.modules.hitl.adapters.notifications.notification_router import (
+    NotificationRouter,
+)
+from src.modules.hitl.adapters.notifications.slack_notification_service import (
+    SlackNotificationService,
+)
+from src.modules.hitl.adapters.notifications.webhook_notification_service import (
+    WebhookNotificationService,
 )
 from src.modules.hitl.adapters.persistence.notification_config_repository import (  # TASK-BCK-025
     NotificationConfigRepository,
@@ -34,12 +47,49 @@ def get_review_queue_repo(
     return SqlAlchemyReviewQueueRepository(session=db, tenant_id=tenant_id)
 
 
-def get_notification_service() -> INotificationService:
-    return LogNotificationService()
+def get_notification_config_repository(
+    db: AsyncSession = Depends(get_session),
+) -> NotificationConfigRepository:
+    return NotificationConfigRepository(session=db)
 
 
 def get_confidence_router() -> ConfidenceRouter:
     return ConfidenceRouter()
+
+
+def get_notification_service(
+    config_repo: NotificationConfigRepository = Depends(get_notification_config_repository),
+) -> INotificationService:
+    settings = get_settings()
+
+    email_svc = None
+    if hasattr(settings, "SMTP_HOST") and settings.SMTP_HOST:
+        email_svc = EmailNotificationService(
+            smtp_host=settings.SMTP_HOST,
+            smtp_port=settings.SMTP_PORT,
+            smtp_user=settings.SMTP_USER,
+            smtp_password=settings.SMTP_PASSWORD.get_secret_value() if hasattr(settings.SMTP_PASSWORD, "get_secret_value") else settings.SMTP_PASSWORD,
+            from_email=settings.FROM_EMAIL,
+        )
+
+    slack_svc = None
+    if hasattr(settings, "SLACK_WEBHOOK_URL") and settings.SLACK_WEBHOOK_URL:
+        slack_svc = SlackNotificationService(webhook_url=settings.SLACK_WEBHOOK_URL)
+
+    webhook_svc = None
+    if hasattr(settings, "NOTIFICATION_WEBHOOK_URL") and settings.NOTIFICATION_WEBHOOK_URL:
+        webhook_svc = WebhookNotificationService(webhook_url=settings.NOTIFICATION_WEBHOOK_URL)
+
+    log_svc = LogNotificationService()
+
+    return NotificationRouter(
+        email_service=email_svc,
+        slack_service=slack_svc,
+        webhook_service=webhook_svc,
+        config_repository=config_repo,
+        log_service=log_svc,
+        environment=settings.environment,
+    )
 
 
 def get_hitl_service(
@@ -59,10 +109,3 @@ def get_resume_workflow_use_case(
     repo: SqlAlchemyReviewQueueRepository = Depends(get_review_queue_repo),
 ) -> ResumeWorkflowUseCase:
     return ResumeWorkflowUseCase(review_queue_repo=repo)
-
-
-# TASK-BCK-025: Notification configuration repository
-def get_notification_config_repository(
-    db: AsyncSession = Depends(get_session),
-) -> NotificationConfigRepository:
-    return NotificationConfigRepository(session=db)

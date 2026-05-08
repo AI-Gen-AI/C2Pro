@@ -6,11 +6,11 @@ Implements BudgetRepository port using existing procurement_budget_items table.
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.procurement.adapters.persistence.models import BudgetItemORM
+from src.procurement.adapters.persistence.models import BudgetItemORM, WBSItemORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -19,6 +19,18 @@ class SQLAlchemyBudgetRepository:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def get_total_spent_by_project(self, project_id: UUID, tenant_id: UUID) -> Decimal:
+        """Get the total spent amount for all WBS items in a project with tenant isolation."""
+        stmt = (
+            select(func.sum(WBSItemORM.budget_spent))
+            .join(ProjectORM, ProjectORM.id == WBSItemORM.project_id)
+            .where(WBSItemORM.project_id == project_id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
+        result = await self.session.execute(stmt)
+        total_spent = result.scalar() or Decimal("0.00")
+        return Decimal(str(total_spent))
 
     async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[dict]:
         """Get all budget items for a project with tenant isolation."""
