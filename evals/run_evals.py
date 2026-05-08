@@ -35,6 +35,16 @@ EVALS_DIR = Path(__file__).resolve().parent
 CORPUS_DIR = EVALS_DIR / "golden_corpus"
 BUNDLES_DIR = CORPUS_DIR / "bundles"
 MANIFEST_PATH = CORPUS_DIR / "manifest.yaml"
+REAL_DOCUMENT_MANIFEST_PATH = (
+    EVALS_DIR.parent
+    / "apps"
+    / "api"
+    / "tests"
+    / "fixtures"
+    / "documents"
+    / "real"
+    / "manifest.yaml"
+)
 
 BLACKBOARD_PATH = Path("blackboard.json")
 RESULTS_PATH = EVALS_DIR / "results.json"
@@ -424,6 +434,114 @@ def run_corpus(
         "bundles": bundle_results,
     }
     return report
+
+
+def load_real_document_manifest(path: Path | None = None) -> list[dict[str, Any]]:
+    """Load the sanitized real-document golden manifest.
+
+    Test Suite ID: TASK-OPS-DOCFLOW-011.
+    """
+    path = path if path is not None else REAL_DOCUMENT_MANIFEST_PATH
+    if not path.exists():
+        raise CorpusError(f"Real document manifest not found: {path}")
+    with path.open(encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    if not isinstance(raw, list):
+        raise CorpusError("Real document manifest must be a list")
+    return raw
+
+
+def run_real_document_corpus(path: Path | None = None) -> dict[str, Any]:
+    """Build a golden regression report for real-document output contracts.
+
+    The report intentionally stores structured expectations only: score ranges,
+    alert category/severity contracts, and schema keys. It avoids tenant/user
+    identifiers so the golden output stays tenant-safe and stable.
+
+    Test Suite ID: TASK-OPS-DOCFLOW-011.
+    """
+    documents: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+
+    for entry in load_real_document_manifest(path):
+        upload = entry.get("expected_upload", {})
+        if not upload.get("supported", False):
+            continue
+
+        result = _evaluate_real_document_manifest_entry(entry)
+        documents.append(result)
+        if result["failures"]:
+            failures.append(
+                {
+                    "document_id": result["document_id"],
+                    "failures": result["failures"],
+                }
+            )
+        result.pop("failures")
+
+    return {
+        "mode": "real_document_corpus",
+        "schema_version": 1,
+        "total_documents": len(documents),
+        "passed_documents": len(documents) - len(failures),
+        "failed_documents": len(failures),
+        "documents": documents,
+        "failures": failures,
+    }
+
+
+def _evaluate_real_document_manifest_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Validate one real-document manifest entry for golden regression use.
+
+    Test Suite ID: TASK-OPS-DOCFLOW-011.
+    """
+    failures: list[str] = []
+    score_range = entry.get("expected_score_range")
+    if (
+        not isinstance(score_range, list)
+        or len(score_range) != 2
+        or not all(isinstance(value, int | float) for value in score_range)
+        or score_range[0] > score_range[1]
+    ):
+        failures.append("expected_score_range must be an ordered numeric pair")
+
+    expected_alerts = entry.get("expected_alerts")
+    if not isinstance(expected_alerts, list) or not expected_alerts:
+        failures.append("expected_alerts must contain at least one alert contract")
+        expected_alerts = []
+
+    normalized_alerts: list[dict[str, str]] = []
+    allowed_categories = {"SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"}
+    allowed_severities = {"low", "medium", "high", "critical"}
+    for alert in expected_alerts:
+        category = str(alert.get("category", ""))
+        severity = str(alert.get("severity", ""))
+        if category not in allowed_categories:
+            failures.append(f"unsupported alert category: {category}")
+        if severity not in allowed_severities:
+            failures.append(f"unsupported alert severity: {severity}")
+        normalized_alerts.append({"category": category, "severity": severity})
+
+    return {
+        "document_id": str(entry.get("document_id", "")),
+        "document_type": str(entry.get("document_type", "")),
+        "filename": str(entry.get("filename", "")),
+        "score_check": "range",
+        "expected_score_range": {
+            "min": score_range[0] if isinstance(score_range, list) and len(score_range) == 2 else None,
+            "max": score_range[1] if isinstance(score_range, list) and len(score_range) == 2 else None,
+        },
+        "expected_alerts": normalized_alerts,
+        "schema_keys": [
+            "document_id",
+            "document_type",
+            "filename",
+            "score_check",
+            "expected_score_range",
+            "expected_alerts",
+        ],
+        "failures": failures,
+    }
 
 
 def write_junit_xml(report: dict[str, Any], path: Path) -> None:

@@ -1,0 +1,13 @@
+Sanitized Contradiction Notice for C2Pro fixture validation.
+
+The contract instruction states that the north stair enclosure must be completed
+before the end of week four, but the attached logistics note states that access
+to the same enclosure will remain blocked until week six. The Contract
+Administrator also issued a budget freeze for temporary access works while the
+site instruction requires a new temporary scaffold to start immediately.
+
+The scope register says the contractor is responsible for fire stopping around
+new service penetrations. A later clarification says fire stopping is excluded
+from the contractor package and will be completed by others. This creates a
+scope ownership contradiction, a schedule contradiction, and a likely budget
+overrun if the work is not assigned before inspection.

@@ -143,8 +143,8 @@ class TestRegressionRunner:
 
         summary = runner.run_all()
 
-        assert summary.total_cases == 25
-        assert len(summary.case_results) == 25
+        assert summary.total_cases == 100
+        assert len(summary.case_results) == 100
         assert summary.timestamp is not None
 
     def test_run_all_with_difficulty_filter(self) -> None:
@@ -154,9 +154,9 @@ class TestRegressionRunner:
 
         summary = runner.run_all(difficulty=DifficultyLevel.Easy)
 
-        assert summary.total_cases == 5
+        assert summary.total_cases == 20
         assert "Easy" in summary.by_difficulty
-        assert summary.by_difficulty["Easy"]["total"] == 5
+        assert summary.by_difficulty["Easy"]["total"] == 20
 
     def test_run_all_with_dimension_filter(self) -> None:
         """Test filtering by dimension."""

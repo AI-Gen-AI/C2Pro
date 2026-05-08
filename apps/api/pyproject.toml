@@ -78,6 +78,7 @@ addopts = [
     "-q",
     "--strict-markers",
     "--basetemp=.pytest-tmp-local",
+    "--import-mode=importlib",
 ]
 pythonpath = ["src"]
 markers = [

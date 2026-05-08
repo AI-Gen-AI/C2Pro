@@ -501,7 +501,7 @@ _hitl_reject_counts: dict[str, int] = defaultdict(int)
 def record_hitl_checkpoint_load_error(reason: str) -> None:
     """Record a failed checkpoint load (not_found, db_error, etc.)."""
     if METRICS_AVAILABLE and HITL_METRICS_AVAILABLE:
-        HITL_CHECKPOINT_LOAD_ERRORS.labels(error_type=reason).inc()
+        HITL_CHECKPOINT_LOAD_ERRORS.labels(reason=reason).inc()
     _datadog_increment("c2pro.hitl.checkpoint_load_errors", tags=[f"reason:{reason}"])
 
 

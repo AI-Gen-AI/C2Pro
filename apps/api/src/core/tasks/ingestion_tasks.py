@@ -193,6 +193,11 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
         days = _extract_days(text)
         if days is not None:
             data["payment_term_days"] = days
+    lowered = text.lower()
+    if clause_type == ClauseType.DELIVERY or any(
+        term in lowered for term in ["schedule", "deadline", "milestone", "completion"]
+    ):
+        data["status"] = "at_risk"
     if clause_type == ClauseType.WARRANTY:
         months = _extract_months(text)
         if months is not None:
