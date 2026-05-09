@@ -8,9 +8,7 @@
 
 import { useState, useCallback, useMemo } from "react"; // eslint-disable-line @typescript-eslint/no-unused-vars -- Phase 2: memoized budget calculations
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios/dist/browser/axios.cjs";
-
-const API_BASE = "/api/v1";
+import { apiClient } from "@/lib/api/client";
 
 export interface BudgetItem {
   id: string;
@@ -72,8 +70,8 @@ export function useBudget({
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["budget", projectId],
     queryFn: async () => {
-      const response = await axios.get<BudgetSummary>(
-        `${API_BASE}/projects/${projectId}/budget`,
+      const response = await apiClient.get<BudgetSummary>(
+        `/projects/${projectId}/budget`,
       );
       return response.data;
     },
@@ -83,8 +81,8 @@ export function useBudget({
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (item: Partial<BudgetItem>) => {
-      const response = await axios.post(
-        `${API_BASE}/projects/${projectId}/budget/items`,
+      const response = await apiClient.post(
+        `/projects/${projectId}/budget/items`,
         item,
       );
       return response.data;
@@ -103,8 +101,8 @@ export function useBudget({
       itemId: string;
       item: Partial<BudgetItem>;
     }) => {
-      const response = await axios.patch(
-        `${API_BASE}/budget/items/${itemId}`,
+      const response = await apiClient.patch(
+        `/budget/items/${itemId}`,
         item,
       );
       return response.data;
@@ -117,7 +115,7 @@ export function useBudget({
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      await axios.delete(`${API_BASE}/budget/items/${itemId}`);
+      await apiClient.delete(`/budget/items/${itemId}`);
       return true;
     },
     onSuccess: () => {
