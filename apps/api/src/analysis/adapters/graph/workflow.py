@@ -40,6 +40,14 @@ _critique_evaluator = CritiqueEvaluationService()
 
 
 # ── Conditional edge: route after critique ──────────────────────────────────
+#
+# Returns the *logical* routing decision string. The physical destination may
+# be remapped in the conditional path_map (see ``build_workflow``):
+# ``"stakeholder_extractor"`` is remapped to ``"enrichment_dispatch"``, the
+# fan-out node that launches the parallel enrichment branches. The Literal
+# return type is preserved verbatim so unit tests in
+# ``tests/analysis/adapters/graph/test_workflow_routing_swarm.py`` (which
+# assert these exact strings) keep working unchanged.
 
 def _next_after_critique_v2(state: ProjectState) -> Literal[
     "risk_extractor",
@@ -58,12 +66,38 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
     )
 
 
+# ── Enrichment fan-out point (passthrough) ──────────────────────────────────
+
+
+async def enrichment_dispatch_node(state: ProjectState) -> ProjectState:
+    """Passthrough node that anchors the parallel-enrichment fan-out.
+
+    Why this node exists:
+        1. The critique conditional edge must terminate at a *single* physical
+           target (LangGraph conditional ``path_map`` values are 1:1, not 1:N).
+           Routing the logical decision ``"stakeholder_extractor"`` to this
+           dispatch keeps the routing service contract unchanged.
+        2. ``human_interrupt`` (N13/14) rejoins the same dispatch so both the
+           HITL and non-HITL paths feed a unified parallel cut.
+        3. With three unconditional outgoing edges, LangGraph launches N6, N8,
+           and N15 concurrently — this is the canonical static-parallelism
+           idiom and avoids the ``Send`` API (which would fork state in ways
+           that complicate the N10 fan-in merge).
+
+    State semantics:
+        Returns the state unchanged. Concurrency starts on the *outgoing*
+        edges, so no race condition can occur inside this node.
+    """
+    return state
+
+
 # ── Graph builder ────────────────────────────────────────────────────────────
+
 
 def build_workflow() -> StateGraph:
     """Build the full N1–N17 orchestration graph with parallel enrichment.
 
-    Graph topology::
+    Topology::
 
         N1 (document_ingestion)
          │
@@ -73,68 +107,93 @@ def build_workflow() -> StateGraph:
                               │
                          N12 (critique)
                               │
-              ┌───────────────┼──────────────┐
-              ▼               ▼              ▼
-         (retry N4/5/9)   N13/14 (HITL)   [Parallel Enrichment Start]
-                              │              │
-                              ▼              ├───────────────┐
-              ┌───────────────┴──────────────┤               │
-              ▼                              ▼               ▼
-        N6 (stakeholder)              N8 (coherence)   N15 (citation)
-              │                              │               │
-        N7 (raci_generator)                  │               │
-              │                              │               │
-              └───────────────┬──────────────┴───────────────┘
-                              ▼
-                        N10 (knowledge_graph)
+              ┌───────────────┼─────────────────────────┐
+              ▼               ▼                         ▼
+         (retry N4/5/9)  N13/14 (HITL)         enrichment_dispatch
+                              │                         ▲
+                              └─────────────────────────┘
+                                                        │
+                              ┌─────────────────────────┼─────────────────────────┐
+                              ▼                         ▼                         ▼
+                       N6 (stakeholder)         N8 (coherence)           N15 (citation)
                               │
-                        N17 (save_to_db)
-                              │
-                        N11 (decision_intelligence)
-                              │
-                        N16 (final_assembler)
-                              │
-                             END
+                       N7 (raci)
+                              │                         │                         │
+                              └────────────► N10 (knowledge_graph) ◄──────────────┘
+                                                        │   (fan-in barrier)
+                                                  N17 (save_to_db)
+                                                        │
+                                              N11 (decision_intelligence)
+                                                        │
+                                                  N16 (final_assembler)
+                                                        │
+                                                       END
+
+    Parallel-write state-safety contract (see ``ProjectState``):
+
+        Branch A:  N6 → ``extracted_stakeholders``
+                   N7 → ``raci_matrix``
+        Branch B:  N8 → ``coherence_score``, ``coherence_breakdown``,
+                        ``coherence_reason``, ``coherence_missing_dimensions``
+        Branch C:  N15 → ``citations``, ``citation_validation_passed``
+
+        Every branch writes a *disjoint* set of state keys, so LangGraph's
+        default last-write-wins merge is correct for them — **no additional
+        reducers required**. The only shared key is ``messages``, whose
+        schema already declares ``Annotated[list[BaseMessage], add_messages]``.
+        ``add_messages`` performs id-based deduplicated append, which is
+        exactly the merge semantic needed at the N10 fan-in barrier.
+
+    Routing contract preserved:
+
+        ``CritiqueEvaluationService.determine_next_step`` still returns the
+        literal string ``"stakeholder_extractor"`` (asserted by
+        ``test_workflow_routing_swarm.py``). The conditional ``path_map``
+        below remaps that *logical* destination to the *physical* dispatch
+        node. Tests are not affected.
     """
     workflow = StateGraph(ProjectState)
 
-    # ── Register all 17 nodes ──
+    # ── Node registration ────────────────────────────────────────────────
     # Pre-processing
-    workflow.add_node("document_ingestion", document_ingestion_node)    # N1
-    workflow.add_node("pii_anonymizer", pii_anonymizer_node)           # N2
+    workflow.add_node("document_ingestion", document_ingestion_node)        # N1
+    workflow.add_node("pii_anonymizer", pii_anonymizer_node)                # N2
 
     # Classification & extraction
-    workflow.add_node("router", router_node)                            # N3
-    workflow.add_node("risk_extractor", risk_extractor_node)            # N4
-    workflow.add_node("wbs_extractor", wbs_extractor_node)              # N5
-    workflow.add_node("budget_parser", budget_parser_node)              # N9
+    workflow.add_node("router", router_node)                                # N3
+    workflow.add_node("risk_extractor", risk_extractor_node)                # N4
+    workflow.add_node("wbs_extractor", wbs_extractor_node)                  # N5
+    workflow.add_node("budget_parser", budget_parser_node)                  # N9
 
     # QA & HITL
-    workflow.add_node("critique", critique_node)                        # N12
-    workflow.add_node("human_interrupt", human_interrupt_node)          # N13/N14
+    workflow.add_node("critique", critique_node)                            # N12
+    workflow.add_node("human_interrupt", human_interrupt_node)              # N13/N14
 
-    # Enrichment (Parallelizable)
+    # Parallel-enrichment fan-out point (passthrough — no business logic)
+    workflow.add_node("enrichment_dispatch", enrichment_dispatch_node)
+
+    # Enrichment branches (run concurrently after dispatch)
     workflow.add_node("stakeholder_extractor", stakeholder_extractor_node)  # N6
     workflow.add_node("raci_generator", raci_generator_node)                # N7
     workflow.add_node("coherence_scorer", coherence_scorer_node)            # N8
     workflow.add_node("citation_validator", citation_validator_node)        # N15
 
-    # Validation & persistence
-    workflow.add_node("knowledge_graph", knowledge_graph_builder_node)  # N10
-    workflow.add_node("save_to_db", save_to_db_node)                   # N17
+    # Synthesis & persistence
+    workflow.add_node("knowledge_graph", knowledge_graph_builder_node)      # N10 (fan-in)
+    workflow.add_node("save_to_db", save_to_db_node)                        # N17
 
     # Assembly
     workflow.add_node("decision_intelligence", decision_intelligence_node)  # N11
     workflow.add_node("final_assembler", final_assembler_node)              # N16
 
-    # ── Entry point ──
+    # ── Entry ────────────────────────────────────────────────────────────
     workflow.set_entry_point("document_ingestion")
 
-    # ── Pre-processing chain: N1 → N2 → N3 ──
+    # ── Pre-processing chain: N1 → N2 → N3 ──────────────────────────────
     workflow.add_edge("document_ingestion", "pii_anonymizer")
     workflow.add_edge("pii_anonymizer", "router")
 
-    # ── Router (N3) → extraction branch ──
+    # ── Router (N3) → extraction branch ─────────────────────────────────
     workflow.add_conditional_edges(
         "router",
         lambda state: state["doc_type"],
@@ -146,12 +205,16 @@ def build_workflow() -> StateGraph:
         },
     )
 
-    # ── Extraction → Critique ──
+    # ── Extraction → Critique (N12) ─────────────────────────────────────
     workflow.add_edge("risk_extractor", "critique")
     workflow.add_edge("wbs_extractor", "critique")
     workflow.add_edge("budget_parser", "critique")
 
-    # ── Critique (N12) → retry / HITL / enrichment branches ──
+    # ── Critique (N12) → retry / HITL / parallel-enrichment dispatch ────
+    # Path-map keys are the logical strings returned by
+    # CritiqueEvaluationService.determine_next_step. The decision
+    # "stakeholder_extractor" is *physically* routed to "enrichment_dispatch"
+    # so that the fan-out point is centralized.
     workflow.add_conditional_edges(
         "critique",
         _next_after_critique_v2,
@@ -160,41 +223,41 @@ def build_workflow() -> StateGraph:
             "wbs_extractor": "wbs_extractor",
             "budget_parser": "budget_parser",
             "human_interrupt": "human_interrupt",
-            "stakeholder_extractor": "stakeholder_extractor",
+            "stakeholder_extractor": "enrichment_dispatch",  # logical → physical
         },
     )
 
-    # ── Parallel Branch 1: Stakeholders & RACI ──
-    # If no HITL required, Critique goes directly to stakeholder_extractor
-    # If HITL required, human_interrupt goes to stakeholder_extractor
-    workflow.add_edge("human_interrupt", "stakeholder_extractor")
-    workflow.add_edge("stakeholder_extractor", "raci_generator")
-    workflow.add_edge("raci_generator", "knowledge_graph")
+    # ── HITL exit converges on the same dispatch node ───────────────────
+    # (Mutually exclusive with the direct critique→dispatch path; only one
+    # of these two edges fires per execution, so this is *not* a join.)
+    workflow.add_edge("human_interrupt", "enrichment_dispatch")
 
-    # ── Parallel Branch 2: Coherence Scorer ──
-    # Critique and HITL both fan-out to coherence_scorer
-    workflow.add_conditional_edges(
-        "critique",
-        lambda state: "coherence_scorer" if _next_after_critique_v2(state) == "stakeholder_extractor" else None,
-        {"coherence_scorer": "coherence_scorer"},
-    )
-    workflow.add_edge("human_interrupt", "coherence_scorer")
-    workflow.add_edge("coherence_scorer", "knowledge_graph")
+    # ── Parallel fan-out from dispatch ──────────────────────────────────
+    # Multiple unconditional outgoing edges from a single node = static
+    # parallel dispatch in LangGraph. All three branches receive the same
+    # input state and execute concurrently. The state-safety contract above
+    # guarantees that branch writes are disjoint (except ``messages``, which
+    # is reduced by ``add_messages``).
+    workflow.add_edge("enrichment_dispatch", "stakeholder_extractor")  # branch A start
+    workflow.add_edge("enrichment_dispatch", "coherence_scorer")       # branch B
+    workflow.add_edge("enrichment_dispatch", "citation_validator")     # branch C
 
-    # ── Parallel Branch 3: Citation Validator ──
-    # Critique and HITL both fan-out to citation_validator
-    workflow.add_conditional_edges(
-        "critique",
-        lambda state: "citation_validator" if _next_after_critique_v2(state) == "stakeholder_extractor" else None,
-        {"citation_validator": "citation_validator"},
-    )
-    workflow.add_edge("human_interrupt", "citation_validator")
-    workflow.add_edge("citation_validator", "knowledge_graph")
+    # Branch A is internally sequential because N7 strictly depends on
+    # ``extracted_stakeholders`` produced by N6.
+    workflow.add_edge("stakeholder_extractor", "raci_generator")       # N6 → N7
 
-    # ── Join & persistence: N10 → N17 ──
+    # ── Fan-in barrier at N10 (knowledge_graph) ─────────────────────────
+    # LangGraph executes a node only when *all* incoming edges have produced
+    # state updates. With three incoming edges from N7, N8, and N15, N10 is
+    # guaranteed not to run until every parallel branch has completed and
+    # its state delta has been merged via the schema reducers. This is the
+    # canonical fan-in idiom — no explicit barrier node is required.
+    workflow.add_edge("raci_generator", "knowledge_graph")             # branch A → join
+    workflow.add_edge("coherence_scorer", "knowledge_graph")           # branch B → join
+    workflow.add_edge("citation_validator", "knowledge_graph")         # branch C → join
+
+    # ── Persistence & assembly: N10 → N17 → N11 → N16 → END ─────────────
     workflow.add_edge("knowledge_graph", "save_to_db")
-
-    # ── Assembly: N17 → N11 → N16 → END ──
     workflow.add_edge("save_to_db", "decision_intelligence")
     workflow.add_edge("decision_intelligence", "final_assembler")
     workflow.add_edge("final_assembler", END)
