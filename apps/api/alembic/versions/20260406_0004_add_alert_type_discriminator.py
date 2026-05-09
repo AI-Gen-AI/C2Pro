@@ -32,21 +32,22 @@ def upgrade() -> None:
     3. Create index on alert_type
     4. Backfill existing alerts based on rule_id presence
     """
-    # Create alert_type enum
+    # Create alert_type enum (idempotent — safe to re-run)
     op.execute("""
-        CREATE TYPE alerttype AS ENUM ('risk', 'coherence', 'budget', 'wbs')
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'alerttype') THEN
+                CREATE TYPE alerttype AS ENUM ('risk', 'coherence', 'budget', 'wbs');
+            END IF;
+        END
+        $$;
     """)
 
-    # Add alert_type column with default='risk' for backward compatibility
-    op.add_column(
-        "alerts",
-        sa.Column(
-            "alert_type",
-            postgresql.ENUM("risk", "coherence", "budget", "wbs", name="alerttype"),
-            nullable=False,
-            server_default="risk",
-        ),
-    )
+    # Add alert_type column with default='risk' for backward compatibility (idempotent)
+    op.execute("""
+        ALTER TABLE alerts
+        ADD COLUMN IF NOT EXISTS alert_type alerttype NOT NULL DEFAULT 'risk'
+    """)
 
     # Backfill existing alerts:
     # - If rule_id is not null → alert_type='coherence' (from coherence rules)
@@ -54,18 +55,13 @@ def upgrade() -> None:
     op.execute("""
         UPDATE alerts
         SET alert_type = 'coherence'
-        WHERE rule_id IS NOT NULL
+        WHERE rule_id IS NOT NULL AND alert_type = 'risk'
     """)
 
-    # Remove server default after backfill (default will be handled in application)
-    op.alter_column("alerts", "alert_type", server_default=None)
-
-    # Create index on alert_type for efficient filtering
-    op.create_index(
-        "ix_alerts_alert_type",
-        "alerts",
-        ["alert_type"],
-    )
+    # Create index on alert_type for efficient filtering (idempotent)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS ix_alerts_alert_type ON alerts(alert_type)
+    """)
 
 
 def downgrade() -> None:
