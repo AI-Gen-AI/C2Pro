@@ -32,8 +32,7 @@ export default async function ProjectCoherencePage({
     <div className="space-y-5">
       {loadError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {loadError}. Verify backend API is running at{" "}
-          <code>http://localhost:8000</code>.
+          {loadError}. Verify the backend service is available and try again.
         </div>
       ) : null}
 
