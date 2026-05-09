@@ -79,14 +79,8 @@ def upgrade() -> None:
         """
     )
 
-    # Backfill metadata_json from changes for existing records
-    op.execute(
-        """
-        UPDATE audit_logs
-        SET metadata_json = changes
-        WHERE metadata_json IS NULL OR metadata_json = '{}'::jsonb
-        """
-    )
+    # Note: 'changes' column does not exist in production; existing rows keep
+    # the '{}' server default for metadata_json — no data migration needed.
 
     # Create indexes for new columns
     op.execute(
