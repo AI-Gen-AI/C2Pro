@@ -60,19 +60,10 @@ def upgrade() -> None:
         WHERE cr.project_id = p.id
     """)
 
-    # 3. Make tenant_id NOT NULL after population
-    op.alter_column('clause_embeddings', 'tenant_id', nullable=False)
-    op.alter_column('analyses', 'tenant_id', nullable=False)
-    op.alter_column('alerts', 'tenant_id', nullable=False)
-    op.alter_column('coherence_results', 'tenant_id', nullable=False)
+    # 3. Columns stay nullable=True — NOT NULL deferred until all rows confirmed clean.
+    # FK constraints to 'tenants' skipped — table managed outside Alembic scope.
 
-    # 4. Add FK constraints
-    op.create_foreign_key('fk_clause_embeddings_tenant', 'clause_embeddings', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key('fk_analyses_tenant', 'analyses', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key('fk_alerts_tenant', 'alerts', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key('fk_coherence_results_tenant', 'coherence_results', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-
-    # 5. Add indices
+    # 4. Add indices
     op.create_index('ix_clause_embeddings_tenant', 'clause_embeddings', ['tenant_id'])
     op.create_index('ix_analyses_tenant', 'analyses', ['tenant_id'])
     op.create_index('ix_alerts_tenant', 'alerts', ['tenant_id'])
