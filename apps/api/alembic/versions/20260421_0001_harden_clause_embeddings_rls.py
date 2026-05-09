@@ -22,7 +22,7 @@ _POLICY_NAME = "clause_embeddings_tenant_isolation"
 
 def upgrade() -> None:
     """Enable strict RLS on clause_embeddings without schema changes."""
-    op.execute("SET LOCAL lock_timeout = '5s';")
+    op.execute("SET LOCAL lock_timeout = '30s';")
     op.execute("ALTER TABLE clause_embeddings ENABLE ROW LEVEL SECURITY;")
     op.execute("ALTER TABLE clause_embeddings FORCE ROW LEVEL SECURITY;")
     op.execute(f"DROP POLICY IF EXISTS {_POLICY_NAME} ON clause_embeddings;")

@@ -24,15 +24,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add tenant_id to tables where it is missing
-    # clause_embeddings
-    op.add_column('clause_embeddings', sa.Column('tenant_id', postgresql.UUID(as_uuid=True), nullable=True))
-    # analyses
-    op.add_column('analyses', sa.Column('tenant_id', postgresql.UUID(as_uuid=True), nullable=True))
-    # alerts
-    op.add_column('alerts', sa.Column('tenant_id', postgresql.UUID(as_uuid=True), nullable=True))
-    # coherence_results
-    op.add_column('coherence_results', sa.Column('tenant_id', postgresql.UUID(as_uuid=True), nullable=True))
+    # 1. Add tenant_id to tables where it is missing — idempotent via IF NOT EXISTS
+    op.execute("ALTER TABLE clause_embeddings ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("ALTER TABLE analyses ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("ALTER TABLE coherence_results ADD COLUMN IF NOT EXISTS tenant_id UUID")
 
     # 2. Populate tenant_id from projects table
     op.execute("""
@@ -63,11 +59,11 @@ def upgrade() -> None:
     # 3. Columns stay nullable=True — NOT NULL deferred until all rows confirmed clean.
     # FK constraints to 'tenants' skipped — table managed outside Alembic scope.
 
-    # 4. Add indices
-    op.create_index('ix_clause_embeddings_tenant', 'clause_embeddings', ['tenant_id'])
-    op.create_index('ix_analyses_tenant', 'analyses', ['tenant_id'])
-    op.create_index('ix_alerts_tenant', 'alerts', ['tenant_id'])
-    op.create_index('ix_coherence_results_tenant', 'coherence_results', ['tenant_id'])
+    # 4. Add indices — idempotent
+    op.execute("CREATE INDEX IF NOT EXISTS ix_clause_embeddings_tenant ON clause_embeddings(tenant_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_analyses_tenant ON analyses(tenant_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_alerts_tenant ON alerts(tenant_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_coherence_results_tenant ON coherence_results(tenant_id)")
 
     # 6. Enable RLS and create fail-closed policies
     # audit_logs excluded: it has no tenant_id column (uses actor_id); its RLS

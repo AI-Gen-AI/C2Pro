@@ -22,32 +22,24 @@ depends_on = None
 
 def upgrade() -> None:
     """Add version and file_hash columns to documents table."""
-    # Add version column (default 1 for existing documents)
-    op.add_column(
-        'documents',
-        sa.Column('version', sa.Integer(), nullable=False, server_default='1')
+    # Add version column (default 1 for existing documents) — idempotent
+    op.execute(
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1"
     )
 
-    # Add file_hash column for duplicate detection
-    op.add_column(
-        'documents',
-        sa.Column('file_hash', sa.String(length=64), nullable=True)
+    # Add file_hash column for duplicate detection — idempotent
+    op.execute(
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_hash VARCHAR(64)"
     )
 
-    # Add index on file_hash for efficient duplicate detection
-    op.create_index(
-        'ix_documents_file_hash',
-        'documents',
-        ['file_hash'],
-        unique=False
+    # Add index on file_hash for efficient duplicate detection — idempotent
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_documents_file_hash ON documents(file_hash)"
     )
 
-    # Add composite index on (id, version) for version history queries
-    op.create_index(
-        'ix_documents_id_version',
-        'documents',
-        ['id', 'version'],
-        unique=False
+    # Add composite index on (id, version) for version history queries — idempotent
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_documents_id_version ON documents(id, version)"
     )
 
 

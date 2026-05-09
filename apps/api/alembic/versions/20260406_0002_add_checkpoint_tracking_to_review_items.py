@@ -21,85 +21,50 @@ depends_on = None
 
 def upgrade() -> None:
     """Add checkpoint tracking fields for LangGraph workflow resumption."""
-    # Add checkpoint_id for LangGraph checkpoint reference
-    op.add_column(
-        "review_items",
-        sa.Column("checkpoint_id", sa.String(255), nullable=True),
-    )
+    # Add columns — all idempotent via ADD COLUMN IF NOT EXISTS
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS checkpoint_id VARCHAR(255)")
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS thread_id VARCHAR(255)")
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS project_id UUID")
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS document_id UUID")
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS review_type VARCHAR(128)")
+    op.execute("ALTER TABLE review_items ADD COLUMN IF NOT EXISTS review_decision TEXT")
 
-    # Add thread_id for LangGraph thread tracking
-    op.add_column(
-        "review_items",
-        sa.Column("thread_id", sa.String(255), nullable=True),
-    )
+    # Create indexes — idempotent
+    op.execute("CREATE INDEX IF NOT EXISTS ix_review_items_checkpoint_id ON review_items(checkpoint_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_review_items_thread_id ON review_items(thread_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_review_items_project_status ON review_items(project_id, current_status)")
 
-    # Add project_id FK for proper data relationships
-    op.add_column(
-        "review_items",
-        sa.Column("project_id", UUID(as_uuid=True), nullable=True),
-    )
-
-    # Add document_id FK for document-related reviews
-    op.add_column(
-        "review_items",
-        sa.Column("document_id", UUID(as_uuid=True), nullable=True),
-    )
-
-    # Add review_type for categorizing reviews
-    op.add_column(
-        "review_items",
-        sa.Column("review_type", sa.String(128), nullable=True),
-    )
-
-    # Add review_decision for storing approval/rejection feedback
-    op.add_column(
-        "review_items",
-        sa.Column("review_decision", sa.Text, nullable=True),
-    )
-
-    # Create index on checkpoint_id for fast lookups during resume
-    op.create_index(
-        "ix_review_items_checkpoint_id",
-        "review_items",
-        ["checkpoint_id"],
-        unique=False,
-    )
-
-    # Create index on thread_id for workflow tracking
-    op.create_index(
-        "ix_review_items_thread_id",
-        "review_items",
-        ["thread_id"],
-        unique=False,
-    )
-
-    # Create composite index on project_id and status for queue queries
-    op.create_index(
-        "ix_review_items_project_status",
-        "review_items",
-        ["project_id", "current_status"],
-        unique=False,
-    )
-
-    # Create FK constraint to projects (if projects table exists)
-    op.create_foreign_key(
-        "fk_review_items_project_id",
-        "review_items",
-        "projects",
-        ["project_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
-
-    # Create FK constraint to documents (if documents table exists)
-    op.create_foreign_key(
-        "fk_review_items_document_id",
-        "review_items",
-        "documents",
-        ["document_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
+    # Create FK constraints — idempotent via DO block
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.table_constraints
+                WHERE constraint_name = 'fk_review_items_project_id'
+                  AND table_name = 'review_items'
+            ) THEN
+                ALTER TABLE review_items
+                ADD CONSTRAINT fk_review_items_project_id
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+            END IF;
+        END
+        $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.table_constraints
+                WHERE constraint_name = 'fk_review_items_document_id'
+                  AND table_name = 'review_items'
+            ) THEN
+                ALTER TABLE review_items
+                ADD CONSTRAINT fk_review_items_document_id
+                FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
+            END IF;
+        END
+        $$;
+    """)
 
 
 def downgrade() -> None:

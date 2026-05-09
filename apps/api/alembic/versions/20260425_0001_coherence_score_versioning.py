@@ -22,7 +22,7 @@ _ENUM_NAME = "coherence_score_version"
 
 def upgrade() -> None:
     """Add immutable audit-trail fields for score-version transitions."""
-    op.execute("SET LOCAL lock_timeout = '5s';")
+    op.execute("SET LOCAL lock_timeout = '30s';")
     op.execute(
         f"""
         DO $$
@@ -57,7 +57,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove score-version audit fields."""
-    op.execute("SET LOCAL lock_timeout = '5s';")
+    op.execute("SET LOCAL lock_timeout = '30s';")
     op.execute("ALTER TABLE coherence_results DROP COLUMN IF EXISTS score_missing_dimensions")
     op.execute("ALTER TABLE coherence_results DROP COLUMN IF EXISTS score_reason")
     op.execute("ALTER TABLE coherence_results DROP COLUMN IF EXISTS score_version")
