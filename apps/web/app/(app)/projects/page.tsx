@@ -857,8 +857,7 @@ export default function ProjectsPage() {
 
       {loadError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          API request failed ({loadError}). Verify backend API is running at{" "}
-          <code>http://localhost:8000/api/v1</code>.
+          API request failed ({loadError}). Verify the backend service is available and try again.
         </div>
       ) : null}
 
