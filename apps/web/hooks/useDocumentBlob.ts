@@ -59,7 +59,7 @@ export function useDocumentBlob(documentId: string | null): UseDocumentBlobResul
 
         if (!active) return;
 
-        const contentType = response.headers['content-type'] || '';
+        const contentType = String(response.headers['content-type'] ?? '');
         if (contentType.includes('application/json')) {
           const text = await response.data.text();
           const payload = JSON.parse(text) as { url?: string };
