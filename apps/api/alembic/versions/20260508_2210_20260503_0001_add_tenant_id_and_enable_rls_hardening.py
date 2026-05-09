@@ -70,11 +70,13 @@ def upgrade() -> None:
     op.create_index('ix_coherence_results_tenant', 'coherence_results', ['tenant_id'])
 
     # 6. Enable RLS and create fail-closed policies
-    tables = ['clause_embeddings', 'analyses', 'alerts', 'audit_logs', 'coherence_results']
-    for table in tables:
+    # audit_logs excluded: it has no tenant_id column (uses actor_id); its RLS
+    # is managed by earlier migrations (20260205_0001, 20260318_0002).
+    tables_with_tenant_id = ['clause_embeddings', 'analyses', 'alerts', 'coherence_results']
+    for table in tables_with_tenant_id:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-        
+
         # Drop existing policies if any
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_select ON {table}")
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_insert ON {table}")
@@ -105,9 +107,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Disable RLS
-    tables = ['clause_embeddings', 'analyses', 'alerts', 'audit_logs']
-    for table in tables:
+    # Disable RLS (audit_logs excluded — managed by earlier migrations)
+    tables_with_tenant_id = ['clause_embeddings', 'analyses', 'alerts', 'coherence_results']
+    for table in tables_with_tenant_id:
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_select ON {table}")
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_insert ON {table}")
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation_update ON {table}")
