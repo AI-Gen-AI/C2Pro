@@ -128,21 +128,15 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def get_by_id(
         self, stakeholder_id: UUID, tenant_id: UUID
     ) -> Stakeholder | None:
+        """Get stakeholder by ID (relying on RLS for tenant isolation)."""
         stmt = select(StakeholderORM).where(StakeholderORM.id == stakeholder_id)
-        if tenant_id is not None:
-            stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
         return self._to_domain(orm) if orm else None
 
     async def get_all_stakeholders(self, tenant_id: UUID) -> list[Stakeholder]:
-        stmt = (
-            select(StakeholderORM)
-            .join(ProjectORM, ProjectORM.id == StakeholderORM.project_id)
-            .where(ProjectORM.tenant_id == tenant_id)
-        )
+        """List all stakeholders for a tenant (relying on RLS)."""
+        stmt = select(StakeholderORM)
         result = await self.session.execute(stmt)
         items = result.scalars().all()
         return [self._to_domain(item) for item in items]
@@ -154,39 +148,39 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Stakeholder], int]:
+        """List stakeholders for a project with pagination (relying on RLS)."""
         stmt = (
             select(StakeholderORM)
             .where(StakeholderORM.project_id == project_id)
             .offset(skip)
             .limit(limit)
         )
-        count_stmt = select(func.count()).select_from(StakeholderORM).where(
-            StakeholderORM.project_id == project_id
+        count_stmt = (
+            select(func.count())
+            .select_from(StakeholderORM)
+            .where(StakeholderORM.project_id == project_id)
         )
-        if tenant_id is not None:
-            stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
-            count_stmt = count_stmt.join(ProjectORM, ProjectORM.id == StakeholderORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
 
         result = await self.session.execute(stmt)
         items = result.scalars().all()
 
         total_count_result = await self.session.execute(count_stmt)
-        total_count = total_count_result.scalar_one()
+        total_count = total_count_result.scalar_one() or 0
 
         return [self._to_domain(item) for item in items], total_count
 
     async def update(self, stakeholder: Stakeholder, tenant_id: UUID) -> None:
+        """Update stakeholder metadata."""
         orm = await self.session.get(StakeholderORM, stakeholder.id)
         if orm is None:
             return
+        
+        # Verify ownership if tenant_id is provided
         if tenant_id is not None:
             proj_tenant = await self._get_project_tenant_id(orm.project_id)
             if proj_tenant is None or proj_tenant != tenant_id:
                 raise PermissionError("Cannot update stakeholder for project outside tenant")
+
         orm.name = stakeholder.name
         orm.role = stakeholder.role
         orm.organization = stakeholder.organization
@@ -203,31 +197,34 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.reviewed_at = self._normalize_naive_utc(stakeholder.reviewed_at)
         orm.review_comment = stakeholder.review_comment
         orm.stakeholder_metadata = stakeholder.stakeholder_metadata
+        
+        await self.session.flush()
 
     async def delete(self, stakeholder_id: UUID, tenant_id: UUID) -> None:
+        """Delete a stakeholder."""
         orm = await self.get_by_id(stakeholder_id=stakeholder_id, tenant_id=tenant_id)
         if orm:
-            orm = await self.session.get(StakeholderORM, orm.id)
-        if orm:
-            await self.session.delete(orm)
+            orm_to_delete = await self.session.get(StakeholderORM, orm.id)
+            if orm_to_delete:
+                await self.session.delete(orm_to_delete)
+                await self.session.flush()
 
     async def add_raci_assignment(
         self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
+        """Add a RACI assignment."""
         if tenant_id is not None:
             proj_tenant = await self._get_project_tenant_id(assignment.project_id)
             if proj_tenant is None or proj_tenant != tenant_id:
                 raise PermissionError("Cannot add RACI assignment for project outside tenant")
         self.session.add(self._to_raci_orm(assignment))
+        await self.session.flush()
 
     async def list_raci_assignments(
         self, project_id: UUID, tenant_id: UUID
     ) -> list[RaciAssignment]:
+        """List RACI assignments for a project (relying on RLS)."""
         stmt = select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
-        if tenant_id is not None:
-            stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderWBSRaciORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
         result = await self.session.execute(stmt)
         rows = result.scalars().all()
         return [self._to_raci_domain(row) for row in rows]
@@ -239,15 +236,12 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         stakeholder_id: UUID,
         tenant_id: UUID,
     ) -> RaciAssignment | None:
+        """Get a specific RACI assignment (relying on RLS)."""
         stmt = select(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.project_id == project_id,
             StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
             StakeholderWBSRaciORM.stakeholder_id == stakeholder_id,
         )
-        if tenant_id is not None:
-            stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderWBSRaciORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
         return self._to_raci_domain(orm) if orm else None
@@ -259,6 +253,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         tenant_id: UUID,
         exclude_stakeholder_id: UUID | None = None,
     ) -> RaciAssignment | None:
+        """Get the ACCOUNTABLE stakeholder for a WBS item (relying on RLS)."""
         stmt = select(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.project_id == project_id,
             StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
@@ -266,10 +261,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         )
         if exclude_stakeholder_id:
             stmt = stmt.where(StakeholderWBSRaciORM.stakeholder_id != exclude_stakeholder_id)
-        if tenant_id is not None:
-            stmt = stmt.join(ProjectORM, ProjectORM.id == StakeholderWBSRaciORM.project_id).where(
-                ProjectORM.tenant_id == tenant_id
-            )
+        
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
         return self._to_raci_domain(orm) if orm else None
@@ -277,6 +269,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def update_raci_assignment(
         self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
+        """Update a RACI assignment."""
         orm = await self.session.get(StakeholderWBSRaciORM, assignment.id)
         if not orm:
             return
@@ -290,6 +283,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.manually_verified = assignment.manually_verified
         orm.verified_by = assignment.verified_by
         orm.verified_at = assignment.verified_at
+        await self.session.flush()
 
     async def commit(self) -> None:
         await self.session.commit()
