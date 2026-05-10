@@ -2,22 +2,23 @@ openapi: 3.1.0
 info:
   title: C2Pro API
   description: "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma\
-    \ de inteligencia contractual para proyectos de construcci\xF3n e ingenier\xED\
-    a.\n\n        ## Caracter\xEDsticas\n\n        - \U0001F50D **Auditor\xEDa Tridimensional**:\
-    \ Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \U0001F916\
-    \ **IA Especializada**: Claude 4 entrenado en documentos de construcci\xF3n\n\
-    \        - \U0001F4CA **Coherence Score**: Indicador 0-100 de alineaci\xF3n entre\
-    \ documentos\n        - \U0001F465 **Stakeholder Intelligence**: Extracci\xF3\
-    n y mapeo autom\xE1tico de stakeholders\n        - \U0001F4C8 **Multi-tenant**:\
-    \ Aislamiento completo de datos por organizaci\xF3n\n\n        ## Autenticaci\xF3\
-    n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
-    \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
+    \ de inteligencia contractual para proyectos de construcci\xC3\xB3n e ingenier\xC3\
+    \xADa.\n\n        ## Caracter\xC3\xADsticas\n\n        - \xF0\u0178\u201D **Auditor\xC3\
+    \xADa Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n\
+    \        - \xF0\u0178\xA4\u2013 **IA Especializada**: Claude 4 entrenado en documentos\
+    \ de construcci\xC3\xB3n\n        - \xF0\u0178\u201C\u0160 **Coherence Score**:\
+    \ Indicador 0-100 de alineaci\xC3\xB3n entre documentos\n        - \xF0\u0178\u2018\
+    \xA5 **Stakeholder Intelligence**: Extracci\xC3\xB3n y mapeo autom\xC3\xA1tico\
+    \ de stakeholders\n        - \xF0\u0178\u201C\u02C6 **Multi-tenant**: Aislamiento\
+    \ completo de datos por organizaci\xC3\xB3n\n\n        ## Autenticaci\xC3\xB3\
+    n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xC3\xB3n.\n\n \
+    \       1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
     \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
-    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
+    \ Bearer <token>`\n\n        ## L\xC3\xADmites de Uso\n\n        - **Rate Limit**:\
     \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
-    \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
-    \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
-    \        - \U0001F4AC Discord: https://discord.gg/c2pro\n        "
+    \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \xF0\u0178\
+    \u201C\xA7 Email: support@c2pro.app\n        - \xF0\u0178\u201C\u2013 Docs: https://docs.c2pro.app\n\
+    \        - \xF0\u0178\u2019\xAC Discord: https://discord.gg/c2pro\n        "
   version: 1.0.0
 paths:
   /:
@@ -1842,6 +1843,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/projects/{project_id}/alerts:
+    get:
+      tags:
+      - alerts
+      summary: List alerts for a project
+      operationId: list_project_alerts_compatibility_api_projects__project_id__alerts_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: status_filter
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status Filter
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/bulk-operations/{job_id}/progress:
     get:
       tags:
@@ -3390,6 +3442,7 @@ paths:
       operationId: get_coherence_dashboard_api_v1_coherence_dashboard__project_id__get
       security:
       - HTTPBearer: []
+      - HTTPBearer: []
       parameters:
       - name: project_id
         in: path
@@ -3407,6 +3460,41 @@ paths:
                 type: object
                 additionalProperties: true
                 title: Response Get Coherence Dashboard Api V1 Coherence Dashboard  Project
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/coherence/dashboard/{project_id}:
+    get:
+      tags:
+      - Coherence Dashboard
+      summary: Get Coherence Dashboard
+      description: "Returns coherence dashboard data for a project.\n    Derived from\
+        \ the latest Analysis or CoherenceResult records."
+      operationId: get_coherence_dashboard_api_coherence_dashboard__project_id__get
+      security:
+      - HTTPBearer: []
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Coherence Dashboard Api Coherence Dashboard  Project
                   Id  Get
         '422':
           description: Validation Error
@@ -3527,6 +3615,140 @@ paths:
       - Stakeholders
       summary: Delete stakeholder
       operationId: delete_stakeholder_api_v1_stakeholders__stakeholder_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: stakeholder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+      responses:
+        '204':
+          description: Successful Response
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/stakeholders/projects/{project_id}:
+    get:
+      tags:
+      - Stakeholders
+      summary: List stakeholders for a project
+      operationId: list_project_stakeholders_api_stakeholders_projects__project_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StakeholderResponseOut'
+                title: Response List Project Stakeholders Api Stakeholders Projects  Project
+                  Id  Get
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Stakeholders
+      summary: Create stakeholder manually
+      operationId: create_project_stakeholder_api_stakeholders_projects__project_id__post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StakeholderCreateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderResponseOut'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/stakeholders/{stakeholder_id}:
+    patch:
+      tags:
+      - Stakeholders
+      summary: Update stakeholder
+      operationId: update_stakeholder_api_stakeholders__stakeholder_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: stakeholder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Stakeholder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StakeholderUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderResponseOut'
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Stakeholders
+      summary: Delete stakeholder
+      operationId: delete_stakeholder_api_stakeholders__stakeholder_id__delete
       security:
       - HTTPBearer: []
       parameters:
