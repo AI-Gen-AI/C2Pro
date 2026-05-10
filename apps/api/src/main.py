@@ -1,7 +1,7 @@
 """
 C2Pro - FastAPI Application
 
-Aplicación principal de la API de C2Pro.
+AplicaciÃ³n principal de la API de C2Pro.
 
 Refers to Suite ID: TS-CORE-MCP-STARTUP-001.
 """
@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         app: FastAPI application instance
 
     Yields:
-        None durante la ejecución de la aplicación
+        None durante la ejecuciÃ³n de la aplicaciÃ³n
     """
     # STARTUP
     logger.info("application_starting", environment=settings.environment, debug=settings.debug)
@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
 def create_application() -> FastAPI:
     """
-    Factory para crear la aplicación FastAPI.
+    Factory para crear la aplicaciÃ³n FastAPI.
 
     Returns:
         FastAPI application instance configurada
@@ -195,25 +195,25 @@ def create_application() -> FastAPI:
         description="""
         **C2Pro - Contract Intelligence Platform**
 
-        Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
+        Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
 
-        ## Características
+        ## CaracterÃ­sticas
 
-        - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
-        - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
-        - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
-        - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
-        - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
+        - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+        - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
+        - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
+        - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
+        - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
 
-        ## Autenticación
+        ## AutenticaciÃ³n
 
-        La API usa JWT (JSON Web Tokens) para autenticación.
+        La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
 
         1. **Registro**: `POST /api/v1/auth/register`
         2. **Login**: `POST /api/v1/auth/login`
         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
 
-        ## Límites de Uso
+        ## LÃ­mites de Uso
 
         - **Rate Limit**: 60 requests/minuto
         - **AI Budget**: $50 USD/mes (plan free)
@@ -221,9 +221,9 @@ def create_application() -> FastAPI:
 
         ## Soporte
 
-        - 📧 Email: support@c2pro.app
-        - 📖 Docs: https://docs.c2pro.app
-        - 💬 Discord: https://discord.gg/c2pro
+        - ðŸ“§ Email: support@c2pro.app
+        - ðŸ“– Docs: https://docs.c2pro.app
+        - ðŸ’¬ Discord: https://discord.gg/c2pro
         """,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -257,7 +257,7 @@ def create_application() -> FastAPI:
     # ===========================================
 
     # Registrar todos los exception handlers globales
-    # Ver src/core/handlers.py para detalles de implementación
+    # Ver src/core/handlers.py para detalles de implementaciÃ³n
     register_exception_handlers(app)
 
     # ===========================================
@@ -297,6 +297,9 @@ def create_application() -> FastAPI:
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)
+    # COMPATIBILITY: Register project alerts without v1 prefix for legacy frontend calls
+    app.include_router(project_alerts_router, prefix="/api")
+
     app.include_router(bulk_operations_router, prefix=api_v1_prefix)
     app.include_router(observability_router, prefix=api_v1_prefix)
     app.include_router(ai_feedback_router, prefix=api_v1_prefix)
@@ -336,6 +339,8 @@ def create_application() -> FastAPI:
         )
         app.include_router(coherence_router, prefix=api_v1_prefix)
         app.include_router(coherence_dashboard_router, prefix=api_v1_prefix)
+        # COMPATIBILITY: Register dashboard without v1 prefix
+        app.include_router(coherence_dashboard_router, prefix="/api")
         logger.info("router_registered", feature="coherence_analysis")
     else:
         logger.info("router_skipped", feature="coherence_analysis", reason="feature_flag_disabled")
@@ -345,6 +350,8 @@ def create_application() -> FastAPI:
         try:
             from src.stakeholders.adapters.http.router import router as stakeholders_router
             app.include_router(stakeholders_router, prefix=api_v1_prefix)
+            # COMPATIBILITY: Register stakeholders without v1 prefix
+            app.include_router(stakeholders_router, prefix="/api")
             logger.info("router_registered", feature="stakeholder_extraction")
         except ImportError:
             logger.warning("router_unavailable", feature="stakeholder_extraction", reason="module_not_ready")
