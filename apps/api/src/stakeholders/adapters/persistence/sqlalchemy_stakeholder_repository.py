@@ -165,7 +165,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         items = result.scalars().all()
 
         total_count_result = await self.session.execute(count_stmt)
-        total_count = total_count_result.scalar_one() or 0
+        total_count = total_count_result.scalar_one_or_none() or 0
 
         return [self._to_domain(item) for item in items], total_count
 

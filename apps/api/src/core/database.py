@@ -203,8 +203,9 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
                 and not settings.database_url.startswith("sqlite")
             ):
                 tenant_id = request.state.tenant_id
-                # SET commands don't support parameterized queries in PostgreSQL
-                # Use validated UUID to prevent SQL injection
+                # SET LOCAL ensures the variable is only set for the current transaction
+                # and automatically discarded on COMMIT or ROLLBACK.
+                # We use validated UUID to prevent SQL injection.
                 safe_tenant = _validate_uuid_for_sql(tenant_id)
                 await session.execute(text(f"SET LOCAL app.current_tenant = '{safe_tenant}'"))
                 logger.debug("RLS_tenant_set", tenant_id=str(tenant_id))
@@ -215,13 +216,17 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
-            # Always reset the tenant context to prevent leakage
+            # Explicit cleanup for extra safety in connection pooling scenarios.
             if (
                 hasattr(request.state, "tenant_id")
                 and request.state.tenant_id
                 and not settings.database_url.startswith("sqlite")
             ):
-                await session.execute(text("RESET app.current_tenant"))
+                try:
+                    await session.execute(text("RESET app.current_tenant"))
+                except Exception:
+                    # Connection might already be closed/invalid
+                    pass
                 logger.debug("RLS_tenant_reset", tenant_id=str(request.state.tenant_id))
 
 
