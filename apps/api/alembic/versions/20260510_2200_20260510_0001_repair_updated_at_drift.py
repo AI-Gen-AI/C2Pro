@@ -16,8 +16,7 @@ and safe to run on environments where the column already exists.
 """
 from collections.abc import Sequence
 
-from alembic import op
-
+from alembic import op  # noqa: E402
 
 # revision identifiers, used by Alembic.
 revision: str = '20260510_0001'
