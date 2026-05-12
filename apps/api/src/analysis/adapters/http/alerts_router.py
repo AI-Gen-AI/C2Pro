@@ -107,6 +107,12 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+project_alerts_router = APIRouter(
+    prefix="/projects",
+    tags=["Alerts"],
+    responses={404: {"description": "Not found"}},
+)
+
 
 def _require_admin(current_user: User) -> None:
     if current_user.role != UserRole.ADMIN:
