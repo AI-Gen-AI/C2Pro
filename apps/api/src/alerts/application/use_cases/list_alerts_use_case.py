@@ -28,8 +28,15 @@ class ListAlertsUseCase:
         severity: str | None = None,
     ) -> AlertListResponse:
         """List alerts for a specific project."""
-        status_enum = AlertStatus(status) if status else None
-        severity_enum = AlertSeverity(severity) if severity else None
+        try:
+            status_enum = AlertStatus(status) if status else None
+        except ValueError:
+            status_enum = None
+
+        try:
+            severity_enum = AlertSeverity(severity) if severity else None
+        except ValueError:
+            severity_enum = None
 
         alerts = await self._repository.list_for_project(
             project_id=project_id,
@@ -53,8 +60,15 @@ class ListAlertsUseCase:
         severity: str | None = None,
     ) -> AlertListResponse:
         """List alerts for a tenant with optional filters."""
-        status_enum = AlertStatus(status) if status else None
-        severity_enum = AlertSeverity(severity) if severity else None
+        try:
+            status_enum = AlertStatus(status) if status else None
+        except ValueError:
+            status_enum = None
+
+        try:
+            severity_enum = AlertSeverity(severity) if severity else None
+        except ValueError:
+            severity_enum = None
 
         alerts = await self._repository.list_for_tenant(
             tenant_id=tenant_id,

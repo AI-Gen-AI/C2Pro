@@ -19,8 +19,8 @@ from sentry_sdk.utils import BadDsn
 import src.analysis.adapters.ai.tools  # noqa: F401
 from src.admin.adapters.http.router import router as dlq_admin_router
 from src.ai_feedback.router import router as ai_feedback_router
-from src.alerts.adapters.http.router import project_alerts_router
-from src.alerts.adapters.http.router import router as alerts_router
+from src.analysis.adapters.http.alerts_router import project_alerts_router
+from src.analysis.adapters.http.alerts_router import router as alerts_router
 from src.analysis.adapters.graph.workflow import (
     close_checkpointer_resources,
     ensure_checkpointer_ready,
