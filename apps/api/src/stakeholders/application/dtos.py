@@ -187,10 +187,10 @@ class StakeholderResponseOut(BaseModel):
     role: str | None
     company: str | None
     department: str | None
-    email: EmailStr | None
+    email: str | None
     phone: str | None
-    power_score: int
-    interest_score: int
+    power_score: int | None
+    interest_score: int | None
     power_level: PowerLevel
     interest_level: InterestLevel
     quadrant: StakeholderQuadrant | None
