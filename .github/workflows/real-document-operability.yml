@@ -11,7 +11,7 @@ on:
       - "apps/web/**"
       - "evals/**"
       - ".github/workflows/real-document-operability.yml"
-      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      - "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
   push:
     branches: [main, develop]
     paths:
@@ -19,7 +19,7 @@ on:
       - "apps/web/**"
       - "evals/**"
       - ".github/workflows/real-document-operability.yml"
-      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      - "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
   workflow_dispatch:
 
 permissions:
@@ -129,8 +129,7 @@ jobs:
 
           ## Known Tracked Blockers
 
-          - `TASK-OPS-DOCFLOW-015`: Full backend suite gate collection currently fails locally on `ModuleNotFoundError: No module named 'schemathesis'` in `tests/contract/schemathesis/*`; adding or installing this dependency requires approved dependency workflow.
-          - `TASK-OPS-DOCFLOW-016`: Full backend suite gate collection also exposes stale legacy contract imports for removed/relocated modules such as `src.alerts.router` and `get_bom_repository` from `src.procurement.adapters.http.router`.
+          - `TASK-OPS-DOCFLOW-016`: Full backend suite gate collection exposes stale legacy contract imports for removed/relocated modules such as `src.alerts.router` and `get_bom_repository` from `src.procurement.adapters.http.router`.
 
           ## Passing Gates Required Before This Tracking
 
