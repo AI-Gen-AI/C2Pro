@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-08T00:15:00Z",
+  "updated_at": "2026-05-13T00:00:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1346,6 +1346,35 @@
         "tests_pasados": true,
         "validacion_lint": true,
         "nota_verificacion": "RED full suite failed on golden.evaluators. Diagnostic importlib collection passed golden and exposed schemathesis/stale-import blockers. tests/golden passed after importlib mode and Core-100 runner expectation updates. TASK-015 and TASK-016 were added for the newly exposed blockers."
+      }
+    },
+    {
+      "tarea_id": "T090",
+      "backlog_id": "TASK-OPS-DOCFLOW-015",
+      "tipo": "qa",
+      "descripcion": "Fix full backend suite Schemathesis dependency blocker so contract tests can collect in local and CI environments.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Backend requirements install Schemathesis, contract suite collection proceeds past missing dependency, and workflow blocker tracking no longer lists TASK-OPS-DOCFLOW-015.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/requirements.txt",
+        "apps/api/tests/contract/schemathesis/conftest.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-13T00:00:00Z",
+        "completado": "2026-05-13T00:00:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Schemathesis dependency blocker is closed with a pytest-9-compatible Schemathesis install and v4 loader compatibility for the existing contract suite.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED full suite failed on ModuleNotFoundError: No module named 'schemathesis'. GREEN passed backend CI guards 7/7 and Schemathesis alerts collect-only 12 cases; targeted Ruff passed. Full-suite execution/collection exceeded local timeouts after the dependency blocker was removed; TASK-016 remains reproduced by tests/core/test_alerts_router_contract.py failing on src.alerts.router."
       }
     }
   ],

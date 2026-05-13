@@ -42,7 +42,7 @@ def test_openapi_schema_examples_do_not_use_jwt_like_placeholders() -> None:
 
 
 def test_real_document_operability_workflow_runs_required_quality_gates() -> None:
-    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014."""
+    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014, TASK-OPS-DOCFLOW-015."""
 
     repo_root = Path(__file__).resolve().parents[4]
     workflow = repo_root / ".github" / "workflows" / "real-document-operability.yml"
@@ -64,12 +64,25 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     assert "python -m pytest tests/evals/test_golden_corpus.py -q" in contents
     assert "pnpm lint" in contents
     assert "real-document-operability-blockers.md" in contents
-    assert "TASK-OPS-DOCFLOW-015" in contents
     assert "TASK-OPS-DOCFLOW-016" in contents
+    assert "TASK-OPS-DOCFLOW-015" not in contents
+    assert "No module named 'schemathesis'" not in contents
+    assert "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" in contents
+    assert "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" not in contents
     assert "TASK-OPS-DOCFLOW-014" not in contents
     assert "golden.evaluators" not in contents
     assert "TASK-OPS-DOCFLOW-013" not in contents
     assert "test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded" not in contents
+
+
+def test_backend_requirements_include_schemathesis_contract_dependency() -> None:
+    """Test Suite ID: TASK-OPS-DOCFLOW-015."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "apps" / "api" / "requirements.txt"
+    contents = requirements.read_text(encoding="utf-8")
+
+    assert "schemathesis>=4.18.5" in contents
 
 
 def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> None:

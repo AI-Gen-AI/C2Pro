@@ -50,7 +50,7 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-012` | P1 | Complete | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates and tracks known blockers. |
 | `TASK-OPS-DOCFLOW-013` | P1 | Complete | Fix INF coverage blocker. | HITL metric label contract plus observability/resilience/security coverage restoration. | Scoped INF coverage gate passes at `>=70%` and CI treats it as a hard gate. |
 | `TASK-OPS-DOCFLOW-014` | P1 | Complete | Fix golden package collection blocker. | Pytest import mode isolates `tests/golden` from production `src/golden`. | Full backend collection proceeds past `golden.evaluators` and exposes the next blockers. |
-| `TASK-OPS-DOCFLOW-015` | P1 | Pending | Fix Schemathesis dependency blocker. | Dependency/install or test-gating decision for `tests/contract/schemathesis/*`. | Full backend collection no longer fails on missing `schemathesis`. |
+| `TASK-OPS-DOCFLOW-015` | P1 | Complete | Fix Schemathesis dependency blocker. | Promoted pytest-9-compatible Schemathesis dependency into backend requirements and removed the CI approved-blocker entry. | Full backend collection no longer fails on missing `schemathesis`; next stop remains `TASK-OPS-DOCFLOW-016`. |
 | `TASK-OPS-DOCFLOW-016` | P1 | Pending | Fix stale legacy contract imports. | Updated tests or compatibility shims for relocated alert/procurement router contracts. | Full backend collection no longer fails on `src.alerts.router` or `get_bom_repository` imports. |
 
 ## Task Details
@@ -491,6 +491,15 @@ Evidence captured 2026-05-08:
 - Newly tracked blockers:
   - `TASK-OPS-DOCFLOW-015`: missing `schemathesis` dependency for contract suite collection.
   - `TASK-OPS-DOCFLOW-016`: stale legacy contract imports for relocated alert/procurement router APIs exposed during importlib-mode collection.
+
+### TASK-OPS-DOCFLOW-015 - Schemathesis Dependency Restoration
+
+- Status: Complete.
+- RED evidence: `python -m pytest tests/ -x -q` failed first on `ModuleNotFoundError: No module named 'schemathesis'` from `tests/contract/schemathesis/test_alerts_router.py`.
+- Guard evidence: targeted backend CI guard failed before the fix because `apps/api/requirements.txt` did not include Schemathesis and the real-document workflow still listed `TASK-OPS-DOCFLOW-015` as an approved blocker.
+- Implementation: added `schemathesis>=4.18.5` to `apps/api/requirements.txt`, restored Schemathesis v4 loader compatibility in the contract-suite conftest, removed `TASK-OPS-DOCFLOW-015` from the workflow blocker artifact, and updated workflow path filters to the archived plan path from current `main`.
+- GREEN evidence: `python -m pytest tests/unit/test_backend_ci_guards.py -q` passed; `python -m pytest tests/contract/schemathesis/test_alerts_router.py --collect-only -q` collected 12 contract cases; targeted Ruff passed.
+- Follow-up evidence: the next known collection blocker remains `TASK-OPS-DOCFLOW-016`, reproduced by `python -m pytest tests/core/test_alerts_router_contract.py -q` failing on `ModuleNotFoundError: No module named 'src.alerts.router'`.
 
 ## Sequencing
 
