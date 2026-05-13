@@ -129,7 +129,7 @@ jobs:
 
           ## Known Tracked Blockers
 
-          - `TASK-OPS-DOCFLOW-016`: Full backend suite gate collection exposes stale legacy contract imports for removed/relocated modules such as `src.alerts.router` and `get_bom_repository` from `src.procurement.adapters.http.router`.
+          - `TASK-OPS-DOCFLOW-017`: Full backend suite collection now proceeds past relocated alert/procurement imports and stops on a Schemathesis no-match contract for frontend-support operations in `tests/contract/schemathesis/test_observability_admin_router.py`.
 
           ## Passing Gates Required Before This Tracking
 

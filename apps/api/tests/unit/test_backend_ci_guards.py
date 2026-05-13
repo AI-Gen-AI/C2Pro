@@ -42,7 +42,7 @@ def test_openapi_schema_examples_do_not_use_jwt_like_placeholders() -> None:
 
 
 def test_real_document_operability_workflow_runs_required_quality_gates() -> None:
-    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014, TASK-OPS-DOCFLOW-015."""
+    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014, TASK-OPS-DOCFLOW-015, TASK-OPS-DOCFLOW-016."""
 
     repo_root = Path(__file__).resolve().parents[4]
     workflow = repo_root / ".github" / "workflows" / "real-document-operability.yml"
@@ -64,7 +64,10 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     assert "python -m pytest tests/evals/test_golden_corpus.py -q" in contents
     assert "pnpm lint" in contents
     assert "real-document-operability-blockers.md" in contents
-    assert "TASK-OPS-DOCFLOW-016" in contents
+    assert "TASK-OPS-DOCFLOW-017" in contents
+    assert "TASK-OPS-DOCFLOW-016" not in contents
+    assert "src.alerts.router" not in contents
+    assert "get_bom_repository" not in contents
     assert "TASK-OPS-DOCFLOW-015" not in contents
     assert "No module named 'schemathesis'" not in contents
     assert "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" in contents

@@ -28,22 +28,23 @@ class AlertMapper:
             AlertResponse DTO
         """
         sla_policy_name, sla_due_at = alert.calculate_sla_due_at()
+        metadata = Alert.normalize_metadata(alert.alert_metadata)
         return AlertResponse(
             id=alert.id,
             project_id=alert.project_id,
             tenant_id=tenant_id,
             rule_code=alert.rule_id or "AI_EXTRACTED",
-            category=alert.category or "risk",
+            category=Alert.coerce_category(alert.category),
             severity=alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
-            message=alert.title,
+            message=Alert.coerce_text(alert.title, alert.description, "Untitled alert"),
             status=alert.status.value if hasattr(alert.status, "value") else str(alert.status),
-            affected_entities=alert.affected_entities or {},
+            affected_entities=Alert.normalize_affected_entities(alert.affected_entities),
             reviewed_by=alert.reviewed_by,
             reviewed_at=alert.reviewed_at,
-            root_cause=(alert.alert_metadata or {}).get("root_cause"),
+            root_cause=metadata.get("root_cause"),
             sla_policy_name=sla_policy_name,
             sla_due_at=sla_due_at,
-            created_at=alert.created_at,
+            created_at=Alert.coerce_datetime(alert.created_at),
         )
 
     @staticmethod

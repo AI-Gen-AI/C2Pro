@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.alerts.router import AlertWorkspaceSettingsPayload
+from src.alerts.application.dtos import AlertWorkspaceSettingsPayload
 
 
 def test_alert_workspace_settings_reject_invalid_email_subscription_target() -> None:
