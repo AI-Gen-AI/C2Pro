@@ -4,21 +4,27 @@ TS-INT-DB-CLS-001: Alerts API contract tests.
 
 from __future__ import annotations
 
-import importlib
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
+from src.alerts.application.mappers import AlertMapper
+from src.alerts.domain.enums import (
+    AlertSeverity as DomainAlertSeverity,
+)
+from src.alerts.domain.enums import (
+    AlertStatus as DomainAlertStatus,
+)
+from src.alerts.domain.enums import (
+    ApprovalStatus as DomainApprovalStatus,
+)
+from src.alerts.domain.models import Alert as DomainAlert
 from src.analysis.adapters.persistence.models import Alert
 from src.analysis.domain.enums import AlertSeverity, AlertStatus
 from src.core.approval import ApprovalStatus
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.documents.domain.models import ClauseType, DocumentStatus, DocumentType
 from src.projects.adapters.persistence.models import ProjectORM
-
-alerts_router_module = importlib.import_module("src.alerts.router")
 
 
 @pytest.mark.asyncio
@@ -275,19 +281,18 @@ async def test_alert_workspace_settings_round_trip_is_tenant_scoped(
     assert tenant_b_response.json() == {"rules": [], "subscriptions": None}
 
 
-@pytest.mark.asyncio
-async def test_list_alerts_tolerates_legacy_rows_with_missing_title_and_bad_metadata(
-    monkeypatch,
-) -> None:
+def test_alert_mapper_tolerates_legacy_rows_with_missing_title_and_bad_metadata() -> None:
     tenant_id = uuid4()
-    legacy_alert = SimpleNamespace(
+    legacy_alert = DomainAlert(
         id=uuid4(),
         project_id=uuid4(),
-        severity="HIGH",
-        category=None,
+        severity=DomainAlertSeverity.HIGH,
+        category="",
+        status=DomainAlertStatus.OPEN,
+        approval_status=DomainApprovalStatus.PENDING,
+        rule_id="R1",
         title=None,
         description="Fallback description for malformed legacy alert",
-        status="OPEN",
         affected_entities="legacy-string-payload",
         reviewed_by=None,
         reviewed_at=None,
@@ -295,38 +300,8 @@ async def test_list_alerts_tolerates_legacy_rows_with_missing_title_and_bad_meta
         created_at=None,
     )
 
-    class _ScalarResult:
-        def __init__(self, values):
-            self._values = values
+    response = AlertMapper.to_response(legacy_alert, tenant_id)
 
-        def all(self):
-            return self._values
-
-    class _ExecuteResult:
-        def __init__(self, values):
-            self._values = values
-
-        def all(self):
-            return self._values
-
-        def scalars(self):
-            return _ScalarResult(self._values)
-
-    class _Session:
-        async def execute(self, _query):
-            return _ExecuteResult([legacy_alert])
-
-    @asynccontextmanager
-    async def _session_with_tenant(_tenant_id):
-        yield _Session()
-
-    monkeypatch.setattr(alerts_router_module, "get_session_with_tenant", _session_with_tenant)
-
-    current_user = SimpleNamespace(tenant_id=tenant_id)
-
-    response = await alerts_router_module.list_alerts(current_user=current_user)
-
-    assert response.total == 1
-    assert response.items[0].message == "Fallback description for malformed legacy alert"
-    assert response.items[0].category == "risk"
-    assert response.items[0].affected_entities == {}
+    assert response.message == "Fallback description for malformed legacy alert"
+    assert response.category == "risk"
+    assert response.affected_entities == {}

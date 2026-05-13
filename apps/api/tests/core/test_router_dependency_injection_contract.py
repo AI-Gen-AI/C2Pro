@@ -11,7 +11,8 @@ from types import SimpleNamespace
 from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnalysisRepository
 from src.core.observability.router import get_analysis_repository, get_observability_service
 from src.core.observability.service import ObservabilityService
-from src.procurement.adapters.http.router import (
+from src.procurement.adapters.persistence import SQLAlchemyBOMRepository, SQLAlchemyWBSRepository
+from src.procurement.application.dependencies import (
     get_bom_item_use_case,
     get_bom_repository,
     get_create_bom_item_use_case,
@@ -27,7 +28,6 @@ from src.procurement.adapters.http.router import (
     get_wbs_repository,
     get_wbs_tree_use_case,
 )
-from src.procurement.adapters.persistence import SQLAlchemyBOMRepository, SQLAlchemyWBSRepository
 from src.procurement.application.use_cases import (
     CreateBOMItemUseCase,
     CreateWBSItemUseCase,
@@ -127,8 +127,8 @@ def test_task_120_procurement_dependency_factories_build_expected_types() -> Non
     """TASK-120: procurement dependency providers must construct repositories and use cases outside handlers."""
     session = SimpleNamespace()
 
-    wbs_repository = get_wbs_repository(session=session)
-    bom_repository = get_bom_repository(session=session)
+    wbs_repository = get_wbs_repository(db=session)
+    bom_repository = get_bom_repository(db=session)
 
     assert isinstance(wbs_repository, SQLAlchemyWBSRepository)
     assert isinstance(bom_repository, SQLAlchemyBOMRepository)

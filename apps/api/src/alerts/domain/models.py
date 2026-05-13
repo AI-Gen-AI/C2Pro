@@ -95,7 +95,7 @@ class Alert:
             return None, None
 
         policy_name, hours = policy
-        due_at = self.created_at + timedelta(hours=hours)
+        due_at = self.coerce_datetime(self.created_at) + timedelta(hours=hours)
         return policy_name, due_at
 
     def append_history(
