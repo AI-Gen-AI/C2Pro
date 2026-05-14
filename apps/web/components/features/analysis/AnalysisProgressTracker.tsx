@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, Circle, Loader2, AlertCircle } from "lucide-react";
 import { handleAuthErrorStatus } from "@/lib/api/client";
-import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
+import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/stores/auth";

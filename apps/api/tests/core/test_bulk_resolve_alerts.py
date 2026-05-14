@@ -4,19 +4,16 @@ TS-INT-DB-CLS-001: Bulk alert resolve contract tests.
 
 from __future__ import annotations
 
-import importlib
 from datetime import datetime
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 
-from src.alerts.router import BulkResolveRequest, bulk_resolve_alerts
-
-alerts_router_module = importlib.import_module("src.alerts.router")
-from src.analysis.domain.enums import AlertSeverity, AlertStatus
-from src.core.approval import ApprovalStatus
+from src.alerts.application.use_cases.bulk_resolve_alerts_use_case import (
+    BulkResolveAlertsUseCase,
+)
+from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 
 
 class _FakeAlert:
@@ -40,38 +37,29 @@ class _FakeAlert:
         self.resolution_notes = None
 
 
-class _FakeResult:
+class _FakeResolveAlertUseCase:
     def __init__(self, alerts: list[_FakeAlert]) -> None:
-        self._alerts = alerts
+        self.alerts = {str(alert.id): alert for alert in alerts}
+        self.calls: list[dict] = []
 
-    def scalars(self) -> _FakeResult:
-        return self
-
-    def all(self) -> list[_FakeAlert]:
-        return self._alerts
-
-
-class _FakeSession:
-    def __init__(self, alerts: list[_FakeAlert]) -> None:
-        self.alerts = alerts
-        self.committed = False
-
-    async def execute(self, _query: object) -> _FakeResult:
-        return _FakeResult(self.alerts)
-
-    async def commit(self) -> None:
-        self.committed = True
-
-
-class _FakeSessionContext:
-    def __init__(self, session: _FakeSession) -> None:
-        self._session = session
-
-    async def __aenter__(self) -> _FakeSession:
-        return self._session
-
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
-        return False
+    async def execute(self, alert_id, tenant_id, user_id, resolution, root_cause):
+        alert = self.alerts[str(alert_id)]
+        if alert.severity in {AlertSeverity.CRITICAL, AlertSeverity.HIGH} and not root_cause:
+            raise HTTPException(status_code=400, detail="Root cause is required for high or critical alerts")
+        alert.status = AlertStatus.RESOLVED
+        alert.resolution_notes = resolution
+        alert.alert_metadata["root_cause"] = root_cause
+        alert.alert_metadata.setdefault("history", []).append({"action": "resolved"})
+        self.calls.append(
+            {
+                "alert_id": alert_id,
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "resolution": resolution,
+                "root_cause": root_cause,
+            }
+        )
+        return alert
 
 
 @pytest.mark.asyncio
@@ -80,55 +68,40 @@ async def test_bulk_resolve_alerts_resolves_selected_alerts_and_records_history(
         _FakeAlert(str(uuid4()), AlertSeverity.HIGH),
         _FakeAlert(str(uuid4()), AlertSeverity.MEDIUM),
     ]
-    session = _FakeSession(alerts)
-    current_user = SimpleNamespace(id=uuid4(), tenant_id=uuid4())
+    tenant_id = uuid4()
+    user_id = uuid4()
+    resolve_use_case = _FakeResolveAlertUseCase(alerts)
+    use_case = BulkResolveAlertsUseCase(resolve_use_case=resolve_use_case)
 
-    monkeypatch.setattr(
-        alerts_router_module,
-        "get_session_with_tenant",
-        lambda _tenant_id: _FakeSessionContext(session),
+    response = await use_case.execute(
+        alert_ids=[str(alert.id) for alert in alerts],
+        tenant_id=tenant_id,
+        user_id=user_id,
+        resolution="Validated the grouped recovery plan across the selected alerts.",
+        root_cause="schedule_delay",
     )
 
-    response = await bulk_resolve_alerts(
-        request=BulkResolveRequest(
-            alert_ids=[str(alert.id) for alert in alerts],
-            resolution="Validated the grouped recovery plan across the selected alerts.",
-            root_cause="schedule_delay",
-        ),
-        current_user=current_user,
-    )
-
-    assert response == {
-        "processed_count": 2,
-        "status": "resolved",
-        "alert_ids": [str(alert.id) for alert in alerts],
-    }
-    assert session.committed is True
+    assert response.processed_count == 2
+    assert response.status == "resolved"
+    assert response.alert_ids == [str(alert.id) for alert in alerts]
+    assert len(resolve_use_case.calls) == 2
     for alert in alerts:
         assert alert.status == AlertStatus.RESOLVED
         assert alert.resolution_notes == "Validated the grouped recovery plan across the selected alerts."
         assert alert.alert_metadata["root_cause"] == "schedule_delay"
-        assert alert.alert_metadata["history"][-1]["action"] == "bulk_resolved"
+        assert alert.alert_metadata["history"][-1]["action"] == "resolved"
 
 
 @pytest.mark.asyncio
 async def test_bulk_resolve_alerts_requires_root_cause_for_high_or_critical_selection(monkeypatch) -> None:
     alerts = [_FakeAlert(str(uuid4()), AlertSeverity.HIGH)]
-    session = _FakeSession(alerts)
-    current_user = SimpleNamespace(id=uuid4(), tenant_id=uuid4())
-
-    monkeypatch.setattr(
-        alerts_router_module,
-        "get_session_with_tenant",
-        lambda _tenant_id: _FakeSessionContext(session),
-    )
+    use_case = BulkResolveAlertsUseCase(resolve_use_case=_FakeResolveAlertUseCase(alerts))
 
     with pytest.raises(HTTPException, match="Root cause is required"):
-        await bulk_resolve_alerts(
-            request=BulkResolveRequest(
-                alert_ids=[str(alerts[0].id)],
-                resolution="Validated the grouped recovery plan across the selected alerts.",
-                root_cause=None,
-            ),
-            current_user=current_user,
+        await use_case.execute(
+            alert_ids=[str(alerts[0].id)],
+            tenant_id=uuid4(),
+            user_id=uuid4(),
+            resolution="Validated the grouped recovery plan across the selected alerts.",
+            root_cause=None,
         )

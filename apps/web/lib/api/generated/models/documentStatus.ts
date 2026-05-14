@@ -41,13 +41,13 @@
 /**
  * Represents the status of a document during its lifecycle.
  */
-export type DocumentStatus = typeof DocumentStatus[keyof typeof DocumentStatus];
-
+export type DocumentStatus =
+  (typeof DocumentStatus)[keyof typeof DocumentStatus];
 
 export const DocumentStatus = {
-  uploaded: 'uploaded',
-  queued: 'queued',
-  processing: 'processing',
-  parsed: 'parsed',
-  error: 'error',
+  uploaded: "uploaded",
+  queued: "queued",
+  processing: "processing",
+  parsed: "parsed",
+  error: "error",
 } as const;

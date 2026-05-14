@@ -38,10 +38,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type BulkReviewRequestDecision = typeof BulkReviewRequestDecision[keyof typeof BulkReviewRequestDecision];
-
+export type BulkReviewRequestDecision =
+  (typeof BulkReviewRequestDecision)[keyof typeof BulkReviewRequestDecision];
 
 export const BulkReviewRequestDecision = {
-  approve: 'approve',
-  reject: 'reject',
+  approve: "approve",
+  reject: "reject",
 } as const;

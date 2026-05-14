@@ -41,12 +41,12 @@
 /**
  * Planes de suscripción disponibles.
  */
-export type SubscriptionPlan = typeof SubscriptionPlan[keyof typeof SubscriptionPlan];
-
+export type SubscriptionPlan =
+  (typeof SubscriptionPlan)[keyof typeof SubscriptionPlan];
 
 export const SubscriptionPlan = {
-  free: 'free',
-  starter: 'starter',
-  professional: 'professional',
-  enterprise: 'enterprise',
+  free: "free",
+  starter: "starter",
+  professional: "professional",
+  enterprise: "enterprise",
 } as const;

@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { Alert } from './alert';
-import type { CategoryBreakdown } from './categoryBreakdown';
+import type { Alert } from "./alert";
+import type { CategoryBreakdown } from "./categoryBreakdown";
 
 /**
  * Represents the complete result of a coherence evaluation, including alerts and the final score.

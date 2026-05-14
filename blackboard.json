@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-08T00:15:00Z",
+  "updated_at": "2026-05-13T21:05:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1347,6 +1347,70 @@
         "validacion_lint": true,
         "nota_verificacion": "RED full suite failed on golden.evaluators. Diagnostic importlib collection passed golden and exposed schemathesis/stale-import blockers. tests/golden passed after importlib mode and Core-100 runner expectation updates. TASK-015 and TASK-016 were added for the newly exposed blockers."
       }
+    },
+    {
+      "tarea_id": "T090",
+      "backlog_id": "TASK-OPS-DOCFLOW-015",
+      "tipo": "qa",
+      "descripcion": "Fix full backend suite Schemathesis dependency blocker so contract tests can collect in local and CI environments.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Backend requirements install Schemathesis, contract suite collection proceeds past missing dependency, and workflow blocker tracking no longer lists TASK-OPS-DOCFLOW-015.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/requirements.txt",
+        "apps/api/tests/contract/schemathesis/conftest.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-13T00:00:00Z",
+        "completado": "2026-05-13T00:00:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Schemathesis dependency blocker is closed with a pytest-9-compatible Schemathesis install and v4 loader compatibility for the existing contract suite.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED full suite failed on ModuleNotFoundError: No module named 'schemathesis'. GREEN passed backend CI guards 7/7 and Schemathesis alerts collect-only 12 cases; targeted Ruff passed. Full-suite execution/collection exceeded local timeouts after the dependency blocker was removed; TASK-016 remains reproduced by tests/core/test_alerts_router_contract.py failing on src.alerts.router."
+      }
+    },
+    {
+      "tarea_id": "T091",
+      "backlog_id": "TASK-OPS-DOCFLOW-016",
+      "tipo": "qa",
+      "descripcion": "Fix stale full-suite legacy contract imports for relocated alert and procurement router APIs.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Affected backend tests collect without importing removed src.alerts.router or removed procurement dependency providers from the HTTP router.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/src/alerts/application/dtos.py",
+        "apps/api/src/alerts/application/mappers/alert_mapper.py",
+        "apps/api/src/alerts/domain/models.py",
+        "apps/api/tests/core/test_alert_workspace_settings_validation.py",
+        "apps/api/tests/core/test_alert_sla_serialization.py",
+        "apps/api/tests/core/test_alerts_router_contract.py",
+        "apps/api/tests/core/test_bulk_resolve_alerts.py",
+        "apps/api/tests/core/test_router_dependency_injection_contract.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json",
+        "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-13T21:05:00Z",
+        "completado": "2026-05-13T21:05:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Legacy alert/procurement contract imports are migrated to current hexagonal boundaries, and the workflow blocker now tracks the next Schemathesis no-match collection issue instead of TASK-016.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "nota_verificacion": "RED failed on missing src.alerts.router and removed get_bom_repository import from the procurement HTTP router. GREEN collect-only passed for affected stale-import files. Targeted non-DB execution passed 14 tests. Full-suite collect-only now stops later on TASK-OPS-DOCFLOW-017: Schemathesis test_frontend_support_contract has no matching API operation."
+      }
     }
   ],
   "backlog_sync": {
@@ -1438,7 +1502,9 @@
       "TASK-OPS-DOCFLOW-013",
       "TASK-OPS-DOCFLOW-014",
       "TASK-OPS-DOCFLOW-015",
-      "TASK-OPS-DOCFLOW-016"
+      "TASK-OPS-DOCFLOW-016",
+      "TASK-OPS-DOCFLOW-017",
+      "TASK-OPS-DOCFLOW-018"
     ]
   },
   "plan_actual": {

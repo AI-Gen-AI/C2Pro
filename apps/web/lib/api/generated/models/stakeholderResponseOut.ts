@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { InterestLevel } from './interestLevel';
-import type { PowerLevel } from './powerLevel';
-import type { StakeholderQuadrant } from './stakeholderQuadrant';
+import type { InterestLevel } from "./interestLevel";
+import type { PowerLevel } from "./powerLevel";
+import type { StakeholderQuadrant } from "./stakeholderQuadrant";
 
 export interface StakeholderResponseOut {
   id: string;

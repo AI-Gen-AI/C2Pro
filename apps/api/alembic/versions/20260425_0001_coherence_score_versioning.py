@@ -1,21 +1,19 @@
 """Add score versioning fields to coherence_results.
 
 Revision ID: 20260425_0001
-Revises: 20260407_0002, 20260421_0001
+Revises: 20260421_0001
 Create Date: 2026-04-25 00:01:00.000000
 
 Suite ID: TS-INT-DB-COH-001
 """
 
-from collections.abc import Sequence
-
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260425_0001"
-down_revision: tuple[str, str] = ("20260407_0002", "20260421_0001")
-branch_labels: str | Sequence[str] | None = None
-depends_on: str | Sequence[str] | None = None
+down_revision: str = "20260421_0001"
+branch_labels = None
+depends_on = None
 
 _ENUM_NAME = "coherence_score_version"
 

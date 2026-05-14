@@ -39,6 +39,6 @@
  */
 
 export type GetRecentAnalysesApiV1ObservabilityAnalysesGetParams = {
-limit?: number;
-offset?: number;
+  limit?: number;
+  offset?: number;
 };

@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class AlertRuleConfigPayload(BaseModel):
@@ -26,6 +26,25 @@ class AlertSubscriptionConfigPayload(BaseModel):
     emailAddress: str = ""
     slackEnabled: bool = False
     slackChannel: str = ""
+
+    @field_validator("emailAddress", "slackChannel", mode="before")
+    @classmethod
+    def _strip_delivery_target(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def validate_delivery_targets(self) -> AlertSubscriptionConfigPayload:
+        if self.emailEnabled:
+            local_part, separator, domain_part = self.emailAddress.partition("@")
+            if not separator or not local_part or "." not in domain_part:
+                raise ValueError("emailAddress must be a valid email when email notifications are enabled")
+
+        if self.slackEnabled and (not self.slackChannel.startswith("#") or len(self.slackChannel) < 2):
+            raise ValueError("slackChannel must start with # when Slack notifications are enabled")
+
+        return self
 
 
 class AlertWorkspaceSettingsPayload(BaseModel):

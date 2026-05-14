@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { QueryResultDataItem } from './queryResultDataItem';
+import type { QueryResultDataItem } from "./queryResultDataItem";
 
 /**
  * Resultado de query.

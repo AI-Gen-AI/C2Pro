@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentPollingStatus } from './documentPollingStatus';
+import type { DocumentPollingStatus } from "./documentPollingStatus";
 
 /**
  * List item for documents.

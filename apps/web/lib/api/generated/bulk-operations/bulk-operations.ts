@@ -37,9 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useQuery
-} from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -49,18 +47,15 @@ import type {
   QueryKey,
   UndefinedInitialDataOptions,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
   GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet200,
-  HTTPValidationError
-} from '../models';
+  HTTPValidationError,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Get progress of a bulk operation.
@@ -79,89 +74,240 @@ Raises:
  * @summary Get Bulk Operation Progress
  */
 export const getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet = (
+  jobId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet200>(
+    { url: `/api/v1/bulk-operations/${jobId}/progress`, method: "GET", signal },
+  );
+};
+
+export const getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryKey =
+  (jobId: string) => {
+    return [`/api/v1/bulk-operations/${jobId}/progress`] as const;
+  };
+
+export const getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
     jobId: string,
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet200>(
-      {url: `/api/v1/bulk-operations/${jobId}/progress`, method: 'GET', signal
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
     },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryKey(
+        jobId,
       );
-    }
-  
 
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+        >
+      >
+    > = ({ signal }) =>
+      getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet(
+        jobId,
+        signal,
+      );
 
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!jobId,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
 
-export const getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryKey = (jobId: string,) => {
-    return [
-    `/api/v1/bulk-operations/${jobId}/progress`
-    ] as const;
-    }
+export type GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+      >
+    >
+  >;
+export type GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryError =
+  HTTPValidationError;
 
-    
-export const getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryOptions = <TData = Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError = HTTPValidationError>(jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryKey(jobId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>> = ({ signal }) => getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet(jobId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(jobId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryResult = NonNullable<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>>
-export type GetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryError = HTTPValidationError
-
-
-export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<TData = Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError = HTTPValidationError>(
- jobId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData>> & Pick<
+export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  jobId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>,
+          Awaited<
+            ReturnType<
+              typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<TData = Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError = HTTPValidationError>(
- jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<
+              typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>,
+          Awaited<
+            ReturnType<
+              typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<TData = Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError = HTTPValidationError>(
- jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<
+              typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get Bulk Operation Progress
  */
 
-export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<TData = Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError = HTTPValidationError>(
- jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getBulkOperationProgressApiV1BulkOperationsJobIdProgressGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryOptions(
+      jobId,
+      options,
+    );
 
-  const queryOptions = getGetBulkOperationProgressApiV1BulkOperationsJobIdProgressGetQueryOptions(jobId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
-

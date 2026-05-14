@@ -1,5 +1,5 @@
 """
-Schemathesis contract-test fixtures — TASK-QA-200.
+Schemathesis contract-test fixtures — TASK-QA-200, TASK-OPS-DOCFLOW-015.
 
 Design:
 - Load schema offline from docs/api/openapi.yaml (no live server needed).
@@ -23,6 +23,17 @@ from uuid import UUID
 import jwt
 import pytest
 from fastapi import FastAPI
+
+import schemathesis
+
+if not hasattr(schemathesis, "from_path"):
+    # Schemathesis v4 moved OpenAPI loaders under schemathesis.openapi.
+    def _from_path(path: str, *, base_url: str | None = None):
+        schema = schemathesis.openapi.from_path(path)
+        schema.config.base_url = base_url
+        return schema
+
+    schemathesis.from_path = _from_path
 
 # ---------------------------------------------------------------------------
 # Fixed synthetic identities (no DB required for contract tests)

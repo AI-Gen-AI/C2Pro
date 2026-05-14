@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ImpactLevel } from './impactLevel';
-import type { RouteForReviewRequestItemData } from './routeForReviewRequestItemData';
+import type { ImpactLevel } from "./impactLevel";
+import type { RouteForReviewRequestItemData } from "./routeForReviewRequestItemData";
 
 export interface RouteForReviewRequest {
   item_id: string;

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ProjectResponse } from './projectResponse';
+import type { ProjectResponse } from "./projectResponse";
 
 /**
  * Project list response.

@@ -135,5 +135,9 @@ def test_quality_report_action_and_workflows_are_wired() -> None:
 
     for workflow_text in [tests_workflow, frontend_workflow, qa_swarm_workflow]:
         assert "./.github/actions/quality-report" in workflow_text
-        assert "marocchino/sticky-pull-request-comment" in workflow_text
         assert "quality-report.md" in workflow_text
+
+    for workflow_text in [tests_workflow, qa_swarm_workflow]:
+        assert "marocchino/sticky-pull-request-comment" in workflow_text
+
+    assert "frontend-quality-report" in frontend_workflow

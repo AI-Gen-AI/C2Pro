@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type WorkerHealthCheckApiV1HealthWorkerGet200 = { [key: string]: unknown };
+export type WorkerHealthCheckApiV1HealthWorkerGet200 = {
+  [key: string]: unknown;
+};

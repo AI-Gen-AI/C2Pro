@@ -50,8 +50,10 @@ Hard rule: tests may mock external LLM/provider calls for determinism, but they 
 | `TASK-OPS-DOCFLOW-012` | P1 | Complete | Add CI quality gate for real document flow. | CI command spec and required environment variables. | CI runs real-document integration gate plus coverage/lint gates and tracks known blockers. |
 | `TASK-OPS-DOCFLOW-013` | P1 | Complete | Fix INF coverage blocker. | HITL metric label contract plus observability/resilience/security coverage restoration. | Scoped INF coverage gate passes at `>=70%` and CI treats it as a hard gate. |
 | `TASK-OPS-DOCFLOW-014` | P1 | Complete | Fix golden package collection blocker. | Pytest import mode isolates `tests/golden` from production `src/golden`. | Full backend collection proceeds past `golden.evaluators` and exposes the next blockers. |
-| `TASK-OPS-DOCFLOW-015` | P1 | Pending | Fix Schemathesis dependency blocker. | Dependency/install or test-gating decision for `tests/contract/schemathesis/*`. | Full backend collection no longer fails on missing `schemathesis`. |
-| `TASK-OPS-DOCFLOW-016` | P1 | Pending | Fix stale legacy contract imports. | Updated tests or compatibility shims for relocated alert/procurement router contracts. | Full backend collection no longer fails on `src.alerts.router` or `get_bom_repository` imports. |
+| `TASK-OPS-DOCFLOW-015` | P1 | Complete | Fix Schemathesis dependency blocker. | Promoted pytest-9-compatible Schemathesis dependency into backend requirements and removed the CI approved-blocker entry. | Full backend collection no longer fails on missing `schemathesis`; next stop remains `TASK-OPS-DOCFLOW-016`. |
+| `TASK-OPS-DOCFLOW-016` | P1 | Complete | Fix stale legacy contract imports. | Migrated tests to current alert DTO/mapper/use-case boundaries and procurement dependency providers. | Full backend collection no longer fails on `src.alerts.router` or `get_bom_repository` imports; next stop is `TASK-OPS-DOCFLOW-017`. |
+| `TASK-OPS-DOCFLOW-017` | P1 | Pending | Fix Schemathesis frontend-support no-match contract. | Update frontend-support operation selection in `tests/contract/schemathesis/test_observability_admin_router.py`. | Full backend collection no longer fails on no-effect Schemathesis parametrization. |
+| `TASK-OPS-DOCFLOW-018` | P1 | Pending | Fix alert API contract execution drift. | Align DB-backed alert contract fixtures/routes with the active alerts router and required `alerts.tenant_id`. | Alert API contract execution no longer fails on legacy route assumptions or null tenant IDs. |
 
 ## Task Details
 
@@ -492,6 +494,26 @@ Evidence captured 2026-05-08:
   - `TASK-OPS-DOCFLOW-015`: missing `schemathesis` dependency for contract suite collection.
   - `TASK-OPS-DOCFLOW-016`: stale legacy contract imports for relocated alert/procurement router APIs exposed during importlib-mode collection.
 
+### TASK-OPS-DOCFLOW-015 - Schemathesis Dependency Restoration
+
+- Status: Complete.
+- RED evidence: `python -m pytest tests/ -x -q` failed first on `ModuleNotFoundError: No module named 'schemathesis'` from `tests/contract/schemathesis/test_alerts_router.py`.
+- Guard evidence: targeted backend CI guard failed before the fix because `apps/api/requirements.txt` did not include Schemathesis and the real-document workflow still listed `TASK-OPS-DOCFLOW-015` as an approved blocker.
+- Implementation: added `schemathesis>=4.18.5` to `apps/api/requirements.txt`, restored Schemathesis v4 loader compatibility in the contract-suite conftest, removed `TASK-OPS-DOCFLOW-015` from the workflow blocker artifact, and updated workflow path filters to the archived plan path from current `main`.
+- GREEN evidence: `python -m pytest tests/unit/test_backend_ci_guards.py -q` passed; `python -m pytest tests/contract/schemathesis/test_alerts_router.py --collect-only -q` collected 12 contract cases; targeted Ruff passed.
+- Follow-up evidence: the next known collection blocker remains `TASK-OPS-DOCFLOW-016`, reproduced by `python -m pytest tests/core/test_alerts_router_contract.py -q` failing on `ModuleNotFoundError: No module named 'src.alerts.router'`.
+
+### TASK-OPS-DOCFLOW-016 - Legacy Contract Import Migration
+
+- Status: Complete.
+- RED evidence: `python -m pytest tests/core/test_alerts_router_contract.py -q` failed on `ModuleNotFoundError: No module named 'src.alerts.router'`; prior collection evidence also showed `ImportError: cannot import name 'get_bom_repository' from 'src.procurement.adapters.http.router'`.
+- Implementation: migrated stale alert tests from `src.alerts.router` to current DTO, mapper, domain, and bulk-resolve use-case boundaries; migrated procurement dependency contract imports from the HTTP router to `src.procurement.application.dependencies`.
+- Compatibility fixes: restored workspace subscription target validation in alert DTOs and moved legacy affected-entity, metadata, title, category, and datetime coercion through the current alert domain/mapper boundary.
+- GREEN evidence: affected stale-import files collect successfully with `python -m pytest tests/core/test_alerts_router_contract.py tests/core/test_alert_workspace_settings_validation.py tests/core/test_alert_sla_serialization.py tests/core/test_bulk_resolve_alerts.py tests/core/test_router_dependency_injection_contract.py tests/core/test_procurement_router_dependency_contract.py --collect-only -q`.
+- Targeted execution evidence: non-DB affected units pass with `python -m pytest tests/core/test_alert_workspace_settings_validation.py tests/core/test_alert_sla_serialization.py tests/core/test_bulk_resolve_alerts.py tests/core/test_router_dependency_injection_contract.py tests/core/test_procurement_router_dependency_contract.py -q`.
+- Follow-up evidence: `python -m pytest tests/ --collect-only -x -q` now proceeds past the stale import blockers and stops on `TASK-OPS-DOCFLOW-017`: Schemathesis no-match for `test_frontend_support_contract`.
+- Additional follow-up: DB-backed execution of `tests/core/test_alerts_router_contract.py` still exposes legacy active-route/fixture drift (`alerts.tenant_id` is required and `/api/v1/alerts/workspace-settings` returns 405 from the currently registered router); tracked separately as `TASK-OPS-DOCFLOW-018`.
+
 ## Sequencing
 
 1. `TASK-OPS-DOCFLOW-001`
@@ -510,6 +532,8 @@ Evidence captured 2026-05-08:
 14. `TASK-OPS-DOCFLOW-014`
 15. `TASK-OPS-DOCFLOW-015`
 16. `TASK-OPS-DOCFLOW-016`
+17. `TASK-OPS-DOCFLOW-017`
+18. `TASK-OPS-DOCFLOW-018`
 
 ## Definition Of Operative
 

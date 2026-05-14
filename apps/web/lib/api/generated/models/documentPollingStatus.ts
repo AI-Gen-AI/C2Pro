@@ -41,12 +41,12 @@
 /**
  * Polling status exposed to clients.
  */
-export type DocumentPollingStatus = typeof DocumentPollingStatus[keyof typeof DocumentPollingStatus];
-
+export type DocumentPollingStatus =
+  (typeof DocumentPollingStatus)[keyof typeof DocumentPollingStatus];
 
 export const DocumentPollingStatus = {
-  queued: 'queued',
-  processing: 'processing',
-  parsed: 'parsed',
-  error: 'error',
+  queued: "queued",
+  processing: "processing",
+  parsed: "parsed",
+  error: "error",
 } as const;

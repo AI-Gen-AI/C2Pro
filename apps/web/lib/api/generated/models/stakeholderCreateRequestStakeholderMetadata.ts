@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type StakeholderCreateRequestStakeholderMetadata = { [key: string]: unknown } | null;
+export type StakeholderCreateRequestStakeholderMetadata = {
+  [key: string]: unknown;
+} | null;
