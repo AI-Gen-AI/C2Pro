@@ -70,6 +70,7 @@ class PersistAnalysisUseCase:
         completed_at = datetime.now(UTC).replace(tzinfo=None)
         analysis = Analysis(
             id=analysis_id,
+            tenant_id=command.tenant_id,
             project_id=command.project_id,
             analysis_type=analysis_type,
             status=AnalysisStatus.COMPLETED,
@@ -93,6 +94,7 @@ class PersistAnalysisUseCase:
             alert_dtos = generator.generate_risk_alerts(command.extracted_risks)
             alerts = [
                 Alert(
+                    tenant_id=command.tenant_id,
                     project_id=dto.project_id,
                     analysis_id=dto.analysis_id,
                     alert_type=dto.alert_type,

@@ -50,7 +50,9 @@ def test_deploy_production_workflow_dispatches_release_reliability_for_candidate
 
     assert "dispatch-release-reliability:" in workflow
     assert "gh workflow run i13-real-e2e-scheduled.yml" in workflow
-    assert 'release_commit_sha="${{ inputs.commit_sha }}"' in workflow
+    assert "COMMIT_SHA: ${{ inputs.commit_sha }}" in workflow
+    assert 'release_commit_sha="${COMMIT_SHA}"' in workflow
+    assert 'release_commit_sha="${{ inputs.commit_sha }}"' not in workflow
     assert "needs: [validate-release, dispatch-release-reliability]" in workflow
 
 

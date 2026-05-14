@@ -86,7 +86,14 @@ class SqlAlchemyAlertRepository(AlertRepository):
         return result.scalar_one_or_none()
 
     async def create(self, payload: AlertCreate) -> Alert:
+        project = await self.session.scalar(
+            select(ProjectORM).where(ProjectORM.id == payload.project_id)
+        )
+        if project is None:
+            raise ValueError("Cannot create alert for unknown project")
+
         alert = Alert(
+            tenant_id=project.tenant_id,
             project_id=payload.project_id,
             analysis_id=payload.analysis_id,
             severity=payload.severity,

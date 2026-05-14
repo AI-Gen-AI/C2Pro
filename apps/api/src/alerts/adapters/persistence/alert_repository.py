@@ -29,16 +29,21 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         self._session = session
         self._tenant_id = tenant_id
 
-    async def _verify_project_ownership(self, project_id: UUID) -> bool:
+    async def _verify_project_ownership(
+        self,
+        project_id: UUID,
+        tenant_id: UUID | None = None,
+    ) -> bool:
         """Verify that a project belongs to the current tenant."""
         stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == project_id)
         result = await self._session.execute(stmt)
         project_tenant = result.scalar_one_or_none()
         if project_tenant is None:
             return False
-        if self._tenant_id is None:
+        effective_tenant_id = tenant_id or self._tenant_id
+        if effective_tenant_id is None:
             return True
-        return project_tenant == self._tenant_id
+        return project_tenant == effective_tenant_id
 
     def _to_domain(self, orm_alert: AlertORM) -> Alert:
         """Convert ORM model to domain entity."""
@@ -115,19 +120,13 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     async def get_by_id(self, alert_id: UUID, tenant_id: UUID) -> Alert | None:
         """Get alert by ID with tenant isolation (relying on RLS)."""
-        # Note: tenant_id is used for verification but RLS handles the heavy lifting
         query = (
             select(AlertORM)
-            .where(AlertORM.id == alert_id)
+            .where(AlertORM.id == alert_id, AlertORM.tenant_id == tenant_id)
         )
         result = await self._session.execute(query)
         orm_alert = result.scalar_one_or_none()
-        
-        # Verify tenant if RLS was bypassed or not configured
-        if orm_alert and self._tenant_id and getattr(orm_alert, "tenant_id", None) != self._tenant_id:
-             # Fallback check if alert model has tenant_id or via project join if necessary
-             pass
-             
+
         return self._to_domain(orm_alert) if orm_alert else None
 
     async def list_for_project(
@@ -141,7 +140,10 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         """List alerts for a project with filters."""
         query = (
             select(AlertORM)
-            .where(AlertORM.project_id == project_id)
+            .where(
+                AlertORM.project_id == project_id,
+                AlertORM.tenant_id == tenant_id,
+            )
         )
         if status:
             query = query.where(AlertORM.status == status.value)
@@ -164,7 +166,7 @@ class SqlAlchemyAlertRepository(IAlertRepository):
         severity: AlertSeverity | None = None,
     ) -> list[Alert]:
         """List alerts for a tenant with optional filters."""
-        query = select(AlertORM)
+        query = select(AlertORM).where(AlertORM.tenant_id == tenant_id)
         if project_id:
             query = query.where(AlertORM.project_id == project_id)
         if document_id:
@@ -184,9 +186,19 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     async def create(self, alert: Alert, tenant_id: UUID | None = None) -> Alert:
         """Create a new alert."""
-        # Verification handled by RLS and project_id constraints
+        effective_tenant_id = tenant_id or self._tenant_id
+        if effective_tenant_id is None:
+            stmt = select(ProjectORM.tenant_id).where(ProjectORM.id == alert.project_id)
+            result = await self._session.execute(stmt)
+            effective_tenant_id = result.scalar_one_or_none()
+        if effective_tenant_id is None:
+            raise ValueError("Cannot create alert without tenant context")
+        if not await self._verify_project_ownership(alert.project_id, effective_tenant_id):
+            raise ValueError("Cannot create alert outside tenant context")
+
         orm_alert = AlertORM(
             id=alert.id,
+            tenant_id=effective_tenant_id,
             project_id=alert.project_id,
             severity=alert.severity.value if hasattr(alert.severity, "value") else alert.severity,
             category=alert.category,
@@ -205,7 +217,12 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     async def save(self, alert: Alert, tenant_id: UUID | None = None) -> None:
         """Save changes to an alert."""
-        orm_alert = await self._session.get(AlertORM, alert.id)
+        effective_tenant_id = tenant_id or self._tenant_id
+        query = select(AlertORM).where(AlertORM.id == alert.id)
+        if effective_tenant_id is not None:
+            query = query.where(AlertORM.tenant_id == effective_tenant_id)
+        result = await self._session.execute(query)
+        orm_alert = result.scalar_one_or_none()
         if orm_alert:
             orm_alert.status = alert.status.value if hasattr(alert.status, "value") else alert.status
             orm_alert.reviewed_by = alert.reviewed_by
@@ -218,7 +235,10 @@ class SqlAlchemyAlertRepository(IAlertRepository):
 
     async def delete(self, alert_id: UUID, tenant_id: UUID) -> bool:
         """Delete an alert."""
-        query = select(AlertORM).where(AlertORM.id == alert_id)
+        query = select(AlertORM).where(
+            AlertORM.id == alert_id,
+            AlertORM.tenant_id == tenant_id,
+        )
         result = await self._session.execute(query)
         orm_alert = result.scalar_one_or_none()
         if orm_alert:
