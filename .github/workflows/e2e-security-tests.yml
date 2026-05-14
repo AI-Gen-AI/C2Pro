@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # Required for coverage comment on PRs
 
 jobs:
   e2e-security-tests:
@@ -155,14 +154,6 @@ jobs:
           name: security-release-summary
           path: apps/api/release-evidence/security-release-summary.txt
           retention-days: 14
-
-      - name: Comment coverage on PR
-        uses: py-cov-action/python-coverage-comment-action@v3
-        if: github.event_name == 'pull_request'
-        with:
-          GITHUB_TOKEN: ${{ github.token }}
-          MINIMUM_GREEN: 80
-          MINIMUM_ORANGE: 60
 
       - name: Database logs on failure
         if: failure()
