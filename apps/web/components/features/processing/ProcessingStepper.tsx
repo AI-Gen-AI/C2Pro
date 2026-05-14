@@ -31,6 +31,8 @@ type StepperState = {
   completeData?: CompleteData;
 };
 
+const processingEventSourceInit: EventSourceInit = { withCredentials: true };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -72,7 +74,7 @@ export function isProcessingSseEvent(
 
 export function createProcessingEventSource(
   projectId: string,
-  init: EventSourceInit = { withCredentials: true },
+  init: EventSourceInit = processingEventSourceInit,
 ): EventSource {
   if (init.withCredentials !== true) {
     throw new Error("withCredentials must be true for processing SSE");
@@ -102,6 +104,34 @@ export function createProcessingEventSource(
 
 const eventSourcesByProject = new Map<string, EventSource>();
 
+function updateStageState(current: StepperState, stage: StageData): StepperState {
+  return {
+    ...current,
+    stages: [...current.stages, stage],
+    progress: stage.progress,
+    statusText: `Processing stage: ${stage.name}`,
+  };
+}
+
+function updateCompleteState(
+  current: StepperState,
+  completeData: CompleteData,
+): StepperState {
+  return {
+    ...current,
+    progress: 100,
+    statusText: "Processing complete",
+    completeData,
+  };
+}
+
+function updateErrorState(current: StepperState, hasToken: boolean): StepperState {
+  return {
+    ...current,
+    statusText: hasToken ? "Processing stream interrupted" : "Session expired",
+  };
+}
+
 export function resetProcessingEventSourcesForTests() {
   for (const source of eventSourcesByProject.values()) {
     source.close();
@@ -127,12 +157,7 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       if (!isProcessingSseEvent(parsed)) return;
 
       flushSync(() => {
-        setState((current) => ({
-          ...current,
-          stages: [...current.stages, parsed.data],
-          progress: parsed.data.progress,
-          statusText: `Processing stage: ${parsed.data.name}`,
-        }));
+        setState((current) => updateStageState(current, parsed.data));
       });
     };
 
@@ -144,12 +169,7 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       if (!isProcessingSseEvent(parsed)) return;
 
       flushSync(() => {
-        setState((current) => ({
-          ...current,
-          progress: 100,
-          statusText: "Processing complete",
-          completeData: parsed.data,
-        }));
+        setState((current) => updateCompleteState(current, parsed.data));
       });
       source.close();
     };
@@ -157,12 +177,7 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
     const onError = () => {
       const hasToken = !!useAuthStore.getState().token;
       flushSync(() => {
-        setState((current) => ({
-          ...current,
-          statusText: hasToken
-            ? "Processing stream interrupted"
-            : "Session expired",
-        }));
+        setState((current) => updateErrorState(current, hasToken));
       });
 
       if (!hasToken) {

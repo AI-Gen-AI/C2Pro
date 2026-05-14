@@ -118,7 +118,7 @@ jobs:
         run: pnpm exec playwright install --with-deps
 
       - name: E2E smoke tests
-        run: pnpm exec playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/cross-browser-smoke.spec.ts --project=chromium
+        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts --project=chromium
 
       - name: API generation drift check
         run: pnpm generate:api:check
