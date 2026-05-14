@@ -7,8 +7,8 @@
 import { useEffect, useState } from "react";
 import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
 import { DashboardClient } from "@/components/coherence/DashboardClient";
-import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
+import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
