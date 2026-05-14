@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   # Typecheck and lint run in parallel — they are independent static checks
@@ -139,13 +138,6 @@ jobs:
         with:
           wireframe-coverage-json: apps/web/wireframe-coverage.json
           output: quality-report.md
-
-      - name: Comment quality gate report
-        if: always() && github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: c2pro-quality-report-frontend
-          path: quality-report.md
 
       - name: Upload quality gate report
         if: always()

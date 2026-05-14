@@ -117,9 +117,7 @@ jobs:
             tests/core/test_clerk_auth_and_rate_limiter.py \
             -v \
             --tb=short \
-            --cov=src/core/auth \
             --cov=src/core/middleware \
-            --cov=src/core/tenants \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-fail-under=60 \

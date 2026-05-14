@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   validate-release:
@@ -56,6 +55,9 @@ jobs:
     timeout-minutes: 10
     environment: production
     needs: [validate-release]
+    permissions:
+      actions: write
+      contents: read
 
     steps:
       - name: Dispatch I13 reliability workflow for release candidate
