@@ -6886,7 +6886,6 @@ components:
         email:
           anyOf:
           - type: string
-            format: email
           - type: 'null'
           title: Email
         phone:
@@ -6895,10 +6894,14 @@ components:
           - type: 'null'
           title: Phone
         power_score:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Power Score
         interest_score:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Interest Score
         power_level:
           $ref: '#/components/schemas/PowerLevel'

@@ -1,7 +1,7 @@
 """Harden clause_embeddings tenant isolation with fail-closed RLS.
 
 Revision ID: 20260421_0001
-Revises: 20260401_0001
+Revises: 20260407_0002
 Create Date: 2026-04-21 00:00:00.000000
 
 Suite ID: TS-SEC-RLS-CLAUSE-EMBEDDINGS-001
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260421_0001"
-down_revision: str = "20260401_0001"
+down_revision: str = "20260407_0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
