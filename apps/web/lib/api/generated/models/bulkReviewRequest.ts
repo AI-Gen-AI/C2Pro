@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { BulkReviewRequestDecision } from './bulkReviewRequestDecision';
+import type { BulkReviewRequestDecision } from "./bulkReviewRequestDecision";
 
 /**
  * Request to bulk review alerts.

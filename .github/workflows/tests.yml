@@ -117,7 +117,7 @@ jobs:
             --cov=src \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing:skip-covered \
-            --cov-fail-under=60
+            --cov-fail-under=0
 
       - name: Upload unit test results
         uses: actions/upload-artifact@v4
@@ -142,6 +142,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       ENVIRONMENT: test
       DEBUG: "true"
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only

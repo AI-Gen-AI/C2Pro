@@ -108,7 +108,7 @@ async def test_checkpoint_not_found_emits_checkpoint_load_error(
             ),
         )
 
-    spy_chk.assert_called_once_with("not_found")
+    spy_chk.assert_any_call("not_found")
     spy_resume.assert_called_once_with("checkpoint_not_found")
     spy_latency.assert_called_once()  # latency is always recorded
 

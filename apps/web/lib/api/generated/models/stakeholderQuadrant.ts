@@ -41,12 +41,12 @@
 /**
  * Power/interest quadrant (Mendelow Matrix).
  */
-export type StakeholderQuadrant = typeof StakeholderQuadrant[keyof typeof StakeholderQuadrant];
-
+export type StakeholderQuadrant =
+  (typeof StakeholderQuadrant)[keyof typeof StakeholderQuadrant];
 
 export const StakeholderQuadrant = {
-  key_player: 'key_player',
-  keep_satisfied: 'keep_satisfied',
-  keep_informed: 'keep_informed',
-  monitor: 'monitor',
+  key_player: "key_player",
+  keep_satisfied: "keep_satisfied",
+  keep_informed: "keep_informed",
+  monitor: "monitor",
 } as const;

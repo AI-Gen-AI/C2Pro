@@ -38,11 +38,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AttachEvidenceRequestType = typeof AttachEvidenceRequestType[keyof typeof AttachEvidenceRequestType];
-
+export type AttachEvidenceRequestType =
+  (typeof AttachEvidenceRequestType)[keyof typeof AttachEvidenceRequestType];
 
 export const AttachEvidenceRequestType = {
-  note: 'note',
-  screenshot: 'screenshot',
-  document_excerpt: 'document_excerpt',
+  note: "note",
+  screenshot: "screenshot",
+  document_excerpt: "document_excerpt",
 } as const;

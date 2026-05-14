@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ImpactLevel } from './impactLevel';
-import type { ReviewItemResponseItemData } from './reviewItemResponseItemData';
-import type { ReviewStatus } from './reviewStatus';
+import type { ImpactLevel } from "./impactLevel";
+import type { ReviewItemResponseItemData } from "./reviewItemResponseItemData";
+import type { ReviewStatus } from "./reviewStatus";
 
 export interface ReviewItemResponse {
   item_id: string;

@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ExportProjectDataApiV1ProjectsProjectIdExportPost202 = { [key: string]: unknown };
+export type ExportProjectDataApiV1ProjectsProjectIdExportPost202 = {
+  [key: string]: unknown;
+};

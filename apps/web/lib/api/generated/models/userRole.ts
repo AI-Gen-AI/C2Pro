@@ -41,12 +41,11 @@
 /**
  * Roles de usuario.
  */
-export type UserRole = typeof UserRole[keyof typeof UserRole];
-
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const UserRole = {
-  admin: 'admin',
-  user: 'user',
-  viewer: 'viewer',
-  api: 'api',
+  admin: "admin",
+  user: "user",
+  viewer: "viewer",
+  api: "api",
 } as const;

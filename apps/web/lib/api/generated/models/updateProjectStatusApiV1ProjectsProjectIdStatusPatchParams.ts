@@ -39,5 +39,5 @@
  */
 
 export type UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams = {
-new_status: string;
+  new_status: string;
 };

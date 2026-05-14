@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentType } from './documentType';
+import type { DocumentType } from "./documentType";
 
 export interface BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost {
   document_type: DocumentType;

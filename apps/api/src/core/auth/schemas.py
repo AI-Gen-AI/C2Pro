@@ -260,10 +260,10 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "access_token": "example-access-token",
                 "token_type": "bearer",
                 "expires_in": 86400,
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "example-refresh-token",
             }
         }
     )
@@ -294,7 +294,7 @@ class LoginResponse(BaseModel):
                     "subscription_plan": "free",
                 },
                 "tokens": {
-                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "access_token": "example-access-token",
                     "token_type": "bearer",
                     "expires_in": 86400,
                 },

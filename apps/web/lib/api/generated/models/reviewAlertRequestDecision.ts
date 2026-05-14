@@ -38,10 +38,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ReviewAlertRequestDecision = typeof ReviewAlertRequestDecision[keyof typeof ReviewAlertRequestDecision];
-
+export type ReviewAlertRequestDecision =
+  (typeof ReviewAlertRequestDecision)[keyof typeof ReviewAlertRequestDecision];
 
 export const ReviewAlertRequestDecision = {
-  approve: 'approve',
-  reject: 'reject',
+  approve: "approve",
+  reject: "reject",
 } as const;

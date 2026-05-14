@@ -40,7 +40,7 @@ async def test_canonical_documents_parse_route_is_available(
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
-        storage_url="/tmp/contract.pdf",
+        storage_url="memory://contract.pdf",
         file_format="pdf",
         file_size_bytes=10,
         upload_status=DocumentStatus.UPLOADED,

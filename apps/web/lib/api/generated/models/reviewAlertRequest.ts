@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ReviewAlertRequestDecision } from './reviewAlertRequestDecision';
+import type { ReviewAlertRequestDecision } from "./reviewAlertRequestDecision";
 
 /**
  * Request to review an alert.

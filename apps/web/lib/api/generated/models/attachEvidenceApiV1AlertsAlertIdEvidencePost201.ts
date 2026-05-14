@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePost201 = { [key: string]: unknown };
+export type AttachEvidenceApiV1AlertsAlertIdEvidencePost201 = {
+  [key: string]: unknown;
+};

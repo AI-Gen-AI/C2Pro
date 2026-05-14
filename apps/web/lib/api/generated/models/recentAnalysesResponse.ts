@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { AnalysisStatus } from './analysisStatus';
+import type { AnalysisStatus } from "./analysisStatus";
 
 export interface RecentAnalysesResponse {
   /** List of recent coherence analyses */

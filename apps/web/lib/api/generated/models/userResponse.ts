@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { UserRole } from './userRole';
+import type { UserRole } from "./userRole";
 
 /**
  * Response con información de Usuario.

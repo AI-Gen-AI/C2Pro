@@ -28,6 +28,7 @@ Outputs written to QASwarmState:
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import os
 import re
@@ -180,17 +181,13 @@ def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
 
         return_annotation = ""
         if node.returns:
-            try:
+            with contextlib.suppress(Exception):
                 return_annotation = ast.unparse(node.returns)
-            except Exception:
-                pass
 
         decorators = []
         for dec in node.decorator_list:
-            try:
+            with contextlib.suppress(Exception):
                 decorators.append(ast.unparse(dec))
-            except Exception:
-                pass
 
         signatures.append(
             {
@@ -205,21 +202,20 @@ def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
             }
         )
 
+    parent_map = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            for item in ast.walk(node):
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if item is not node:
-                        _process_func(item, prefix=f"{node.name}.")
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Only top-level functions (not methods inside a class)
-            _is_method = any(
-                isinstance(parent, ast.ClassDef)
-                for parent in ast.walk(tree)
-                if hasattr(parent, "body") and node in getattr(parent, "body", [])
-            )
-            if not _is_method:
-                _process_func(node)
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                    _process_func(item, prefix=f"{node.name}.")
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and parent_map.get(node) is tree:
+            # Only top-level functions; methods are emitted by their ClassDef.
+            _process_func(node)
 
     return signatures
 

@@ -41,11 +41,10 @@
 /**
  * Level of power of the stakeholder.
  */
-export type PowerLevel = typeof PowerLevel[keyof typeof PowerLevel];
-
+export type PowerLevel = (typeof PowerLevel)[keyof typeof PowerLevel];
 
 export const PowerLevel = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  low: "low",
+  medium: "medium",
+  high: "high",
 } as const;

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { SubscriptionPlan } from './subscriptionPlan';
+import type { SubscriptionPlan } from "./subscriptionPlan";
 
 /**
  * Response con información de Tenant.

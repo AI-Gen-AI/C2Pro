@@ -37,26 +37,21 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation
-} from '@tanstack/react-query';
+import { useMutation } from "@tanstack/react-query";
 import type {
   MutationFunction,
   QueryClient,
   UseMutationOptions,
-  UseMutationResult
-} from '@tanstack/react-query';
+  UseMutationResult,
+} from "@tanstack/react-query";
 
 import type {
   CoherenceResult,
   HTTPValidationError,
-  ProjectContext
-} from '../models';
+  ProjectContext,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Accepts a project's context and evaluates it against a predefined set of coherence rules.
@@ -64,63 +59,92 @@ import { orvalApiClient } from '../../client';
  * @summary Evaluate Project Coherence
  */
 export const evaluateProjectCoherenceV0CoherenceEvaluatePost = (
-    projectContext: ProjectContext,
- signal?: AbortSignal
+  projectContext: ProjectContext,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<CoherenceResult>(
-      {url: `/coherence/evaluate`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: projectContext, signal
-    },
-      );
-    }
-  
+  return orvalApiClient<CoherenceResult>({
+    url: `/coherence/evaluate`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: projectContext,
+    signal,
+  });
+};
 
+export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      TError,
+      { data: ProjectContext },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
+    TError,
+    { data: ProjectContext },
+    TContext
+  > => {
+    const mutationKey = ["evaluateProjectCoherenceV0CoherenceEvaluatePost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>, TError,{data: ProjectContext}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>, TError,{data: ProjectContext}, TContext> => {
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      { data: ProjectContext }
+    > = (props) => {
+      const { data } = props ?? {};
 
-const mutationKey = ['evaluateProjectCoherenceV0CoherenceEvaluatePost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      return evaluateProjectCoherenceV0CoherenceEvaluatePost(data);
+    };
 
-      
+    return { mutationFn, ...mutationOptions };
+  };
 
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>
+  >;
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationBody =
+  ProjectContext;
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationError =
+  void | HTTPValidationError;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>, {data: ProjectContext}> = (props) => {
-          const {data} = props ?? {};
-
-          return  evaluateProjectCoherenceV0CoherenceEvaluatePost(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationResult = NonNullable<Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>>
-    export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationBody = ProjectContext
-    export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Evaluate Project Coherence
  */
-export const useEvaluateProjectCoherenceV0CoherenceEvaluatePost = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>, TError,{data: ProjectContext}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
-        TError,
-        {data: ProjectContext},
-        TContext
-      > => {
-      return useMutation(getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions(options), queryClient);
-    }
-    
+export const useEvaluateProjectCoherenceV0CoherenceEvaluatePost = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      TError,
+      { data: ProjectContext },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
+  TError,
+  { data: ProjectContext },
+  TContext
+> => {
+  return useMutation(
+    getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions(options),
+    queryClient,
+  );
+};
