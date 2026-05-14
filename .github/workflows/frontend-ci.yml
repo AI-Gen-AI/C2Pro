@@ -88,6 +88,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [typecheck, lint]
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      CLERK_SECRET_KEY: sk_test_mock
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     defaults:
       run:
         working-directory: apps/web
