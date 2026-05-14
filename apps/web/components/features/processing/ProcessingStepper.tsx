@@ -2,7 +2,7 @@
  * Test Suite ID: S2-10
  * Roadmap Reference: S2-10 SSE processing stepper + withCredentials (FLAG-3)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { flushSync } from "react-dom";
 import { handleAuthErrorStatus } from "@/lib/api/client";
 import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
@@ -132,6 +132,33 @@ function updateErrorState(current: StepperState, hasToken: boolean): StepperStat
   };
 }
 
+function applyStageState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  stage: StageData,
+) {
+  flushSync(() => {
+    setState((current) => updateStageState(current, stage));
+  });
+}
+
+function applyCompleteState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  completeData: CompleteData,
+) {
+  flushSync(() => {
+    setState((current) => updateCompleteState(current, completeData));
+  });
+}
+
+function applyErrorState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  hasToken: boolean,
+) {
+  flushSync(() => {
+    setState((current) => updateErrorState(current, hasToken));
+  });
+}
+
 export function resetProcessingEventSourcesForTests() {
   for (const source of eventSourcesByProject.values()) {
     source.close();
@@ -156,9 +183,7 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       };
       if (!isProcessingSseEvent(parsed)) return;
 
-      flushSync(() => {
-        setState((current) => updateStageState(current, parsed.data));
-      });
+      applyStageState(setState, parsed.data);
     };
 
     const onComplete = (event: MessageEvent<string>) => {
@@ -168,17 +193,13 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       };
       if (!isProcessingSseEvent(parsed)) return;
 
-      flushSync(() => {
-        setState((current) => updateCompleteState(current, parsed.data));
-      });
+      applyCompleteState(setState, parsed.data);
       source.close();
     };
 
     const onError = () => {
       const hasToken = !!useAuthStore.getState().token;
-      flushSync(() => {
-        setState((current) => updateErrorState(current, hasToken));
-      });
+      applyErrorState(setState, hasToken);
 
       if (!hasToken) {
         handleAuthErrorStatus(401);

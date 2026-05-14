@@ -90,7 +90,7 @@ async def test_legacy_parse_route_remains_backward_compatible(
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="legacy.pdf",
-        storage_url="/tmp/legacy.pdf",
+        storage_url="memory://legacy.pdf",
         file_format="pdf",
         file_size_bytes=10,
         upload_status=DocumentStatus.UPLOADED,

@@ -57,6 +57,59 @@ _VALID_MARKERS = {"unit", "integration", "e2e", "ai", "security", "contract", "s
 # ---------------------------------------------------------------------------
 
 
+def _parse_coverage_root(coverage_path: str) -> ET.Element | None:
+    if not os.path.exists(coverage_path):
+        return None
+
+    try:
+        return ET.parse(coverage_path).getroot()
+    except ET.ParseError:
+        return None
+
+
+def _coverage_filename_matches(filename: str, target_file: str) -> bool:
+    normalized_filename = filename.replace("\\", "/")
+    normalized_target = target_file.replace("\\", "/")
+    return normalized_filename == normalized_target or normalized_filename.endswith(
+        normalized_target
+    )
+
+
+def _collect_missing_branches(line: ET.Element, lineno: int) -> list[tuple[int, str]]:
+    if line.get("branch", "false") != "true":
+        return []
+
+    missing_branches = line.get("missing-branches", "")
+    if not missing_branches:
+        return []
+
+    return [(lineno, side.strip()) for side in missing_branches.split(",")]
+
+
+def _collect_method_coverage(method: ET.Element) -> dict[str, Any]:
+    uncovered: list[int] = []
+    missing_branches: list[tuple[int, str]] = []
+
+    for line in method.iter("line"):
+        lineno = int(line.get("number", 0))
+        if int(line.get("hits", 0)) == 0:
+            uncovered.append(lineno)
+        missing_branches.extend(_collect_missing_branches(line, lineno))
+
+    return {
+        "line_rate": float(method.get("line-rate", 0)),
+        "uncovered_lines": uncovered,
+        "missing_branches": missing_branches,
+    }
+
+
+def _collect_class_coverage(cls: ET.Element) -> dict[str, dict[str, Any]]:
+    return {
+        method.get("name", "<unknown>"): _collect_method_coverage(method)
+        for method in cls.iter("method")
+    }
+
+
 def parse_coverage_xml(
     coverage_path: str,
     target_file: str,
@@ -81,52 +134,16 @@ def parse_coverage_xml(
         coverage_path: Absolute or relative path to coverage.xml.
         target_file:   Repo-relative path (e.g. "apps/api/src/coherence/engine_v2.py").
     """
-    if not os.path.exists(coverage_path):
+    root = _parse_coverage_root(coverage_path)
+    if root is None:
         return {}
-
-    try:
-        tree = ET.parse(coverage_path)
-        root = tree.getroot()
-    except ET.ParseError:
-        return {}
-
-    # Normalise target path for matching against coverage XML filenames
-    normalised_target = target_file.replace("\\", "/")
 
     for package in root.iter("package"):
         for cls in package.iter("class"):
-            filename = cls.get("filename", "").replace("\\", "/")
             # Match if the coverage filename ends with our target (handles abs/rel paths)
-            if not (filename == normalised_target or filename.endswith(normalised_target)):
+            if not _coverage_filename_matches(cls.get("filename", ""), target_file):
                 continue
-
-            function_coverage: dict[str, dict[str, Any]] = {}
-
-            for method in cls.iter("method"):
-                name = method.get("name", "<unknown>")
-                line_rate = float(method.get("line-rate", 0))
-                uncovered: list[int] = []
-                missing_branches: list[tuple[int, str]] = []
-
-                for line in method.iter("line"):
-                    hits = int(line.get("hits", 0))
-                    lineno = int(line.get("number", 0))
-                    if hits == 0:
-                        uncovered.append(lineno)
-                    # Branch coverage misses
-                    branch = line.get("branch", "false")
-                    missing_b = line.get("missing-branches", "")
-                    if branch == "true" and missing_b:
-                        for side in missing_b.split(","):
-                            missing_branches.append((lineno, side.strip()))
-
-                function_coverage[name] = {
-                    "line_rate": line_rate,
-                    "uncovered_lines": uncovered,
-                    "missing_branches": missing_branches,
-                }
-
-            return function_coverage
+            return _collect_class_coverage(cls)
 
     return {}
 
