@@ -458,7 +458,7 @@ async def get_document_endpoint(
             "project_id": clause.project_id,
             "document_id": clause.document_id,
             "clause_code": clause.clause_code,
-            "clause_type": clause.clause_type.value if clause.clause_type else None,
+            "clause_type": clause.clause_type.value if hasattr(clause.clause_type, "value") else str(clause.clause_type) if clause.clause_type else None,
             "title": clause.title,
             "full_text": clause.full_text,
             "text_start_offset": clause.text_start_offset,
@@ -593,7 +593,7 @@ async def list_documents_for_project(
         DocumentListItem(
             id=doc.id,
             filename=doc.filename,
-            document_type=doc.document_type.value if doc.document_type else None,
+            document_type=doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type) if doc.document_type else None,
             status=_normalize_document_status_for_polling(doc.upload_status),
             status_detail=_document_status_detail_for_polling(doc.upload_status),
             error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
