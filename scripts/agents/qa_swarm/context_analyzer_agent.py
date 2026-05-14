@@ -28,12 +28,13 @@ Outputs written to QASwarmState:
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 import anthropic
 from langchain_core.messages import HumanMessage
@@ -54,6 +55,59 @@ _VALID_MARKERS = {"unit", "integration", "e2e", "ai", "security", "contract", "s
 # ---------------------------------------------------------------------------
 # Coverage XML parsing
 # ---------------------------------------------------------------------------
+
+
+def _parse_coverage_root(coverage_path: str) -> ET.Element | None:
+    if not os.path.exists(coverage_path):
+        return None
+
+    try:
+        return ET.parse(coverage_path).getroot()
+    except ET.ParseError:
+        return None
+
+
+def _coverage_filename_matches(filename: str, target_file: str) -> bool:
+    normalized_filename = filename.replace("\\", "/")
+    normalized_target = target_file.replace("\\", "/")
+    return normalized_filename == normalized_target or normalized_filename.endswith(
+        normalized_target
+    )
+
+
+def _collect_missing_branches(line: ET.Element, lineno: int) -> list[tuple[int, str]]:
+    if line.get("branch", "false") != "true":
+        return []
+
+    missing_branches = line.get("missing-branches", "")
+    if not missing_branches:
+        return []
+
+    return [(lineno, side.strip()) for side in missing_branches.split(",")]
+
+
+def _collect_method_coverage(method: ET.Element) -> dict[str, Any]:
+    uncovered: list[int] = []
+    missing_branches: list[tuple[int, str]] = []
+
+    for line in method.iter("line"):
+        lineno = int(line.get("number", 0))
+        if int(line.get("hits", 0)) == 0:
+            uncovered.append(lineno)
+        missing_branches.extend(_collect_missing_branches(line, lineno))
+
+    return {
+        "line_rate": float(method.get("line-rate", 0)),
+        "uncovered_lines": uncovered,
+        "missing_branches": missing_branches,
+    }
+
+
+def _collect_class_coverage(cls: ET.Element) -> dict[str, dict[str, Any]]:
+    return {
+        method.get("name", "<unknown>"): _collect_method_coverage(method)
+        for method in cls.iter("method")
+    }
 
 
 def parse_coverage_xml(
@@ -80,52 +134,16 @@ def parse_coverage_xml(
         coverage_path: Absolute or relative path to coverage.xml.
         target_file:   Repo-relative path (e.g. "apps/api/src/coherence/engine_v2.py").
     """
-    if not os.path.exists(coverage_path):
+    root = _parse_coverage_root(coverage_path)
+    if root is None:
         return {}
-
-    try:
-        tree = ET.parse(coverage_path)
-        root = tree.getroot()
-    except ET.ParseError:
-        return {}
-
-    # Normalise target path for matching against coverage XML filenames
-    normalised_target = target_file.replace("\\", "/")
 
     for package in root.iter("package"):
         for cls in package.iter("class"):
-            filename = cls.get("filename", "").replace("\\", "/")
             # Match if the coverage filename ends with our target (handles abs/rel paths)
-            if not (filename == normalised_target or filename.endswith(normalised_target)):
+            if not _coverage_filename_matches(cls.get("filename", ""), target_file):
                 continue
-
-            function_coverage: dict[str, dict[str, Any]] = {}
-
-            for method in cls.iter("method"):
-                name = method.get("name", "<unknown>")
-                line_rate = float(method.get("line-rate", 0))
-                uncovered: list[int] = []
-                missing_branches: list[tuple[int, str]] = []
-
-                for line in method.iter("line"):
-                    hits = int(line.get("hits", 0))
-                    lineno = int(line.get("number", 0))
-                    if hits == 0:
-                        uncovered.append(lineno)
-                    # Branch coverage misses
-                    branch = line.get("branch", "false")
-                    missing_b = line.get("missing-branches", "")
-                    if branch == "true" and missing_b:
-                        for side in missing_b.split(","):
-                            missing_branches.append((lineno, side.strip()))
-
-                function_coverage[name] = {
-                    "line_rate": line_rate,
-                    "uncovered_lines": uncovered,
-                    "missing_branches": missing_branches,
-                }
-
-            return function_coverage
+            return _collect_class_coverage(cls)
 
     return {}
 
@@ -133,6 +151,86 @@ def parse_coverage_xml(
 # ---------------------------------------------------------------------------
 # AST-based source analysis
 # ---------------------------------------------------------------------------
+
+
+def _node_docstring_metadata(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[bool, str]:
+    if not (
+        node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+        and isinstance(node.body[0].value.value, str)
+    ):
+        return False, ""
+
+    return True, node.body[0].value.value.splitlines()[0].strip()
+
+
+def _node_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    return [
+        arg.arg
+        for arg in node.args.args
+        if arg.arg not in ("self", "cls")
+    ]
+
+
+def _node_return_annotation(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    if not node.returns:
+        return ""
+
+    with contextlib.suppress(Exception):
+        return ast.unparse(node.returns)
+    return ""
+
+
+def _node_decorators(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    decorators = []
+    for dec in node.decorator_list:
+        with contextlib.suppress(Exception):
+            decorators.append(ast.unparse(dec))
+    return decorators
+
+
+def _function_signature(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    prefix: str = "",
+) -> dict[str, Any]:
+    has_doc, docstring = _node_docstring_metadata(node)
+    qualified = f"{prefix}{node.name}" if prefix else node.name
+
+    return {
+        "qualified_name": qualified,
+        "lineno": node.lineno,
+        "is_async": isinstance(node, ast.AsyncFunctionDef),
+        "has_docstring": has_doc,
+        "args": _node_args(node),
+        "return_annotation": _node_return_annotation(node),
+        "docstring": docstring,
+        "decorators": _node_decorators(node),
+    }
+
+
+def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    return {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+
+
+def _is_function_node(
+    node: ast.AST,
+) -> TypeGuard[ast.FunctionDef | ast.AsyncFunctionDef]:
+    return isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+
+
+def _class_method_signatures(node: ast.ClassDef) -> list[dict[str, Any]]:
+    return [
+        _function_signature(item, prefix=f"{node.name}.")
+        for item in node.body
+        if _is_function_node(item)
+    ]
 
 
 def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
@@ -158,68 +256,14 @@ def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
         return []
 
     signatures: list[dict[str, Any]] = []
-
-    def _process_func(node: ast.FunctionDef | ast.AsyncFunctionDef, prefix: str = "") -> None:
-        qualified = f"{prefix}{node.name}" if prefix else node.name
-        docstring = ""
-        has_doc = False
-        if (
-            node.body
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        ):
-            has_doc = True
-            docstring = node.body[0].value.value.splitlines()[0].strip()
-
-        args = [
-            arg.arg
-            for arg in node.args.args
-            if arg.arg not in ("self", "cls")
-        ]
-
-        return_annotation = ""
-        if node.returns:
-            try:
-                return_annotation = ast.unparse(node.returns)
-            except Exception:
-                pass
-
-        decorators = []
-        for dec in node.decorator_list:
-            try:
-                decorators.append(ast.unparse(dec))
-            except Exception:
-                pass
-
-        signatures.append(
-            {
-                "qualified_name": qualified,
-                "lineno": node.lineno,
-                "is_async": isinstance(node, ast.AsyncFunctionDef),
-                "has_docstring": has_doc,
-                "args": args,
-                "return_annotation": return_annotation,
-                "docstring": docstring,
-                "decorators": decorators,
-            }
-        )
+    parents = _parent_map(tree)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            for item in ast.walk(node):
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if item is not node:
-                        _process_func(item, prefix=f"{node.name}.")
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Only top-level functions (not methods inside a class)
-            _is_method = any(
-                isinstance(parent, ast.ClassDef)
-                for parent in ast.walk(tree)
-                if hasattr(parent, "body") and node in getattr(parent, "body", [])
-            )
-            if not _is_method:
-                _process_func(node)
+            signatures.extend(_class_method_signatures(node))
+        elif _is_function_node(node) and parents.get(node) is tree:
+            # Only top-level functions; methods are emitted by their ClassDef.
+            signatures.append(_function_signature(node))
 
     return signatures
 
@@ -414,6 +458,75 @@ async def _call_claude_for_scenarios(
 # LangGraph node
 # ---------------------------------------------------------------------------
 
+def _identify_uncovered_functions(
+    coverage_data: dict[str, dict[str, Any]],
+    source_code: str,
+) -> list[str]:
+    if not coverage_data:
+        sigs = extract_function_signatures(source_code)
+        return [s["qualified_name"] for s in sigs]
+
+    uncovered_functions: list[str] = []
+    for fn_name, data in coverage_data.items():
+        line_rate = data.get("line_rate", 0)
+        uncovered_lines = data.get("uncovered_lines", [])
+        missing_branches = data.get("missing_branches", [])
+        if line_rate * 100 < _COVERAGE_THRESHOLD or uncovered_lines or missing_branches:
+            uncovered_functions.append(fn_name)
+    return uncovered_functions
+
+
+def _summarize_pr_diff(pr_diff: str, target_file: str) -> str:
+    if not pr_diff:
+        return ""
+    changed = extract_changed_functions_from_diff(pr_diff, target_file)
+    if not changed:
+        return ""
+    return f"Changed line references: {', '.join(changed[:20])}"
+
+
+def _append_message(state: QASwarmState, content: str) -> list[Any]:
+    return state.get("messages", []) + [HumanMessage(content=content)]
+
+
+def _missing_api_key_state(state: QASwarmState) -> QASwarmState:
+    return {
+        **state,
+        "error": "ANTHROPIC_API_KEY not set — ContextAnalyzerAgent cannot proceed.",
+        "messages": _append_message(state, "ContextAnalyzerAgent: missing API key"),
+    }
+
+
+def _api_error_state(state: QASwarmState, exc: anthropic.APIError) -> QASwarmState:
+    return {
+        **state,
+        "error": f"Claude API error in ContextAnalyzerAgent: {exc}",
+        "messages": _append_message(state, f"ContextAnalyzerAgent error: {exc}"),
+    }
+
+
+def _success_state(
+    state: QASwarmState,
+    target_file: str,
+    uncovered_functions: list[str],
+    scenarios: list[dict[str, Any]],
+    business_context: str,
+) -> QASwarmState:
+    return {
+        **state,
+        "uncovered_functions": uncovered_functions,
+        "test_scenarios": scenarios,
+        "business_context": business_context,
+        "messages": _append_message(
+            state,
+            (
+                f"ContextAnalyzerAgent: analysed `{target_file}`. "
+                f"Found {len(uncovered_functions)} uncovered function(s), "
+                f"generated {len(scenarios)} test scenario(s)."
+            ),
+        ),
+    }
+
 
 async def analyze_context(state: QASwarmState) -> QASwarmState:
     """
@@ -428,43 +541,15 @@ async def analyze_context(state: QASwarmState) -> QASwarmState:
     pr_diff = state.get("pr_diff", "")
     existing_test_files = state.get("existing_test_files", [])
 
-    # ── Step 1: Parse coverage report ─────────────────────────────────
     coverage_data = parse_coverage_xml(coverage_path, target_file)
+    uncovered_functions = _identify_uncovered_functions(coverage_data, source_code)
+    pr_diff_summary = _summarize_pr_diff(pr_diff, target_file)
 
-    # Identify functions below the coverage threshold
-    uncovered_functions: list[str] = []
-    if coverage_data:
-        for fn_name, data in coverage_data.items():
-            line_rate = data.get("line_rate", 0)
-            uncovered_lines = data.get("uncovered_lines", [])
-            missing_branches = data.get("missing_branches", [])
-            # Flag if below threshold OR has missing branches
-            if line_rate * 100 < _COVERAGE_THRESHOLD or uncovered_lines or missing_branches:
-                uncovered_functions.append(fn_name)
-    else:
-        # No coverage data available — treat all AST-extracted functions as targets
-        sigs = extract_function_signatures(source_code)
-        uncovered_functions = [s["qualified_name"] for s in sigs]
-
-    # ── Step 2: Analyse PR diff ────────────────────────────────────────
-    pr_diff_summary = ""
-    if pr_diff:
-        changed = extract_changed_functions_from_diff(pr_diff, target_file)
-        if changed:
-            pr_diff_summary = f"Changed line references: {', '.join(changed[:20])}"
-
-    # ── Step 3: Call Claude for scenario extraction ────────────────────
     anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not anthropic_api_key:
-        return {
-            **state,
-            "error": "ANTHROPIC_API_KEY not set — ContextAnalyzerAgent cannot proceed.",
-            "messages": state.get("messages", [])
-            + [HumanMessage(content="ContextAnalyzerAgent: missing API key")],
-        }
+        return _missing_api_key_state(state)
 
     client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
-
     try:
         scenarios, business_context = await _call_claude_for_scenarios(
             target_file=target_file,
@@ -475,27 +560,12 @@ async def analyze_context(state: QASwarmState) -> QASwarmState:
             client=client,
         )
     except anthropic.APIError as exc:
-        return {
-            **state,
-            "error": f"Claude API error in ContextAnalyzerAgent: {exc}",
-            "messages": state.get("messages", [])
-            + [HumanMessage(content=f"ContextAnalyzerAgent error: {exc}")],
-        }
+        return _api_error_state(state, exc)
 
-    # ── Step 4: Return updated state ──────────────────────────────────
-    return {
-        **state,
-        "uncovered_functions": uncovered_functions,
-        "test_scenarios": scenarios,
-        "business_context": business_context,
-        "messages": state.get("messages", [])
-        + [
-            HumanMessage(
-                content=(
-                    f"ContextAnalyzerAgent: analysed `{target_file}`. "
-                    f"Found {len(uncovered_functions)} uncovered function(s), "
-                    f"generated {len(scenarios)} test scenario(s)."
-                )
-            )
-        ],
-    }
+    return _success_state(
+        state,
+        target_file,
+        uncovered_functions,
+        scenarios,
+        business_context,
+    )

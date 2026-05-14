@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSItemChildOutput } from './wBSItemChildOutput';
-import type { WBSItemOutputBudget } from './wBSItemOutputBudget';
+import type { WBSItemChildOutput } from "./wBSItemChildOutput";
+import type { WBSItemOutputBudget } from "./wBSItemOutputBudget";
 
 /**
  * Output model for WBS items.

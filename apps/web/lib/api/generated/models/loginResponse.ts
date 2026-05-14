@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { TenantResponse } from './tenantResponse';
-import type { TokenResponse } from './tokenResponse';
-import type { UserResponse } from './userResponse';
+import type { TenantResponse } from "./tenantResponse";
+import type { TokenResponse } from "./tokenResponse";
+import type { UserResponse } from "./userResponse";
 
 /**
  * Response completo de login.

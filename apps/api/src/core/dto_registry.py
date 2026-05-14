@@ -25,10 +25,10 @@ def get_all_dtos() -> Iterable[tuple[type[BaseModel], dict[str, Any]]]:
         (
             TokenResponse,
             {
-                "access_token": "eyJhbGciOiJIUzI1NiJ9.test.sig",
+                "access_token": "example-access-token",
                 "token_type": "bearer",
                 "expires_in": 3600,
-                "refresh_token": "eyJhbGciOiJIUzI1NiJ9.refresh.sig",
+                "refresh_token": "example-refresh-token",
             },
         ),
         (

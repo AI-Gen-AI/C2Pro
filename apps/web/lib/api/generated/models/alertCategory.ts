@@ -41,15 +41,14 @@
 /**
  * The category of the alert (legal, financial, technical, schedule, scope).
  */
-export type AlertCategory = typeof AlertCategory[keyof typeof AlertCategory];
-
+export type AlertCategory = (typeof AlertCategory)[keyof typeof AlertCategory];
 
 export const AlertCategory = {
-  legal: 'legal',
-  financial: 'financial',
-  technical: 'technical',
-  schedule: 'schedule',
-  scope: 'scope',
-  quality: 'quality',
-  general: 'general',
+  legal: "legal",
+  financial: "financial",
+  technical: "technical",
+  schedule: "schedule",
+  scope: "scope",
+  quality: "quality",
+  general: "general",
 } as const;

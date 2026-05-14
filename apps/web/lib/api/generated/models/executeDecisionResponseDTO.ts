@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ExecuteDecisionResponseDTORisksItem } from './executeDecisionResponseDTORisksItem';
+import type { ExecuteDecisionResponseDTORisksItem } from "./executeDecisionResponseDTORisksItem";
 
 /**
  * Refers to Suite ID: TS-I13-E2E-REAL-001.

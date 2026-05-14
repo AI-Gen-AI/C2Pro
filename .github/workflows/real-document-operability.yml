@@ -11,7 +11,7 @@ on:
       - "apps/web/**"
       - "evals/**"
       - ".github/workflows/real-document-operability.yml"
-      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      - "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
   push:
     branches: [main, develop]
     paths:
@@ -19,7 +19,7 @@ on:
       - "apps/web/**"
       - "evals/**"
       - ".github/workflows/real-document-operability.yml"
-      - "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
+      - "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       ENVIRONMENT: test
       DEBUG: "true"
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
@@ -129,8 +130,7 @@ jobs:
 
           ## Known Tracked Blockers
 
-          - `TASK-OPS-DOCFLOW-015`: Full backend suite gate collection currently fails locally on `ModuleNotFoundError: No module named 'schemathesis'` in `tests/contract/schemathesis/*`; adding or installing this dependency requires approved dependency workflow.
-          - `TASK-OPS-DOCFLOW-016`: Full backend suite gate collection also exposes stale legacy contract imports for removed/relocated modules such as `src.alerts.router` and `get_bom_repository` from `src.procurement.adapters.http.router`.
+          - `TASK-OPS-DOCFLOW-017`: Full backend suite collection now proceeds past relocated alert/procurement imports and stops on a Schemathesis no-match contract for frontend-support operations in `tests/contract/schemathesis/test_observability_admin_router.py`.
 
           ## Passing Gates Required Before This Tracking
 

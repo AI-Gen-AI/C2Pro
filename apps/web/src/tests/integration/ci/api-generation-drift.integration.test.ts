@@ -25,7 +25,7 @@ describe("API generation drift safeguards", () => {
     const pkg = readRepoFile("apps", "web", "package.json");
 
     expect(pkg).toContain(
-      '"generate:api:check": "orval && git diff --exit-code -- lib/api/generated schema/api.json"',
+      '"generate:api:check": "orval && pnpm exec prettier --write lib/api/generated schema/api.json && git diff --exit-code -- lib/api/generated schema/api.json"',
     );
   });
 

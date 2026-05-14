@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCoverageOutput } from './wBSCoverageOutput';
-import type { WBSItemOutput } from './wBSItemOutput';
-import type { WBSOutputAlertsItem } from './wBSOutputAlertsItem';
+import type { WBSCoverageOutput } from "./wBSCoverageOutput";
+import type { WBSItemOutput } from "./wBSItemOutput";
+import type { WBSOutputAlertsItem } from "./wBSOutputAlertsItem";
 
 /**
  * Output model for WBS endpoint.

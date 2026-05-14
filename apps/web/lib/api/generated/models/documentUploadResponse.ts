@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentStatus } from './documentStatus';
+import type { DocumentStatus } from "./documentStatus";
 
 /**
  * Response for parse endpoints.

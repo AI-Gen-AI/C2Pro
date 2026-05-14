@@ -138,6 +138,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         alert_payloads = list(alerts)
         async with get_session_with_tenant(project.tenant_id) as tenant_db:
             new_analysis = Analysis(
+                tenant_id=project.tenant_id,
                 project_id=project_id,
                 analysis_type=AnalysisType.COHERENCE,
                 status=AnalysisStatus.COMPLETED,
@@ -174,6 +175,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                     )
 
                     new_alert = Alert(
+                        tenant_id=project.tenant_id,
                         project_id=project_id,
                         analysis_id=new_analysis.id,
                         severity=AlertSeverity[alert_data.get("severity", "LOW").upper()],

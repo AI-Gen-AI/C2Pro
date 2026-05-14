@@ -175,7 +175,7 @@ def get_current_trace_context() -> dict[str, Any] | None:
     return _TRACE_CONTEXT.get()
 
 
-def traced_llm_call(
+def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and async tracing paths.
     *,
     task_type: str,
     span_name: str | None = None,
@@ -255,9 +255,9 @@ def traced_llm_call(
                     trace_id, trace_url = _extract_trace_identifiers(span, run_id=run_id)
                     _TRACE_CONTEXT.set({"trace_id": trace_id, "trace_url": trace_url, "latency_ms": usage_metrics["latency_ms"]})
 
-                    tenant_uuid = getattr(request_obj, "tenant_id", None)
-                    project_id = getattr(request_obj, "project_id", None)
-                    prompt_version = getattr(request_obj, "prompt_version", None)
+                    tenant_uuid = getattr(request_obj, "tenant_id", None) or kwargs.get("tenant_id")
+                    project_id = getattr(request_obj, "project_id", None) or kwargs.get("project_id")
+                    prompt_version = getattr(request_obj, "prompt_version", None) or kwargs.get("prompt_version")
 
                     if usage_logger is not None and tenant_uuid is not None and trace_id:
                         await usage_logger.log_success(

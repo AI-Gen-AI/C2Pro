@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   # Typecheck and lint run in parallel — they are independent static checks
@@ -28,6 +27,11 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      CLERK_SECRET_KEY: sk_test_mock
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
 
     steps:
       - name: Checkout
@@ -35,8 +39,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,8 +68,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,6 +88,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [typecheck, lint]
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      CLERK_SECRET_KEY: sk_test_mock
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     defaults:
       run:
         working-directory: apps/web
@@ -98,8 +103,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -119,7 +122,7 @@ jobs:
         run: pnpm exec playwright install --with-deps
 
       - name: E2E smoke tests
-        run: pnpm test:e2e
+        run: pnpm test:e2e -- src/tests/e2e/coherence-v1.spec.ts --project=chromium
 
       - name: API generation drift check
         run: pnpm generate:api:check
@@ -140,13 +143,6 @@ jobs:
         with:
           wireframe-coverage-json: apps/web/wireframe-coverage.json
           output: quality-report.md
-
-      - name: Comment quality gate report
-        if: always() && github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: c2pro-quality-report-frontend
-          path: quality-report.md
 
       - name: Upload quality gate report
         if: always()

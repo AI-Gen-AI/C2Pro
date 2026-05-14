@@ -38,12 +38,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CreateAlertRequestSeverity = typeof CreateAlertRequestSeverity[keyof typeof CreateAlertRequestSeverity];
-
+export type CreateAlertRequestSeverity =
+  (typeof CreateAlertRequestSeverity)[keyof typeof CreateAlertRequestSeverity];
 
 export const CreateAlertRequestSeverity = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  critical: 'critical',
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
 } as const;

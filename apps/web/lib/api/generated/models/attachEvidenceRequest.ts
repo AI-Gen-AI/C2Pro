@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { AttachEvidenceRequestType } from './attachEvidenceRequestType';
+import type { AttachEvidenceRequestType } from "./attachEvidenceRequestType";
 
 /**
  * Request to attach evidence to alert.

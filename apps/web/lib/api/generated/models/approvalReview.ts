@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ApprovalReviewCorrectionData } from './approvalReviewCorrectionData';
-import type { ApprovalStatus } from './approvalStatus';
+import type { ApprovalReviewCorrectionData } from "./approvalReviewCorrectionData";
+import type { ApprovalStatus } from "./approvalStatus";
 
 export interface ApprovalReview {
   status: ApprovalStatus;

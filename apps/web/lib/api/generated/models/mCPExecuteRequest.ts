@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { MCPExecuteRequestParams } from './mCPExecuteRequestParams';
+import type { MCPExecuteRequestParams } from "./mCPExecuteRequestParams";
 
 /**
  * Generic MCP execution request.

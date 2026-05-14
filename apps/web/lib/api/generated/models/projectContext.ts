@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { Clause } from './clause';
+import type { Clause } from "./clause";
 
 /**
  * Represents the full context of a project to be evaluated, now with structured clauses.
