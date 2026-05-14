@@ -1,10 +1,10 @@
 [allowlist]
   description = "C2Pro allowlist for known-safe patterns in test fixtures, examples, and documentation"
-  
-  [allowlist.paths]
-    # Exclude entire test venv directory - these are third-party library test fixtures
-    apps/.venv-tests/.* = true
-    apps\\.venv-tests\\.* = true
+  # Exclude entire test venv directory - these are third-party library test fixtures.
+  paths = [
+    '''apps/\.venv-tests/.*''',
+    '''apps\\\.venv-tests\\.*'''
+  ]
 
   [[allowlist.rules]]
     description = "Allow JWT-like test patterns in source files"
