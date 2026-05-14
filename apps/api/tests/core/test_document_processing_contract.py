@@ -77,7 +77,7 @@ async def test_document_list_marks_parsed_as_pre_analysis_state(
             project_id=project.id,
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
-            storage_url="/tmp/contract.pdf",
+            storage_url="memory://contract.pdf",
             file_format="pdf",
             file_size_bytes=42,
             upload_status=DocumentStatus.PARSED,

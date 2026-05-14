@@ -37,10 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -53,8 +50,8 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
   BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost,
@@ -65,542 +62,1148 @@ import type {
   HTTPValidationError,
   ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
   RagAnswerResponse,
-  RagQuestionRequest
-} from '../models';
+  RagQuestionRequest,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * @summary Upload a document for asynchronous processing
  */
 export const uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost = (
-    projectId: string,
-    bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost,
- signal?: AbortSignal
+  projectId: string,
+  bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost,
+  signal?: AbortSignal,
 ) => {
-      
-      const formData = new FormData();
-formData.append(`document_type`, bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost.document_type);
-formData.append(`file`, bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost.file);
+  const formData = new FormData();
+  formData.append(
+    `document_type`,
+    bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost.document_type,
+  );
+  formData.append(
+    `file`,
+    bodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost.file,
+  );
 
-      return orvalApiClient<DocumentQueuedResponse>(
-      {url: `/api/v1/projects/${projectId}/documents`, method: 'POST',
-       data: formData, signal
+  return orvalApiClient<DocumentQueuedResponse>({
+    url: `/api/v1/projects/${projectId}/documents`,
+    method: "POST",
+    data: formData,
+    signal,
+  });
+};
+
+export const getUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+        >
+      >,
+      TError,
+      {
+        projectId: string;
+        data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
     },
+    TContext
+  > => {
+    const mutationKey = [
+      "uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+        >
+      >,
+      {
+        projectId: string;
+        data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
+      }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost(
+        projectId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>, TError,{projectId: string;data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>, TError,{projectId: string;data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost}, TContext> => {
+export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+      >
+    >
+  >;
+export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationBody =
+  BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
+export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationError =
+  void | HTTPValidationError;
 
-const mutationKey = ['uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>, {projectId: string;data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost}> = (props) => {
-          const {projectId,data} = props ?? {};
-
-          return  uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost(projectId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>>
-    export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationBody = BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
-    export type UploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Upload a document for asynchronous processing
  */
-export const useUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>, TError,{projectId: string;data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost>>,
+export const useUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost =
+  <TError = void | HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+          >
+        >,
         TError,
-        {projectId: string;data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost},
+        {
+          projectId: string;
+          data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
+        },
         TContext
-      > => {
-      return useMutation(getUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationOptions(options), queryClient);
-    }
-    /**
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof uploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      data: BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost;
+    },
+    TContext
+  > => {
+    return useMutation(
+      getUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
  * @summary List documents for a project
  */
 export const listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet = (
+  projectId: string,
+  params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<DocumentListResponse>({
+    url: `/api/v1/projects/${projectId}/documents`,
+    method: "GET",
+    params,
+    signal,
+  });
+};
+
+export const getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryKey =
+  (
     projectId: string,
     params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<DocumentListResponse>(
-      {url: `/api/v1/projects/${projectId}/documents`, method: 'GET',
-        params, signal
-    },
-      );
-    }
-  
-
-
-
-export const getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryKey = (projectId: string,
-    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,) => {
+  ) => {
     return [
-    `/api/v1/projects/${projectId}/documents`, ...(params ? [params] : [])
+      `/api/v1/projects/${projectId}/documents`,
+      ...(params ? [params] : []),
     ] as const;
-    }
+  };
 
-    
-export const getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryOptions = <TData = Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError = void | HTTPValidationError>(projectId: string,
-    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData>>, }
-) => {
+export const getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    projectId: string,
+    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
 
-const {query: queryOptions} = options ?? {};
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryKey(
+        projectId,
+        params,
+      );
 
-  const queryKey =  queryOptions?.queryKey ?? getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryKey(projectId,params);
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+        >
+      >
+    > = ({ signal }) =>
+      listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet(
+        projectId,
+        params,
+        signal,
+      );
 
-  
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!projectId,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>> = ({ signal }) => listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet(projectId,params, signal);
+export type ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+      >
+    >
+  >;
+export type ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryError =
+  void | HTTPValidationError;
 
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(projectId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>>
-export type ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryError = void | HTTPValidationError
-
-
-export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<TData = Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError = void | HTTPValidationError>(
- projectId: string,
-    params: undefined |  ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData>> & Pick<
+export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params:
+    | undefined
+    | ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>,
+          Awaited<
+            ReturnType<
+              typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<TData = Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError = void | HTTPValidationError>(
- projectId: string,
-    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<
+              typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>,
+          Awaited<
+            ReturnType<
+              typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<TData = Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError = void | HTTPValidationError>(
- projectId: string,
-    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<
+              typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary List documents for a project
  */
 
-export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<TData = Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError = void | HTTPValidationError>(
- projectId: string,
-    params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsForProjectApiV1ProjectsProjectIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryOptions(
+      projectId,
+      params,
+      options,
+    );
 
-  const queryOptions = getListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetQueryOptions(projectId,params,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * @summary Get document details by ID
  */
 export const getDocumentEndpointApiV1DocumentsDocumentIdGet = (
-    documentId: string,
- signal?: AbortSignal
+  documentId: string,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<DocumentDetailResponse>(
-      {url: `/api/v1/documents/${documentId}`, method: 'GET', signal
-    },
-      );
-    }
-  
+  return orvalApiClient<DocumentDetailResponse>({
+    url: `/api/v1/documents/${documentId}`,
+    method: "GET",
+    signal,
+  });
+};
 
-
-
-export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey = (documentId: string,) => {
-    return [
-    `/api/v1/documents/${documentId}`
-    ] as const;
-    }
-
-    
-export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError = void | HTTPValidationError>(documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData>>, }
+export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey = (
+  documentId: string,
 ) => {
+  return [`/api/v1/documents/${documentId}`] as const;
+};
 
-const {query: queryOptions} = options ?? {};
+export const getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey(documentId);
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryKey(documentId);
 
-  
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>
+  > = ({ signal }) =>
+    getDocumentEndpointApiV1DocumentsDocumentIdGet(documentId, signal);
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>> = ({ signal }) => getDocumentEndpointApiV1DocumentsDocumentIdGet(documentId, signal);
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!documentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-      
+export type GetDocumentEndpointApiV1DocumentsDocumentIdGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>
+  >;
+export type GetDocumentEndpointApiV1DocumentsDocumentIdGetQueryError =
+  void | HTTPValidationError;
 
-      
-
-   return  { queryKey, queryFn, enabled: !!(documentId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetDocumentEndpointApiV1DocumentsDocumentIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>>
-export type GetDocumentEndpointApiV1DocumentsDocumentIdGetQueryError = void | HTTPValidationError
-
-
-export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<TData = Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError = void | HTTPValidationError>(
- documentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData>> & Pick<
+export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>,
+          Awaited<
+            ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<TData = Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>,
+          Awaited<
+            ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<TData = Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get document details by ID
  */
 
-export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<TData = Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetDocumentEndpointApiV1DocumentsDocumentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDocumentEndpointApiV1DocumentsDocumentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions(
+      documentId,
+      options,
+    );
 
-  const queryOptions = getGetDocumentEndpointApiV1DocumentsDocumentIdGetQueryOptions(documentId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * @summary Delete a document by ID
  */
 export const deleteDocumentEndpointApiV1DocumentsDocumentIdDelete = (
-    documentId: string,
- signal?: AbortSignal
+  documentId: string,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<void>(
-      {url: `/api/v1/documents/${documentId}`, method: 'DELETE', signal
-    },
-      );
-    }
-  
+  return orvalApiClient<void>({
+    url: `/api/v1/documents/${documentId}`,
+    method: "DELETE",
+    signal,
+  });
+};
 
+export const getDeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+      >,
+      TError,
+      { documentId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+    >,
+    TError,
+    { documentId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "deleteDocumentEndpointApiV1DocumentsDocumentIdDelete",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-export const getDeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>, TError,{documentId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>, TError,{documentId: string}, TContext> => {
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+      >,
+      { documentId: string }
+    > = (props) => {
+      const { documentId } = props ?? {};
 
-const mutationKey = ['deleteDocumentEndpointApiV1DocumentsDocumentIdDelete'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      return deleteDocumentEndpointApiV1DocumentsDocumentIdDelete(documentId);
+    };
 
-      
+    return { mutationFn, ...mutationOptions };
+  };
 
+export type DeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+    >
+  >;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>, {documentId: string}> = (props) => {
-          const {documentId} = props ?? {};
+export type DeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationError =
+  void | HTTPValidationError;
 
-          return  deleteDocumentEndpointApiV1DocumentsDocumentIdDelete(documentId,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>>
-    
-    export type DeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Delete a document by ID
  */
-export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>, TError,{documentId: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>>,
-        TError,
-        {documentId: string},
-        TContext
-      > => {
-      return useMutation(getDeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationOptions(options), queryClient);
-    }
-    /**
+export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+      >,
+      TError,
+      { documentId: string },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteDocumentEndpointApiV1DocumentsDocumentIdDelete>
+  >,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteDocumentEndpointApiV1DocumentsDocumentIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * @summary Download document file by ID
  */
 export const downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet = (
+  documentId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<unknown>({
+    url: `/api/v1/documents/${documentId}/download`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey =
+  (documentId: string) => {
+    return [`/api/v1/documents/${documentId}/download`] as const;
+  };
+
+export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
     documentId: string,
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<unknown>(
-      {url: `/api/v1/documents/${documentId}/download`, method: 'GET', signal
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
     },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey(
+        documentId,
       );
-    }
-  
 
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+        >
+      >
+    > = ({ signal }) =>
+      downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet(
+        documentId,
+        signal,
+      );
 
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!documentId,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
 
-export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey = (documentId: string,) => {
-    return [
-    `/api/v1/documents/${documentId}/download`
-    ] as const;
-    }
+export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+      >
+    >
+  >;
+export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryError =
+  void | HTTPValidationError;
 
-    
-export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions = <TData = Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError = void | HTTPValidationError>(documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey(documentId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>> = ({ signal }) => downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet(documentId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(documentId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryResult = NonNullable<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>>
-export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryError = void | HTTPValidationError
-
-
-export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<TData = Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError = void | HTTPValidationError>(
- documentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData>> & Pick<
+export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
+  TData = Awaited<
+    ReturnType<
+      typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>,
+          Awaited<
+            ReturnType<
+              typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<TData = Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<
+              typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
+  TData = Awaited<
+    ReturnType<
+      typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>,
+          Awaited<
+            ReturnType<
+              typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<TData = Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<
+              typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
+  TData = Awaited<
+    ReturnType<
+      typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Download document file by ID
  */
 
-export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<TData = Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError = void | HTTPValidationError>(
- documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
+  TData = Awaited<
+    ReturnType<
+      typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions(
+      documentId,
+      options,
+    );
 
-  const queryOptions = getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions(documentId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * @summary Parse a document by ID
  */
 export const parseDocumentEndpointCanonical = (
-    documentId: string,
- signal?: AbortSignal
+  documentId: string,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<DocumentUploadResponse>(
-      {url: `/api/v1/documents/${documentId}/parse`, method: 'POST', signal
-    },
-      );
-    }
-  
+  return orvalApiClient<DocumentUploadResponse>({
+    url: `/api/v1/documents/${documentId}/parse`,
+    method: "POST",
+    signal,
+  });
+};
 
+export const getParseDocumentEndpointCanonicalMutationOptions = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+    TError,
+    { documentId: string },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  const mutationKey = ["parseDocumentEndpointCanonical"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
 
-export const getParseDocumentEndpointCanonicalMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>, TError,{documentId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>, TError,{documentId: string}, TContext> => {
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+    { documentId: string }
+  > = (props) => {
+    const { documentId } = props ?? {};
 
-const mutationKey = ['parseDocumentEndpointCanonical'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return parseDocumentEndpointCanonical(documentId);
+  };
 
-      
+  return { mutationFn, ...mutationOptions };
+};
 
+export type ParseDocumentEndpointCanonicalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>
+>;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>, {documentId: string}> = (props) => {
-          const {documentId} = props ?? {};
+export type ParseDocumentEndpointCanonicalMutationError =
+  void | HTTPValidationError;
 
-          return  parseDocumentEndpointCanonical(documentId,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ParseDocumentEndpointCanonicalMutationResult = NonNullable<Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>>
-    
-    export type ParseDocumentEndpointCanonicalMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Parse a document by ID
  */
-export const useParseDocumentEndpointCanonical = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>, TError,{documentId: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
-        TError,
-        {documentId: string},
-        TContext
-      > => {
-      return useMutation(getParseDocumentEndpointCanonicalMutationOptions(options), queryClient);
-    }
-    /**
+export const useParseDocumentEndpointCanonical = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+      TError,
+      { documentId: string },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof parseDocumentEndpointCanonical>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  return useMutation(
+    getParseDocumentEndpointCanonicalMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * @summary Ask a question about project documents (RAG)
  */
 export const answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost = (
-    projectId: string,
-    ragQuestionRequest: RagQuestionRequest,
- signal?: AbortSignal
+  projectId: string,
+  ragQuestionRequest: RagQuestionRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<RagAnswerResponse>(
-      {url: `/api/v1/projects/${projectId}/rag/answer`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: ragQuestionRequest, signal
-    },
+  return orvalApiClient<RagAnswerResponse>({
+    url: `/api/v1/projects/${projectId}/rag/answer`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: ragQuestionRequest,
+    signal,
+  });
+};
+
+export const getAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost
+        >
+      >,
+      TError,
+      { projectId: string; data: RagQuestionRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost
+      >
+    >,
+    TError,
+    { projectId: string; data: RagQuestionRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost
+        >
+      >,
+      { projectId: string; data: RagQuestionRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost(
+        projectId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>, TError,{projectId: string;data: RagQuestionRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>, TError,{projectId: string;data: RagQuestionRequest}, TContext> => {
+export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost
+      >
+    >
+  >;
+export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationBody =
+  RagQuestionRequest;
+export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationError =
+  void | HTTPValidationError;
 
-const mutationKey = ['answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>, {projectId: string;data: RagQuestionRequest}> = (props) => {
-          const {projectId,data} = props ?? {};
-
-          return  answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost(projectId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationResult = NonNullable<Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>>
-    export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationBody = RagQuestionRequest
-    export type AnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Ask a question about project documents (RAG)
  */
-export const useAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>, TError,{projectId: string;data: RagQuestionRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>>,
-        TError,
-        {projectId: string;data: RagQuestionRequest},
-        TContext
-      > => {
-      return useMutation(getAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationOptions(options), queryClient);
-    }
-    
+export const useAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost
+        >
+      >,
+      TError,
+      { projectId: string; data: RagQuestionRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof answerProjectQuestionApiV1ProjectsProjectIdRagAnswerPost>
+  >,
+  TError,
+  { projectId: string; data: RagQuestionRequest },
+  TContext
+> => {
+  return useMutation(
+    getAnswerProjectQuestionApiV1ProjectsProjectIdRagAnswerPostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};

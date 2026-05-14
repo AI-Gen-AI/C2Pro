@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { AnalyzeResponseRisksItem } from './analyzeResponseRisksItem';
-import type { AnalyzeResponseWbsItem } from './analyzeResponseWbsItem';
+import type { AnalyzeResponseRisksItem } from "./analyzeResponseRisksItem";
+import type { AnalyzeResponseWbsItem } from "./analyzeResponseWbsItem";
 
 export interface AnalyzeResponse {
   project_id: string;

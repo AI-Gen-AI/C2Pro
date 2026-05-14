@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { CategoryBreakdownCategory } from './categoryBreakdownCategory';
-import type { SeverityCount } from './severityCount';
+import type { CategoryBreakdownCategory } from "./categoryBreakdownCategory";
+import type { SeverityCount } from "./severityCount";
 
 /**
  * Represents the coherence score breakdown for a specific category.

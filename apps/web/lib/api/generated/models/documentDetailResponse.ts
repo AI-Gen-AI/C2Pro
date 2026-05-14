@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentDetailResponseClauses } from './documentDetailResponseClauses';
-import type { DocumentStatus } from './documentStatus';
-import type { DocumentType } from './documentType';
+import type { DocumentDetailResponseClauses } from "./documentDetailResponseClauses";
+import type { DocumentStatus } from "./documentStatus";
+import type { DocumentType } from "./documentType";
 
 /**
  * Detailed document response.

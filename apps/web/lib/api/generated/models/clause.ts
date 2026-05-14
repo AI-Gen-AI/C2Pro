@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ClauseData } from './clauseData';
+import type { ClauseData } from "./clauseData";
 
 /**
  * Represents a specific clause or segment of a document.

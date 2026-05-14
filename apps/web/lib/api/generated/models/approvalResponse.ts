@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ApprovalStatus } from './approvalStatus';
+import type { ApprovalStatus } from "./approvalStatus";
 
 export interface ApprovalResponse {
   resource_type: string;

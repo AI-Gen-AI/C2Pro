@@ -38,15 +38,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ReviewStatus = typeof ReviewStatus[keyof typeof ReviewStatus];
-
+export type ReviewStatus = (typeof ReviewStatus)[keyof typeof ReviewStatus];
 
 export const ReviewStatus = {
-  DRAFT: 'DRAFT',
-  PENDING_REVIEW_REQUIRED: 'PENDING_REVIEW_REQUIRED',
-  PENDING_REVIEW_CONDITIONAL: 'PENDING_REVIEW_CONDITIONAL',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  ESCALATED: 'ESCALATED',
-  CLOSED: 'CLOSED',
+  DRAFT: "DRAFT",
+  PENDING_REVIEW_REQUIRED: "PENDING_REVIEW_REQUIRED",
+  PENDING_REVIEW_CONDITIONAL: "PENDING_REVIEW_CONDITIONAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  ESCALATED: "ESCALATED",
+  CLOSED: "CLOSED",
 } as const;

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { BulkExportRequestFormat } from './bulkExportRequestFormat';
+import type { BulkExportRequestFormat } from "./bulkExportRequestFormat";
 
 /**
  * Bulk export request.

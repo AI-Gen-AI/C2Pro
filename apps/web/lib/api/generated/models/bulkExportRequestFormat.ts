@@ -38,12 +38,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type BulkExportRequestFormat = typeof BulkExportRequestFormat[keyof typeof BulkExportRequestFormat];
-
+export type BulkExportRequestFormat =
+  (typeof BulkExportRequestFormat)[keyof typeof BulkExportRequestFormat];
 
 export const BulkExportRequestFormat = {
-  json: 'json',
-  csv: 'csv',
-  xlsx: 'xlsx',
-  zip: 'zip',
+  json: "json",
+  csv: "csv",
+  xlsx: "xlsx",
+  zip: "zip",
 } as const;

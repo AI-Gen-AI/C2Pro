@@ -37,88 +37,134 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation
-} from '@tanstack/react-query';
+import { useMutation } from "@tanstack/react-query";
 import type {
   MutationFunction,
   QueryClient,
   UseMutationOptions,
-  UseMutationResult
-} from '@tanstack/react-query';
+  UseMutationResult,
+} from "@tanstack/react-query";
 
 import type {
   ExecuteDecisionRequestDTO,
-  ExecuteDecisionResponseDTO
-} from '../models';
+  ExecuteDecisionResponseDTO,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Runs I13 orchestration and returns a final decision package when gates pass. Returns 409 when finalization is blocked by HITL/citation/sign-off policy.
  * @summary Execute Decision Intelligence Flow
  */
 export const executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost = (
-    executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
- signal?: AbortSignal
+  executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<ExecuteDecisionResponseDTO>(
-      {url: `/api/v1/decision-intelligence/execute`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: executeDecisionRequestDTO, signal
-    },
+  return orvalApiClient<ExecuteDecisionResponseDTO>({
+    url: `/api/v1/decision-intelligence/execute`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: executeDecisionRequestDTO,
+    signal,
+  });
+};
+
+export const getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions =
+  <TError = void, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+        >
+      >,
+      TError,
+      { data: ExecuteDecisionRequestDTO },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+      >
+    >,
+    TError,
+    { data: ExecuteDecisionRequestDTO },
+    TContext
+  > => {
+    const mutationKey = [
+      "executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+        >
+      >,
+      { data: ExecuteDecisionRequestDTO }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost(
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions = <TError = void,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>, TError,{data: ExecuteDecisionRequestDTO}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>, TError,{data: ExecuteDecisionRequestDTO}, TContext> => {
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+      >
+    >
+  >;
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationBody =
+  ExecuteDecisionRequestDTO;
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationError =
+  void;
 
-const mutationKey = ['executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>, {data: ExecuteDecisionRequestDTO}> = (props) => {
-          const {data} = props ?? {};
-
-          return  executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationResult = NonNullable<Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>>
-    export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationBody = ExecuteDecisionRequestDTO
-    export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationError = void
-
-    /**
+/**
  * @summary Execute Decision Intelligence Flow
  */
-export const useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost = <TError = void,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>, TError,{data: ExecuteDecisionRequestDTO}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost>>,
+export const useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost =
+  <TError = void, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+          >
+        >,
         TError,
-        {data: ExecuteDecisionRequestDTO},
+        { data: ExecuteDecisionRequestDTO },
         TContext
-      > => {
-      return useMutation(getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions(options), queryClient);
-    }
-    
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+      >
+    >,
+    TError,
+    { data: ExecuteDecisionRequestDTO },
+    TContext
+  > => {
+    return useMutation(
+      getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { RagAnswerResponseSourcesItem } from './ragAnswerResponseSourcesItem';
+import type { RagAnswerResponseSourcesItem } from "./ragAnswerResponseSourcesItem";
 
 /**
  * Response for RAG answers.

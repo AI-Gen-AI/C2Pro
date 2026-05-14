@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CheckAndEscalateApiV1HitlEscalatePost200 = { [key: string]: unknown };
+export type CheckAndEscalateApiV1HitlEscalatePost200 = {
+  [key: string]: unknown;
+};

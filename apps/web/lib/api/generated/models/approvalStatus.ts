@@ -38,12 +38,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ApprovalStatus = typeof ApprovalStatus[keyof typeof ApprovalStatus];
-
+export type ApprovalStatus =
+  (typeof ApprovalStatus)[keyof typeof ApprovalStatus];
 
 export const ApprovalStatus = {
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  CORRECTED: 'CORRECTED',
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CORRECTED: "CORRECTED",
 } as const;

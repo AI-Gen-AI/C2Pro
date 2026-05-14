@@ -37,9 +37,9 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateAlertRequestAffectedEntities } from './createAlertRequestAffectedEntities';
-import type { CreateAlertRequestCategory } from './createAlertRequestCategory';
-import type { CreateAlertRequestSeverity } from './createAlertRequestSeverity';
+import type { CreateAlertRequestAffectedEntities } from "./createAlertRequestAffectedEntities";
+import type { CreateAlertRequestCategory } from "./createAlertRequestCategory";
+import type { CreateAlertRequestSeverity } from "./createAlertRequestSeverity";
 
 /**
  * Request to create an alert.

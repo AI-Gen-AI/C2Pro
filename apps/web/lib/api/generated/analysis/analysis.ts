@@ -167,18 +167,6 @@ export const streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamG
     });
   };
 
-export function getStreamProjectProcessingUrl(
-  projectId: string,
-  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
-): string {
-  const base = "/api/v1/analysis/projects";
-  let url = `${base}/${projectId}/process/stream`;
-  if (params?.access_token) {
-    url += `?access_token=${encodeURIComponent(params.access_token)}`;
-  }
-  return url;
-}
-
 export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryKey =
   (
     projectId: string,

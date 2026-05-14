@@ -79,7 +79,7 @@ lark==1.1.9
 pyyaml==6.0.1 # For Coherence Engine rules
 python-dotenv==1.2.2
 orjson>=3.11.0
-tenacity==8.2.3  # Retry logic
+tenacity>=9.1.2,<10.0  # Retry logic; compatible with Schemathesis v4
 email-validator==2.1.1
 networkx==3.3
 
@@ -88,6 +88,7 @@ pytest>=9.0.3  # >=9.0.3 fixes tmpdir predictable path CVE
 pytest-asyncio>=0.24.0  # >=0.24.0 required for pytest 9 compatibility
 pytest-cov>=5.0.0  # >=5.0.0 required for pytest 9 compatibility
 pytest-benchmark==4.0.0
+schemathesis>=4.18.5  # TASK-QA-200/TASK-OPS-DOCFLOW-015: OpenAPI contract testing
 factory-boy==3.3.0
 Faker==40.1.0  # For factory-boy
 docker>=7.0.0  # Required by testcontainers-backed persistence tests

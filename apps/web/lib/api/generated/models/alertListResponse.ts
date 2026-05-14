@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { AlertResponse } from './alertResponse';
+import type { AlertResponse } from "./alertResponse";
 
 /**
  * Alert list response.

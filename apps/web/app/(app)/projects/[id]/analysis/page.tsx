@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 import { useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet } from "@/lib/api/generated/coherence-dashboard/coherence-dashboard";
-import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
+import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 
 /**
  * Test Suite ID: TASK-1347, TASK-OPS-DOCFLOW-010
