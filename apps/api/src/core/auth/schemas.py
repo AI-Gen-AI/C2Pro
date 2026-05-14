@@ -101,7 +101,7 @@ class RegisterRequest(BaseModel):
 
     @field_validator("password_confirm")
     @classmethod
-    def validate_passwords_match(cls, v: str | None, info: ValidationInfo) -> str | None:
+    def validate_password_confirmation(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Valida coincidencia solo si se envía confirmación."""
         if v is None:
             return v
@@ -156,7 +156,7 @@ class PasswordChangeRequest(BaseModel):
 
     @field_validator("new_password_confirm")
     @classmethod
-    def validate_passwords_match(cls, v: str | None, info) -> str | None:
+    def validate_new_password_confirmation(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Valida que las contraseñas coincidan si se envía confirmación."""
         if v is None:
             return v
