@@ -41,14 +41,13 @@
 /**
  * Supported document types.
  */
-export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
-
+export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
 
 export const DocumentType = {
-  contract: 'contract',
-  schedule: 'schedule',
-  budget: 'budget',
-  drawing: 'drawing',
-  specification: 'specification',
-  other: 'other',
+  contract: "contract",
+  schedule: "schedule",
+  budget: "budget",
+  drawing: "drawing",
+  specification: "specification",
+  other: "other",
 } as const;

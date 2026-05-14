@@ -5765,7 +5765,7 @@ components:
           name: Constructora Ejemplo S.L.
           subscription_plan: free
         tokens:
-          access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+          access_token: example-access-token
           expires_in: 86400
           token_type: bearer
         user:
@@ -7144,9 +7144,9 @@ components:
       title: TokenResponse
       description: "Response con tokens de autenticaci\xF3n."
       example:
-        access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        access_token: example-access-token
         expires_in: 86400
-        refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token: example-refresh-token
         token_type: bearer
     UpdateWBSItemInput:
       properties:

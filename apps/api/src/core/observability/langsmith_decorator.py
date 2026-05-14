@@ -175,7 +175,7 @@ def get_current_trace_context() -> dict[str, Any] | None:
     return _TRACE_CONTEXT.get()
 
 
-def traced_llm_call(
+def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and async tracing paths.
     *,
     task_type: str,
     span_name: str | None = None,

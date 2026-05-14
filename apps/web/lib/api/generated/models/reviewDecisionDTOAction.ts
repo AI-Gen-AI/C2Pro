@@ -38,10 +38,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ReviewDecisionDTOAction = typeof ReviewDecisionDTOAction[keyof typeof ReviewDecisionDTOAction];
-
+export type ReviewDecisionDTOAction =
+  (typeof ReviewDecisionDTOAction)[keyof typeof ReviewDecisionDTOAction];
 
 export const ReviewDecisionDTOAction = {
-  approve: 'approve',
-  reject: 'reject',
+  approve: "approve",
+  reject: "reject",
 } as const;

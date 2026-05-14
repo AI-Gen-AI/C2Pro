@@ -38,12 +38,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ImpactLevel = typeof ImpactLevel[keyof typeof ImpactLevel];
-
+export type ImpactLevel = (typeof ImpactLevel)[keyof typeof ImpactLevel];
 
 export const ImpactLevel = {
-  LOW: 'LOW',
-  MEDIUM: 'MEDIUM',
-  HIGH: 'HIGH',
-  CRITICAL: 'CRITICAL',
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  CRITICAL: "CRITICAL",
 } as const;

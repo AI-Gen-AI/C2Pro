@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { StakeholderUpdateRequestStakeholderMetadata } from './stakeholderUpdateRequestStakeholderMetadata';
+import type { StakeholderUpdateRequestStakeholderMetadata } from "./stakeholderUpdateRequestStakeholderMetadata";
 
 export interface StakeholderUpdateRequest {
   name?: string | null;

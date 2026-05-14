@@ -128,15 +128,26 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def get_by_id(
         self, stakeholder_id: UUID, tenant_id: UUID
     ) -> Stakeholder | None:
-        """Get stakeholder by ID (relying on RLS for tenant isolation)."""
-        stmt = select(StakeholderORM).where(StakeholderORM.id == stakeholder_id)
+        """Get stakeholder by ID with explicit tenant isolation."""
+        stmt = (
+            select(StakeholderORM)
+            .join(ProjectORM, StakeholderORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderORM.id == stakeholder_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
+        )
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
         return self._to_domain(orm) if orm else None
 
     async def get_all_stakeholders(self, tenant_id: UUID) -> list[Stakeholder]:
-        """List all stakeholders for a tenant (relying on RLS)."""
-        stmt = select(StakeholderORM)
+        """List all stakeholders for a tenant."""
+        stmt = (
+            select(StakeholderORM)
+            .join(ProjectORM, StakeholderORM.project_id == ProjectORM.id)
+            .where(ProjectORM.tenant_id == tenant_id)
+        )
         result = await self.session.execute(stmt)
         items = result.scalars().all()
         return [self._to_domain(item) for item in items]
@@ -148,17 +159,25 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Stakeholder], int]:
-        """List stakeholders for a project with pagination (relying on RLS)."""
+        """List stakeholders for a tenant-scoped project with pagination."""
         stmt = (
             select(StakeholderORM)
-            .where(StakeholderORM.project_id == project_id)
+            .join(ProjectORM, StakeholderORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderORM.project_id == project_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
             .offset(skip)
             .limit(limit)
         )
         count_stmt = (
             select(func.count())
             .select_from(StakeholderORM)
-            .where(StakeholderORM.project_id == project_id)
+            .join(ProjectORM, StakeholderORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderORM.project_id == project_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
         )
 
         result = await self.session.execute(stmt)
@@ -174,7 +193,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = await self.session.get(StakeholderORM, stakeholder.id)
         if orm is None:
             return
-        
+
         # Verify ownership if tenant_id is provided
         if tenant_id is not None:
             proj_tenant = await self._get_project_tenant_id(orm.project_id)
@@ -197,7 +216,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm.reviewed_at = self._normalize_naive_utc(stakeholder.reviewed_at)
         orm.review_comment = stakeholder.review_comment
         orm.stakeholder_metadata = stakeholder.stakeholder_metadata
-        
+
         await self.session.flush()
 
     async def delete(self, stakeholder_id: UUID, tenant_id: UUID) -> None:
@@ -223,8 +242,15 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def list_raci_assignments(
         self, project_id: UUID, tenant_id: UUID
     ) -> list[RaciAssignment]:
-        """List RACI assignments for a project (relying on RLS)."""
-        stmt = select(StakeholderWBSRaciORM).where(StakeholderWBSRaciORM.project_id == project_id)
+        """List RACI assignments for a tenant-scoped project."""
+        stmt = (
+            select(StakeholderWBSRaciORM)
+            .join(ProjectORM, StakeholderWBSRaciORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderWBSRaciORM.project_id == project_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
+        )
         result = await self.session.execute(stmt)
         rows = result.scalars().all()
         return [self._to_raci_domain(row) for row in rows]
@@ -236,11 +262,16 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         stakeholder_id: UUID,
         tenant_id: UUID,
     ) -> RaciAssignment | None:
-        """Get a specific RACI assignment (relying on RLS)."""
-        stmt = select(StakeholderWBSRaciORM).where(
-            StakeholderWBSRaciORM.project_id == project_id,
-            StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
-            StakeholderWBSRaciORM.stakeholder_id == stakeholder_id,
+        """Get a tenant-scoped RACI assignment."""
+        stmt = (
+            select(StakeholderWBSRaciORM)
+            .join(ProjectORM, StakeholderWBSRaciORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderWBSRaciORM.project_id == project_id,
+                StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
+                StakeholderWBSRaciORM.stakeholder_id == stakeholder_id,
+                ProjectORM.tenant_id == tenant_id,
+            )
         )
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -253,15 +284,20 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         tenant_id: UUID,
         exclude_stakeholder_id: UUID | None = None,
     ) -> RaciAssignment | None:
-        """Get the ACCOUNTABLE stakeholder for a WBS item (relying on RLS)."""
-        stmt = select(StakeholderWBSRaciORM).where(
-            StakeholderWBSRaciORM.project_id == project_id,
-            StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
-            StakeholderWBSRaciORM.raci_role == RACIRole.ACCOUNTABLE,
+        """Get the ACCOUNTABLE stakeholder for a tenant-scoped WBS item."""
+        stmt = (
+            select(StakeholderWBSRaciORM)
+            .join(ProjectORM, StakeholderWBSRaciORM.project_id == ProjectORM.id)
+            .where(
+                StakeholderWBSRaciORM.project_id == project_id,
+                StakeholderWBSRaciORM.wbs_item_id == wbs_item_id,
+                StakeholderWBSRaciORM.raci_role == RACIRole.ACCOUNTABLE,
+                ProjectORM.tenant_id == tenant_id,
+            )
         )
         if exclude_stakeholder_id:
             stmt = stmt.where(StakeholderWBSRaciORM.stakeholder_id != exclude_stakeholder_id)
-        
+
         result = await self.session.execute(stmt)
         orm = result.scalar_one_or_none()
         return self._to_raci_domain(orm) if orm else None

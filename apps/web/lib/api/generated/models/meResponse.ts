@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { TenantResponse } from './tenantResponse';
-import type { UserResponse } from './userResponse';
+import type { TenantResponse } from "./tenantResponse";
+import type { UserResponse } from "./userResponse";
 
 /**
  * Response para endpoint /me.

@@ -38,4 +38,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type BulkReviewAlertsApiV1AlertsBulkReviewPost200 = { [key: string]: unknown };
+export type BulkReviewAlertsApiV1AlertsBulkReviewPost200 = {
+  [key: string]: unknown;
+};

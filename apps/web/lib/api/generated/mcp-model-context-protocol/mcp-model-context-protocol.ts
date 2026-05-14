@@ -37,10 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -53,8 +50,8 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
   ExecuteMcpOperationApiV1McpExecutePost200,
@@ -65,13 +62,10 @@ import type {
   ListAllowedViewsApiV1McpViewsGet200,
   MCPExecuteRequest,
   QueryResult,
-  ViewQueryRequest
-} from '../models';
+  ViewQueryRequest,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Ejecuta una query sobre una vista permitida.
@@ -94,66 +88,89 @@ import { orvalApiClient } from '../../client';
  * @summary Query Vista Permitida
  */
 export const queryViewApiV1McpQueryViewPost = (
-    viewQueryRequest: ViewQueryRequest,
- signal?: AbortSignal
+  viewQueryRequest: ViewQueryRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<QueryResult>(
-      {url: `/api/v1/mcp/query-view`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: viewQueryRequest, signal
-    },
-      );
-    }
-  
+  return orvalApiClient<QueryResult>({
+    url: `/api/v1/mcp/query-view`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: viewQueryRequest,
+    signal,
+  });
+};
 
+export const getQueryViewApiV1McpQueryViewPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
+    TError,
+    { data: ViewQueryRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
+  TError,
+  { data: ViewQueryRequest },
+  TContext
+> => {
+  const mutationKey = ["queryViewApiV1McpQueryViewPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
 
-export const getQueryViewApiV1McpQueryViewPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>, TError,{data: ViewQueryRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>, TError,{data: ViewQueryRequest}, TContext> => {
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
+    { data: ViewQueryRequest }
+  > = (props) => {
+    const { data } = props ?? {};
 
-const mutationKey = ['queryViewApiV1McpQueryViewPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return queryViewApiV1McpQueryViewPost(data);
+  };
 
-      
+  return { mutationFn, ...mutationOptions };
+};
 
+export type QueryViewApiV1McpQueryViewPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>
+>;
+export type QueryViewApiV1McpQueryViewPostMutationBody = ViewQueryRequest;
+export type QueryViewApiV1McpQueryViewPostMutationError = HTTPValidationError;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>, {data: ViewQueryRequest}> = (props) => {
-          const {data} = props ?? {};
-
-          return  queryViewApiV1McpQueryViewPost(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type QueryViewApiV1McpQueryViewPostMutationResult = NonNullable<Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>>
-    export type QueryViewApiV1McpQueryViewPostMutationBody = ViewQueryRequest
-    export type QueryViewApiV1McpQueryViewPostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Query Vista Permitida
  */
-export const useQueryViewApiV1McpQueryViewPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>, TError,{data: ViewQueryRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
-        TError,
-        {data: ViewQueryRequest},
-        TContext
-      > => {
-      return useMutation(getQueryViewApiV1McpQueryViewPostMutationOptions(options), queryClient);
-    }
-    /**
+export const useQueryViewApiV1McpQueryViewPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
+      TError,
+      { data: ViewQueryRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof queryViewApiV1McpQueryViewPost>>,
+  TError,
+  { data: ViewQueryRequest },
+  TContext
+> => {
+  return useMutation(
+    getQueryViewApiV1McpQueryViewPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Ejecuta una función permitida.
 
     **Seguridad:**
@@ -171,337 +188,565 @@ export const useQueryViewApiV1McpQueryViewPost = <TError = HTTPValidationError,
  * @summary Llamar Función Permitida
  */
 export const callFunctionApiV1McpCallFunctionPost = (
-    functionCallRequest: FunctionCallRequest,
- signal?: AbortSignal
+  functionCallRequest: FunctionCallRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<QueryResult>(
-      {url: `/api/v1/mcp/call-function`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: functionCallRequest, signal
-    },
-      );
-    }
-  
+  return orvalApiClient<QueryResult>({
+    url: `/api/v1/mcp/call-function`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: functionCallRequest,
+    signal,
+  });
+};
 
+export const getCallFunctionApiV1McpCallFunctionPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
+    TError,
+    { data: FunctionCallRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
+  TError,
+  { data: FunctionCallRequest },
+  TContext
+> => {
+  const mutationKey = ["callFunctionApiV1McpCallFunctionPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
 
-export const getCallFunctionApiV1McpCallFunctionPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>, TError,{data: FunctionCallRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>, TError,{data: FunctionCallRequest}, TContext> => {
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
+    { data: FunctionCallRequest }
+  > = (props) => {
+    const { data } = props ?? {};
 
-const mutationKey = ['callFunctionApiV1McpCallFunctionPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return callFunctionApiV1McpCallFunctionPost(data);
+  };
 
-      
+  return { mutationFn, ...mutationOptions };
+};
 
+export type CallFunctionApiV1McpCallFunctionPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>
+>;
+export type CallFunctionApiV1McpCallFunctionPostMutationBody =
+  FunctionCallRequest;
+export type CallFunctionApiV1McpCallFunctionPostMutationError =
+  HTTPValidationError;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>, {data: FunctionCallRequest}> = (props) => {
-          const {data} = props ?? {};
-
-          return  callFunctionApiV1McpCallFunctionPost(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CallFunctionApiV1McpCallFunctionPostMutationResult = NonNullable<Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>>
-    export type CallFunctionApiV1McpCallFunctionPostMutationBody = FunctionCallRequest
-    export type CallFunctionApiV1McpCallFunctionPostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Llamar Función Permitida
  */
-export const useCallFunctionApiV1McpCallFunctionPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>, TError,{data: FunctionCallRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
-        TError,
-        {data: FunctionCallRequest},
-        TContext
-      > => {
-      return useMutation(getCallFunctionApiV1McpCallFunctionPostMutationOptions(options), queryClient);
-    }
-    /**
+export const useCallFunctionApiV1McpCallFunctionPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
+      TError,
+      { data: FunctionCallRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof callFunctionApiV1McpCallFunctionPost>>,
+  TError,
+  { data: FunctionCallRequest },
+  TContext
+> => {
+  return useMutation(
+    getCallFunctionApiV1McpCallFunctionPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Retorna la lista de vistas permitidas en el MCP Server.
  * @summary Listar Vistas Permitidas
  */
-export const listAllowedViewsApiV1McpViewsGet = (
-    
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<ListAllowedViewsApiV1McpViewsGet200>(
-      {url: `/api/v1/mcp/views`, method: 'GET', signal
-    },
-      );
-    }
-  
-
-
+export const listAllowedViewsApiV1McpViewsGet = (signal?: AbortSignal) => {
+  return orvalApiClient<ListAllowedViewsApiV1McpViewsGet200>({
+    url: `/api/v1/mcp/views`,
+    method: "GET",
+    signal,
+  });
+};
 
 export const getListAllowedViewsApiV1McpViewsGetQueryKey = () => {
-    return [
-    `/api/v1/mcp/views`
-    ] as const;
-    }
+  return [`/api/v1/mcp/views`] as const;
+};
 
-    
-export const getListAllowedViewsApiV1McpViewsGetQueryOptions = <TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData>>, }
-) => {
+export const getListAllowedViewsApiV1McpViewsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+      TError,
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
 
-const {query: queryOptions} = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getListAllowedViewsApiV1McpViewsGetQueryKey();
 
-  const queryKey =  queryOptions?.queryKey ?? getListAllowedViewsApiV1McpViewsGetQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>
+  > = ({ signal }) => listAllowedViewsApiV1McpViewsGet(signal);
 
-  
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>> = ({ signal }) => listAllowedViewsApiV1McpViewsGet(signal);
+export type ListAllowedViewsApiV1McpViewsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>
+>;
+export type ListAllowedViewsApiV1McpViewsGetQueryError = unknown;
 
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListAllowedViewsApiV1McpViewsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>>
-export type ListAllowedViewsApiV1McpViewsGetQueryError = unknown
-
-
-export function useListAllowedViewsApiV1McpViewsGet<TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData>> & Pick<
+export function useListAllowedViewsApiV1McpViewsGet<
+  TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
           TError,
           Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAllowedViewsApiV1McpViewsGet<TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAllowedViewsApiV1McpViewsGet<
+  TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
           TError,
           Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAllowedViewsApiV1McpViewsGet<TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAllowedViewsApiV1McpViewsGet<
+  TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Listar Vistas Permitidas
  */
 
-export function useListAllowedViewsApiV1McpViewsGet<TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useListAllowedViewsApiV1McpViewsGet<
+  TData = Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedViewsApiV1McpViewsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListAllowedViewsApiV1McpViewsGetQueryOptions(options);
 
-  const queryOptions = getListAllowedViewsApiV1McpViewsGetQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * Retorna la lista de funciones permitidas en el MCP Server.
  * @summary Listar Funciones Permitidas
  */
 export const listAllowedFunctionsApiV1McpFunctionsGet = (
-    
- signal?: AbortSignal
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<ListAllowedFunctionsApiV1McpFunctionsGet200>(
-      {url: `/api/v1/mcp/functions`, method: 'GET', signal
-    },
-      );
-    }
-  
-
-
+  return orvalApiClient<ListAllowedFunctionsApiV1McpFunctionsGet200>({
+    url: `/api/v1/mcp/functions`,
+    method: "GET",
+    signal,
+  });
+};
 
 export const getListAllowedFunctionsApiV1McpFunctionsGetQueryKey = () => {
-    return [
-    `/api/v1/mcp/functions`
-    ] as const;
-    }
+  return [`/api/v1/mcp/functions`] as const;
+};
 
-    
-export const getListAllowedFunctionsApiV1McpFunctionsGetQueryOptions = <TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData>>, }
-) => {
+export const getListAllowedFunctionsApiV1McpFunctionsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+      TError,
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
 
-const {query: queryOptions} = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListAllowedFunctionsApiV1McpFunctionsGetQueryKey();
 
-  const queryKey =  queryOptions?.queryKey ?? getListAllowedFunctionsApiV1McpFunctionsGetQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>
+  > = ({ signal }) => listAllowedFunctionsApiV1McpFunctionsGet(signal);
 
-  
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>> = ({ signal }) => listAllowedFunctionsApiV1McpFunctionsGet(signal);
+export type ListAllowedFunctionsApiV1McpFunctionsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>
+>;
+export type ListAllowedFunctionsApiV1McpFunctionsGetQueryError = unknown;
 
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListAllowedFunctionsApiV1McpFunctionsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>>
-export type ListAllowedFunctionsApiV1McpFunctionsGetQueryError = unknown
-
-
-export function useListAllowedFunctionsApiV1McpFunctionsGet<TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData>> & Pick<
+export function useListAllowedFunctionsApiV1McpFunctionsGet<
+  TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
           TError,
           Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAllowedFunctionsApiV1McpFunctionsGet<TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAllowedFunctionsApiV1McpFunctionsGet<
+  TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
           TError,
           Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAllowedFunctionsApiV1McpFunctionsGet<TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAllowedFunctionsApiV1McpFunctionsGet<
+  TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Listar Funciones Permitidas
  */
 
-export function useListAllowedFunctionsApiV1McpFunctionsGet<TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useListAllowedFunctionsApiV1McpFunctionsGet<
+  TData = Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAllowedFunctionsApiV1McpFunctionsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListAllowedFunctionsApiV1McpFunctionsGetQueryOptions(options);
 
-  const queryOptions = getListAllowedFunctionsApiV1McpFunctionsGetQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * Retorna el estado actual del rate limit para el tenant actual.
  * @summary Estado de Rate Limit
  */
 export const getRateLimitStatusApiV1McpRateLimitStatusGet = (
-    
- signal?: AbortSignal
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<GetRateLimitStatusApiV1McpRateLimitStatusGet200>(
-      {url: `/api/v1/mcp/rate-limit-status`, method: 'GET', signal
-    },
-      );
-    }
-  
-
-
+  return orvalApiClient<GetRateLimitStatusApiV1McpRateLimitStatusGet200>({
+    url: `/api/v1/mcp/rate-limit-status`,
+    method: "GET",
+    signal,
+  });
+};
 
 export const getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryKey = () => {
-    return [
-    `/api/v1/mcp/rate-limit-status`
-    ] as const;
-    }
+  return [`/api/v1/mcp/rate-limit-status`] as const;
+};
 
-    
-export const getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryOptions = <TData = Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData>>, }
-) => {
+export const getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>,
+      TError,
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
 
-const {query: queryOptions} = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryKey();
 
-  const queryKey =  queryOptions?.queryKey ?? getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>
+  > = ({ signal }) => getRateLimitStatusApiV1McpRateLimitStatusGet(signal);
 
-  
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>> = ({ signal }) => getRateLimitStatusApiV1McpRateLimitStatusGet(signal);
+export type GetRateLimitStatusApiV1McpRateLimitStatusGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>
+  >;
+export type GetRateLimitStatusApiV1McpRateLimitStatusGetQueryError = unknown;
 
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetRateLimitStatusApiV1McpRateLimitStatusGetQueryResult = NonNullable<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>>
-export type GetRateLimitStatusApiV1McpRateLimitStatusGetQueryError = unknown
-
-
-export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<TData = Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData>> & Pick<
+export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>,
+          Awaited<
+            ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<TData = Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>,
+          Awaited<
+            ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<TData = Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Estado de Rate Limit
  */
 
-export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<TData = Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRateLimitStatusApiV1McpRateLimitStatusGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryOptions(options);
 
-  const queryOptions = getGetRateLimitStatusApiV1McpRateLimitStatusGetQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * Generic MCP operation execution endpoint.
@@ -518,63 +763,87 @@ export function useGetRateLimitStatusApiV1McpRateLimitStatusGet<TData = Awaited<
  * @summary Execute MCP Operation
  */
 export const executeMcpOperationApiV1McpExecutePost = (
-    mCPExecuteRequest: MCPExecuteRequest,
- signal?: AbortSignal
+  mCPExecuteRequest: MCPExecuteRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<ExecuteMcpOperationApiV1McpExecutePost200>(
-      {url: `/api/v1/mcp/execute`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: mCPExecuteRequest, signal
-    },
-      );
-    }
-  
+  return orvalApiClient<ExecuteMcpOperationApiV1McpExecutePost200>({
+    url: `/api/v1/mcp/execute`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: mCPExecuteRequest,
+    signal,
+  });
+};
 
+export const getExecuteMcpOperationApiV1McpExecutePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
+    TError,
+    { data: MCPExecuteRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
+  TError,
+  { data: MCPExecuteRequest },
+  TContext
+> => {
+  const mutationKey = ["executeMcpOperationApiV1McpExecutePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
 
-export const getExecuteMcpOperationApiV1McpExecutePostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>, TError,{data: MCPExecuteRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>, TError,{data: MCPExecuteRequest}, TContext> => {
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
+    { data: MCPExecuteRequest }
+  > = (props) => {
+    const { data } = props ?? {};
 
-const mutationKey = ['executeMcpOperationApiV1McpExecutePost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return executeMcpOperationApiV1McpExecutePost(data);
+  };
 
-      
+  return { mutationFn, ...mutationOptions };
+};
 
+export type ExecuteMcpOperationApiV1McpExecutePostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>
+>;
+export type ExecuteMcpOperationApiV1McpExecutePostMutationBody =
+  MCPExecuteRequest;
+export type ExecuteMcpOperationApiV1McpExecutePostMutationError =
+  HTTPValidationError;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>, {data: MCPExecuteRequest}> = (props) => {
-          const {data} = props ?? {};
-
-          return  executeMcpOperationApiV1McpExecutePost(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ExecuteMcpOperationApiV1McpExecutePostMutationResult = NonNullable<Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>>
-    export type ExecuteMcpOperationApiV1McpExecutePostMutationBody = MCPExecuteRequest
-    export type ExecuteMcpOperationApiV1McpExecutePostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Execute MCP Operation
  */
-export const useExecuteMcpOperationApiV1McpExecutePost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>, TError,{data: MCPExecuteRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
-        TError,
-        {data: MCPExecuteRequest},
-        TContext
-      > => {
-      return useMutation(getExecuteMcpOperationApiV1McpExecutePostMutationOptions(options), queryClient);
-    }
-    
+export const useExecuteMcpOperationApiV1McpExecutePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
+      TError,
+      { data: MCPExecuteRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof executeMcpOperationApiV1McpExecutePost>>,
+  TError,
+  { data: MCPExecuteRequest },
+  TContext
+> => {
+  return useMutation(
+    getExecuteMcpOperationApiV1McpExecutePostMutationOptions(options),
+    queryClient,
+  );
+};

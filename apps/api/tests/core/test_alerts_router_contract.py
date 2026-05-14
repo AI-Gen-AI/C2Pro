@@ -118,7 +118,7 @@ async def test_list_alerts_can_filter_by_document_id(
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
-        storage_url="/tmp/contract.pdf",
+        storage_url="memory://contract.pdf",
         file_format="pdf",
         file_size_bytes=10,
         upload_status=DocumentStatus.UPLOADED,

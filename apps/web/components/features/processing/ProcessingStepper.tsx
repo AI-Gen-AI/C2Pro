@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { handleAuthErrorStatus } from "@/lib/api/client";
-import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
+import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 import { useAuthStore } from "@/stores/auth";
 
 type StageData = {

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ViewQueryRequestFilters } from './viewQueryRequestFilters';
+import type { ViewQueryRequestFilters } from "./viewQueryRequestFilters";
 
 /**
  * Request para query de vista.

@@ -16,6 +16,24 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
     contents = workflow.read_text(encoding="utf-8")
 
     assert '-m "not integration"' in contents
+    assert "--cov-report=xml:coverage.xml" in contents
+    assert "--cov-fail-under=0" in contents
+
+
+def test_database_backed_ci_workflows_export_test_database_url() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "tests.yml",
+        repo_root / ".github" / "workflows" / "e2e-security-tests.yml",
+        repo_root / ".github" / "workflows" / "real-document-operability.yml",
+    ]
+
+    for workflow in workflow_paths:
+        contents = workflow.read_text(encoding="utf-8")
+        assert "DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
+        assert "TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
 
 
 def test_test_compose_uses_pgvector_image() -> None:
@@ -36,11 +54,55 @@ def test_hitl_auth_script_does_not_embed_real_jwt() -> None:
 
 def test_openapi_schema_examples_do_not_use_jwt_like_placeholders() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    schema = repo_root / "apps" / "web" / "schema" / "api.json"
-    contents = schema.read_text(encoding="utf-8")
+    schema_paths = [
+        repo_root / "apps" / "web" / "schema" / "api.json",
+        repo_root / "docs" / "api" / "openapi.yaml",
+    ]
 
-    assert '"access_token": "eyJ' not in contents
-    assert '"refresh_token": "eyJ' not in contents
+    for schema in schema_paths:
+        contents = schema.read_text(encoding="utf-8")
+        assert '"access_token": "eyJ' not in contents
+        assert '"refresh_token": "eyJ' not in contents
+        assert "access_token: eyJ" not in contents
+        assert "refresh_token: eyJ" not in contents
+
+
+def test_qa_swarm_context_analyzer_uses_ast_parent_map() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    analyzer = repo_root / "scripts" / "agents" / "qa_swarm" / "context_analyzer_agent.py"
+    contents = analyzer.read_text(encoding="utf-8")
+
+    assert "ast.iter_child_nodes(parent)" in contents
+    assert 'node in getattr(parent, "body", [])' not in contents
+
+
+def test_frontend_e2e_workflows_export_clerk_test_keys() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflows = [
+        repo_root / ".github" / "workflows" / "frontend-ci.yml",
+        repo_root / ".github" / "workflows" / "frontend-e2e.yml",
+    ]
+
+    for workflow in workflows:
+        contents = workflow.read_text(encoding="utf-8")
+        assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_" in contents
+        assert "CLERK_SECRET_KEY: sk_test_" in contents
+
+
+def test_frontend_api_generation_check_formats_orval_output_before_diff() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    package_json = repo_root / "apps" / "web" / "package.json"
+    contents = package_json.read_text(encoding="utf-8")
+
+    assert '"generate:api:check"' in contents
+    assert "pnpm exec prettier --write lib/api/generated schema/api.json" in contents
+    assert "git diff --exit-code -- lib/api/generated schema/api.json" in contents
 
 
 def test_real_document_operability_workflow_runs_required_quality_gates() -> None:

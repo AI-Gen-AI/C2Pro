@@ -37,90 +37,134 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation
-} from '@tanstack/react-query';
+import { useMutation } from "@tanstack/react-query";
 import type {
   MutationFunction,
   QueryClient,
   UseMutationOptions,
-  UseMutationResult
-} from '@tanstack/react-query';
+  UseMutationResult,
+} from "@tanstack/react-query";
 
 import type {
   ApprovalResponse,
   ApprovalReview,
-  HTTPValidationError
-} from '../models';
+  HTTPValidationError,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * @summary Approve, reject, or correct AI-generated resources
  */
 export const reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch = (
-    resourceType: string,
-    resourceId: string,
-    approvalReview: ApprovalReview,
- signal?: AbortSignal
+  resourceType: string,
+  resourceId: string,
+  approvalReview: ApprovalReview,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<ApprovalResponse>(
-      {url: `/api/v1/approvals/${resourceType}/${resourceId}`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', },
-      data: approvalReview, signal
-    },
+  return orvalApiClient<ApprovalResponse>({
+    url: `/api/v1/approvals/${resourceType}/${resourceId}`,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    data: approvalReview,
+    signal,
+  });
+};
+
+export const getReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch
+        >
+      >,
+      TError,
+      { resourceType: string; resourceId: string; data: ApprovalReview },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>
+    >,
+    TError,
+    { resourceType: string; resourceId: string; data: ApprovalReview },
+    TContext
+  > => {
+    const mutationKey = [
+      "reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch
+        >
+      >,
+      { resourceType: string; resourceId: string; data: ApprovalReview }
+    > = (props) => {
+      const { resourceType, resourceId, data } = props ?? {};
+
+      return reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch(
+        resourceType,
+        resourceId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>, TError,{resourceType: string;resourceId: string;data: ApprovalReview}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>, TError,{resourceType: string;resourceId: string;data: ApprovalReview}, TContext> => {
+export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>
+    >
+  >;
+export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationBody =
+  ApprovalReview;
+export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationError =
+  void | HTTPValidationError;
 
-const mutationKey = ['reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>, {resourceType: string;resourceId: string;data: ApprovalReview}> = (props) => {
-          const {resourceType,resourceId,data} = props ?? {};
-
-          return  reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch(resourceType,resourceId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationResult = NonNullable<Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>>
-    export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationBody = ApprovalReview
-    export type ReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Approve, reject, or correct AI-generated resources
  */
-export const useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>, TError,{resourceType: string;resourceId: string;data: ApprovalReview}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>>,
-        TError,
-        {resourceType: string;resourceId: string;data: ApprovalReview},
-        TContext
-      > => {
-      return useMutation(getReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationOptions(options), queryClient);
-    }
-    
+export const useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch
+        >
+      >,
+      TError,
+      { resourceType: string; resourceId: string; data: ApprovalReview },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof reviewResourceApiV1ApprovalsResourceTypeResourceIdPatch>
+  >,
+  TError,
+  { resourceType: string; resourceId: string; data: ApprovalReview },
+  TContext
+> => {
+  return useMutation(
+    getReviewResourceApiV1ApprovalsResourceTypeResourceIdPatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { BudgetInput } from './budgetInput';
+import type { BudgetInput } from "./budgetInput";
 
 /**
  * Input model for creating a WBS item.

@@ -39,8 +39,8 @@
  */
 
 export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams = {
-/**
- * Delete item and all descendants
- */
-cascade?: boolean;
+  /**
+   * Delete item and all descendants
+   */
+  cascade?: boolean;
 };

@@ -24,7 +24,7 @@ vi.mock("@/lib/api/generated/alerts/alerts", () => ({
     listProjectAlertsMock(...args),
 }));
 
-vi.mock("@/lib/api/generated/analysis/analysis", () => ({
+vi.mock("@/lib/api/analysis-stream", () => ({
   getStreamProjectProcessingUrl: (...args: unknown[]) =>
     getStreamProjectProcessingUrlMock(...args),
 }));

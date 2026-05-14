@@ -37,9 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useQuery
-} from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -49,13 +47,10 @@ import type {
   QueryKey,
   UndefinedInitialDataOptions,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Root endpoint.
@@ -63,90 +58,120 @@ import { orvalApiClient } from '../../client';
 Redirects to API documentation.
  * @summary Root
  */
-export const rootGet = (
-    
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<unknown>(
-      {url: `/`, method: 'GET', signal
-    },
-      );
-    }
-  
-
-
+export const rootGet = (signal?: AbortSignal) => {
+  return orvalApiClient<unknown>({ url: `/`, method: "GET", signal });
+};
 
 export const getRootGetQueryKey = () => {
-    return [
-    `/`
-    ] as const;
-    }
+  return [`/`] as const;
+};
 
-    
-export const getRootGetQueryOptions = <TData = Awaited<ReturnType<typeof rootGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>>, }
-) => {
+export const getRootGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof rootGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
 
-const {query: queryOptions} = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getRootGetQueryKey();
 
-  const queryKey =  queryOptions?.queryKey ?? getRootGetQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof rootGet>>> = ({
+    signal,
+  }) => rootGet(signal);
 
-  
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof rootGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof rootGet>>> = ({ signal }) => rootGet(signal);
+export type RootGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof rootGet>>
+>;
+export type RootGetQueryError = unknown;
 
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type RootGetQueryResult = NonNullable<Awaited<ReturnType<typeof rootGet>>>
-export type RootGetQueryError = unknown
-
-
-export function useRootGet<TData = Awaited<ReturnType<typeof rootGet>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>> & Pick<
+export function useRootGet<
+  TData = Awaited<ReturnType<typeof rootGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>
+    > &
+      Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof rootGet>>,
           TError,
           Awaited<ReturnType<typeof rootGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useRootGet<TData = Awaited<ReturnType<typeof rootGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useRootGet<
+  TData = Awaited<ReturnType<typeof rootGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>
+    > &
+      Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof rootGet>>,
           TError,
           Awaited<ReturnType<typeof rootGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useRootGet<TData = Awaited<ReturnType<typeof rootGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useRootGet<
+  TData = Awaited<ReturnType<typeof rootGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Root
  */
 
-export function useRootGet<TData = Awaited<ReturnType<typeof rootGet>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useRootGet<
+  TData = Awaited<ReturnType<typeof rootGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof rootGet>>, TError, TData>
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getRootGetQueryOptions(options);
 
-  const queryOptions = getRootGetQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
-

@@ -5823,31 +5823,31 @@
         "required": ["reviewer_name"],
         "title": "RejectRequest"
       },
-        "ResolveAlertRequest": {
-          "properties": {
-            "resolution": {
-              "type": "string",
-              "title": "Resolution"
-            },
-            "resolved_by": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Resolved By"
-            },
-            "root_cause": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Root Cause"
-            }
+      "ResolveAlertRequest": {
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "title": "Resolution"
           },
-          "type": "object",
-          "required": ["resolution", "resolved_by"],
+          "resolved_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Resolved By"
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          }
+        },
+        "type": "object",
+        "required": ["resolution", "resolved_by"],
         "title": "ResolveAlertRequest",
         "description": "Request to resolve an alert."
       },

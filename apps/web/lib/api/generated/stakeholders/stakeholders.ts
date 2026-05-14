@@ -37,10 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -53,298 +50,585 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
   HTTPValidationError,
   StakeholderCreateRequest,
   StakeholderResponseOut,
-  StakeholderUpdateRequest
-} from '../models';
+  StakeholderUpdateRequest,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * @summary List stakeholders for a project
  */
 export const listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet = (
+  projectId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<StakeholderResponseOut[]>({
+    url: `/api/v1/stakeholders/projects/${projectId}`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryKey =
+  (projectId: string) => {
+    return [`/api/v1/stakeholders/projects/${projectId}`] as const;
+  };
+
+export const getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
     projectId: string,
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<StakeholderResponseOut[]>(
-      {url: `/api/v1/stakeholders/projects/${projectId}`, method: 'GET', signal
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
     },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryKey(
+        projectId,
       );
-    }
-  
 
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+        >
+      >
+    > = ({ signal }) =>
+      listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet(
+        projectId,
+        signal,
+      );
 
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!projectId,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
 
-export const getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryKey = (projectId: string,) => {
-    return [
-    `/api/v1/stakeholders/projects/${projectId}`
-    ] as const;
-    }
+export type ListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+      >
+    >
+  >;
+export type ListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryError =
+  void | HTTPValidationError;
 
-    
-export const getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryOptions = <TData = Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError = void | HTTPValidationError>(projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryKey(projectId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>> = ({ signal }) => listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet(projectId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(projectId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>>
-export type ListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryError = void | HTTPValidationError
-
-
-export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<TData = Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError = void | HTTPValidationError>(
- projectId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData>> & Pick<
+export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>,
+          Awaited<
+            ReturnType<
+              typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<TData = Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError = void | HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<
+              typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>,
+          Awaited<
+            ReturnType<
+              typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+            >
+          >,
           TError,
-          Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<TData = Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError = void | HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<
+              typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary List stakeholders for a project
  */
 
-export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<TData = Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError = void | HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listProjectStakeholdersApiV1StakeholdersProjectsProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryOptions(
+      projectId,
+      options,
+    );
 
-  const queryOptions = getListProjectStakeholdersApiV1StakeholdersProjectsProjectIdGetQueryOptions(projectId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * @summary Create stakeholder manually
  */
 export const createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost = (
-    projectId: string,
-    stakeholderCreateRequest: StakeholderCreateRequest,
- signal?: AbortSignal
+  projectId: string,
+  stakeholderCreateRequest: StakeholderCreateRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<StakeholderResponseOut>(
-      {url: `/api/v1/stakeholders/projects/${projectId}`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: stakeholderCreateRequest, signal
-    },
+  return orvalApiClient<StakeholderResponseOut>({
+    url: `/api/v1/stakeholders/projects/${projectId}`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: stakeholderCreateRequest,
+    signal,
+  });
+};
+
+export const getCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+        >
+      >,
+      TError,
+      { projectId: string; data: StakeholderCreateRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+      >
+    >,
+    TError,
+    { projectId: string; data: StakeholderCreateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+        >
+      >,
+      { projectId: string; data: StakeholderCreateRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost(
+        projectId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>, TError,{projectId: string;data: StakeholderCreateRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>, TError,{projectId: string;data: StakeholderCreateRequest}, TContext> => {
+export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+      >
+    >
+  >;
+export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationBody =
+  StakeholderCreateRequest;
+export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationError =
+  void | HTTPValidationError;
 
-const mutationKey = ['createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>, {projectId: string;data: StakeholderCreateRequest}> = (props) => {
-          const {projectId,data} = props ?? {};
-
-          return  createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost(projectId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationResult = NonNullable<Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>>
-    export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationBody = StakeholderCreateRequest
-    export type CreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Create stakeholder manually
  */
-export const useCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPost = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>, TError,{projectId: string;data: StakeholderCreateRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost>>,
+export const useCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPost =
+  <TError = void | HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+          >
+        >,
         TError,
-        {projectId: string;data: StakeholderCreateRequest},
+        { projectId: string; data: StakeholderCreateRequest },
         TContext
-      > => {
-      return useMutation(getCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationOptions(options), queryClient);
-    }
-    /**
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof createProjectStakeholderApiV1StakeholdersProjectsProjectIdPost
+      >
+    >,
+    TError,
+    { projectId: string; data: StakeholderCreateRequest },
+    TContext
+  > => {
+    return useMutation(
+      getCreateProjectStakeholderApiV1StakeholdersProjectsProjectIdPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
  * @summary Update stakeholder
  */
 export const updateStakeholderApiV1StakeholdersStakeholderIdPatch = (
-    stakeholderId: string,
-    stakeholderUpdateRequest: StakeholderUpdateRequest,
- signal?: AbortSignal
+  stakeholderId: string,
+  stakeholderUpdateRequest: StakeholderUpdateRequest,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<StakeholderResponseOut>(
-      {url: `/api/v1/stakeholders/${stakeholderId}`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', },
-      data: stakeholderUpdateRequest, signal
-    },
+  return orvalApiClient<StakeholderResponseOut>({
+    url: `/api/v1/stakeholders/${stakeholderId}`,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    data: stakeholderUpdateRequest,
+    signal,
+  });
+};
+
+export const getUpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+      >,
+      TError,
+      { stakeholderId: string; data: StakeholderUpdateRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+    >,
+    TError,
+    { stakeholderId: string; data: StakeholderUpdateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateStakeholderApiV1StakeholdersStakeholderIdPatch",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+      >,
+      { stakeholderId: string; data: StakeholderUpdateRequest }
+    > = (props) => {
+      const { stakeholderId, data } = props ?? {};
+
+      return updateStakeholderApiV1StakeholdersStakeholderIdPatch(
+        stakeholderId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getUpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>, TError,{stakeholderId: string;data: StakeholderUpdateRequest}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>, TError,{stakeholderId: string;data: StakeholderUpdateRequest}, TContext> => {
+export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+    >
+  >;
+export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationBody =
+  StakeholderUpdateRequest;
+export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationError =
+  void | HTTPValidationError;
 
-const mutationKey = ['updateStakeholderApiV1StakeholdersStakeholderIdPatch'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>, {stakeholderId: string;data: StakeholderUpdateRequest}> = (props) => {
-          const {stakeholderId,data} = props ?? {};
-
-          return  updateStakeholderApiV1StakeholdersStakeholderIdPatch(stakeholderId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>>
-    export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationBody = StakeholderUpdateRequest
-    export type UpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Update stakeholder
  */
-export const useUpdateStakeholderApiV1StakeholdersStakeholderIdPatch = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>, TError,{stakeholderId: string;data: StakeholderUpdateRequest}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>>,
-        TError,
-        {stakeholderId: string;data: StakeholderUpdateRequest},
-        TContext
-      > => {
-      return useMutation(getUpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationOptions(options), queryClient);
-    }
-    /**
+export const useUpdateStakeholderApiV1StakeholdersStakeholderIdPatch = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+      >,
+      TError,
+      { stakeholderId: string; data: StakeholderUpdateRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateStakeholderApiV1StakeholdersStakeholderIdPatch>
+  >,
+  TError,
+  { stakeholderId: string; data: StakeholderUpdateRequest },
+  TContext
+> => {
+  return useMutation(
+    getUpdateStakeholderApiV1StakeholdersStakeholderIdPatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * @summary Delete stakeholder
  */
 export const deleteStakeholderApiV1StakeholdersStakeholderIdDelete = (
-    stakeholderId: string,
- signal?: AbortSignal
+  stakeholderId: string,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<void>(
-      {url: `/api/v1/stakeholders/${stakeholderId}`, method: 'DELETE', signal
-    },
+  return orvalApiClient<void>({
+    url: `/api/v1/stakeholders/${stakeholderId}`,
+    method: "DELETE",
+    signal,
+  });
+};
+
+export const getDeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+      >,
+      TError,
+      { stakeholderId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+    >,
+    TError,
+    { stakeholderId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "deleteStakeholderApiV1StakeholdersStakeholderIdDelete",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+      >,
+      { stakeholderId: string }
+    > = (props) => {
+      const { stakeholderId } = props ?? {};
+
+      return deleteStakeholderApiV1StakeholdersStakeholderIdDelete(
+        stakeholderId,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getDeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationOptions = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>, TError,{stakeholderId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>, TError,{stakeholderId: string}, TContext> => {
+export type DeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+    >
+  >;
 
-const mutationKey = ['deleteStakeholderApiV1StakeholdersStakeholderIdDelete'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+export type DeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationError =
+  void | HTTPValidationError;
 
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>, {stakeholderId: string}> = (props) => {
-          const {stakeholderId} = props ?? {};
-
-          return  deleteStakeholderApiV1StakeholdersStakeholderIdDelete(stakeholderId,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>>
-    
-    export type DeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationError = void | HTTPValidationError
-
-    /**
+/**
  * @summary Delete stakeholder
  */
-export const useDeleteStakeholderApiV1StakeholdersStakeholderIdDelete = <TError = void | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>, TError,{stakeholderId: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>>,
-        TError,
-        {stakeholderId: string},
-        TContext
-      > => {
-      return useMutation(getDeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationOptions(options), queryClient);
-    }
-    
+export const useDeleteStakeholderApiV1StakeholdersStakeholderIdDelete = <
+  TError = void | HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+      >,
+      TError,
+      { stakeholderId: string },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteStakeholderApiV1StakeholdersStakeholderIdDelete>
+  >,
+  TError,
+  { stakeholderId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteStakeholderApiV1StakeholdersStakeholderIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
