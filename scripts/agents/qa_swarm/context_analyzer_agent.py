@@ -34,7 +34,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 import anthropic
 from langchain_core.messages import HumanMessage
@@ -153,6 +153,86 @@ def parse_coverage_xml(
 # ---------------------------------------------------------------------------
 
 
+def _node_docstring_metadata(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[bool, str]:
+    if not (
+        node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+        and isinstance(node.body[0].value.value, str)
+    ):
+        return False, ""
+
+    return True, node.body[0].value.value.splitlines()[0].strip()
+
+
+def _node_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    return [
+        arg.arg
+        for arg in node.args.args
+        if arg.arg not in ("self", "cls")
+    ]
+
+
+def _node_return_annotation(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    if not node.returns:
+        return ""
+
+    with contextlib.suppress(Exception):
+        return ast.unparse(node.returns)
+    return ""
+
+
+def _node_decorators(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    decorators = []
+    for dec in node.decorator_list:
+        with contextlib.suppress(Exception):
+            decorators.append(ast.unparse(dec))
+    return decorators
+
+
+def _function_signature(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    prefix: str = "",
+) -> dict[str, Any]:
+    has_doc, docstring = _node_docstring_metadata(node)
+    qualified = f"{prefix}{node.name}" if prefix else node.name
+
+    return {
+        "qualified_name": qualified,
+        "lineno": node.lineno,
+        "is_async": isinstance(node, ast.AsyncFunctionDef),
+        "has_docstring": has_doc,
+        "args": _node_args(node),
+        "return_annotation": _node_return_annotation(node),
+        "docstring": docstring,
+        "decorators": _node_decorators(node),
+    }
+
+
+def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    return {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+
+
+def _is_function_node(
+    node: ast.AST,
+) -> TypeGuard[ast.FunctionDef | ast.AsyncFunctionDef]:
+    return isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+
+
+def _class_method_signatures(node: ast.ClassDef) -> list[dict[str, Any]]:
+    return [
+        _function_signature(item, prefix=f"{node.name}.")
+        for item in node.body
+        if _is_function_node(item)
+    ]
+
+
 def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
     """
     Parse *source_code* with Python's ``ast`` module and return metadata for
@@ -176,63 +256,14 @@ def extract_function_signatures(source_code: str) -> list[dict[str, Any]]:
         return []
 
     signatures: list[dict[str, Any]] = []
-
-    def _process_func(node: ast.FunctionDef | ast.AsyncFunctionDef, prefix: str = "") -> None:
-        qualified = f"{prefix}{node.name}" if prefix else node.name
-        docstring = ""
-        has_doc = False
-        if (
-            node.body
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        ):
-            has_doc = True
-            docstring = node.body[0].value.value.splitlines()[0].strip()
-
-        args = [
-            arg.arg
-            for arg in node.args.args
-            if arg.arg not in ("self", "cls")
-        ]
-
-        return_annotation = ""
-        if node.returns:
-            with contextlib.suppress(Exception):
-                return_annotation = ast.unparse(node.returns)
-
-        decorators = []
-        for dec in node.decorator_list:
-            with contextlib.suppress(Exception):
-                decorators.append(ast.unparse(dec))
-
-        signatures.append(
-            {
-                "qualified_name": qualified,
-                "lineno": node.lineno,
-                "is_async": isinstance(node, ast.AsyncFunctionDef),
-                "has_docstring": has_doc,
-                "args": args,
-                "return_annotation": return_annotation,
-                "docstring": docstring,
-                "decorators": decorators,
-            }
-        )
-
-    parent_map = {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
+    parents = _parent_map(tree)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            for item in node.body:
-                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
-                    _process_func(item, prefix=f"{node.name}.")
-        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and parent_map.get(node) is tree:
+            signatures.extend(_class_method_signatures(node))
+        elif _is_function_node(node) and parents.get(node) is tree:
             # Only top-level functions; methods are emitted by their ClassDef.
-            _process_func(node)
+            signatures.append(_function_signature(node))
 
     return signatures
 
