@@ -12,6 +12,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    ValidationInfo,
     field_validator,
 )
 
@@ -100,7 +101,7 @@ class RegisterRequest(BaseModel):
 
     @field_validator("password_confirm")
     @classmethod
-    def validate_passwords_match(cls, v: str | None, info) -> str | None:
+    def validate_passwords_match(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Valida coincidencia solo si se envía confirmación."""
         if v is None:
             return v
