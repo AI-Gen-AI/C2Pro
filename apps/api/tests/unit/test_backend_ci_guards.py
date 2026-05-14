@@ -5,6 +5,8 @@ Regression checks for backend CI workflow prerequisites.
 
 from __future__ import annotations
 
+import re
+import tomllib
 from pathlib import Path
 
 
@@ -86,6 +88,48 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     contents = requirements.read_text(encoding="utf-8")
 
     assert "schemathesis>=4.18.5" in contents
+    assert "tenacity>=9.1.2,<10.0" in contents
+
+
+def test_pnpm_action_setup_uses_package_manager_version() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflows = sorted((repo_root / ".github" / "workflows").glob("*.yml"))
+    duplicate_version_pattern = re.compile(
+        r"uses:\s+pnpm/action-setup@v4\s*\n\s*with:\s*\n\s*version:",
+        re.MULTILINE,
+    )
+
+    offenders = [
+        workflow.relative_to(repo_root).as_posix()
+        for workflow in workflows
+        if duplicate_version_pattern.search(workflow.read_text(encoding="utf-8"))
+    ]
+
+    assert offenders == []
+
+
+def test_gitleaks_config_is_valid_toml() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    config = repo_root / ".gitleaks.toml"
+
+    parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+
+    assert "allowlist" in parsed
+
+
+def test_agent_swarm_dependencies_pin_langgraph_stack() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "scripts" / "agents" / "requirements.txt"
+    contents = requirements.read_text(encoding="utf-8")
+
+    assert "langgraph==1.1.9" in contents
+    assert "langchain>=0.2.0,<0.4.0" not in contents
 
 
 def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> None:
