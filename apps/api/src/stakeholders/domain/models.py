@@ -82,10 +82,14 @@ class Stakeholder:
     def __post_init__(self) -> None:
         if self.project_id is None:
             raise ValueError("project_id is required")
+        
+        # Handle missing or empty names gracefully for legacy data
         if self.name is None or not self.name.strip():
-            raise ValueError("name is required")
+            self.name = "Unnamed Stakeholder"
+            
         if self.updated_at < self.created_at:
-            raise ValueError("updated_at cannot be before created_at")
+            # Coerce to created_at if for some reason timestamps are inconsistent in legacy data
+            self.updated_at = self.created_at
 
         clause_adjusted = self.source_clause_id is not None and self.power_level == PowerLevel.LOW
         if clause_adjusted:

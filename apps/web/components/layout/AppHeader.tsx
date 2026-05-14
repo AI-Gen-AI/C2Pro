@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, LogOut, Search, User } from 'lucide-react';
+import { Bell, LogOut, Search, User, Menu } from 'lucide-react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
   selectIsDemoMode,
   isExplicitDemoRoute,
 } from '@/stores/app-mode';
+import { useSidebarStore } from '@/stores/sidebar';
 
 interface AppHeaderProps {
   title?: string;
@@ -31,6 +32,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
   const { signOut } = useClerk();
   const { user } = useUser();
   const pathname = usePathname();
+  const { toggle } = useSidebarStore();
   
   const demoEnvironmentEnabled = useAppModeStore(
     (state) => state.demoEnvironmentEnabled,
@@ -52,8 +54,18 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card px-6">
-      {/* Left: Breadcrumb / Title */}
-      <div className="flex items-center gap-2">
+      {/* Left: Menu Toggle (Mobile) + Breadcrumb / Title */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={toggle}
+          aria-label="Toggle Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
         {breadcrumb && breadcrumb.length > 0 ? (
           <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
             {breadcrumb.map((item, index) => (
@@ -72,7 +84,7 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
             ))}
           </nav>
         ) : (
-          <>
+          <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{title}</h1>
             {isDemoMode ? (
               <>
@@ -90,13 +102,13 @@ export function AppHeader({ title = 'Dashboard', breadcrumb }: AppHeaderProps) {
                 </Badge>
               </>
             ) : null}
-          </>
+          </div>
         )}
       </div>
 
       {/* Right: Search, Notifications, Avatar */}
       <div className="flex items-center gap-4">
-        <div className="relative hidden md:block">
+        <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search..."
