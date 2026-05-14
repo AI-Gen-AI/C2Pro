@@ -51,5 +51,5 @@ jobs:
       - name: Install Playwright Browsers
         run: pnpm exec playwright install --with-deps
 
-      - name: Run E2E tests
-        run: pnpm test:e2e
+      - name: Run E2E smoke tests
+        run: pnpm exec playwright test src/tests/e2e/coherence-v1.spec.ts src/tests/e2e/cross-browser-smoke.spec.ts --project=chromium

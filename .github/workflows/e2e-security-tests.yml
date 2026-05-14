@@ -25,6 +25,7 @@ jobs:
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
       JWT_ALGORITHM: HS256
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock
       SUPABASE_SERVICE_ROLE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test.mock.service

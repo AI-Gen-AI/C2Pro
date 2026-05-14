@@ -171,6 +171,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "ANTHROPIC_API_KEY is not configured; skipping QA Swarm generation for this PR."
+            exit 0
+          fi
           python -m scripts.agents.qa_swarm.qa_swarm_orchestrator \
             --repo "${{ github.repository }}" \
             --pr-number "${{ github.event.pull_request.number }}" \

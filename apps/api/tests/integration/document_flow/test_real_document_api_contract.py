@@ -100,6 +100,7 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
     db.add(
         CoherenceResultORM(
             id=uuid4(),
+            tenant_id=test_tenant.id,
             project_id=project_id,
             global_score=persisted_score,
             category_scores={"SCOPE": 80, "TIME": persisted_score},
@@ -123,6 +124,7 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
     db.add(
         AlertORM(
             id=uuid4(),
+            tenant_id=test_tenant.id,
             project_id=project_id,
             severity=AlertSeverity(expected_alert["severity"]),
             alert_type=AlertType.COHERENCE,
@@ -192,3 +194,4 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
         await db.execute(select(AlertORM).where(AlertORM.project_id == project_id))
     ).scalars().all()
     assert len(leaked_alerts) == 1
+    assert leaked_alerts[0].tenant_id == test_tenant.id
