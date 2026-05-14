@@ -410,6 +410,75 @@ async def _call_claude_for_scenarios(
 # LangGraph node
 # ---------------------------------------------------------------------------
 
+def _identify_uncovered_functions(
+    coverage_data: dict[str, dict[str, Any]],
+    source_code: str,
+) -> list[str]:
+    if not coverage_data:
+        sigs = extract_function_signatures(source_code)
+        return [s["qualified_name"] for s in sigs]
+
+    uncovered_functions: list[str] = []
+    for fn_name, data in coverage_data.items():
+        line_rate = data.get("line_rate", 0)
+        uncovered_lines = data.get("uncovered_lines", [])
+        missing_branches = data.get("missing_branches", [])
+        if line_rate * 100 < _COVERAGE_THRESHOLD or uncovered_lines or missing_branches:
+            uncovered_functions.append(fn_name)
+    return uncovered_functions
+
+
+def _summarize_pr_diff(pr_diff: str, target_file: str) -> str:
+    if not pr_diff:
+        return ""
+    changed = extract_changed_functions_from_diff(pr_diff, target_file)
+    if not changed:
+        return ""
+    return f"Changed line references: {', '.join(changed[:20])}"
+
+
+def _append_message(state: QASwarmState, content: str) -> list[Any]:
+    return state.get("messages", []) + [HumanMessage(content=content)]
+
+
+def _missing_api_key_state(state: QASwarmState) -> QASwarmState:
+    return {
+        **state,
+        "error": "ANTHROPIC_API_KEY not set — ContextAnalyzerAgent cannot proceed.",
+        "messages": _append_message(state, "ContextAnalyzerAgent: missing API key"),
+    }
+
+
+def _api_error_state(state: QASwarmState, exc: anthropic.APIError) -> QASwarmState:
+    return {
+        **state,
+        "error": f"Claude API error in ContextAnalyzerAgent: {exc}",
+        "messages": _append_message(state, f"ContextAnalyzerAgent error: {exc}"),
+    }
+
+
+def _success_state(
+    state: QASwarmState,
+    target_file: str,
+    uncovered_functions: list[str],
+    scenarios: list[dict[str, Any]],
+    business_context: str,
+) -> QASwarmState:
+    return {
+        **state,
+        "uncovered_functions": uncovered_functions,
+        "test_scenarios": scenarios,
+        "business_context": business_context,
+        "messages": _append_message(
+            state,
+            (
+                f"ContextAnalyzerAgent: analysed `{target_file}`. "
+                f"Found {len(uncovered_functions)} uncovered function(s), "
+                f"generated {len(scenarios)} test scenario(s)."
+            ),
+        ),
+    }
+
 
 async def analyze_context(state: QASwarmState) -> QASwarmState:
     """
@@ -424,43 +493,15 @@ async def analyze_context(state: QASwarmState) -> QASwarmState:
     pr_diff = state.get("pr_diff", "")
     existing_test_files = state.get("existing_test_files", [])
 
-    # ── Step 1: Parse coverage report ─────────────────────────────────
     coverage_data = parse_coverage_xml(coverage_path, target_file)
+    uncovered_functions = _identify_uncovered_functions(coverage_data, source_code)
+    pr_diff_summary = _summarize_pr_diff(pr_diff, target_file)
 
-    # Identify functions below the coverage threshold
-    uncovered_functions: list[str] = []
-    if coverage_data:
-        for fn_name, data in coverage_data.items():
-            line_rate = data.get("line_rate", 0)
-            uncovered_lines = data.get("uncovered_lines", [])
-            missing_branches = data.get("missing_branches", [])
-            # Flag if below threshold OR has missing branches
-            if line_rate * 100 < _COVERAGE_THRESHOLD or uncovered_lines or missing_branches:
-                uncovered_functions.append(fn_name)
-    else:
-        # No coverage data available — treat all AST-extracted functions as targets
-        sigs = extract_function_signatures(source_code)
-        uncovered_functions = [s["qualified_name"] for s in sigs]
-
-    # ── Step 2: Analyse PR diff ────────────────────────────────────────
-    pr_diff_summary = ""
-    if pr_diff:
-        changed = extract_changed_functions_from_diff(pr_diff, target_file)
-        if changed:
-            pr_diff_summary = f"Changed line references: {', '.join(changed[:20])}"
-
-    # ── Step 3: Call Claude for scenario extraction ────────────────────
     anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not anthropic_api_key:
-        return {
-            **state,
-            "error": "ANTHROPIC_API_KEY not set — ContextAnalyzerAgent cannot proceed.",
-            "messages": state.get("messages", [])
-            + [HumanMessage(content="ContextAnalyzerAgent: missing API key")],
-        }
+        return _missing_api_key_state(state)
 
     client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
-
     try:
         scenarios, business_context = await _call_claude_for_scenarios(
             target_file=target_file,
@@ -471,27 +512,12 @@ async def analyze_context(state: QASwarmState) -> QASwarmState:
             client=client,
         )
     except anthropic.APIError as exc:
-        return {
-            **state,
-            "error": f"Claude API error in ContextAnalyzerAgent: {exc}",
-            "messages": state.get("messages", [])
-            + [HumanMessage(content=f"ContextAnalyzerAgent error: {exc}")],
-        }
+        return _api_error_state(state, exc)
 
-    # ── Step 4: Return updated state ──────────────────────────────────
-    return {
-        **state,
-        "uncovered_functions": uncovered_functions,
-        "test_scenarios": scenarios,
-        "business_context": business_context,
-        "messages": state.get("messages", [])
-        + [
-            HumanMessage(
-                content=(
-                    f"ContextAnalyzerAgent: analysed `{target_file}`. "
-                    f"Found {len(uncovered_functions)} uncovered function(s), "
-                    f"generated {len(scenarios)} test scenario(s)."
-                )
-            )
-        ],
-    }
+    return _success_state(
+        state,
+        target_file,
+        uncovered_functions,
+        scenarios,
+        business_context,
+    )

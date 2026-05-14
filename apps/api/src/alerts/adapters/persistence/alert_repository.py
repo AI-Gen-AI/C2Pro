@@ -218,11 +218,15 @@ class SqlAlchemyAlertRepository(IAlertRepository):
     async def save(self, alert: Alert, tenant_id: UUID | None = None) -> None:
         """Save changes to an alert."""
         effective_tenant_id = tenant_id or self._tenant_id
-        query = select(AlertORM).where(AlertORM.id == alert.id)
-        if effective_tenant_id is not None:
-            query = query.where(AlertORM.tenant_id == effective_tenant_id)
-        result = await self._session.execute(query)
-        orm_alert = result.scalar_one_or_none()
+        if effective_tenant_id is None:
+            orm_alert = await self._session.get(AlertORM, alert.id)
+        else:
+            query = select(AlertORM).where(
+                AlertORM.id == alert.id,
+                AlertORM.tenant_id == effective_tenant_id,
+            )
+            result = await self._session.execute(query)
+            orm_alert = result.scalar_one_or_none()
         if orm_alert:
             orm_alert.status = alert.status.value if hasattr(alert.status, "value") else alert.status
             orm_alert.reviewed_by = alert.reviewed_by
