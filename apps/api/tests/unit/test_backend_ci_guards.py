@@ -5,6 +5,8 @@ Regression checks for backend CI workflow prerequisites.
 
 from __future__ import annotations
 
+import re
+import tomllib
 from pathlib import Path
 
 
@@ -14,6 +16,24 @@ def test_unit_workflow_excludes_integration_marked_tests() -> None:
     contents = workflow.read_text(encoding="utf-8")
 
     assert '-m "not integration"' in contents
+    assert "--cov-report=xml:coverage.xml" in contents
+    assert "--cov-fail-under=0" in contents
+
+
+def test_database_backed_ci_workflows_export_test_database_url() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "tests.yml",
+        repo_root / ".github" / "workflows" / "e2e-security-tests.yml",
+        repo_root / ".github" / "workflows" / "real-document-operability.yml",
+    ]
+
+    for workflow in workflow_paths:
+        contents = workflow.read_text(encoding="utf-8")
+        assert "DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
+        assert "TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test" in contents
 
 
 def test_test_compose_uses_pgvector_image() -> None:
@@ -34,15 +54,59 @@ def test_hitl_auth_script_does_not_embed_real_jwt() -> None:
 
 def test_openapi_schema_examples_do_not_use_jwt_like_placeholders() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    schema = repo_root / "apps" / "web" / "schema" / "api.json"
-    contents = schema.read_text(encoding="utf-8")
+    schema_paths = [
+        repo_root / "apps" / "web" / "schema" / "api.json",
+        repo_root / "docs" / "api" / "openapi.yaml",
+    ]
 
-    assert '"access_token": "eyJ' not in contents
-    assert '"refresh_token": "eyJ' not in contents
+    for schema in schema_paths:
+        contents = schema.read_text(encoding="utf-8")
+        assert '"access_token": "eyJ' not in contents
+        assert '"refresh_token": "eyJ' not in contents
+        assert "access_token: eyJ" not in contents
+        assert "refresh_token: eyJ" not in contents
+
+
+def test_qa_swarm_context_analyzer_uses_ast_parent_map() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    analyzer = repo_root / "scripts" / "agents" / "qa_swarm" / "context_analyzer_agent.py"
+    contents = analyzer.read_text(encoding="utf-8")
+
+    assert "ast.iter_child_nodes(parent)" in contents
+    assert 'node in getattr(parent, "body", [])' not in contents
+
+
+def test_frontend_e2e_workflows_export_clerk_test_keys() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflows = [
+        repo_root / ".github" / "workflows" / "frontend-ci.yml",
+        repo_root / ".github" / "workflows" / "frontend-e2e.yml",
+    ]
+
+    for workflow in workflows:
+        contents = workflow.read_text(encoding="utf-8")
+        assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_" in contents
+        assert "CLERK_SECRET_KEY: sk_test_" in contents
+
+
+def test_frontend_api_generation_check_formats_orval_output_before_diff() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    package_json = repo_root / "apps" / "web" / "package.json"
+    contents = package_json.read_text(encoding="utf-8")
+
+    assert '"generate:api:check"' in contents
+    assert "pnpm exec prettier --write lib/api/generated schema/api.json" in contents
+    assert "git diff --exit-code -- lib/api/generated schema/api.json" in contents
 
 
 def test_real_document_operability_workflow_runs_required_quality_gates() -> None:
-    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014."""
+    """Test Suite ID: TASK-OPS-DOCFLOW-012, TASK-OPS-DOCFLOW-013, TASK-OPS-DOCFLOW-014, TASK-OPS-DOCFLOW-015, TASK-OPS-DOCFLOW-016."""
 
     repo_root = Path(__file__).resolve().parents[4]
     workflow = repo_root / ".github" / "workflows" / "real-document-operability.yml"
@@ -64,12 +128,91 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     assert "python -m pytest tests/evals/test_golden_corpus.py -q" in contents
     assert "pnpm lint" in contents
     assert "real-document-operability-blockers.md" in contents
-    assert "TASK-OPS-DOCFLOW-015" in contents
-    assert "TASK-OPS-DOCFLOW-016" in contents
+    assert "TASK-OPS-DOCFLOW-017" in contents
+    assert "TASK-OPS-DOCFLOW-016" not in contents
+    assert "src.alerts.router" not in contents
+    assert "get_bom_repository" not in contents
+    assert "TASK-OPS-DOCFLOW-015" not in contents
+    assert "No module named 'schemathesis'" not in contents
+    assert "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" in contents
+    assert "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" not in contents
     assert "TASK-OPS-DOCFLOW-014" not in contents
     assert "golden.evaluators" not in contents
     assert "TASK-OPS-DOCFLOW-013" not in contents
     assert "test_hitl_resume_metrics.py::test_checkpoint_load_errors_are_recorded" not in contents
+
+
+def test_backend_requirements_include_schemathesis_contract_dependency() -> None:
+    """Test Suite ID: TASK-OPS-DOCFLOW-015."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "apps" / "api" / "requirements.txt"
+    contents = requirements.read_text(encoding="utf-8")
+
+    assert "schemathesis>=4.18.5" in contents
+    assert "tenacity>=9.1.2,<10.0" in contents
+
+
+def test_pnpm_action_setup_uses_package_manager_version() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflows = sorted((repo_root / ".github" / "workflows").glob("*.yml"))
+    duplicate_version_pattern = re.compile(
+        r"uses:\s+pnpm/action-setup@v4\s*\n\s*with:\s*\n\s*version:",
+        re.MULTILINE,
+    )
+
+    offenders = [
+        workflow.relative_to(repo_root).as_posix()
+        for workflow in workflows
+        if duplicate_version_pattern.search(workflow.read_text(encoding="utf-8"))
+    ]
+
+    assert offenders == []
+
+
+def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = repo_root / ".github" / "workflows" / "wireframe-coverage.yml"
+    contents = workflow.read_text(encoding="utf-8")
+
+    assert contents.index("uses: pnpm/action-setup@v4") < contents.index("uses: actions/setup-node@v4")
+
+
+def test_gitleaks_config_is_valid_toml() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    config = repo_root / ".gitleaks.toml"
+
+    parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+
+    assert "allowlist" in parsed
+
+
+def test_agent_swarm_dependencies_pin_langgraph_stack() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "scripts" / "agents" / "requirements.txt"
+    contents = requirements.read_text(encoding="utf-8")
+
+    assert "langgraph==1.1.9" in contents
+    assert "langchain>=0.2.0,<0.4.0" not in contents
+
+
+def test_code_auditor_skips_when_anthropic_secret_is_missing() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    agent = repo_root / "scripts" / "agents" / "code_auditor_agent.py"
+    contents = agent.read_text(encoding="utf-8")
+
+    assert 'os.environ.get("ANTHROPIC_API_KEY", "").strip()' in contents
+    assert "ANTHROPIC_API_KEY is not configured" in contents
 
 
 def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> None:

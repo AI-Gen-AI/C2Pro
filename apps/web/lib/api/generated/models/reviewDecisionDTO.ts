@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ReviewDecisionDTOAction } from './reviewDecisionDTOAction';
+import type { ReviewDecisionDTOAction } from "./reviewDecisionDTOAction";
 
 /**
  * Refers to Suite ID: TS-I13-E2E-REAL-001.

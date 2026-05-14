@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { BulkDocumentItem } from './bulkDocumentItem';
+import type { BulkDocumentItem } from "./bulkDocumentItem";
 
 /**
  * Bulk document upload request.

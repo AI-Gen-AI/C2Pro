@@ -2,10 +2,10 @@
  * Test Suite ID: S2-10
  * Roadmap Reference: S2-10 SSE processing stepper + withCredentials (FLAG-3)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { flushSync } from "react-dom";
 import { handleAuthErrorStatus } from "@/lib/api/client";
-import { getStreamProjectProcessingUrl } from "@/lib/api/generated/analysis/analysis";
+import { getStreamProjectProcessingUrl } from "@/lib/api/analysis-stream";
 import { useAuthStore } from "@/stores/auth";
 
 type StageData = {
@@ -30,6 +30,8 @@ type StepperState = {
   statusText: string;
   completeData?: CompleteData;
 };
+
+const processingEventSourceInit: EventSourceInit = { withCredentials: true };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -72,7 +74,7 @@ export function isProcessingSseEvent(
 
 export function createProcessingEventSource(
   projectId: string,
-  init: EventSourceInit = { withCredentials: true },
+  init: EventSourceInit = processingEventSourceInit,
 ): EventSource {
   if (init.withCredentials !== true) {
     throw new Error("withCredentials must be true for processing SSE");
@@ -102,6 +104,61 @@ export function createProcessingEventSource(
 
 const eventSourcesByProject = new Map<string, EventSource>();
 
+function updateStageState(current: StepperState, stage: StageData): StepperState {
+  return {
+    ...current,
+    stages: [...current.stages, stage],
+    progress: stage.progress,
+    statusText: `Processing stage: ${stage.name}`,
+  };
+}
+
+function updateCompleteState(
+  current: StepperState,
+  completeData: CompleteData,
+): StepperState {
+  return {
+    ...current,
+    progress: 100,
+    statusText: "Processing complete",
+    completeData,
+  };
+}
+
+function updateErrorState(current: StepperState, hasToken: boolean): StepperState {
+  return {
+    ...current,
+    statusText: hasToken ? "Processing stream interrupted" : "Session expired",
+  };
+}
+
+function applyStageState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  stage: StageData,
+) {
+  flushSync(() => {
+    setState((current) => updateStageState(current, stage));
+  });
+}
+
+function applyCompleteState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  completeData: CompleteData,
+) {
+  flushSync(() => {
+    setState((current) => updateCompleteState(current, completeData));
+  });
+}
+
+function applyErrorState(
+  setState: Dispatch<SetStateAction<StepperState>>,
+  hasToken: boolean,
+) {
+  flushSync(() => {
+    setState((current) => updateErrorState(current, hasToken));
+  });
+}
+
 export function resetProcessingEventSourcesForTests() {
   for (const source of eventSourcesByProject.values()) {
     source.close();
@@ -126,14 +183,7 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       };
       if (!isProcessingSseEvent(parsed)) return;
 
-      flushSync(() => {
-        setState((current) => ({
-          ...current,
-          stages: [...current.stages, parsed.data],
-          progress: parsed.data.progress,
-          statusText: `Processing stage: ${parsed.data.name}`,
-        }));
-      });
+      applyStageState(setState, parsed.data);
     };
 
     const onComplete = (event: MessageEvent<string>) => {
@@ -143,27 +193,13 @@ export function ProcessingStepper({ projectId }: { projectId: string }) {
       };
       if (!isProcessingSseEvent(parsed)) return;
 
-      flushSync(() => {
-        setState((current) => ({
-          ...current,
-          progress: 100,
-          statusText: "Processing complete",
-          completeData: parsed.data,
-        }));
-      });
+      applyCompleteState(setState, parsed.data);
       source.close();
     };
 
     const onError = () => {
       const hasToken = !!useAuthStore.getState().token;
-      flushSync(() => {
-        setState((current) => ({
-          ...current,
-          statusText: hasToken
-            ? "Processing stream interrupted"
-            : "Session expired",
-        }));
-      });
+      applyErrorState(setState, hasToken);
 
       if (!hasToken) {
         handleAuthErrorStatus(401);

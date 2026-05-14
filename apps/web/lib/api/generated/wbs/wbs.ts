@@ -37,10 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -53,8 +50,8 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
   CreateWBSItemInput,
@@ -63,13 +60,10 @@ import type {
   MoveWBSItemInput,
   UpdateWBSItemInput,
   WBSItemOutput,
-  WBSOutput
-} from '../models';
+  WBSOutput,
+} from "../models";
 
-import { orvalApiClient } from '../../client';
-
-
-
+import { orvalApiClient } from "../../client";
 
 /**
  * Get WBS items for a project.
@@ -78,91 +72,168 @@ Returns all WBS items with their hierarchy and coverage information.
  * @summary Get Wbs
  */
 export const getWbsApiV1ProjectsProjectIdWbsGet = (
-    projectId: string,
- signal?: AbortSignal
+  projectId: string,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<WBSOutput>(
-      {url: `/api/v1/projects/${projectId}/wbs`, method: 'GET', signal
-    },
-      );
-    }
-  
+  return orvalApiClient<WBSOutput>({
+    url: `/api/v1/projects/${projectId}/wbs`,
+    method: "GET",
+    signal,
+  });
+};
 
-
-
-export const getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey = (projectId: string,) => {
-    return [
-    `/api/v1/projects/${projectId}/wbs`
-    ] as const;
-    }
-
-    
-export const getGetWbsApiV1ProjectsProjectIdWbsGetQueryOptions = <TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError = HTTPValidationError>(projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData>>, }
+export const getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey = (
+  projectId: string,
 ) => {
+  return [`/api/v1/projects/${projectId}/wbs`] as const;
+};
 
-const {query: queryOptions} = options ?? {};
+export const getGetWbsApiV1ProjectsProjectIdWbsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey(projectId);
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetWbsApiV1ProjectsProjectIdWbsGetQueryKey(projectId);
 
-  
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>
+  > = ({ signal }) => getWbsApiV1ProjectsProjectIdWbsGet(projectId, signal);
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>> = ({ signal }) => getWbsApiV1ProjectsProjectIdWbsGet(projectId, signal);
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-      
+export type GetWbsApiV1ProjectsProjectIdWbsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>
+>;
+export type GetWbsApiV1ProjectsProjectIdWbsGetQueryError = HTTPValidationError;
 
-      
-
-   return  { queryKey, queryFn, enabled: !!(projectId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetWbsApiV1ProjectsProjectIdWbsGetQueryResult = NonNullable<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>>
-export type GetWbsApiV1ProjectsProjectIdWbsGetQueryError = HTTPValidationError
-
-
-export function useGetWbsApiV1ProjectsProjectIdWbsGet<TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError = HTTPValidationError>(
- projectId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData>> & Pick<
+export function useGetWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
           TError,
           Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetWbsApiV1ProjectsProjectIdWbsGet<TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError = HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
           TError,
           Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetWbsApiV1ProjectsProjectIdWbsGet<TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError = HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get Wbs
  */
 
-export function useGetWbsApiV1ProjectsProjectIdWbsGet<TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError = HTTPValidationError>(
- projectId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetWbsApiV1ProjectsProjectIdWbsGet<
+  TData = Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getWbsApiV1ProjectsProjectIdWbsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetWbsApiV1ProjectsProjectIdWbsGetQueryOptions(
+    projectId,
+    options,
+  );
 
-  const queryOptions = getGetWbsApiV1ProjectsProjectIdWbsGetQueryOptions(projectId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * Create a new WBS item.
@@ -171,298 +242,571 @@ Auto-generates code if not provided.
  * @summary Create Wbs Item
  */
 export const createWbsItemApiV1ProjectsProjectIdWbsItemsPost = (
-    projectId: string,
-    createWBSItemInput: CreateWBSItemInput,
- signal?: AbortSignal
+  projectId: string,
+  createWBSItemInput: CreateWBSItemInput,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<WBSItemOutput>(
-      {url: `/api/v1/projects/${projectId}/wbs/items`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: createWBSItemInput, signal
-    },
-      );
-    }
-  
+  return orvalApiClient<WBSItemOutput>({
+    url: `/api/v1/projects/${projectId}/wbs/items`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: createWBSItemInput,
+    signal,
+  });
+};
 
+export const getCreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>
+      >,
+      TError,
+      { projectId: string; data: CreateWBSItemInput },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>,
+    TError,
+    { projectId: string; data: CreateWBSItemInput },
+    TContext
+  > => {
+    const mutationKey = ["createWbsItemApiV1ProjectsProjectIdWbsItemsPost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-export const getCreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>, TError,{projectId: string;data: CreateWBSItemInput}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>, TError,{projectId: string;data: CreateWBSItemInput}, TContext> => {
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>
+      >,
+      { projectId: string; data: CreateWBSItemInput }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
 
-const mutationKey = ['createWbsItemApiV1ProjectsProjectIdWbsItemsPost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      return createWbsItemApiV1ProjectsProjectIdWbsItemsPost(projectId, data);
+    };
 
-      
+    return { mutationFn, ...mutationOptions };
+  };
 
+export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>
+  >;
+export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationBody =
+  CreateWBSItemInput;
+export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationError =
+  HTTPValidationError;
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>, {projectId: string;data: CreateWBSItemInput}> = (props) => {
-          const {projectId,data} = props ?? {};
-
-          return  createWbsItemApiV1ProjectsProjectIdWbsItemsPost(projectId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>>
-    export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationBody = CreateWBSItemInput
-    export type CreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Create Wbs Item
  */
-export const useCreateWbsItemApiV1ProjectsProjectIdWbsItemsPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>, TError,{projectId: string;data: CreateWBSItemInput}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>,
-        TError,
-        {projectId: string;data: CreateWBSItemInput},
-        TContext
-      > => {
-      return useMutation(getCreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationOptions(options), queryClient);
-    }
-    /**
+export const useCreateWbsItemApiV1ProjectsProjectIdWbsItemsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>
+      >,
+      TError,
+      { projectId: string; data: CreateWBSItemInput },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createWbsItemApiV1ProjectsProjectIdWbsItemsPost>>,
+  TError,
+  { projectId: string; data: CreateWBSItemInput },
+  TContext
+> => {
+  return useMutation(
+    getCreateWbsItemApiV1ProjectsProjectIdWbsItemsPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Update a WBS item.
 
 Partial update - only provided fields are updated.
  * @summary Update Wbs Item
  */
 export const updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch = (
-    projectId: string,
-    itemId: string,
-    updateWBSItemInput: UpdateWBSItemInput,
- signal?: AbortSignal
+  projectId: string,
+  itemId: string,
+  updateWBSItemInput: UpdateWBSItemInput,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<WBSItemOutput>(
-      {url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', },
-      data: updateWBSItemInput, signal
-    },
+  return orvalApiClient<WBSItemOutput>({
+    url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    data: updateWBSItemInput,
+    signal,
+  });
+};
+
+export const getUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch
+        >
+      >,
+      TError,
+      { projectId: string; itemId: string; data: UpdateWBSItemInput },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>
+    >,
+    TError,
+    { projectId: string; itemId: string; data: UpdateWBSItemInput },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch
+        >
+      >,
+      { projectId: string; itemId: string; data: UpdateWBSItemInput }
+    > = (props) => {
+      const { projectId, itemId, data } = props ?? {};
+
+      return updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch(
+        projectId,
+        itemId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>, TError,{projectId: string;itemId: string;data: UpdateWBSItemInput}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>, TError,{projectId: string;itemId: string;data: UpdateWBSItemInput}, TContext> => {
+export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>
+    >
+  >;
+export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationBody =
+  UpdateWBSItemInput;
+export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationError =
+  HTTPValidationError;
 
-const mutationKey = ['updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>, {projectId: string;itemId: string;data: UpdateWBSItemInput}> = (props) => {
-          const {projectId,itemId,data} = props ?? {};
-
-          return  updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch(projectId,itemId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>>
-    export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationBody = UpdateWBSItemInput
-    export type UpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Update Wbs Item
  */
-export const useUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>, TError,{projectId: string;itemId: string;data: UpdateWBSItemInput}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>>,
-        TError,
-        {projectId: string;itemId: string;data: UpdateWBSItemInput},
-        TContext
-      > => {
-      return useMutation(getUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationOptions(options), queryClient);
-    }
-    /**
+export const useUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch
+        >
+      >,
+      TError,
+      { projectId: string; itemId: string; data: UpdateWBSItemInput },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatch>
+  >,
+  TError,
+  { projectId: string; itemId: string; data: UpdateWBSItemInput },
+  TContext
+> => {
+  return useMutation(
+    getUpdateWbsItemApiV1ProjectsProjectIdWbsItemsItemIdPatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * Delete a WBS item.
 
 Requires cascade=True if the item has children.
  * @summary Delete Wbs Item
  */
 export const deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete = (
-    projectId: string,
-    itemId: string,
-    params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams,
- signal?: AbortSignal
+  projectId: string,
+  itemId: string,
+  params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<void>(
-      {url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`, method: 'DELETE',
-        params, signal
+  return orvalApiClient<void>({
+    url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`,
+    method: "DELETE",
+    params,
+    signal,
+  });
+};
+
+export const getDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete
+        >
+      >,
+      TError,
+      {
+        projectId: string;
+        itemId: string;
+        params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>
+    >,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams;
     },
+    TContext
+  > => {
+    const mutationKey = [
+      "deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete
+        >
+      >,
+      {
+        projectId: string;
+        itemId: string;
+        params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams;
+      }
+    > = (props) => {
+      const { projectId, itemId, params } = props ?? {};
+
+      return deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete(
+        projectId,
+        itemId,
+        params,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>, TError,{projectId: string;itemId: string;params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>, TError,{projectId: string;itemId: string;params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams}, TContext> => {
+export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>
+    >
+  >;
 
-const mutationKey = ['deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationError =
+  HTTPValidationError;
 
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>, {projectId: string;itemId: string;params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams}> = (props) => {
-          const {projectId,itemId,params} = props ?? {};
-
-          return  deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete(projectId,itemId,params,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>>
-    
-    export type DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Delete Wbs Item
  */
-export const useDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>, TError,{projectId: string;itemId: string;params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>>,
-        TError,
-        {projectId: string;itemId: string;params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams},
-        TContext
-      > => {
-      return useMutation(getDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationOptions(options), queryClient);
-    }
-    /**
+export const useDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete
+        >
+      >,
+      TError,
+      {
+        projectId: string;
+        itemId: string;
+        params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams;
+      },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDelete>
+  >,
+  TError,
+  {
+    projectId: string;
+    itemId: string;
+    params?: DeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteParams;
+  },
+  TContext
+> => {
+  return useMutation(
+    getDeleteWbsItemApiV1ProjectsProjectIdWbsItemsItemIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * Get a single WBS item by ID.
  * @summary Get Wbs Item
  */
 export const getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet = (
+  projectId: string,
+  itemId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<WBSItemOutput>({
+    url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryKey = (
+  projectId: string,
+  itemId: string,
+) => {
+  return [`/api/v1/projects/${projectId}/wbs/items/${itemId}`] as const;
+};
+
+export const getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+    >,
+    TError = HTTPValidationError,
+  >(
     projectId: string,
     itemId: string,
- signal?: AbortSignal
-) => {
-      
-      
-      return orvalApiClient<WBSItemOutput>(
-      {url: `/api/v1/projects/${projectId}/wbs/items/${itemId}`, method: 'GET', signal
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+          >,
+          TError,
+          TData
+        >
+      >;
     },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryKey(
+        projectId,
+        itemId,
       );
-    }
-  
 
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+      >
+    > = ({ signal }) =>
+      getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet(
+        projectId,
+        itemId,
+        signal,
+      );
 
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(projectId && itemId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
 
-export const getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryKey = (projectId: string,
-    itemId: string,) => {
-    return [
-    `/api/v1/projects/${projectId}/wbs/items/${itemId}`
-    ] as const;
-    }
+export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+    >
+  >;
+export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryError =
+  HTTPValidationError;
 
-    
-export const getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError = HTTPValidationError>(projectId: string,
-    itemId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryKey(projectId,itemId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>> = ({ signal }) => getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet(projectId,itemId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(projectId && itemId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>>
-export type GetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryError = HTTPValidationError
-
-
-export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<TData = Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError = HTTPValidationError>(
- projectId: string,
-    itemId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData>> & Pick<
+export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
+  TData = Awaited<
+    ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  itemId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>,
+          Awaited<
+            ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<TData = Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError = HTTPValidationError>(
- projectId: string,
-    itemId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
+  TData = Awaited<
+    ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>,
+          Awaited<
+            ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<TData = Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError = HTTPValidationError>(
- projectId: string,
-    itemId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
+  TData = Awaited<
+    ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get Wbs Item
  */
 
-export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<TData = Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError = HTTPValidationError>(
- projectId: string,
-    itemId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet<
+  TData = Awaited<
+    ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryOptions(
+      projectId,
+      itemId,
+      options,
+    );
 
-  const queryOptions = getGetWbsItemApiV1ProjectsProjectIdWbsItemsItemIdGetQueryOptions(projectId,itemId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-
-
 
 /**
  * Move a WBS item to a new parent.
@@ -471,65 +815,114 @@ Validates against circular references and maximum depth.
  * @summary Move Wbs Item
  */
 export const moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost = (
-    projectId: string,
-    itemId: string,
-    moveWBSItemInput: MoveWBSItemInput,
- signal?: AbortSignal
+  projectId: string,
+  itemId: string,
+  moveWBSItemInput: MoveWBSItemInput,
+  signal?: AbortSignal,
 ) => {
-      
-      
-      return orvalApiClient<WBSItemOutput>(
-      {url: `/api/v1/projects/${projectId}/wbs/items/${itemId}/move`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: moveWBSItemInput, signal
-    },
+  return orvalApiClient<WBSItemOutput>({
+    url: `/api/v1/projects/${projectId}/wbs/items/${itemId}/move`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: moveWBSItemInput,
+    signal,
+  });
+};
+
+export const getMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost
+        >
+      >,
+      TError,
+      { projectId: string; itemId: string; data: MoveWBSItemInput },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>
+    >,
+    TError,
+    { projectId: string; itemId: string; data: MoveWBSItemInput },
+    TContext
+  > => {
+    const mutationKey = [
+      "moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost
+        >
+      >,
+      { projectId: string; itemId: string; data: MoveWBSItemInput }
+    > = (props) => {
+      const { projectId, itemId, data } = props ?? {};
+
+      return moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost(
+        projectId,
+        itemId,
+        data,
       );
-    }
-  
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-export const getMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>, TError,{projectId: string;itemId: string;data: MoveWBSItemInput}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>, TError,{projectId: string;itemId: string;data: MoveWBSItemInput}, TContext> => {
+export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>
+    >
+  >;
+export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationBody =
+  MoveWBSItemInput;
+export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationError =
+  HTTPValidationError;
 
-const mutationKey = ['moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>, {projectId: string;itemId: string;data: MoveWBSItemInput}> = (props) => {
-          const {projectId,itemId,data} = props ?? {};
-
-          return  moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost(projectId,itemId,data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationResult = NonNullable<Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>>
-    export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationBody = MoveWBSItemInput
-    export type MoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Move Wbs Item
  */
-export const useMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>, TError,{projectId: string;itemId: string;data: MoveWBSItemInput}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>>,
-        TError,
-        {projectId: string;itemId: string;data: MoveWBSItemInput},
-        TContext
-      > => {
-      return useMutation(getMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationOptions(options), queryClient);
-    }
-    
+export const useMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost
+        >
+      >,
+      TError,
+      { projectId: string; itemId: string; data: MoveWBSItemInput },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof moveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePost>
+  >,
+  TError,
+  { projectId: string; itemId: string; data: MoveWBSItemInput },
+  TContext
+> => {
+  return useMutation(
+    getMoveWbsItemApiV1ProjectsProjectIdWbsItemsItemIdMovePostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};

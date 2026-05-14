@@ -39,7 +39,7 @@
  */
 
 export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams = {
-status?: string | null;
-category?: string | null;
-severity?: string | null;
+  status?: string | null;
+  category?: string | null;
+  severity?: string | null;
 };

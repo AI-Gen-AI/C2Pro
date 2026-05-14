@@ -37,8 +37,8 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentStatus } from './documentStatus';
-import type { DocumentType } from './documentType';
+import type { DocumentStatus } from "./documentStatus";
+import type { DocumentType } from "./documentType";
 
 /**
  * Response for async document upload.

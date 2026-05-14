@@ -38,14 +38,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CreateAlertRequestCategory = typeof CreateAlertRequestCategory[keyof typeof CreateAlertRequestCategory];
-
+export type CreateAlertRequestCategory =
+  (typeof CreateAlertRequestCategory)[keyof typeof CreateAlertRequestCategory];
 
 export const CreateAlertRequestCategory = {
-  SCOPE: 'SCOPE',
-  BUDGET: 'BUDGET',
-  QUALITY: 'QUALITY',
-  TECHNICAL: 'TECHNICAL',
-  LEGAL: 'LEGAL',
-  TIME: 'TIME',
+  SCOPE: "SCOPE",
+  BUDGET: "BUDGET",
+  QUALITY: "QUALITY",
+  TECHNICAL: "TECHNICAL",
+  LEGAL: "LEGAL",
+  TIME: "TIME",
 } as const;

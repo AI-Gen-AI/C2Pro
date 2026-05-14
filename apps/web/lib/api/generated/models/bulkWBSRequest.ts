@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { BulkWBSItem } from './bulkWBSItem';
+import type { BulkWBSItem } from "./bulkWBSItem";
 
 /**
  * Bulk WBS creation request.

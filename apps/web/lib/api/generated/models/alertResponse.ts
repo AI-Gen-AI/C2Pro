@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { AlertResponseAffectedEntities } from './alertResponseAffectedEntities';
+import type { AlertResponseAffectedEntities } from "./alertResponseAffectedEntities";
 
 /**
  * Alert response model.

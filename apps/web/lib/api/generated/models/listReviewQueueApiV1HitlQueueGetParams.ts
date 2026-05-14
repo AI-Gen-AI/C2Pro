@@ -37,17 +37,17 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ReviewStatus } from './reviewStatus';
+import type { ReviewStatus } from "./reviewStatus";
 
 export type ListReviewQueueApiV1HitlQueueGetParams = {
-status?: ReviewStatus | null;
-/**
- * @minimum 0
- */
-skip?: number;
-/**
- * @minimum 1
- * @maximum 200
- */
-limit?: number;
+  status?: ReviewStatus | null;
+  /**
+   * @minimum 0
+   */
+  skip?: number;
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
 };

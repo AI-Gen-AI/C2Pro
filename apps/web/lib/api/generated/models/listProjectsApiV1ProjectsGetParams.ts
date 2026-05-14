@@ -39,8 +39,8 @@
  */
 
 export type ListProjectsApiV1ProjectsGetParams = {
-page?: number;
-page_size?: number;
-status?: string | null;
-search?: string | null;
+  page?: number;
+  page_size?: number;
+  status?: string | null;
+  search?: string | null;
 };

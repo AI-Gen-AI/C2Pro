@@ -38,4 +38,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ListAllowedViewsApiV1McpViewsGet200 = {[key: string]: string[]};
+export type ListAllowedViewsApiV1McpViewsGet200 = { [key: string]: string[] };

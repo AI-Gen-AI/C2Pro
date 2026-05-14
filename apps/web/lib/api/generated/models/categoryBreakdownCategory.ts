@@ -41,15 +41,15 @@
 /**
  * The alert category.
  */
-export type CategoryBreakdownCategory = typeof CategoryBreakdownCategory[keyof typeof CategoryBreakdownCategory];
-
+export type CategoryBreakdownCategory =
+  (typeof CategoryBreakdownCategory)[keyof typeof CategoryBreakdownCategory];
 
 export const CategoryBreakdownCategory = {
-  legal: 'legal',
-  financial: 'financial',
-  technical: 'technical',
-  schedule: 'schedule',
-  scope: 'scope',
-  quality: 'quality',
-  general: 'general',
+  legal: "legal",
+  financial: "financial",
+  technical: "technical",
+  schedule: "schedule",
+  scope: "scope",
+  quality: "quality",
+  general: "general",
 } as const;

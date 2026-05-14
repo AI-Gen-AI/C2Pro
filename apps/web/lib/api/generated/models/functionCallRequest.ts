@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { FunctionCallRequestParams } from './functionCallRequestParams';
+import type { FunctionCallRequestParams } from "./functionCallRequestParams";
 
 /**
  * Request para llamada a función.

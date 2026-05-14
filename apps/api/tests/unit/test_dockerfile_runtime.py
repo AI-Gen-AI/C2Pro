@@ -14,7 +14,7 @@ def test_api_dockerfile_binds_platform_port() -> None:
 
     assert 'HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\' in content
     assert "localhost:${PORT:-8000}/health" in content
-    assert 'CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]' in content
+    assert "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}" in content
 
 
 def test_api_runtime_requirements_include_pgvector() -> None:

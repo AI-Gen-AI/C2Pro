@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentListItem } from './documentListItem';
+import type { DocumentListItem } from "./documentListItem";
 
 /**
  * Paginated list response for documents.

@@ -41,11 +41,10 @@
 /**
  * Level of interest of the stakeholder.
  */
-export type InterestLevel = typeof InterestLevel[keyof typeof InterestLevel];
-
+export type InterestLevel = (typeof InterestLevel)[keyof typeof InterestLevel];
 
 export const InterestLevel = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  low: "low",
+  medium: "medium",
+  high: "high",
 } as const;

@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { ReviewItemResponse } from './reviewItemResponse';
+import type { ReviewItemResponse } from "./reviewItemResponse";
 
 export interface ReviewQueueResponse {
   items: ReviewItemResponse[];

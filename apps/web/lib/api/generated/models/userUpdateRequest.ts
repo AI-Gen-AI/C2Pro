@@ -37,7 +37,7 @@
         
  * OpenAPI spec version: 1.0.0
  */
-import type { UserUpdateRequestPreferences } from './userUpdateRequestPreferences';
+import type { UserUpdateRequestPreferences } from "./userUpdateRequestPreferences";
 
 /**
  * Request para actualizar perfil de usuario.
