@@ -7,15 +7,15 @@
 import { useEffect, useState } from "react";
 import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
 import { DashboardClient } from "@/components/coherence/DashboardClient";
-import type { DashboardSummary } from "@/lib/api/contracts";
-import { getDashboardSummary, listProjects, type Project } from "@/lib/api/services/dashboard";
+import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
+import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function AppDashboardPage() {
   const token = useAuthStore((state) => state.token);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [summaries, setSummaries] = useState<Record<string, DashboardSummary>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
