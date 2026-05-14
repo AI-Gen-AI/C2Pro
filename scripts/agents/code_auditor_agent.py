@@ -262,6 +262,10 @@ def main() -> None:
         print("[code-auditor] Dry run: graph compiled successfully.")
         return
 
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        print("[code-auditor] Skipping review: ANTHROPIC_API_KEY is not configured.")
+        return
+
     compiled = graph.compile()
     result = compiled.invoke(AuditorState(
         repo_name=args.repo,

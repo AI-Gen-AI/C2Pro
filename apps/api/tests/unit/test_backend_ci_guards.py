@@ -132,6 +132,17 @@ def test_agent_swarm_dependencies_pin_langgraph_stack() -> None:
     assert "langchain>=0.2.0,<0.4.0" not in contents
 
 
+def test_code_auditor_skips_when_anthropic_secret_is_missing() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    agent = repo_root / "scripts" / "agents" / "code_auditor_agent.py"
+    contents = agent.read_text(encoding="utf-8")
+
+    assert 'os.environ.get("ANTHROPIC_API_KEY", "").strip()' in contents
+    assert "ANTHROPIC_API_KEY is not configured" in contents
+
+
 def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> None:
     """Test Suite ID: TASK-OPS-DOCFLOW-014."""
 
