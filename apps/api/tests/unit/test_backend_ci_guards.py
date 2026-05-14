@@ -172,6 +172,16 @@ def test_pnpm_action_setup_uses_package_manager_version() -> None:
     assert offenders == []
 
 
+def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    workflow = repo_root / ".github" / "workflows" / "wireframe-coverage.yml"
+    contents = workflow.read_text(encoding="utf-8")
+
+    assert contents.index("uses: pnpm/action-setup@v4") < contents.index("uses: actions/setup-node@v4")
+
+
 def test_gitleaks_config_is_valid_toml() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
 
