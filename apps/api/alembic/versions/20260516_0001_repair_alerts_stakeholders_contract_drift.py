@@ -48,12 +48,60 @@ def upgrade() -> None:
     op.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITHOUT TIME ZONE")
     op.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS review_comment TEXT")
 
-    op.execute("UPDATE alerts SET description = COALESCE(description, message, '')")
-    op.execute("UPDATE alerts SET recommendation = COALESCE(recommendation, suggested_action)")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'alerts' AND column_name = 'message'
+            ) THEN
+                UPDATE alerts SET description = COALESCE(description, message, '');
+            ELSE
+                UPDATE alerts SET description = COALESCE(description, '');
+            END IF;
+        END
+        $$;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'alerts' AND column_name = 'suggested_action'
+            ) THEN
+                UPDATE alerts SET recommendation = COALESCE(recommendation, suggested_action);
+            END IF;
+        END
+        $$;
+        """
+    )
     op.execute(
         "UPDATE alerts SET affected_entities = COALESCE(affected_entities, '{}'::jsonb)"
     )
-    op.execute("UPDATE alerts SET alert_metadata = COALESCE(alert_metadata, evidence_json, '{}'::jsonb)")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'alerts' AND column_name = 'evidence_json'
+            ) THEN
+                UPDATE alerts
+                SET alert_metadata = COALESCE(alert_metadata, evidence_json, '{}'::jsonb);
+            ELSE
+                UPDATE alerts
+                SET alert_metadata = COALESCE(alert_metadata, '{}'::jsonb);
+            END IF;
+        END
+        $$;
+        """
+    )
     op.execute("UPDATE alerts SET approval_status = COALESCE(approval_status, 'PENDING'::approvalstatus)")
 
     op.execute(
@@ -82,7 +130,23 @@ def upgrade() -> None:
         "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS stakeholder_metadata JSONB DEFAULT '{}'::jsonb"
     )
     op.execute(
-        "UPDATE stakeholders SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)"
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'stakeholders' AND column_name = 'metadata'
+            ) THEN
+                UPDATE stakeholders
+                SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb);
+            ELSE
+                UPDATE stakeholders
+                SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb);
+            END IF;
+        END
+        $$;
+        """
     )
     op.execute(
         "UPDATE stakeholders SET approval_status = COALESCE(approval_status, 'PENDING'::approvalstatus)"
