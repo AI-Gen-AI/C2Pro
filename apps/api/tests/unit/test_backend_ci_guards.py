@@ -173,8 +173,12 @@ def test_production_contract_drift_repair_migration_restores_alerts_and_stakehol
     assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_metadata" in contents
     assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS approval_status" in contents
     assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS stakeholder_metadata" in contents
+    assert "column_name = 'message'" in contents
     assert "UPDATE alerts SET description = COALESCE(description, message, '')" in contents
-    assert "UPDATE stakeholders SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)" in contents
+    assert "ELSE\n                UPDATE alerts SET description = COALESCE(description, '')" in contents
+    assert "column_name = 'metadata'" in contents
+    assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)" in contents
+    assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb)" in contents
 
 
 def test_pnpm_action_setup_uses_package_manager_version() -> None:
