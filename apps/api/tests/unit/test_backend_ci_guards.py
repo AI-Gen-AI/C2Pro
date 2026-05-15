@@ -153,6 +153,30 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     assert "tenacity>=9.1.2,<10.0" in contents
 
 
+def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260516_0001_repair_alerts_stakeholders_contract_drift.py"
+    )
+    contents = migration.read_text(encoding="utf-8")
+
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS category" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS description" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS affected_entities" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_metadata" in contents
+    assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS approval_status" in contents
+    assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS stakeholder_metadata" in contents
+    assert "UPDATE alerts SET description = COALESCE(description, message, '')" in contents
+    assert "UPDATE stakeholders SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)" in contents
+
+
 def test_pnpm_action_setup_uses_package_manager_version() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
 

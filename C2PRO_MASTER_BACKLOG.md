@@ -13,10 +13,10 @@
 | Category | File | Owner | Total | Active | Completed |
 | -------- | ---- | ----- | ----- | ------ | --------- |
 | AI/ML Intelligence | [backlogs/AI_AI_ML_INTELLIGENCE.md](backlogs/AI_AI_ML_INTELLIGENCE.md) | ai | 78 | 43 | 35 |
-| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 49 | 5 | 44 |
+| Backend | [backlogs/BCK_BACKEND.md](backlogs/BCK_BACKEND.md) | backend | 50 | 6 | 44 |
 | DevOps | [backlogs/DEV_DEVOPS.md](backlogs/DEV_DEVOPS.md) | devops | 2 | 0 | 2 |
 | Documentation | [backlogs/DOC_DOCUMENTATION.md](backlogs/DOC_DOCUMENTATION.md) | shared | 0 | 0 | 0 |
-| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 169 | 16 | 153 |
+| Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 170 | 16 | 154 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 12 | 2 | 10 |
@@ -92,6 +92,7 @@
 
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
+| P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error references with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Live schema drift was repaired on 2026-05-16 via `20260516_0001`; log correlation remains blocked on unavailable production log access. |
 
 ### Frontend (2 pending)
 
@@ -139,6 +140,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 |[x]|P1|`TASK-OPS-DOCFLOW-016`|`TASK-OPS-DOCFLOW-014`|Fix stale full-suite legacy contract imports for relocated alert and procurement router APIs, including `src.alerts.router` and `get_bom_repository` import paths. `[x] Implemented (Legacy Contract Imports Migrated)`|`TASK-OPS-DOCFLOW-014 local verification`|
 |[ ]|P1|`TASK-OPS-DOCFLOW-017`|`TASK-OPS-DOCFLOW-016`|Fix full-suite Schemathesis no-match contract: update `tests/contract/schemathesis/test_observability_admin_router.py` frontend-support selection so every parametrized contract maps to current OpenAPI operations.|`TASK-OPS-DOCFLOW-016 local verification`|
 |[ ]|P1|`TASK-OPS-DOCFLOW-018`|`TASK-OPS-DOCFLOW-017`|Fix DB-backed alert API contract execution drift: align `tests/core/test_alerts_router_contract.py` fixtures/routes with current active alerts router and required `alerts.tenant_id` persistence contract.|`TASK-OPS-DOCFLOW-016 local verification`|
+|[x]|P1|`TASK-FRT-171`|None|Keep project overview usable when the alerts subrequest fails after production schema drift. `[x] Implemented (Partial Failure Resilience)`|Production report 2026-05-15|
 
 ### Coherence v1 (EPIC-COH-V1-CONSOLIDATION)
 
