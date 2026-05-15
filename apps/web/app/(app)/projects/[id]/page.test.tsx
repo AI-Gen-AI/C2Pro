@@ -64,6 +64,30 @@ describe("ProjectOverviewPage", () => {
     expect(screen.getByText(/boom/i)).toBeInTheDocument();
   });
 
+  it("keeps the project overview usable when only the alerts request fails", () => {
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 87,
+        sub_scores: { BUDGET: 37 },
+        alert_count: 5,
+        document_count: 12,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error("alerts unavailable"),
+    });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    expect(screen.getAllByText("Coherence Score")).toHaveLength(2);
+    expect(screen.getByText("Open Alerts")).toBeInTheDocument();
+    expect(screen.getByText(/recent alerts unavailable/i)).toBeInTheDocument();
+  });
+
   it("renders coherence, alert, document, and budget summary cards from generated queries", () => {
     getDashboardMock.mockReturnValue({
       data: {

@@ -1411,6 +1411,62 @@
         "validacion_lint": true,
         "nota_verificacion": "RED failed on missing src.alerts.router and removed get_bom_repository import from the procurement HTTP router. GREEN collect-only passed for affected stale-import files. Targeted non-DB execution passed 14 tests. Full-suite collect-only now stops later on TASK-OPS-DOCFLOW-017: Schemathesis test_frontend_support_contract has no matching API operation."
       }
+    },
+    {
+      "tarea_id": "T092",
+      "backlog_id": "TASK-FRT-171",
+      "tipo": "frontend",
+      "descripcion": "Keep project overview usable when only the alerts subrequest fails after production schema drift.",
+      "asignado_a": "codex",
+      "estado": "completado",
+      "criterio_done": "Project overview still renders when alerts fail but dashboard data is present.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/projects/[id]/page.tsx",
+        "apps/web/app/(app)/projects/[id]/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-15T16:38:00Z",
+        "completado": "2026-05-15T16:38:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Degraded project overview alerts to a local warning instead of a full-page failure.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "RED failed on full-page alerts failure. GREEN passed targeted Vitest for the project overview route. Mobile navigation was later superseded by the sidebar-based fix merged to main."
+      }
+    },
+    {
+      "tarea_id": "T093",
+      "backlog_id": "TASK-BCK-051",
+      "tipo": "backend",
+      "descripcion": "Investigate live 500s on project alerts and project stakeholders by correlating production references with logs and verifying applied migration/schema parity.",
+      "asignado_a": "backend",
+      "estado": "en_progreso",
+      "criterio_done": "Production references map to a confirmed root cause and the live schema/log state is verified against current Alembic head.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-15T16:39:00Z"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Live schema drift was confirmed and repaired with migration 20260516_0001; production log correlation for the supplied reference IDs remains blocked because no Railway/Sentry log connector or credentials are available in this session.",
+        "cambios_realizados": [
+          "Verified production Alembic head was 20260510_0001 before repair despite contract drift.",
+          "Confirmed alerts and stakeholders were missing current ORM-required columns.",
+          "Applied idempotent production repair migration and verified live head advanced to 20260516_0001."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "bloqueador": "No production log access available to correlate the supplied reference IDs with the exact exception class."
+      }
     }
   ],
   "backlog_sync": {
@@ -1505,6 +1561,8 @@
       "TASK-OPS-DOCFLOW-016",
       "TASK-OPS-DOCFLOW-017",
       "TASK-OPS-DOCFLOW-018"
+      ,"TASK-FRT-171"
+      ,"TASK-BCK-051"
     ]
   },
   "plan_actual": {
