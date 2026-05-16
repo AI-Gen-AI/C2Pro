@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-13T21:05:00Z",
+  "updated_at": "2026-05-16T18:57:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1467,6 +1467,93 @@
         "validacion_lint": false,
         "bloqueador": "No production log access available to correlate the supplied reference IDs with the exact exception class."
       }
+    },
+    {
+      "tarea_id": "T099",
+      "backlog_id": "TASK-FRT-172",
+      "tipo": "frontend",
+      "descripcion": "Add a visible return path from the dashboard portfolio overview to the Projects list.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The portfolio overview exposes a visible link back to /projects and targeted frontend regression coverage passes.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/dashboard/page.tsx",
+        "apps/web/app/(app)/dashboard/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:30:00Z",
+        "completado": "2026-05-16T18:34:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Dashboard portfolio overview now exposes a visible Back to Projects link to /projects.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage in dashboard/page.test.tsx. Local targeted Vitest execution could not run because this checkout does not currently expose the vitest binary through pnpm."
+      }
+    },
+    {
+      "tarea_id": "T100",
+      "backlog_id": "TASK-FRT-173",
+      "tipo": "frontend",
+      "descripcion": "Clarify document-upload failure states so users can tell the file was not queued and know what to do next.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Upload 500 failures render plain-language feedback with a next step, and targeted frontend regression coverage passes.",
+      "archivos_modificados": [
+        "apps/web/components/features/documents/DocumentUploadDropzone.tsx",
+        "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:40:00Z",
+        "completado": "2026-05-16T18:44:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Upload failures now explain that the file was not queued yet and give the user a concrete next step.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage in DocumentUploadDropzone.test.tsx. Local targeted Vitest execution remains blocked because this checkout does not currently expose the vitest binary through pnpm."
+      }
+    },
+    {
+      "tarea_id": "T101",
+      "backlog_id": "TASK-FRT-174",
+      "tipo": "frontend",
+      "descripcion": "Standardize dialogs, alert dialogs, and sheets on one high-contrast elevated surface system.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Shared sub-window primitives use the same elevated surface treatment, and the upload dialog inherits a readable high-contrast shell.",
+      "archivos_modificados": [
+        "apps/web/components/ui/dialog.tsx",
+        "apps/web/components/ui/dialog.test.tsx",
+        "apps/web/components/ui/alert-dialog.tsx",
+        "apps/web/components/ui/alert-dialog.test.tsx",
+        "apps/web/components/ui/sheet.tsx",
+        "apps/web/components/ui/sheet.test.tsx",
+        "apps/web/app/(app)/projects/[id]/documents/page.tsx",
+        "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:51:00Z",
+        "completado": "2026-05-16T18:57:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Dialogs, alert dialogs, and sheets now share a solid elevated card surface; the upload dialog now uses that same higher-contrast shell.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage for shared surface classes across dialog primitives and the upload dialog. Local targeted Vitest execution remains blocked because this checkout does not currently expose the vitest binary through pnpm."
+      }
     }
   ],
   "backlog_sync": {
@@ -1562,7 +1649,10 @@
       "TASK-OPS-DOCFLOW-017",
       "TASK-OPS-DOCFLOW-018"
       ,"TASK-FRT-171"
-      ,"TASK-BCK-051"
+      ,"TASK-BCK-051",
+      "TASK-FRT-172",
+      "TASK-FRT-173",
+      "TASK-FRT-174"
     ]
   },
   "plan_actual": {

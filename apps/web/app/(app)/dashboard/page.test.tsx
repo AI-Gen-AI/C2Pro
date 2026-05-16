@@ -31,7 +31,7 @@ describe("AppDashboardPage", () => {
     vi.clearAllMocks();
   });
 
-  it("loads the canonical dashboard route through the shared dashboard service", async () => {
+  it("shows a route back to the projects list from the portfolio overview", async () => {
     useAuthStoreMock.mockImplementation(
       (selector: (state: { token: string | null }) => unknown) =>
         selector({ token: "token-123" }),
@@ -55,6 +55,8 @@ describe("AppDashboardPage", () => {
       expect(getSummaryMock).toHaveBeenCalledWith("project-1");
     });
 
-    expect(screen.getByText(/dashboard for alpha project/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /back to projects/i }),
+    ).toHaveAttribute("href", "/projects");
   });
 });

@@ -287,7 +287,8 @@ describe("ProjectDocumentsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /upload document/i }));
     const uploadDialog = screen.getByRole("dialog", { name: /upload documents/i });
-    expect(uploadDialog).toHaveClass("bg-background/95");
+    expect(uploadDialog).toHaveClass("bg-card");
+    expect(uploadDialog).toHaveClass("text-card-foreground");
     expect(uploadDialog).toHaveClass("shadow-2xl");
     expect(screen.getByTestId("documents-upload-dialog-shell")).toHaveClass("gap-5");
     expect(screen.getByText(/supported formats/i)).toBeInTheDocument();

@@ -32,7 +32,9 @@ describe("AlertDialog", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /delete/i }));
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toHaveClass("bg-card");
+    expect(screen.getByRole("alertdialog")).toHaveClass("text-card-foreground");
+    expect(screen.getByRole("alertdialog")).toHaveClass("shadow-2xl");
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm/i })).toBeInTheDocument();
   });
