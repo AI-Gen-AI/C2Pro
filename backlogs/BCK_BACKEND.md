@@ -13,7 +13,7 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 4
+**Pending Tasks**: 5
 
 **Completed Tasks**: 49
 
@@ -29,8 +29,9 @@
 | ------ | -------- | ------- | ---------- | ----------- | ------ |
 | [ ] | P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error reference IDs with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Railway logs at `2026-05-16T18:20:52Z` now confirm project-alert reads fail with `UndefinedColumnError: column alerts.related_clause_ids does not exist`, proving `20260516_0001` did not fully restore live alerts parity. | Production report 2026-05-15 |
 | [ ] | P1 | `TASK-BCK-052` | `TASK-BCK-051` | Verify backend production error capture into Sentry after the live-500 incident: prove that an unhandled backend exception reaches the `c2pro` Sentry project with expected environment/release tags, or document and repair the observability gap. | `TASK-BCK-051 live triage 2026-05-16` |
-| [ ] | P0 | `TASK-BCK-053` | None | Investigate live `500` on project document upload observed at `2026-05-16T18:06:14Z` with reference ID `ae928e97-224f-4b17-8f2c-f315823281a9`; determine whether it shares the same production failure mode as the alerts 500s or is a separate incident. | `Browser error capture 2026-05-16` |
+| [ ] | P0 | `TASK-BCK-053` | None | Investigate live `500` on project document upload observed at `2026-05-16T18:06:14Z` with reference ID `ae928e97-224f-4b17-8f2c-f315823281a9`; Railway logs at `2026-05-16T21:35:46Z` now confirm a separate enum drift incident: production `documents.document_type` expects `documenttype` while the ORM binds `document_type`. | `Browser error capture + Railway logs 2026-05-16` |
 | [ ] | P0 | `TASK-BCK-054` | `TASK-BCK-051` | Complete the alerts production-drift repair with a new forward revision `20260516_0002` that adds the missing `alerts.related_clause_ids` column, then redeploy/apply the live schema fix before retesting the project alerts route. | `TASK-BCK-051 Railway logs 2026-05-16` |
+| [ ] | P0 | `TASK-BCK-055` | `TASK-BCK-053` | Repair document upload enum drift with a forward migration that normalizes live `documents.document_type` from legacy PostgreSQL enum `documenttype` to canonical `document_type`, then redeploy/retest the upload route. | `TASK-BCK-053 Railway logs 2026-05-16` |
 
 ---
 
@@ -90,3 +91,4 @@
 | `TASK-BCK-052` | Production Sentry backend capture verification         | Pending       |
 | `TASK-BCK-053` | Production document upload 500 triage                  | Pending       |
 | `TASK-BCK-054` | Complete alerts production drift repair                | Pending       |
+| `TASK-BCK-055` | Repair document upload enum drift                     | Pending       |
