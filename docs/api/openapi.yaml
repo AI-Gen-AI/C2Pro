@@ -5338,7 +5338,7 @@ components:
       - budget
       - drawing
       - specification
-      - specification
+      - technical_spec
       - other
       title: DocumentType
       description: Supported document types.
