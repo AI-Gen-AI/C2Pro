@@ -97,5 +97,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
 
-# Run migrations then start application
-CMD ["sh", "-c", "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run migrations, start Celery worker + API server in same container.
+# start.sh: (1) alembic upgrade head, (2) celery worker in bg, (3) exec uvicorn
+CMD ["bash", "start.sh"]
