@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.admin.application.dtos.dlq import (
     DLQEntryResponse,
@@ -32,6 +33,8 @@ from src.core.dlq.dlq_service import DLQService
 from src.core.dlq.models import DLQFailedTask
 from src.core.security import security_scheme
 
+_logger = structlog.get_logger()
+
 
 class DLQServiceAdminAdapter:
     """TS-BCK-042-001: Admin adapter around the existing DLQ service."""
@@ -39,15 +42,29 @@ class DLQServiceAdminAdapter:
     def __init__(self, service: DLQService | None = None) -> None:
         self._service = service or DLQService()
 
-    async def list_by_status(self, status: str) -> list[DLQEntryView]:
-        """List DLQ entries across tenants for organization-admin review."""
+    async def list_by_status(
+        self, status: str, *, limit: int, offset: int
+    ) -> list[DLQEntryView]:
+        """List DLQ entries across tenants with LIMIT/OFFSET pagination."""
         async with get_raw_session() as session:
             result = await session.execute(
                 select(DLQFailedTask)
                 .where(DLQFailedTask.status == status)
                 .order_by(DLQFailedTask.created_at.desc())
+                .limit(limit)
+                .offset(offset)
             )
             return list(result.scalars().all())
+
+    async def count_by_status(self, status: str) -> int:
+        """Return the total number of DLQ entries for the given status."""
+        async with get_raw_session() as session:
+            result = await session.execute(
+                select(func.count())
+                .select_from(DLQFailedTask)
+                .where(DLQFailedTask.status == status)
+            )
+            return result.scalar_one()
 
     async def get_by_id(self, dlq_id: UUID) -> DLQEntryView | None:
         """Return a DLQ entry by id using the existing service read path."""
@@ -103,12 +120,18 @@ router = APIRouter(
 )
 async def list_dlq_entries(
     status_filter: DLQStatus = Query("pending", alias="status"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     use_case: ListDLQEntriesUseCase = Depends(get_list_dlq_entries_use_case),
 ) -> DLQListResponse:
     """TS-BCK-042-001: List DLQ entries for organization administrators."""
-    entries = await use_case.execute(status=status_filter)
+    page = await use_case.execute(status=status_filter, limit=limit, offset=offset)
     return DLQListResponse(
-        entries=[DLQEntryResponse.model_validate(entry) for entry in entries]
+        entries=[DLQEntryResponse.model_validate(entry) for entry in page.entries],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+        has_more=page.has_more,
     )
 
 
@@ -120,8 +143,16 @@ async def list_dlq_entries(
 async def retry_dlq_entry(
     dlq_id: UUID,
     use_case: RetryDLQEntryUseCase = Depends(get_retry_dlq_entry_use_case),
+    current_user: User = Depends(require_admin_user),
 ) -> DLQRetryResponse:
     """TS-BCK-042-001: Retry a DLQ entry for organization administrators."""
+    # Audit log emitted before the call — records the attempt, not the outcome.
+    _logger.info(
+        "admin_dlq_retry",
+        admin_id=str(current_user.id),
+        dlq_id=str(dlq_id),
+        tenant_id=str(current_user.tenant_id),
+    )
     try:
         entry = await use_case.execute(dlq_id)
     except DLQEntryNotFoundError as exc:
