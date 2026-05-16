@@ -4,8 +4,6 @@ Regression checks for backend CI workflow prerequisites.
 """
 
 from __future__ import annotations
-
-import re
 import tomllib
 from pathlib import Path
 
@@ -186,18 +184,28 @@ def test_pnpm_action_setup_uses_package_manager_version() -> None:
 
     repo_root = Path(__file__).resolve().parents[4]
     workflows = sorted((repo_root / ".github" / "workflows").glob("*.yml"))
-    duplicate_version_pattern = re.compile(
-        r"uses:\s+pnpm/action-setup@v4\s*\n\s*with:\s*\n\s*version:",
-        re.MULTILINE,
-    )
 
     offenders = [
         workflow.relative_to(repo_root).as_posix()
         for workflow in workflows
-        if duplicate_version_pattern.search(workflow.read_text(encoding="utf-8"))
+        if _uses_explicit_pnpm_version(workflow.read_text(encoding="utf-8"))
     ]
 
     assert offenders == []
+
+
+def _uses_explicit_pnpm_version(contents: str) -> bool:
+    """Detect forbidden pnpm version blocks without regex backtracking."""
+
+    lines = [line.strip() for line in contents.splitlines()]
+    for index in range(len(lines) - 2):
+        if (
+            lines[index] == "uses: pnpm/action-setup@v4"
+            and lines[index + 1] == "with:"
+            and lines[index + 2].startswith("version:")
+        ):
+            return True
+    return False
 
 
 def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:
