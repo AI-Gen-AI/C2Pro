@@ -1584,7 +1584,7 @@
       "tipo": "backend",
       "descripcion": "Repair duplicate Alembic revision identifiers introduced by overlapping production hotfixes before deployment.",
       "asignado_a": "backend",
-      "estado": "en_progreso",
+      "estado": "completado",
       "criterio_done": "The 20260516 hotfix chain has unique sequential revision IDs and Alembic bootstrap can target a single head again.",
       "archivos_modificados": [
         "apps/api/alembic/versions/20260516_0002_add_missing_alert_related_clause_ids.py",
@@ -1595,11 +1595,20 @@
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-05-16T22:02:00Z"
+        "inicio": "2026-05-16T22:02:00Z",
+        "completado": "2026-05-16T22:05:00Z"
       },
       "resultado": {
-        "exitoso": false,
-        "mensaje": "Created after PR #133 CI proved duplicate 20260516_0002 and 20260516_0003 revisions prevent alembic upgrade head from bootstrapping."
+        "exitoso": true,
+        "mensaje": "Removed the duplicate 20260516_0002 hotfix revision, moved the document enum repair to forward revision 20260516_0004 after the existing 20260516_0003 migration, and added regression coverage to keep the same-day chain single-headed.",
+        "cambios_realizados": [
+          "Deleted the duplicate 20260516_0002 alert hotfix migration.",
+          "Renumbered the document enum drift repair to 20260516_0004 with down_revision 20260516_0003.",
+          "Added a guard test that rejects duplicate same-day hotfix revisions."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "apps/api/tests/unit/test_backend_ci_guards.py: 20 passed."
       }
     }
   ],
