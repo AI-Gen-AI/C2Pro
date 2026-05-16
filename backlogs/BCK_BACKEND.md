@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 5
 
-**Completed Tasks**: 49
+**Completed Tasks**: 50
 
 - IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`
 
@@ -31,7 +31,8 @@
 | [ ] | P1 | `TASK-BCK-052` | `TASK-BCK-051` | Verify backend production error capture into Sentry after the live-500 incident: prove that an unhandled backend exception reaches the `c2pro` Sentry project with expected environment/release tags, or document and repair the observability gap. | `TASK-BCK-051 live triage 2026-05-16` |
 | [ ] | P0 | `TASK-BCK-053` | None | Investigate live `500` on project document upload observed at `2026-05-16T18:06:14Z` with reference ID `ae928e97-224f-4b17-8f2c-f315823281a9`; Railway logs at `2026-05-16T21:35:46Z` now confirm a separate enum drift incident: production `documents.document_type` expects `documenttype` while the ORM binds `document_type`. | `Browser error capture + Railway logs 2026-05-16` |
 | [ ] | P0 | `TASK-BCK-054` | `TASK-BCK-051` | Complete the alerts production-drift repair with a new forward revision `20260516_0002` that adds the missing `alerts.related_clause_ids` column, then redeploy/apply the live schema fix before retesting the project alerts route. | `TASK-BCK-051 Railway logs 2026-05-16` |
-| [ ] | P0 | `TASK-BCK-055` | `TASK-BCK-053` | Repair document upload enum drift with a forward migration that normalizes live `documents.document_type` from legacy PostgreSQL enum `documenttype` to canonical `document_type`, then redeploy/retest the upload route. | `TASK-BCK-053 Railway logs 2026-05-16` |
+| [ ] | P0 | `TASK-BCK-055` | `TASK-BCK-053` | Repair document upload enum drift with forward revision `20260516_0004` that normalizes live `documents.document_type` from legacy PostgreSQL enum `documenttype` to canonical `document_type`, then redeploy/retest the upload route. | `TASK-BCK-053 Railway logs 2026-05-16` |
+| [x] | P0 | `TASK-BCK-056` | `TASK-BCK-054,TASK-BCK-055` | Repair duplicate Alembic revisions introduced by overlapping production hotfixes so the live migration chain has one `20260516_0002`, one `20260516_0003`, and one `20260516_0004` head path before deployment. `[x] Implemented (Hotfix Migration Chain Repair)` | `PR #133 CI 2026-05-16` |
 
 ---
 
@@ -92,3 +93,4 @@
 | `TASK-BCK-053` | Production document upload 500 triage                  | Pending       |
 | `TASK-BCK-054` | Complete alerts production drift repair                | Pending       |
 | `TASK-BCK-055` | Repair document upload enum drift                     | Pending       |
+| `TASK-BCK-056` | Repair duplicate Alembic revision chain               | 2026-05-16    |

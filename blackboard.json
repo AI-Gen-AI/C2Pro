@@ -1564,7 +1564,7 @@
       "estado": "en_progreso",
       "criterio_done": "A forward migration normalizes legacy live documenttype columns to canonical document_type, targeted regression coverage passes, and the upload route is ready for redeploy/retest.",
       "archivos_modificados": [
-        "apps/api/alembic/versions/20260516_0003_repair_document_type_enum_drift.py",
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
         "apps/api/tests/unit/test_backend_ci_guards.py",
         "C2PRO_MASTER_BACKLOG.md",
         "backlogs/BCK_BACKEND.md",
@@ -1575,7 +1575,40 @@
       },
       "resultado": {
         "exitoso": false,
-        "mensaje": "Created after Railway logs proved the upload 500 is caused by document enum type drift rather than the alerts schema incident."
+        "mensaje": "Created after Railway logs proved the upload 500 is caused by document enum type drift rather than the alerts schema incident; corrected to forward revision 20260516_0004 after CI exposed an existing 20260516_0003 migration on main."
+      }
+    },
+    {
+      "tarea_id": "T103",
+      "backlog_id": "TASK-BCK-056",
+      "tipo": "backend",
+      "descripcion": "Repair duplicate Alembic revision identifiers introduced by overlapping production hotfixes before deployment.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "The 20260516 hotfix chain has unique sequential revision IDs and Alembic bootstrap can target a single head again.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260516_0002_add_missing_alert_related_clause_ids.py",
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T22:02:00Z",
+        "completado": "2026-05-16T22:05:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Removed the duplicate 20260516_0002 hotfix revision, moved the document enum repair to forward revision 20260516_0004 after the existing 20260516_0003 migration, and added regression coverage to keep the same-day chain single-headed.",
+        "cambios_realizados": [
+          "Deleted the duplicate 20260516_0002 alert hotfix migration.",
+          "Renumbered the document enum drift repair to 20260516_0004 with down_revision 20260516_0003.",
+          "Added a guard test that rejects duplicate same-day hotfix revisions."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "apps/api/tests/unit/test_backend_ci_guards.py: 20 passed."
       }
     }
   ],
@@ -1676,7 +1709,8 @@
       "TASK-FRT-172",
       "TASK-FRT-173",
       "TASK-FRT-174",
-      "TASK-BCK-055"
+      "TASK-BCK-055",
+      "TASK-BCK-056"
     ]
   },
   "plan_actual": {
