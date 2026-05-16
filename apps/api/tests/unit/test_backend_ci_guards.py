@@ -180,6 +180,25 @@ def test_production_contract_drift_repair_migration_restores_alerts_and_stakehol
     assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb)" in contents
 
 
+def test_followup_alerts_drift_repair_adds_related_clause_ids_in_new_revision() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-054."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260516_0002_add_missing_alert_related_clause_ids.py"
+    )
+    contents = migration.read_text(encoding="utf-8")
+
+    assert 'revision: str = "20260516_0002"' in contents
+    assert 'down_revision: str | None = "20260516_0001"' in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS related_clause_ids UUID[]" in contents
+
+
 def test_pnpm_action_setup_uses_package_manager_version() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
 
