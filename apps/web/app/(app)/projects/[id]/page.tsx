@@ -42,7 +42,7 @@ export default function ProjectOverviewPage() {
     );
   }
 
-  if (dashboardError || alertsError || !dashboard) {
+  if (dashboardError || !dashboard) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
         {(dashboardError instanceof Error && dashboardError.message) ||
@@ -54,6 +54,7 @@ export default function ProjectOverviewPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
+  const alertsUnavailable = Boolean(alertsError);
   const coherenceScore =
     typeof dashboard.coherence_score === 'number'
       ? dashboard.coherence_score
@@ -67,6 +68,9 @@ export default function ProjectOverviewPage() {
       ? (dashboard.sub_scores as Record<string, number>)
       : {};
   const budgetScore = subScores['BUDGET'] ?? 0;
+  const openAlertCount = alertsUnavailable
+    ? Number(dashboard.alert_count ?? 0)
+    : openAlerts.length;
   const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
     severity: alert.severity,
     title: alert.message.split(' — ')[0],
@@ -74,7 +78,7 @@ export default function ProjectOverviewPage() {
 
   const statCards = [
     { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
-    { label: 'Open Alerts', value: String(openAlerts.length), icon: AlertTriangle, color: 'text-warning' },
+    { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
     { label: 'Budget Used', value: `${100 - budgetScore}%`, icon: DollarSign, color: 'text-chart-budget' },
   ];
@@ -136,6 +140,11 @@ export default function ProjectOverviewPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
+            {alertsUnavailable && (
+              <p className="text-sm text-muted-foreground">
+                Recent alerts unavailable right now.
+              </p>
+            )}
             {recentAlerts.map((alert, i) => (
               <div key={i} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
                 <div className={`h-2 w-2 shrink-0 rounded-full ${
@@ -151,7 +160,7 @@ export default function ProjectOverviewPage() {
                 </Badge>
               </div>
             ))}
-            {recentAlerts.length === 0 && (
+            {!alertsUnavailable && recentAlerts.length === 0 && (
               <p className="text-sm text-muted-foreground">No open alerts</p>
             )}
           </CardContent>

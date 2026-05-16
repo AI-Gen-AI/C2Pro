@@ -5,7 +5,6 @@ Regression checks for backend CI workflow prerequisites.
 
 from __future__ import annotations
 
-import re
 import tomllib
 from pathlib import Path
 
@@ -153,23 +152,61 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     assert "tenacity>=9.1.2,<10.0" in contents
 
 
+def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260516_0001_repair_alerts_stakeholders_contract_drift.py"
+    )
+    contents = migration.read_text(encoding="utf-8")
+
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS category" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS description" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS affected_entities" in contents
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_metadata" in contents
+    assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS approval_status" in contents
+    assert "ALTER TABLE stakeholders ADD COLUMN IF NOT EXISTS stakeholder_metadata" in contents
+    assert "column_name = 'message'" in contents
+    assert "UPDATE alerts SET description = COALESCE(description, message, '')" in contents
+    assert "ELSE\n                UPDATE alerts SET description = COALESCE(description, '')" in contents
+    assert "column_name = 'metadata'" in contents
+    assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, metadata, '{}'::jsonb)" in contents
+    assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb)" in contents
+
+
 def test_pnpm_action_setup_uses_package_manager_version() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
 
     repo_root = Path(__file__).resolve().parents[4]
     workflows = sorted((repo_root / ".github" / "workflows").glob("*.yml"))
-    duplicate_version_pattern = re.compile(
-        r"uses:\s+pnpm/action-setup@v4\s*\n\s*with:\s*\n\s*version:",
-        re.MULTILINE,
-    )
 
     offenders = [
         workflow.relative_to(repo_root).as_posix()
         for workflow in workflows
-        if duplicate_version_pattern.search(workflow.read_text(encoding="utf-8"))
+        if _uses_explicit_pnpm_version(workflow.read_text(encoding="utf-8"))
     ]
 
     assert offenders == []
+
+
+def _uses_explicit_pnpm_version(contents: str) -> bool:
+    """Detect forbidden pnpm version blocks without regex backtracking."""
+
+    lines = [line.strip() for line in contents.splitlines()]
+    for index in range(len(lines) - 2):
+        if (
+            lines[index] == "uses: pnpm/action-setup@v4"
+            and lines[index + 1] == "with:"
+            and lines[index + 2].startswith("version:")
+        ):
+            return True
+    return False
 
 
 def test_wireframe_coverage_installs_pnpm_before_node_cache_setup() -> None:

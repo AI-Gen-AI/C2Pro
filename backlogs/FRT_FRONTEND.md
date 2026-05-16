@@ -17,9 +17,9 @@
 
 - IDs: `TASK-FRT-041` (blocked — requires Clerk dashboard operator access)
 
-**Completed Tasks**: 169
+**Completed Tasks**: 170
 
-- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-170`
+- IDs: `TASK-FRT-001`-`TASK-FRT-040`, `TASK-FRT-042`-`TASK-FRT-171`
 
 **Usage Note**:
 
@@ -34,16 +34,18 @@
 
 **Statistics**:
 
-- Total: 170 tasks
+- Total: 171 tasks
 - Active: 1 (0.6%)
-- Completed: 169 (99.4%)
+- Completed: 170 (99.4%)
 - Blocked: 1 (0.6%)
 
 ---
 
 ## 2. Specifications
 
-_No active specifications — all completed task specs archived to `backlogs/COMPLETED.md`._
+### TASK-FRT-171 - Production partial failure resilience
+
+- Keep the project overview route renderable when the alerts subrequest fails but the coherence dashboard payload succeeds; use the dashboard alert count as a fallback and show a local panel warning instead of replacing the whole page with an error.
 
 ---
 
