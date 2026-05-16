@@ -5,8 +5,8 @@ Regression checks for backend CI workflow prerequisites.
 
 from __future__ import annotations
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 
 def test_unit_workflow_excludes_integration_marked_tests() -> None:
