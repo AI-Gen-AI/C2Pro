@@ -26,7 +26,9 @@
 
 ## 1. Active Tasks
 
-_No pending tasks. All 49 BCK tasks completed as of 2026-05-08._
+| Status | Priority | Task ID | Depends On | Description | Source |
+| ------ | -------- | ------- | ---------- | ----------- | ------ |
+| [ ] | P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error reference IDs with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Live drift repaired 2026-05-16 through `20260516_0001`; remaining blocker is unavailable production log access for reference-ID correlation. | Production report 2026-05-15 |
 
 ---
 
@@ -82,3 +84,4 @@ _No pending tasks. All 49 BCK tasks completed as of 2026-05-08._
 | `TASK-BCK-047` | Document reprocess and status mapping fix                | 2026-04-11    |
 | `TASK-BCK-048` | Production alerts route + upload CORS parity             | 2026-04-11    |
 | `TASK-BCK-049` | Direct upload Clerk token + error CORS fix               | 2026-04-11    |
+| `TASK-BCK-051` | Production alerts/stakeholders 500 triage              | Pending       |
