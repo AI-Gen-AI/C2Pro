@@ -29,7 +29,9 @@ describe("Dialog", () => {
 
     await user.click(screen.getByRole("button", { name: /open/i }));
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveClass("bg-card");
+    expect(screen.getByRole("dialog")).toHaveClass("text-card-foreground");
+    expect(screen.getByRole("dialog")).toHaveClass("shadow-2xl");
     expect(screen.getByText("Details")).toBeInTheDocument();
     expect(screen.getByText("Info")).toBeInTheDocument();
   });

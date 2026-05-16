@@ -141,6 +141,9 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 |[ ]|P1|`TASK-OPS-DOCFLOW-017`|`TASK-OPS-DOCFLOW-016`|Fix full-suite Schemathesis no-match contract: update `tests/contract/schemathesis/test_observability_admin_router.py` frontend-support selection so every parametrized contract maps to current OpenAPI operations.|`TASK-OPS-DOCFLOW-016 local verification`|
 |[ ]|P1|`TASK-OPS-DOCFLOW-018`|`TASK-OPS-DOCFLOW-017`|Fix DB-backed alert API contract execution drift: align `tests/core/test_alerts_router_contract.py` fixtures/routes with current active alerts router and required `alerts.tenant_id` persistence contract.|`TASK-OPS-DOCFLOW-016 local verification`|
 |[x]|P1|`TASK-FRT-171`|None|Keep project overview usable when the alerts subrequest fails after production schema drift. `[x] Implemented (Partial Failure Resilience)`|Production report 2026-05-15|
+|[x]|P1|`TASK-FRT-172`|None|Add an explicit return path from the dashboard portfolio overview to the Projects list so users are not stranded after entering Dashboard. `[x] Implemented (Dashboard Navigation Recovery)`|User report 2026-05-16|
+|[x]|P1|`TASK-FRT-173`|`TASK-BCK-053`|Replace raw document-upload failure copy with a plain-language state that tells the user the file was not queued and what to do next. `[x] Implemented (Upload Failure Clarity)`|User report 2026-05-16|
+|[x]|P1|`TASK-FRT-174`|None|Standardize dialogs, alert dialogs, and sheets on one high-contrast elevated surface so sub-windows remain readable and visually consistent across the app. `[x] Implemented (Shared Sub-Window Surface System)`|User report 2026-05-16|
 
 ### Coherence v1 (EPIC-COH-V1-CONSOLIDATION)
 
