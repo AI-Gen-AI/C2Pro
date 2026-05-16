@@ -88,11 +88,14 @@
 
 > Only `[ ]` items are listed here. For completed task history, see [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md) or the category backlog files.
 
-### Backend (1 pending)
+### Backend (4 pending)
 
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
-| P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error references with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Live schema drift was repaired on 2026-05-16 via `20260516_0001`; log correlation remains blocked on unavailable production log access. |
+| P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error references with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Railway logs at `2026-05-16T18:20:52Z` now confirm project-alert reads fail with `UndefinedColumnError: column alerts.related_clause_ids does not exist`, proving `20260516_0001` did not fully restore live alerts parity. |
+| P1 | `TASK-BCK-052` | `TASK-BCK-051` | Verify backend production error capture into Sentry after the live-500 incident: prove that an unhandled backend exception reaches the `c2pro` Sentry project with expected environment/release tags, or document and repair the observability gap. | `TASK-BCK-051 live triage 2026-05-16` |
+| P0 | `TASK-BCK-053` | None | Investigate live `500` on project document upload observed at `2026-05-16T18:06:14Z` with reference ID `ae928e97-224f-4b17-8f2c-f315823281a9`; determine whether it shares the same production failure mode as the alerts 500s or is a separate incident. | `Browser error capture 2026-05-16` |
+| P0 | `TASK-BCK-054` | `TASK-BCK-051` | Complete the alerts production-drift repair with a new forward revision `20260516_0002` that adds the missing `alerts.related_clause_ids` column, then redeploy/apply the live schema fix before retesting the project alerts route. | `TASK-BCK-051 Railway logs 2026-05-16` |
 
 ### Frontend (2 pending)
 
