@@ -1564,7 +1564,7 @@
       "estado": "en_progreso",
       "criterio_done": "A forward migration normalizes legacy live documenttype columns to canonical document_type, targeted regression coverage passes, and the upload route is ready for redeploy/retest.",
       "archivos_modificados": [
-        "apps/api/alembic/versions/20260516_0003_repair_document_type_enum_drift.py",
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
         "apps/api/tests/unit/test_backend_ci_guards.py",
         "C2PRO_MASTER_BACKLOG.md",
         "backlogs/BCK_BACKEND.md",
@@ -1575,7 +1575,31 @@
       },
       "resultado": {
         "exitoso": false,
-        "mensaje": "Created after Railway logs proved the upload 500 is caused by document enum type drift rather than the alerts schema incident."
+        "mensaje": "Created after Railway logs proved the upload 500 is caused by document enum type drift rather than the alerts schema incident; corrected to forward revision 20260516_0004 after CI exposed an existing 20260516_0003 migration on main."
+      }
+    },
+    {
+      "tarea_id": "T103",
+      "backlog_id": "TASK-BCK-056",
+      "tipo": "backend",
+      "descripcion": "Repair duplicate Alembic revision identifiers introduced by overlapping production hotfixes before deployment.",
+      "asignado_a": "backend",
+      "estado": "en_progreso",
+      "criterio_done": "The 20260516 hotfix chain has unique sequential revision IDs and Alembic bootstrap can target a single head again.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260516_0002_add_missing_alert_related_clause_ids.py",
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T22:02:00Z"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Created after PR #133 CI proved duplicate 20260516_0002 and 20260516_0003 revisions prevent alembic upgrade head from bootstrapping."
       }
     }
   ],
@@ -1676,7 +1700,8 @@
       "TASK-FRT-172",
       "TASK-FRT-173",
       "TASK-FRT-174",
-      "TASK-BCK-055"
+      "TASK-BCK-055",
+      "TASK-BCK-056"
     ]
   },
   "plan_actual": {
