@@ -1,6 +1,5 @@
 from src.coherence.models import Clause
 from src.coherence.rules_engine.base import ApplicabilityState, RuleEvaluator
-from src.coherence.rules_engine.deterministic import SpecReferenceEvaluator
 
 
 def test_applicability_state_enum_values():

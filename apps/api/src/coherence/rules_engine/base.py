@@ -9,13 +9,12 @@ v0.3 adds:
 """
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 from ..models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
-from enum import Enum
-
 from .category_utils import infer_category
 
 
@@ -130,6 +129,7 @@ class RuleEvaluator(ABC):
 
 # Re-export for convenience
 __all__ = [
+    "ApplicabilityState",
     "Finding",
     "FindingSignal",
     "RuleEvaluator",
