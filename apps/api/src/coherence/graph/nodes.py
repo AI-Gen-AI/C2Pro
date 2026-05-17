@@ -337,6 +337,9 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with llm_signals, llm_cost_usd, llm_calls_count
     """
+    # Six canonical LLM categories (registry V1_LLM_RULE_IDS map)
+    _LLM_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
+
     # Skip in low_budget_mode
     if state.config.low_budget_mode:
         logger.info("llm_semantic_evaluate: skipped (low_budget_mode=True)")
@@ -344,10 +347,12 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
             "llm_signals": [],
             "llm_cost_usd": 0.0,
             "llm_calls_count": 0,
+            "coverage_map": {cat: False for cat in _LLM_CATEGORIES},
         }
 
     signals: list[FindingSignal] = []
     errors: list[str] = []
+    coverage: dict[str, bool] = {}
     total_cost = 0.0
     total_calls = 0
 
@@ -361,20 +366,27 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
 
         for clause in state.clauses:
             for evaluator in evaluators:
+                category = evaluator.category
                 try:
-                    signal = await evaluator.evaluate_v3_async(clause)
-                    if signal is not None:
-                        signals.append(signal)
-                except Exception as e:
-                    error_msg = (
-                        f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
-                    )
-                    logger.warning(error_msg)
-                    errors.append(error_msg)
+                    app_state = evaluator.applicability(clause)
+                except Exception:  # noqa: BLE001
+                    app_state = ApplicabilityState.SKIPPED_DISABLED
+                if app_state == ApplicabilityState.EVALUATED:
+                    coverage[category] = True
+                    try:
+                        signal = await evaluator.evaluate_v3_async(clause)
+                        if signal is not None:
+                            signals.append(signal)
+                    except Exception as e:
+                        msg = f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
+                        logger.warning(msg)
+                        errors.append(msg)
+                else:
+                    coverage.setdefault(category, False)
 
         # Get cost metrics
-        total_cost = sum(getattr(evaluator, "total_cost_usd", 0.0) for evaluator in evaluators)
-        total_calls = sum(getattr(evaluator, "llm_calls_count", 0) for evaluator in evaluators)
+        total_cost = sum(getattr(e, "total_cost_usd", 0.0) for e in evaluators)
+        total_calls = sum(getattr(e, "llm_calls_count", 0) for e in evaluators)
 
     except ImportError as e:
         logger.warning(f"LLM evaluator not available: {e}")
@@ -389,6 +401,7 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
         "llm_signals": signals,
         "llm_cost_usd": total_cost,
         "llm_calls_count": total_calls,
+        "coverage_map": coverage,
         "errors": errors,
     }
 
