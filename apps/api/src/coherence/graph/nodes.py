@@ -269,7 +269,8 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
         state: Current graph state with enriched clauses
 
     Returns:
-        Partial state update with deterministic_signals
+        Partial state update with deterministic_signals, coverage_map
+        (per-category assessed/skipped), and errors.
     """
     evaluators = [
         evaluator for evaluator in list_evaluators()
