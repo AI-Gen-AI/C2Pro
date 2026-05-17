@@ -1,4 +1,7 @@
+import pytest
+
 from src.coherence.models import Clause
+from src.coherence.rules_engine import deterministic as D
 from src.coherence.rules_engine.base import ApplicabilityState, RuleEvaluator
 
 
@@ -50,39 +53,32 @@ def test_llm_evaluator_evaluated_when_enabled():
     assert ev.applicability(c) == ApplicabilityState.EVALUATED
 
 
-import pytest
-
-from src.coherence.rules_engine import deterministic as D
-from src.coherence.rules_engine.base import ApplicabilityState as A
-
-
 @pytest.mark.parametrize("evaluator_cls,data,text,expected", [
-    (D.BudgetOverrunEvaluator, {"current": 110.0, "planned": 100.0}, "cost", A.EVALUATED),
-    (D.BudgetOverrunEvaluator, {}, "cost overrun", A.SKIPPED_MISSING_INPUTS),
-    (D.BudgetLineItemEvaluator, {"unit_price": 2.0, "quantity": 3.0, "line_total": 6.0}, "x", A.EVALUATED),
-    (D.BudgetLineItemEvaluator, {"unit_price": 2.0}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.BomBudgetLinkEvaluator, {"bom_items": [{"item_name": "pump"}]}, "x", A.EVALUATED),
-    (D.BomBudgetLinkEvaluator, {"bom_items": []}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.SpecReferenceEvaluator, {"material": "concrete"}, "x", A.EVALUATED),
-    (D.SpecReferenceEvaluator, {}, "party name", A.SKIPPED_MISSING_INPUTS),
-    (D.NoticePeriodEvaluator, {"notice_period_days": 30}, "x", A.EVALUATED),
-    (D.NoticePeriodEvaluator, {}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.PenaltyCapEvaluator, {"has_penalty_cap": False}, "x", A.EVALUATED),
-    (D.PenaltyCapEvaluator, {}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.ScheduleStatusEvaluator, {"status": "delayed"}, "schedule milestone delay", A.EVALUATED),
-    (D.ScheduleStatusEvaluator, {"status": "delayed"}, "payment price invoice", A.SKIPPED_MISSING_INPUTS),
-    (D.ScheduleDurationEvaluator, {"start_date": "2026-01-01", "end_date": "2026-02-01"}, "x", A.EVALUATED),
-    (D.ScheduleDurationEvaluator, {}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.ScopeVsBudgetCoverageEvaluator, {"deliverables": [{"name": "a"}], "budget_items": [{"id": "b"}]}, "x", A.EVALUATED),
-    (D.ScopeVsBudgetCoverageEvaluator, {"deliverables": []}, "x", A.SKIPPED_MISSING_INPUTS),
-    (D.ScopeDeliverablesEvaluator, {}, "scope of work deliverable", A.EVALUATED),
-    (D.ScopeDeliverablesEvaluator, {}, "insurance policy", A.SKIPPED_MISSING_INPUTS),
-    (D.QualityStandardEvaluator, {}, "quality inspection standard", A.EVALUATED),
-    (D.QualityStandardEvaluator, {}, "payment terms price", A.SKIPPED_MISSING_INPUTS),
-    (D.InspectionFrequencyEvaluator, {}, "quality control inspection", A.EVALUATED),
-    (D.InspectionFrequencyEvaluator, {}, "payment advance guarantee", A.SKIPPED_MISSING_INPUTS),
+    (D.BudgetOverrunEvaluator, {"current": 110.0, "planned": 100.0}, "cost", ApplicabilityState.EVALUATED),
+    (D.BudgetOverrunEvaluator, {}, "cost overrun", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.BudgetLineItemEvaluator, {"unit_price": 2.0, "quantity": 3.0, "line_total": 6.0}, "x", ApplicabilityState.EVALUATED),
+    (D.BudgetLineItemEvaluator, {"unit_price": 2.0}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.BomBudgetLinkEvaluator, {"bom_items": [{"item_name": "pump"}]}, "x", ApplicabilityState.EVALUATED),
+    (D.BomBudgetLinkEvaluator, {"bom_items": []}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.SpecReferenceEvaluator, {"material": "concrete"}, "x", ApplicabilityState.EVALUATED),
+    (D.SpecReferenceEvaluator, {}, "party name", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.NoticePeriodEvaluator, {"notice_period_days": 30}, "x", ApplicabilityState.EVALUATED),
+    (D.NoticePeriodEvaluator, {}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.PenaltyCapEvaluator, {"has_penalty_cap": False}, "x", ApplicabilityState.EVALUATED),
+    (D.PenaltyCapEvaluator, {}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.ScheduleStatusEvaluator, {"status": "delayed"}, "schedule milestone delay", ApplicabilityState.EVALUATED),
+    (D.ScheduleStatusEvaluator, {"status": "delayed"}, "payment price invoice", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.ScheduleDurationEvaluator, {"start_date": "2026-01-01", "end_date": "2026-02-01"}, "x", ApplicabilityState.EVALUATED),
+    (D.ScheduleDurationEvaluator, {}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.ScopeVsBudgetCoverageEvaluator, {"deliverables": [{"name": "a"}], "budget_items": [{"id": "b"}]}, "x", ApplicabilityState.EVALUATED),
+    (D.ScopeVsBudgetCoverageEvaluator, {"deliverables": []}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.ScopeDeliverablesEvaluator, {}, "scope of work deliverable", ApplicabilityState.EVALUATED),
+    (D.ScopeDeliverablesEvaluator, {}, "insurance policy", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.QualityStandardEvaluator, {}, "quality inspection standard", ApplicabilityState.EVALUATED),
+    (D.QualityStandardEvaluator, {}, "payment terms price", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.InspectionFrequencyEvaluator, {}, "quality control inspection", ApplicabilityState.EVALUATED),
+    (D.InspectionFrequencyEvaluator, {}, "payment advance guarantee", ApplicabilityState.SKIPPED_MISSING_INPUTS),
 ])
 def test_deterministic_applicability(evaluator_cls, data, text, expected):
-    from src.coherence.models import Clause
     c = Clause(id="c", text=text, data=data)
     assert evaluator_cls().applicability(c) == expected
