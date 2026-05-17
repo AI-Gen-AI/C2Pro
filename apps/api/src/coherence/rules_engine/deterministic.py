@@ -631,16 +631,16 @@ class SpecReferenceEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
-        category = clause.data.get("category")
-        if category in ("TECHNICAL", "TECH", "technical") or any(k in clause.data for k in ("material", "specification", "bom", "item_name")):
-            has_spec = any(clause.data.get(k) for k in (
-                "spec_reference", "standard", "norm", "iso", "astm", "en_standard",
-                "specification", "technical_standard",
-            ))
-            if not has_spec:
-                return _signal(self, clause, 0.45,
-                    "Technical clause without specific standard/specification reference",
-                    {"missing": "spec_reference or standard or norm"})
+        if infer_category(clause) != "TECHNICAL":
+            return None
+        has_spec = any(clause.data.get(k) for k in (
+            "spec_reference", "standard", "norm", "iso", "astm", "en_standard",
+            "specification", "technical_standard",
+        ))
+        if not has_spec:
+            return _signal(self, clause, 0.45,
+                "Technical clause without specific standard/specification reference",
+                {"missing": "spec_reference or standard or norm"})
         return None
 
 
@@ -704,6 +704,8 @@ class QualityStandardEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
+        if infer_category(clause) not in ("QUALITY", "TECHNICAL"):
+            return None
         text_lower = (clause.text or "").lower()
         standards = clause.data.get("quality_standards") or clause.data.get("standards", [])
         has_specific = bool(standards) or any(
@@ -734,6 +736,8 @@ class InspectionFrequencyEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
+        if infer_category(clause) not in ("QUALITY", "TECHNICAL"):
+            return None
         has_inspection = clause.data.get("inspection") or clause.data.get("testing")
         if not has_inspection:
             # Check text for inspection-related keywords
