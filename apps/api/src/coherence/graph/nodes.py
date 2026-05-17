@@ -35,6 +35,7 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
+from ..rules_engine.category_utils import CATEGORY_KEYWORDS, infer_category
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..rules_engine.registry import list_evaluators
 from ..scoring import ScoringService
@@ -53,66 +54,6 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Keywords for category inference from clause text/data
-CATEGORY_KEYWORDS: dict[CoherenceCategory, list[str]] = {
-    "BUDGET": [
-        "budget", "cost", "price", "amount", "payment", "invoice", "expense",
-        "contingency", "retention", "advance", "total", "unit_price", "line_total",
-        "planned", "current", "variance", "overrun", "financial",
-    ],
-    "TIME": [
-        "schedule", "deadline", "milestone", "date", "duration", "start_date",
-        "end_date", "timeline", "delay", "overdue", "predecessor", "task",
-        "calendar", "days", "weeks", "months",
-    ],
-    "LEGAL": [
-        "contract", "agreement", "clause", "term", "condition", "warranty",
-        "liability", "penalty", "notice", "insurance", "indemnity", "review",
-        "expiry", "termination", "dispute", "arbitration",
-    ],
-    "SCOPE": [
-        "scope", "deliverable", "requirement", "specification", "work",
-        "objective", "inclusion", "exclusion", "change", "amendment",
-    ],
-    "TECHNICAL": [
-        "bom", "material", "specification", "standard", "iso", "astm",
-        "lead_time", "technical", "engineering", "design", "component",
-    ],
-    "QUALITY": [
-        "quality", "inspection", "test", "compliance", "standard",
-        "acceptance", "defect", "tolerance", "frequency",
-    ],
-}
-
-
-def infer_category(clause: Clause) -> CoherenceCategory:
-    """
-    Infer the coherence category from clause text and data keys.
-
-    Uses keyword matching to determine the most likely category.
-    Returns "SCOPE" as default if no strong match.
-    """
-    text_lower = clause.text.lower() if clause.text else ""
-    data_keys = " ".join(clause.data.keys()).lower() if clause.data else ""
-    combined = f"{text_lower} {data_keys}"
-
-    scores: dict[CoherenceCategory, int] = {cat: 0 for cat in CATEGORY_KEYWORDS}
-
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        for kw in keywords:
-            if kw in combined:
-                scores[category] += 1
-
-    # Return category with highest score, or SCOPE if tie/zero
-    max_score = max(scores.values())
-    if max_score == 0:
-        return "SCOPE"
-
-    for cat, score in scores.items():
-        if score == max_score:
-            return cat
-
-    return "SCOPE"
-
 
 def infer_document_type(clause: Clause) -> str:
     """Infer document type from clause data or ID patterns."""
@@ -213,7 +154,18 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
             logger.warning(f"Embedding batch load failed, continuing without RAG: {e}")
             errors.append(f"Embedding batch load failed: {e}")
 
-    for clause in state.clauses:
+    # Enrich clause.data with structured fields the deterministic rules need.
+    # Cache-first: DB hit = zero LLM cost; miss = one Claude Haiku call per clause.
+    # This runs regardless of low_budget_mode — it serves deterministic rules, not LLM evaluators.
+    try:
+        from src.coherence.extraction.clause_extractor import enrich_clauses
+
+        enriched_raw = await enrich_clauses(list(state.clauses))
+    except Exception as _exc:  # noqa: BLE001 — never block evaluation
+        logger.warning("prepare_context: clause enrichment failed, continuing: %s", _exc)
+        enriched_raw = list(state.clauses)
+
+    for clause in enriched_raw:
         category = infer_category(clause)
         doc_type = infer_document_type(clause)
 
@@ -936,6 +888,24 @@ def _build_category_breakdown(
         )
 
     breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
+
+    # Add score=100 entries for canonical categories that had no findings.
+    # Absence of alerts means the evaluator found nothing wrong, not that the
+    # dimension is unmeasured (unmeasured dimensions appear in score_missing_dimensions).
+    scored_categories = {item.category for item in breakdown}
+    for canonical, legacy in cat_map.items():
+        if legacy not in scored_categories and canonical != "CROSS":
+            breakdown.append(
+                CategoryBreakdown(
+                    category=legacy,
+                    score=100.0,
+                    alert_count=0,
+                    severity_breakdown=SeverityCount(
+                        critical=0, high=0, medium=0, low=0, info=0
+                    ),
+                    impact_percentage=0.0,
+                )
+            )
 
     return breakdown
 

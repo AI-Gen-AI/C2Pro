@@ -19,6 +19,7 @@ from typing import Any
 
 from ..models import Clause, FindingSignal, impact_to_severity
 from .base import Finding, RuleEvaluator
+from .category_utils import infer_category
 from .config import DEFAULT_CONFIG, EvaluatorConfig
 
 # ═══════════════════════════════════════════════════════════════
@@ -242,6 +243,8 @@ class ScheduleStatusEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
+        if infer_category(clause) not in ("TIME", "SCHEDULE"):
+            return None
         status = str(clause.data.get("status", "")).lower().strip()
         impact = self.STATUS_IMPACT.get(status)
         if impact is None:
