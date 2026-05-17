@@ -229,7 +229,7 @@ class LlmRuleEvaluator(RuleEvaluator):
             category=category,
         )
 
-    def applicability(self, clause: Clause) -> ApplicabilityState:
+    def applicability(self, clause: Clause) -> ApplicabilityState:  # noqa: ARG002
         """LLM rules are disabled wholesale under low_budget_mode."""
         if self.low_budget_mode:
             return ApplicabilityState.SKIPPED_DISABLED
