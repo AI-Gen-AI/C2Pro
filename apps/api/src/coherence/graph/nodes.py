@@ -34,6 +34,7 @@ from ..models import (
     SeverityCount,
     impact_to_severity,
 )
+from ..rules_engine.base import ApplicabilityState
 from ..rules_engine.category_utils import infer_category
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..rules_engine.registry import list_evaluators
@@ -276,28 +277,41 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     ]
     signals: list[FindingSignal] = []
     errors: list[str] = []
-
-    # Use original clauses (evaluators expect Clause, not ClauseWithEmbedding)
+    coverage: dict[str, bool] = {}
     clauses_to_eval = state.clauses
 
     for clause in clauses_to_eval:
         for evaluator in evaluators:
+            category = evaluator.category
             try:
-                signal = evaluator.evaluate_v3(clause)
-                if signal is not None:
-                    signals.append(signal)
-            except Exception as e:
-                error_msg = f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
-                logger.warning(error_msg)
-                errors.append(error_msg)
+                app_state = evaluator.applicability(clause)
+            except Exception as e:  # noqa: BLE001 — applicability must never crash eval
+                logger.warning(f"applicability {evaluator.rule_id} failed: {e}")
+                app_state = ApplicabilityState.SKIPPED_MISSING_INPUTS
+
+            if app_state == ApplicabilityState.EVALUATED:
+                coverage[category] = True
+                try:
+                    signal = evaluator.evaluate_v3(clause)
+                    if signal is not None:
+                        signals.append(signal)
+                except Exception as e:
+                    error_msg = (
+                        f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
+                    )
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
+            else:
+                coverage.setdefault(category, False)
 
     logger.info(
-        f"deterministic_evaluate: {len(signals)} findings from "
-        f"{len(evaluators)} evaluators × {len(clauses_to_eval)} clauses"
+        f"deterministic_evaluate: {len(signals)} findings, "
+        f"coverage={coverage}"
     )
 
     return {
         "deterministic_signals": signals,
+        "coverage_map": coverage,
         "errors": errors,
     }
 
