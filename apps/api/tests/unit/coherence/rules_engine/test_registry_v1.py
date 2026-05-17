@@ -103,8 +103,8 @@ DETERMINISTIC_CASES = [
         "TECHNICAL",
         Clause(
             id="technical-1",
-            text="Concrete works shall be supplied.",
-            data={"category": "TECHNICAL", "material": "concrete"},
+            text="BOM material standard: concrete specification required.",
+            data={"material": "concrete"},
         ),
     ),
     (
@@ -131,7 +131,7 @@ DETERMINISTIC_CASES = [
         "QUALITY",
         Clause(
             id="quality-1",
-            text="Works shall follow industry standards and best practices.",
+            text="Quality inspection shall follow industry standards and best practices.",
             data={},
         ),
     ),
