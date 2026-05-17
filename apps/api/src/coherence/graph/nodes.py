@@ -28,14 +28,13 @@ from ..models import (
     Alert,
     CategoryBreakdown,
     Clause,
-    CoherenceCategory,
     EnrichedCoherenceResult,
     Evidence,
     FindingSignal,
     SeverityCount,
     impact_to_severity,
 )
-from ..rules_engine.category_utils import CATEGORY_KEYWORDS, infer_category
+from ..rules_engine.category_utils import infer_category
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..rules_engine.registry import list_evaluators
 from ..scoring import ScoringService
