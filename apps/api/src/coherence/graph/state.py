@@ -126,6 +126,21 @@ class EvaluationConfig:
 
 
 # =============================================================================
+# COVERAGE MAP REDUCER
+# =============================================================================
+
+
+def merge_coverage(
+    left: dict[str, bool], right: dict[str, bool]
+) -> dict[str, bool]:
+    """LangGraph reducer: a category is assessed if assessed in EITHER branch."""
+    merged = dict(left)
+    for category, assessed in right.items():
+        merged[category] = merged.get(category, False) or assessed
+    return merged
+
+
+# =============================================================================
 # COHERENCE GRAPH STATE
 # =============================================================================
 
@@ -187,6 +202,9 @@ class CoherenceGraphState:
     cross_signals: Annotated[list[FindingSignal], operator.add] = field(
         default_factory=list
     )
+    coverage_map: Annotated[dict[str, bool], merge_coverage] = field(
+        default_factory=dict
+    )
 
     # Scoring output
     all_signals: list[FindingSignal] = field(default_factory=list)
@@ -215,6 +233,11 @@ class CoherenceGraphState:
             + len(self.llm_signals)
             + len(self.cross_signals)
         )
+
+    @property
+    def tenant_id(self) -> str | None:
+        """TS-OBS-COH-001: Canonical tenant accessor for graph integrations."""
+        return self.config.tenant_id
 
     def has_errors(self) -> bool:
         """Check if any errors occurred during evaluation."""
