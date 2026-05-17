@@ -2,7 +2,7 @@
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-05-08
+**Last Updated**: 2026-05-17
 
 **Quick Links**:
 
@@ -13,14 +13,13 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 0
+**Pending Tasks**: 1
 
-**Completed Tasks**: 49
+**Completed Tasks**: 51
 
-- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`
+- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`
 
-> All backend tasks are complete. Detailed task history and specifications have been archived.
-> See [COMPLETED.md](./COMPLETED.md) for the completion record.
+> Active runtime defects are tracked below; completed history remains archived in [COMPLETED.md](./COMPLETED.md).
 
 ---
 
@@ -29,6 +28,28 @@
 | Status | Priority | Task ID | Depends On | Description | Source |
 | ------ | -------- | ------- | ---------- | ----------- | ------ |
 | [ ] | P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error reference IDs with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Live drift repaired 2026-05-16 through `20260516_0001`; remaining blocker is unavailable production log access for reference-ID correlation. | Production report 2026-05-15 |
+| [x] | P0 | `TASK-BCK-052` | None | Fix `/api/v1/analysis/analyze` LangGraph `InvalidUpdateError` caused by duplicated parallel fan-out/join writes to shared keys such as `project_id` after successful parsing. `[x] Implemented (True Multi-Source Fan-In + Branch State Isolation)` | Swagger verification 2026-05-17 |
+| [x] | P1 | `TASK-BCK-053` | None | Stop fresh `/api/v1/analysis/analyze` requests from reusing project-level LangGraph checkpoint threads and replaying prior workflow messages into later analyses. `[x] Implemented (Fresh Analysis Thread Isolation)` | Swagger verification 2026-05-17 |
+| [x] | P0 | `TASK-BCK-054` | None | Restore live `/api/v1/coherence/evaluate` by fixing the tracing/state contract mismatch, satisfying the current LangSmith SDK `inputs` contract, and making coherence telemetry fail open instead of blocking scoring. `[x] Implemented (Coherence Tracing Contract + Fail-Open Telemetry)` | Swagger verification 2026-05-17 |
+| [~] | P0 | `TASK-BCK-055` | None | Coherence Score™ Structured Extraction Layer — wiring complete, LLM calls failing due to depleted Anthropic account credits. Implemented: `clause_extractor.py` (combined schema, UUID-safe DB cache, proper async lifecycle), integrated into `prepare_context` in `nodes.py`, padded `_build_category_breakdown` for categories with no findings, `_norm_cat()` alias in `router.py`. Pending: Anthropic credit top-up to verify extraction produces fields and additional deterministic rules fire. | Swagger session 2026-05-17 |
+| [ ] | P1 | `TASK-BCK-056` | None | Fix `AnthropicWrapper` calling `self.anonymizer_service.anonymize_document()` on `AnonymizationService` (which only has async `anonymize()`). Bug crashes document analysis pipeline (risk_extraction tool). Fix applied: swap import to `PiiAnonymizerService` from `core.privacy.anonymizer` which has the correct `anonymize_document()` sync API. Verify with make test-api after credit top-up. | Bug found during BCK-055 session |
+
+## 2. Specifications
+
+### TASK-BCK-054 — Coherence tracing/state contract repair
+
+- Live cause: `traced_coherence_node()` dereferences `state.tenant_id`, but `CoherenceGraphState` has no direct `tenant_id` field; tenant identity currently lives in `state.config.tenant_id`.
+- Why it matters: every coherence node wrapped by tracing can fail before business logic runs, so `/api/v1/coherence/evaluate` is not operable even when request data is valid.
+- Chosen repair: preserve one canonical tenant source on `CoherenceGraphState` by exposing a read-only `tenant_id` accessor that delegates to `config.tenant_id`; this keeps observability code simple while avoiding duplicate mutable tenant state.
+- Acceptance:
+  1. tracing can read tenant/project metadata from a real `CoherenceGraphState`;
+  2. the core coherence endpoint returns `200` in Swagger for the current parsed project;
+  3. no tenant-filtering or graph behavior is weakened.
+- Follow-on defect found during real verification: after the state accessor fix, live execution advanced to a second `500` because `LangSmithClient.start_span()` no longer satisfied the installed SDK signature (`Client.create_run()` requires `inputs`).
+- Final repair shape:
+  1. expose read-only `CoherenceGraphState.tenant_id -> config.tenant_id`;
+  2. pass `inputs={}` when creating LangSmith spans;
+  3. make span start/update/end telemetry fail open so observability cannot take down coherence evaluation.
 
 ---
 
@@ -85,3 +106,8 @@
 | `TASK-BCK-048` | Production alerts route + upload CORS parity             | 2026-04-11    |
 | `TASK-BCK-049` | Direct upload Clerk token + error CORS fix               | 2026-04-11    |
 | `TASK-BCK-051` | Production alerts/stakeholders 500 triage              | Pending       |
+| `TASK-BCK-052` | Analysis graph parallel state merge fix                | 2026-05-17    |
+| `TASK-BCK-053` | Fresh analysis checkpoint isolation                    | 2026-05-17    |
+| `TASK-BCK-054` | Coherence tracing contract + fail-open telemetry       | 2026-05-17    |
+| `TASK-BCK-055` | Coherence structured extraction layer (credits needed) | In progress   |
+| `TASK-BCK-056` | AnthropicWrapper anonymizer API mismatch fix           | 2026-05-17    |
