@@ -37,14 +37,17 @@ CATEGORY_KEYWORDS: dict[CoherenceCategory, list[str]] = {
 
 def infer_category(clause: Clause) -> CoherenceCategory:
     """
-    Infer the coherence category from clause text and data keys.
+    Infer the coherence category from clause text content only.
 
-    Uses keyword matching to determine the most likely category.
+    Uses keyword matching on the clause text to determine the most likely
+    category. Data key names are intentionally excluded — after extraction,
+    every clause has schema field names (specification, standard, material…)
+    as keys regardless of whether those fields apply, which would corrupt
+    scores if key names were included in the match target.
+
     Returns "SCOPE" as default if no strong match.
     """
-    text_lower = clause.text.lower() if clause.text else ""
-    data_keys = " ".join(clause.data.keys()).lower() if clause.data else ""
-    combined = f"{text_lower} {data_keys}"
+    combined = clause.text.lower() if clause.text else ""
 
     scores: dict[CoherenceCategory, int] = {cat: 0 for cat in CATEGORY_KEYWORDS}
 
