@@ -93,6 +93,11 @@
 | Priority | Task ID | Depends On | Description |
 | -------- | ------- | ---------- | ----------- |
 | P0 | `TASK-BCK-051` | None | Investigate live `500` responses on project alerts and project stakeholders by correlating production error references with backend logs and verifying applied Alembic head/schema parity for tenant-hardened tables. Live schema drift was repaired on 2026-05-16 via `20260516_0001`; log correlation remains blocked on unavailable production log access. |
+| ~~P0~~ | ~~`TASK-BCK-052`~~ | None | ~~Fix `/api/v1/analysis/analyze` runtime failure where LangGraph parallel fan-out/join wiring duplicated downstream state writes such as `project_id`, causing `InvalidUpdateError` after successful document parsing.~~ `[x] Implemented (True Multi-Source Fan-In + Branch State Isolation)` |
+| ~~P1~~ | ~~`TASK-BCK-053`~~ | None | ~~Stop fresh `/api/v1/analysis/analyze` requests from reusing project-level LangGraph checkpoint threads, which replays prior workflow messages into new analyses for the same project.~~ `[x] Implemented (Fresh Analysis Thread Isolation)` |
+| ~~P0~~ | ~~`TASK-BCK-054`~~ | None | ~~Restore live `/api/v1/coherence/evaluate` by reconciling the tracing wrapper with the actual `CoherenceGraphState` tenant contract; current Swagger call fails with `AttributeError: 'CoherenceGraphState' object has no attribute 'tenant_id'`.~~ `[x] Implemented (Coherence Tracing Contract + Fail-Open Telemetry)` |
+| ~~P0~~ | ~~`TASK-BCK-055`~~ | None | ~~Coherence Score™ Structured Extraction Layer~~ `[x] Implemented` — extraction layer runs on every evaluation, populates `clause.data` from clause text via Claude Haiku, caches in `clauses.extracted_entities`. Verified: TECHNICAL score 100→71.5, deterministic findings 8→13, new rules `DET-TEC-BOMBUDGET` + `DET-TEC-SPEC` firing. Second-call latency near-zero (DB cache hits). LEGAL/SCOPE still 100 due to RAG retrieval coverage (not an extraction bug). |
+| ~~P1~~ | ~~`TASK-BCK-056`~~ | None | ~~Fix `AnthropicWrapper` calling `anonymize_document()` on wrong service class~~ `[x] Implemented` — swapped to `PiiAnonymizerService` from `core.privacy.anonymizer` which has the correct sync API. |
 
 ### Frontend (2 pending)
 
