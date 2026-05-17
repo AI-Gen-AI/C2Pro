@@ -265,4 +265,5 @@ __all__ = [
     "CoherenceGraphState",
     "NodeInput",
     "NodeOutput",
+    "merge_coverage",
 ]
