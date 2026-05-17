@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from ..models import Clause, FindingSignal, impact_to_severity
-from .base import Finding, RuleEvaluator
+from .base import ApplicabilityState, Finding, RuleEvaluator
 from .category_utils import infer_category
 from .config import DEFAULT_CONFIG, EvaluatorConfig
 
@@ -40,6 +40,11 @@ class BudgetOverrunEvaluator(RuleEvaluator):
 
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if _num(clause.data.get("current")) and _num(clause.data.get("planned")):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -101,6 +106,13 @@ class BudgetLineItemEvaluator(RuleEvaluator):
 
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        up, qty = clause.data.get("unit_price"), clause.data.get("quantity")
+        total = clause.data.get("line_total") or clause.data.get("total")
+        if _num(up) and _num(qty) and _num(total):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -238,6 +250,13 @@ class ScheduleStatusEvaluator(RuleEvaluator):
         "force_majeure": 0.75, "stopped": 0.85,
     }
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if infer_category(clause) in ("TIME", "SCHEDULE") and str(
+            clause.data.get("status", "")
+        ).strip():
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -367,6 +386,13 @@ class ScheduleDurationEvaluator(RuleEvaluator):
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        has_dates = clause.data.get("start_date") and clause.data.get("end_date")
+        has_buf = _num(clause.data.get("buffer_days")) or _num(clause.data.get("float_days"))
+        if has_dates or has_buf:
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -427,6 +453,16 @@ class PenaltyCapEvaluator(RuleEvaluator):
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        d = clause.data
+        if (
+            d.get("has_penalty_cap") is not None
+            or _num(d.get("penalty_cap_pct"))
+            or _num(d.get("daily_penalty_pct"))
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -464,6 +500,11 @@ class NoticePeriodEvaluator(RuleEvaluator):
 
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if _num(clause.data.get("notice_period_days")):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -626,6 +667,14 @@ class SpecReferenceEvaluator(RuleEvaluator):
     rule_name = "Technical Specification Reference"
     category = "TECHNICAL"
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if any(
+            clause.data.get(k) not in (None, [], "")
+            for k in ("material", "bom_items", "item_name", "lead_time_days")
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -661,6 +710,12 @@ class BomBudgetLinkEvaluator(RuleEvaluator):
     rule_id = "DET-TEC-BOMBUDGET"
     rule_name = "BOM-Budget Linkage"
     category = "TECHNICAL"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        bom = clause.data.get("bom_items")
+        if isinstance(bom, list) and len(bom) > 0:
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -706,6 +761,11 @@ class QualityStandardEvaluator(RuleEvaluator):
         "generally accepted", "customary", "usual standards",
     }
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if infer_category(clause) in ("QUALITY", "TECHNICAL"):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -737,6 +797,11 @@ class InspectionFrequencyEvaluator(RuleEvaluator):
     rule_id = "DET-QUA-INSPECT"
     rule_name = "Inspection Frequency Validation"
     category = "QUALITY"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if infer_category(clause) in ("QUALITY", "TECHNICAL"):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -827,6 +892,11 @@ class ScopeDeliverablesEvaluator(RuleEvaluator):
     rule_id = "DET-SCP-DELIVERABLES"
     rule_name = "Deliverable Completeness"
     category = "SCOPE"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        if infer_category(clause) == "SCOPE":
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
@@ -941,6 +1011,16 @@ class ScopeVsBudgetCoverageEvaluator(RuleEvaluator):
     rule_id = "DET-CRS-SCPBUD"
     rule_name = "Scope vs Budget Coverage"
     category = "SCOPE"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        d = clause.data
+        deliverables, budget_items = d.get("deliverables"), d.get("budget_items")
+        if (
+            isinstance(deliverables, list) and deliverables
+            and isinstance(budget_items, list) and budget_items
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
