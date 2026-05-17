@@ -179,6 +179,46 @@ def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> 
     )
 
 
+_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "LEGAL":     ["penalty", "notice", "terminat", "warrant", "liabilit", "indemnif", "arbitrat", "dispute", "insurance"],
+    "TIME":      ["completion", "milestone", "delay", "deadline", "schedule", "float", "duration", "commencement"],
+    "BUDGET":    ["payment", "price", "invoice", "retention", "advance", "contract sum", "contract price", "lump sum"],
+    "TECHNICAL": ["specification", "standard", "iso", "astm", "equipment", "bom", "engineering", "design"],
+    "QUALITY":   ["inspection", "test", "commissioning", "defect", "quality", "acceptance"],
+    "SCOPE":     ["deliverable", "scope of work", "scope of supply", "shall supply", "shall provide", "shall design"],
+}
+
+# Clauses per category on targeted pass; fallback fills remainder up to max_chunks.
+_CLAUSES_PER_CATEGORY = 10
+
+
+def _build_clause(row: tuple) -> Clause | None:
+    clause_id = str(row[0])
+    text_value = row[1] or ""
+    extracted = row[2] or {}
+    doc_id = str(row[3])
+    doc_type = row[4] or "unknown"
+    if not text_value:
+        return None
+    extracted_dict = extracted if isinstance(extracted, dict) else {}
+    affected_categories = extracted_dict.get("affected_categories")
+    if not isinstance(affected_categories, list) or not affected_categories:
+        fallback_category = extracted_dict.get("category", doc_type)
+        affected_categories = [str(fallback_category).upper()]
+    return Clause(
+        id=clause_id,
+        text=text_value,
+        data={
+            "document_id": doc_id,
+            "source": "persisted_clause",
+            "source_document_type": doc_type,
+            "category": affected_categories[0],
+            "affected_categories": affected_categories,
+            **extracted_dict,
+        },
+    )
+
+
 async def get_clauses_from_rag(
     db: AsyncSession,
     project_id: UUID,
@@ -187,55 +227,81 @@ async def get_clauses_from_rag(
 ) -> list[Clause]:
     """
     Resolve coherence clauses with this precedence:
-    1. Persisted document clauses
+    1. Persisted document clauses — category-targeted multi-query
     2. RAG chunks
     3. Parsed document text fallback
+
+    Category-targeted strategy: run one keyword-filtered query per category
+    (LEGAL, TIME, BUDGET, TECHNICAL, QUALITY, SCOPE), take up to
+    _CLAUSES_PER_CATEGORY hits each, deduplicate, then fill remaining budget
+    with a chronological fallback so boilerplate clauses are still present.
     """
-    persisted_stmt = text("""
+    seen_ids: set[str] = set()
+    targeted_clauses: list[Clause] = []
+
+    base_query = """
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
         JOIN documents d ON c.document_id = d.id
         JOIN projects p ON d.project_id = p.id
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND (
+            {keyword_filter}
+          )
         ORDER BY c.created_at ASC
         LIMIT :limit
-    """)
-    persisted_result = await db.execute(
-        persisted_stmt,
-        {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": max_chunks},
-    )
-    persisted_rows = persisted_result.fetchall()
-    persisted_clauses = []
-    for row in persisted_rows:
-        clause_id = str(row[0])
-        text_value = row[1] or ""
-        extracted = row[2] or {}
-        doc_id = str(row[3])
-        doc_type = row[4] or "unknown"
-        if not text_value:
-            continue
-        extracted_dict = extracted if isinstance(extracted, dict) else {}
-        affected_categories = extracted_dict.get("affected_categories")
-        if not isinstance(affected_categories, list) or not affected_categories:
-            fallback_category = extracted_dict.get("category", doc_type)
-            affected_categories = [str(fallback_category).upper()]
-        persisted_clauses.append(
-            Clause(
-                id=clause_id,
-                text=text_value,
-                data={
-                    "document_id": doc_id,
-                    "source": "persisted_clause",
-                    "source_document_type": doc_type,
-                    "category": affected_categories[0],
-                    "affected_categories": affected_categories,
-                    **extracted_dict,
-                },
-            )
+    """
+
+    for _category, keywords in _CATEGORY_KEYWORDS.items():
+        conditions = " OR ".join(
+            f"LOWER(c.full_text) LIKE '%{kw.lower()}%'" for kw in keywords
         )
-    if persisted_clauses:
-        return persisted_clauses
+        stmt = text(base_query.format(keyword_filter=conditions))
+        result = await db.execute(
+            stmt,
+            {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": _CLAUSES_PER_CATEGORY},
+        )
+        for row in result.fetchall():
+            cid = str(row[0])
+            if cid in seen_ids:
+                continue
+            clause = _build_clause(row)
+            if clause:
+                targeted_clauses.append(clause)
+                seen_ids.add(cid)
+
+    # Chronological fallback: fill remaining budget so boilerplate is not lost
+    remaining = max(0, max_chunks - len(targeted_clauses))
+    if remaining > 0:
+        fallback_stmt = text("""
+            SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
+            FROM clauses c
+            JOIN documents d ON c.document_id = d.id
+            JOIN projects p ON d.project_id = p.id
+            WHERE d.project_id = CAST(:project_id AS uuid)
+              AND p.tenant_id = CAST(:tenant_id AS uuid)
+            ORDER BY c.created_at ASC
+            LIMIT :limit
+        """)
+        fallback_result = await db.execute(
+            fallback_stmt,
+            {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": remaining + len(seen_ids)},
+        )
+        for row in fallback_result.fetchall():
+            cid = str(row[0])
+            if cid in seen_ids:
+                continue
+            clause = _build_clause(row)
+            if clause:
+                targeted_clauses.append(clause)
+                seen_ids.add(cid)
+                remaining -= 1
+                if remaining <= 0:
+                    break
+
+    if targeted_clauses:
+        return targeted_clauses
 
     stmt = text("""
         SELECT dc.content, dc.metadata, dc.document_id
@@ -401,6 +467,62 @@ async def evaluate_project_coherence(
         overall_score=enriched_result.overall_score,
     )
 
+    # Persist result so the dashboard always reflects the latest evaluation
+    if payload.project_id and enriched_result.overall_score is not None:
+        # Normalize legacy "SCHEDULE"→"TIME" so dashboard sub_scores keys match COHERENCE_CATEGORIES
+        _CAT_ALIAS = {"SCHEDULE": "TIME", "FINANCIAL": "BUDGET", "GENERAL": "SCOPE"}
+
+        def _norm_cat(cat: str) -> str:
+            key = cat.upper()
+            return _CAT_ALIAS.get(key, key)
+
+        category_scores = {
+            _norm_cat(item.category): item.score
+            for item in enriched_result.category_breakdown
+        }
+        category_details = [
+            {
+                "category": _norm_cat(item.category),
+                "score": item.score,
+                "alert_count": item.alert_count,
+                "severity_breakdown": dict(item.severity_breakdown) if item.severity_breakdown else {},
+                "impact_percentage": item.impact_percentage,
+            }
+            for item in enriched_result.category_breakdown
+        ]
+        alerts_data = [
+            {
+                "rule_id": a.rule_id,
+                "severity": a.severity,
+                "category": a.category,
+                "message": a.message,
+                "evidence": (
+                    {
+                        "source_clause_id": a.evidence.source_clause_id,
+                        "claim": a.evidence.claim,
+                        "quote": a.evidence.quote,
+                    }
+                    if a.evidence
+                    else None
+                ),
+            }
+            for a in enriched_result.alerts
+        ]
+        db.add(
+            CoherenceResultORM(
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                global_score=round(enriched_result.overall_score),
+                category_scores=category_scores,
+                category_details=category_details,
+                alerts=alerts_data,
+                score_version=enriched_result.score_version or "v0_flag_based",
+                score_reason=enriched_result.score_reason,
+                score_missing_dimensions=enriched_result.score_missing_dimensions,
+            )
+        )
+        await db.commit()
+
     # Return diagnostics if requested (Task 7.4)
     if include_diagnostics:
         return enriched_result
@@ -427,17 +549,18 @@ async def evaluate_project_coherence(
 async def evaluate_with_diagnostics(
     payload: CoherenceEvaluateRequest,
     db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> EnrichedCoherenceResult:
     """
     Evaluate project coherence with full diagnostic output.
 
     This is a convenience endpoint equivalent to POST /evaluate?include_diagnostics=true
     """
-    # Reuse main endpoint logic with diagnostics forced
     return await evaluate_project_coherence(
         payload=payload,
         include_diagnostics=True,
         db=db,
+        current_user=current_user,
     )
 
 
