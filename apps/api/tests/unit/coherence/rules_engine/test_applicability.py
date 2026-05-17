@@ -28,3 +28,23 @@ def test_base_default_skips_when_category_mismatch():
         def evaluate(self, clause):
             return None
     assert _Bare().applicability(c) == ApplicabilityState.SKIPPED_MISSING_INPUTS
+
+
+def test_llm_evaluator_skipped_disabled_in_low_budget():
+    from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+    ev = LlmRuleEvaluator(
+        rule_id="R-RESPONSIBILITY-01", rule_name="Resp", rule_description="d",
+        detection_logic="l", category="legal", low_budget_mode=True,
+    )
+    c = Clause(id="l1", text="The contractor shall be liable.", data={})
+    assert ev.applicability(c) == ApplicabilityState.SKIPPED_DISABLED
+
+
+def test_llm_evaluator_evaluated_when_enabled():
+    from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+    ev = LlmRuleEvaluator(
+        rule_id="R-RESPONSIBILITY-01", rule_name="Resp", rule_description="d",
+        detection_logic="l", category="legal", low_budget_mode=False,
+    )
+    c = Clause(id="l1", text="The contractor shall be liable.", data={})
+    assert ev.applicability(c) == ApplicabilityState.EVALUATED
