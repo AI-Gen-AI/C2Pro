@@ -631,7 +631,14 @@ class SpecReferenceEvaluator(RuleEvaluator):
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
 
     def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
-        if infer_category(clause) != "TECHNICAL":
+        # Only fire when extraction confirmed material/BOM content exists.
+        # If extraction ran and left these fields null the clause isn't a
+        # spec/BOM clause, regardless of what keywords appear in its text.
+        has_material_content = any(
+            clause.data.get(k) not in (None, [], "")
+            for k in ("material", "bom_items", "item_name", "lead_time_days")
+        )
+        if not has_material_content:
             return None
         has_spec = any(clause.data.get(k) for k in (
             "spec_reference", "standard", "norm", "iso", "astm", "en_standard",
