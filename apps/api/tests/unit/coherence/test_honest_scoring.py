@@ -16,7 +16,7 @@ def test_unassessed_categories_are_null_and_penalize_global():
                                coverage_map=cov)
     assert d.category_scores["BUDGET"] is None
     assert d.category_scores["LEGAL"] is None
-    assert "BUDGET" in d.missing_dimensions
+    assert set(d.missing_dimensions) == {"BUDGET", "TIME", "LEGAL", "QUALITY"}
     assert d.score is not None and d.score < 40
 
 
