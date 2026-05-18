@@ -777,7 +777,11 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
             alerts.append(meta_alert)
 
     # Build category breakdown
-    category_breakdown = _build_category_breakdown(state.all_signals, state.score)
+    category_breakdown = _build_category_breakdown(
+        state.all_signals,
+        state.coverage_map,
+        state.diagnostics.get("category_scores") or {},
+    )
 
     # Build enriched result
     result = EnrichedCoherenceResult(
@@ -858,84 +862,47 @@ def _create_audit_incomplete_alert(
     )
 
 
+_CAT_LEGACY = {
+    "SCOPE": "scope", "BUDGET": "financial", "TIME": "schedule",
+    "TECHNICAL": "technical", "LEGAL": "legal", "QUALITY": "quality",
+}
+
+
 def _build_category_breakdown(
     signals: list[FindingSignal],
-    overall_score: float | None,
+    coverage_map: dict[str, bool],
+    category_scores: dict[str, float | None],
 ) -> list[CategoryBreakdown]:
-    """Build category breakdown from signals."""
-    if overall_score is None:
-        return []
-
-    expanded_signals: list[tuple[str, FindingSignal]] = []
-    for signal in signals:
-        affected_categories = signal.raw_data.get("affected_categories") if isinstance(signal.raw_data, dict) else None
-        if isinstance(affected_categories, list) and affected_categories:
-            for category in affected_categories:
-                expanded_signals.append((str(category).upper(), signal))
-        else:
-            expanded_signals.append((signal.category, signal))
-
-    by_category: dict[str, list[FindingSignal]] = {}
-    for category, signal in expanded_signals:
-        by_category.setdefault(category, []).append(signal)
-
-    total_deduction = 100.0 - overall_score
+    """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings."""
     breakdown: list[CategoryBreakdown] = []
-    total_impact_sum = sum(signal.impact_score for _, signal in expanded_signals) if expanded_signals else 1
-
-    for category, cat_signals in by_category.items():
-        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-        for signal in cat_signals:
-            if signal.severity in severity_counts:
-                severity_counts[signal.severity] += 1
-
-        cat_impact_sum = sum(signal.impact_score for signal in cat_signals)
-
-        if total_deduction > 0 and total_impact_sum > 0:
-            impact_pct = (cat_impact_sum / total_impact_sum) * 100
+    for canonical, legacy in _CAT_LEGACY.items():
+        cat_signals = [s for s in signals if s.category == canonical]
+        sev = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        for s in cat_signals:
+            if s.severity in sev:
+                sev[s.severity] += 1
+        assessed = coverage_map.get(canonical, False)
+        score = category_scores.get(canonical)
+        if not assessed:
+            state, baseline_estimated, score = "unassessed", False, None
+        elif not cat_signals:
+            state, baseline_estimated = "assessed_clean", True
         else:
-            impact_pct = 0.0
-
-        cat_map = {
-            "BUDGET": "financial",
-            "TIME": "schedule",
-            "LEGAL": "legal",
-            "SCOPE": "scope",
-            "TECHNICAL": "technical",
-            "QUALITY": "quality",
-            "CROSS": "general",
-        }
-
+            state, baseline_estimated = "assessed_findings", False
+        total_impact = sum(s.impact_score for s in signals) or 1.0
+        cat_impact = sum(s.impact_score for s in cat_signals)
         breakdown.append(
             CategoryBreakdown(
-                category=cat_map.get(category, "general"),
-                score=round(max(0.0, 100.0 - (cat_impact_sum * 10)), 2),
+                category=legacy,
+                score=score,
                 alert_count=len(cat_signals),
-                severity_breakdown=SeverityCount(**severity_counts),
-                impact_percentage=round(impact_pct, 2),
+                severity_breakdown=SeverityCount(**sev),
+                impact_percentage=round(cat_impact / total_impact * 100, 2),
+                state=state,
+                baseline_estimated=baseline_estimated,
             )
         )
-
-    breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
-
-    # Add score=100 entries for canonical categories that had no findings.
-    # Absence of alerts means the evaluator found nothing wrong, not that the
-    # dimension is unmeasured (unmeasured dimensions appear in score_missing_dimensions).
-    scored_categories = {item.category for item in breakdown}
-    for canonical, legacy in cat_map.items():
-        if legacy not in scored_categories and canonical != "CROSS":
-            breakdown.append(
-                CategoryBreakdown(
-                    category=legacy,
-                    score=100.0,
-                    alert_count=0,
-                    severity_breakdown=SeverityCount(
-                        critical=0, high=0, medium=0, low=0, info=0
-                    ),
-                    impact_percentage=0.0,
-                )
-            )
-
+    breakdown.sort(key=lambda b: b.impact_percentage, reverse=True)
     return breakdown
 
 
