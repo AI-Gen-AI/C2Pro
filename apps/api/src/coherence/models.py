@@ -199,13 +199,22 @@ class CategoryBreakdown(BaseModel):
     """
 
     category: AlertCategory = Field(..., description="The alert category.")
-    score: float = Field(..., description="The coherence score for this category (0-100).")
+    score: float | None = Field(
+        None, description="Category score (null when UNASSESSED)."
+    )
     alert_count: int = Field(..., description="Total number of alerts in this category.")
     severity_breakdown: SeverityCount = Field(
         ..., description="Breakdown of alerts by severity within this category."
     )
     impact_percentage: float = Field(
         ..., description="Percentage of impact this category has on the overall score."
+    )
+    state: str = Field(
+        "assessed_findings",
+        description="unassessed | assessed_clean | assessed_findings",
+    )
+    baseline_estimated: bool = Field(
+        False, description="True when score is the inherent-risk baseline (clean)."
     )
 
 

@@ -28,13 +28,14 @@ from ..models import (
     Alert,
     CategoryBreakdown,
     Clause,
-    CoherenceCategory,
     EnrichedCoherenceResult,
     Evidence,
     FindingSignal,
     SeverityCount,
     impact_to_severity,
 )
+from ..rules_engine.base import ApplicabilityState
+from ..rules_engine.category_utils import infer_category
 from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..rules_engine.registry import list_evaluators
 from ..scoring import ScoringService
@@ -53,66 +54,6 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Keywords for category inference from clause text/data
-CATEGORY_KEYWORDS: dict[CoherenceCategory, list[str]] = {
-    "BUDGET": [
-        "budget", "cost", "price", "amount", "payment", "invoice", "expense",
-        "contingency", "retention", "advance", "total", "unit_price", "line_total",
-        "planned", "current", "variance", "overrun", "financial",
-    ],
-    "TIME": [
-        "schedule", "deadline", "milestone", "date", "duration", "start_date",
-        "end_date", "timeline", "delay", "overdue", "predecessor", "task",
-        "calendar", "days", "weeks", "months",
-    ],
-    "LEGAL": [
-        "contract", "agreement", "clause", "term", "condition", "warranty",
-        "liability", "penalty", "notice", "insurance", "indemnity", "review",
-        "expiry", "termination", "dispute", "arbitration",
-    ],
-    "SCOPE": [
-        "scope", "deliverable", "requirement", "specification", "work",
-        "objective", "inclusion", "exclusion", "change", "amendment",
-    ],
-    "TECHNICAL": [
-        "bom", "material", "specification", "standard", "iso", "astm",
-        "lead_time", "technical", "engineering", "design", "component",
-    ],
-    "QUALITY": [
-        "quality", "inspection", "test", "compliance", "standard",
-        "acceptance", "defect", "tolerance", "frequency",
-    ],
-}
-
-
-def infer_category(clause: Clause) -> CoherenceCategory:
-    """
-    Infer the coherence category from clause text and data keys.
-
-    Uses keyword matching to determine the most likely category.
-    Returns "SCOPE" as default if no strong match.
-    """
-    text_lower = clause.text.lower() if clause.text else ""
-    data_keys = " ".join(clause.data.keys()).lower() if clause.data else ""
-    combined = f"{text_lower} {data_keys}"
-
-    scores: dict[CoherenceCategory, int] = {cat: 0 for cat in CATEGORY_KEYWORDS}
-
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        for kw in keywords:
-            if kw in combined:
-                scores[category] += 1
-
-    # Return category with highest score, or SCOPE if tie/zero
-    max_score = max(scores.values())
-    if max_score == 0:
-        return "SCOPE"
-
-    for cat, score in scores.items():
-        if score == max_score:
-            return cat
-
-    return "SCOPE"
-
 
 def infer_document_type(clause: Clause) -> str:
     """Infer document type from clause data or ID patterns."""
@@ -213,7 +154,18 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
             logger.warning(f"Embedding batch load failed, continuing without RAG: {e}")
             errors.append(f"Embedding batch load failed: {e}")
 
-    for clause in state.clauses:
+    # Enrich clause.data with structured fields the deterministic rules need.
+    # Cache-first: DB hit = zero LLM cost; miss = one Claude Haiku call per clause.
+    # This runs regardless of low_budget_mode — it serves deterministic rules, not LLM evaluators.
+    try:
+        from src.coherence.extraction.clause_extractor import enrich_clauses
+
+        enriched_raw = await enrich_clauses(list(state.clauses))
+    except Exception as _exc:  # noqa: BLE001 — never block evaluation
+        logger.warning("prepare_context: clause enrichment failed, continuing: %s", _exc)
+        enriched_raw = list(state.clauses)
+
+    for clause in enriched_raw:
         category = infer_category(clause)
         doc_type = infer_document_type(clause)
 
@@ -317,7 +269,8 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
         state: Current graph state with enriched clauses
 
     Returns:
-        Partial state update with deterministic_signals
+        Partial state update with deterministic_signals, coverage_map
+        (per-category assessed/skipped), and errors.
     """
     evaluators = [
         evaluator for evaluator in list_evaluators()
@@ -325,28 +278,41 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     ]
     signals: list[FindingSignal] = []
     errors: list[str] = []
-
-    # Use original clauses (evaluators expect Clause, not ClauseWithEmbedding)
+    coverage: dict[str, bool] = {}
     clauses_to_eval = state.clauses
 
     for clause in clauses_to_eval:
         for evaluator in evaluators:
+            category = evaluator.category
             try:
-                signal = evaluator.evaluate_v3(clause)
-                if signal is not None:
-                    signals.append(signal)
-            except Exception as e:
-                error_msg = f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
-                logger.warning(error_msg)
-                errors.append(error_msg)
+                app_state = evaluator.applicability(clause)
+            except Exception as e:  # noqa: BLE001 — applicability must never crash eval
+                logger.warning(f"applicability {evaluator.rule_id} failed: {e}")
+                app_state = ApplicabilityState.SKIPPED_MISSING_INPUTS
+
+            if app_state == ApplicabilityState.EVALUATED:
+                coverage[category] = True
+                try:
+                    signal = evaluator.evaluate_v3(clause)
+                    if signal is not None:
+                        signals.append(signal)
+                except Exception as e:
+                    error_msg = (
+                        f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
+                    )
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
+            else:
+                coverage.setdefault(category, False)
 
     logger.info(
-        f"deterministic_evaluate: {len(signals)} findings from "
-        f"{len(evaluators)} evaluators × {len(clauses_to_eval)} clauses"
+        f"deterministic_evaluate: {len(signals)} findings, "
+        f"coverage={coverage}"
     )
 
     return {
         "deterministic_signals": signals,
+        "coverage_map": coverage,
         "errors": errors,
     }
 
@@ -371,6 +337,9 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with llm_signals, llm_cost_usd, llm_calls_count
     """
+    # Six canonical LLM categories (registry V1_LLM_RULE_IDS map)
+    _LLM_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
+
     # Skip in low_budget_mode
     if state.config.low_budget_mode:
         logger.info("llm_semantic_evaluate: skipped (low_budget_mode=True)")
@@ -378,10 +347,12 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
             "llm_signals": [],
             "llm_cost_usd": 0.0,
             "llm_calls_count": 0,
+            "coverage_map": {cat: False for cat in _LLM_CATEGORIES},
         }
 
     signals: list[FindingSignal] = []
     errors: list[str] = []
+    coverage: dict[str, bool] = {}
     total_cost = 0.0
     total_calls = 0
 
@@ -395,20 +366,27 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
 
         for clause in state.clauses:
             for evaluator in evaluators:
+                category = evaluator.category
                 try:
-                    signal = await evaluator.evaluate_v3_async(clause)
-                    if signal is not None:
-                        signals.append(signal)
-                except Exception as e:
-                    error_msg = (
-                        f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
-                    )
-                    logger.warning(error_msg)
-                    errors.append(error_msg)
+                    app_state = evaluator.applicability(clause)
+                except Exception:  # noqa: BLE001
+                    app_state = ApplicabilityState.SKIPPED_DISABLED
+                if app_state == ApplicabilityState.EVALUATED:
+                    coverage[category] = True
+                    try:
+                        signal = await evaluator.evaluate_v3_async(clause)
+                        if signal is not None:
+                            signals.append(signal)
+                    except Exception as e:
+                        msg = f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
+                        logger.warning(msg)
+                        errors.append(msg)
+                else:
+                    coverage.setdefault(category, False)
 
         # Get cost metrics
-        total_cost = sum(getattr(evaluator, "total_cost_usd", 0.0) for evaluator in evaluators)
-        total_calls = sum(getattr(evaluator, "llm_calls_count", 0) for evaluator in evaluators)
+        total_cost = sum(getattr(e, "total_cost_usd", 0.0) for e in evaluators)
+        total_calls = sum(getattr(e, "llm_calls_count", 0) for e in evaluators)
 
     except ImportError as e:
         logger.warning(f"LLM evaluator not available: {e}")
@@ -423,6 +401,7 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
         "llm_signals": signals,
         "llm_cost_usd": total_cost,
         "llm_calls_count": total_calls,
+        "coverage_map": coverage,
         "errors": errors,
     }
 
@@ -732,9 +711,9 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     diagnostics = scoring_service.calculate_detailed(
         signals=all_signals,
         num_clauses=len(state.clauses),
-        num_rules=27,  # 27 deterministic rules
+        num_rules=12,
         poor_extraction_quality=state.config.poor_extraction_quality,
-        missing_dimensions=state.config.missing_dimensions or _missing_dimensions(state),
+        coverage_map=state.coverage_map,
     )
 
     logger.info(
@@ -759,6 +738,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
             "category_contributions": diagnostics.category_contributions,
             "reason": diagnostics.reason,
             "missing_dimensions": diagnostics.missing_dimensions,
+            "category_scores": diagnostics.category_scores,
+            "audit_coverage": diagnostics.audit_coverage,
         },
     }
 
@@ -796,7 +777,11 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
             alerts.append(meta_alert)
 
     # Build category breakdown
-    category_breakdown = _build_category_breakdown(state.all_signals, state.score)
+    category_breakdown = _build_category_breakdown(
+        state.all_signals,
+        state.coverage_map,
+        state.diagnostics.get("category_scores") or {},
+    )
 
     # Build enriched result
     result = EnrichedCoherenceResult(
@@ -877,66 +862,49 @@ def _create_audit_incomplete_alert(
     )
 
 
+_CAT_LEGACY = {
+    "SCOPE": "scope", "BUDGET": "financial", "TIME": "schedule",
+    "TECHNICAL": "technical", "LEGAL": "legal", "QUALITY": "quality",
+}
+
+
 def _build_category_breakdown(
     signals: list[FindingSignal],
-    overall_score: float | None,
+    coverage_map: dict[str, bool],
+    category_scores: dict[str, float | None],
 ) -> list[CategoryBreakdown]:
-    """Build category breakdown from signals."""
-    if overall_score is None:
-        return []
-
-    expanded_signals: list[tuple[str, FindingSignal]] = []
-    for signal in signals:
-        affected_categories = signal.raw_data.get("affected_categories") if isinstance(signal.raw_data, dict) else None
-        if isinstance(affected_categories, list) and affected_categories:
-            for category in affected_categories:
-                expanded_signals.append((str(category).upper(), signal))
-        else:
-            expanded_signals.append((signal.category, signal))
-
-    by_category: dict[str, list[FindingSignal]] = {}
-    for category, signal in expanded_signals:
-        by_category.setdefault(category, []).append(signal)
-
-    total_deduction = 100.0 - overall_score
+    """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings."""
     breakdown: list[CategoryBreakdown] = []
-    total_impact_sum = sum(signal.impact_score for _, signal in expanded_signals) if expanded_signals else 1
-
-    for category, cat_signals in by_category.items():
-        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-        for signal in cat_signals:
-            if signal.severity in severity_counts:
-                severity_counts[signal.severity] += 1
-
-        cat_impact_sum = sum(signal.impact_score for signal in cat_signals)
-
-        if total_deduction > 0 and total_impact_sum > 0:
-            impact_pct = (cat_impact_sum / total_impact_sum) * 100
+    # CROSS-category signals are not bucketed into the 6 canonical categories
+    # but still count toward total_impact (the impact_percentage denominator).
+    total_impact = sum(s.impact_score for s in signals) or 1.0
+    for canonical, legacy in _CAT_LEGACY.items():
+        cat_signals = [s for s in signals if s.category == canonical]
+        sev = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        for s in cat_signals:
+            if s.severity in sev:
+                sev[s.severity] += 1
+        assessed = coverage_map.get(canonical, False)
+        score = category_scores.get(canonical)
+        if not assessed:
+            state, baseline_estimated, score = "unassessed", False, None
+        elif not cat_signals:
+            state, baseline_estimated = "assessed_clean", True
         else:
-            impact_pct = 0.0
-
-        cat_map = {
-            "BUDGET": "financial",
-            "TIME": "schedule",
-            "LEGAL": "legal",
-            "SCOPE": "scope",
-            "TECHNICAL": "technical",
-            "QUALITY": "quality",
-            "CROSS": "general",
-        }
-
+            state, baseline_estimated = "assessed_findings", False
+        cat_impact = sum(s.impact_score for s in cat_signals)
         breakdown.append(
             CategoryBreakdown(
-                category=cat_map.get(category, "general"),
-                score=round(max(0.0, 100.0 - (cat_impact_sum * 10)), 2),
+                category=legacy,
+                score=score,
                 alert_count=len(cat_signals),
-                severity_breakdown=SeverityCount(**severity_counts),
-                impact_percentage=round(impact_pct, 2),
+                severity_breakdown=SeverityCount(**sev),
+                impact_percentage=round(cat_impact / total_impact * 100, 2),
+                state=state,
+                baseline_estimated=baseline_estimated,
             )
         )
-
-    breakdown.sort(key=lambda x: x.impact_percentage, reverse=True)
-
+    breakdown.sort(key=lambda b: b.impact_percentage, reverse=True)
     return breakdown
 
 

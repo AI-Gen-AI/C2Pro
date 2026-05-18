@@ -2,7 +2,7 @@
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-05-08
+**Last Updated**: 2026-05-17
 
 **Quick Links**:
 
@@ -17,7 +17,7 @@
 
 **Completed Tasks**: 50
 
-- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`
+- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`
 
 > Active production follow-ups are tracked below. Detailed completed-task history and specifications remain archived in [COMPLETED.md](./COMPLETED.md).
 

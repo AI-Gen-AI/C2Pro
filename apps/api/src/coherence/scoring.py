@@ -120,6 +120,37 @@ class ScoringDiagnostics:
     category_contributions: dict[str, float]
     reason: str | None = None
     missing_dimensions: list[str] | None = None
+    category_scores: dict[str, float | None] | None = None
+    audit_coverage: dict[str, float] | None = None
+
+
+@dataclass
+class BaselineContext:
+    """Signals about the rest of the document used to flex the baseline."""
+
+    total_findings_other_categories: int
+    total_assessed_categories: int
+    avg_impact_other_categories: float
+    num_clauses: int
+
+
+class HeuristicBaselineProvider:
+    """
+    Inherent-risk baseline for an assessed-but-clean category.
+
+    Band [80, 90]. Clean elsewhere -> 90; heavily alerted elsewhere -> 80.
+    Interface-isolated so a trained regression model can replace it later.
+    """
+
+    LOW = 80.0
+    HIGH = 90.0
+    _RISK_GAIN = 1.5
+
+    def baseline_for(self, category: str, ctx: BaselineContext) -> float:  # noqa: ARG002
+        if ctx.total_assessed_categories <= 1:
+            return self.HIGH
+        global_risk = min(1.0, max(0.0, ctx.avg_impact_other_categories * self._RISK_GAIN))
+        return self.HIGH - (self.HIGH - self.LOW) * global_risk
 
 
 # =============================================================================
@@ -229,6 +260,7 @@ class ScoringService:
         num_rules: int = 5,  # noqa: ARG002
         poor_extraction_quality: bool = False,
         missing_dimensions: list[str] | None = None,
+        coverage_map: dict[str, bool] | None = None,
     ) -> ScoringDiagnostics:
         """
         Calculate score with full diagnostic breakdown.
@@ -240,11 +272,17 @@ class ScoringService:
             signals: List of FindingSignal objects from evaluators
             num_clauses: Number of clauses in the project context
             num_rules: Number of rules evaluated
+            coverage_map: when provided, use the coverage-aware path
 
         Returns:
             ScoringDiagnostics with score and breakdown
         """
         _ = num_rules
+        if coverage_map is not None:
+            return self._calculate_detailed_with_coverage(
+                signals, num_clauses, coverage_map, poor_extraction_quality
+            )
+        # ---- legacy path below (UNCHANGED) ----
         if not signals or poor_extraction_quality:
             return ScoringDiagnostics(
                 score=None,
@@ -299,6 +337,92 @@ class ScoringService:
             raw_penalty_sum=round(raw_penalty, 3),
             category_contributions=dict(category_contributions),
             missing_dimensions=missing_dimensions,
+        )
+
+    _ALL_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
+
+    def _calculate_detailed_with_coverage(
+        self,
+        signals: list[FindingSignal],
+        num_clauses: int,
+        coverage_map: dict[str, bool],
+        poor_extraction_quality: bool,
+    ) -> ScoringDiagnostics:
+        assessed = [c for c in self._ALL_CATEGORIES if coverage_map.get(c, False)]
+        unassessed = [c for c in self._ALL_CATEGORIES if not coverage_map.get(c, False)]
+
+        if not assessed or poor_extraction_quality:
+            return ScoringDiagnostics(
+                score=None, total_findings=0, deterministic_findings=0,
+                llm_findings=0,
+                severity_distribution={"critical": 0, "high": 0, "medium": 0, "low": 0},
+                avg_impact=0.0, avg_confidence=0.0, scope_factor=1.0,
+                penalty_density=0.0, raw_penalty_sum=0.0,
+                category_contributions={}, reason="insufficient_evidence",
+                missing_dimensions=unassessed,
+                category_scores={c: None for c in self._ALL_CATEGORIES},
+                audit_coverage={"assessed": len(assessed), "total": 6,
+                                "pct": round(len(assessed) / 6 * 100, 1)},
+            )
+
+        provider = HeuristicBaselineProvider()
+        scope_factor = self.config.compute_scope_factor(num_clauses)
+
+        cat_penalty: dict[str, float] = defaultdict(float)
+        for s in signals:
+            cat_penalty[s.category] += self._compute_signal_contribution(s)
+
+        total_findings = len(signals)
+        category_scores: dict[str, float | None] = {c: None for c in self._ALL_CATEGORIES}
+
+        for category in assessed:
+            other = [s for s in signals if s.category != category]
+            ctx = BaselineContext(
+                total_findings_other_categories=len(other),
+                total_assessed_categories=len(assessed),
+                avg_impact_other_categories=(
+                    sum(o.impact_score for o in other) / len(other) if other else 0.0
+                ),
+                num_clauses=num_clauses,
+            )
+            baseline = provider.baseline_for(category, ctx)
+            density = cat_penalty[category] / scope_factor
+            raw = baseline * math.exp(-self.config.decay_lambda * density)
+            category_scores[category] = round(
+                max(self.config.min_score, min(raw, baseline)), 1
+            )
+
+        assessed_vals = [category_scores[c] for c in assessed]
+        mean_assessed = sum(assessed_vals) / len(assessed_vals)
+        coverage_ratio = len(assessed) / 6.0
+        global_score = round(mean_assessed * coverage_ratio, 1)
+
+        sev = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for s in signals:
+            if s.severity in sev:
+                sev[s.severity] += 1
+
+        return ScoringDiagnostics(
+            score=global_score,
+            total_findings=total_findings,
+            deterministic_findings=sum(1 for s in signals if s.source == "deterministic"),
+            llm_findings=sum(1 for s in signals if s.source == "llm"),
+            severity_distribution=sev,
+            avg_impact=round(
+                sum(s.impact_score for s in signals) / total_findings, 3
+            ) if total_findings else 0.0,
+            avg_confidence=round(
+                sum(s.confidence for s in signals) / total_findings, 3
+            ) if total_findings else 0.0,
+            scope_factor=round(scope_factor, 3),
+            penalty_density=round(sum(cat_penalty.values()) / scope_factor, 4),
+            raw_penalty_sum=round(sum(cat_penalty.values()), 4),
+            category_contributions=dict(cat_penalty),
+            reason=None if total_findings else "assessed_clean",
+            missing_dimensions=unassessed,
+            category_scores=category_scores,
+            audit_coverage={"assessed": len(assessed), "total": 6,
+                            "pct": round(len(assessed) / 6 * 100, 1)},
         )
 
     def _compute_signal_contribution(self, signal: FindingSignal) -> float:
