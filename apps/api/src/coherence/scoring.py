@@ -122,6 +122,35 @@ class ScoringDiagnostics:
     missing_dimensions: list[str] | None = None
 
 
+@dataclass
+class BaselineContext:
+    """Signals about the rest of the document used to flex the baseline."""
+
+    total_findings_other_categories: int
+    total_assessed_categories: int
+    avg_impact_other_categories: float
+    num_clauses: int
+
+
+class HeuristicBaselineProvider:
+    """
+    Inherent-risk baseline for an assessed-but-clean category.
+
+    Band [80, 90]. Clean elsewhere -> 90; heavily alerted elsewhere -> 80.
+    Interface-isolated so a trained regression model can replace it later.
+    """
+
+    LOW = 80.0
+    HIGH = 90.0
+    _RISK_GAIN = 1.5
+
+    def baseline_for(self, category: str, ctx: BaselineContext) -> float:  # noqa: ARG002
+        if ctx.total_assessed_categories <= 1:
+            return self.HIGH
+        global_risk = min(1.0, max(0.0, ctx.avg_impact_other_categories * self._RISK_GAIN))
+        return self.HIGH - (self.HIGH - self.LOW) * global_risk
+
+
 # =============================================================================
 # SCORING SERVICE V0.3
 # =============================================================================
