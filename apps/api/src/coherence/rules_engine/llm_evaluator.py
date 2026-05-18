@@ -34,7 +34,7 @@ import structlog
 from src.coherence.domain.ports.llm_rule_port import LLMRulePort
 from src.coherence.llm_schemas import LlmEvaluationLegacyResponse, LlmEvaluationV3Response
 from src.coherence.models import Clause, CoherenceCategory, FindingSignal
-from src.coherence.rules_engine.base import Finding, RuleEvaluator
+from src.coherence.rules_engine.base import ApplicabilityState, Finding, RuleEvaluator
 
 logger = structlog.get_logger()
 
@@ -228,6 +228,12 @@ class LlmRuleEvaluator(RuleEvaluator):
             rule_name=rule_name,
             category=category,
         )
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:  # noqa: ARG002
+        """LLM rules are disabled wholesale under low_budget_mode."""
+        if self.low_budget_mode:
+            return ApplicabilityState.SKIPPED_DISABLED
+        return ApplicabilityState.EVALUATED
 
     @property
     def coherence_category(self) -> CoherenceCategory:

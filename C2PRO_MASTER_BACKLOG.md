@@ -19,7 +19,7 @@
 | Frontend | [backlogs/FRT_FRONTEND.md](backlogs/FRT_FRONTEND.md) | frontend | 170 | 16 | 154 |
 | Infrastructure | [backlogs/INF_INFRASTRUCTURE.md](backlogs/INF_INFRASTRUCTURE.md) | infra | 59 | 17 | 42 |
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
-| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 12 | 2 | 10 |
+| Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
 | Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
 | Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 0 | 0 | 0 |
 
@@ -52,7 +52,7 @@
 | `✅ EPIC-LANGSMITH-ANALYTICS` | Analytics APIs + UI (`TASK-AI-016..026`, `TASK-AI-046`, `TASK-INF-014`) | Feature | P1 | PHASE-2 | Implement `/api/v1/ai/analytics/*` with Redis cache; build Dashboard + Version/Cost/Drift components. Completed 2026-05-03 via PR #104 (W8a: backend cache + endpoints) and PR #105 (W8b: frontend dashboard components + trace deep-link). All 12 subtasks (TASK-AI-002, AI-016..026, AI-046) marked [x] with full verification. |
 | `✅ EPIC-LANGSMITH-VALIDATION` | Unit + integration + E2E (`TASK-AI-027/028/029`) | Feature | P1 | ANALYTICS | Mock SDK in unit, test DB + mocked LangSmith in integration, Playwright E2E. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-VALIDATION entry. |
 | `✅ EPIC-LANGSMITH-ROLLOUT` | Load, staging, 10→50→100% rollout, monitoring, docs (`TASK-AI-030..034`, `TASK-AI-045`, `TASK-INF-013`) | Feature | P1 | VALIDATION | Load-test 10k/day, verify staging, gradual rollout + trace-failure/latency alerts. Completed 2026-04-21 via Change Log EPIC-LANGSMITH-ROLLOUT entry (PR #86). |
-| `EPIC-LC-WORKFLOWS` | [PHASE 2 DEFERRED] Procurement + RACI + Stakeholder flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | Three LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. Deferred to Phase 2 — not on critical path to launch. Re-evaluate after current Coherence Score / alerts / HITL features prove stable in production. |
+| `EPIC-LC-WORKFLOWS` | [PHASE 2 DEFERRED] Procurement + RACI + Stakeholder + intelligent WBS flows with EN/ES prompts (`TASK-AI-040..043`, `TASK-AI-049`, `TASK-INF-008..011`, `TASK-FRT-124..127`) | Feature | P2 | DDD-MIGRATION + PHASE-2 | LangChain flows on hexagonal bounded contexts, EN/ES templates via PromptRegistry, traced end-to-end. Deferred to Phase 2 — not on critical path to launch. Re-evaluate after current Coherence Score / alerts / HITL features prove stable in production and after the Swagger flow audit is complete. |
 | `✅ EPIC-HITL-OBSERVABILITY` | Metrics + OpenAPI for HITL resume (`TASK-BCK-032/033`) | Feature | P2 | EPIC-CORE-DECOUPLE | Prometheus/DataDog counters from `ResumeWorkflowUseCase`; publish `/hitl/resume/{id}` contract. Completed 2026-04-21 via TASK-BCK-032 + TASK-BCK-033 Change Log entries. |
 | `EPIC-DLQ-ADMIN` ✅ | DLQ admin endpoints (`TASK-BCK-042`) | Feature | P2 | EPIC-CORE-DECOUPLE | `GET /admin/dlq` + `POST /admin/dlq/{id}/retry` against DLQService, admin scope, contract tests. Completed 2026-04-27. |
 | `✅ EPIC-COH-V1-CONSOLIDATION` | Coherence Score v1 — pipeline consolidation + InsufficientEvidence + alerts (pre-signature audit only) | Feature | P0 | EPIC-CORE-DECOUPLE | 9-phase orchestration (Codex/Gemini/OpenCode) merging into `coh-v1/consolidation`. Fixes the `score=100` bug, consolidates two parallel pipelines, builds 18 evaluators behind `LLMRulePort`, persists `score_version` with hard cut-off, wires `AlertGeneratorService` + `meta_alert` AUDIT_INCOMPLETE. PRD: `.claude/PRPs/prds/coherence-score-v1-consolidation.prd.md`. Briefs: `blackboard/SESSION_2026-04-25_coherence-v1-orchestration.md`. Completed 2026-04-27 via all 9 V1-01..09 tasks marked [x] and Change Log EPIC-COH-V1-CONSOLIDATION complete evidence. |
@@ -123,6 +123,7 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 ### Quality Assurance
 
 - `EPIC-QA-CONTRACT-COVERAGE` — replanned 2026-05-03 (W7); 31 stubs collapsed into `TASK-QA-200..213` across 3 tracks. **Track A (TASK-QA-200..206)** ✅ complete — PR #106 (Schemathesis harness + OpenAPI drift CI). **Track B (TASK-QA-207..211)** ✅ complete — PR #107 (wireframe coverage tracker, CI gate, 6 wireframe test files, 100% coverage). **Track C (TASK-QA-212..213)** ✅ complete — PR #108 (quality-report composite action, `scripts/quality_report.py` renderer with contract/wireframe/coverage/JUnit gates + >2% contract-drop gating, wired into tests.yml + frontend-ci.yml + qa-swarm.yml with sticky PR comments). Full spec: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md#epic-qa-contract-coverage--plan).
+- `EPIC-QA-SWAGGER-MANUAL-VERIFICATION` — active 2026-05-17 real Swagger audit across `TASK-QA-214..321`; each task is one unique method + path operation, marked only after a live Swagger execution with outcome notes. Full board: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md#epic-qa-swagger-manual-verification--real-swagger-endpoint-audit).
 - Full detail: [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md).
 
 ### Cross-Category
@@ -165,6 +166,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P0 | `[x] TASK-COH-V1-07` | Codex | 02, 04, 05 | Golden-corpus schema: `expected_score_range` + `expected_alerts`. Annotate 15 bundles. CI assertion. `[x] Implemented (Golden Corpus Expectations + CI Assertions)` |
 | P0 | `[x] TASK-COH-V1-08` | Gemini 3 Pro (delivery) → MASTER (recovery) | 02 | LangSmith spans on 6 of 7 nodes (skip LLM until rollout=100%). EU-residency attribute allowlist + contract test. Runbook. `[x] Implemented (@traced_coherence_node decorator + allowlist schema + 5/5 contract tests + runbook)` |
 | P0 | `[x] TASK-COH-V1-09` | OpenCode (delivery) → MASTER (recovery) | 04, 06, 07 | Dashboard badge + tooltip, alert UX (sort, filter, copy-to-clipboard, AUDIT_INCOMPLETE banner), customer email + FAQ + activated cut-off date. E2E. `[x] Implemented (v1 Dashboard UX + Alert Copy + Customer Comms)` |
+
+- 2026-05-17 — Added TASK-BCK-060 (Honest Coherence Scoring): ApplicabilityState + coverage_map + HeuristicBaselineProvider + coverage-penalized scoring + three-state CategoryBreakdown. Removes fabricated 100/0 subcategory scores. Implemented on branch feat/honest-coherence-scoring, 104 coherence tests green.
 
 **2026-05-07**: TASK-AI-038 verified complete (python_mcp_server.md already correct). TASK-AI-039 implemented as validate_prompt_templates.py CLI (commit 71f717c8). AI backlog: 89 completed / 9 active.
 

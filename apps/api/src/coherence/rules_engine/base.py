@@ -9,11 +9,21 @@ v0.3 adds:
 """
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 from ..models import Clause, CoherenceCategory, FindingSignal, impact_to_severity
+from .category_utils import infer_category
+
+
+class ApplicabilityState(Enum):
+    """Whether a rule could meaningfully run against a clause."""
+
+    EVALUATED = "EVALUATED"
+    SKIPPED_MISSING_INPUTS = "SKIPPED_MISSING_INPUTS"
+    SKIPPED_DISABLED = "SKIPPED_DISABLED"
 
 
 class Finding(BaseModel):
@@ -50,6 +60,19 @@ class RuleEvaluator(ABC):
     rule_id: ClassVar[str] = "UNKNOWN"
     rule_name: ClassVar[str] = "Unknown Rule"
     category: ClassVar[CoherenceCategory] = "SCOPE"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        """
+        Whether this rule can meaningfully evaluate `clause`.
+
+        Conservative default: EVALUATED only if the clause's inferred
+        category matches this rule's category; otherwise the rule had no
+        real evidence to assess, so SKIPPED_MISSING_INPUTS. Field-dependent
+        rules override this to also require their structured inputs.
+        """
+        if infer_category(clause) == self.category:
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     @abstractmethod
     def evaluate(self, clause: Clause) -> Finding | None:
@@ -106,6 +129,7 @@ class RuleEvaluator(ABC):
 
 # Re-export for convenience
 __all__ = [
+    "ApplicabilityState",
     "Finding",
     "FindingSignal",
     "RuleEvaluator",

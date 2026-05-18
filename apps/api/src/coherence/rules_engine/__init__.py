@@ -17,6 +17,7 @@ from typing import Any
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # Base classes
+    "ApplicabilityState":            ("src.coherence.rules_engine.base", "ApplicabilityState"),
     "Finding":                       ("src.coherence.rules_engine.base", "Finding"),
     "RuleEvaluator":                 ("src.coherence.rules_engine.base", "RuleEvaluator"),
     # LLM Evaluator
