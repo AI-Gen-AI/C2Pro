@@ -377,12 +377,11 @@ class ScoringService:
 
         for category in assessed:
             other = [s for s in signals if s.category != category]
-            other_cnt = max(1, len(other))
             ctx = BaselineContext(
                 total_findings_other_categories=len(other),
                 total_assessed_categories=len(assessed),
                 avg_impact_other_categories=(
-                    sum(o.impact_score for o in other) / other_cnt if other else 0.0
+                    sum(o.impact_score for o in other) / len(other) if other else 0.0
                 ),
                 num_clauses=num_clauses,
             )
