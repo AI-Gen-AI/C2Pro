@@ -711,9 +711,9 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     diagnostics = scoring_service.calculate_detailed(
         signals=all_signals,
         num_clauses=len(state.clauses),
-        num_rules=27,  # 27 deterministic rules
+        num_rules=12,
         poor_extraction_quality=state.config.poor_extraction_quality,
-        missing_dimensions=state.config.missing_dimensions or _missing_dimensions(state),
+        coverage_map=state.coverage_map,
     )
 
     logger.info(
@@ -738,6 +738,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
             "category_contributions": diagnostics.category_contributions,
             "reason": diagnostics.reason,
             "missing_dimensions": diagnostics.missing_dimensions,
+            "category_scores": diagnostics.category_scores,
+            "audit_coverage": diagnostics.audit_coverage,
         },
     }
 
