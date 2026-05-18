@@ -875,6 +875,9 @@ def _build_category_breakdown(
 ) -> list[CategoryBreakdown]:
     """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings."""
     breakdown: list[CategoryBreakdown] = []
+    # CROSS-category signals are not bucketed into the 6 canonical categories
+    # but still count toward total_impact (the impact_percentage denominator).
+    total_impact = sum(s.impact_score for s in signals) or 1.0
     for canonical, legacy in _CAT_LEGACY.items():
         cat_signals = [s for s in signals if s.category == canonical]
         sev = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
@@ -889,7 +892,6 @@ def _build_category_breakdown(
             state, baseline_estimated = "assessed_clean", True
         else:
             state, baseline_estimated = "assessed_findings", False
-        total_impact = sum(s.impact_score for s in signals) or 1.0
         cat_impact = sum(s.impact_score for s in cat_signals)
         breakdown.append(
             CategoryBreakdown(
