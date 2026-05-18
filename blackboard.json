@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-13T21:05:00Z",
+  "updated_at": "2026-05-16T21:45:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -1467,6 +1467,149 @@
         "validacion_lint": false,
         "bloqueador": "No production log access available to correlate the supplied reference IDs with the exact exception class."
       }
+    },
+    {
+      "tarea_id": "T099",
+      "backlog_id": "TASK-FRT-172",
+      "tipo": "frontend",
+      "descripcion": "Add a visible return path from the dashboard portfolio overview to the Projects list.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "The portfolio overview exposes a visible link back to /projects and targeted frontend regression coverage passes.",
+      "archivos_modificados": [
+        "apps/web/app/(app)/dashboard/page.tsx",
+        "apps/web/app/(app)/dashboard/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:30:00Z",
+        "completado": "2026-05-16T18:34:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Dashboard portfolio overview now exposes a visible Back to Projects link to /projects.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage in dashboard/page.test.tsx. Local targeted Vitest execution could not run because this checkout does not currently expose the vitest binary through pnpm."
+      }
+    },
+    {
+      "tarea_id": "T100",
+      "backlog_id": "TASK-FRT-173",
+      "tipo": "frontend",
+      "descripcion": "Clarify document-upload failure states so users can tell the file was not queued and know what to do next.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Upload 500 failures render plain-language feedback with a next step, and targeted frontend regression coverage passes.",
+      "archivos_modificados": [
+        "apps/web/components/features/documents/DocumentUploadDropzone.tsx",
+        "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:40:00Z",
+        "completado": "2026-05-16T18:44:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Upload failures now explain that the file was not queued yet and give the user a concrete next step.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage in DocumentUploadDropzone.test.tsx. Local targeted Vitest execution remains blocked because this checkout does not currently expose the vitest binary through pnpm."
+      }
+    },
+    {
+      "tarea_id": "T101",
+      "backlog_id": "TASK-FRT-174",
+      "tipo": "frontend",
+      "descripcion": "Standardize dialogs, alert dialogs, and sheets on one high-contrast elevated surface system.",
+      "asignado_a": "frontend",
+      "estado": "completado",
+      "criterio_done": "Shared sub-window primitives use the same elevated surface treatment, and the upload dialog inherits a readable high-contrast shell.",
+      "archivos_modificados": [
+        "apps/web/components/ui/dialog.tsx",
+        "apps/web/components/ui/dialog.test.tsx",
+        "apps/web/components/ui/alert-dialog.tsx",
+        "apps/web/components/ui/alert-dialog.test.tsx",
+        "apps/web/components/ui/sheet.tsx",
+        "apps/web/components/ui/sheet.test.tsx",
+        "apps/web/app/(app)/projects/[id]/documents/page.tsx",
+        "apps/web/app/(app)/projects/[id]/documents/page.test.tsx",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/FRT_FRONTEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T18:51:00Z",
+        "completado": "2026-05-16T18:57:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Dialogs, alert dialogs, and sheets now share a solid elevated card surface; the upload dialog now uses that same higher-contrast shell.",
+        "tests_pasados": false,
+        "validacion_lint": false,
+        "nota_verificacion": "Added regression coverage for shared surface classes across dialog primitives and the upload dialog. Local targeted Vitest execution remains blocked because this checkout does not currently expose the vitest binary through pnpm."
+      }
+    },
+    {
+      "tarea_id": "T102",
+      "backlog_id": "TASK-BCK-055",
+      "tipo": "backend",
+      "descripcion": "Repair live document upload enum drift by normalizing the legacy PostgreSQL enum type behind documents.document_type.",
+      "asignado_a": "backend",
+      "estado": "en_progreso",
+      "criterio_done": "A forward migration normalizes legacy live documenttype columns to canonical document_type, targeted regression coverage passes, and the upload route is ready for redeploy/retest.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T21:45:00Z"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Created after Railway logs proved the upload 500 is caused by document enum type drift rather than the alerts schema incident; corrected to forward revision 20260516_0004 after CI exposed an existing 20260516_0003 migration on main."
+      }
+    },
+    {
+      "tarea_id": "T103",
+      "backlog_id": "TASK-BCK-056",
+      "tipo": "backend",
+      "descripcion": "Repair duplicate Alembic revision identifiers introduced by overlapping production hotfixes before deployment.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "The 20260516 hotfix chain has unique sequential revision IDs and Alembic bootstrap can target a single head again.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260516_0002_add_missing_alert_related_clause_ids.py",
+        "apps/api/alembic/versions/20260516_0004_repair_document_type_enum_drift.py",
+        "apps/api/tests/unit/test_backend_ci_guards.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-16T22:02:00Z",
+        "completado": "2026-05-16T22:05:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Removed the duplicate 20260516_0002 hotfix revision, moved the document enum repair to forward revision 20260516_0004 after the existing 20260516_0003 migration, and added regression coverage to keep the same-day chain single-headed.",
+        "cambios_realizados": [
+          "Deleted the duplicate 20260516_0002 alert hotfix migration.",
+          "Renumbered the document enum drift repair to 20260516_0004 with down_revision 20260516_0003.",
+          "Added a guard test that rejects duplicate same-day hotfix revisions."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "apps/api/tests/unit/test_backend_ci_guards.py: 20 passed."
+      }
     }
   ],
   "backlog_sync": {
@@ -1562,7 +1705,12 @@
       "TASK-OPS-DOCFLOW-017",
       "TASK-OPS-DOCFLOW-018"
       ,"TASK-FRT-171"
-      ,"TASK-BCK-051"
+      ,"TASK-BCK-051",
+      "TASK-FRT-172",
+      "TASK-FRT-173",
+      "TASK-FRT-174",
+      "TASK-BCK-055",
+      "TASK-BCK-056"
     ]
   },
   "plan_actual": {

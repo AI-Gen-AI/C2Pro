@@ -19,6 +19,21 @@ function getExtension(fileName: string): string {
   return parts.length > 1 ? parts[parts.length - 1]!.toLowerCase() : "";
 }
 
+function formatUploadFailureMessage(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : "Upload failed";
+  const statusMatch = rawMessage.match(/(\d{3})$/);
+
+  if (statusMatch) {
+    return [
+      "Upload could not be completed right now.",
+      `The server returned ${statusMatch[1]} before the file could be queued.`,
+      "Try again in a moment. If it keeps happening, contact support.",
+    ].join(" ");
+  }
+
+  return `Upload could not be completed right now. ${rawMessage}`;
+}
+
 export function DocumentUploadDropzone({
   projectId,
   maxFileSizeBytes,
@@ -71,8 +86,7 @@ export function DocumentUploadDropzone({
       setStatusMessage("Upload request accepted");
       onUploadComplete?.();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Upload failed";
-      setMessage(`Error: ${errorMessage}`);
+      setMessage(formatUploadFailureMessage(error));
       setStatusMessage("");
     } finally {
       setUploading(false);

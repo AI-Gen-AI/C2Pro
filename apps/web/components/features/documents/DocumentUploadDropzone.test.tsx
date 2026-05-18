@@ -155,6 +155,30 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     });
   });
 
+  it("explains server upload failures in plain language", async () => {
+    uploadDocumentMock.mockRejectedValue(new Error("Upload failed: 500"));
+    getTokenMock.mockResolvedValue("fresh-token-123");
+
+    render(<DocumentUploadDropzone projectId="proj_live_003" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile("contract.pdf", "application/pdf")],
+      },
+    });
+
+    expect(
+      await screen.findByText(/upload could not be completed right now/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/the server returned 500 before the file could be queued/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/try again in a moment\. if it keeps happening, contact support\./i),
+    ).toBeInTheDocument();
+  });
+
   it("renders the upload surface with high-contrast styling for production readability", () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
