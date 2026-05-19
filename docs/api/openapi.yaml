@@ -3449,6 +3449,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+      - HTTPBearer: []
   /api/v1/coherence/dashboard/{project_id}:
     get:
       tags:
