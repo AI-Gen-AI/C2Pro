@@ -80,7 +80,7 @@ addopts = [
     "--basetemp=.pytest-tmp-local",
     "--import-mode=importlib",
 ]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
