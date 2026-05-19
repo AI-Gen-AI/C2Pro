@@ -181,7 +181,15 @@ async def _exercise_real_coherence_contract(entry: dict[str, Any], fixture_path:
     assert result.overall_score is not None
     assert expected_min <= result.overall_score <= expected_max
     assert result.score_reason is None
-    assert result.score_missing_dimensions == ["schedule", "budget"]
+    # Honest scoring (TASK-BCK-060): score_missing_dimensions is now derived
+    # from the per-category coverage map (canonical categories that had no
+    # evaluator actually run) instead of the old doc-type heuristic that
+    # always returned ["schedule", "budget"]. A contract-only upload cannot
+    # assess every dimension, so this must be a non-empty subset of the six
+    # canonical categories.
+    _CANON = {"SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"}
+    assert result.score_missing_dimensions
+    assert set(result.score_missing_dimensions).issubset(_CANON)
     assert result.category_breakdown
     assert result.alerts
     for expected_alert in entry["expected_alerts"]:
