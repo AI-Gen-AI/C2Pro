@@ -3449,6 +3449,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+      - HTTPBearer: []
   /api/v1/coherence/dashboard/{project_id}:
     get:
       tags:
@@ -4522,9 +4523,11 @@ components:
           title: Category
           description: The alert category.
         score:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Score
-          description: The coherence score for this category (0-100).
+          description: Category score (null when UNASSESSED).
         alert_count:
           type: integer
           title: Alert Count
@@ -4536,10 +4539,19 @@ components:
           type: number
           title: Impact Percentage
           description: Percentage of impact this category has on the overall score.
+        state:
+          type: string
+          title: State
+          description: unassessed | assessed_clean | assessed_findings
+          default: assessed_findings
+        baseline_estimated:
+          type: boolean
+          title: Baseline Estimated
+          description: True when score is the inherent-risk baseline (clean).
+          default: false
       type: object
       required:
       - category
-      - score
       - alert_count
       - severity_breakdown
       - impact_percentage
