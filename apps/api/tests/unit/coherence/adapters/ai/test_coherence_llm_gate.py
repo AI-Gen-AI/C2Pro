@@ -1,3 +1,5 @@
+import pytest
+
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
     GateDecision,
@@ -68,3 +70,26 @@ def test_rollout_config_env_garbage_defaults_to_zero(monkeypatch):
     from src.coherence.adapters.ai import rollout_config
     monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "not-an-int")
     assert rollout_config.get_rollout_pct("R-SCOPE-CLARITY-01") == 0
+
+
+def test_gate_constructs_with_lazy_deps():
+    from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
+    gate = CoherenceLlmGate()
+    # Lazy: nothing resolved yet
+    assert gate._cache is None
+    assert gate._cost is None
+    assert gate._router is None
+    assert gate._usage is None
+    assert gate._llm is None
+
+
+@pytest.mark.asyncio
+async def test_gate_evaluate_rule_returns_gate_decision_type():
+    """Until Tasks 4-7 land, evaluate_rule is allowed to raise NotImplementedError —
+    this test just pins the async signature."""
+    from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
+    from src.coherence.models import Clause
+    gate = CoherenceLlmGate()
+    with pytest.raises(NotImplementedError):
+        await gate.evaluate_rule("tenant", "R-SCOPE-CLARITY-01",
+                                  Clause(id="c", text="", data={}))
