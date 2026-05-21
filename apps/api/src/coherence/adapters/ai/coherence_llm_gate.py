@@ -21,6 +21,21 @@ from src.coherence.models import Clause
 logger = structlog.get_logger()
 
 
+PROMPT_VERSION = "p3-v1"
+
+
+def _content_hash(rule_id: str, clause_text: str) -> str:
+    """SHA-256 of (rule_id, prompt_version, canonical(clause_text)).
+
+    Canonicalization: strip + lower. Cache key is stable across whitespace
+    and case changes; cache invalidates implicitly when PROMPT_VERSION bumps.
+    """
+    import hashlib
+    canonical = (clause_text or "").strip().lower()
+    digest = hashlib.sha256(f"{rule_id}|{PROMPT_VERSION}|{canonical}".encode())
+    return digest.hexdigest()
+
+
 @dataclass
 class CoherenceLlmGate:
     """
@@ -76,4 +91,22 @@ class CoherenceLlmGate:
         rule_id: str,
         clause: Clause,
     ) -> GateDecision:
-        raise NotImplementedError("five-step gate lands in Tasks 4-7")
+        # Step 1: content-hash cache check (before budget / rollout / LLM).
+        cache_key = _content_hash(rule_id, clause.text)
+        cache = self._get_cache()
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug(
+                "coherence_llm_gate.cache_hit",
+                tenant_id=tenant_id, rule_id=rule_id, key=cache_key,
+            )
+            return GateDecision(
+                state="cache_hit",
+                finding=cached,
+                reason=None,
+                reset_date=None,
+                cache_key=cache_key,
+                cost_charged_usd=0.0,
+            )
+
+        raise NotImplementedError("rollout + budget + LLM land in Tasks 5-7")
