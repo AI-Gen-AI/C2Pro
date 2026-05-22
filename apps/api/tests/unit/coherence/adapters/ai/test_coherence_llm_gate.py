@@ -417,3 +417,91 @@ async def test_gate_llm_error_does_not_charge_or_cache(monkeypatch):
         )
     assert saved == {}
     assert recorded == []
+
+
+@pytest.mark.asyncio
+async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
+    """v1 LlmRuleEvaluator swallows LLM 5xx and returns None; ensure that surfaces
+    to usage_analytics as success=False, not a $0 successful call (telemetry honesty)."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        def __init__(self):
+            self.set_calls = 0
+        async def get(self, key): return None
+        async def set(self, key, value):
+            self.set_calls += 1
+
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw): pass
+
+    recorded: list[dict] = []
+    class FakeUsage:
+        def record_usage(self, **kw):
+            recorded.append(kw)
+
+    async def fake_call_returning_none(rule_id, clause):
+        return None, 0, 0, 0.0, 12.3, "claude-3-haiku-20240307"
+
+    cache = EmptyCache()
+    gate = g.CoherenceLlmGate()
+    gate._cache = cache
+    gate._cost = FakeCost()
+    gate._usage = FakeUsage()
+    monkeypatch.setattr(gate, "_call_rule_via_llm", fake_call_returning_none)
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="x", data={}),
+    )
+
+    # 1. Cache NOT written when finding is None (no poisoning).
+    assert cache.set_calls == 0
+
+    # 2. record_usage called with success=False on swallowed-error path.
+    assert len(recorded) == 1
+    assert recorded[0]["success"] is False
+    assert recorded[0]["cost_usd"] == 0.0
+    assert recorded[0]["input_tokens"] == 0
+    assert recorded[0]["output_tokens"] == 0
+
+    # 3. Decision is still "evaluated" (the evaluator didn't raise — gate
+    #    only sees a None finding, which is a valid "no violation" outcome
+    #    semantically), with finding=None.
+    assert decision.state == "evaluated"
+    assert decision.finding is None
+
+
+@pytest.mark.asyncio
+async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch):
+    """UUID(None) raises TypeError; gate must catch and fail-closed."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        async def get(self, key): return None
+        async def set(self, key, value): pass
+
+    cost_consulted = {"called": False}
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw):
+            cost_consulted["called"] = True
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = EmptyCache()
+    gate._cost = FakeCost()
+
+    decision = await gate.evaluate_rule(
+        None,  # type: ignore[arg-type]
+        "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="any text", data={}),
+    )
+
+    assert decision.state == "budget_exhausted"
+    assert decision.reason == "invalid_tenant_id"
+    assert cost_consulted["called"] is False

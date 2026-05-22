@@ -147,7 +147,7 @@ class CoherenceLlmGate:
 
         try:
             tenant_uuid = UUID(tenant_id)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, TypeError):
             # Defensive: tenant_id isn't a UUID → fail closed.
             logger.warning(
                 "coherence_llm_gate.invalid_tenant_id", tenant_id=tenant_id,
@@ -208,7 +208,7 @@ class CoherenceLlmGate:
                 output_tokens=out_tok,
                 cost_usd=actual_cost,
                 latency_ms=latency_ms,
-                success=True,
+                success=(finding is not None),
                 tenant_id=tenant_id,
                 prompt_version=PROMPT_VERSION,
             )
