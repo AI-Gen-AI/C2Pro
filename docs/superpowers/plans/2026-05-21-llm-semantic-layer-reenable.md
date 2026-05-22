@@ -12,6 +12,10 @@
 
 ---
 
+## REVISION NOTE 2 (2026-05-22) — Cache primitive corrected
+
+Second discovery: neither `FlashCacheService` nor `PromptCacheService` exposes a generic `get(key)/set(key,value)` — both are LLM-call-shaped (model_id + messages + temperature derive their own key). The spec's SHA-256 content-hash model requires a thin wrapper. **User-approved correction:** introduce `apps/api/src/coherence/adapters/ai/content_hash_cache.py` (≈30 lines) backed by the existing `CacheService` (`apps/api/src/core/cache.py`) — which already provides `async get_json(key)` / `async set_json(key, value, ttl)` over Redis with automatic in-memory fallback. The wrapper exposes `async get(key) -> FindingSignal | None` and `async set(key, FindingSignal) -> None`. `CoherenceLlmGate._get_cache()` resolves the wrapper via a new `get_content_hash_cache()` factory. Tests inject a `FakeContentHashCache` with async `get`/`set` matching this surface.
+
 ## REVISION NOTE — Real-vs-assumed API mismatches (2026-05-21)
 
 Mid-implementation discovery: the plan's original assumptions about three `core/ai/` services were wrong. Verified against source:
