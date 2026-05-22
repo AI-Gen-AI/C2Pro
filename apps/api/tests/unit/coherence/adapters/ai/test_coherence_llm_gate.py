@@ -192,3 +192,36 @@ async def test_content_hash_cache_returns_none_when_service_is_none():
     cache = ContentHashCache(cache_service=None)
     assert await cache.get("any") is None
     await cache.set("any", value=None)  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "0")
+
+    class EmptyCache:
+        async def get(self, key): return None
+        async def set(self, key, value): pass
+
+    cost_consulted = {"called": False}
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw):
+            cost_consulted["called"] = True
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = EmptyCache()
+    gate._cost = FakeCost()
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="any text", data={}),
+    )
+
+    assert decision.state == "rolled_out_off"
+    assert decision.finding is None
+    assert decision.reason == "rule_rollout_disabled"
+    assert decision.cost_charged_usd == 0.0
+    assert decision.cache_key is not None  # still computed
+    assert cost_consulted["called"] is False  # critical: budget NOT consulted on rollout deny

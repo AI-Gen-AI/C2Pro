@@ -109,4 +109,23 @@ class CoherenceLlmGate:
                 cost_charged_usd=0.0,
             )
 
-        raise NotImplementedError("rollout + budget + LLM land in Tasks 5-7")
+        # Step 2: per-rule rollout (uses existing % primitive in core/ai).
+        from src.coherence.adapters.ai.rollout_config import get_rollout_pct
+        from src.core.ai.rollout_router import should_trace_request
+
+        pct = get_rollout_pct(rule_id)
+        if pct == 0 or not should_trace_request(tenant_id, pct):
+            logger.info(
+                "coherence_llm_gate.rolled_out_off",
+                tenant_id=tenant_id, rule_id=rule_id, pct=pct,
+            )
+            return GateDecision(
+                state="rolled_out_off",
+                finding=None,
+                reason="rule_rollout_disabled",
+                reset_date=None,
+                cache_key=cache_key,
+                cost_charged_usd=0.0,
+            )
+
+        raise NotImplementedError("budget + LLM land in Tasks 6-7")
