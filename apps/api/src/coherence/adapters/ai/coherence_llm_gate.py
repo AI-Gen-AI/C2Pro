@@ -55,8 +55,8 @@ class CoherenceLlmGate:
 
     def _get_cache(self) -> Any:
         if self._cache is None:
-            from src.core.ai.prompt_cache import get_prompt_cache_service
-            self._cache = get_prompt_cache_service()
+            from src.coherence.adapters.ai.content_hash_cache import get_content_hash_cache
+            self._cache = get_content_hash_cache()
         return self._cache
 
     def _get_cost(self) -> Any:
@@ -94,7 +94,7 @@ class CoherenceLlmGate:
         # Step 1: content-hash cache check (before budget / rollout / LLM).
         cache_key = _content_hash(rule_id, clause.text)
         cache = self._get_cache()
-        cached = cache.get(cache_key)
+        cached = await cache.get(cache_key)
         if cached is not None:
             logger.debug(
                 "coherence_llm_gate.cache_hit",

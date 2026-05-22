@@ -92,8 +92,8 @@ async def test_gate_evaluate_rule_returns_gate_decision_type():
     gate = CoherenceLlmGate()
     # Cache-miss path still raises NotImplementedError until Tasks 5-7 land.
     class _MissCache:
-        def get(self, key): return None
-        def set(self, key, value): pass
+        async def get(self, key): return None
+        async def set(self, key, value): pass
     gate._cache = _MissCache()
     with pytest.raises(NotImplementedError):
         await gate.evaluate_rule("tenant", "R-SCOPE-CLARITY-01",
@@ -114,24 +114,23 @@ async def test_gate_returns_cache_hit_without_consulting_budget_or_llm():
         evidence_summary="cached", quote="q", raw_data={"source": "llm"},
     )
 
-    class FakeCache:
+    class FakeContentHashCache:
         def __init__(self):
             self.get_calls = 0
             self.set_calls = 0
-        def get(self, key):
+        async def get(self, key):
             self.get_calls += 1
             return cached_finding
-        def set(self, key, value):  # pragma: no cover — should not be called on hit
+        async def set(self, key, value):  # pragma: no cover — hit path
             self.set_calls += 1
 
     cost_consulted = {"called": False}
     class FakeCost:
-        def can_spend(self, *a, **kw):
+        async def check_budget_availability(self, *a, **kw):
             cost_consulted["called"] = True
-            return True
 
     gate = g.CoherenceLlmGate()
-    gate._cache = FakeCache()
+    gate._cache = FakeContentHashCache()
     gate._cost = FakeCost()
 
     decision = await gate.evaluate_rule(
@@ -156,3 +155,40 @@ def test_content_hash_is_deterministic_and_canonicalized():
     # Different rule_id → different key
     h3 = _content_hash("R-PAYMENT-CLARITY-01", "some text")
     assert h1 != h3
+
+
+@pytest.mark.asyncio
+async def test_content_hash_cache_roundtrips_finding_signal():
+    from src.coherence.adapters.ai.content_hash_cache import ContentHashCache
+    from src.coherence.models import FindingSignal
+
+    class FakeCacheService:
+        def __init__(self):
+            self.store: dict[str, dict] = {}
+        async def get_json(self, key):
+            return self.store.get(key)
+        async def set_json(self, key, value, ttl_seconds):
+            self.store[key] = value
+
+    svc = FakeCacheService()
+    cache = ContentHashCache(svc)
+
+    finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.42,
+        confidence=0.9, severity="medium", category="SCOPE",
+        evidence_summary="e", quote="q", raw_data={},
+    )
+    assert await cache.get("k1") is None  # miss
+    await cache.set("k1", finding)
+    got = await cache.get("k1")
+    assert got is not None
+    assert got.rule_id == finding.rule_id and got.impact_score == finding.impact_score
+
+
+@pytest.mark.asyncio
+async def test_content_hash_cache_returns_none_when_service_is_none():
+    """When CacheService is unavailable (None), the wrapper degrades to a no-op."""
+    from src.coherence.adapters.ai.content_hash_cache import ContentHashCache
+    cache = ContentHashCache(cache_service=None)
+    assert await cache.get("any") is None
+    await cache.set("any", value=None)  # should not raise
