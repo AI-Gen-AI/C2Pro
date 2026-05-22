@@ -84,19 +84,24 @@ def test_gate_constructs_with_lazy_deps():
 
 
 @pytest.mark.asyncio
-async def test_gate_evaluate_rule_returns_gate_decision_type():
-    """Until Tasks 4-7 land, evaluate_rule is allowed to raise NotImplementedError —
-    this test just pins the async signature."""
+async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
+    """Until Task 7 lands, evaluate_rule is allowed to raise NotImplementedError on
+    the LLM step — this test just pins the async signature."""
     from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
     from src.coherence.models import Clause
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
     gate = CoherenceLlmGate()
-    # Cache-miss path still raises NotImplementedError until Tasks 5-7 land.
+    # Cache-miss + rollout-on + budget-ok path raises NotImplementedError until Task 7 lands.
     class _MissCache:
         async def get(self, key): return None
         async def set(self, key, value): pass
+    class _OkCost:
+        async def check_budget_availability(self, *a, **kw): return None
     gate._cache = _MissCache()
+    gate._cost = _OkCost()
     with pytest.raises(NotImplementedError):
-        await gate.evaluate_rule("tenant", "R-SCOPE-CLARITY-01",
+        await gate.evaluate_rule("00000000-0000-0000-0000-000000000001",
+                                  "R-SCOPE-CLARITY-01",
                                   Clause(id="c", text="", data={}))
 
 
@@ -225,3 +230,79 @@ async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
     assert decision.cost_charged_usd == 0.0
     assert decision.cache_key is not None  # still computed
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on rollout deny
+
+
+@pytest.mark.asyncio
+async def test_gate_budget_exhausted_returns_distinct_state_with_reset_date(monkeypatch):
+    import datetime
+
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+    from src.core.ai.cost_controller import BudgetExceededException
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        async def get(self, key): return None
+        async def set(self, key, value): pass
+
+    class FakeCost:
+        async def check_budget_availability(self, tenant_uuid, estimated_cost):
+            raise BudgetExceededException("test: budget exhausted")
+
+    llm_consulted = {"called": False}
+    class FakeLlm:
+        async def call(self, *a, **kw):
+            llm_consulted["called"] = True
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = EmptyCache()
+    gate._cost = FakeCost()
+    gate._llm = FakeLlm()
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="any text", data={}),
+    )
+
+    assert decision.state == "budget_exhausted"
+    assert decision.reason == "tenant_budget_exhausted"
+    # reset_date = first of next calendar month (matches cost_controller's monthly reset)
+    today = datetime.date.today()
+    expected = (
+        datetime.date(today.year + 1, 1, 1) if today.month == 12
+        else datetime.date(today.year, today.month + 1, 1)
+    )
+    assert decision.reset_date == expected
+    assert decision.cost_charged_usd == 0.0
+    assert llm_consulted["called"] is False  # LLM NOT consulted on exhausted
+
+
+@pytest.mark.asyncio
+async def test_gate_invalid_tenant_id_fails_closed_to_budget_exhausted(monkeypatch):
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        async def get(self, key): return None
+        async def set(self, key, value): pass
+
+    cost_consulted = {"called": False}
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw):
+            cost_consulted["called"] = True
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = EmptyCache()
+    gate._cost = FakeCost()
+
+    decision = await gate.evaluate_rule(
+        "not-a-uuid", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="any text", data={}),
+    )
+
+    assert decision.state == "budget_exhausted"
+    assert decision.reason == "invalid_tenant_id"
+    assert cost_consulted["called"] is False  # short-circuited before cost call
