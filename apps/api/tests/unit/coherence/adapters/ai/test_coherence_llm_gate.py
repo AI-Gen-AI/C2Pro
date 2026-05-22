@@ -85,24 +85,33 @@ def test_gate_constructs_with_lazy_deps():
 
 @pytest.mark.asyncio
 async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
-    """Until Task 7 lands, evaluate_rule is allowed to raise NotImplementedError on
-    the LLM step — this test just pins the async signature."""
+    """Post-Task-7: evaluate_rule returns a GateDecision through the full path."""
     from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
     from src.coherence.models import Clause
     monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
     gate = CoherenceLlmGate()
-    # Cache-miss + rollout-on + budget-ok path raises NotImplementedError until Task 7 lands.
     class _MissCache:
         async def get(self, key): return None
         async def set(self, key, value): pass
     class _OkCost:
         async def check_budget_availability(self, *a, **kw): return None
+    class _NoopUsage:
+        def record_usage(self, **kw): pass
     gate._cache = _MissCache()
     gate._cost = _OkCost()
-    with pytest.raises(NotImplementedError):
-        await gate.evaluate_rule("00000000-0000-0000-0000-000000000001",
-                                  "R-SCOPE-CLARITY-01",
-                                  Clause(id="c", text="", data={}))
+    gate._usage = _NoopUsage()
+
+    async def _fake_call(rule_id, clause):
+        return None, 0, 0, 0.0, 1.0, "claude-3-haiku-20240307"
+    monkeypatch.setattr(gate, "_call_rule_via_llm", _fake_call)
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001",
+        "R-SCOPE-CLARITY-01",
+        Clause(id="c", text="", data={}),
+    )
+    assert decision.state == "evaluated"
+    assert decision.finding is None
 
 
 PROMPT_VERSION_FOR_TESTS = "p3-v1"  # the canonical version the gate uses
@@ -306,3 +315,105 @@ async def test_gate_invalid_tenant_id_fails_closed_to_budget_exhausted(monkeypat
     assert decision.state == "budget_exhausted"
     assert decision.reason == "invalid_tenant_id"
     assert cost_consulted["called"] is False  # short-circuited before cost call
+
+
+@pytest.mark.asyncio
+async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypatch):
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause, FindingSignal
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    saved: dict[str, FindingSignal] = {}
+    class FakeContentHashCache:
+        async def get(self, key): return None
+        async def set(self, key, value): saved[key] = value
+
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw): pass  # ok
+
+    recorded: list[dict] = []
+    class FakeUsage:
+        def record_usage(self, *, model, task_name, input_tokens, output_tokens,
+                          cost_usd, latency_ms, success, tenant_id=None, **_kw):
+            recorded.append({
+                "model": model, "task_name": task_name,
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "cost_usd": cost_usd, "tenant_id": tenant_id,
+                "latency_ms": latency_ms, "success": success,
+            })
+
+    finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.42,
+        confidence=0.9, severity="medium", category="SCOPE",
+        evidence_summary="ambiguous", quote="q", raw_data={},
+    )
+
+    # Inject the LLM-call helper directly so the test doesn't touch the real registry.
+    # Helper returns (finding, input_tokens, output_tokens, cost, latency_ms, model).
+    async def fake_call_rule(rule_id, clause):
+        return finding, 120, 80, 0.0007, 250.0, "claude-3-haiku-20240307"
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = FakeContentHashCache()
+    gate._cost = FakeCost()
+    gate._usage = FakeUsage()
+    monkeypatch.setattr(gate, "_call_rule_via_llm", fake_call_rule)
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="ambiguous scope text", data={}),
+    )
+
+    assert decision.state == "evaluated"
+    assert decision.finding is finding
+    assert decision.cost_charged_usd == 0.0007
+    assert decision.cache_key in saved and saved[decision.cache_key] is finding
+    assert len(recorded) == 1
+    r = recorded[0]
+    assert r["model"] == "claude-3-haiku-20240307"
+    assert r["task_name"] == "coherence_R-SCOPE-CLARITY-01"
+    assert r["input_tokens"] == 120 and r["output_tokens"] == 80
+    assert r["cost_usd"] == 0.0007
+    assert r["tenant_id"] == "00000000-0000-0000-0000-000000000001"
+    assert r["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_gate_llm_error_does_not_charge_or_cache(monkeypatch):
+    """If the LLM call raises, we must NOT charge usage_analytics nor cache anything.
+    The exception propagates up — node converts to errors[] + SKIPPED for the rule."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    saved: dict = {}
+    class FakeContentHashCache:
+        async def get(self, key): return None
+        async def set(self, key, value): saved[key] = value
+
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw): pass
+
+    recorded: list = []
+    class FakeUsage:
+        def record_usage(self, **kw):
+            recorded.append(kw)
+
+    async def boom(rule_id, clause):
+        raise RuntimeError("upstream LLM 5xx")
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = FakeContentHashCache()
+    gate._cost = FakeCost()
+    gate._usage = FakeUsage()
+    monkeypatch.setattr(gate, "_call_rule_via_llm", boom)
+
+    with pytest.raises(RuntimeError):
+        await gate.evaluate_rule(
+            "00000000-0000-0000-0000-000000000001", "R-SCOPE-CLARITY-01",
+            Clause(id="c1", text="x", data={}),
+        )
+    assert saved == {}
+    assert recorded == []

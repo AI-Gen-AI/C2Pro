@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 
 from src.coherence.domain.ports.coherence_llm_gate_port import GateDecision
-from src.coherence.models import Clause
+from src.coherence.models import Clause, FindingSignal
 
 logger = structlog.get_logger()
 
@@ -178,4 +178,91 @@ class CoherenceLlmGate:
                 cost_charged_usd=0.0,
             )
 
-        raise NotImplementedError("LLM call lands in Task 7")
+        # Step 4: LLM call (via v1 registry per-rule evaluator; Haiku-routed).
+        try:
+            finding, in_tok, out_tok, actual_cost, latency_ms, model = \
+                await self._call_rule_via_llm(rule_id, clause)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "coherence_llm_gate.llm_error",
+                tenant_id=tenant_id, rule_id=rule_id, err=str(exc),
+            )
+            raise  # node converts to errors[] + SKIPPED for this (clause, rule)
+
+        # Step 5a: cache write (only on non-None finding; cache is best-effort).
+        if finding is not None:
+            try:
+                await self._get_cache().set(cache_key, finding)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "coherence_llm_gate.cache_write_failed",
+                    tenant_id=tenant_id, rule_id=rule_id, err=str(exc),
+                )
+
+        # Step 5b: charge usage_analytics with rich metadata (real API).
+        try:
+            self._get_usage().record_usage(
+                model=model,
+                task_name=f"coherence_{rule_id}",
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                cost_usd=actual_cost,
+                latency_ms=latency_ms,
+                success=True,
+                tenant_id=tenant_id,
+                prompt_version=PROMPT_VERSION,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "coherence_llm_gate.charge_failed",
+                tenant_id=tenant_id, rule_id=rule_id, err=str(exc),
+            )
+
+        return GateDecision(
+            state="evaluated",
+            finding=finding,
+            reason=None,
+            reset_date=None,
+            cache_key=cache_key,
+            cost_charged_usd=actual_cost,
+        )
+
+    async def _call_rule_via_llm(
+        self,
+        rule_id: str,
+        clause: Clause,
+    ) -> tuple[FindingSignal | None, int, int, float, float, str]:
+        """
+        Resolve the per-rule LLM evaluator from the v1 registry, run it for the
+        clause, and return rich usage telemetry.
+
+        Returns: (finding_or_None, input_tokens, output_tokens,
+                  cost_usd, latency_ms, model_name)
+
+        Token counts and model name are best-effort: the v1 LlmRuleEvaluator
+        does not currently surface per-call input/output token counts on its
+        instance attributes (only cumulative `total_cost_usd` via
+        LlmEvaluationMetrics). When unavailable we return 0 tokens and the
+        Haiku constant — this is acceptable degraded telemetry per the P3
+        plan. Cost is the delta of evaluator.total_cost_usd before/after.
+        """
+        import time
+
+        from src.coherence.rules_engine.registry import get_v1_evaluator
+
+        evaluator = get_v1_evaluator(rule_id, low_budget_mode=False)
+        cost_before = float(getattr(evaluator, "total_cost_usd", 0.0))
+        t0 = time.perf_counter()
+        signal = await evaluator.evaluate_v3_async(clause)
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        cost_after = float(getattr(evaluator, "total_cost_usd", cost_before))
+        actual_cost = max(0.0, cost_after - cost_before)
+
+        # Token counts: best-effort. The v1 evaluator does not currently
+        # expose per-call token counts — default to 0 + Haiku constant.
+        last_call = getattr(evaluator, "_last_call_metrics", None) or {}
+        input_tokens = int(last_call.get("input_tokens", 0))
+        output_tokens = int(last_call.get("output_tokens", 0))
+        model = str(last_call.get("model", "claude-3-haiku-20240307"))
+
+        return signal, input_tokens, output_tokens, actual_cost, latency_ms, model
