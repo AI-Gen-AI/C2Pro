@@ -786,6 +786,22 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
         f"penalty_density={diagnostics.penalty_density}"
     )
 
+    # P3 Task 11: surface budget-throttled categories so the breakdown can
+    # report state="budget_throttled" instead of generic "unassessed" when
+    # the LLM gate denied the only rule for a category due to tenant cap.
+    # The LLM node emits an ADV-BUDGET-EXHAUSTED alert into state.alerts
+    # whenever any rule was budget-denied; treat every unassessed canonical
+    # category as throttled in that case.
+    budget_throttled: list[str] = []
+    budget_exhausted = any(
+        getattr(a, "rule_id", None) == "ADV-BUDGET-EXHAUSTED"
+        for a in (state.alerts or [])
+    )
+    if budget_exhausted:
+        for cat in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):
+            if not state.coverage_map.get(cat, False):
+                budget_throttled.append(cat)
+
     return {
         "all_signals": all_signals,
         "score": diagnostics.score,
@@ -804,6 +820,7 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
             "missing_dimensions": diagnostics.missing_dimensions,
             "category_scores": diagnostics.category_scores,
             "audit_coverage": diagnostics.audit_coverage,
+            "budget_throttled_categories": budget_throttled,
         },
     }
 
@@ -845,6 +862,9 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         state.all_signals,
         state.coverage_map,
         state.diagnostics.get("category_scores") or {},
+        budget_throttled_categories=set(
+            state.diagnostics.get("budget_throttled_categories") or []
+        ),
     )
 
     # Build enriched result
@@ -936,8 +956,15 @@ def _build_category_breakdown(
     signals: list[FindingSignal],
     coverage_map: dict[str, bool],
     category_scores: dict[str, float | None],
+    budget_throttled_categories: set[str] | None = None,
 ) -> list[CategoryBreakdown]:
-    """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings."""
+    """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings.
+
+    When ``budget_throttled_categories`` is provided, any canonical category
+    that would otherwise be reported as ``unassessed`` AND is present in that
+    set is upgraded to ``budget_throttled`` instead — surfacing the distinction
+    between "no document / no evidence" and "your analysis budget cap was hit".
+    """
     breakdown: list[CategoryBreakdown] = []
     # CROSS-category signals are not bucketed into the 6 canonical categories
     # but still count toward total_impact (the impact_percentage denominator).
@@ -956,6 +983,16 @@ def _build_category_breakdown(
             state, baseline_estimated = "assessed_clean", True
         else:
             state, baseline_estimated = "assessed_findings", False
+        # P3: an unassessed category whose LLM-only rule was budget-denied
+        # is reported distinctly as "budget_throttled" rather than generic
+        # "unassessed", so the dashboard can show "you've hit your analysis
+        # cap" vs "upload more documents".
+        if (
+            not assessed
+            and budget_throttled_categories
+            and canonical in budget_throttled_categories
+        ):
+            state, baseline_estimated, score = "budget_throttled", False, None
         cat_impact = sum(s.impact_score for s in cat_signals)
         breakdown.append(
             CategoryBreakdown(

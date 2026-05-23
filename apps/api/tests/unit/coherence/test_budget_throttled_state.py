@@ -48,3 +48,56 @@ def test_scoring_diagnostics_reset_date_defaults_to_none():
         category_contributions={"LEGAL": 0.06},
     )
     assert d.budget_exhausted_reset_date is None
+
+
+def test_build_category_breakdown_surfaces_budget_throttled():
+    """When a category is unassessed AND in budget_throttled_categories,
+    breakdown.state must be 'budget_throttled' (not 'unassessed').
+    """
+    from src.coherence.graph.nodes import _build_category_breakdown
+
+    coverage = {c: True for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY")}
+    coverage["LEGAL"] = False
+    cat_scores = {c: 85.0 for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY")}
+    cat_scores["LEGAL"] = None
+
+    bd = _build_category_breakdown(
+        signals=[], coverage_map=coverage, category_scores=cat_scores,
+        budget_throttled_categories={"LEGAL"},
+    )
+    by = {b.category: b for b in bd}
+    assert by["legal"].state == "budget_throttled"
+    assert by["legal"].score is None
+    # Other categories unchanged
+    assert by["scope"].state == "assessed_clean"
+
+
+def test_build_category_breakdown_omitting_throttled_set_uses_unassessed():
+    """Backward-compat: when budget_throttled_categories is None / omitted,
+    unassessed remains 'unassessed' (no behavioral change for non-LLM paths).
+    """
+    from src.coherence.graph.nodes import _build_category_breakdown
+    coverage = {c: True for c in ("SCOPE","BUDGET","TIME","TECHNICAL","QUALITY")}
+    coverage["LEGAL"] = False
+    cat_scores = {c: 85.0 for c in ("SCOPE","BUDGET","TIME","TECHNICAL","QUALITY")}
+    cat_scores["LEGAL"] = None
+    bd = _build_category_breakdown(
+        signals=[], coverage_map=coverage, category_scores=cat_scores,
+    )  # no budget_throttled_categories kwarg
+    by = {b.category: b for b in bd}
+    assert by["legal"].state == "unassessed"
+
+
+def test_assessed_category_in_throttled_set_does_not_get_overridden():
+    """Throttling only applies when the category is ALSO unassessed.
+    An assessed-clean category in the throttled set keeps assessed_clean."""
+    from src.coherence.graph.nodes import _build_category_breakdown
+    coverage = {c: True for c in ("SCOPE","BUDGET","TIME","TECHNICAL","LEGAL","QUALITY")}
+    cat_scores = {c: 85.0 for c in coverage}
+    bd = _build_category_breakdown(
+        signals=[], coverage_map=coverage, category_scores=cat_scores,
+        budget_throttled_categories={"LEGAL"},
+    )
+    by = {b.category: b for b in bd}
+    # LEGAL is assessed → state stays assessed_clean despite being in throttled set
+    assert by["legal"].state == "assessed_clean"
