@@ -381,6 +381,7 @@ async def _run_gate(
     errors: list[str] = []
     coverage: dict[str, bool] = {cat: False for cat in _LLM_CATEGORIES}
     total_cost = 0.0
+    total_calls = 0
     budget_reset: date | None = None
     budget_exhausted_seen = False
 
@@ -398,6 +399,7 @@ async def _run_gate(
                 logger.warning(msg)
                 errors.append(msg)
                 continue
+            total_calls += 1
             cat = _category_for_rule(rule_id)
             if decision.state in ("evaluated", "cache_hit"):
                 if decision.finding is not None:
@@ -415,7 +417,7 @@ async def _run_gate(
     out: dict[str, Any] = {
         "llm_signals": signals,
         "llm_cost_usd": total_cost,
-        "llm_calls_count": len(state.clauses) * len(rule_ids),
+        "llm_calls_count": total_calls,
         "coverage_map": coverage,
         "errors": errors,
     }
@@ -425,16 +427,29 @@ async def _run_gate(
     return out
 
 
+_RULE_TO_CATEGORY: dict[str, str] = {
+    "R-SCOPE-CLARITY-01": "SCOPE",
+    "R-PAYMENT-CLARITY-01": "BUDGET",
+    "R-SCHEDULE-CLARITY-01": "TIME",
+    "R-TECHNICAL-SPEC-CLARITY-01": "TECHNICAL",
+    "R-RESPONSIBILITY-01": "LEGAL",
+    "R-QUALITY-STANDARDS-01": "QUALITY",
+}
+
+
 def _category_for_rule(rule_id: str) -> str:
-    """Map LLM rule_id -> canonical category. Mirrors V1_LLM_RULE_IDS registry order."""
-    return {
-        "R-SCOPE-CLARITY-01": "SCOPE",
-        "R-PAYMENT-CLARITY-01": "BUDGET",
-        "R-SCHEDULE-CLARITY-01": "TIME",
-        "R-TECHNICAL-SPEC-CLARITY-01": "TECHNICAL",
-        "R-RESPONSIBILITY-01": "LEGAL",
-        "R-QUALITY-STANDARDS-01": "QUALITY",
-    }.get(rule_id, "SCOPE")
+    """Map LLM rule_id -> canonical category. Mirrors V1_LLM_RULE_IDS registry order.
+
+    Unknown rule_ids log a warning (loudly surfaces config drift between
+    V1_LLM_RULE_IDS and this mapping) and fall back to SCOPE.
+    """
+    cat = _RULE_TO_CATEGORY.get(rule_id)
+    if cat is None:
+        logger.warning(
+            "_category_for_rule.unknown_rule_id rule_id=%r defaulting=SCOPE", rule_id
+        )
+        return "SCOPE"
+    return cat
 
 
 def _emit_budget_alert(reset_date: date | None) -> Alert:
