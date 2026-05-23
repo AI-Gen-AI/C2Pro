@@ -167,6 +167,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P0 | `[x] TASK-COH-V1-08` | Gemini 3 Pro (delivery) → MASTER (recovery) | 02 | LangSmith spans on 6 of 7 nodes (skip LLM until rollout=100%). EU-residency attribute allowlist + contract test. Runbook. `[x] Implemented (@traced_coherence_node decorator + allowlist schema + 5/5 contract tests + runbook)` |
 | P0 | `[x] TASK-COH-V1-09` | OpenCode (delivery) → MASTER (recovery) | 04, 06, 07 | Dashboard badge + tooltip, alert UX (sort, filter, copy-to-clipboard, AUDIT_INCOMPLETE banner), customer email + FAQ + activated cut-off date. E2E. `[x] Implemented (v1 Dashboard UX + Alert Copy + Customer Comms)` |
 
+- 2026-05-22 — Added TASK-BCK-061 (Re-enable LLM Semantic Layer): always-on with per-tenant cost gate, per-rule rollout, content-hash cache, honest budget_throttled state + ADV-BUDGET-EXHAUSTED advisory. PR #143 on branch feat/llm-semantic-layer-reenable. 138 coherence tests green.
+
 - 2026-05-17 — Added TASK-BCK-060 (Honest Coherence Scoring): ApplicabilityState + coverage_map + HeuristicBaselineProvider + coverage-penalized scoring + three-state CategoryBreakdown. Removes fabricated 100/0 subcategory scores. Implemented on branch feat/honest-coherence-scoring, 104 coherence tests green.
 
 **2026-05-07**: TASK-AI-038 verified complete (python_mcp_server.md already correct). TASK-AI-039 implemented as validate_prompt_templates.py CLI (commit 71f717c8). AI backlog: 89 completed / 9 active.
