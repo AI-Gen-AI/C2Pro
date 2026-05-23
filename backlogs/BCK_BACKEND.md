@@ -33,6 +33,7 @@
 | [ ] | P0 | `TASK-BCK-054` | `TASK-BCK-051` | Complete the alerts production-drift repair with a new forward revision `20260516_0002` that adds the missing `alerts.related_clause_ids` column, then redeploy/apply the live schema fix before retesting the project alerts route. | `TASK-BCK-051 Railway logs 2026-05-16` |
 | [ ] | P0 | `TASK-BCK-055` | `TASK-BCK-053` | Repair document upload enum drift with forward revision `20260516_0004` that normalizes live `documents.document_type` from legacy PostgreSQL enum `documenttype` to canonical `document_type`, then redeploy/retest the upload route. | `TASK-BCK-053 Railway logs 2026-05-16` |
 | [x] | P0 | `TASK-BCK-056` | `TASK-BCK-054,TASK-BCK-055` | Repair duplicate Alembic revisions introduced by overlapping production hotfixes so the live migration chain has one `20260516_0002`, one `20260516_0003`, and one `20260516_0004` head path before deployment. `[x] Implemented (Hotfix Migration Chain Repair)` | `PR #133 CI 2026-05-16` |
+| [x] | P1 | `TASK-BCK-061` | BCK-060 | Re-enable LLM semantic layer (always-on, cost-gated): CoherenceLlmGatePort + CoherenceLlmGate adapter (5-step cache→rollout→budget→LLM→persist+charge), per-rule env-overridable rollout, Haiku via model_router, ContentHashCache wrapper over CacheService, budget_throttled CategoryBreakdown state + ADV-BUDGET-EXHAUSTED advisory, low_budget_mode default flipped True→False. 138 coherence unit tests green (104 baseline + 34 new). PR #143. | Design+plan 2026-05-21, impl 2026-05-22 |
 
 ---
 

@@ -54,6 +54,7 @@ TEMPLATES: dict[str, str] = {
     "R20": "La tarea '{task_name}' no tiene responsable asignado.",
     "R6": "Falta una licencia o permiso requerido en el contrato.",
     "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",  # TBD-EN
+    "ADV-BUDGET-EXHAUSTED": "Deep semantic analysis paused: tenant analysis budget exhausted. Resets {reset_date}.",
 }
 
 RULE_TITLES: dict[str, str] = {
@@ -83,6 +84,7 @@ RULE_TITLES: dict[str, str] = {
     "R20": "Tarea sin responsable",
     "R6": "Permisos contractuales incompletos",
     "AUDIT_INCOMPLETE": "Audit incomplete — full triplet not provided",  # TBD-EN
+    "ADV-BUDGET-EXHAUSTED": "Deep semantic analysis paused",
 }
 
 RULE_SEVERITIES: dict[str, AlertSeverity] = {
@@ -112,6 +114,7 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "R20": AlertSeverity.MEDIUM,
     "R6": AlertSeverity.MEDIUM,
     "AUDIT_INCOMPLETE": AlertSeverity.MEDIUM,
+    "ADV-BUDGET-EXHAUSTED": AlertSeverity.LOW,
 }
 
 SUMMARY_TEMPLATES: dict[str, str] = {
