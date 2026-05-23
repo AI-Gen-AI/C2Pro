@@ -19,8 +19,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Any
 
+from src.coherence.domain.ports.coherence_llm_gate_port import (
+    CoherenceLlmGatePort,
+    GateDecision,
+)
 from src.core.observability.coherence_tracing import traced_coherence_node
 
 from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
@@ -36,7 +41,6 @@ from ..models import (
 )
 from ..rules_engine.base import ApplicabilityState
 from ..rules_engine.category_utils import infer_category
-from ..rules_engine.llm_evaluator import LlmRuleEvaluator
 from ..rules_engine.registry import list_evaluators
 from ..scoring import ScoringService
 from .state import (
@@ -322,27 +326,22 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
 # =============================================================================
 
 
-async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
+async def llm_semantic_evaluate_async(
+    state: CoherenceGraphState,
+    *,
+    gate: CoherenceLlmGatePort | None = None,
+) -> NodeOutput:
+    """P3: always-on LLM semantic layer via CoherenceLlmGate.
+
+    For each (clause x R-*-CLARITY rule), consult the gate. Honor the
+    test escape hatch (state.config.low_budget_mode=True) to skip entirely.
     """
-    Run LLM-based semantic analysis on clauses (async version).
+    from src.coherence.rules_engine.registry import V1_LLM_RULE_IDS
 
-    This is Agent B in the coherence architecture - uses LLM to detect
-    semantic issues that deterministic rules cannot catch.
-
-    In low_budget_mode, this node is skipped to reduce costs.
-
-    Args:
-        state: Current graph state with enriched clauses
-
-    Returns:
-        Partial state update with llm_signals, llm_cost_usd, llm_calls_count
-    """
-    # Six canonical LLM categories (registry V1_LLM_RULE_IDS map)
     _LLM_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
 
-    # Skip in low_budget_mode
     if state.config.low_budget_mode:
-        logger.info("llm_semantic_evaluate: skipped (low_budget_mode=True)")
+        logger.info("llm_semantic_evaluate: skipped (low_budget_mode=True escape hatch)")
         return {
             "llm_signals": [],
             "llm_cost_usd": 0.0,
@@ -350,60 +349,110 @@ async def llm_semantic_evaluate_async(state: CoherenceGraphState) -> NodeOutput:
             "coverage_map": {cat: False for cat in _LLM_CATEGORIES},
         }
 
+    if gate is None:
+        # Production path: construct CoherenceLlmGate. Per-request DB session
+        # is acquired from the existing database helper. If the helper isn't
+        # available in this context (e.g. some test contexts), fall back to
+        # gate without db -- the cost path will fail-closed to budget_exhausted
+        # at the UUID/cost step, surfacing honestly rather than crashing.
+        from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
+        try:
+            from src.core import database as _db_mod  # noqa: PLC0415
+            _session_factory = getattr(_db_mod, "_session_factory", None)
+        except Exception:
+            _session_factory = None
+        if _session_factory is not None:
+            async with _session_factory() as session:
+                gate = CoherenceLlmGate(db=session)
+                return await _run_gate(state, gate, _LLM_CATEGORIES, V1_LLM_RULE_IDS)
+        gate = CoherenceLlmGate(db=None)
+
+    return await _run_gate(state, gate, _LLM_CATEGORIES, V1_LLM_RULE_IDS)
+
+
+async def _run_gate(
+    state: CoherenceGraphState,
+    gate: CoherenceLlmGatePort,
+    _LLM_CATEGORIES: tuple[str, ...],
+    rule_ids: tuple[str, ...],
+) -> NodeOutput:
+    """Inner loop: dispatch each (clause, rule) to the gate and aggregate."""
     signals: list[FindingSignal] = []
     errors: list[str] = []
-    coverage: dict[str, bool] = {}
+    coverage: dict[str, bool] = {cat: False for cat in _LLM_CATEGORIES}
     total_cost = 0.0
-    total_calls = 0
+    budget_reset: date | None = None
+    budget_exhausted_seen = False
 
-    try:
-        evaluators: list[LlmRuleEvaluator] = [
-            evaluator for evaluator in list_evaluators(
-                low_budget_mode=state.config.low_budget_mode,
-            )
-            if isinstance(evaluator, LlmRuleEvaluator)
-        ]
+    tenant_id = (state.config.tenant_id or "").strip() or \
+        "00000000-0000-0000-0000-000000000000"
 
-        for clause in state.clauses:
-            for evaluator in evaluators:
-                category = evaluator.category
-                try:
-                    app_state = evaluator.applicability(clause)
-                except Exception:  # noqa: BLE001
-                    app_state = ApplicabilityState.SKIPPED_DISABLED
-                if app_state == ApplicabilityState.EVALUATED:
-                    coverage[category] = True
-                    try:
-                        signal = await evaluator.evaluate_v3_async(clause)
-                        if signal is not None:
-                            signals.append(signal)
-                    except Exception as e:
-                        msg = f"LLM evaluator {evaluator.rule_id} failed for clause {clause.id}: {e}"
-                        logger.warning(msg)
-                        errors.append(msg)
-                else:
-                    coverage.setdefault(category, False)
+    for clause in state.clauses:
+        for rule_id in rule_ids:
+            try:
+                decision: GateDecision = await gate.evaluate_rule(
+                    tenant_id, rule_id, clause
+                )
+            except Exception as e:  # noqa: BLE001
+                msg = f"LLM gate {rule_id} failed for clause {clause.id}: {e}"
+                logger.warning(msg)
+                errors.append(msg)
+                continue
+            cat = _category_for_rule(rule_id)
+            if decision.state in ("evaluated", "cache_hit"):
+                if decision.finding is not None:
+                    signals.append(decision.finding)
+                coverage[cat] = True
+                total_cost += decision.cost_charged_usd
+            elif decision.state == "budget_exhausted":
+                budget_exhausted_seen = True
+                if budget_reset is None or (
+                    decision.reset_date and decision.reset_date < budget_reset
+                ):
+                    budget_reset = decision.reset_date
+            # rolled_out_off: leave coverage[cat] at its current value (False).
 
-        # Get cost metrics
-        total_cost = sum(getattr(e, "total_cost_usd", 0.0) for e in evaluators)
-        total_calls = sum(getattr(e, "llm_calls_count", 0) for e in evaluators)
-
-    except ImportError as e:
-        logger.warning(f"LLM evaluator not available: {e}")
-        errors.append(f"LLM evaluator import failed: {e}")
-
-    logger.info(
-        f"llm_semantic_evaluate: {len(signals)} findings, "
-        f"cost=${total_cost:.4f}, calls={total_calls}"
-    )
-
-    return {
+    out: dict[str, Any] = {
         "llm_signals": signals,
         "llm_cost_usd": total_cost,
-        "llm_calls_count": total_calls,
+        "llm_calls_count": len(state.clauses) * len(rule_ids),
         "coverage_map": coverage,
         "errors": errors,
     }
+    if budget_exhausted_seen:
+        out["alerts"] = [_emit_budget_alert(budget_reset)]
+        out["budget_exhausted_reset_date"] = budget_reset
+    return out
+
+
+def _category_for_rule(rule_id: str) -> str:
+    """Map LLM rule_id -> canonical category. Mirrors V1_LLM_RULE_IDS registry order."""
+    return {
+        "R-SCOPE-CLARITY-01": "SCOPE",
+        "R-PAYMENT-CLARITY-01": "BUDGET",
+        "R-SCHEDULE-CLARITY-01": "TIME",
+        "R-TECHNICAL-SPEC-CLARITY-01": "TECHNICAL",
+        "R-RESPONSIBILITY-01": "LEGAL",
+        "R-QUALITY-STANDARDS-01": "QUALITY",
+    }.get(rule_id, "SCOPE")
+
+
+def _emit_budget_alert(reset_date: date | None) -> Alert:
+    """One advisory per evaluation when >=1 rule denied for budget_exhausted."""
+    msg = "Deep semantic analysis paused: tenant analysis budget exhausted."
+    if reset_date is not None:
+        msg = f"{msg} Resets {reset_date}."
+    return Alert(
+        rule_id="ADV-BUDGET-EXHAUSTED",
+        severity="low",  # template registered AlertSeverity.LOW in Task 8
+        category="general",
+        message=msg,
+        evidence=Evidence(
+            claim="tenant_budget_exhausted",
+            source_clause_id="",
+            quote="",
+        ),
+    )
 
 
 def llm_semantic_evaluate(state: CoherenceGraphState) -> NodeOutput:
