@@ -1,247 +1,408 @@
-# Análisis: Mejora del Coherence Score con Desglose por Categorías
+# Coherence Score™ v2 Redesign Blueprint (Evidence-Aware, Explainable, Industry-Ready)
 
-**Fecha:** 2026-01-20
-**Objetivo:** Implementar desglose detallado del Coherence Score por categorías de alerta
-
----
-
-## 1. ANÁLISIS DEL OBJETIVO
-
-### 1.1 Estado Actual
-
-**Backend:**
-
-- El sistema tiene un motor de coherencia que evalúa reglas y genera alertas
-- Las alertas tienen `severity` (critical, high, medium, low) pero NO tienen categorías
-- El scoring se calcula con base en severity y deducción de puntos
-- Modelo actual: `CoherenceResult` con `alerts[]` y `score`
-
-**Frontend:**
-
-- GaugeChart muestra el score global (0-100)
-- No hay desglose por categorías
-- No hay vista detallada al hacer clic en el score
-
-### 1.2 Objetivo Deseado
-
-Implementar un sistema de **categorización de alertas** similar al de la página Alerts:
-
-- **Legal**: Cláusulas contractuales, penalidades, términos legales
-- **Financial**: Presupuesto, sobrecostos, variaciones económicas
-- **Technical**: Especificaciones técnicas, compatibilidad de equipos
-- **Schedule**: Cronograma, retrasos, hitos críticos
-- **Scope**: Alcance del proyecto, cambios en requerimientos
-
-### 1.3 Funcionalidad Esperada
-
-1. **Vista Global del Score**: El gauge actual se mantiene mostrando el score general
-2. **Click to Expand**: Al hacer clic en el score, se despliega un desglose detallado
-3. **Desglose por Categoría**:
-   - Mostrar el score por cada categoría
-   - Número de alertas por categoría y severidad
-   - Impacto de cada categoría en el score total
-4. **Navegación**: Desde el desglose, poder navegar a las alertas específicas
+**Date:** 2026-05-24  
+**Scope:** C2Pro repository analysis + target architecture for production rollout  
+**Critical invariant:** **Missing evidence must NEVER generate score = 0.**
 
 ---
 
-## 2. ANÁLISIS TÉCNICO
+## 1) Problem diagnosis
 
-### 2.1 Cambios en el Backend
+### 1.1 Where the current implementation fails
 
-#### 2.1.1 Modelo de Datos
+After reviewing the active coherence pipeline, there are three systemic issues:
 
-- **Agregar campo `category`** al modelo `Alert`
-- **Crear nuevo modelo `CategoryBreakdown`** con:
-  - `category`: string (legal, financial, technical, schedule, scope)
-  - `score`: float (score parcial de esta categoría)
-  - `alert_count`: int (número de alertas)
-  - `severity_breakdown`: dict (conteo por severidad)
-  - `impact`: float (% de impacto en el score total)
+1. **Coverage and coherence are mixed into one number**, so missing dimensions can depress score outcomes instead of being reported explicitly.
+2. **Legacy deterministic path still allows hard zero in category logic** (e.g., budget severe deviation sets category score to `0`) without explicit “evaluation sufficiency” metadata.
+3. **Frontend fallback behavior can visually collapse unknown to zero**, especially when nullable scores are rendered as `0` in chart defaults.
 
-- **Extender `CoherenceResult`** para incluir:
-  - `overall_score`: float (score general)
-  - `category_breakdown`: list[CategoryBreakdown]
-  - `alerts`: list[Alert] (con categoría incluida)
+### 1.2 Concrete code hotspots
 
-#### 2.1.2 Reglas y Configuración
+- `ScoringService._calculate_detailed_with_coverage()` computes global score as `mean_assessed * coverage_ratio`, which penalizes missing categories by construction. This violates “lack of evidence is not incoherence.” (`apps/api/src/coherence/scoring.py`)
+- `CoherenceRulesEngine.evaluate()` sets category scores to numeric defaults only, with no `status` state machine (`scored`, `insufficient_evidence`, etc.). (`apps/api/src/coherence/domain/rules_engine.py`)
+- `ScoreCalculator.calculate()` reads missing category via `.get(category, 100)` and cannot distinguish “not evaluated” from “perfect.” (`apps/api/src/coherence/domain/rules_engine.py`)
+- UI fallback `const score = data.coherence_score ?? 0;` can produce misleading visuals. (`apps/web/components/coherence/DashboardClient.tsx`)
+- Use-case DTO flow (`CalculateCoherenceUseCase`) currently transports raw integer category scores only; no evidence count/confidence/state metadata. (`apps/api/src/coherence/application/use_cases/calculate_coherence.py`)
 
-- Actualizar `initial_rules.yaml` para incluir categoría en cada regla
-- Actualizar el motor de coherencia para asignar categoría a cada alerta generada
+### 1.3 File classification / category mapping observations
 
-#### 2.1.3 Scoring Service
+- Document typing exists in `documents` domain (`DocumentType.SCHEDULE`, `BUDGET`, `TECHNICAL_SPEC`, `QUALITY`, `SCOPE`). (`apps/api/src/documents/domain/models.py`)
+- Ingestion maps clause types to coherence categories through deterministic mapping (`LEGAL`, `TIME`, `BUDGET`, `TECHNICAL`, etc.). (`apps/api/src/core/tasks/ingestion_tasks.py`)
+- This mapping is workable but **insufficient for evidence quality scoring**, OCR quality gates, and applicability detection.
+- Canonical v2 category set remains six dimensions: `SCOPE`, `BUDGET`, `QUALITY`, `TECHNICAL`, `LEGAL`, `TIME`.
 
-- Modificar `ScoringService.compute_score()` para:
-  - Calcular score general
-  - Calcular score por categoría
-  - Calcular impacto proporcional de cada categoría
+### 1.4 Architectural limitations
 
-#### 2.1.4 Endpoint
-- Mantener `/v0/coherence/evaluate` con modelo extendido
-- Considerar nuevo endpoint `/projects/{id}/coherence-score` (ya existe según git log)
+- No first-class **category status lifecycle**.
+- No separation of **coherence vs evidence coverage vs confidence**.
+- No structured provenance contract (evidence spans, extraction quality, conflict sets).
+- Incomplete support for incremental uploads and longitudinal recalculation with explainable deltas.
 
-### 2.2 Cambios en el Frontend
+---
 
-#### 2.2.1 Componentes Nuevos
+### 1.5 Local validation of code hotspots (verified)
 
-- **`CoherenceScoreModal`**: Modal/Dialog que se abre al hacer clic en el gauge
-- **`CategoryBreakdownCard`**: Card individual para cada categoría
-- **`CategoryScoreGauge`**: Gauge pequeño para score por categoría
+Validated directly in the repository:
 
-#### 2.2.2 Componentes a Modificar
-- **`GaugeChart`**: Agregar onClick handler para abrir el modal
-- **Dashboard page**: Integrar el nuevo modal
+1. `apps/api/src/coherence/scoring.py` contains `_calculate_detailed_with_coverage()` and computes `global_score = round(mean_assessed * coverage_ratio, 1)` (coverage currently penalizes coherence).
+2. `apps/api/src/coherence/domain/rules_engine.py` contains `ScoreCalculator.calculate()` using `category_scores.get(category, 100)` default.
+3. `apps/web/components/coherence/DashboardClient.tsx` contains `const score = data.coherence_score ?? 0;` fallback.
 
-#### 2.2.3 Tipos TypeScript
-```typescript
-interface CategoryBreakdown {
-  category: 'Legal' | 'Financial' | 'Technical' | 'Schedule' | 'Scope';
-  score: number;
-  alert_count: number;
-  severity_breakdown: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
-  impact: number; // Percentage
+These checks confirm the migration rationale is grounded in current code behavior.
+
+### 1.6 Additional path validation (verified)
+
+Validated directly in repository tree:
+
+1. `apps/api/src/coherence/application/use_cases/calculate_coherence.py` exists.
+2. `apps/api/src/coherence/application/dtos/coherence_dtos.py` exists.
+
+This confirms that the referenced use-case/DTO migration touchpoints are real and implementation planning is anchored to current paths.
+
+## 2) Conceptual redesign
+
+### 2.1 Category state model (mandatory)
+
+Each category must have a status in:
+
+- `scored`
+- `insufficient_evidence`
+- `not_applicable`
+- `conflicting_evidence`
+- `error`
+- `pending_documents` (operational state for progressive workflows)
+
+### 2.2 Semantics of numeric score
+
+- `score` is nullable.
+- `score = 0` is valid **only when**:
+  1. `status == scored`
+  2. `evidence_count >= min_evidence_threshold`
+  3. category coherence is critically contradictory/poor.
+- If status is not `scored`, score MUST be `null`.
+
+### 2.3 Triple-axis evaluation
+
+For each category compute independently:
+
+1. **Coherence** (0-100, nullable)
+2. **Evidence Coverage** (0-1)
+3. **Confidence** (0-1)
+
+This unlocks fair scoring for partial uploads and enterprise explainability.
+
+---
+
+## 3) Scoring methodology
+
+### 3.1 Per-category evaluation pipeline
+
+1. Collect candidate evidence (clauses, tables, entities, dates, amounts, obligations).
+2. Validate quality gates (OCR confidence, parser integrity, dedupe, language support).
+3. Determine applicability (`not_applicable` when category truly out-of-scope).
+4. If applicable but below minimum evidence -> `insufficient_evidence`.
+5. Detect cross-document contradictions -> `conflicting_evidence` with conflict set.
+6. If evaluable, run rules/LLM hybrid and output `scored` with rationale + trace.
+
+### 3.2 Recommended per-category output
+
+- `status`
+- `score` (nullable)
+- `confidence`
+- `coverage`
+- `evidence_count`
+- `conflict_count`
+- `missing_required_evidence[]`
+- `rationale`
+- `references[]`
+
+### 3.3 Global model: dual-score contract
+
+- **Coherence Score™**: weighted mean over **only scored categories**.
+- **Completeness Score™**: weighted coverage ratio over expected/applicable categories.
+
+Do not collapse these into one number.
+
+---
+
+## 4) Mathematical model evaluation (MVP-focused)
+
+For MVP and near-term enterprise pilots, adopt only:
+
+1. **Weighted averages over scored categories** (transparent and auditable).
+2. **Confidence-adjusted diagnostics** (for ranking reliability, not fabricating coherence).
+3. **Evidence normalization for coverage/completeness** (cross-project comparability).
+
+Deferred models (Bayesian, regression, fuzzy, graph-native probabilistic scoring) are explicitly out-of-scope for this phase and should not consume sprint capacity until v2 telemetry is stable.
+
+**Hard constraint:** no mathematical model may transform unknown/missing evidence into a coherence score, and never into `0`.
+
+## 5) Alert framework
+
+### 5.1 Alert taxonomy
+
+- `missing_evidence`
+- `low_confidence`
+- `conflicting_evidence`
+- `critical_incoherence`
+- `processing_error`
+- `data_quality_issue`
+
+### 5.2 Severity levels
+
+- `info`: expected incompleteness (early upload stage)
+- `warning`: low confidence / partial coverage
+- `high`: strong conflicts requiring review
+- `critical`: severe incoherence with high confidence
+
+### 5.3 Trigger examples
+
+- No budget files + applicable project: `missing_evidence` warning.
+- OCR avg < threshold: `data_quality_issue` warning.
+- Milestone dates mismatch contract dates: `conflicting_evidence` high.
+- Deterministic+LLM converge on contradiction with high confidence: `critical_incoherence` critical.
+
+### 5.4 UI behavior
+
+- Show alerts next to each category status badge.
+- Missing evidence should display as amber/blue “Needs docs”, not red failure.
+
+---
+
+## 6) Global score calculation
+
+### 6.1 Recommended equations
+
+Let `C` = set of categories with `status=scored`, and `A` = set of applicable categories.
+
+- `CoherenceScore = Σ(w_i * s_i) / Σ(w_i) for i in C`
+- `CompletenessScore = Σ(w_i * coverage_i) / Σ(w_i) for i in A`
+- `ConfidenceIndex = Σ(w_i * confidence_i) / Σ(w_i) for i in C`
+
+### 6.2 Rules
+
+- If `|C| = 0`: `CoherenceScore = null`, reason=`insufficient_evidence`.
+- Never multiply coherence by coverage ratio (that penalizes unknown).
+- Exclude `not_applicable` from denominator.
+
+### 6.3 Default category weights (v2 baseline)
+
+For initial rollout, keep compatibility with current production intuition and reporting:
+
+| Category | Weight |
+|---|---:|
+| SCOPE | 0.20 |
+| BUDGET | 0.20 |
+| QUALITY | 0.15 |
+| TECHNICAL | 0.15 |
+| LEGAL | 0.15 |
+| TIME | 0.15 |
+
+Notes:
+- Weights are applied only over `status=scored` categories for Coherence Score™.
+- `not_applicable` categories are excluded from denominator normalization.
+- Tenant-specific weight customization can be phase-2, gated behind governance controls.
+
+### 6.4 Minimum evidence thresholds by category (v2 baseline)
+
+| Category | Min evidence | Baseline rationale |
+|---|---:|---|
+| BUDGET | 3 | Contract + budget artifact + BOQ/cashflow evidence. |
+| TIME | 2 | Contract dates + schedule/timeline artifact. |
+| SCOPE | 2 | Contract scope clauses + SOW/WBS evidence. |
+| TECHNICAL | 2 | Technical specification + BOM/engineering evidence. |
+| LEGAL | 1 | Contract/legal clauses can be sufficient initial basis. |
+| QUALITY | 2 | Quality specification + certification/HSE evidence. |
+
+These thresholds are rollout defaults; calibration may adjust them after shadow telemetry.
+
+---
+
+## 7) Production JSON schema (proposed)
+
+```json
+{
+  "project_id": "string",
+  "version": "coherence-v2",
+  "generated_at": "ISO-8601",
+  "global": {
+    "coherence_score": 78.4,
+    "completeness_score": 0.61,
+    "confidence_index": 0.73,
+    "status": "partial",
+    "score_reason": "scored_categories_only",
+    "scored_categories": 4,
+    "applicable_categories": 6
+  },
+  "categories": [
+    {
+      "category": "BUDGET",
+      "status": "insufficient_evidence",
+      "score": null,
+      "confidence": 0.22,
+      "coverage": 0.15,
+      "evidence_count": 1,
+      "evidence_references": [
+        {"document_id": "doc_123", "page": 4, "span_id": "sp_9"}
+      ],
+      "rationale": "No structured financial tables detected.",
+      "detected_conflicts": [],
+      "missing_evidence": ["bill_of_quantities", "cost_breakdown", "cashflow"],
+      "alerts": [
+        {"code": "MISSING_BUDGET_EVIDENCE", "severity": "warning", "confidence": 0.93}
+      ],
+      "recommendation": "Upload budget workbook or BOQ.",
+      "calculation_metadata": {
+        "weight": 0.2,
+        "min_evidence_threshold": 3,
+        "evaluated_rules": [],
+        "model_version": "coh-v2.0.0"
+      }
+    }
+  ]
 }
-
-interface CoherenceScoreDetail {
-  overall_score: number;
-  category_breakdown: CategoryBreakdown[];
-  calculated_at: string;
-}
 ```
 
 ---
 
-## 3. DISEÑO DE UX/UI
+## 8) Frontend recommendations
 
-### 3.1 Vista Modal del Desglose
+1. **Status badges per category**: `Scored`, `Needs Evidence`, `N/A`, `Conflict`, `Error`.
+2. **Tri-panel card** per category: Score | Coverage | Confidence.
+3. **Explicit null score display**: render a dedicated “Pending evidence” gauge-empty state (not numeric), with info icon and tooltip explaining why score is unavailable.
+4. **Evidence trace drawer** with page/snippet/source linkage.
+5. **Progressive upload banner**: “4/6 categories evaluable” + CTA “Upload missing documents”.
+6. **Gauge null-state policy (required)**: show skeleton/empty gauge and coverage progress instead of plotting `0/100`.
+7. **Conflict diff UI** for contradictory milestones/obligations.
 
-**Layout:**
+---
+
+## 9) Backend implementation plan
+
+### 9.1 Affected modules
+
+- `apps/api/src/coherence/scoring.py`
+- `apps/api/src/coherence/domain/rules_engine.py`
+- `apps/api/src/coherence/application/use_cases/calculate_coherence.py`
+- `apps/api/src/coherence/application/dtos/coherence_dtos.py`
+- `apps/api/src/core/tasks/ingestion_tasks.py`
+- `apps/web/components/coherence/DashboardClient.tsx`
+
+### 9.2 Refactor boundaries
+
+- **Evidence Service**: evidence extraction quality + coverage computation.
+- **Category Aggregator (new)**: consumes rule signals from existing RuleEvaluators/Rule Registry (R1–R20) and determines `status`, `score`, `coverage`, `confidence`, and conflict metadata per category.
+- **Important compatibility rule**: RuleEvaluators are preserved (not replaced). Flow is `Rules -> Signals -> Category Aggregator -> Triple-axis Output`.
+- **Aggregation Service**: global coherence/completeness/confidence.
+- **Alert Service**: taxonomy-driven alert generation.
+
+### 9.3 Migration strategy
+
+1. Add v2 DTOs/tables with backward-compatible adapters.
+2. Dual-run v1 and v2 in shadow mode (feature flag).
+3. Add Alembic migration for `analyses.coherence_breakdown` JSONB contract evolution + backfill for historical analyses.
+4. Provide v1->v2 response adapter to preserve public API compatibility during transition.
+5. Compare distributions + business review (shadow mode 2-3 weeks with calibration dataset).
+6. Switch UI to v2 response contract.
+7. Deprecate v1 numeric-only contract with rollback runbook update (CE-P0-06 extension).
+
+### 9.4 Pseudocode
+
+```python
+for category in CATEGORIES:
+    evidence = evidence_service.collect(category, project_docs)
+    applicability = applicability_service.check(category, project_context)
+
+    if not applicability.is_applicable:
+        emit(category, status="not_applicable", score=None)
+        continue
+
+    if evidence.count < thresholds[category]:
+        emit(category, status="insufficient_evidence", score=None)
+        continue
+
+    conflicts = conflict_service.detect(category, evidence)
+    if conflicts.hard_conflict:
+        emit(category, status="conflicting_evidence", score=None)
+        alert_service.emit("CRITICAL_CONFLICT", severity="critical") if conflicts.critical else None
+        continue
+
+    score, confidence = evaluator.score(category, evidence)
+    emit(category, status="scored", score=score, confidence=confidence)
 ```
-┌─────────────────────────────────────────────────────┐
-│  Coherence Score Breakdown              [X]         │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Overall Score: 78 / 100                            │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│                                                      │
-│  ┌────────────────┐  ┌────────────────┐           │
-│  │ Legal      85  │  │ Financial  72  │           │
-│  │ 7 alerts       │  │ 12 alerts      │           │
-│  │ ■ 1 Critical   │  │ ■ 2 Critical   │           │
-│  │ ■ 2 High       │  │ ■ 5 High       │           │
-│  │ Impact: 18%    │  │ Impact: 25%    │           │
-│  └────────────────┘  └────────────────┘           │
-│                                                      │
-│  ┌────────────────┐  ┌────────────────┐           │
-│  │ Technical  68  │  │ Schedule   92  │           │
-│  │ 9 alerts       │  │ 2 alerts       │           │
-│  └────────────────┘  └────────────────┘           │
-│                                                      │
-│  ┌────────────────┐                                │
-│  │ Scope      95  │                                │
-│  │ 1 alert        │                                │
-│  └────────────────┘                                │
-│                                                      │
-│            [View All Alerts] [Export Report]       │
-└─────────────────────────────────────────────────────┘
-```
-
-### 3.2 Colores por Categoría
-
-- **Legal**: Blue (#3B82F6)
-- **Financial**: Green (#10B981)
-- **Technical**: Purple (#8B5CF6)
-- **Schedule**: Orange (#F59E0B)
-- **Scope**: Cyan (#06B6D4)
 
 ---
 
-## 4. PLAN DE IMPLEMENTACIÓN
+## 10) Test strategy
 
-### Fase 1: Backend - Modelo de Datos
+### Unit tests
+- Status transitions (`insufficient_evidence` != 0).
+- Zero-score guardrails (only `scored` + threshold met).
+- Coverage/confidence calculations.
 
-1. Agregar campo `category` a modelo `Alert`
-2. Crear modelo `CategoryBreakdown`
-3. Extender modelo `CoherenceResult`
-4. Actualizar tests unitarios
+### Integration tests
+- Incremental upload progression (contract only → +schedule → +budget).
+- Contradictory doc conflict detection.
+- OCR low-quality handling.
 
-### Fase 2: Backend - Reglas y Motor
-1. Actualizar `initial_rules.yaml` con categorías
-2. Modificar motor de coherencia para asignar categorías
-3. Actualizar tests de integración
+### Evaluation datasets
+- Golden corpus with labelled states per category.
+- Edge corpus: duplicates, multilingual, noisy OCR, partial sets.
 
-### Fase 3: Backend - Scoring Service
-
-1. Implementar cálculo de score por categoría
-2. Implementar cálculo de impacto proporcional
-3. Agregar tests de scoring avanzado
-
-### Fase 4: Frontend - Tipos y API
-1. Definir tipos TypeScript
-2. Crear hook `useCoherenceScore`
-3. Actualizar cliente API
-
-### Fase 5: Frontend - Componentes
-1. Crear `CategoryBreakdownCard`
-2. Crear `CoherenceScoreModal`
-3. Modificar `GaugeChart` para ser clickeable
-
-
-### Fase 6: Integración y Testing
-1. Integrar modal en Dashboard
-2. Tests end-to-end
-3. Ajustes de UX/UI
+### Regression safeguards
+- Contract tests for JSON schema.
+- Snapshot tests for explainability payloads.
+- Distribution monitoring for score drift.
 
 ---
 
-## 5. ESTIMACIÓN DE ESFUERZO
+## 11) Risks and tradeoffs
 
-- **Fase 1**: 2-3 horas
-- **Fase 2**: 3-4 horas
-- **Fase 3**: 2-3 horas
-- **Fase 4**: 1-2 horas
-- **Fase 5**: 4-5 horas
-- **Fase 6**: 2-3 horas
+- Potential terminology drift with academic paper wording (“tripolar” vs operational triple-axis).
+- More states increase UX complexity.
+- Confidence can be misinterpreted as truth probability.
+- Graph conflict detection may increase compute cost.
+- Dual scoring requires product education.
+- Repository root technical debt can increase migration conflict risk (`temp_conflicting_frontend_files/`, `tmp-gh-artifacts/`, legacy agent docs).
 
-**Total**: ~14-20 horas de desarrollo
+Mitigation: align paper lexicon to the production triple-axis contract before publication; release with strong tooltips, glossary, and audit logs. Open a pre-migration cleanup ticket and complete root hygiene before implementation branch cut.
 
----
+### 11.1 Academic alignment note (tripolar vs triple-axis)
 
-## 6. CONSIDERACIONES ADICIONALES
+To avoid conceptual confusion:
 
-### 6.1 Extensibilidad
-- El sistema debe permitir agregar nuevas categorías fácilmente
-- Considerar categorías customizables por tenant en el futuro
+- **Tripolar algorithm** (temporal + technical + economic) refers to bid/procurement analytical methodology (separate layer).
+- **Triple-axis scoring contract** (coherence + completeness + confidence) refers to Coherence Score™ evaluation output semantics.
 
-### 6.2 Performance
-- El cálculo de category breakdown no debe impactar significativamente el tiempo de respuesta
-- Considerar caching si el número de alertas es muy alto
-
-### 6.3 Internacionalización
-- Las categorías deben ser traducibles
-- Usar constantes para los nombres de categorías
-
-### 6.4 Prioridades Adicionales
-- **Alta**: Legal, Financial, Schedule (críticas para el negocio)
-- **Media**: Technical (importante pero menos crítica)
-- **Baja**: Scope (informativa)
+Both can coexist: one is decision-analysis methodology, the other is scoring/reporting contract.
 
 ---
 
-## 7. PRÓXIMOS PASOS
+## 12) Final recommended architecture
 
-1. ✓ Análisis completado
-2. Validar con usuario/stakeholder
-3. Desglosar en tickets de trabajo
-4. Comenzar implementación por fases
+### Implement immediately (Phase 1)
 
----
+1. Introduce status machine + nullable category score.
+2. Decouple coherence/completeness/confidence.
+3. Replace global formula with scored-category normalization.
+4. Introduce alert taxonomy for missing/conflicting evidence.
+5. Remove UI `?? 0` defaults where score can be unknown.
 
-Last Updated: 2026-02-13
+### Delivery effort estimate (planning baseline)
 
-Changelog:
-- 2026-02-13: Added metadata block during repository-wide docs format pass.
+- Backend Category Aggregator + status machine: **~1 sprint**
+- Alembic migration + v1/v2 adapter + rollback updates: **~0.5 sprint**
+- Shadow mode + dual-run telemetry on calibration dataset: **~2–3 calendar weeks**
+- Frontend null-score gauge state + coverage UX: **~0.5 sprint**
+
+Total execution envelope: **~2 sprints + 2–3 weeks shadow telemetry**.
+
+### Defer to Phase 2+
+
+- Bayesian/regression calibration.
+- Graph-native consistency scoring across all documents.
+- Tenant-adaptive weighting based on longitudinal outcomes.
+
+### Strategic outcome
+
+This v2 framework turns Coherence Score™ into an **auditable evidence intelligence system** rather than a single opaque number. It is fair with partial data, robust under uncertainty, and suitable for enterprise standardization.

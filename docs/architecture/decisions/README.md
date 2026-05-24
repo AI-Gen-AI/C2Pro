@@ -11,6 +11,7 @@ This section contains the active architecture decision records for the current r
 - [005 Three-layer SC test strategy](./005-three-layer-sc-test-strategy.md)
 - [006 Post-reorganization architecture](./006-post-reorganization-architecture.md)
 - [ADR-004 Circuit breakers](./ADR-004-circuit-breakers.md)
+- [ADR-009 Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up](./009-coherence-score-v2-evidence-aware.md)
 
 ## Related Sections
 
