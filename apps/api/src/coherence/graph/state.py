@@ -112,7 +112,9 @@ class EvaluationConfig:
     - include_cross_clause: Run cross-document analysis
     """
 
-    low_budget_mode: bool = True
+    # P3: always-on LLM semantic layer; gate handles cost/rollout.
+    # Set True to disable the layer entirely (test escape hatch).
+    low_budget_mode: bool = False
     parallel_evaluation: bool = True
     include_cross_clause: bool = True
     include_rag_similarity: bool = True

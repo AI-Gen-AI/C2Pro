@@ -25,6 +25,7 @@ import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date
 from functools import total_ordering
 from typing import Any
 
@@ -122,6 +123,7 @@ class ScoringDiagnostics:
     missing_dimensions: list[str] | None = None
     category_scores: dict[str, float | None] | None = None
     audit_coverage: dict[str, float] | None = None
+    budget_exhausted_reset_date: date | None = None
 
 
 @dataclass
