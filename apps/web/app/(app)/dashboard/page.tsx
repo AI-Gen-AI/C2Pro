@@ -4,8 +4,9 @@
  */
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
 import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
@@ -169,13 +170,21 @@ export default function AppDashboardPage() {
   // Overview view
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold text-foreground">
-          Portfolio Overview
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Cross-project coherence and alert distribution.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-[22px] font-semibold text-foreground">
+            Portfolio Overview
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cross-project coherence and alert distribution.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-fit">
+          <Link href="/projects">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Projects
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

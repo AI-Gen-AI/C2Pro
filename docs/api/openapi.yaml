@@ -2203,6 +2203,23 @@ paths:
           type: string
           default: pending
           title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -3431,6 +3448,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
+      - HTTPBearer: []
       - HTTPBearer: []
   /api/v1/coherence/dashboard/{project_id}:
     get:
@@ -4887,11 +4905,27 @@ components:
             $ref: '#/components/schemas/DLQEntryResponse'
           type: array
           title: Entries
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        has_more:
+          type: boolean
+          title: Has More
       type: object
       required:
       - entries
+      - total
+      - limit
+      - offset
+      - has_more
       title: DLQListResponse
-      description: 'TS-BCK-042-001: Admin DLQ list response.'
+      description: 'TS-BCK-042-001: Admin DLQ list response with pagination metadata.'
     DLQRetryResponse:
       properties:
         id:
@@ -5349,7 +5383,7 @@ components:
       - budget
       - drawing
       - specification
-      - specification
+      - technical_spec
       - other
       title: DocumentType
       description: Supported document types.

@@ -180,6 +180,63 @@ def test_production_contract_drift_repair_migration_restores_alerts_and_stakehol
     assert "SET stakeholder_metadata = COALESCE(stakeholder_metadata, '{}'::jsonb)" in contents
 
 
+def test_followup_alerts_drift_repair_adds_related_clause_ids_in_new_revision() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-054."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260516_0002_add_alerts_related_clause_ids.py"
+    )
+    contents = migration.read_text(encoding="utf-8")
+
+    assert 'revision: str = "20260516_0002"' in contents
+    assert 'down_revision: str | None = "20260516_0001"' in contents
+    assert "ALTER TABLE alerts" in contents
+    assert "ADD COLUMN IF NOT EXISTS related_clause_ids UUID[]" in contents
+
+
+def test_hotfix_migration_chain_has_no_duplicate_revisions() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-056."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    versions_dir = repo_root / "apps" / "api" / "alembic" / "versions"
+    revision_markers = [
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("20260516_000*.py")
+    ]
+
+    assert sum('revision: str = "20260516_0002"' in contents for contents in revision_markers) == 1
+    assert sum('revision: str = "20260516_0003"' in contents for contents in revision_markers) == 1
+    assert sum('revision: str = "20260516_0004"' in contents for contents in revision_markers) == 1
+
+
+def test_document_type_drift_repair_normalizes_legacy_enum_name() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-055."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260516_0004_repair_document_type_enum_drift.py"
+    )
+    contents = migration.read_text(encoding="utf-8")
+
+    assert 'revision: str = "20260516_0004"' in contents
+    assert 'down_revision: str | None = "20260516_0003"' in contents
+    assert "typname = 'documenttype'" in contents
+    assert "typname = 'document_type'" in contents
+    assert "ALTER TABLE documents" in contents
+    assert "ALTER COLUMN document_type TYPE document_type" in contents
+
+
 def test_pnpm_action_setup_uses_package_manager_version() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
 

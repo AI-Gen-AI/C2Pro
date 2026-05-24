@@ -35,9 +35,13 @@ class DLQEntryResponse(BaseModel):
 
 
 class DLQListResponse(BaseModel):
-    """TS-BCK-042-001: Admin DLQ list response."""
+    """TS-BCK-042-001: Admin DLQ list response with pagination metadata."""
 
     entries: list[DLQEntryResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class DLQRetryResponse(BaseModel):

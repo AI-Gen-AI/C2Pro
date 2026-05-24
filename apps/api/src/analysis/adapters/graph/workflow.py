@@ -204,6 +204,9 @@ def build_workflow() -> StateGraph:
             "technical_spec": "wbs_extractor",
             "budget": "budget_parser",
             "schedule": "wbs_extractor",
+            "specification": "wbs_extractor",
+            "drawing": "wbs_extractor",
+            "other": "risk_extractor",
         },
     )
 

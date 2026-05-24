@@ -207,10 +207,10 @@ export default function ProjectDocumentsPage() {
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent
-          className="gap-4 border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[680px] sm:rounded-[28px]"
+          className="gap-5 bg-card p-6 text-card-foreground sm:max-w-[680px] sm:rounded-[28px]"
           data-testid="documents-upload-dialog-shell"
         >
-          <DialogHeader className="rounded-[24px] border border-border/70 bg-muted/35 px-5 py-5">
+          <DialogHeader className="rounded-[24px] border border-border/70 bg-muted/70 px-5 py-5">
             <DialogTitle>Upload Documents</DialogTitle>
             <DialogDescription>
               Files will be scoped to{" "}
@@ -241,8 +241,8 @@ export default function ProjectDocumentsPage() {
           if (!open) setDocumentToDelete(null);
         }
       }}>
-        <DialogContent className="border-border/80 bg-background/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-[425px] sm:rounded-2xl">
-          <DialogHeader className="rounded-2xl border bg-muted/35 px-4 py-4">
+        <DialogContent className="bg-card p-6 text-card-foreground sm:max-w-[425px] sm:rounded-2xl">
+          <DialogHeader className="rounded-2xl border bg-muted/70 px-4 py-4">
             <DialogTitle>Delete Document</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete "{documentToDelete?.name}"? This action cannot be undone.

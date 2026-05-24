@@ -30,7 +30,7 @@ class DocumentType(str, Enum):
     BUDGET = "budget"
     DRAWING = "drawing"
     SPECIFICATION = "specification"
-    TECHNICAL_SPEC = "specification"
+    TECHNICAL_SPEC = "technical_spec"
     OTHER = "other"
 
 class ClauseType(str, Enum):
