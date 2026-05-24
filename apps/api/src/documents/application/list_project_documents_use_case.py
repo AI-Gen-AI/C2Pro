@@ -29,6 +29,6 @@ class ListProjectDocumentsUseCase:
             return [], 0
 
         documents, total_count = await self.document_repository.list_for_project(
-            project_id, skip, limit
+            tenant_id, project_id, skip, limit
         )
         return documents, total_count

@@ -21,6 +21,7 @@ class CreateAndQueueDocumentUseCase:
         file: UploadFile,
         document_type: DocumentType,
         user_id: UUID,  # noqa: ARG002
+        tenant_id: UUID,
     ) -> Document:
         """
         Creates a document record with QUEUED status.
@@ -48,15 +49,16 @@ class CreateAndQueueDocumentUseCase:
                 detail=f"File type {file_extension} is not allowed. Allowed types: {', '.join(settings.allowed_document_types)}",
             )
 
-        # 2. Get tenant_id
-        tenant_id = await self.document_repository.get_project_tenant_id(project_id)
-        if not tenant_id:
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+        # 2. Verify project ownership (optional but recommended if tenant_id is available)
+        proj_tenant = await self.document_repository.get_project_tenant_id(project_id)
+        if not proj_tenant or proj_tenant != tenant_id:
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found or access denied.")
 
         # 3. Create a new document domain entity with QUEUED status
         new_document = Document(
             id=uuid4(),
             project_id=project_id,
+            tenant_id=tenant_id,
             document_type=document_type,
             filename=file.filename,
             upload_status=DocumentStatus.QUEUED, # Always start as QUEUED
@@ -68,7 +70,7 @@ class CreateAndQueueDocumentUseCase:
         )
 
         # 4. Add document to repository
-        await self.document_repository.add(new_document)
+        await self.document_repository.add(tenant_id, new_document)
         await self.document_repository.commit()
         await self.document_repository.refresh(new_document) # Refresh to get any DB-assigned values
 

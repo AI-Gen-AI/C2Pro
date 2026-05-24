@@ -244,6 +244,7 @@ class ResumeWorkflowUseCase:
                     # Use update_state to inject the modified state back into the checkpoint
                     # This will resume from the interrupt point (human_interrupt_node)
                     await graph_app.aupdate_state(config, state)
+                    await graph_app.ainvoke(None, config)
 
                     logger.info(
                         "workflow_resumed",

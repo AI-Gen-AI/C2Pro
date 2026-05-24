@@ -31,9 +31,12 @@ class UpdateStakeholderUseCase:
         stakeholder_id: UUID,
         user_id: UUID,
         payload: StakeholderUpdateRequest,
-        tenant_id: UUID | None = None,
+        tenant_id: UUID,
     ) -> Stakeholder:
-        stakeholder = await self.repository.get_by_id(stakeholder_id)
+        if tenant_id is None:
+            raise ValueError("tenant_id is required")
+
+        stakeholder = await self.repository.get_by_id(stakeholder_id, tenant_id=tenant_id)
         if stakeholder is None:
             raise ValueError("Stakeholder not found")
 

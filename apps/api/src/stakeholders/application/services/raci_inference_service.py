@@ -148,6 +148,7 @@ class RACIInferenceService:
                         stakeholder_id=stakeholder_id,
                         role=RACIRole(responsibility_data["role"]),
                         confidence=float(activity_data.get("confidence", 0.0)),
+                        tenant_id=tenant_id,
                     )
                 )
 

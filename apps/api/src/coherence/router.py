@@ -26,7 +26,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 # Import v0.3 graph evaluation
 from .graph.graph import evaluate_coherence
 from .graph.state import EvaluationConfig
-from .models import Clause, CoherenceResult, EnrichedCoherenceResult
+from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 router = APIRouter(
@@ -97,12 +97,12 @@ class CoherenceEvaluateRequest(BaseModel):
     )
 
 
-def _zeroed_sub_scores() -> dict[str, int]:
-    return {category: 0 for category in COHERENCE_CATEGORIES}
+def _empty_sub_scores() -> dict[str, int | None]:
+    return {category: None for category in COHERENCE_CATEGORIES}
 
 
-def _normalized_sub_scores(raw_scores: object) -> dict[str, int]:
-    normalized = _zeroed_sub_scores()
+def _normalized_sub_scores(raw_scores: object) -> dict[str, int | None]:
+    normalized = _empty_sub_scores()
     if not raw_scores or not isinstance(raw_scores, dict):
         return normalized
 
@@ -112,7 +112,7 @@ def _normalized_sub_scores(raw_scores: object) -> dict[str, int]:
             try:
                 normalized[category_key] = int(score)
             except (TypeError, ValueError):
-                normalized[category_key] = 0
+                pass
     return normalized
 
 
@@ -572,6 +572,7 @@ async def evaluate_with_diagnostics(
 
 @dashboard_router.get(
     "/{project_id}",
+    response_model=DashboardSummary,
     summary="Get Coherence Dashboard",
     description="""
     Returns coherence dashboard data for a project.
@@ -582,7 +583,7 @@ async def get_coherence_dashboard(
     project_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> DashboardSummary:
     """
     Get coherence dashboard for project.
     Prioritizes the latest completed Analysis, then falls back to CoherenceResult,
@@ -611,76 +612,68 @@ async def get_coherence_dashboard(
             detail="Project not found",
         )
 
-    # 2. Optimized counts and latest timestamps in parallel or combined if possible
-    # For now, let's keep them separate but use the same session and scalar_one_or_none()
-    
-    document_count = (
-        await db.execute(
-            select(func.count(DocumentORM.id))
-            .where(DocumentORM.project_id == project_id)
-        )
-    ).scalar_one() or 0
+    # 2. Optimized counts and latest timestamps
+    document_count_result = await db.execute(
+        select(func.count(DocumentORM.id))
+        .where(DocumentORM.project_id == project_id)
+    )
+    document_count = document_count_result.scalar() or 0
 
-    alert_count = (
-        await db.execute(
-            select(func.count(AlertORM.id))
-            .where(AlertORM.project_id == project_id)
-        )
-    ).scalar_one() or 0
+    alert_count_result = await db.execute(
+        select(func.count(AlertORM.id))
+        .where(AlertORM.project_id == project_id)
+    )
+    alert_count = alert_count_result.scalar() or 0
 
     # Fetch latest completed analysis
-    latest_analysis = (
-        await db.execute(
-            select(
-                Analysis.coherence_score,
-                Analysis.coherence_breakdown,
-                Analysis.alerts_count,
-                Analysis.completed_at,
-                Analysis.updated_at,
-            )
-            .where(
-                Analysis.project_id == project_id,
-                cast(Analysis.status, String).ilike(AnalysisStatus.COMPLETED.value),
-            )
-            .order_by(Analysis.completed_at.desc().nullslast(), Analysis.created_at.desc())
-            .limit(1)
+    latest_analysis_result = await db.execute(
+        select(
+            Analysis.coherence_score,
+            Analysis.coherence_breakdown,
+            Analysis.alerts_count,
+            Analysis.completed_at,
+            Analysis.updated_at,
         )
-    ).one_or_none()
+        .where(
+            Analysis.project_id == project_id,
+            cast(Analysis.status, String).ilike(AnalysisStatus.COMPLETED.value),
+        )
+        .order_by(Analysis.completed_at.desc().nullslast(), Analysis.created_at.desc())
+        .limit(1)
+    )
+    latest_analysis = latest_analysis_result.one_or_none()
 
     # Fetch latest coherence result
-    coherence_result = (
-        await db.execute(
-            select(
-                CoherenceResultORM.global_score,
-                CoherenceResultORM.category_scores,
-                CoherenceResultORM.calculated_at,
-                CoherenceResultORM.score_version,
-                CoherenceResultORM.score_reason,
-                CoherenceResultORM.score_missing_dimensions,
-            )
-            .where(CoherenceResultORM.project_id == project_id)
-            .order_by(CoherenceResultORM.calculated_at.desc())
-            .limit(1)
+    coherence_result_data = await db.execute(
+        select(
+            CoherenceResultORM.global_score,
+            CoherenceResultORM.category_scores,
+            CoherenceResultORM.calculated_at,
+            CoherenceResultORM.score_version,
+            CoherenceResultORM.score_reason,
+            CoherenceResultORM.score_missing_dimensions,
         )
-    ).one_or_none()
+        .where(CoherenceResultORM.project_id == project_id)
+        .order_by(CoherenceResultORM.calculated_at.desc())
+        .limit(1)
+    )
+    coherence_result = coherence_result_data.one_or_none()
 
     # Fetch latest metadata for last_updated
-    latest_doc_at = (
-        await db.execute(
-            select(func.max(DocumentORM.updated_at))
-            .where(DocumentORM.project_id == project_id)
-        )
-    ).scalar_one()
+    latest_doc_at_result = await db.execute(
+        select(func.max(DocumentORM.updated_at))
+        .where(DocumentORM.project_id == project_id)
+    )
+    latest_doc_at = latest_doc_at_result.scalar()
 
-    latest_alert_at = (
-        await db.execute(
-            select(func.max(AlertORM.updated_at))
-            .where(AlertORM.project_id == project_id)
-        )
-    ).scalar_one()
+    latest_alert_at_result = await db.execute(
+        select(func.max(AlertORM.updated_at))
+        .where(AlertORM.project_id == project_id)
+    )
+    latest_alert_at = latest_alert_at_result.scalar()
 
     # Determine global score and breakdown
-    sub_scores = _zeroed_sub_scores()
+    sub_scores = _empty_sub_scores()
     global_score = 0
 
     if latest_analysis and latest_analysis.coherence_score is not None:
@@ -712,20 +705,20 @@ async def get_coherence_dashboard(
     ]
     last_updated = max(normalized_candidates, default=datetime.now(UTC))
 
-    return {
-        "project_id": str(project_id),
-        "tenant_id": str(tenant_id),
-        "global_score": global_score,
-        "coherence_score": global_score,
-        "sub_scores": sub_scores,
-        "weights_used": COHERENCE_WEIGHTS,
-        "alert_count": alert_count,
-        "document_count": document_count,
-        "methodology_version": "3.0",
-        "score_version": coherence_result.score_version if coherence_result else None,
-        "score_reason": coherence_result.score_reason if coherence_result else None,
-        "score_missing_dimensions": (
+    return DashboardSummary(
+        project_id=str(project_id),
+        tenant_id=str(tenant_id),
+        global_score=global_score,
+        coherence_score=global_score,
+        sub_scores=sub_scores,
+        weights_used=COHERENCE_WEIGHTS,
+        alert_count=alert_count,
+        document_count=document_count,
+        methodology_version="3.0",
+        score_version=coherence_result.score_version if coherence_result else None,
+        score_reason=coherence_result.score_reason if coherence_result else None,
+        score_missing_dimensions=(
             coherence_result.score_missing_dimensions if coherence_result else None
         ),
-        "last_updated": last_updated.isoformat(),
-    }
+        last_updated=last_updated,
+    )

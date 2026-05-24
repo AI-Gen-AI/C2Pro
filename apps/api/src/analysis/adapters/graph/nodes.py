@@ -200,7 +200,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
 
     Delegates domain routing to HumanInTheLoopService; interrupt stays here.
     """
-    from src.modules.hitl.domain.entities import ImpactLevel
+    from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
     tenant_id = state.get("tenant_id")
     if tenant_id:
@@ -214,7 +214,18 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 service = get_hitl_service_for_graph(
                     session=session, tenant_id=UUID(tenant_id),
                 )
-                await service.route_for_review(
+                metadata = {
+                    "tenant_id": tenant_id,
+                    "project_id": state["project_id"],
+                    "document_id": state["document_id"],
+                    "review_type": "analysis_critique",
+                }
+                if state.get("thread_id"):
+                    metadata["thread_id"] = state["thread_id"]
+                if state.get("checkpoint_id"):
+                    metadata["checkpoint_id"] = state["checkpoint_id"]
+
+                review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
                     item_type=state.get("doc_type") or "unknown",
                     confidence=state.get("confidence_score", 0.0),
@@ -225,8 +236,17 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "doc_type": state.get("doc_type"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
+                        "thread_id": state.get("thread_id"),
+                        "checkpoint_id": state.get("checkpoint_id"),
                     },
+                    metadata=metadata,
                 )
+                if review_status == ReviewStatus.APPROVED:
+                    state["human_approval_required"] = False
+                    state["messages"].append(
+                        AIMessage(content="HITL auto-approved; continuing analysis.")
+                    )
+                    return state
         except Exception:
             import structlog
 

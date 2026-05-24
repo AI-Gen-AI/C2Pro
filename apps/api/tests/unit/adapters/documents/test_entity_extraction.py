@@ -148,6 +148,49 @@ class TestExtractionServiceIntegration:
         assert "wbs_items" in result
 
     @pytest.mark.asyncio
+    async def test_extract_entities_schedule_document_sets_wbs_level_from_code(self):
+        """TS-UD-DOC-EXT-001: parsed schedule rows map into valid WBS create payloads."""
+        from src.documents.adapters.extraction.documents_entity_extraction_service import (
+            DocumentsEntityExtractionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        mock_wbs_use_case = MagicMock()
+        mock_wbs_use_case.execute = AsyncMock()
+        service = DocumentsEntityExtractionService(
+            stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
+            wbs_use_case_factory=MagicMock(return_value=mock_wbs_use_case),
+            bom_use_case_factory=MagicMock(return_value=MagicMock()),
+            user_id=uuid4(),
+        )
+        doc = Document(
+            id=uuid4(),
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            document_type=DocumentType.SCHEDULE,
+            filename="schedule.xlsx",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        await service.extract_entities_from_document(
+            document=doc,
+            parsed_payload={
+                "schedule": [
+                    {
+                        "task": "Firma del contrato",
+                        "wbs": "1.1",
+                        "start_date": "2024-01-01",
+                        "end_date": "2024-01-01",
+                    }
+                ]
+            },
+            tenant_id=doc.tenant_id,
+        )
+
+        payload = mock_wbs_use_case.execute.await_args.args[0]
+        assert payload.level == 2
+
+    @pytest.mark.asyncio
     async def test_extract_entities_budget_document(self):
         """Test extraction for BUDGET document type extracts BOM items."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (

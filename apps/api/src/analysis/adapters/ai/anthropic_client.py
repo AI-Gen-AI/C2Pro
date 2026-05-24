@@ -96,14 +96,20 @@ class AIService:
             )
             return parsed
 
+        if not self.tenant_id:
+            logger.error("Tenant ID missing, cannot proceed with AI call.")
+            raise AIServiceError(message="El tenant no está configurado.")
+
+        tenant_uuid = UUID(self.tenant_id)
+
         if not self.cost_controller:
             if os.getenv("C2PRO_TEST_LIGHT") == "1":
                 logger.warning("Cost controller disabled in light test mode.")
             else:
-                logger.error("Cost controller not initialized, cannot proceed with AI call.")
-                raise AIServiceError(message="El control de costes no está configurado.")
-
-        tenant_uuid = UUID(self.tenant_id)
+                logger.warning(
+                    "cost_controller_deferred_to_tenant_session",
+                    tenant_id=str(tenant_uuid),
+                )
 
         # Before making the call, check the budget
         estimated_cost = 0.01  # A small amount to represent a potential call

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from langgraph.graph import END, StateGraph
@@ -69,8 +69,8 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
 # ── Enrichment fan-out point (passthrough) ──────────────────────────────────
 
 
-async def enrichment_dispatch_node(state: ProjectState) -> ProjectState:
-    """Passthrough node that anchors the parallel-enrichment fan-out.
+async def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
+    """TS-UA-ANA-GRAPH-001 - Anchor the fan-out without rewriting shared state.
 
     Why this node exists:
         1. The critique conditional edge must terminate at a *single* physical
@@ -85,10 +85,12 @@ async def enrichment_dispatch_node(state: ProjectState) -> ProjectState:
            that complicate the N10 fan-in merge).
 
     State semantics:
-        Returns the state unchanged. Concurrency starts on the *outgoing*
-        edges, so no race condition can occur inside this node.
+        Emits an empty patch. The incoming state already exists in the graph;
+        rewriting the full state immediately before a parallel cut can cause
+        identity keys such as ``project_id`` to be observed as concurrent
+        writes by LangGraph.
     """
-    return state
+    return {}
 
 
 # ── Graph builder ────────────────────────────────────────────────────────────
@@ -247,14 +249,13 @@ def build_workflow() -> StateGraph:
     workflow.add_edge("stakeholder_extractor", "raci_generator")       # N6 → N7
 
     # ── Fan-in barrier at N10 (knowledge_graph) ─────────────────────────
-    # LangGraph executes a node only when *all* incoming edges have produced
-    # state updates. With three incoming edges from N7, N8, and N15, N10 is
-    # guaranteed not to run until every parallel branch has completed and
-    # its state delta has been merged via the schema reducers. This is the
-    # canonical fan-in idiom — no explicit barrier node is required.
-    workflow.add_edge("raci_generator", "knowledge_graph")             # branch A → join
-    workflow.add_edge("coherence_scorer", "knowledge_graph")           # branch B → join
-    workflow.add_edge("citation_validator", "knowledge_graph")         # branch C → join
+    # A list-valued start edge is LangGraph's true "wait for all" join.
+    # Three separate edges would let N10 fire independently as each branch
+    # completes, duplicating downstream writes such as project_id/analysis_id.
+    workflow.add_edge(
+        ["raci_generator", "coherence_scorer", "citation_validator"],
+        "knowledge_graph",
+    )
 
     # ── Persistence & assembly: N10 → N17 → N11 → N16 → END ─────────────
     workflow.add_edge("knowledge_graph", "save_to_db")

@@ -89,6 +89,7 @@ def sample_document():
     return Document(
         id=uuid4(),
         project_id=uuid4(),
+        tenant_id=uuid4(),
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
         upload_status=DocumentStatus.UPLOADED,
@@ -486,6 +487,19 @@ class TestDocumentParse:
             status.HTTP_404_NOT_FOUND,
             status.HTTP_500_INTERNAL_SERVER_ERROR
         ]
+
+    def test_doc_http_010b_parse_document_reports_validation_error(self, client, app, sample_document):
+        """TS-UD-DOC-HTTP-010B: parser format errors are returned as 422, not 500."""
+        from src.documents.adapters.http.router import get_parse_document_use_case
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute = AsyncMock(side_effect=ValueError("Excel schedule parsing failed: missing headers"))
+        app.dependency_overrides[get_parse_document_use_case] = lambda: mock_use_case
+
+        response = client.post(f"/documents/{sample_document.id}/parse")
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["detail"] == "Excel schedule parsing failed: missing headers"
 
 
 class TestRagQuestion:

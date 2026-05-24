@@ -186,6 +186,93 @@ class TestRagIngestionServiceAdvanced:
 
         assert hasattr(service, "ingest_document_chunks")
 
+    @pytest.mark.asyncio
+    async def test_schedule_payload_is_ingested_as_rag_text(self):
+        """TS-UD-RAG-ERR-001: parsed Excel schedules must create searchable RAG text chunks."""
+        from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
+            SqlAlchemyRagIngestionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        service = SqlAlchemyRagIngestionService(db_session=MagicMock())
+        service._rag_service.ingest_document = AsyncMock(return_value=1)
+        tenant_id = uuid4()
+        project_id = uuid4()
+        document = Document(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_type=DocumentType.SCHEDULE,
+            filename="Cronograma.xlsx",
+            file_format=".xlsx",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        await service.ingest_document_chunks(
+            document=document,
+            tenant_id=tenant_id,
+            parsed_payload={
+                "schedule": [
+                    {
+                        "task": "Emisión del Operational Acceptance Certificate",
+                        "start_date": "2014-10-05",
+                        "end_date": "2015-01-02",
+                        "duration": 90,
+                        "wbs": "SCH-033",
+                    }
+                ]
+            },
+        )
+
+        service._rag_service.ingest_document.assert_awaited_once()
+        text_content = service._rag_service.ingest_document.await_args.kwargs["text_content"]
+        assert "SCH-033" in text_content
+        assert "Emisión del Operational Acceptance Certificate" in text_content
+        assert "2015-01-02" in text_content
+
+    @pytest.mark.asyncio
+    async def test_contract_clause_payload_is_ingested_as_rag_text(self):
+        """TS-UD-RAG-ERR-002: parsed contract clauses must create searchable RAG text chunks."""
+        from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
+            SqlAlchemyRagIngestionService,
+        )
+        from src.documents.domain.models import Document, DocumentStatus, DocumentType
+
+        service = SqlAlchemyRagIngestionService(db_session=MagicMock())
+        service._rag_service.ingest_document = AsyncMock(return_value=1)
+        tenant_id = uuid4()
+        project_id = uuid4()
+        document = Document(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_type=DocumentType.CONTRACT,
+            filename="HVPNL_First Contract (Main Contents).pdf",
+            file_format=".pdf",
+            upload_status=DocumentStatus.PARSED,
+        )
+
+        await service.ingest_document_chunks(
+            document=document,
+            tenant_id=tenant_id,
+            parsed_payload={
+                "clauses": [
+                    {
+                        "clause_number": "26.2",
+                        "title": "Liquidated Damages",
+                        "text": "Penalty is 0.5 percent per week for delayed completion.",
+                        "page": 42,
+                    }
+                ]
+            },
+        )
+
+        service._rag_service.ingest_document.assert_awaited_once()
+        text_content = service._rag_service.ingest_document.await_args.kwargs["text_content"]
+        assert "Clause: 26.2" in text_content
+        assert "Liquidated Damages" in text_content
+        assert "Penalty is 0.5 percent per week" in text_content
+
 
 class TestRagServiceAdapter:
     """Tests for SqlAlchemyRagService adapter."""

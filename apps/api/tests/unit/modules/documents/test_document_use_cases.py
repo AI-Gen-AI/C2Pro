@@ -18,6 +18,7 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 def _make_dto(**overrides) -> CreateDocumentDTO:
     defaults = {
         "project_id": uuid4(),
+        "tenant_id": uuid4(),
         "filename": "contract.pdf",
         "document_type": DocumentType.CONTRACT,
         "file_format": "pdf",
@@ -42,11 +43,13 @@ def test_create_document_happy_path():
 
     result = use_case.execute(dto)
 
-    # Assert: repo.save was called exactly once with the new document
-    repo.save.assert_called_once()
-    saved_doc = repo.save.call_args[0][0]
+    # Assert: repo.add was called exactly once with the new document
+    repo.add.assert_called_once()
+    passed_tenant_id, saved_doc = repo.add.call_args[0]
+    assert passed_tenant_id == dto.tenant_id
     assert isinstance(saved_doc, Document)
     assert saved_doc.project_id == dto.project_id
+    assert saved_doc.tenant_id == dto.tenant_id
     assert saved_doc.filename == dto.filename
     assert saved_doc.document_type == dto.document_type
     assert saved_doc.upload_status == DocumentStatus.UPLOADED
@@ -59,7 +62,7 @@ def test_create_document_happy_path():
 def test_create_document_raises_exception_on_repository_error():
     """Should propagate repository exceptions to the caller."""
     repo = Mock()
-    repo.save.side_effect = ConnectionError("DB connection lost")
+    repo.add.side_effect = ConnectionError("DB connection lost")
     use_case = CreateDocumentUseCase(repository=repo)
     dto = _make_dto()
 
@@ -76,6 +79,7 @@ def test_create_document_with_missing_name_fails():
     with pytest.raises(TypeError):
         CreateDocumentDTO(
             project_id=uuid4(),
+            tenant_id=uuid4(),
             # filename omitted
             document_type=DocumentType.CONTRACT,
         )

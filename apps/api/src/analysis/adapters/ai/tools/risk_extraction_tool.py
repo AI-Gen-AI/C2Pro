@@ -2,6 +2,8 @@
 analysis/adapters/ai/tools/risk_extraction_tool.py
 
 Extracts contractual and project risks from narrative sections.
+
+Test Suite ID: TS-QA-SWAGGER-ANALYSIS-001
 """
 from __future__ import annotations
 
@@ -60,10 +62,11 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     async def _execute_impl(
         self,
         input_data: RiskExtractionInput,
-        _tenant_id: UUID | None,
+        tenant_id: UUID | None,
         ai_response: AIResponse,
     ) -> list[RiskItem]:
         """Parse AI response and apply domain logic."""
+        _ = tenant_id
 
         # Apply filtering if requested
         if input_data.filter_relevant:

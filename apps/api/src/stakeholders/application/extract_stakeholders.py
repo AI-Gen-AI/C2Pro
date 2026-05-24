@@ -61,9 +61,12 @@ class ExtractStakeholdersUseCase:
     def __init__(self, ai_provider: Any) -> None:
         self._ai_provider = ai_provider
 
-    async def execute(self, contract_text: str, tenant_id: UUID | None = None) -> list[Stakeholder]:
+    async def execute(self, contract_text: str, tenant_id: UUID) -> list[Stakeholder]:
         if not contract_text or not contract_text.strip():
             return []
+        
+        if tenant_id is None:
+            raise ValueError("tenant_id is required")
 
         from src.core.ai.anthropic_wrapper import AIRequest
 

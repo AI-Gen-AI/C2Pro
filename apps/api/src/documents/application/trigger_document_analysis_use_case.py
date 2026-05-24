@@ -6,6 +6,8 @@ Refers to Suite ID: TS-INT-MOD-DOC-001.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
 from src.documents.ports.document_repository import IDocumentRepository
 
@@ -21,10 +23,10 @@ class TriggerDocumentAnalysisUseCase:
         self._document_repository = document_repository
         self._orchestrator = orchestrator
 
-    async def execute(self, *, document_id) -> dict:
-        document = await self._document_repository.get_by_id(document_id)
+    async def execute(self, *, tenant_id: UUID, document_id: UUID) -> dict:
+        document = await self._document_repository.get_by_id(tenant_id, document_id)
         if not document:
-            raise ValueError("document not found")
+            raise ValueError("document not found or access denied")
 
         if not document.is_parsed():
             raise ValueError("document must be parsed before analysis")
@@ -32,10 +34,6 @@ class TriggerDocumentAnalysisUseCase:
         parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
         if not parsed_text:
             raise ValueError("parsed_text not available")
-
-        tenant_id = await self._document_repository.get_project_tenant_id(document.project_id)
-        if tenant_id is None:
-            raise ValueError("tenant not found for project")
 
         initial_state = {
             "document_text": parsed_text,

@@ -56,10 +56,14 @@ from src.alerts.application.use_cases.update_alert_workspace_settings_use_case i
     UpdateAlertWorkspaceSettingsUseCase,
 )
 from src.core.database import get_session
-from src.core.security import CurrentTenantId, CurrentUserId
+from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 
-router = APIRouter(prefix="/alerts", tags=["alerts"])
-project_alerts_router = APIRouter(prefix="/projects", tags=["alerts"])
+router = APIRouter(prefix="/alerts", tags=["alerts"], dependencies=[Depends(security_scheme)])
+project_alerts_router = APIRouter(
+    prefix="/projects",
+    tags=["alerts"],
+    dependencies=[Depends(security_scheme)],
+)
 
 
 def get_alert_repository(

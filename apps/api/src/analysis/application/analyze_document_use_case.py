@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from src.analysis.ports.orchestrator import AnalysisOrchestrator
 
 
 class AnalyzeDocumentUseCase:
+    """TS-UA-ANA-UC-002 - Orchestrate a fresh document analysis run."""
     def __init__(self, orchestrator: AnalysisOrchestrator) -> None:
         self.orchestrator = orchestrator
 
@@ -17,12 +19,14 @@ class AnalyzeDocumentUseCase:
         document_id: str | None,
         tenant_id: str | None,
     ) -> dict[str, Any]:
+        thread_id = str(uuid4())
         initial_state = {
             "document_text": document_text,
             "project_id": project_id,
             "document_id": document_id or project_id,
             "doc_type": "",
             "tenant_id": tenant_id,
+            "thread_id": thread_id,
             "messages": [],
             "extracted_risks": [],
             "extracted_wbs": [],
@@ -33,4 +37,4 @@ class AnalyzeDocumentUseCase:
             "human_approval_required": False,
             "analysis_id": None,
         }
-        return await self.orchestrator.run(initial_state, thread_id=project_id)
+        return await self.orchestrator.run(initial_state, thread_id=thread_id)

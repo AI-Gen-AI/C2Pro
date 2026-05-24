@@ -864,6 +864,55 @@ class TestProjectBudgetEndpoint:
         assert payload["variance_status"] == "on_track"
 
 
+class TestBulkWBSCompatibilityEndpoint:
+    """Tests for POST /projects/{project_id}/wbs/bulk."""
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_wbs_items_are_visible_from_wbs_read_endpoint(
+        self,
+        client,
+        test_project,
+        auth_headers,
+    ):
+        """TS-E2E-FLW-BLK-001: bulk-created WBS rows must be readable through GET /wbs."""
+        create_response = await client.post(
+            f"{API_PREFIX}/projects/{test_project.id}/wbs/bulk",
+            json={
+                "items": [
+                    {
+                        "code": "1",
+                        "name": "Project Delivery",
+                        "level": 1,
+                        "description": "Root package",
+                    },
+                    {
+                        "code": "1.1",
+                        "name": "Engineering",
+                        "level": 2,
+                        "parent_code": "1",
+                        "description": "Engineering package",
+                    },
+                ],
+                "atomic": True,
+            },
+            headers=auth_headers,
+        )
+
+        assert create_response.status_code == status.HTTP_201_CREATED
+        assert create_response.json()["created_count"] == 2
+
+        read_response = await client.get(
+            f"{API_PREFIX}/projects/{test_project.id}/wbs",
+            headers=auth_headers,
+        )
+
+        assert read_response.status_code == status.HTTP_200_OK
+        payload = read_response.json()
+        assert payload["total_items"] == 2
+        assert [item["code"] for item in payload["items"]] == ["1", "1.1"]
+        assert payload["items"][1]["parent_code"] == "1"
+
+
 # ===========================================
 # HEALTH CHECK TEST
 # ===========================================

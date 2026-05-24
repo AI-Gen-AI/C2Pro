@@ -874,6 +874,14 @@ async def bulk_create_wbs(
             },
         )
 
+    async with get_session_with_tenant(current_user.tenant_id) as session:
+        wbs_repository = SQLAlchemyWBSRepository(session)
+        await wbs_repository.bulk_create_from_dicts(
+            project_id,
+            [item.model_dump() for item in valid_items],
+            current_user.tenant_id,
+        )
+
     response_payload = {
         "project_id": str(project_id),
         "created_count": len(valid_items),

@@ -25,22 +25,15 @@ class ExtractClausesUseCase:
         self.document_repository = document_repository
         self.clause_extraction_service = clause_extraction_service
 
-    async def execute(self, document_id: UUID, text: str) -> list[Clause]:
+    async def execute(self, tenant_id: UUID, document_id: UUID, text: str) -> list[Clause]:
         """
         Extracts clauses from text and persists them for a document.
         """
-        document = await self.document_repository.get_by_id(document_id)
+        document = await self.document_repository.get_by_id(tenant_id, document_id)
         if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found.",
-            )
-
-        tenant_id = await self.document_repository.get_project_tenant_id(document.project_id)
-        if not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project for document not found.",
+                detail="Document not found or access denied.",
             )
 
         clauses = await self.clause_extraction_service.extract_from_text(
@@ -54,7 +47,7 @@ class ExtractClausesUseCase:
             return []
 
         for clause in clauses:
-            await self.document_repository.add_clause(clause)
+            await self.document_repository.add_clause(tenant_id, clause)
 
         await self.document_repository.commit()
         return clauses

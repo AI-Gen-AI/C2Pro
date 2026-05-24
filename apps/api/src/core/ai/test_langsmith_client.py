@@ -34,3 +34,52 @@ def test_langsmith_client_builds_metadata_tags(monkeypatch):
     assert metadata["tenant_id"] == "tenant-123"
     assert metadata["task_type"] == "coherence"
     assert metadata["environment"] == os.getenv("ENVIRONMENT", "development")
+
+
+def test_langsmith_client_start_span_supplies_default_inputs(monkeypatch):
+    """TS-AI-LANGSMITH-001: LangSmith span creation satisfies current SDK contract."""
+
+    class _FakeRun:
+        id = "run-1"
+
+    class _FakeNativeClient:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def create_run(self, **kwargs):
+            self.calls.append(kwargs)
+            return _FakeRun()
+
+    monkeypatch.setenv("LANGSMITH_API_KEY", "unit-test-key")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    client = LangSmithClient(project_name="c2pro-test")
+    fake_native_client = _FakeNativeClient()
+    client._client = fake_native_client
+
+    client.start_span(name="coherence_node:prepare_context", run_type="chain")
+
+    assert fake_native_client.calls == [
+        {
+            "name": "coherence_node:prepare_context",
+            "run_type": "chain",
+            "inputs": {},
+            "metadata": {},
+            "project_name": "c2pro-test",
+            "parent_run": None,
+        }
+    ]
+
+
+def test_langsmith_client_start_span_fails_open_on_api_error(monkeypatch):
+    """TS-AI-LANGSMITH-001: LangSmith API failures must not block application responses."""
+
+    class _FailingNativeClient:
+        def create_run(self, **kwargs):
+            raise RuntimeError("403 Forbidden")
+
+    monkeypatch.setenv("LANGSMITH_API_KEY", "unit-test-key")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    client = LangSmithClient(project_name="c2pro-test")
+    client._client = _FailingNativeClient()
+
+    assert client.start_span(name="rag_answer", run_type="llm") is None

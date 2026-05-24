@@ -114,11 +114,12 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             if not task_name:
                 continue
 
-            wbs_code = f"SCH-{index:03d}"
+            wbs_code = str(task.get("wbs") or f"SCH-{index:03d}")
             payload = WBSItemCreate(
                 project_id=document.project_id,
                 wbs_code=wbs_code,
                 name=str(task_name),
+                level=_infer_wbs_level(wbs_code),
                 item_type=WBSItemType.ACTIVITY,
                 planned_start=_parse_datetime_value(task.get("start_date")),
                 planned_end=_parse_datetime_value(task.get("end_date")),
@@ -215,6 +216,16 @@ def _parse_datetime_value(value: object) -> datetime | None:
         except ValueError:
             return None
     return None
+
+
+def _infer_wbs_level(wbs_code: str) -> int:
+    """TS-UD-DOC-EXT-001: infer hierarchy depth from parsed or generated WBS codes."""
+    normalized_code = wbs_code.strip()
+    if not normalized_code:
+        return 0
+    if "." in normalized_code:
+        return len([segment for segment in normalized_code.split(".") if segment])
+    return 1
 
 
 def _parse_decimal(value: object) -> Decimal | None:

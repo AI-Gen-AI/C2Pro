@@ -54,6 +54,7 @@ class Stakeholder:
     """
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     power_level: PowerLevel
     interest_level: InterestLevel
     approval_status: str # Assuming approval_status is string for now, enum to be defined later if needed
@@ -82,6 +83,9 @@ class Stakeholder:
     def __post_init__(self) -> None:
         if self.project_id is None:
             raise ValueError("project_id is required")
+        
+        if self.tenant_id is None:
+            raise ValueError("tenant_id is required")
         
         # Handle missing or empty names gracefully for legacy data
         if self.name is None or not self.name.strip():
@@ -116,6 +120,7 @@ class RaciAssignment:
     """
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     stakeholder_id: UUID
     wbs_item_id: UUID
     raci_role: RACIRole
@@ -134,6 +139,7 @@ class RaciAssignment:
 class RaciResponsibility:
     stakeholder_id: UUID
     role: RACIRole
+    tenant_id: UUID
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
 

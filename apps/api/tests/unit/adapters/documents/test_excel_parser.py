@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from openpyxl import Workbook
 
 
 class TestExcelParserSchedule:
@@ -96,6 +97,38 @@ class TestExcelParserSchedule:
                     await parser.parse_schedule(Path(tmp_path))
             finally:
                 os.unlink(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_parse_schedule_discovers_spanish_header_row_after_title_block(self):
+        """TS-UD-DOC-XLS-001: realistic Spanish schedules parse after title rows."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        parser = ExcelFileParser()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet["A1"] = "1. CRONOGRAMA DETALLADO"
+        sheet.append([])
+        sheet.append([])
+        sheet.append(["ID", "WBS", "Actividad", "Duración (días)", "Inicio", "Fin", "Predecesoras"])
+        sheet.append(["1.1", None, "Firma del contrato", 1, "2024-01-01", "2024-01-01", "–"])
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+        workbook.save(tmp_path)
+        workbook.close()
+
+        result = await parser.parse_schedule(Path(tmp_path))
+
+        assert result == [
+            {
+                "task": "Firma del contrato",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-01",
+                "duration": 1,
+                "wbs": None,
+                "predecessors": "–",
+            }
+        ]
 
 
 class TestExcelParserBudget:

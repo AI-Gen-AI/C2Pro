@@ -167,11 +167,11 @@ async def update_stakeholder(
 )
 async def delete_stakeholder(
     stakeholder_id: UUID,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     _user_id: CurrentUserId,
     delete_use_case: DeleteStakeholderUseCase = Depends(get_delete_use_case),
 ) -> None:
-    await delete_use_case.execute(stakeholder_id=stakeholder_id)
+    await delete_use_case.execute(stakeholder_id=stakeholder_id, tenant_id=tenant_id)
     return None
 
 

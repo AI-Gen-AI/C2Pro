@@ -20,7 +20,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 
 
 def _request_for_tenant(tenant_id):
-    return SimpleNamespace(state=SimpleNamespace(tenant_id=tenant_id))
+    return SimpleNamespace(tenant_id=tenant_id)
 
 
 @pytest.mark.asyncio
@@ -52,17 +52,17 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 
     monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
 
-    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id))
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response["coherence_score"] == 0
     assert response["global_score"] == 0
     assert response["sub_scores"] == {
-        "SCOPE": 0,
-        "BUDGET": 0,
-        "QUALITY": 0,
-        "TECHNICAL": 0,
-        "LEGAL": 0,
-        "TIME": 0,
+        "SCOPE": None,
+        "BUDGET": None,
+        "QUALITY": None,
+        "TECHNICAL": None,
+        "LEGAL": None,
+        "TIME": None,
     }
 
 
@@ -70,7 +70,7 @@ async def test_dashboard_defaults_to_zero_when_no_persisted_coherence_sources(
 async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_results(
     db, test_tenant, monkeypatch
 ) -> None:
-    coherence_time = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=2)
+    coherence_time = datetime.now(UTC).replace(tzinfo=None, microsecond=0) - timedelta(hours=2)
     project = ProjectORM(
         id=uuid4(),
         tenant_id=test_tenant.id,
@@ -84,7 +84,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
         start_date=None,
         end_date=None,
         coherence_score=33.0,
-        last_analysis_at=datetime.now(UTC) - timedelta(days=2),
+        last_analysis_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(days=2),
         metadata_json={},
     )
     project.updated_at = coherence_time - timedelta(days=1)
@@ -93,6 +93,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
     coherence_result = CoherenceResultORM(
         project_id=project.id,
+        tenant_id=test_tenant.id,
         global_score=61,
         category_scores={
             "SCOPE": 65,
@@ -112,6 +113,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
     analysis = Analysis(
         id=uuid4(),
         project_id=project.id,
+        tenant_id=test_tenant.id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
         result_json={"source": "analysis"},
@@ -131,7 +133,7 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
     monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
 
-    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id))
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response["coherence_score"] == 61
     assert response["sub_scores"]["TECHNICAL"] == 63
@@ -165,13 +167,14 @@ async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
     analysis = Analysis(
         id=uuid4(),
         project_id=project.id,
+        tenant_id=test_tenant.id,
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
         result_json={"source": "analysis"},
         coherence_score=71,
         coherence_breakdown=["unexpected", "legacy", "list"],
         alerts_count=2,
-        completed_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(analysis)
     await db.commit()
@@ -182,15 +185,15 @@ async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
 
     monkeypatch.setattr("src.coherence.router.get_session_with_tenant", _session_with_tenant)
 
-    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id))
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response["coherence_score"] == 71
     assert response["alert_count"] == 2
     assert response["sub_scores"] == {
-        "SCOPE": 0,
-        "BUDGET": 0,
-        "QUALITY": 0,
-        "TECHNICAL": 0,
-        "LEGAL": 0,
-        "TIME": 0,
+        "SCOPE": None,
+        "BUDGET": None,
+        "QUALITY": None,
+        "TECHNICAL": None,
+        "LEGAL": None,
+        "TIME": None,
     }

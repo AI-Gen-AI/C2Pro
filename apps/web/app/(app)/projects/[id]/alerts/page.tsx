@@ -5,6 +5,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useMemo } from "react";
 import { AlertReviewCenter, type ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
 import { useListProjectAlertsApiV1ProjectsProjectIdAlertsGet } from "@/lib/api/generated/alerts/alerts";
 
@@ -53,6 +54,11 @@ export default function AlertsPage() {
   const { data, isLoading, error } =
     useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
 
+  const alerts = useMemo(() => 
+    (data?.items ?? []).map(mapAlertToReviewAlert),
+    [data?.items]
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
@@ -69,11 +75,10 @@ export default function AlertsPage() {
     );
   }
 
-  const alerts = (data?.items ?? []).map(mapAlertToReviewAlert);
-
   return (
     <div className="space-y-6">
       <AlertReviewCenter projectId={id} alerts={alerts} />
     </div>
   );
 }
+

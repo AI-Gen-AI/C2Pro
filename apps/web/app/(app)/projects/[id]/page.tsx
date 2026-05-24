@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -34,7 +35,10 @@ export default function ProjectOverviewPage() {
     error: alertsError,
   } = useListProjectAlertsApiV1ProjectsProjectIdAlertsGet(id, undefined);
 
-  if (dashboardLoading || alertsLoading) {
+  const isLoading = dashboardLoading || alertsLoading;
+  const hasError = dashboardError || !dashboard;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
         Loading project overview…
@@ -42,7 +46,7 @@ export default function ProjectOverviewPage() {
     );
   }
 
-  if (dashboardError || !dashboard) {
+  if (hasError) {
     return (
       <div className="flex items-center justify-center py-24 text-destructive">
         {(dashboardError instanceof Error && dashboardError.message) ||
@@ -55,33 +59,47 @@ export default function ProjectOverviewPage() {
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
-  const coherenceScore =
+  
+  const coherenceScore = useMemo(() => 
     typeof dashboard.coherence_score === 'number'
       ? dashboard.coherence_score
-      : Number(dashboard.coherence_score ?? 0);
-  const documentCount =
+      : Number(dashboard.coherence_score ?? 0),
+    [dashboard.coherence_score]
+  );
+
+  const documentCount = useMemo(() => 
     typeof dashboard.document_count === 'number'
       ? dashboard.document_count
-      : Number(dashboard.document_count ?? 0);
-  const subScores =
-    dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
-      ? (dashboard.sub_scores as Record<string, number>)
-      : {};
-  const budgetScore = subScores['BUDGET'] ?? 0;
+      : Number(dashboard.document_count ?? 0),
+    [dashboard.document_count]
+  );
+
+  const budgetScore = useMemo(() => {
+    const subScores =
+      dashboard.sub_scores && typeof dashboard.sub_scores === 'object'
+        ? (dashboard.sub_scores as Record<string, number>)
+        : {};
+    return subScores['BUDGET'] ?? 0;
+  }, [dashboard.sub_scores]);
+
   const openAlertCount = alertsUnavailable
     ? Number(dashboard.alert_count ?? 0)
     : openAlerts.length;
-  const recentAlerts = openAlerts.slice(0, 3).map((alert) => ({
-    severity: alert.severity,
-    title: alert.message.split(' — ')[0],
-  }));
 
-  const statCards = [
+  const recentAlerts = useMemo(() => 
+    openAlerts.slice(0, 3).map((alert) => ({
+      severity: alert.severity,
+      title: alert.message.split(' — ')[0],
+    })),
+    [openAlerts]
+  );
+
+  const statCards = useMemo(() => [
     { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
     { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
     { label: 'Budget Used', value: `${100 - budgetScore}%`, icon: DollarSign, color: 'text-chart-budget' },
-  ];
+  ], [coherenceScore, openAlertCount, documentCount, budgetScore]);
 
   return (
     <div className="space-y-5">
@@ -140,11 +158,11 @@ export default function ProjectOverviewPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {alertsUnavailable && (
+            {alertsUnavailable ? (
               <p className="text-sm text-muted-foreground">
                 Recent alerts unavailable right now.
               </p>
-            )}
+            ) : null}
             {recentAlerts.map((alert, i) => (
               <div key={i} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
                 <div className={`h-2 w-2 shrink-0 rounded-full ${
@@ -160,12 +178,13 @@ export default function ProjectOverviewPage() {
                 </Badge>
               </div>
             ))}
-            {!alertsUnavailable && recentAlerts.length === 0 && (
+            {!alertsUnavailable && recentAlerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No open alerts</p>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+

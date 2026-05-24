@@ -44,6 +44,7 @@ class HumanInTheLoopService:
         confidence: float,
         impact_level: ImpactLevel,
         item_data: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
     ) -> ReviewStatus:
         status = self.confidence_router.determine_review_status(
             confidence, impact_level
@@ -63,6 +64,7 @@ class HumanInTheLoopService:
             created_at=datetime.now(),
             sla_due_date=sla_due,
             item_data=item_data,
+            metadata=metadata or {},
         )
         await self.review_queue_repo.add_review_item(review_item)
         return status

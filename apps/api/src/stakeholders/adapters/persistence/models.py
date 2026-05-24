@@ -48,6 +48,13 @@ class StakeholderORM(Base):
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -132,6 +139,7 @@ class StakeholderORM(Base):
     # Indexes
     __table_args__ = (
         Index("ix_stakeholders_project", "project_id"),
+        Index("ix_stakeholders_tenant", "tenant_id"),
         Index("ix_stakeholders_quadrant", "quadrant"),
         Index("ix_stakeholders_clause", "source_clause_id"),
         Index("ix_stakeholders_email", "email"),
@@ -148,6 +156,13 @@ class StakeholderWBSRaciORM(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
@@ -197,6 +212,7 @@ class StakeholderWBSRaciORM(Base):
     __table_args__ = (
         Index("ix_raci_stakeholder", "stakeholder_id"),
         Index("ix_raci_wbs", "wbs_item_id"),
+        Index("ix_raci_tenant", "tenant_id"),
         Index("ix_raci_role", "raci_role"),
         {"info": {"rls_policy": "tenant_isolation"}},
     )

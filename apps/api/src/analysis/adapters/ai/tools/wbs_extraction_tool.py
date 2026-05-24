@@ -2,6 +2,8 @@
 analysis/adapters/ai/tools/wbs_extraction_tool.py
 
 Extracts Work Breakdown Structure (WBS) items from technical documents.
+
+Test Suite ID: TS-QA-SWAGGER-ANALYSIS-001
 """
 from __future__ import annotations
 
@@ -77,10 +79,11 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
     async def _execute_impl(
         self,
         input_data: WBSExtractionInput,
-        _tenant_id: UUID | None,
+        tenant_id: UUID | None,
         ai_response: AIResponse,
     ) -> list[WBSItemOutput]:
         """Parse AI response and apply domain logic."""
+        _ = tenant_id
 
         # Parse JSON response
         try:

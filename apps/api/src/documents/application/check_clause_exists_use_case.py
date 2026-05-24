@@ -10,5 +10,5 @@ class CheckClauseExistsUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
 
-    async def execute(self, clause_id: UUID) -> bool:
-        return await self.document_repository.clause_exists(clause_id)
+    async def execute(self, tenant_id: UUID, clause_id: UUID) -> bool:
+        return await self.document_repository.clause_exists(tenant_id, clause_id)

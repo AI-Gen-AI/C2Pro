@@ -38,42 +38,7 @@ class TestSqlAlchemyDocumentRepository:
 
         # Check core methods exist
         assert hasattr(repo, "session")
-        assert hasattr(repo, "_get_current_tenant_id")
         assert hasattr(repo, "_to_domain_document")
-
-    @pytest.mark.asyncio
-    async def test_repository_get_current_tenant_id(self):
-        """Test getting current tenant ID."""
-        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-            SqlAlchemyDocumentRepository,
-        )
-
-        mock_session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = str(uuid4())
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        repo = SqlAlchemyDocumentRepository(session=mock_session)
-        tenant_id = await repo._get_current_tenant_id()
-
-        assert tenant_id is not None
-
-    @pytest.mark.asyncio
-    async def test_repository_get_current_tenant_id_none(self):
-        """Test getting current tenant ID when none set."""
-        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-            SqlAlchemyDocumentRepository,
-        )
-
-        mock_session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        repo = SqlAlchemyDocumentRepository(session=mock_session)
-        tenant_id = await repo._get_current_tenant_id()
-
-        assert tenant_id is None
 
 
 class TestDocumentORM:

@@ -23,7 +23,7 @@ class _SpanClient(Protocol):
     def start_span(
         self,
         name: str,
-        input: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
         run_type: str = "llm",
         **kwargs: Any,
     ) -> Any: ...
@@ -218,7 +218,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                 )
                 span = span_client.start_span(
                     name=name,
-                    input={
+                    inputs={
                         "args_count": len(args),
                         "kwargs": list(kwargs.keys()),
                         "prompt": prompt,
@@ -307,7 +307,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                 )
                 span = span_client.start_span(
                     name=name,
-                    input={
+                    inputs={
                         "args_count": len(args),
                         "kwargs": list(kwargs.keys()),
                         "prompt": prompt,

@@ -28,6 +28,10 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
 from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
+from src.documents.adapters.rag.rag_service import (
+    RagProjectNotFoundError,
+    RagProviderUnavailableError,
+)
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
@@ -375,7 +379,7 @@ async def upload_document_for_processing(
 async def reupload_document_file(
     document_id: UUID,
     _user_id: CurrentUserId,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     file: UploadFile = File(...),
     reupload_use_case: ReuploadDocumentUseCase = Depends(get_reupload_use_case),
 ) -> DocumentResponse:
@@ -408,6 +412,7 @@ async def reupload_document_file(
 
     try:
         document_dto = await reupload_use_case.execute(
+            tenant_id=tenant_id,
             document_id=document_id,
             file_content=file_content,
             filename=file.filename,
@@ -450,7 +455,7 @@ async def get_document_endpoint(
     tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> DocumentDetailResponse:
-    document = await use_case.execute(document_id, tenant_id)
+    document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
     response_data = DocumentResponse.model_validate(document).model_dump()
     response_data["clauses"] = [
         {
@@ -481,9 +486,10 @@ async def get_document_endpoint(
 )
 async def get_document_history_endpoint(
     document_id: UUID,
+    tenant_id: CurrentTenantId,
     use_case: GetDocumentHistoryUseCase = Depends(get_document_history_use_case),
 ) -> DocumentHistoryResponse:
-    return await use_case.execute(document_id)
+    return await use_case.execute(tenant_id=tenant_id, document_id=document_id)
 
 
 @router.get(
@@ -494,11 +500,12 @@ async def get_document_history_endpoint(
 async def get_document_relationship_explanation_endpoint(
     document_id: UUID,
     _user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     use_case: GetDocumentRelationshipExplanationUseCase = Depends(
         get_document_relationship_explanation_use_case
     ),
 ) -> DocumentRelationshipExplanationResponse:
-    return await use_case.execute(document_id)
+    return await use_case.execute(tenant_id=tenant_id, document_id=document_id)
 
 
 @router.get(
@@ -509,9 +516,10 @@ async def get_document_relationship_explanation_endpoint(
 async def get_document_entities_endpoint(
     document_id: UUID,
     _user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     use_case: GetDocumentWithClausesUseCase = Depends(get_get_document_with_clauses_use_case),
 ) -> list[DocumentEntityResponse]:
-    document = await use_case.execute(document_id)
+    document = await use_case.execute(tenant_id=tenant_id, document_id=document_id)
 
     entities: list[DocumentEntityResponse] = []
     for clause in document.clauses:
@@ -523,6 +531,8 @@ async def get_document_entities_endpoint(
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,
+                project_id=clause.project_id,
+                tenant_id=clause.tenant_id,
                 type="clause",
                 text=clause.title or clause.full_text or clause.clause_code,
                 page=int(evidence_location.get("page_number") or 1),
@@ -549,9 +559,10 @@ async def get_document_entities_endpoint(
 async def download_document_endpoint(
     document_id: UUID,
     user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     download_use_case: DownloadDocumentUseCase = Depends(get_download_use_case),
 ):
-    file_path, media_type = await download_use_case.execute(document_id, user_id)
+    file_path, media_type = await download_use_case.execute(document_id, user_id, tenant_id)
     return FileResponse(path=file_path, filename=file_path.name, media_type=media_type)
 
 
@@ -563,9 +574,10 @@ async def download_document_endpoint(
 async def delete_document_endpoint(
     document_id: UUID,
     user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     delete_use_case: DeleteDocumentUseCase = Depends(get_delete_use_case),
 ):
-    await delete_use_case.execute(document_id, user_id)
+    await delete_use_case.execute(document_id, user_id, tenant_id)
     return status.HTTP_204_NO_CONTENT
 
 
@@ -621,9 +633,16 @@ async def list_documents_for_project(
 async def parse_document_endpoint(
     document_id: UUID,
     _user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
     parse_use_case: ParseDocumentUseCase = Depends(get_parse_document_use_case),
 ):
-    await parse_use_case.execute(document_id, _user_id)
+    try:
+        await parse_use_case.execute(tenant_id, document_id, _user_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     return DocumentUploadResponse(
         document_id=document_id,
         status=DocumentStatus.PARSED,
@@ -641,7 +660,7 @@ async def reprocess_document_endpoint(
     project_id: UUID,
     document_id: UUID,
     user_id: CurrentUserId,  # noqa: ARG001
-    tenant_id: CurrentTenantId,  # noqa: ARG001
+    tenant_id: CurrentTenantId,
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
 ) -> DocumentQueuedResponse:
     """
@@ -649,11 +668,11 @@ async def reprocess_document_endpoint(
     or error state. Resets the document status to UPLOADED and enqueues a fresh
     parse + analysis run.
     """
-    document = await repo.get_by_id(document_id)
+    document = await repo.get_by_id(tenant_id, document_id)
     if not document or document.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found or access denied.")
 
-    await repo.update_status(document_id, DocumentStatus.UPLOADED, parsing_error=None)
+    await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
     await repo.commit()
     await repo.refresh(document)
 
@@ -677,14 +696,30 @@ async def answer_project_question(
     project_id: UUID,
     payload: RagQuestionRequest,
     _user_id: CurrentUserId,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
     use_case: AnswerRagQuestionUseCase = Depends(get_answer_rag_use_case),
 ):
-    result = await use_case.execute(
-        question=payload.question,
-        project_id=project_id,
-        top_k=payload.top_k or 5,
-    )
+    try:
+        result = await use_case.execute(
+            question=payload.question,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            top_k=payload.top_k or 5,
+        )
+    except RagProviderUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "RAG_PROVIDER_UNAVAILABLE",
+                "message": str(exc),
+                "retryable": True,
+            },
+        ) from exc
+    except RagProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied.",
+        ) from exc
     return RagAnswerResponse(
         answer=result.answer,
         sources=[

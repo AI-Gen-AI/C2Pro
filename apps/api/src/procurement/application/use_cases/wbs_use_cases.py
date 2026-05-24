@@ -25,6 +25,26 @@ class CreateWBSItemUseCase:
         Returns:
             The created WBS item
         """
+        existing = await self.wbs_repository.get_by_code(
+            wbs_create.project_id,
+            wbs_create.wbs_code,
+            tenant_id,
+        )
+        if existing and _same_source_document(existing.wbs_metadata, wbs_create.wbs_metadata):
+            existing.name = wbs_create.name
+            existing.description = wbs_create.description
+            existing.level = wbs_create.level
+            existing.item_type = wbs_create.item_type
+            existing.budget_allocated = wbs_create.budget_allocated
+            existing.budget_spent = wbs_create.budget_spent
+            existing.planned_start = wbs_create.planned_start
+            existing.planned_end = wbs_create.planned_end
+            existing.actual_start = wbs_create.actual_start
+            existing.actual_end = wbs_create.actual_end
+            existing.source_clause_id = wbs_create.funded_by_clause_id
+            existing.wbs_metadata = wbs_create.wbs_metadata
+            return await self.wbs_repository.update(existing.id, existing, tenant_id)
+
         # Convert DTO to domain entity
         wbs_item = WBSItem(
             project_id=wbs_create.project_id,
@@ -188,3 +208,12 @@ class GetWBSTreeUseCase:
             List of root WBS items with children loaded recursively
         """
         return await self.wbs_repository.get_tree(project_id, tenant_id)
+
+
+def _same_source_document(existing_metadata: dict | None, incoming_metadata: dict | None) -> bool:
+    """TS-UD-DOC-EXT-002: identify idempotent schedule-derived WBS rows by source document."""
+    if not existing_metadata or not incoming_metadata:
+        return False
+    existing_source = existing_metadata.get("source_document_id")
+    incoming_source = incoming_metadata.get("source_document_id")
+    return bool(existing_source and incoming_source and existing_source == incoming_source)
