@@ -1,11 +1,20 @@
 # ADR-009: Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up
 
-**Status:** Accepted  
-**Date:** 2026-05-24  
-**Deciders:** Jesús Camacho (VP Engineering / Strategic Procurement Director)  
-**Sprint context:** S2 (Coherence Engine, 65% en curso)  
-**Supersedes:** Coherence Score v1 methodology (scoring_methodology_v1.md, sprint P2-01)  
+**Status:** Accepted (v2 — locked)
+**Date:** 2026-05-25 (supersedes 2026-05-24 draft)
+**Deciders:** Jesús Camacho (VP Engineering / Strategic Procurement Director)
+**Sprint context:** S2 (Coherence Engine, 65% en curso)
+**Supersedes:** Coherence Score v1 methodology (scoring_methodology_v1.md, sprint P2-01) AND the 2026-05-24 draft of this ADR which used the deprecated `ConfidenceIndex` terminology.
 **Related:** ADR-007 (Clauses as separate entity), CTO Gate 4 (Legal Traceability), CTO Gate 5 (Coherence Score Formal)
+
+> **2026-05-25 amendment.** Sections §2.5, §2.6, §5, §6 and §11 are updated to:
+> 1. Rename `ConfidenceIndex` → `Technical Reliability Index (TRI)`. Per-category field is `technical_reliability`; global field is `technical_reliability_index`.
+> 2. Rename per-category `coverage` → `evidence_coverage`; rename `score` → `coherence_score`.
+> 3. Add per-category `evidence_freshness`, `applicability_reason`, and `score_explanation { positive_factors, negative_factors, dominant_rules, score_path }`.
+> 4. Add global `active_weight` (float in [0,1]); deprecate the `scored_categories`/`applicable_categories` counts in favor of `active_weight` + arrays exposed as orchestration metadata.
+> 5. Lock the global `status` literal set to `{"scored","partial","insufficient_active_weight","pending_documents"}`.
+>
+> No legacy aliases are kept in new code. v1→v2 adapters MUST emit the new field names.
 
 ## 1. Contexto
 
@@ -68,17 +77,20 @@ Cada categoría tiene un status asignado dinámicamente:
 
 ### 2.5 Triple-axis por categoría
 
-Cada categoría reporta tres ejes independientes e independientes entre sí:
+Cada categoría reporta tres ejes independientes entre sí:
 
-1. **Coherence** (0–100, nullable)
-2. **Evidence Coverage** (0–1)
-3. **Confidence** (0–1)
+1. **Coherence Score** (`coherence_score`, 0–100, nullable)
+2. **Evidence Coverage** (`evidence_coverage`, 0–1)
+3. **Technical Reliability** (`technical_reliability`, 0–1) — sustituye a la terminología deprecada `confidence`.
+
+Cada categoría reporta además `evidence_freshness` (0–1) como métrica complementaria de calidad temporal de la evidencia.
 
 ### 2.6 Dual-score global
 
-- **Coherence Score™:** Media ponderada calculada sobre las categorías activas que están aportando datos reales al ecosistema del proyecto (categorías en estado `scored` o `conflicting_evidence`).
-- **Completeness Score™:** Ratio de cobertura ponderado sobre todas las categorías que aplican al proyecto (excluye `not_applicable`).
-- **Confidence Index:** Media ponderada de la confianza técnica sobre las categorías evaluadas.
+- **Coherence Score™** (`coherence_score`): Media ponderada calculada sobre las categorías activas (`scored` ∪ `conflicting_evidence`). Nullable.
+- **Completeness Score™** (`completeness_score`): Ratio de cobertura ponderado sobre todas las categorías aplicables (excluye `not_applicable`).
+- **Technical Reliability Index™** (`technical_reliability_index`): Media ponderada de `technical_reliability` sobre las categorías evaluadas.
+- **Active Weight** (`active_weight`): Suma de pesos de las categorías evaluadas activas. Se utiliza para aplicar la regla de estabilidad `MIN_ACTIVE_WEIGHT = 0.35` (ver §14).
 
 Los pesos `w_i` iniciales son **equipesados (1/6 cada categoría)** para el lanzamiento inicial.
 
@@ -161,7 +173,7 @@ Para mitigar riesgos y estabilizar el pipeline cuantitativo en el Sprint S2, se 
 - Un conflicto crítico (`conflicts.severity == "critical"`) emite una alerta de nivel `critical` indexada a la categoría. No oculta el problema; lo parametriza.
 - Los problemas de `missing_evidence` se representarán visualmente con colores de advertencia neutros/asistenciales (ámbar/azul), prohibiendo el uso del color rojo de error.
 
-## 5. Contrato JSON v2
+## 5. Contrato JSON v2 (canónico — locked)
 
 ```json
 {
@@ -169,42 +181,37 @@ Para mitigar riesgos y estabilizar el pipeline cuantitativo en el Sprint S2, se 
   "version": "coherence-v2",
   "generated_at": "ISO-8601",
   "global": {
-    "coherence_score": 78.4,
-    "completeness_score": 0.61,
-    "confidence_index": 0.73,
+    "coherence_score": 81.4,
+    "completeness_score": 0.67,
+    "technical_reliability_index": 0.79,
     "status": "partial",
     "score_reason": "scored_categories_only",
-    "scored_categories": 4,
-    "applicable_categories": 6
+    "active_weight": 0.52
   },
   "categories": [
     {
       "category": "BUDGET",
-      "status": "insufficient_evidence",
-      "score": null,
-      "confidence": 0.22,
-      "coverage": 0.15,
-      "evidence_count": 1,
-      "evidence_references": [
-        {"document_id": "doc_123", "page": 4, "span_id": "sp_9"}
-      ],
-      "rationale": "No structured financial tables detected.",
-      "detected_conflicts": [],
-      "missing_evidence": ["bill_of_quantities", "cost_breakdown", "cashflow"],
-      "alerts": [
-        {"code": "MISSING_BUDGET_EVIDENCE", "severity": "warning", "confidence": 0.93}
-      ],
-      "recommendation": "Upload budget workbook or BOQ.",
-      "calculation_metadata": {
-        "weight": 0.1667,
-        "min_evidence_threshold": 3,
-        "evaluated_rules": [],
-        "model_version": "coh-v2.0.0"
+      "status": "conflicting_evidence",
+      "coherence_score": 42.1,
+      "evidence_coverage": 0.81,
+      "technical_reliability": 0.88,
+      "evidence_freshness": 0.92,
+      "applicability_reason": null,
+      "score_explanation": {
+        "positive_factors": [],
+        "negative_factors": [],
+        "dominant_rules": [],
+        "score_path": []
       }
     }
   ]
 }
 ```
+
+> Campos adicionales opcionales que pueden coexistir como metadatos de orquestación
+> (no forman parte del contrato canónico mínimo): `evidence_count`, `evidence_references`,
+> `rationale`, `detected_conflicts`, `missing_evidence`, `alerts`, `recommendation`,
+> `calculation_metadata.{weight, min_evidence_threshold, evaluated_rules, model_version}`.
 
 ## 6. Pseudocódigo del Category Aggregator
 

@@ -4,6 +4,57 @@ import type {
   ProjectResponse,
 } from "@/lib/api/generated/models";
 
+// ECOA v2 (ADR-009 §5) — canonical evidence-aware coherence contract.
+export type CategoryStatus =
+  | "pending_documents"
+  | "insufficient_evidence"
+  | "scored"
+  | "conflicting_evidence"
+  | "not_applicable"
+  | "processing_error";
+
+export interface ScoreExplanation {
+  positive_factors: string[];
+  negative_factors: string[];
+  dominant_rules: string[];
+  score_path: Array<Record<string, unknown>>;
+}
+
+export interface CategoryV2 {
+  category: string;
+  status: CategoryStatus;
+  coherence_score: number | null;
+  evidence_coverage: number;
+  technical_reliability: number;
+  evidence_freshness: number;
+  applicability_reason: string | null;
+  score_explanation: ScoreExplanation | null;
+  evidence_count?: number;
+  evidence_references?: string[];
+  missing_evidence?: string[];
+  detected_conflicts?: Array<Record<string, unknown>>;
+  rationale?: string | null;
+  recommendation?: string | null;
+  calculation_metadata?: Record<string, unknown>;
+}
+
+export interface GlobalV2 {
+  coherence_score: number | null;
+  completeness_score: number;
+  technical_reliability_index: number;
+  status: "scored" | "partial" | "insufficient_active_weight" | "pending_documents";
+  score_reason: string | null;
+  active_weight: number;
+}
+
+export interface CoherenceV2Payload {
+  project_id: string;
+  version: "coherence-v2";
+  generated_at: string;
+  global: GlobalV2;
+  categories: CategoryV2[];
+}
+
 export interface DashboardSummary {
   project_id: string;
   tenant_id: string;
@@ -14,10 +65,17 @@ export interface DashboardSummary {
   alert_count: number;
   document_count: number;
   methodology_version: string;
-  score_version?: "v0_flag_based" | "v1_exponential_decay" | string | null;
+  score_version?:
+    | "v0_flag_based"
+    | "v1_exponential_decay"
+    | "v2_evidence_aware"
+    | string
+    | null;
   score_reason?: string | null;
   score_missing_dimensions?: string[];
   last_updated: string | null;
+  // ECOA v2 additive field (ADR-009 §7.2). Null when `coherence_v2_enabled` is off.
+  categories_v2?: CoherenceV2Payload | null;
 }
 
 export interface ProjectListItem extends ProjectResponse {

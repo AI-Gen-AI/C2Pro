@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
+
 # Canonical six-value risk / alert taxonomy — see
 # src.analysis.domain.risk_categories for the authoritative enum. The
 # legacy lowercase / "financial" / "general" values are accepted so
@@ -332,6 +334,9 @@ class EnrichedCoherenceResult(BaseModel):
 class DashboardSummary(BaseModel):
     """
     Consolidated view of project coherence for the dashboard.
+
+    ECOA v2 (ADR-009 §7.2 step 1): the optional `categories_v2` field carries
+    the locked v2 contract. Defaults to None so v1 clients are unaffected.
     """
     project_id: str
     tenant_id: str
@@ -346,4 +351,5 @@ class DashboardSummary(BaseModel):
     score_reason: str | None = None
     score_missing_dimensions: list[str] | None = None
     last_updated: datetime
+    categories_v2: "CoherenceV2Payload | None" = None
 
