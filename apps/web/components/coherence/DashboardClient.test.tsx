@@ -79,10 +79,16 @@ vi.mock("next/link", () => ({
   default: ({
     children,
     href,
+    ...rest
   }: {
     children: ReactNode;
     href: string;
-  }) => <a href={href}>{children}</a>,
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 const dashboardData = {
@@ -175,6 +181,36 @@ describe("DashboardClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /close detail/i }));
     expect(screen.queryByText("Detail SCOPE")).not.toBeInTheDocument();
+  });
+
+  it("renders the empty state instead of the gauge when coherence_score is null", () => {
+    const nullData = {
+      ...dashboardData,
+      coherence_score: null,
+      global_score: null,
+      score_reason: "insufficient_active_weight",
+    };
+    render(<DashboardClient data={nullData} projectName="Alpha Project" />);
+
+    expect(screen.getByTestId("coherence-empty-state")).toBeInTheDocument();
+    expect(screen.getByTestId("empty-state-cta")).toHaveAttribute(
+      "href",
+      "/projects/proj-1/documents",
+    );
+    expect(screen.queryByText(/gauge 0 \/ /i)).not.toBeInTheDocument();
+  });
+
+  it("never renders a fallback '0' score when coherence_score is null", () => {
+    const nullData = {
+      ...dashboardData,
+      coherence_score: null,
+      global_score: null,
+    };
+    const { container } = render(
+      <DashboardClient data={nullData} projectName="Alpha Project" />,
+    );
+    // The gauge mock would render "Gauge 0 / 8" if the old `?? 0` fallback existed.
+    expect(container.textContent).not.toMatch(/Gauge 0 \//);
   });
 
   it("exports the dashboard summary to PDF and Excel", () => {

@@ -767,3 +767,86 @@ if __name__ == "__main__":
     # Total deduction = 15 + 12.75 + 20 + 5 = 52.75
     score4 = service.compute_score(alerts)
     print(f"Score with mixed alerts: {score4} (Expected: {100 - 52.75})")
+
+
+# =============================================================================
+# ECOA v2 entry point (additive — does NOT modify v0.3 calculate_detailed_with_coverage)
+# Source of truth: ADR-009 §5, §6, §14.
+# =============================================================================
+def calculate_v2_from_signals(
+    signals,  # type: ignore[no-untyped-def] — kept loose so callers can pass list[FindingSignal]
+    evidence_bundles,  # type: ignore[no-untyped-def]
+    applicability_map,  # type: ignore[no-untyped-def]
+    project_id,  # type: ignore[no-untyped-def]
+):
+    """Compute the canonical v2 payload.
+
+    Args:
+        signals: Iterable of `FindingSignal` (or any (rule_id, score) pair) per category.
+        evidence_bundles: dict[str, EvidenceBundle] keyed by category.
+        applicability_map: dict[str, tuple[bool, str | None]] (applicable, reason).
+        project_id: UUID of the project.
+
+    Returns:
+        CoherenceV2Payload — the JSON v2 contract object.
+    """
+    from datetime import UTC, datetime  # noqa: PLC0415
+    from src.coherence.application.dtos.coherence_v2_dtos import (  # noqa: PLC0415
+        CoherenceV2Payload,
+    )
+    from src.coherence.domain.category_state_machine import (  # noqa: PLC0415
+        CategoryStateMachine,
+    )
+    from src.coherence.domain.v2_constants import (  # noqa: PLC0415
+        MIN_EVIDENCE_BY_CATEGORY,
+    )
+    from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2  # noqa: PLC0415
+    from src.coherence.services.v2.category_aggregator import (  # noqa: PLC0415
+        CategoryAggregator,
+    )
+    from src.coherence.services.v2.conflict_service import (  # noqa: PLC0415
+        ConflictReport,
+    )
+    from src.coherence.services.v2.evidence_service import EvidenceBundle  # noqa: PLC0415
+
+    cat_agg = CategoryAggregator(CategoryStateMachine())
+    global_agg = GlobalAggregatorV2()
+
+    signals_by_category: dict[str, list[tuple[str, float]]] = {}
+    for s in signals or []:
+        # Accept either FindingSignal or (rule_id, score) tuples
+        if isinstance(s, tuple):
+            rule_id, score = s
+            cat = "SCOPE"  # fallback bucket if no category attribute
+        else:
+            rule_id = getattr(s, "rule_id", "unknown")
+            score = float(getattr(s, "impact_score", 0.0)) * 100.0
+            cat = str(getattr(s, "category", "SCOPE")).upper()
+        signals_by_category.setdefault(cat, []).append((str(rule_id), float(score)))
+
+    categories = []
+    for cat in MIN_EVIDENCE_BY_CATEGORY:
+        applicable, reason = applicability_map.get(cat, (True, None))
+        bundle = evidence_bundles.get(
+            cat,
+            EvidenceBundle(0, 0.0, 0.0, 0.0, [], []),
+        )
+        conflict = ConflictReport("none", False, [], 1.0)
+        categories.append(
+            cat_agg.aggregate(
+                category=cat,
+                evidence=bundle,
+                conflict=conflict,
+                rule_signals=signals_by_category.get(cat, []),
+                applicable=applicable,
+                applicability_reason=reason,
+            )
+        )
+
+    global_block = global_agg.aggregate(categories)
+    return CoherenceV2Payload(
+        project_id=project_id,
+        generated_at=datetime.now(UTC),
+        **{"global": global_block},
+        categories=categories,
+    )
