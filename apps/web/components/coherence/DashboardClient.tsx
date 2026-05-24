@@ -6,6 +6,7 @@ import { BreakdownChart } from "@/components/coherence/BreakdownChart";
 import { RadarView } from "@/components/coherence/RadarView";
 import { AlertsDistribution } from "@/components/coherence/AlertsDistribution";
 import { CategoryDetail } from "@/components/coherence/CategoryDetail";
+import { CoherenceEmptyState } from "@/components/coherence/CoherenceEmptyState";
 import {
   Sheet,
   SheetContent,
@@ -126,7 +127,11 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   const [view, setView] = useState<ViewMode>("breakdown");
   const [layout, setLayout] = useState<LayoutMode>("overview");
   const [template, setTemplate] = useState<TemplateMode>("executive");
-  const score = data.coherence_score ?? 0;
+  // ADR-009 §18: never collapse null → 0. The gauge is replaced by an empty
+  // state when the global score is unknown (pending evidence / below
+  // MIN_ACTIVE_WEIGHT). The number is only forwarded to export formats.
+  const score: number | null = data.coherence_score;
+  const exportScore = score ?? "—";
 
   const barData = useMemo(() => Object.entries(data.sub_scores).map(([k, score]) => ({
     name: CATEGORY_LABELS[k] ?? k,
@@ -202,7 +207,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
     <div class="summary">
       <div class="card">
         <div class="label">Coherence Score</div>
-        <div class="value">${score}</div>
+        <div class="value">${exportScore}</div>
       </div>
       <div class="card">
         <div class="label">Documents</div>
@@ -242,7 +247,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   <Worksheet ss:Name="Dashboard">
     <Table>
       <Row><Cell><Data ss:Type="String">Project</Data></Cell><Cell><Data ss:Type="String">${escapeXml(projectName)}</Data></Cell></Row>
-      <Row><Cell><Data ss:Type="String">Coherence Score</Data></Cell><Cell><Data ss:Type="Number">${score}</Data></Cell></Row>
+      <Row><Cell><Data ss:Type="String">Coherence Score</Data></Cell><Cell><Data ss:Type="String">${exportScore}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Documents</Data></Cell><Cell><Data ss:Type="Number">${data.document_count}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Alerts</Data></Cell><Cell><Data ss:Type="Number">${data.alert_count}</Data></Cell></Row>
       <Row><Cell><Data ss:Type="String">Category</Data></Cell><Cell><Data ss:Type="String">Score</Data></Cell><Cell><Data ss:Type="String">Weight</Data></Cell></Row>
@@ -367,16 +372,23 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
           layout === "compact" && "xl:grid-cols-[240px_1fr]",
         )}
       >
-        <CoherenceGauge
-          score={score}
-          documentsAnalyzed={data.document_count}
-          dataPointsChecked={0}
-          calculatedAt={
-            data.last_updated
-              ? new Date(data.last_updated).toLocaleString()
-              : "—"
-          }
-        />
+        {score === null ? (
+          <CoherenceEmptyState
+            reason={data.score_reason ?? null}
+            projectId={data.project_id}
+          />
+        ) : (
+          <CoherenceGauge
+            score={score}
+            documentsAnalyzed={data.document_count}
+            dataPointsChecked={0}
+            calculatedAt={
+              data.last_updated
+                ? new Date(data.last_updated).toLocaleString()
+                : "—"
+            }
+          />
+        )}
 
         <div className="rounded-md border bg-card p-5 shadow-sm">
           {view === "breakdown" ? <BreakdownChart data={barData} /> : null}

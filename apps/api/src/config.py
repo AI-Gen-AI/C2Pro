@@ -315,6 +315,15 @@ class Settings(BaseSettings):  # type: ignore[misc]
     feature_rfq_generation: bool = False  # Fase 2
     feature_expediting_vision: bool = False  # Fase 3
 
+    # ECOA v2 (ADR-009) — Phase 1 (compatibility) + Phase 2 (shadow mode).
+    # Per-tenant override is deferred — single global toggle for now.
+    coherence_v2_enabled: bool = Field(
+        default=False, validation_alias="COHERENCE_V2_ENABLED"
+    )
+    coherence_v2_shadow_mode: bool = Field(
+        default=True, validation_alias="COHERENCE_V2_SHADOW_MODE"
+    )
+
     # ===========================================
     # COMPUTED PROPERTIES
     # ===========================================

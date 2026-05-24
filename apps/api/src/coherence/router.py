@@ -705,7 +705,7 @@ async def get_coherence_dashboard(
     ]
     last_updated = max(normalized_candidates, default=datetime.now(UTC))
 
-    return DashboardSummary(
+    summary = DashboardSummary(
         project_id=str(project_id),
         tenant_id=str(tenant_id),
         global_score=global_score,
@@ -721,4 +721,37 @@ async def get_coherence_dashboard(
             coherence_result.score_missing_dimensions if coherence_result else None
         ),
         last_updated=last_updated,
+        categories_v2=None,
     )
+
+    # ECOA v2 additive field (ADR-009 §7.2). When the global flag is on, project
+    # the persisted v1 row into the v2 contract so the frontend can render the
+    # new tri-axis dashboard. Until the v2 orchestrator persists native rows
+    # (Phase 3), we adapt from the v1 summary using the pure v1→v2 adapter.
+    try:
+        from src.config import get_settings  # local import to avoid circular deps
+        from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
+        from src.coherence.services.v2.shadow_runner import ShadowRunner
+        settings = get_settings()
+        if getattr(settings, "coherence_v2_enabled", False):
+            v2_payload = adapt_v1_dashboard(
+                summary.model_dump(),
+                project_id=project_id,
+                generated_at=last_updated,
+            )
+            summary = summary.model_copy(update={"categories_v2": v2_payload})
+
+            if getattr(settings, "coherence_v2_shadow_mode", True):
+                runner = ShadowRunner()
+                delta = runner.compare(summary.model_dump(), v2_payload)
+                runner.emit(
+                    delta,
+                    feature_flag_state={
+                        "coherence_v2_enabled": True,
+                        "coherence_v2_shadow_mode": True,
+                    },
+                )
+    except Exception:  # noqa: BLE001 — v2 must NEVER break v1 dashboard
+        logger.exception("coherence_v2_adapter_failed")
+
+    return summary

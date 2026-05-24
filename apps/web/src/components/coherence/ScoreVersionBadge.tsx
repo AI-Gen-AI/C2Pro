@@ -1,4 +1,7 @@
-export type ScoreVersion = "v0_flag_based" | "v1_exponential_decay";
+export type ScoreVersion =
+  | "v0_flag_based"
+  | "v1_exponential_decay"
+  | "v2_evidence_aware";
 
 import Link from "next/link";
 import {
@@ -30,11 +33,22 @@ const BADGE_COPY: Record<
     tooltip:
       "v1 uses weighted finding severity, confidence, and project scope to produce a defensible coherence score.",
   },
+  v2_evidence_aware: {
+    label: "(v2)",
+    ariaLabel: "v2 evidence-aware coherence score",
+    className: "border-sky-300 bg-sky-50 text-sky-800",
+    tooltip:
+      "v2 is the evidence-aware, tri-axis score (coherence + completeness + technical reliability) from ADR-009.",
+  },
 };
 
 export function ScoreVersionBadge({ scoreVersion }: ScoreVersionBadgeProps) {
   const resolvedVersion: ScoreVersion =
-    scoreVersion === "v1_exponential_decay" ? "v1_exponential_decay" : "v0_flag_based";
+    scoreVersion === "v2_evidence_aware"
+      ? "v2_evidence_aware"
+      : scoreVersion === "v1_exponential_decay"
+        ? "v1_exponential_decay"
+        : "v0_flag_based";
   const copy = BADGE_COPY[resolvedVersion];
 
   return (

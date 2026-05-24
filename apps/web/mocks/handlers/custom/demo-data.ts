@@ -1,6 +1,136 @@
 import { http, HttpResponse } from "@/mocks/msw";
 import { db, DEMO_TENANT_ID, DEMO_USER_ID } from "../../data";
 
+// ECOA v2 demo payloads triggered by ?cohV2Scenario=
+function buildCategoriesV2(projectId: string, scenario: string) {
+  const generated_at = new Date().toISOString();
+  if (scenario === "insufficient") {
+    return {
+      project_id: projectId,
+      version: "coherence-v2" as const,
+      generated_at,
+      global: {
+        coherence_score: null,
+        completeness_score: 0.15,
+        technical_reliability_index: 0.0,
+        status: "insufficient_active_weight" as const,
+        score_reason: "insufficient_active_weight",
+        active_weight: 0.16,
+      },
+      categories: [
+        {
+          category: "LEGAL",
+          status: "scored" as const,
+          coherence_score: 95.0,
+          evidence_coverage: 0.9,
+          technical_reliability: 0.9,
+          evidence_freshness: 0.95,
+          applicability_reason: null,
+          score_explanation: {
+            positive_factors: ["evidence_threshold_met"],
+            negative_factors: [],
+            dominant_rules: [],
+            score_path: [],
+          },
+        },
+        ...["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "TIME"].map((category) => ({
+          category,
+          status: "insufficient_evidence" as const,
+          coherence_score: null,
+          evidence_coverage: 0.1,
+          technical_reliability: 0.0,
+          evidence_freshness: 0.0,
+          applicability_reason: null,
+          score_explanation: null,
+        })),
+      ],
+    };
+  }
+  if (scenario === "conflict") {
+    return {
+      project_id: projectId,
+      version: "coherence-v2" as const,
+      generated_at,
+      global: {
+        coherence_score: 58.4,
+        completeness_score: 1.0,
+        technical_reliability_index: 0.88,
+        status: "partial" as const,
+        score_reason: "scored_categories_only",
+        active_weight: 1.0,
+      },
+      categories: [
+        {
+          category: "BUDGET",
+          status: "conflicting_evidence" as const,
+          coherence_score: 12.0,
+          evidence_coverage: 0.95,
+          technical_reliability: 0.9,
+          evidence_freshness: 0.95,
+          applicability_reason: null,
+          score_explanation: {
+            positive_factors: [],
+            negative_factors: ["hard_conflict", "severity:critical"],
+            dominant_rules: ["budget_overrun"],
+            score_path: [
+              { step: "base", value: 80 },
+              { step: "severity_multiplier", severity: "critical", value: 0.1 },
+              { step: "evidence_certainty", value: 1.0 },
+              { step: "adjusted", value: 8.0 },
+            ],
+          },
+        },
+        ...["SCOPE", "QUALITY", "TECHNICAL", "LEGAL", "TIME"].map((category) => ({
+          category,
+          status: "scored" as const,
+          coherence_score: 80.0,
+          evidence_coverage: 1.0,
+          technical_reliability: 0.9,
+          evidence_freshness: 1.0,
+          applicability_reason: null,
+          score_explanation: {
+            positive_factors: ["evidence_threshold_met"],
+            negative_factors: [],
+            dominant_rules: [],
+            score_path: [],
+          },
+        })),
+      ],
+    };
+  }
+  // default: excellent
+  return {
+    project_id: projectId,
+    version: "coherence-v2" as const,
+    generated_at,
+    global: {
+      coherence_score: 88.0,
+      completeness_score: 1.0,
+      technical_reliability_index: 0.92,
+      status: "scored" as const,
+      score_reason: "scored_categories_only",
+      active_weight: 1.0,
+    },
+    categories: ["SCOPE", "BUDGET", "QUALITY", "TECHNICAL", "LEGAL", "TIME"].map(
+      (category) => ({
+        category,
+        status: "scored" as const,
+        coherence_score: 88.0,
+        evidence_coverage: 1.0,
+        technical_reliability: 0.92,
+        evidence_freshness: 1.0,
+        applicability_reason: null,
+        score_explanation: {
+          positive_factors: ["evidence_threshold_met"],
+          negative_factors: [],
+          dominant_rules: [],
+          score_path: [],
+        },
+      }),
+    ),
+  };
+}
+
 export const demoDataHandlers = [
   // ── Projects ──────────────────────────────────────────────
   http.get("*/api/v1/projects", () => {
@@ -152,7 +282,7 @@ export const demoDataHandlers = [
   }),
 
   // ── Coherence Dashboard ─────────────────────────────────
-  http.get("*/api/coherence/dashboard/:projectId", ({ params }) => {
+  http.get("*/api/coherence/dashboard/:projectId", ({ params, request }) => {
     const projectId = String(params.projectId);
     const project = db.project.findFirst({
       where: { id: { equals: projectId } },
@@ -162,11 +292,15 @@ export const demoDataHandlers = [
       return new HttpResponse(null, { status: 404 });
     }
 
+    const url = new URL(request.url);
+    const scenario = url.searchParams.get("cohV2Scenario");
+    const categoriesV2 = scenario ? buildCategoriesV2(projectId, scenario) : null;
+
     return HttpResponse.json({
       project_id: projectId,
       tenant_id: DEMO_TENANT_ID,
-      coherence_score: 78,
-      global_score: 78,
+      coherence_score: scenario === "insufficient" || scenario === "pending" ? null : 78,
+      global_score: scenario === "insufficient" || scenario === "pending" ? null : 78,
       sub_scores: {
         SCOPE: 80,
         BUDGET: 62,
@@ -186,7 +320,15 @@ export const demoDataHandlers = [
       alert_count: 15,
       document_count: 8,
       methodology_version: "2.0",
+      score_version: scenario ? "v2_evidence_aware" : "v1_exponential_decay",
+      score_reason:
+        scenario === "insufficient"
+          ? "insufficient_active_weight"
+          : scenario === "pending"
+            ? "pending_documents"
+            : null,
       last_updated: new Date().toISOString(),
+      categories_v2: categoriesV2,
     });
   }),
 
