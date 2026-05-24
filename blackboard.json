@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-23T21:38:06Z",
+  "updated_at": "2026-05-24T21:25:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,37 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T075",
+      "backlog_id": "TASK-BCK-075",
+      "tipo": "backend",
+      "descripcion": "Repair API startup failure from split Alembic heads after local main/GitHub synchronization.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Alembic graph has one canonical head and API startup migrations can target head again.",
+      "archivos_modificados": [
+        "apps/api/alembic/versions/20260524_0001_merge_hotfix_and_swagger_heads.py",
+        "apps/api/tests/unit/test_alembic_single_head.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-24T21:25:00Z",
+        "completado": "2026-05-24T21:25:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Added no-op Alembic merge revision joining 20260516_0004 and 20260517_0002 after Docker startup failed with multiple heads.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "pytest --noconftest tests/unit/test_alembic_single_head.py -q -> RED failed with heads 20260516_0004 and 20260517_0002",
+          "pytest --noconftest tests/unit/test_alembic_single_head.py -q -> 1 passed",
+          "alembic heads -> 20260524_0001 (head)"
+        ]
+      }
+    },
     {
       "tarea_id": "T074",
       "backlog_id": "TASK-BCK-074",

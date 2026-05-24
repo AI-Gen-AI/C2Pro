@@ -2,7 +2,7 @@
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-05-23
+**Last Updated**: 2026-05-24
 
 **Quick Links**:
 
@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 2
 
-**Completed Tasks**: 52
+**Completed Tasks**: 53
 
 - IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`
 
@@ -47,6 +47,7 @@
 | [x] | P1 | `TASK-BCK-072` | None | Expose bearer auth in OpenAPI for protected alerts routes. Live Swagger `GET /api/v1/alerts/projects/{project_id}` omitted `Authorization` and hit middleware `401`; alerts routers now declare `HTTPBearer` via `security_scheme`. | Swagger verification 2026-05-23 |
 | [x] | P0 | `TASK-BCK-073` | None | Restore analysis AI tool execution contract. Live Swagger `POST /api/v1/analysis/analyze` returned HTTP 200 but functionally failed with `Tool 'risk_extraction' executed: failed`; logs showed `_execute_impl() got an unexpected keyword argument 'tenant_id'`. Risk and WBS extraction tools now accept the keyword contract used by `BaseTool`. | Swagger verification 2026-05-23 |
 | [x] | P0 | `TASK-BCK-074` | `TASK-BCK-073` | Repair the Analysis ⇄ HITL seam. Live Swagger extracted risks but stopped with `analysis_id=null` because critique used legacy AIService cost control without constructor DB, HITL auto-approved rows still triggered LangGraph interrupt, and resume updated checkpoint state without invoking the graph. | Swagger verification 2026-05-23 |
+| [x] | P0 | `TASK-BCK-075` | None | Repair API startup failure from split Alembic heads after main sync. Docker startup failed before app boot with `Multiple head revisions are present for given argument 'head'`; added no-op merge revision `20260524_0001` joining `20260516_0004` and `20260517_0002`. | Docker startup verification 2026-05-24 |
 | [x] | P0 | `TASK-BCK-055` | None | Coherence Score™ Structured Extraction Layer — complete. `clause_extractor.py` (combined schema, UUID-safe DB cache, `_load_cache()` validity check requiring at least one `_ALL_REQUIRED_KEYS` field), integrated into `prepare_context` in `nodes.py`. Cache check bug fixed: ingestion metadata `{source, category, affected_categories}` was treated as a cache hit; fixed to require real extracted field. Verified: extraction now fires Haiku LLM calls and enriches `clause.data`. `deterministic_findings_count` rose from 8 → 31. | 2026-05-17 |
 | [x] | P1 | `TASK-BCK-056` | None | Fix `AnthropicWrapper` calling `self.anonymizer_service.anonymize_document()` on `AnonymizationService` (wrong API). Swapped to `PiiAnonymizerService` from `core.privacy.anonymizer` which has the correct `anonymize_document()` sync API returning `AnonymizedResult` with `.mapping` and `.anonymized_text`. | 2026-05-17 |
 | [x] | P1 | `TASK-BCK-057` | BCK-055 | Category-targeted RAG retrieval: replaced `ORDER BY created_at LIMIT 50` with 6 keyword-filtered SQL queries (10 clauses per category: LEGAL/TIME/BUDGET/TECHNICAL/QUALITY/SCOPE). Penalty, warranty, notice, and deliverable clauses previously invisible now surface. `deterministic_findings_count` 13 → 31. | 2026-05-17 |
@@ -56,6 +57,12 @@
 
 ## 2. Specifications
 
+### TASK-BCK-075 — Alembic split-head startup repair
+
+- Live finding: `docker compose up -d api celery-worker` failed because `c2pro-api` was unhealthy before startup. Logs showed Alembic aborting with `Multiple head revisions are present for given argument 'head'`.
+- Root cause: the main synchronization merged two independent migration chains: production hotfix head `20260516_0004` and local Swagger/schema head `20260517_0002`.
+- Repair: add no-op merge revision `20260524_0001_merge_hotfix_and_swagger_heads.py` with `down_revision=("20260516_0004", "20260517_0002")`.
+- Verification: `TS-QA-SWAGGER-MIGRATION-001` first failed with two heads, then passed after the merge revision; `alembic heads` reports only `20260524_0001 (head)`.
 
 ### TASK-BCK-074 — Analysis ⇄ HITL seam repair
 
