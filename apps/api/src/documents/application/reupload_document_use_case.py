@@ -31,6 +31,7 @@ class ReuploadDocumentUseCase:
 
     async def execute(
         self,
+        tenant_id: UUID,
         document_id: UUID,
         file_content: bytes,
         filename: str | None = None,
@@ -39,6 +40,7 @@ class ReuploadDocumentUseCase:
         Re-upload a document with version tracking.
 
         Args:
+            tenant_id: Current tenant ID
             document_id: ID of document to re-upload
             file_content: New file content
             filename: Optional new filename
@@ -50,9 +52,9 @@ class ReuploadDocumentUseCase:
             ValueError: If document not found
         """
         # Get existing document
-        document = await self.document_repository.get_by_id(document_id)
+        document = await self.document_repository.get_by_id(tenant_id, document_id)
         if not document:
-            raise ValueError(f"Document {document_id} not found")
+            raise ValueError(f"Document {document_id} not found or access denied")
 
         # Calculate file hash of new content
         new_file_hash = hashlib.sha256(file_content).hexdigest()
@@ -67,6 +69,7 @@ class ReuploadDocumentUseCase:
 
         # Update document
         updated_document = await self.document_repository.update_version(
+            tenant_id=tenant_id,
             document_id=document_id,
             version=new_version,
             file_hash=new_file_hash,

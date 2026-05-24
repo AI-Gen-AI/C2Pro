@@ -46,59 +46,6 @@ class TestSqlAlchemyDocumentRepository:
         assert hasattr(repo, "delete")
         assert hasattr(repo, "list_for_project")
 
-    @pytest.mark.asyncio
-    async def test_get_current_tenant_id_success(self):
-        """Test getting current tenant ID successfully."""
-        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-            SqlAlchemyDocumentRepository,
-        )
-
-        mock_session = MagicMock()
-        expected_tenant_id = uuid4()
-
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = str(expected_tenant_id)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        repo = SqlAlchemyDocumentRepository(session=mock_session)
-        tenant_id = await repo._get_current_tenant_id()
-
-        assert tenant_id == expected_tenant_id
-
-    @pytest.mark.asyncio
-    async def test_get_current_tenant_id_not_set(self):
-        """Test getting current tenant ID when not set."""
-        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-            SqlAlchemyDocumentRepository,
-        )
-
-        mock_session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        repo = SqlAlchemyDocumentRepository(session=mock_session)
-        tenant_id = await repo._get_current_tenant_id()
-
-        assert tenant_id is None
-
-    @pytest.mark.asyncio
-    async def test_get_current_tenant_id_invalid(self):
-        """Test getting current tenant ID with invalid value."""
-        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-            SqlAlchemyDocumentRepository,
-        )
-
-        mock_session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = "not-a-uuid"
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        repo = SqlAlchemyDocumentRepository(session=mock_session)
-        tenant_id = await repo._get_current_tenant_id()
-
-        assert tenant_id is None
-
     def test_to_orm_document_normalizes_aware_timestamps_to_naive_utc(self):
         """Aware UTC timestamps should be normalized for naive TIMESTAMP columns."""
         from src.documents.adapters.persistence.sqlalchemy_document_repository import (
@@ -110,6 +57,7 @@ class TestSqlAlchemyDocumentRepository:
         document = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="aware.pdf",
             upload_status=DocumentStatus.QUEUED,
@@ -122,6 +70,48 @@ class TestSqlAlchemyDocumentRepository:
 
         assert orm_document.created_at.tzinfo is None
         assert orm_document.updated_at.tzinfo is None
+
+    @pytest.mark.asyncio
+    async def test_update_status_persists_parsed_at(self):
+        """TASK-BCK-063: Verify that update_status correctly sets parsed_at on ORM model."""
+        from src.documents.adapters.persistence.models import DocumentORM
+        from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+            SqlAlchemyDocumentRepository,
+        )
+        from src.documents.domain.models import DocumentStatus
+
+        tenant_id = uuid4()
+        document_id = uuid4()
+        parsed_at = datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC)
+
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock()
+        
+        # Setup mock result for select
+        orm_doc = DocumentORM(
+            id=document_id,
+            tenant_id=tenant_id,
+            upload_status=DocumentStatus.PARSING,
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = orm_doc
+        mock_session.execute.return_value = mock_result
+
+        repo = SqlAlchemyDocumentRepository(session=mock_session)
+        
+        await repo.update_status(
+            tenant_id,
+            document_id,
+            DocumentStatus.PARSED,
+            parsed_at=parsed_at
+        )
+
+        assert orm_doc.upload_status == DocumentStatus.PARSED
+        assert orm_doc.parsed_at is not None
+        assert orm_doc.parsed_at.tzinfo is None  # Should be normalized to naive UTC
+        assert orm_doc.parsed_at == datetime(2026, 5, 17, 12, 0, 0)
+
 
 
 class TestDocumentORM:
@@ -180,6 +170,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type="contract",
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,

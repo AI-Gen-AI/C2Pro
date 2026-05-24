@@ -59,6 +59,13 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
     # Project relationship
     project_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -127,6 +134,7 @@ class DocumentORM(Base): # Renamed to DocumentORM to distinguish from domain ent
     # Indexes
     __table_args__ = (
         Index("ix_documents_project", "project_id"),
+        Index("ix_documents_tenant", "tenant_id"),
         Index("ix_documents_type", "document_type"),
         Index("ix_documents_status", "upload_status"),
         Index("ix_documents_created", "created_at"),
@@ -150,6 +158,13 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
 
     # Primary key
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
 
     # Relationships
     project_id: Mapped[UUID] = mapped_column(
@@ -222,6 +237,7 @@ class ClauseORM(Base): # Renamed to ClauseORM to distinguish from domain entity
     __table_args__ = (
         Index("ix_clauses_project", "project_id"),
         Index("ix_clauses_document", "document_id"),
+        Index("ix_clauses_tenant", "tenant_id"),
         Index("ix_clauses_type", "clause_type"),
         Index("ix_clauses_code", "clause_code"),
         Index("ix_clauses_verified", "manually_verified", "verified_at"),
@@ -245,6 +261,14 @@ class DocumentChunkORM(Base):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
     )
+
+    # Tenant relationship
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
     document_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("documents.id", ondelete="CASCADE"),
@@ -262,6 +286,14 @@ class DocumentChunkORM(Base):
     chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_document_chunks_project", "project_id"),
+        Index("ix_document_chunks_document", "document_id"),
+        Index("ix_document_chunks_tenant", "tenant_id"),
+        {"info": {"rls_policy": "tenant_isolation"}},
     )
 
     def __repr__(self) -> str:

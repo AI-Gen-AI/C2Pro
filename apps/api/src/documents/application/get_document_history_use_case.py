@@ -21,8 +21,8 @@ class GetDocumentHistoryUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
 
-    async def execute(self, document_id: UUID) -> DocumentHistoryResponse:
-        snapshot = await self.document_repository.get_history_snapshot(document_id)
+    async def execute(self, tenant_id: UUID, document_id: UUID) -> DocumentHistoryResponse:
+        snapshot = await self.document_repository.get_history_snapshot(tenant_id, document_id)
         if snapshot is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
         return self._build_response(snapshot)

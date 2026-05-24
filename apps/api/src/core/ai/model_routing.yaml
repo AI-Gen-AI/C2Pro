@@ -15,7 +15,7 @@
 
 models:
   flash:
-    name: "claude-haiku-4-5"
+    name: "claude-haiku-4-5-20251001"
     tier: "flash"
     description: "Modelo rápido y económico para tareas simples"
     cost_per_1m_input: 1.00
@@ -29,7 +29,7 @@ models:
       - "summarization_short"
 
   standard:
-    name: "claude-sonnet-4-20250514"
+    name: "claude-sonnet-4-6"
     tier: "standard"
     description: "Modelo balanceado para tareas normales"
     cost_per_1m_input: 3.0
@@ -44,7 +44,7 @@ models:
       - "summarization_long"
 
   powerful:
-    name: "claude-opus-4-20250514"
+    name: "claude-opus-4-7"
     tier: "powerful"
     description: "Modelo potente para tareas complejas"
     cost_per_1m_input: 15.0

@@ -6,9 +6,13 @@ from src.analysis.adapters.persistence.analysis_repository import SqlAlchemyAnal
 from src.core.database import get_session
 from src.core.observability.schemas import RecentAnalysesResponse, SystemStatusResponse
 from src.core.observability.service import ObservabilityService
-from src.core.security import CurrentTenantId
+from src.core.security import CurrentTenantId, security_scheme
 
-router = APIRouter(prefix="/observability", tags=["Observability"])
+router = APIRouter(
+    prefix="/observability",
+    tags=["Observability"],
+    dependencies=[Depends(security_scheme)],
+)
 
 
 def get_analysis_repository(

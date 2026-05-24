@@ -23,13 +23,13 @@ class DownloadDocumentUseCase:
         self.storage_service = storage_service
         self.get_document_use_case = get_document_use_case
 
-    async def execute(self, document_id: UUID, user_id: UUID) -> tuple[Path, str]:
+    async def execute(self, document_id: UUID, user_id: UUID, tenant_id: UUID) -> tuple[Path, str]:
         """
         Retrieves the actual file from storage for a given document.
         Enforces security by checking document ownership via tenant_id.
         Returns file path and media type.
         """
-        document = await self.get_document_use_case.execute(document_id, user_id)
+        document = await self.get_document_use_case.execute(document_id, user_id, tenant_id)
 
         # Assuming storage_url will be based on document.id and its extension
         file_name_in_storage = f"{document.id}{Path(document.filename).suffix}"

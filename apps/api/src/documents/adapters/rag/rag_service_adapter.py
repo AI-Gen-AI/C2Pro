@@ -14,9 +14,10 @@ class SqlAlchemyRagService(IRagService):
         self.rag_service = RagService(db_session)
 
     async def answer_question(
-        self, *, question: str, project_id: UUID, top_k: int
+        self, *, tenant_id: UUID, question: str, project_id: UUID, top_k: int
     ) -> RagAnswer:
         return await self.rag_service.answer_question(
+            tenant_id=tenant_id,
             question=question,
             project_id=project_id,
             top_k=top_k,

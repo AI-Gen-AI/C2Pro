@@ -117,8 +117,10 @@ class TestUploadDocumentUseCase:
         )
 
         repo.add.assert_awaited_once()
-        added_doc = repo.add.call_args.args[0]
+        added_tenant_id, added_doc = repo.add.call_args.args
+        assert added_tenant_id == tenant_id
         assert added_doc.project_id == project_id
+        assert added_doc.tenant_id == tenant_id
         assert added_doc.filename == "contract.pdf"
         assert added_doc.upload_status == DocumentStatus.QUEUED
 
@@ -127,8 +129,8 @@ class TestUploadDocumentUseCase:
         assert upload_kwargs["file_id"] == added_doc.id
         assert upload_kwargs["file_extension"] == ".pdf"
 
-        repo.update_storage_path.assert_awaited_once_with(added_doc.id, "/local-storage/contract.pdf")
-        repo.update_status.assert_awaited_once_with(added_doc.id, DocumentStatus.UPLOADED)
+        repo.update_storage_path.assert_awaited_once_with(tenant_id, added_doc.id, "/local-storage/contract.pdf")
+        repo.update_status.assert_awaited_once_with(tenant_id, added_doc.id, DocumentStatus.UPLOADED)
         project_repository.exists_by_id.assert_awaited_once_with(project_id, tenant_id)
         repo.refresh.assert_awaited_once_with(added_doc)
         assert isinstance(document.id, UUID)

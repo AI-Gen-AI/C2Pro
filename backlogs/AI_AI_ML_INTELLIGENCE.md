@@ -15,7 +15,7 @@
 **Pending Tasks**: 6
 
 - Blocked (human access required): `TASK-AI-010`, `TASK-AI-011` (LangSmith Hub dashboard)
-- Deferred Phase 2: `TASK-AI-040`..`TASK-AI-043` (LangChain flows)
+- Deferred Phase 2: `TASK-AI-040`..`TASK-AI-043`, `TASK-AI-049` (LangChain flows, including intelligent WBS proposal design)
 
 **Completed Tasks**: 94 (94%) — see COMPLETED.md
 
@@ -39,10 +39,11 @@
 | [ ] | P2 | `TASK-AI-041` | Planned | [PHASE 2 DEFERRED] Implement Procurement Plan flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-042` | Planned | [PHASE 2 DEFERRED] Implement RACI flow with LangChain | Planning |
 | [ ] | P2 | `TASK-AI-043` | Planned | [PHASE 2 DEFERRED] Implement Stakeholder Resolution flow with LangChain | Planning |
+| [ ] | P2 | `TASK-AI-049` | `TASK-BCK-060`, completed Swagger flow audit | [PHASE 2 DEFERRED] Draft intelligent WBS proposal: LLM-assisted generation/review contract with evidence, hierarchy validation, uncertainty, and HITL approval gates | Swagger verification / user direction 2026-05-17 |
 
 **Statistics**:
 - Total: 100 tasks
-- Active: 6 (6%) — TASK-AI-010/011 (human access), TASK-AI-040..043 (Phase 2)
+- Active: 7 (7%) — TASK-AI-010/011 (human access), TASK-AI-040..043 + TASK-AI-049 (Phase 2)
 - Completed: 94 (94%)
 - Blocked: 2 (TASK-AI-010/011 — human dashboard access required)
 
@@ -179,6 +180,23 @@ Components:
 *Estimated Hours*: 12
 *Priority*: P2 (Phase 2)
 *Depends On*: T009
+
+#### T015 - Intelligent WBS Proposal (`TASK-AI-049`)
+
+*Estimated Hours*: 8
+*Priority*: P2 (Phase 2)
+*Depends On*: `TASK-BCK-060`, completed Swagger flow audit
+
+*Intent*: Treat WBS as a project-control artifact, not a disposable LLM output. Before implementation, define the proposal for an assisted WBS lane that can derive candidate structure from contracts and project context while staying explainable and reviewable.
+
+*Required Proposal Scope*:
+- Inputs: project metadata, parsed contract clauses, existing WBS, alerts, and user intent.
+- Outputs: hierarchical candidate WBS, parent-child integrity, source evidence per item, confidence/uncertainty, and explicit delta against the current structure.
+- Controls: deterministic validation first, confidence scoring, LangGraph fallback extraction when workbook/document structure is ambiguous, duplicate detection, human approval gates, and tenant-safe persistence boundaries.
+- Integration points: procurement, RACI, coherence, approvals, and future analytics.
+- Evaluation: completeness, traceability, hierarchy validity, editability, and false-positive risk.
+
+*Why deferred*: Phase 1 must first prove the current project/document/coherence flow and repair the live WBS contract so Phase 2 is designed on truthful foundations.
 
 **FULL-STACK OWNERSHIP**: AI agent implements backend + frontend
 

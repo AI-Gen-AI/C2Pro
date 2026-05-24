@@ -63,6 +63,38 @@ async def test_traced_llm_call_async_success(mock_langsmith_client_enabled, mock
     mock_span_client.end_span.assert_called_once()
     mock_usage_logger.log_success.assert_called_once()
 
+
+@pytest.mark.asyncio
+async def test_traced_llm_call_uses_current_inputs_keyword(mock_langsmith_client_enabled):
+    """TS-AI-LANGSMITH-002: decorator must call current LangSmith wrapper with inputs, not legacy input."""
+
+    class StrictSpanClient:
+        def __init__(self) -> None:
+            self.inputs = None
+            self.ended = False
+
+        def start_span(self, name, run_type, metadata=None, inputs=None, tags=None):
+            self.inputs = inputs
+            return {"id": "strict_span_id", "url": "http://mock.url"}
+
+        def end_span(self, span, outputs=None):
+            self.ended = True
+
+    strict_client = StrictSpanClient()
+
+    @traced_llm_call(task_type="test_task")
+    async def sample_function(request: LLMRequest, langsmith_client: StrictSpanClient):
+        return {"usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+    await sample_function(
+        LLMRequest(model="test_model", messages=[]),
+        langsmith_client=strict_client,
+    )
+
+    assert strict_client.inputs is not None
+    assert strict_client.inputs["args_count"] == 1
+    assert strict_client.ended is True
+
 @pytest.mark.asyncio
 async def test_traced_llm_call_disabled(mock_span_client):
     """Test that the decorator is a no-op when disabled."""

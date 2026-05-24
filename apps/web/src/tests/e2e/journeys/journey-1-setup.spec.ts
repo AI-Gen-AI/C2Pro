@@ -13,19 +13,15 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { setupClerkTestingToken } from "@clerk/testing/playwright";
 
 test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to app and login as new user
-    await page.goto("http://localhost:3000");
-
-    // Login with test credentials
-    await page.fill('[data-testid="email-input"]', "newuser@test.com");
-    await page.fill('[data-testid="password-input"]', "testpassword123");
-    await page.click('[data-testid="login-button"]');
-
-    // Wait for canonical app home to load
-    await page.waitForURL((url) => url.pathname === "/");
+    // Setup Clerk testing token to bypass bot detection
+    await setupClerkTestingToken({ page });
+    
+    // Navigate to app home (authenticated via storageState)
+    await page.goto("/");
   });
 
   test("should navigate to project creation from empty dashboard [TEST-01]", async ({

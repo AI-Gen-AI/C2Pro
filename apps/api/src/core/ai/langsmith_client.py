@@ -96,28 +96,60 @@ class LangSmithClient:
         """Backwards-compatible alias for is_enabled (used by prompt_registry)."""
         return self.is_enabled
 
-    def start_span(self, name: str, run_type: str, metadata: dict[str, Any] | None = None) -> Run | None:
-        """Starts a new span."""
+    def start_span(
+        self,
+        name: str,
+        run_type: str,
+        metadata: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> Run | None:
+        """TS-AI-LANGSMITH-001: Start a new span with SDK-required inputs."""
         if not self.is_enabled or not self._client:
             return None
 
         parent_run = get_current_run_tree()
-        run = self._client.create_run(
-            name=name,
-            run_type=run_type,
-            metadata=metadata or {},
-            project_name=self.config.project_name,
-            parent_run=parent_run,
-        )
-        return run
+        create_run_kwargs: dict[str, Any] = {
+            "name": name,
+            "run_type": run_type,
+            "inputs": inputs or {},
+            "metadata": metadata or {},
+            "project_name": self.config.project_name,
+            "parent_run": parent_run,
+        }
+        if tags:
+            create_run_kwargs["tags"] = tags
+        try:
+            run = self._client.create_run(**create_run_kwargs)
+            return run
+        except Exception as exc:  # noqa: BLE001 - telemetry must never block app flow
+            logger.warning(
+                "langsmith_start_span_failed",
+                span_name=name,
+                run_type=run_type,
+                error=str(exc),
+            )
+            return None
 
-    def end_span(self, span: Run, error: Exception | None = None) -> None:
+    def end_span(
+        self,
+        span: Run,
+        error: Exception | None = None,
+        outputs: dict[str, Any] | None = None,
+    ) -> None:
         """Ends a span, marking as error if one occurred."""
         if not self.is_enabled or not self._client or not span:
             return
 
         error_message = str(error) if error else None
-        self._client.end_run(run_id=span.id, error=error_message)
+        try:
+            self._client.end_run(run_id=span.id, error=error_message, outputs=outputs or {})
+        except Exception as exc:  # noqa: BLE001 - telemetry must never block app flow
+            logger.warning(
+                "langsmith_end_span_failed",
+                run_id=str(span.id),
+                error=str(exc),
+            )
 
     def update_span_metadata(self, span: Run, metadata: dict[str, Any]) -> None:
         """Updates the metadata of an existing span."""

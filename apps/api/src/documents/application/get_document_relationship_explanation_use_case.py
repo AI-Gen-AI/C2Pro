@@ -32,13 +32,13 @@ class GetDocumentRelationshipExplanationUseCase:
         self.document_repository = document_repository
         self.explanation_service = explanation_service
 
-    async def execute(self, document_id: UUID) -> DocumentRelationshipExplanationResponse:
-        document = await self.document_repository.get_document_with_clauses(document_id)
+    async def execute(self, tenant_id: UUID, document_id: UUID) -> DocumentRelationshipExplanationResponse:
+        document = await self.document_repository.get_document_with_clauses(tenant_id, document_id)
         if document is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
         clause_ids = {clause.id for clause in document.clauses}
-        alert_signals = await self.document_repository.list_alert_signals_for_document(document_id)
+        alert_signals = await self.document_repository.list_alert_signals_for_document(tenant_id, document_id)
         filtered_alerts = [
             ExplanationAlertInput(
                 id=alert.id,

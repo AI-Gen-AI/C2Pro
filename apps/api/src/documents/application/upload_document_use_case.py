@@ -70,6 +70,7 @@ class UploadDocumentUseCase:
         new_document = Document(
             id=uuid4(),
             project_id=project_id,
+            tenant_id=tenant_id,
             document_type=document_type,
             filename=file.filename,
             upload_status=DocumentStatus.QUEUED,  # Start as QUEUED as per new plan
@@ -83,7 +84,7 @@ class UploadDocumentUseCase:
         )
 
         # 4. Add document to repository (this will create the ORM record)
-        await self.document_repository.add(new_document)
+        await self.document_repository.add(tenant_id, new_document)
         await self.document_repository.commit()  # Commit transaction for the new document record
 
         # 5. Upload the file to storage using the document's ID
@@ -93,9 +94,9 @@ class UploadDocumentUseCase:
         )
 
         # 6. Update document record with storage URL
-        await self.document_repository.update_storage_path(new_document.id, storage_path)
+        await self.document_repository.update_storage_path(tenant_id, new_document.id, storage_path)
         await self.document_repository.update_status(
-            new_document.id, DocumentStatus.UPLOADED
+            tenant_id, new_document.id, DocumentStatus.UPLOADED
         )  # Mark as UPLOADED after successful storage
         await self.document_repository.commit()
 

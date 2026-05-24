@@ -105,17 +105,16 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
 # N6 — Stakeholder Extractor
 # ---------------------------------------------------------------------------
 
-async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
-    """N6 — Extract stakeholders from document text."""
+async def stakeholder_extractor_node(state: ProjectState) -> dict[str, Any]:
+    """TS-UA-ANA-GRAPH-001 - N6 extracts stakeholders with branch-local graph updates."""
     tenant_id = state.get("tenant_id")
     text = state.get("anonymized_text") or state["document_text"]
 
     if not tenant_id:
-        state["extracted_stakeholders"] = []
-        state["messages"].append(
-            AIMessage(content="N6 stakeholder_extractor: skipped (missing tenant)")
-        )
-        return state
+        return {
+            "extracted_stakeholders": [],
+            "messages": [AIMessage(content="N6 stakeholder_extractor: skipped (missing tenant)")],
+        }
 
     try:
         from src.core.ai.anthropic_wrapper import get_anthropic_wrapper
@@ -138,66 +137,64 @@ async def stakeholder_extractor_node(state: ProjectState) -> ProjectState:
         logger.warning("node_stakeholder_extractor_failed", exc_info=True)
         result = []
 
-    state["extracted_stakeholders"] = result
-    state["messages"].append(
-        AIMessage(content=f"N6 stakeholder_extractor: {len(result)} stakeholders found")
-    )
-    return state
+    return {
+        "extracted_stakeholders": result,
+        "messages": [AIMessage(content=f"N6 stakeholder_extractor: {len(result)} stakeholders found")],
+    }
 
 
 # ---------------------------------------------------------------------------
 # N7 — RACI Generator
 # ---------------------------------------------------------------------------
 
-async def raci_generator_node(state: ProjectState) -> ProjectState:
-    """N7 — Delegates RACI matrix generation to GenerateRaciUseCase."""
+async def raci_generator_node(state: ProjectState) -> dict[str, Any]:
+    """TS-UA-ANA-GRAPH-001 - N7 generates RACI output with branch-local graph updates."""
     stakeholders = state.get("extracted_stakeholders", [])
     wbs_items = state.get("extracted_wbs", [])
 
     if not stakeholders or not wbs_items:
-        state["raci_matrix"] = []
-        state["messages"].append(
-            AIMessage(
-                content=(
-                    f"N7 raci_generator: skipped "
-                    f"(stakeholders={len(stakeholders)}, wbs={len(wbs_items)})"
+        return {
+            "raci_matrix": [],
+            "messages": [
+                AIMessage(
+                    content=(
+                        f"N7 raci_generator: skipped "
+                        f"(stakeholders={len(stakeholders)}, wbs={len(wbs_items)})"
+                    )
                 )
-            )
-        )
-        return state
+            ],
+        }
 
     use_case = GenerateRaciUseCase(ai=get_ai_service(state.get("tenant_id")))
     matrix = await use_case.execute(
         GenerateRaciCommand(stakeholders=stakeholders, wbs_items=wbs_items)
     )
 
-    state["raci_matrix"] = matrix
-    state["messages"].append(
-        AIMessage(content=f"N7 raci_generator: {len(matrix)} assignments generated")
-    )
-    return state
+    return {
+        "raci_matrix": matrix,
+        "messages": [AIMessage(content=f"N7 raci_generator: {len(matrix)} assignments generated")],
+    }
 
 
 # ---------------------------------------------------------------------------
 # N8 — Coherence Scorer (delegates to canonical 7-node subgraph)
 # ---------------------------------------------------------------------------
 
-async def coherence_scorer_node(state: ProjectState) -> ProjectState:
-    """N8 — Calculate Coherence Score via the canonical 7-node subgraph.
+async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
+    """TS-UA-ANA-GRAPH-001 - N8 calculates coherence with branch-local graph updates.
 
     Refers to Suite ID: TS-UA-ANA-UC-001.
     """
     project_id = state.get("project_id")
 
     if not project_id:
-        state["coherence_score"] = None
-        state["coherence_breakdown"] = {}
-        state["coherence_reason"] = "missing_project_id"
-        state["coherence_missing_dimensions"] = ["schedule", "budget"]
-        state["messages"].append(
-            AIMessage(content="N8 coherence_scorer: skipped (missing project_id)")
-        )
-        return state
+        return {
+            "coherence_score": None,
+            "coherence_breakdown": {},
+            "coherence_reason": "missing_project_id",
+            "coherence_missing_dimensions": ["schedule", "budget"],
+            "messages": [AIMessage(content="N8 coherence_scorer: skipped (missing project_id)")],
+        }
 
     try:
         from src.analysis.domain.coherence_derivation import (
@@ -249,17 +246,18 @@ async def coherence_scorer_node(state: ProjectState) -> ProjectState:
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
 
-    state["coherence_score"] = score
-    state["coherence_breakdown"] = breakdown
-    state["coherence_reason"] = reason
-    state["coherence_missing_dimensions"] = result_missing_dimensions
-    state["messages"].append(
-        AIMessage(
-            content=f"N8 coherence_scorer: score={score} "
-            f"(derived from {risk_count} risks, {wbs_count} WBS items{quality_note})"
-        )
-    )
-    return state
+    return {
+        "coherence_score": score,
+        "coherence_breakdown": breakdown,
+        "coherence_reason": reason,
+        "coherence_missing_dimensions": result_missing_dimensions,
+        "messages": [
+            AIMessage(
+                content=f"N8 coherence_scorer: score={score} "
+                f"(derived from {risk_count} risks, {wbs_count} WBS items{quality_note})"
+            )
+        ],
+    }
 
 
 def _build_coherence_clauses(state: ProjectState) -> list[Clause]:
@@ -396,8 +394,8 @@ async def decision_intelligence_node(state: ProjectState) -> ProjectState:
 # N15 — Citation Validator
 # ---------------------------------------------------------------------------
 
-async def citation_validator_node(state: ProjectState) -> ProjectState:
-    """N15 — Validate that extracted data can be traced back to source text."""
+async def citation_validator_node(state: ProjectState) -> dict[str, Any]:
+    """TS-UA-ANA-GRAPH-001 - N15 validates citations with branch-local graph updates."""
     from src.analysis.domain.citation_validation import CitationValidatorService
 
     text = state.get("anonymized_text") or state["document_text"]
@@ -411,15 +409,16 @@ async def citation_validator_node(state: ProjectState) -> ProjectState:
         for c in validation.citations
     ]
 
-    state["citations"] = citations
-    state["citation_validation_passed"] = validation.validation_passed
-    state["messages"].append(
-        AIMessage(
-            content=f"N15 citation_validator: {validation.validated_count}/{validation.total_count} "
-            f"citations verified, passed={validation.validation_passed}"
-        )
-    )
-    return state
+    return {
+        "citations": citations,
+        "citation_validation_passed": validation.validation_passed,
+        "messages": [
+            AIMessage(
+                content=f"N15 citation_validator: {validation.validated_count}/{validation.total_count} "
+                f"citations verified, passed={validation.validation_passed}"
+            )
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------

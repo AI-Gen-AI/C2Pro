@@ -36,6 +36,7 @@ class CreateDocumentUseCase:
         new_document = Document(
             id=uuid4(),
             project_id=dto.project_id,
+            tenant_id=dto.tenant_id,
             document_type=dto.document_type,
             filename=dto.filename,
             upload_status=DocumentStatus.UPLOADED, # Default status on creation
@@ -48,6 +49,6 @@ class CreateDocumentUseCase:
             document_metadata=dto.document_metadata or {},
         )
 
-        self.repository.save(new_document)
+        self.repository.add(dto.tenant_id, new_document)
 
         return new_document

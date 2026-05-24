@@ -61,6 +61,7 @@ class Clause:
     """
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     document_id: UUID
     clause_code: str
     clause_type: ClauseType | None
@@ -73,6 +74,12 @@ class Clause:
     extraction_model: str | None = None
     manually_verified: bool = False
     verified_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.project_id is None:
+            raise ValueError("project_id is required")
+        if self.tenant_id is None:
+            raise ValueError("tenant_id is required")
 
     def is_verified(self) -> bool:
         """Business rule: Checks if the clause was manually verified."""
@@ -91,6 +98,7 @@ class Document:
     """
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     document_type: DocumentType
     filename: str
     upload_status: DocumentStatus
@@ -109,6 +117,12 @@ class Document:
     # TASK-BCK-023: Document versioning
     version: int = 1
     file_hash: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.project_id is None:
+            raise ValueError("project_id is required")
+        if self.tenant_id is None:
+            raise ValueError("tenant_id is required")
 
     def is_parsed(self) -> bool:
         """Business rule: Checks if the document was successfully parsed."""
@@ -151,6 +165,7 @@ class Document:
         return Document(
             id=self.id,
             project_id=self.project_id,
+            tenant_id=self.tenant_id,
             document_type=self.document_type,
             filename=self.filename,
             upload_status=new_status,

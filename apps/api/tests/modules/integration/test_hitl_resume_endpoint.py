@@ -49,10 +49,11 @@ class _FakeCheckpointService:
 
 
 class _FakeGraphApp:
-    """Records state updates without requiring the real LangGraph runtime."""
+    """Records state updates and resume invocations without real LangGraph runtime."""
 
     def __init__(self) -> None:
         self.updates: list[tuple[dict[str, object], dict[str, object]]] = []
+        self.invocations: list[tuple[object, dict[str, object]]] = []
 
     async def aupdate_state(
         self,
@@ -60,6 +61,14 @@ class _FakeGraphApp:
         state: dict[str, object],
     ) -> None:
         self.updates.append((config, dict(state)))
+
+    async def ainvoke(
+        self,
+        state: object,
+        config: dict[str, object],
+    ) -> dict[str, object]:
+        self.invocations.append((state, config))
+        return {"analysis_id": "analysis-resumed"}
 
 
 @pytest_asyncio.fixture
@@ -122,6 +131,7 @@ async def test_document(db, test_project):
     """Create a test document."""
     document = DocumentORM(
         id=uuid4(),
+        tenant_id=test_project.tenant_id,
         project_id=test_project.id,
         document_type="contract",
         filename="test_contract.pdf",
@@ -145,7 +155,7 @@ async def test_review_item(db, test_project, test_document, test_tenant):
         current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
         impact_level=ImpactLevel.HIGH,
         confidence=0.65,
-        sla_due_date=datetime.now(UTC),
+        sla_due_date=datetime.now(UTC).replace(tzinfo=None),
         item_data={},
         review_metadata={
             "stakeholders": ["Alice", "Bob"],
@@ -177,7 +187,7 @@ async def approved_review_item(db, test_project, test_document, test_tenant):
         current_status=ReviewStatus.APPROVED,  # Already processed
         impact_level=ImpactLevel.MEDIUM,
         confidence=0.75,
-        sla_due_date=datetime.now(UTC),
+        sla_due_date=datetime.now(UTC).replace(tzinfo=None),
         item_data={},
         review_metadata={},
         # TASK-BCK-024: Checkpoint tracking fields
@@ -233,7 +243,7 @@ class TestApprovalFlow:
         hitl_resume_override,
     ):
         """Approving a review item should resume the workflow."""
-        _ = hitl_resume_override
+        _, graph_app = hitl_resume_override
         response = await authenticated_client.post(
             f"/api/v1/hitl/resume/{test_review_item.id}",
             json={
@@ -248,6 +258,8 @@ class TestApprovalFlow:
         assert "review_id" in data
         assert "status" in data
         assert data["status"] == "resumed" or data["status"] == "approved"
+        assert graph_app.invocations, "Approve must invoke LangGraph after state update"
+        assert graph_app.invocations[-1][0] is None
 
     async def test_approval_updates_review_status(
         self,
@@ -393,7 +405,7 @@ class TestCheckpointRestoration:
             current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
             impact_level=ImpactLevel.LOW,
             confidence=0.5,
-            sla_due_date=datetime.now(UTC),
+            sla_due_date=datetime.now(UTC).replace(tzinfo=None),
             item_data={},
             review_metadata={},
             project_id=test_project.id,

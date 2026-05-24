@@ -275,7 +275,7 @@ async def _process(document_id: UUID) -> dict:
     async with get_raw_session() as session:
         repo = SqlAlchemyDocumentRepository(session=session)
 
-        document = await repo.get_by_id(document_id)
+        document = await repo.get_by_id_internal(document_id)
         if not document:
             logger.error("Document with ID '%s' not found. Cannot process.", document_id)
             return {"status": "error", "message": "Document not found"}
@@ -305,7 +305,7 @@ async def _process(document_id: UUID) -> dict:
             logger.error("tenant_id_not_found_for_project: project_id=%s", document.project_id)
             return {"status": "error", "message": "Project not found"}
 
-        await repo.update_status(document_id, DocumentStatus.PARSING)
+        await repo.update_status(tenant_id, document_id, DocumentStatus.PARSING)
         await session.commit()
 
         try:
@@ -339,7 +339,7 @@ async def _process(document_id: UUID) -> dict:
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
                 if document.document_type == DocumentType.CONTRACT:
-                    existing_clauses = await repo.list_clauses_for_document(document_id)
+                    existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
                     if not existing_clauses:
                         extracted_clauses = _extract_contract_clauses(
                             document_id=document_id,
@@ -347,11 +347,17 @@ async def _process(document_id: UUID) -> dict:
                             parsed_text=parsed_text,
                         )
                         for clause in extracted_clauses:
-                            await repo.add_clause(clause)
+                            await repo.add_clause(tenant_id, clause)
                         contract_clause_count = len(extracted_clauses)
                         metadata["contract_clause_count"] = contract_clause_count
-            await repo.update_metadata(document_id, metadata)
-            await repo.update_status(document_id, DocumentStatus.PARSED_PENDING_ANALYSIS)
+            await repo.update_metadata(tenant_id, document_id, metadata)
+            from datetime import UTC, datetime
+            await repo.update_status(
+                tenant_id,
+                document_id,
+                DocumentStatus.PARSED_PENDING_ANALYSIS,
+                parsed_at=datetime.now(UTC),
+            )
             await session.commit()
 
             if contract_clause_count:
@@ -364,7 +370,7 @@ async def _process(document_id: UUID) -> dict:
                     document_repository=repo,
                     orchestrator=AnalysisOrchestratorFactory.create(),
                 )
-                await trigger_use_case.execute(document_id=document_id)
+                await trigger_use_case.execute(tenant_id=tenant_id, document_id=document_id)
             except Exception as trigger_error:
                 logger.error(
                     "document_analysis_trigger_failed",
@@ -401,7 +407,7 @@ async def _process(document_id: UUID) -> dict:
         except Exception as error:
             logger.error("Error processing document %s: %s", document_id, error, exc_info=True)
             await session.rollback()
-            await repo.update_status(document_id, DocumentStatus.ERROR, parsing_error=str(error))
+            await repo.update_status(tenant_id, document_id, DocumentStatus.ERROR, parsing_error=str(error))
             await session.commit()
             raise
 

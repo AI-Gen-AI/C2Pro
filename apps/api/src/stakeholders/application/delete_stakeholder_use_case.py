@@ -12,6 +12,8 @@ class DeleteStakeholderUseCase:
     def __init__(self, repository: IStakeholderRepository):
         self.repository = repository
 
-    async def execute(self, stakeholder_id: UUID) -> None:
-        await self.repository.delete(stakeholder_id)
+    async def execute(self, stakeholder_id: UUID, tenant_id: UUID) -> None:
+        if tenant_id is None:
+            raise ValueError("tenant_id is required")
+        await self.repository.delete(stakeholder_id, tenant_id=tenant_id)
         await self.repository.commit()

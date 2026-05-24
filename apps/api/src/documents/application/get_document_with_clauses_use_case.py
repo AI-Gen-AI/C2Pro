@@ -18,14 +18,11 @@ class GetDocumentWithClausesUseCase:
     def __init__(self, document_repository: IDocumentRepository):
         self.document_repository = document_repository
 
-    async def execute(self, document_id: UUID, tenant_id: TenantId | None = None) -> Document:
-        if tenant_id is None:
-            document = await self.document_repository.get_document_with_clauses(document_id)
-        else:
-            document = await self.document_repository.get_document_with_clauses(
-                tenant_id,
-                document_id,
-            )
+    async def execute(self, tenant_id: UUID, document_id: UUID) -> Document:
+        document = await self.document_repository.get_document_with_clauses(
+            tenant_id,
+            document_id,
+        )
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
         return document

@@ -308,7 +308,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                     name=item.get("name") or "WBS Item",
                     description=item.get("description"),
                     level=level,
-                    parent_code=None,
+                    parent_code=item.get("parent_code"),
                     item_type=item_type,
                     budget_allocated=_parse_decimal(item.get("budget_allocated")),
                     wbs_metadata={"confidence": item.get("confidence"), "raw": item},

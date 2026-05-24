@@ -14,10 +14,12 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3 coverage gate.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
+from src.modules.hitl.domain.entities import ReviewStatus
 
 
 class _FakeAI:
@@ -67,6 +69,27 @@ def _make_state(**overrides) -> ProjectState:
     }
     defaults.update(overrides)
     return defaults  # type: ignore[return-value]
+
+
+class _AsyncContext:
+    def __init__(self, value: Any = object()) -> None:
+        self.value = value
+
+    async def __aenter__(self) -> Any:
+        return self.value
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
+
+
+class _FakeHitlService:
+    def __init__(self, status: ReviewStatus) -> None:
+        self.status = status
+        self.calls: list[dict[str, Any]] = []
+
+    async def route_for_review(self, **kwargs: Any) -> ReviewStatus:
+        self.calls.append(kwargs)
+        return self.status
 
 
 # ── N3 router_node ──────────────────────────────────────────────────────────
@@ -207,6 +230,52 @@ class TestWbsExtractorMockBranch:
             _make_state(document_text="scope with deadline")
         )
         assert len(result["extracted_wbs"]) == 2
+
+
+class TestHumanInterruptNode:
+    @pytest.mark.asyncio
+    async def test_auto_approved_hitl_status_continues_without_langgraph_interrupt(
+        self, monkeypatch
+    ) -> None:
+        """Test Suite ID: TS-QA-SWAGGER-ANALYSIS-002."""
+        from src.analysis.adapters.graph import nodes
+
+        service = _FakeHitlService(ReviewStatus.APPROVED)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "get_hitl_service_for_graph",
+            lambda *, session, tenant_id: service,
+            raising=False,
+        )
+
+        def _interrupt_must_not_be_called(payload: dict[str, Any]) -> None:
+            raise AssertionError(f"unexpected interrupt: {payload}")
+
+        monkeypatch.setattr(nodes, "interrupt", _interrupt_must_not_be_called)
+
+        result = await nodes.human_interrupt_node(
+            _make_state(
+                doc_type="contract",
+                confidence_score=0.9,
+                retry_count=2,
+                thread_id="thread-swagger-analysis",
+                checkpoint_id="checkpoint-swagger-analysis",
+            )
+        )
+
+        assert result["human_approval_required"] is False
+        assert service.calls[0]["item_id"] == UUID(result["document_id"])
+        assert service.calls[0]["item_data"]["thread_id"] == "thread-swagger-analysis"
+        assert (
+            service.calls[0]["item_data"]["checkpoint_id"]
+            == "checkpoint-swagger-analysis"
+        )
 
 
 # ── N7 raci_generator_node ──────────────────────────────────────────────────

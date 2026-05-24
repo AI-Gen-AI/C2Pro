@@ -327,3 +327,23 @@ class EnrichedCoherenceResult(BaseModel):
         default="standard",
         description="low_budget_mode or standard"
     )
+
+
+class DashboardSummary(BaseModel):
+    """
+    Consolidated view of project coherence for the dashboard.
+    """
+    project_id: str
+    tenant_id: str
+    global_score: int
+    coherence_score: int
+    sub_scores: dict[str, int | None]
+    weights_used: dict[str, float]
+    alert_count: int
+    document_count: int
+    methodology_version: str = "3.0"
+    score_version: str | None = None
+    score_reason: str | None = None
+    score_missing_dimensions: list[str] | None = None
+    last_updated: datetime
+

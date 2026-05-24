@@ -22,8 +22,22 @@ export default defineConfig({
     : undefined,
   projects: [
     {
-      name: "chromium",
+      name: "global-setup",
+      testMatch: /global\.setup\.ts/,
+    },
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
       use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+    },
+    {
+      name: "chromium",
+      use: { 
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
     },
     {
       name: "cross-browser-chromium",
@@ -74,7 +88,11 @@ export default defineConfig({
     {
       name: "e2e-j2-weekly-review",
       testMatch: /journey-2-review\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"] },
+      use: { 
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
       metadata: {
         suite: "TS-E2E-J2-001",
         phase: "red",
@@ -86,7 +104,11 @@ export default defineConfig({
     {
       name: "e2e-document-analysis-pipeline",
       testMatch: /document-analysis-pipeline\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"] },
+      use: { 
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
       metadata: {
         suite: "TS-E2E-DAP-001",
         phase: "green",

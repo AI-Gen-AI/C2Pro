@@ -25,22 +25,15 @@ class ExtractEntitiesUseCase:
         self.document_repository = document_repository
         self.entity_extraction_service = entity_extraction_service
 
-    async def execute(self, document_id: UUID, parsed_payload: dict[str, Any]) -> dict[str, int]:
+    async def execute(self, tenant_id: UUID, document_id: UUID, parsed_payload: dict[str, Any]) -> dict[str, int]:
         """
         Extracts entities from parsed payload for a document.
         """
-        document = await self.document_repository.get_by_id(document_id)
+        document = await self.document_repository.get_by_id(tenant_id, document_id)
         if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found.",
-            )
-
-        tenant_id = await self.document_repository.get_project_tenant_id(document.project_id)
-        if not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project for document not found.",
+                detail="Document not found or access denied.",
             )
 
         summary = await self.entity_extraction_service.extract_entities_from_document(

@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-13T21:05:00Z",
+  "updated_at": "2026-05-23T21:38:06Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,169 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T074",
+      "backlog_id": "TASK-BCK-074",
+      "tipo": "backend",
+      "descripcion": "Repair Analysis to HITL seam after live Swagger analysis produced risks but stopped with analysis_id null and inconclusive critique.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Critique cost control uses tenant session path, auto-approved HITL decisions do not interrupt, and resume approval invokes LangGraph.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/ai/anthropic_client.py",
+        "apps/api/src/analysis/adapters/graph/nodes.py",
+        "apps/api/src/analysis/adapters/graph/schema.py",
+        "apps/api/src/analysis/application/analyze_document_use_case.py",
+        "apps/api/src/modules/hitl/application/human_in_the_loop_service.py",
+        "apps/api/src/modules/hitl/application/resume_workflow_use_case.py",
+        "apps/api/tests/unit/analysis/graph/test_thin_nodes.py",
+        "apps/api/tests/unit/analysis/test_legacy_ai_service_cost_controller.py",
+        "apps/api/tests/modules/integration/test_hitl_resume_endpoint.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-23T21:38:06Z",
+        "completado": "2026-05-23T21:38:06Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Fixed critique/HITL/resume linkage so approved analysis can continue toward persistence.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "PYTHONPATH=. pytest tests/unit/analysis/graph/test_thin_nodes.py::TestHumanInterruptNode::test_auto_approved_hitl_status_continues_without_langgraph_interrupt tests/modules/integration/test_hitl_resume_endpoint.py::TestApprovalFlow::test_approval_resumes_workflow tests/unit/analysis/test_legacy_ai_service_cost_controller.py -q -> 3 passed",
+          "PYTHONPATH=. pytest tests/unit/analysis/graph/test_thin_nodes.py tests/unit/analysis/test_legacy_ai_service_cost_controller.py -q -> 28 passed",
+          "PYTHONPATH=. pytest tests/modules/integration/test_hitl_resume_endpoint.py::TestApprovalFlow tests/modules/integration/test_hitl_resume_endpoint.py::TestStateInjection tests/modules/integration/test_hitl_resume_endpoint.py::TestCheckpointRestoration::test_checkpoint_id_is_used_for_restoration -q -> 6 passed"
+        ],
+        "nota_verificacion": "Live Swagger requires API container reload before rerun."
+      }
+    },
+    {
+      "tarea_id": "T073",
+      "backlog_id": "TASK-BCK-073",
+      "tipo": "backend",
+      "descripcion": "Restore analysis AI tool execution contract after live Swagger POST /api/v1/analysis/analyze returned 200 with failed risk_extraction.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Risk and WBS extraction tools accept BaseTool tenant_id keyword contract and focused regression tests pass.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/ai/tools/risk_extraction_tool.py",
+        "apps/api/src/analysis/adapters/ai/tools/wbs_extraction_tool.py",
+        "apps/api/tests/unit/analysis/test_ai_tool_execution_contract.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-23T20:42:04Z",
+        "completado": "2026-05-23T20:42:04Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Fixed _execute_impl tenant_id keyword mismatch that caused tool_execution_failed after LLM success.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "PYTHONPATH=. pytest tests/unit/analysis/test_ai_tool_execution_contract.py -q -> 2 passed",
+          "PYTHONPATH=. pytest tests/unit/analysis/test_ai_tool_execution_contract.py tests/unit/core/ai/tools/test_registry.py -q -> 20 passed"
+        ],
+        "nota_verificacion": "Live Swagger still needs container restart/reload and rerun of TASK-QA-309."
+      }
+    },
+    {
+      "tarea_id": "T072",
+      "backlog_id": "TASK-BCK-072",
+      "tipo": "backend",
+      "descripcion": "Expose bearer auth in OpenAPI for protected alerts routes so Swagger sends Authorization.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Alerts routers advertise HTTPBearer security and regression tests prove OpenAPI security entries.",
+      "archivos_modificados": [
+        "apps/api/src/alerts/adapters/http/router.py",
+        "apps/api/tests/core/test_alerts_http_dependencies.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-23T20:15:13Z",
+        "completado": "2026-05-23T20:15:13Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Swagger alert route omitted Authorization because OpenAPI lacked HTTPBearer; added router-level security_scheme dependency.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "pytest apps/api/tests/core/test_alerts_http_dependencies.py apps/api/tests/core/test_observability_http_dependencies.py -q -> 4 passed"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T071",
+      "backlog_id": "TASK-BCK-071",
+      "tipo": "backend",
+      "descripcion": "Improve RAG penalty answer fallback when contract chunks contain damages evidence but the LLM abstains.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "RAG returns deterministic contract damages summary when retrieved chunks contain damages evidence and generated answer says no-answer.",
+      "archivos_modificados": [
+        "apps/api/src/documents/adapters/rag/rag_service.py",
+        "apps/api/tests/unit/adapters/documents/test_rag_service_provider_errors.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-23T20:07:38Z",
+        "completado": "2026-05-23T20:07:38Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Added no-answer override plus contract damages extractive fallback for penalty/delay questions.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "pytest apps/api/tests/unit/adapters/documents/test_rag_service_provider_errors.py apps/api/tests/unit/adapters/documents/test_composite_rag.py::TestRagIngestionServiceAdvanced -q -> 11 passed"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T070",
+      "backlog_id": "TASK-BCK-070",
+      "tipo": "backend",
+      "descripcion": "Ingest parsed contract clause payloads into project RAG chunks so contract penalty questions are not starved by schedule-only sources.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "RAG ingestion normalizes parsed contract clauses into searchable text with unit coverage; live QA remains open for restart/reparse/reindex verification.",
+      "archivos_modificados": [
+        "apps/api/src/documents/adapters/rag/sqlalchemy_rag_ingestion_service.py",
+        "apps/api/tests/unit/adapters/documents/test_composite_rag.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-23T19:38:08Z",
+        "completado": "2026-05-23T19:38:08Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Confirmed live RAG penalty query only returned schedule sources because contract had clauses but no document_chunks; added clause/text payload normalization and unit proof.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "pytest apps/api/tests/unit/adapters/documents/test_composite_rag.py::TestRagIngestionServiceAdvanced -q -> 4 passed"
+        ]
+      }
+    },
     {
       "tarea_id": "T065",
       "backlog_id": "EPIC-DDD-MIGRATION",
@@ -1467,6 +1630,446 @@
         "validacion_lint": false,
         "bloqueador": "No production log access available to correlate the supplied reference IDs with the exact exception class."
       }
+    },
+    {
+      "tarea_id": "T094",
+      "backlog_id": "TASK-BCK-052",
+      "tipo": "backend",
+      "descripcion": "Fix analysis graph concurrent state merge failure after parsed document analysis.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Parallel analysis branches stop rewriting shared identity keys, targeted regression coverage passes, and /api/v1/analysis/analyze can proceed past the LangGraph merge step.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/tests/analysis/adapters/graph/test_parallel_state_updates.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/COMPLETED.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T07:05:00Z",
+        "completado": "2026-05-17T07:09:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Fixed LangGraph concurrent update failure in analysis enrichment fan-out by combining branch-local patches with a true multi-source fan-in join.",
+        "cambios_realizados": [
+          "Added focused regression coverage for branch-local updates, empty dispatch patches, and compiled workflow fan-in behavior.",
+          "Changed stakeholder, RACI, coherence, and citation graph nodes to emit only their owned updates plus reducer-backed messages.",
+          "Changed the fan-out anchor to emit an empty patch and replaced three independent knowledge-graph edges with a single multi-source join edge."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "RED first reproduced full-state branch returns, then compiled workflow fan-in duplication (`analysis_id` duplicate after the initial shallow fix). GREEN passed targeted graph tests 34/34 from apps/api with PYTHONPATH='.'."
+      }
+    },
+    {
+      "tarea_id": "T095",
+      "backlog_id": "TASK-BCK-053",
+      "tipo": "backend",
+      "descripcion": "Prevent fresh analysis requests from reusing project-level LangGraph checkpoint threads.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Repeated fresh analyses for the same project use distinct checkpoint threads and do not replay prior workflow message history.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/application/analyze_document_use_case.py",
+        "apps/api/tests/analysis/application/test_analyze_document_use_case.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/COMPLETED.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T08:21:00Z",
+        "completado": "2026-05-17T08:24:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Fresh analyses now use unique checkpoint thread IDs instead of project IDs, preventing prior message replay across repeated requests.",
+        "cambios_realizados": [
+          "Added regression coverage proving repeated fresh analyses use distinct thread IDs.",
+          "Changed AnalyzeDocumentUseCase to assign a UUID thread per fresh analysis request."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "RED proved repeated analyses reused project_id as thread_id. GREEN passed targeted analysis tests 35/35 from apps/api with PYTHONPATH='.'."
+      }
+    },
+    {
+      "tarea_id": "T096",
+      "backlog_id": "TASK-BCK-054",
+      "tipo": "backend",
+      "descripcion": "Fix coherence tracing/state contract mismatch that crashes live coherence evaluation.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Coherence tracing can read tenant metadata from runtime state and /api/v1/coherence/evaluate returns 200 for the live Swagger project.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/graph/state.py",
+        "apps/api/src/core/ai/langsmith_client.py",
+        "apps/api/src/core/observability/coherence_tracing.py",
+        "apps/api/src/core/ai/test_langsmith_client.py",
+        "apps/api/tests/unit/core/observability/test_coherence_tracing.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/COMPLETED.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T08:35:00Z",
+        "completado": "2026-05-17T08:42:44Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Restored live coherence evaluation by repairing the tracing/state tenant contract, updating LangSmith span creation to the current SDK inputs contract, and making coherence telemetry fail open.",
+        "cambios_realizados": [
+          "Added focused regressions for tenant metadata access and fail-open telemetry behavior.",
+          "Exposed CoherenceGraphState.tenant_id as a read-only accessor over config.tenant_id.",
+          "Supplied inputs={} to LangSmith create_run calls and insulated span start/update/end failures from the scoring path."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "RED reproduced AttributeError on state.tenant_id, then live verification exposed Client.create_run() missing required inputs. GREEN passed targeted observability/LangSmith tests and live POST /api/v1/coherence/evaluate returned 200 with overall_score=66.8."
+      }
+    },
+    {
+      "tarea_id": "T097",
+      "backlog_id": "EPIC-QA-SWAGGER-MANUAL-VERIFICATION",
+      "tipo": "qa",
+      "descripcion": "Execute a real Swagger verification audit for every unique endpoint and maintain one task per method+path operation.",
+      "asignado_a": "qa",
+      "estado": "en_progreso",
+      "criterio_done": "All unique Swagger operations are executed live, each task has a real result note, and defects discovered during the audit are routed into follow-up backlog items.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T08:50:00Z"
+      }
+    },
+    {
+      "tarea_id": "T098",
+      "backlog_id": "TASK-BCK-055",
+      "tipo": "backend",
+      "descripcion": "Fix project bulk-WBS fake-write / real-read contract drift discovered in live Swagger testing.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "A successful project bulk WBS create persists tenant-scoped items that are returned by the WBS read endpoint.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json",
+        "apps/api/src/projects/adapters/http/router.py",
+        "apps/api/src/procurement/adapters/persistence/wbs_repository.py",
+        "apps/api/tests/projects/test_projects_router.py",
+        "backlogs/COMPLETED.md"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T16:03:00Z",
+        "completado": "2026-05-17T16:24:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Bulk WBS writes now persist through the procurement repository used by the live read endpoint, preserving parent hierarchy.",
+        "cambios_realizados": [
+          "Added a regression proving POST /wbs/bulk must be visible through GET /wbs.",
+          "Persisted validated bulk WBS rows through SQLAlchemyWBSRepository.bulk_create_from_dicts().",
+          "Preserved parent_code during bulk persistence so hierarchy survives the write path."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "RED reproduced total_items=0 after created_count=2. GREEN passed targeted project regression and sequential bulk-flow tests 3/3; live verification returned total_items=2 with codes=9,9.1 and parent_9_1=9."
+      }
+    },
+    {
+      "tarea_id": "T099",
+      "backlog_id": "TASK-BCK-060",
+      "tipo": "backend",
+      "descripcion": "Reconcile the live project WBS endpoint with its published hierarchy and coverage contract.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "The public /wbs response shape truthfully matches Swagger and returns the intended hierarchy/coverage contract or the docs are corrected to a flat list contract.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T16:27:00Z"
+      }
+    },
+    {
+      "tarea_id": "T100",
+      "backlog_id": "TASK-AI-049",
+      "tipo": "ai",
+      "descripcion": "Draft the Phase 2 intelligent WBS proposal after the live Swagger flow is proven and the WBS public contract is reconciled.",
+      "asignado_a": "ai",
+      "estado": "pendiente",
+      "criterio_done": "A reviewed proposal defines inputs, outputs, evidence, hierarchy validation, uncertainty, HITL gates, integrations, and evaluation criteria for assisted WBS generation/review.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/AI_AI_ML_INTELLIGENCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T16:30:00Z"
+      }
+    },
+    {
+      "tarea_id": "T101",
+      "backlog_id": "TASK-BCK-061",
+      "tipo": "backend",
+      "descripcion": "Restore local document uploads by aligning the running database schema with tenant-hardened document repository expectations.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Local DB reaches the intended migration head, documents.tenant_id exists, and the same Swagger upload path returns 202 again.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T16:35:00Z",
+        "completado": "2026-05-17T17:17:30Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Applied pending local migrations through 20260517_0002, restored documents.tenant_id, and live Swagger schedule upload returned 202.",
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T102",
+      "backlog_id": "TASK-BCK-062",
+      "tipo": "backend",
+      "descripcion": "Make Excel schedule parsing accept realistic workbook layouts and localized headers instead of failing on title rows and Spanish columns.",
+      "asignado_a": "backend",
+      "estado": "pendiente",
+      "criterio_done": "Realistic schedule workbook parses successfully, localized aliases are supported, and user-correctable format problems do not surface as HTTP 500.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T17:22:00Z",
+        "ultimo_avance": "2026-05-17T17:41:16Z",
+        "completado": "2026-05-17T17:43:33Z"
+      },
+      "resultado": {
+        "status": "success",
+        "details": "Live Swagger verification passed: real schedule workbook parsed successfully with 202 after header discovery, localized aliases, and WBS level mapping fixes."
+      }
+    },
+    {
+      "tarea_id": "T103",
+      "backlog_id": "TASK-BCK-063",
+      "tipo": "backend",
+      "descripcion": "Persist parsed_at on successful document parse so parsed documents expose a real completion timestamp.",
+      "asignado_a": "backend",
+      "estado": "pendiente",
+      "criterio_done": "Successful document parse updates parsed_at and downstream detail/history responses expose the timestamp.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T17:45:16Z"
+      }
+    },
+    {
+      "tarea_id": "T104",
+      "backlog_id": "TASK-BCK-064",
+      "tipo": "backend",
+      "descripcion": "Connect parsed schedule evidence to coherence scoring so schedule is no longer reported as missing after successful ingestion.",
+      "asignado_a": "backend",
+      "estado": "pendiente",
+      "criterio_done": "A project with successfully parsed schedule evidence and generated WBS no longer reports schedule as a missing coherence dimension.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T17:53:30Z"
+      }
+    },
+    {
+      "tarea_id": "T105",
+      "backlog_id": "TASK-BCK-065",
+      "tipo": "backend",
+      "descripcion": "Convert upstream RAG provider throttling into controlled API failures instead of exposing 500 tracebacks.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "RAG answer requests receiving provider 429s return a clean retryable API response and no traceback body.",
+      "archivos_modificados": [
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T18:10:55Z",
+        "completado": "2026-05-18T21:59:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "RAG answer no longer leaks OpenAI embedding provider 429 tracebacks; wrong project/document id path is rejected before embeddings.",
+        "cambios_realizados": [
+          "Added RagProviderUnavailableError and mapped embedding provider HTTPStatusError to retryable 503 JSON.",
+          "Added tenant-scoped project existence check before embedding calls.",
+          "Added regression tests for provider 429 handling and document_id-as-project_id rejection."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T106",
+      "backlog_id": "TASK-BCK-066",
+      "tipo": "backend",
+      "descripcion": "Expose bearer auth in OpenAPI for private observability endpoints so Swagger sends Authorization while middleware keeps the routes protected.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Swagger advertises bearer auth for /observability/status and /observability/analyses, and both endpoints return 200 with an authenticated request.",
+      "archivos_modificados": [
+        "apps/api/src/core/observability/router.py",
+        "apps/api/tests/core/test_observability_http_dependencies.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-17T18:54:00Z",
+        "completado": "2026-05-17T19:02:30Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Private observability endpoints now expose HTTP bearer auth in OpenAPI while remaining middleware-protected at runtime.",
+        "cambios_realizados": [
+          "Added router-level HTTPBearer dependency so OpenAPI marks the observability surface as authenticated.",
+          "Added regression coverage proving /status and /analyses publish bearer security requirements.",
+          "Verified live authenticated GET /status and GET /analyses both return 200."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T107",
+      "backlog_id": "TASK-BCK-067",
+      "tipo": "backend",
+      "descripcion": "Make schedule document parsing idempotent for schedule-derived activity projections without treating schedules as canonical WBS.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Re-parsing the same schedule document updates same-source generated activity projections and returns 202 instead of violating project/code uniqueness.",
+      "archivos_modificados": [
+        "apps/api/src/procurement/application/use_cases/wbs_use_cases.py",
+        "apps/api/tests/modules/procurement/application/test_wbs_use_cases.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-18T00:00:00Z",
+        "completado": "2026-05-18T00:00:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Same-source schedule-derived activity projections are now idempotent; live reparse returned 202 parsed.",
+        "cambios_realizados": [
+          "Added a focused regression for re-parsing a schedule-derived activity projection.",
+          "Updated CreateWBSItemUseCase to update only existing rows with the same source_document_id instead of inserting duplicates.",
+          "Preserved the architecture distinction: schedule evidence is not the canonical WBS."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false
+      }
+    },
+    {
+      "tarea_id": "T108",
+      "backlog_id": "TASK-BCK-068",
+      "tipo": "backend",
+      "descripcion": "Restore RAG answer completion after provider credit by fixing stale retrieval SQL, schedule chunk ingestion, and telemetry/model fallback behavior.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "RAG answer endpoint returns a live 200 answer for the parsed Excel schedule question.",
+      "archivos_modificados": [
+        "apps/api/src/documents/adapters/rag/rag_service.py",
+        "apps/api/src/documents/adapters/rag/sqlalchemy_rag_ingestion_service.py",
+        "apps/api/src/core/ai/langsmith_client.py",
+        "apps/api/src/core/observability/langsmith_decorator.py",
+        "apps/api/tests/unit/adapters/documents/test_rag_service_provider_errors.py",
+        "apps/api/tests/unit/adapters/documents/test_composite_rag.py",
+        "apps/api/tests/unit/core/observability/test_langsmith_decorator.py",
+        "apps/api/src/core/ai/test_langsmith_client.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-18T22:26:33Z",
+        "completado": "2026-05-18T22:26:33Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "RAG answer endpoint returned 200 for the parsed schedule question after direct tenant-scoped retrieval, schedule chunk ingestion, LangSmith fail-open, and extractive schedule fallback.",
+        "cambios_realizados": [
+          "Replaced stale match_documents call with tenant-scoped document_chunks retrieval.",
+          "Serialized parsed Excel schedule rows into RAG text chunks.",
+          "Made LangSmith span start/end fail open and compatible with inputs/tags.",
+          "Added extractive schedule end-date fallback when LLM generation is unavailable."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "Targeted tests passed 15/15; live reparse created 5 chunks; live RAG answer returned 200 with project end date 2015-01-02."
+      }
+    },
+    {
+      "tarea_id": "T109",
+      "backlog_id": "TASK-BCK-069",
+      "tipo": "backend",
+      "descripcion": "Extend RAG answer resilience for equipment-purchase questions and generation-provider failures.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "RAG equipment question returns 200 with two schedule-derived equipment items, and non-extractive generation failures return controlled provider-unavailable responses.",
+      "archivos_modificados": [
+        "apps/api/src/documents/adapters/rag/rag_service.py",
+        "apps/api/tests/unit/adapters/documents/test_rag_service_provider_errors.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-19T19:46:04Z",
+        "completado": "2026-05-19T19:46:04Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Live RAG equipment question returned 200 with Transformador 100 MVA and Transformador 25/31.5 MVA after extractive fallback; generation failures without deterministic answers now map to provider unavailable.",
+        "cambios_realizados": [
+          "Added deterministic equipment extraction from retrieved schedule Task entries.",
+          "Converted LLM generation failures without deterministic fallback to RagProviderUnavailableError.",
+          "Added regression tests for equipment fallback and controlled generation failure handling."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "nota_verificacion": "Targeted RAG provider tests passed 6/6; live POST /api/v1/projects/{project_id}/rag/answer returned 200 for equipment question with schedule sources."
+      }
     }
   ],
   "backlog_sync": {
@@ -1560,9 +2163,22 @@
       "TASK-OPS-DOCFLOW-015",
       "TASK-OPS-DOCFLOW-016",
       "TASK-OPS-DOCFLOW-017",
-      "TASK-OPS-DOCFLOW-018"
-      ,"TASK-FRT-171"
-      ,"TASK-BCK-051"
+      "TASK-OPS-DOCFLOW-018",
+      "TASK-FRT-171",
+      "TASK-BCK-051",
+      "TASK-BCK-052",
+      "TASK-BCK-053",
+      "TASK-BCK-054",
+      "TASK-BCK-055",
+      "TASK-BCK-060",
+      "TASK-AI-049",
+      "TASK-BCK-061",
+      "TASK-BCK-062",
+      "TASK-BCK-066",
+      "TASK-BCK-067",
+      "TASK-BCK-065",
+      "TASK-BCK-068",
+      "TASK-BCK-069"
     ]
   },
   "plan_actual": {
@@ -1651,8 +2267,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 18,
-    "tareas_completadas": 17,
+    "total_tareas": 20,
+    "tareas_completadas": 19,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,

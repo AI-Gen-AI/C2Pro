@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { CoherenceGauge } from "@/components/coherence/CoherenceGauge";
 import { ScoreCard } from "@/components/coherence/ScoreCard";
@@ -130,28 +128,37 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
   const [template, setTemplate] = useState<TemplateMode>("executive");
   const score = data.coherence_score ?? 0;
 
-  const barData = Object.entries(data.sub_scores).map(([k, score]) => ({
+  const barData = useMemo(() => Object.entries(data.sub_scores).map(([k, score]) => ({
     name: CATEGORY_LABELS[k] ?? k,
     score,
-  }));
+  })), [data.sub_scores]);
 
-  const radarData = Object.entries(data.sub_scores).map(([k, score]) => ({
+  const radarData = useMemo(() => Object.entries(data.sub_scores).map(([k, score]) => ({
     category: CATEGORY_LABELS[k] ?? k,
     score,
     target: 80,
-  }));
+  })), [data.sub_scores]);
 
-  const catEntries = Object.entries(data.sub_scores).sort(
+  const catEntries = useMemo(() => Object.entries(data.sub_scores).sort(
     ([, a], [, b]) => a - b,
+  ), [data.sub_scores]);
+
+  const activeLayout = useMemo(() => 
+    LAYOUT_OPTIONS.find((option) => option.value === layout) ?? LAYOUT_OPTIONS[0],
+    [layout]
   );
-  const activeLayout =
-    LAYOUT_OPTIONS.find((option) => option.value === layout) ?? LAYOUT_OPTIONS[0];
-  const activeTemplate =
-    TEMPLATE_OPTIONS.find((option) => option.value === template) ??
-    null;
-  const activeDescription =
-    template === "custom" ? activeLayout.description : activeTemplate?.description;
-  const dashboardRows = buildDashboardRows(data);
+
+  const activeTemplate = useMemo(() => 
+    TEMPLATE_OPTIONS.find((option) => option.value === template) ?? null,
+    [template]
+  );
+
+  const activeDescription = useMemo(() => 
+    template === "custom" ? activeLayout.description : activeTemplate?.description,
+    [template, activeLayout.description, activeTemplate?.description]
+  );
+
+  const dashboardRows = useMemo(() => buildDashboardRows(data), [data]);
 
   function exportPdfReport() {
     const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
@@ -372,16 +379,16 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
         />
 
         <div className="rounded-md border bg-card p-5 shadow-sm">
-          {view === "breakdown" && <BreakdownChart data={barData} />}
-          {view === "radar" && <RadarView data={radarData} />}
-          {view === "alerts" && (
+          {view === "breakdown" ? <BreakdownChart data={barData} /> : null}
+          {view === "radar" ? <RadarView data={radarData} /> : null}
+          {view === "alerts" ? (
             <AlertsDistribution
               critical={0}
               high={0}
               medium={data.alert_count}
               low={0}
             />
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -419,7 +426,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
         }}
       >
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-          {selectedCat && data.sub_scores[selectedCat] != null && (
+          {selectedCat != null && data.sub_scores[selectedCat] != null ? (
             <div className="space-y-5">
               <SheetHeader>
                 <SheetTitle>Coherence Score Drill-down</SheetTitle>
@@ -437,7 +444,7 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
                 onClose={() => setSelectedCat(null)}
               />
             </div>
-          )}
+          ) : null}
         </SheetContent>
       </Sheet>
     </section>

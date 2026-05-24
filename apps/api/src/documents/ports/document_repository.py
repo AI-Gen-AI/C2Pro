@@ -3,6 +3,7 @@ Document Repository Interface (Port).
 Defines the contract for interacting with document persistence.
 """
 from abc import ABC, abstractmethod
+from datetime import datetime
 from uuid import UUID
 
 from src.core.tenants.types import TenantId
@@ -27,6 +28,11 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_id_internal(self, document_id: UUID) -> Document | None:
+        """Retrieves a document by its ID without tenant filtering. Internal use only."""
+        pass
+
+    @abstractmethod
     async def get_document_with_clauses(self, tenant_id: TenantId, document_id: UUID) -> Document | None:
         """Retrieves a document by its ID, including its associated clauses."""
         pass
@@ -42,8 +48,20 @@ class IDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    async def update_status(self, tenant_id: TenantId, document_id: UUID, status: DocumentStatus, parsing_error: str | None = None) -> None:
-        """Updates the status and optional parsing error of a document."""
+    async def update_status(
+        self,
+        tenant_id: TenantId,
+        document_id: UUID,
+        status: DocumentStatus,
+        parsing_error: str | None = None,
+        parsed_at: datetime | None = None,
+    ) -> None:
+        """Updates the status and optional parsing metadata of a document."""
+        pass
+
+    @abstractmethod
+    async def update_metadata(self, tenant_id: TenantId, document_id: UUID, document_metadata: dict) -> None:
+        """Updates the metadata of a document."""
         pass
 
     @abstractmethod

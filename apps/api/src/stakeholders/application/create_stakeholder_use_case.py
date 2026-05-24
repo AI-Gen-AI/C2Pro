@@ -28,10 +28,13 @@ class CreateStakeholderUseCase:
         project_id: UUID,
         user_id: UUID,
         payload: StakeholderCreateRequest,
-        tenant_id: UUID | None = None,
+        tenant_id: UUID,
     ) -> Stakeholder:
+        if tenant_id is None:
+             raise ValueError("tenant_id is required")
+
         if payload.source_clause_id:
-            exists = await self.document_repository.clause_exists(payload.source_clause_id)
+            exists = await self.document_repository.clause_exists(tenant_id, payload.source_clause_id)
             if not exists:
                 raise ValueError("source_clause_id_not_found")
 
@@ -53,6 +56,7 @@ class CreateStakeholderUseCase:
         stakeholder = Stakeholder(
             id=uuid4(),
             project_id=project_id,
+            tenant_id=tenant_id,
             name=payload.name,
             role=payload.role,
             organization=payload.company,

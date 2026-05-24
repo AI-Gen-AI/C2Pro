@@ -21,6 +21,7 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 class CreateDocumentDTO:
     """DTO for creating a new document."""
     project_id: UUID
+    tenant_id: UUID
     filename: str
     document_type: DocumentType
     # Optional fields
@@ -39,6 +40,7 @@ class DocumentDTO:
     """
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     document_type: DocumentType
     filename: str
     upload_status: DocumentStatus
@@ -56,6 +58,7 @@ class DocumentDTO:
         return DocumentDTO(
             id=document.id,
             project_id=document.project_id,
+            tenant_id=document.tenant_id,
             document_type=document.document_type,
             filename=document.filename,
             upload_status=document.upload_status,
@@ -98,6 +101,7 @@ class DocumentResponse(BaseModel):
 
     id: UUID
     project_id: UUID
+    tenant_id: UUID
     document_type: DocumentType
     filename: str
     upload_status: DocumentStatus

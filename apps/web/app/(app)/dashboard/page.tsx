@@ -4,14 +4,23 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, ArrowLeft, BarChart3, AlertTriangle, FileText } from "lucide-react";
-import { DashboardClient } from "@/components/coherence/DashboardClient";
 import type { DashboardSummary, ProjectListItem } from "@/lib/api/contracts";
 import { getDashboardSummary, listProjects } from "@/lib/api/services/dashboard";
 import { useAuthStore } from "@/stores/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+const DashboardClient = dynamic(() => import("@/components/coherence/DashboardClient").then(mod => mod.DashboardClient), {
+  loading: () => (
+    <div className="flex min-h-[400px] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <span className="ml-3 text-muted-foreground">Loading interactive dashboard...</span>
+    </div>
+  ),
+});
 
 export default function AppDashboardPage() {
   const token = useAuthStore((state) => state.token);
@@ -20,6 +29,56 @@ export default function AppDashboardPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const loadDashboard = useCallback(async (active: boolean) => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const fetchedProjects = await listProjects();
+
+      if (fetchedProjects.length === 0) {
+        if (active) {
+          setProjects([]);
+          setSummaries({});
+          setLoadError(
+            "No projects found. Create a project to see coherence data.",
+          );
+        }
+        return;
+      }
+
+      if (!active) return;
+      setProjects(fetchedProjects);
+
+      // Fetch summaries for all projects in parallel
+      const summariesMap: Record<string, DashboardSummary> = {};
+      await Promise.all(
+        fetchedProjects.map(async (p) => {
+          try {
+            const summary = await getDashboardSummary(p.id);
+            summariesMap[p.id] = summary;
+          } catch (e) {
+            console.error(`Failed to load summary for project ${p.id}`, e);
+          }
+        })
+      );
+
+      if (!active) return;
+      setSummaries(summariesMap);
+    } catch (error) {
+      if (!active) return;
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Could not load dashboard data right now.",
+      );
+    } finally {
+      if (active) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -31,63 +90,16 @@ export default function AppDashboardPage() {
     }
 
     let active = true;
-
-    const loadDashboard = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-
-      try {
-        const fetchedProjects = await listProjects();
-
-        if (fetchedProjects.length === 0) {
-          if (active) {
-            setProjects([]);
-            setSummaries({});
-            setLoadError(
-              "No projects found. Create a project to see coherence data.",
-            );
-          }
-          return;
-        }
-
-        if (!active) return;
-        setProjects(fetchedProjects);
-
-        // Fetch summaries for all projects
-        const summariesMap: Record<string, DashboardSummary> = {};
-        await Promise.all(
-          fetchedProjects.map(async (p) => {
-            try {
-              const summary = await getDashboardSummary(p.id);
-              summariesMap[p.id] = summary;
-            } catch (e) {
-              console.error(`Failed to load summary for project ${p.id}`, e);
-            }
-          })
-        );
-
-        if (!active) return;
-        setSummaries(summariesMap);
-      } catch (error) {
-        if (!active) return;
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Could not load dashboard data right now.",
-        );
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadDashboard();
+    void loadDashboard(active);
 
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, loadDashboard]);
+
+  const handleBackToOverview = useCallback(() => {
+    setSelectedProjectId(null);
+  }, []);
 
   if (!token) {
     return (
@@ -132,7 +144,7 @@ export default function AppDashboardPage() {
     if (!project || !data) {
       return (
         <div className="space-y-5">
-          <Button variant="ghost" onClick={() => setSelectedProjectId(null)} className="-ml-2">
+          <Button variant="ghost" onClick={handleBackToOverview} className="-ml-2">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Overview
           </Button>
@@ -145,7 +157,7 @@ export default function AppDashboardPage() {
 
     return (
       <div className="space-y-5">
-        <Button variant="ghost" onClick={() => setSelectedProjectId(null)} className="-ml-2 mb-2 text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" onClick={handleBackToOverview} className="-ml-2 mb-2 text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Overview
         </Button>
@@ -214,3 +226,4 @@ export default function AppDashboardPage() {
     </div>
   );
 }
+

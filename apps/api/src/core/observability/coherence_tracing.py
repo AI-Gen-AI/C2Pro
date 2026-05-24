@@ -49,11 +49,15 @@ def traced_coherence_node(
             caught_error: Exception | None = None
             try:
                 _validate_attributes(span_attributes)
-                span = langsmith_client.start_span(
-                    name=f"coherence_node:{node_name}",
-                    run_type="chain",
-                    metadata=span_attributes,
-                )
+                try:
+                    span = langsmith_client.start_span(
+                        name=f"coherence_node:{node_name}",
+                        run_type="chain",
+                        metadata=span_attributes,
+                    )
+                except Exception:
+                    # TS-OBS-COH-001: Observability must never block core evaluation.
+                    return func(*args, **kwargs)
 
                 result = func(*args, **kwargs)
 
@@ -73,7 +77,14 @@ def traced_coherence_node(
                     }
                     _validate_attributes(output_attributes)
                     if span:
-                        langsmith_client.update_span_metadata(span, output_attributes)
+                        try:
+                            langsmith_client.update_span_metadata(
+                                span,
+                                output_attributes,
+                            )
+                        except Exception:
+                            # TS-OBS-COH-001: Metadata enrichment is best-effort only.
+                            pass
 
                 return result
             except Exception as e:
@@ -81,7 +92,11 @@ def traced_coherence_node(
                 raise
             finally:
                 if span:
-                    langsmith_client.end_span(span, error=caught_error)
+                    try:
+                        langsmith_client.end_span(span, error=caught_error)
+                    except Exception:
+                        # TS-OBS-COH-001: Telemetry finalization is best-effort only.
+                        pass
 
         return wrapper
     return decorator
