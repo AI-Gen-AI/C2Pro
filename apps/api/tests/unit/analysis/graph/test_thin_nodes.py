@@ -265,17 +265,13 @@ class TestHumanInterruptNode:
                 confidence_score=0.9,
                 retry_count=2,
                 thread_id="thread-swagger-analysis",
-                checkpoint_id="checkpoint-swagger-analysis",
             )
         )
 
         assert result["human_approval_required"] is False
         assert service.calls[0]["item_id"] == UUID(result["document_id"])
         assert service.calls[0]["item_data"]["thread_id"] == "thread-swagger-analysis"
-        assert (
-            service.calls[0]["item_data"]["checkpoint_id"]
-            == "checkpoint-swagger-analysis"
-        )
+        assert service.calls[0]["metadata"]["thread_id"] == "thread-swagger-analysis"
 
 
 # ── N7 raci_generator_node ──────────────────────────────────────────────────

@@ -29,7 +29,6 @@ class ProjectState(TypedDict):
     retry_count: int
     tenant_id: str | None
     thread_id: str | None
-    checkpoint_id: str | None
     analysis_id: str | None
     human_approval_required: bool
 

@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-24T21:25:00Z",
+  "updated_at": "2026-05-24T21:45:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,39 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T076",
+      "backlog_id": "TASK-BCK-076",
+      "tipo": "backend",
+      "descripcion": "Repair API startup failure from LangGraph reserved checkpoint_id state channel after HITL seam fix.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Analysis workflow compiles without reserved checkpoint channels while preserving thread_id HITL correlation.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/graph/schema.py",
+        "apps/api/src/analysis/adapters/graph/nodes.py",
+        "apps/api/tests/analysis/adapters/graph/test_parallel_state_updates.py",
+        "apps/api/tests/unit/analysis/graph/test_thin_nodes.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-24T21:45:00Z",
+        "completado": "2026-05-24T21:45:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Removed checkpoint_id from ProjectState because LangGraph reserves that channel name; thread_id remains the workflow correlation key.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "pytest --noconftest tests/analysis/adapters/graph/test_parallel_state_updates.py::test_compiled_workflow_merges_parallel_branches_without_rewriting_identity -q -> RED failed with ValueError Channel name checkpoint_id is reserved",
+          "python -c compile_workflow(...) -> workflow_compile_ok",
+          "pytest --noconftest tests/analysis/adapters/graph/test_parallel_state_updates.py::test_workflow_compile_does_not_use_reserved_checkpoint_channel tests/unit/analysis/graph/test_thin_nodes.py::TestHumanInterruptNode::test_auto_approved_hitl_status_continues_without_langgraph_interrupt -q -> 2 passed"
+        ]
+      }
+    },
     {
       "tarea_id": "T075",
       "backlog_id": "TASK-BCK-075",
