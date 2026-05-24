@@ -222,8 +222,6 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 }
                 if state.get("thread_id"):
                     metadata["thread_id"] = state["thread_id"]
-                if state.get("checkpoint_id"):
-                    metadata["checkpoint_id"] = state["checkpoint_id"]
 
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
@@ -237,7 +235,6 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
                         "thread_id": state.get("thread_id"),
-                        "checkpoint_id": state.get("checkpoint_id"),
                     },
                     metadata=metadata,
                 )

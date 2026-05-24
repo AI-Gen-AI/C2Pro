@@ -69,6 +69,11 @@ async def test_parallel_dispatch_does_not_rewrite_shared_identity_state() -> Non
     assert await enrichment_dispatch_node(_base_state()) == {}  # type: ignore[arg-type]
 
 
+def test_workflow_compile_does_not_use_reserved_checkpoint_channel() -> None:
+    """TS-UA-ANA-GRAPH-001 - LangGraph reserved checkpoint channels must stay out of state."""
+    compile_workflow(checkpointer=None, persist_diagram=False)
+
+
 @pytest.mark.asyncio
 async def test_compiled_workflow_merges_parallel_branches_without_rewriting_identity(
     monkeypatch: pytest.MonkeyPatch,
