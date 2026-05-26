@@ -102,7 +102,7 @@ Re-exports from `analysis.adapters.graph` and `core.ai`. Contains a simplified e
 | `wbs_extractor` | N5 | Extract WBS structure |
 | `stakeholder_extractor` | N6 | Identify stakeholders |
 | `raci_generator` | N7 | Build RACI matrix |
-| `coherence_scorer` | N8 | **Coherence Score™** computation |
+| `coherence_scorer` | N8 | **Coherence Score™** computation (mid-migration to v2 per ADR-009, evidence-aware; v1 remains primary, v2 runs shadow) |
 | `budget_parser` | N9 | Parse budget line items |
 | `knowledge_graph` | N10 | Build cross-document knowledge graph |
 | `decision_intelligence` | N11 | Decision Intelligence analysis |
@@ -155,7 +155,7 @@ blackboard/    — SESSION_*.md active session notes
 
 ## Project-Specific Rules (CRITICAL)
 
-These rules in `.claude/rules/` override general defaults:
+These rules in `.claude/rules/` override general defaults. Backlog/task source of truth: `C2PRO_MASTER_BACKLOG.md` (root) and `backlogs/BCK_*.md` (per-domain, e.g. `backlogs/BCK_BACKEND.md`).
 
 1. **`CRITICAL_BACKLOG_REQUIREMENT.md`** — Every task (created, updated, or completed) MUST be reflected in `C2PRO_MASTER_BACKLOG.md`. Update `[ ] → [x]` with verification details and append to the Change Log.
 
@@ -182,3 +182,4 @@ These rules in `.claude/rules/` override general defaults:
 - `context/` and `sandbox/` are explicitly non-canonical — do not cite as sources of truth.
 - The root `package.json` is misnamed (`"name": "package.json"`); pnpm workspace is still the real entry point.
 - **Push to `main`** requires `ALLOW_PUSH_MAIN=1 git push` (Husky pre-push guard).
+- **`docs/api/openapi.yaml` is generated** — produced by `make openapi` (`apps/api/scripts/generate_openapi.py`). Do not hand-edit; regenerate after route changes.
