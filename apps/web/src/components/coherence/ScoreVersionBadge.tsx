@@ -1,7 +1,10 @@
-export type ScoreVersion =
-  | "v0_flag_based"
-  | "v1_exponential_decay"
-  | "v2_evidence_aware";
+/**
+ * Canonical score version type — Phase F (ADR-009 §F).
+ * Only "coherence-v1" and "coherence-v2" are canonical.
+ * Legacy values are accepted at the prop boundary and mapped to "(v1)" gracefully
+ * until the DB migration (20260526_0001) finishes deployment.
+ */
+export type ScoreVersion = "coherence-v1" | "coherence-v2";
 
 import Link from "next/link";
 import {
@@ -19,21 +22,14 @@ const BADGE_COPY: Record<
   ScoreVersion,
   { label: string; ariaLabel: string; className: string; tooltip: string }
 > = {
-  v0_flag_based: {
-    label: "(v0)",
-    ariaLabel: "Legacy flag-based coherence score",
-    className: "border-stone-300 bg-stone-100 text-stone-700",
-    tooltip:
-      "v0 is the historical flag-based score. It remains immutable for audits before the v1 cut-off.",
-  },
-  v1_exponential_decay: {
+  "coherence-v1": {
     label: "(v1)",
-    ariaLabel: "v1 exponential-decay coherence score",
+    ariaLabel: "v1 coherence score",
     className: "border-emerald-300 bg-emerald-50 text-emerald-800",
     tooltip:
       "v1 uses weighted finding severity, confidence, and project scope to produce a defensible coherence score.",
   },
-  v2_evidence_aware: {
+  "coherence-v2": {
     label: "(v2)",
     ariaLabel: "v2 evidence-aware coherence score",
     className: "border-sky-300 bg-sky-50 text-sky-800",
@@ -42,14 +38,17 @@ const BADGE_COPY: Record<
   },
 };
 
+/** Resolve any input (including legacy or unknown) to a canonical ScoreVersion. */
+function resolveVersion(scoreVersion: string | null | undefined): ScoreVersion {
+  if (scoreVersion === "coherence-v2") return "coherence-v2";
+  // All other values (including "coherence-v1", legacy "v0_flag_based",
+  // "v1_exponential_decay", null, undefined, unknown) resolve to v1.
+  return "coherence-v1";
+}
+
 export function ScoreVersionBadge({ scoreVersion }: ScoreVersionBadgeProps) {
-  const resolvedVersion: ScoreVersion =
-    scoreVersion === "v2_evidence_aware"
-      ? "v2_evidence_aware"
-      : scoreVersion === "v1_exponential_decay"
-        ? "v1_exponential_decay"
-        : "v0_flag_based";
-  const copy = BADGE_COPY[resolvedVersion];
+  const resolved = resolveVersion(scoreVersion);
+  const copy = BADGE_COPY[resolved];
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -59,7 +58,7 @@ export function ScoreVersionBadge({ scoreVersion }: ScoreVersionBadgeProps) {
             type="button"
             aria-label={copy.ariaLabel}
             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tracking-normal ${copy.className}`}
-            data-score-version={resolvedVersion}
+            data-score-version={resolved}
           >
             {copy.label}
           </button>

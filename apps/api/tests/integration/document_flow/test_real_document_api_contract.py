@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.documents.adapters.http.router import get_storage_service
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.adapters.storage.local_file_storage_service import (
@@ -115,7 +116,7 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
             is_gaming_detected=False,
             gaming_violations=[],
             penalty_points=0,
-            score_version="v1_exponential_decay",
+            score_version=SCORE_VERSION_V1,
             score_reason=None,
             score_missing_dimensions=["schedule", "budget"],
             calculated_at=datetime.now(UTC).replace(tzinfo=None),
@@ -157,7 +158,7 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["tenant_id"] == str(test_tenant.id)
     assert expected_score_min <= dashboard_payload["coherence_score"] <= expected_score_max
-    assert dashboard_payload["score_version"] == "v1_exponential_decay"
+    assert dashboard_payload["score_version"] == SCORE_VERSION_V1
     assert dashboard_payload["score_reason"] is None
     assert dashboard_payload["score_missing_dimensions"] == ["schedule", "budget"]
 

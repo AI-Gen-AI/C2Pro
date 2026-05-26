@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from src.coherence.domain.alert_mapping import CoherenceAlert
 from src.coherence.domain.category_weights import CoherenceCategory
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 
 
 class AlertAction(str, Enum):
@@ -58,7 +59,7 @@ class CoherenceCalculationResult(BaseModel):
     is_gaming_detected: bool
     gaming_violations: list[str]
     penalty_points: int
-    score_version: str = "v0_flag_based"
+    score_version: str = SCORE_VERSION_V1
     score_reason: str | None = None
     score_missing_dimensions: list[str] | None = None
 

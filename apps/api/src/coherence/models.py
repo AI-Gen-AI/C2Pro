@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 
 # Canonical six-value risk / alert taxonomy — see
 # src.analysis.domain.risk_categories for the authoritative enum. The
@@ -238,8 +239,8 @@ class CoherenceResult(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp when the score was calculated."
     )
-    score_version: str = Field(
-        default="v0_flag_based",
+    score_version: Literal["coherence-v1", "coherence-v2"] = Field(
+        default=SCORE_VERSION_V1,
         description="Immutable scoring algorithm version used for this result.",
     )
     score_reason: str | None = Field(
@@ -279,8 +280,8 @@ class EnrichedCoherenceResult(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp of calculation"
     )
-    score_version: str = Field(
-        default="v0_flag_based",
+    score_version: Literal["coherence-v1", "coherence-v2"] = Field(
+        default=SCORE_VERSION_V1,
         description="Immutable scoring algorithm version used for this result.",
     )
     score_reason: str | None = Field(
@@ -347,7 +348,7 @@ class DashboardSummary(BaseModel):
     alert_count: int
     document_count: int
     methodology_version: str = "3.0"
-    score_version: str | None = None
+    score_version: Literal["coherence-v1", "coherence-v2"] | None = None
     score_reason: str | None = None
     score_missing_dimensions: list[str] | None = None
     last_updated: datetime

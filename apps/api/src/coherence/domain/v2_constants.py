@@ -32,9 +32,21 @@ DEFAULT_CATEGORY_WEIGHTS: Final[dict[str, float]] = {
     cat: 1.0 / len(MIN_EVIDENCE_BY_CATEGORY) for cat in MIN_EVIDENCE_BY_CATEGORY
 }
 
+# ---------------------------------------------------------------------------
+# Canonical score_version identifiers (Phase F, ADR-009 §F).
+# All scoring surfaces MUST use these constants — no inline string literals.
+# ---------------------------------------------------------------------------
+
+SCORE_VERSION_V1: Final[str] = "coherence-v1"
+SCORE_VERSION_V2: Final[str] = "coherence-v2"
+SCORE_VERSION_VALUES: Final[tuple[str, ...]] = (SCORE_VERSION_V1, SCORE_VERSION_V2)
+
 __all__ = [
     "DEFAULT_CATEGORY_WEIGHTS",
     "MIN_ACTIVE_WEIGHT",
     "MIN_EVIDENCE_BY_CATEGORY",
+    "SCORE_VERSION_V1",
+    "SCORE_VERSION_V2",
+    "SCORE_VERSION_VALUES",
     "SEVERITY_MULTIPLIERS",
 ]

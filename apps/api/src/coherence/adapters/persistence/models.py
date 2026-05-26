@@ -79,17 +79,17 @@ class CoherenceResultORM(Base):
     )
     penalty_points: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Score-version audit trail
+    # Score-version audit trail — canonical 2-value enum (Phase F, ADR-009 §F)
     score_version: Mapped[str] = mapped_column(
         ENUM(
-            "v0_flag_based",
-            "v1_exponential_decay",
+            "coherence-v1",
+            "coherence-v2",
             name="coherence_score_version",
             create_type=False,
         ),
         nullable=False,
-        default="v0_flag_based",
-        server_default="v0_flag_based",
+        default="coherence-v1",
+        server_default="coherence-v1",
     )
     score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     score_missing_dimensions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)

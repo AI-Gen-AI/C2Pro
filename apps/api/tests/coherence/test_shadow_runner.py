@@ -17,6 +17,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CoherenceV2Payload,
     GlobalV2,
 )
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.services.v2.shadow_runner import ShadowDelta, ShadowRunner
 
 
@@ -32,7 +33,7 @@ def _v1(score: float | None = 80.0) -> dict:
         "alert_count": 0,
         "document_count": 5,
         "methodology_version": "v1",
-        "score_version": "v1_exponential_decay",
+        "score_version": SCORE_VERSION_V1,
     }
 
 
@@ -122,6 +123,9 @@ def test_delta_contains_required_fields() -> None:
         "coherence_v2_score",
         "delta_abs",
         "delta_signed",
+        # Canonical score_version labels (Phase F)
+        "score_version_v1",
+        "score_version_v2",
         "v1_status",
         "v2_status",
         "v2_active_weight",

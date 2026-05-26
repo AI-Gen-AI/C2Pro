@@ -17,6 +17,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CoherenceV2Payload,
     GlobalV2,
 )
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 
 
 @pytest.mark.unit
@@ -41,7 +42,7 @@ def test_dashboard_summary_omits_v2_when_field_is_none() -> None:
         alert_count=0,
         document_count=1,
         methodology_version="v1",
-        score_version="v1_exponential_decay",
+        score_version=SCORE_VERSION_V1,
         last_updated=datetime.now(UTC),
         categories_v2=None,
     )
@@ -87,7 +88,7 @@ def test_dashboard_summary_carries_categories_v2_payload() -> None:
         alert_count=0,
         document_count=1,
         methodology_version="v1",
-        score_version="v1_exponential_decay",
+        score_version=SCORE_VERSION_V1,
         last_updated=datetime.now(UTC),
         categories_v2=payload,
     )

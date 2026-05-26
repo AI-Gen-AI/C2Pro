@@ -22,7 +22,7 @@ import pytest
 
 from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
 from src.coherence.application.dtos.coherence_v2_dtos import CategoryStatus
-from src.coherence.domain.v2_constants import MIN_ACTIVE_WEIGHT
+from src.coherence.domain.v2_constants import MIN_ACTIVE_WEIGHT, SCORE_VERSION_V1
 
 
 def _project_id() -> object:
@@ -46,7 +46,7 @@ def _make_v1_partial(sub_scores: dict) -> dict:
         "alert_count": 0,
         "document_count": 2,
         "methodology_version": "v1",
-        "score_version": "v1_exponential_decay",
+        "score_version": SCORE_VERSION_V1,
         "score_reason": None,
         "score_missing_dimensions": [],
         "last_updated": None,
