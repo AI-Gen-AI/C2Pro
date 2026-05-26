@@ -60,7 +60,7 @@ export interface DashboardSummary {
   tenant_id: string;
   coherence_score: number | null;
   global_score: number | null;
-  sub_scores: Record<string, number>;
+  sub_scores: Record<string, number | null>;
   weights_used: Record<string, number>;
   alert_count: number;
   document_count: number;

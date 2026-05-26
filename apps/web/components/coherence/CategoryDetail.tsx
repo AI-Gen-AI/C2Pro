@@ -15,7 +15,7 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
 
 interface CategoryDetailProps {
   category: string;
-  score: number;
+  score: number | null;
   weight: number;
   alertCount: number;
   trend: number[];
@@ -43,7 +43,7 @@ export function CategoryDetail({
         <div>
           <h3 className="text-base font-semibold">{meta.label} Analysis</h3>
           <span className="text-xs text-muted-foreground">
-            Score: {score}/100 &middot; Weight: {Math.round(weight * 100)}%
+            Score: {score === null ? '— (pending evidence)' : `${score}/100`} &middot; Weight: {Math.round(weight * 100)}%
             {" \u00b7 "}{alertCount} alert{alertCount !== 1 ? 's' : ''}
           </span>
         </div>
