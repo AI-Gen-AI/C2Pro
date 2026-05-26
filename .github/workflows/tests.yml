@@ -105,6 +105,21 @@ jobs:
           pip install -r requirements.txt
           pip install python-magic
 
+      - name: Coherence cache-key SoT guard (ADR-009 §G)
+        working-directory: .
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rEn 'f"coherence:|f'\''coherence:' apps/api/src/ \
+            --include='*.py' \
+            | grep -v 'src/coherence/cache_keys.py' \
+            | grep -v 'src/coherence/cache_invalidation.py' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::ADR-009 §G violation — ad-hoc coherence cache key literal detected. Use cache_keys.key() instead:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "✓ All coherence cache keys go through cache_keys.key()."
+
       - name: Run unit tests
         working-directory: apps/api
         run: |
