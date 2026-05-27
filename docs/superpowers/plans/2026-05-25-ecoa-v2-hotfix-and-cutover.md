@@ -311,6 +311,97 @@ Auto-block via deploy-pipeline hook reading these metrics; manual sign-off at GA
 
 ---
 
+---
+
+## Phase D — Operational Canary Playbook
+
+### D.5 Per-tenant flag management
+
+**SQL (direct DB — emergency use only):**
+```sql
+-- Enable v2 for a specific tenant
+UPDATE tenants
+SET settings = jsonb_set(
+    COALESCE(settings, '{}'),
+    '{feature_flags,coherence_v2_enabled}',
+    'true'
+)
+WHERE id = '<UUID>';
+
+-- Disable v2 for a specific tenant (rollback)
+UPDATE tenants
+SET settings = jsonb_set(
+    COALESCE(settings, '{}'),
+    '{feature_flags,coherence_v2_enabled}',
+    'false'
+)
+WHERE id = '<UUID>';
+
+-- Verify current flag state for all tenants
+SELECT id, settings->'feature_flags'->'coherence_v2_enabled' AS v2_flag
+FROM tenants
+ORDER BY id;
+```
+
+**API (preferred — triggers cache invalidation automatically):**
+If a settings endpoint exists for the tenant admin surface, prefer that path
+because `TenantFlagsService.set_flag` automatically invalidates the coherence
+cache via `cache_invalidation.on_flag_flip` after commit.
+
+### D.6 Canary rollout stages
+
+Flip the `coherence_v2_enabled` flag one cohort at a time.  Allow ≥24 hours
+between stages to collect shadow delta data.
+
+| Day | Action | Scope |
+|-----|--------|-------|
+| D+0 | Enable v2 for internal / test tenants | ~5 tenants |
+| D+1 | Review `coherence.shadow.delta` + `coherence.v1_v2_score_delta` logs; MAE ≤ 15 required to proceed | — |
+| D+2 | Enable v2 for 10% of production tenants | 10% |
+| D+3 | Review MAE; if ≤ 15, expand to 50% | 50% |
+| D+5 | Full rollout — enable for all tenants | 100% |
+| D+7 | Post-rollout review; if MAE ≤ 5 over 7 days → mark Shadow MAE gate green | — |
+
+### D.7 Shadow MAE threshold
+
+The shadow MAE guard requires **MAE ≤ 15** before expanding past 10% of tenants,
+and **MAE ≤ 5** before declaring GA.
+
+Assess from structlog events:
+
+```
+# coherence.shadow.delta   — emitted by ShadowRunner.emit() (stdlib logger)
+# coherence.v1_v2_score_delta — emitted by ShadowRunner.emit() (structlog, Phase D)
+```
+
+Query your log aggregator (e.g. Datadog / CloudWatch Logs Insights):
+
+```
+fields delta_abs
+| filter event = "coherence.v1_v2_score_delta"
+| stats avg(delta_abs) as mae by bin(1h)
+| sort by @timestamp desc
+```
+
+A MAE value > 15 means v2 calibration is off — stop expanding, investigate
+`missing_categories` and `conflicting_categories` distributions in the events.
+
+### D.8 Rollback procedure
+
+1. Flip `coherence_v2_enabled` back to `false` for affected tenants (SQL above or API).
+2. `TenantFlagsService.set_flag` automatically calls `cache_invalidation.on_flag_flip`
+   which UNLINKs all `coherence:*:{tenant_id}:*` keys — no manual cache flush needed.
+3. Verify rollback in logs: `coherence.cache_invalidated trigger=flag_flip keys_unlinked=N`.
+4. Monitor `coherence.v1_v2_score_delta` — events should cease within 1 minute.
+5. If cache invalidation hook failed (log: `coherence.flag_changed.cache_invalidation_failed`),
+   run the Phase G one-shot purge script manually:
+   ```bash
+   python apps/api/scripts/purge_coherence_cache.py --dry-run  # verify count
+   python apps/api/scripts/purge_coherence_cache.py             # execute
+   ```
+
+---
+
 ## Agent Dispatch Matrix
 
 | Step | Agent | Model | Phase(s) |

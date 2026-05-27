@@ -5,6 +5,14 @@ Phase 1+2 implementation: structlog-only emission, NO database writes.
 The MAE calibration guard lives in
 `tests/coherence/test_shadow_mae_guardrail.py` and gates rollout.
 
+Phase D addition: ``emit()`` also fires a structlog ``coherence.v1_v2_score_delta``
+event alongside the existing stdlib ``coherence.shadow.delta``.  Decision
+rationale: keep the stdlib logger for backward-compat consumers that subscribe to
+the ``coherence.shadow`` logger hierarchy; add the structlog event so the
+observability pipeline (which reads structlog JSON) receives the delta too.
+Tags are UUID-only (no PII): ``tenant_id``, ``delta_abs``, ``delta_signed``,
+``v1_status``, ``v2_status``.
+
 Refers to Suite ID: TS-UA-COH-V2-SHADOW-001.
 """
 from __future__ import annotations
@@ -15,6 +23,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+import structlog
+
 from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
     CoherenceV2Payload,
@@ -22,6 +32,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 
 logger = logging.getLogger("coherence.shadow")
+structlog_logger = structlog.get_logger()
 
 
 def compute_mae(v1: list[float], v2: list[float]) -> float:
@@ -138,6 +149,17 @@ class ShadowRunner:
         }
         payload = delta.to_log_event(flag_state)
         logger.info("coherence.shadow.delta", extra={"shadow_event": payload})
+
+        # Phase D: emit a structlog event for the observability pipeline.
+        # Tags are UUID-only (no PII).
+        structlog_logger.info(
+            "coherence.v1_v2_score_delta",
+            tenant_id=str(delta.tenant_id),
+            delta_abs=delta.delta_abs,
+            delta_signed=delta.delta_signed,
+            v1_status=delta.v1_status,
+            v2_status=delta.v2_status,
+        )
 
 
 __all__ = ["ShadowDelta", "ShadowRunner", "compute_mae"]

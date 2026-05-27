@@ -54,8 +54,21 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
             project_tenant = await self.get_project_tenant_id(result.project_id)
             if project_tenant is None or project_tenant != self._tenant_id:
                 raise PermissionError("Cannot save coherence result for project outside tenant")
+        # Resolve tenant_id for the NOT NULL column. Prefer the repository's
+        # constructor-injected tenant; fall back to a project lookup so callers
+        # without explicit tenant scope still write a consistent row.
+        tenant_id_for_row: UUID | None = self._tenant_id
+        if tenant_id_for_row is None:
+            tenant_id_for_row = await self.get_project_tenant_id(result.project_id)
+            if tenant_id_for_row is None:
+                raise ValueError(
+                    f"Cannot persist coherence result: project {result.project_id} "
+                    "has no resolvable tenant_id."
+                )
+
         orm_result = CoherenceResultORM(
             project_id=result.project_id,
+            tenant_id=tenant_id_for_row,
             global_score=result.global_score,
             category_scores=self._serialize_category_scores(result.category_scores),
             category_details=self._serialize_category_details(result.category_details),
@@ -72,6 +85,29 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
         self._db.add(orm_result)
         await self._db.commit()
         await self._db.refresh(orm_result)
+
+        # ADR-009 §G / Phase D: invalidate cached coherence keys for this
+        # project so the next dashboard read recomputes. Fire-and-forget;
+        # never propagate cache failures to the caller (the DB write is
+        # already committed and authoritative).
+        if self._tenant_id is not None:
+            try:
+                from src.coherence import cache_invalidation as _cache_invalidation
+                from src.core.cache import get_redis_client as _get_redis_client
+                redis = _get_redis_client()
+                if redis is not None:
+                    await _cache_invalidation.on_result_persisted(
+                        redis,
+                        tenant_id=self._tenant_id,
+                        project_id=result.project_id,
+                    )
+            except Exception:  # noqa: BLE001 — cache is best-effort
+                import structlog as _structlog
+                _structlog.get_logger().warning(
+                    "coherence.on_result_persisted.cache_invalidation_failed",
+                    tenant_id=str(self._tenant_id),
+                    project_id=str(result.project_id),
+                )
 
         return orm_result.id
 
