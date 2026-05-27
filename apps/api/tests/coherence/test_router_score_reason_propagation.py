@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.models import DashboardSummary, EnrichedCoherenceResult
 
 
@@ -32,7 +31,7 @@ def test_enriched_result_carries_score_reason() -> None:
         overall_score=None,
         score_reason="insufficient_active_weight",
         score_missing_dimensions=["BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"],
-        score_version=SCORE_VERSION_V1,
+        score_version="v0_flag_based",
     )
 
     serialised = result.model_dump()
@@ -76,7 +75,7 @@ def test_dashboard_summary_propagates_null_score_and_reason() -> None:
         weights_used={c: 1 / 6 for c in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")},
         alert_count=0,
         document_count=2,
-        score_version=SCORE_VERSION_V1,
+        score_version="v0_flag_based",
         score_reason="insufficient_active_weight",
         score_missing_dimensions=["BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"],
         last_updated=datetime.now(UTC),

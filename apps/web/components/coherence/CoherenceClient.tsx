@@ -46,8 +46,14 @@ export function CoherenceClient({ summary }: CoherenceClientProps) {
     target: 80,
   }));
 
+  // ADR-009 §18: nulls last; never NaN-coerce via `a - b` on partial coverage.
   const catEntries = Object.entries(summary.sub_scores).sort(
-    ([, a], [, b]) => a - b,
+    ([, a], [, b]) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return a - b;
+    },
   );
 
   return (

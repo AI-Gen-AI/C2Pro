@@ -26,7 +26,13 @@ const CATEGORY_CONFIG: Record<
   TIME: { icon: Clock, color: '#FA4D56', label: 'Time' },
 };
 
-function getSeverity(score: number) {
+function getSeverity(score: number | null) {
+  // ADR-009 \u00A718: null evidence is NOT incoherence. Render neutral "Pending"
+  // chip with a non-destructive variant. Red is reserved for validated
+  // incoherence only.
+  if (score === null) {
+    return { label: 'Pending', variant: 'outline' as const, shape: '\u25CB' };
+  }
   if (score >= 80) return { label: 'Good', variant: 'success' as const, shape: '\u25CF' };
   if (score >= 60) return { label: 'Warning', variant: 'warning' as const, shape: '\u25C6' };
   return { label: 'Critical', variant: 'destructive' as const, shape: '\u25B2' };
@@ -34,7 +40,7 @@ function getSeverity(score: number) {
 
 interface ScoreCardProps {
   category: string;
-  score: number;
+  score: number | null;
   weight: number;
   alertCount: number;
   selected?: boolean;
@@ -52,6 +58,7 @@ export function ScoreCard({
   const config = CATEGORY_CONFIG[category] ?? CATEGORY_CONFIG.SCOPE;
   const severity = getSeverity(score);
   const animated = useCountUp(score);
+  const displayScore = animated === null ? '\u2014' : animated;
   const Icon = config.icon;
 
   return (
@@ -69,7 +76,7 @@ export function ScoreCard({
       onClick={onClick}
       tabIndex={0}
       role="button"
-      aria-label={`${config.label} score ${score}/100, ${alertCount} alerts, ${severity.label}`}
+      aria-label={`${config.label} score ${score === null ? 'pending' : `${score}/100`}, ${alertCount} alerts, ${severity.label}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -93,9 +100,11 @@ export function ScoreCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1">
             <span className="font-mono text-[22px] font-bold leading-none tabular-nums">
-              {animated}
+              {displayScore}
             </span>
-            <span className="text-[11px] text-muted-foreground">/100</span>
+            <span className="text-[11px] text-muted-foreground">
+              {score === null ? 'pending' : '/100'}
+            </span>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <span>{config.label}</span>

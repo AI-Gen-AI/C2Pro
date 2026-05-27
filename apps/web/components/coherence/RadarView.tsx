@@ -10,15 +10,20 @@ import {
 } from 'recharts';
 
 interface RadarViewProps {
-  data: { category: string; score: number; target: number }[];
+  data: { category: string; score: number | null; target: number }[];
 }
 
 export function RadarView({ data }: RadarViewProps) {
+  // ADR-009 §18: skip null categories from the radar. They are surfaced
+  // separately as "Pending evidence" rather than rendered as zero axes.
+  const scored = data.filter(
+    (d): d is { category: string; score: number; target: number } => d.score !== null,
+  );
   return (
     <div>
       <h3 className="mb-3 text-sm font-semibold">Score vs Target (80)</h3>
       <ResponsiveContainer width="100%" height={240}>
-        <RadarChart data={data}>
+        <RadarChart data={scored}>
           <PolarGrid stroke="hsl(240, 6%, 90%)" />
           <PolarAngleAxis
             dataKey="category"
