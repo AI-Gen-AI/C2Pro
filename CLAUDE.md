@@ -102,7 +102,7 @@ Re-exports from `analysis.adapters.graph` and `core.ai`. Contains a simplified e
 | `wbs_extractor` | N5 | Extract WBS structure |
 | `stakeholder_extractor` | N6 | Identify stakeholders |
 | `raci_generator` | N7 | Build RACI matrix |
-| `coherence_scorer` | N8 | **Coherence Score™** computation. v1 enforces ADR-009 §14 active-weight guard (returns `None` + `score_reason="insufficient_active_weight"` when `active_weight < 0.35`); the deprecated `mean × coverage_ratio` collapse is gone. v2 (`services/v2/aggregator_v2.py`) runs shadow; cutover behind per-tenant `Tenant.settings.feature_flags.coherence_v2_enabled` (Phase D). |
+| `coherence_scorer` | N8 | **Coherence Score™** computation (mid-migration to v2 per ADR-009, evidence-aware; v1 remains primary, v2 runs shadow) |
 | `budget_parser` | N9 | Parse budget line items |
 | `knowledge_graph` | N10 | Build cross-document knowledge graph |
 | `decision_intelligence` | N11 | Decision Intelligence analysis |

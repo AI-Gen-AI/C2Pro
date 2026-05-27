@@ -144,8 +144,16 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
     target: 80,
   })), [data.sub_scores]);
 
+  // ADR-009 §18: nulls sort last so "Pending evidence" cards appear after
+  // scored categories. Never use `a - b` directly — NaN propagates and breaks
+  // the sort on partial-coverage payloads.
   const catEntries = useMemo(() => Object.entries(data.sub_scores).sort(
-    ([, a], [, b]) => a - b,
+    ([, a], [, b]) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return a - b;
+    },
   ), [data.sub_scores]);
 
   const activeLayout = useMemo(() => 
@@ -177,7 +185,8 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
     const rowMarkup = dashboardRows
       .map(
         (row) =>
-          `<tr><td>${escapeXml(row.category)}</td><td>${row.score}</td><td>${Math.round(
+          // ADR-009 §18: null score renders as "—", never as 0 or empty.
+          `<tr><td>${escapeXml(row.category)}</td><td>${row.score === null ? "—" : row.score}</td><td>${Math.round(
             row.weight * 100,
           )}%</td></tr>`,
       )
@@ -236,7 +245,11 @@ export function DashboardClient({ data, projectName }: DashboardClientProps) {
     const rowsXml = dashboardRows
       .map(
         (row) =>
-          `<Row><Cell><Data ss:Type="String">${escapeXml(row.category)}</Data></Cell><Cell><Data ss:Type="Number">${row.score}</Data></Cell><Cell><Data ss:Type="Number">${row.weight}</Data></Cell></Row>`,
+          // ADR-009 §18: emit "—" as String when score is null; XLS reader
+          // would otherwise coerce blank/null to 0.
+          row.score === null
+            ? `<Row><Cell><Data ss:Type="String">${escapeXml(row.category)}</Data></Cell><Cell><Data ss:Type="String">—</Data></Cell><Cell><Data ss:Type="Number">${row.weight}</Data></Cell></Row>`
+            : `<Row><Cell><Data ss:Type="String">${escapeXml(row.category)}</Data></Cell><Cell><Data ss:Type="Number">${row.score}</Data></Cell><Cell><Data ss:Type="Number">${row.weight}</Data></Cell></Row>`,
       )
       .join("");
     const workbook = `<?xml version="1.0"?>
