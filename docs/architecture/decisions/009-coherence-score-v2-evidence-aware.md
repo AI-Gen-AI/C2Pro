@@ -1,11 +1,18 @@
 # ADR-009: Coherence Score v2 — Evidence-Aware, Explainable, Bottom-Up
 
-**Status:** Accepted (v2 — locked)
-**Date:** 2026-05-25 (supersedes 2026-05-24 draft)
+**Status:** Accepted (v2 — locked) · Phase A+B+C shipped (v1 hotfix + frontend null-safe)
+**Date:** 2026-05-25 (supersedes 2026-05-24 draft); revised 2026-05-26
 **Deciders:** Jesús Camacho (VP Engineering / Strategic Procurement Director)
 **Sprint context:** S2 (Coherence Engine, 65% en curso)
 **Supersedes:** Coherence Score v1 methodology (scoring_methodology_v1.md, sprint P2-01) AND the 2026-05-24 draft of this ADR which used the deprecated `ConfidenceIndex` terminology.
 **Related:** ADR-007 (Clauses as separate entity), CTO Gate 4 (Legal Traceability), CTO Gate 5 (Coherence Score Formal)
+
+## Revision history
+
+- **2026-05-26 — Phase A+B+C landed.** v1 `_calculate_detailed_with_coverage` no longer applies the forbidden `mean × coverage_ratio` collapse (§1 P1). When `active_weight < MIN_ACTIVE_WEIGHT (0.35)` the engine returns `score=None`, `reason="insufficient_active_weight"` (§14). The v1→v2 shadow adapter no longer echoes v1's collapsed number for partial-coverage inputs. Frontend renders `null` as ADR-009 §18 "Pending evidence" neutral state (no `?? 0`, no red on partial categories). `DashboardSummary.{global_score, coherence_score, sub_scores}` widened to `float | None`. CI guard added to `frontend-ci.yml` banning `?? 0` / `|| 0` on coherence score paths. Tracking: `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` (`TASK-COH-V2-HOTFIX-001`, `-ADAPTER-002`, `-FRONTEND-003`). Phase D (v2 authoritative behind per-tenant flag) and Phase F (`score_version` canonicalization) remain pending.
+- **2026-05-24** — Phase 1 (DTOs, services, state machine) + Phase 2 (shadow mode) shipped via PR #146 / merge `b6eac7d3`. `coherence_v2_enabled=False`, `coherence_v2_shadow_mode=True`.
+- **2026-05-25** — ADR amended: `ConfidenceIndex` → `Technical Reliability Index (TRI)`; nullable `coherence_score`; `active_weight` global; status enum locked.
+
 
 > **2026-05-25 amendment.** Sections §2.5, §2.6, §5, §6 and §11 are updated to:
 > 1. Rename `ConfidenceIndex` → `Technical Reliability Index (TRI)`. Per-category field is `technical_reliability`; global field is `technical_reliability_index`.
