@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  axios: 1.15.2
+  axios: 1.15.0
   ajv: 8.18.0
   eslint>ajv: 6.12.6
   '@eslint/eslintrc>ajv': 6.12.6
@@ -161,8 +161,8 @@ importers:
         specifier: ^5.87.1
         version: 5.90.20(react@19.1.5)
       axios:
-        specifier: 1.15.2
-        version: 1.15.2
+        specifier: 1.15.0
+        version: 1.15.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -215,6 +215,9 @@ importers:
         specifier: ^5.0.11
         version: 5.0.11(@types/react@19.2.13)(immer@11.1.3)(react@19.1.5)(use-sync-external-store@1.6.0(react@19.1.5))
     devDependencies:
+      '@clerk/testing':
+        specifier: ^2.0.29
+        version: 2.0.33(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
       '@playwright/test':
         specifier: ^1.51.1
         version: 1.58.2
@@ -267,7 +270,7 @@ importers:
         specifier: ^8.5.3
         version: 8.5.3(prettier@3.8.1)(typescript@5.3.3)
       postcss:
-        specifier: ^8.5.10
+        specifier: ^8.5.11
         version: 8.5.15
       tailwindcss:
         specifier: ^4.1.18
@@ -405,6 +408,10 @@ packages:
     resolution: {integrity: sha512-lWzQibWvbfP3M6Dsv651KupVfbhIIKY7KGghMPlJuFrUHjaZ7464DfLq33mtrShBksY1v1xGEkdfxqwdQwWg0A==}
     engines: {node: '>=20.9.0'}
 
+  '@clerk/backend@3.4.13':
+    resolution: {integrity: sha512-3BABnKE1YZpQqJ/S8QD5FpzE7jq+mgaMrO7rLiWTI8Bfs/xk11XYSp1lMEf3BTo/rzEtaUsXaVDGvccYogKapg==}
+    engines: {node: '>=20.9.0'}
+
   '@clerk/nextjs@7.4.0':
     resolution: {integrity: sha512-xTHg3crkiDeCEkFKeJiAtx6cAk5FoxbhrUKCunv3rlv3iO1m8o5YOKMPYP+yHDdqQ686RjandK2B2UeQwMzq3Q==}
     engines: {node: '>=20.9.0'}
@@ -430,6 +437,30 @@ packages:
       react:
         optional: true
       react-dom:
+        optional: true
+
+  '@clerk/shared@4.13.1':
+    resolution: {integrity: sha512-DyUtvNHgMmqjtTM0q285jKaAXUmCDSyItiGQTt1dNL0M6DZ3bxqsJz7wXPjh9zezmU4BAnLpwhj5gsM3OuNPzA==}
+    engines: {node: '>=20.9.0'}
+    peerDependencies:
+      react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
+      react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@clerk/testing@2.0.33':
+    resolution: {integrity: sha512-a1FXKIkIqKlJbYBwuDmtZOUjUPdh1oJTYzYTKYhDZpiN/CxcHj2fTAVKWE6Oh3yVfDWQRZnOI48KD0uEZHjpxA==}
+    engines: {node: '>=20.9.0'}
+    peerDependencies:
+      '@playwright/test': ^1
+      cypress: ^13 || ^14
+    peerDependenciesMeta:
+      '@playwright/test':
+        optional: true
+      cypress:
         optional: true
 
   '@commander-js/extra-typings@14.0.0':
@@ -2661,8 +2692,8 @@ packages:
     resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
     engines: {node: '>=4'}
 
-  axios@1.15.2:
-    resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
+  axios@1.15.0:
+    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
 
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
@@ -2939,6 +2970,10 @@ packages:
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
 
+  dotenv@17.2.2:
+    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
+    engines: {node: '>=12'}
+
   dotenv@17.2.4:
     resolution: {integrity: sha512-mudtfb4zRB4bVvdj0xRo+e6duH1csJRM8IukBqfTRvHotn9+LBXB8ynAidP9zHqoRC/fsllXgk4kCKlR21fIhw==}
     engines: {node: '>=12'}
@@ -2990,10 +3025,6 @@ packages:
 
   es-module-lexer@2.0.0:
     resolution: {integrity: sha512-5POEcUuZybH7IdmGsD8wlf0AI55wMecM9rVBTI/qEAy2c1kTOm3DjFYjrBdI2K3BaJjJYfYFeRtM0t9ssnRuxw==}
-
-  es-object-atoms@1.1.1:
-    resolution: {integrity: sha512-FGgH2h8zKNim9ljj7dankFPcICIK9Cp5bm+c2gQSYePhpaG5+esrLODihIorn+Pe6FGJzWhXQotPv73jTaldXA==}
-    engines: {node: '>= 0.4'}
 
   es-object-atoms@1.1.2:
     resolution: {integrity: sha512-HWcBoN6NileqtSydK2FqHbS/LoDd2pqrnQHLyJzBj4kOp/ky2MWMN694xOfkK8/SnUsW2DH7EfyVlydKCsm1Zw==}
@@ -3411,10 +3442,6 @@ packages:
     resolution: {integrity: sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==}
     engines: {node: '>= 0.4'}
 
-  hasown@2.0.2:
-    resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
-    engines: {node: '>= 0.4'}
-
   hasown@2.0.3:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
@@ -3644,6 +3671,10 @@ packages:
   js-cookie@3.0.5:
     resolution: {integrity: sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw==}
     engines: {node: '>=14'}
+
+  js-cookie@3.0.7:
+    resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
+    engines: {node: '>=20'}
 
   js-tokens@10.0.0:
     resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
@@ -5182,6 +5213,15 @@ snapshots:
       - react
       - react-dom
 
+  '@clerk/backend@3.4.13(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+    dependencies:
+      '@clerk/shared': 4.13.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      standardwebhooks: 1.0.0
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
   '@clerk/nextjs@7.4.0(next@16.2.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5))(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
     dependencies:
       '@clerk/backend': 3.4.12(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
@@ -5210,6 +5250,28 @@ snapshots:
     optionalDependencies:
       react: 19.1.5
       react-dom: 19.1.5(react@19.1.5)
+
+  '@clerk/shared@4.13.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+    dependencies:
+      '@tanstack/query-core': 5.100.11
+      dequal: 2.0.3
+      glob-to-regexp: 0.4.1
+      js-cookie: 3.0.7
+      std-env: 3.10.0
+    optionalDependencies:
+      react: 19.1.5
+      react-dom: 19.1.5(react@19.1.5)
+
+  '@clerk/testing@2.0.33(@playwright/test@1.58.2)(react-dom@19.1.5(react@19.1.5))(react@19.1.5)':
+    dependencies:
+      '@clerk/backend': 3.4.13(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      '@clerk/shared': 4.13.1(react-dom@19.1.5(react@19.1.5))(react@19.1.5)
+      dotenv: 17.2.2
+    optionalDependencies:
+      '@playwright/test': 1.58.2
+    transitivePeerDependencies:
+      - react
+      - react-dom
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:
@@ -7224,7 +7286,7 @@ snapshots:
       call-bound: 1.0.4
       define-properties: 1.2.1
       es-abstract: 1.24.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       get-intrinsic: 1.3.0
       is-string: 1.1.1
       math-intrinsics: 1.1.0
@@ -7235,7 +7297,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.24.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       es-shim-unscopables: 1.1.0
 
   array.prototype.findlastindex@1.2.6:
@@ -7245,7 +7307,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.24.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       es-shim-unscopables: 1.1.0
 
   array.prototype.flat@1.3.3:
@@ -7300,7 +7362,7 @@ snapshots:
 
   axe-core@4.11.1: {}
 
-  axios@1.15.2:
+  axios@1.15.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
@@ -7559,6 +7621,8 @@ snapshots:
       '@babel/runtime': 7.28.6
       csstype: 3.2.3
 
+  dotenv@17.2.2: {}
+
   dotenv@17.2.4: {}
 
   dunder-proto@1.0.1:
@@ -7599,7 +7663,7 @@ snapshots:
       data-view-byte-offset: 1.0.1
       es-define-property: 1.0.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       es-set-tostringtag: 2.1.0
       es-to-primitive: 1.3.0
       function.prototype.name: 1.1.8
@@ -7668,10 +7732,6 @@ snapshots:
       safe-array-concat: 1.1.3
 
   es-module-lexer@2.0.0: {}
-
-  es-object-atoms@1.1.1:
-    dependencies:
-      es-errors: 1.3.0
 
   es-object-atoms@1.1.2:
     dependencies:
@@ -7824,7 +7884,7 @@ snapshots:
       eslint: 9.35.0(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
       eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.55.0(eslint@9.35.0(jiti@2.6.1))(typescript@5.3.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.35.0(jiti@2.6.1))
-      hasown: 2.0.2
+      hasown: 2.0.3
       is-core-module: 2.16.1
       is-glob: 4.0.3
       minimatch: 10.2.4
@@ -7852,7 +7912,7 @@ snapshots:
       damerau-levenshtein: 1.0.8
       emoji-regex: 9.2.2
       eslint: 9.35.0(jiti@2.6.1)
-      hasown: 2.0.2
+      hasown: 2.0.3
       jsx-ast-utils: 3.3.5
       language-tags: 1.0.9
       minimatch: 10.2.4
@@ -7881,7 +7941,7 @@ snapshots:
       es-iterator-helpers: 1.2.2
       eslint: 9.35.0(jiti@2.6.1)
       estraverse: 5.3.0
-      hasown: 2.0.2
+      hasown: 2.0.3
       jsx-ast-utils: 3.3.5
       minimatch: 10.2.4
       object.entries: 1.1.9
@@ -8262,10 +8322,6 @@ snapshots:
     dependencies:
       has-symbols: 1.1.0
 
-  hasown@2.0.2:
-    dependencies:
-      function-bind: 1.1.2
-
   hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
@@ -8355,7 +8411,7 @@ snapshots:
 
   is-core-module@2.16.1:
     dependencies:
-      hasown: 2.0.2
+      hasown: 2.0.3
 
   is-data-view@1.0.2:
     dependencies:
@@ -8470,7 +8526,7 @@ snapshots:
   iterator.prototype@1.1.5:
     dependencies:
       define-data-property: 1.1.4
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       get-intrinsic: 1.3.0
       get-proto: 1.0.1
       has-symbols: 1.1.0
@@ -8479,6 +8535,8 @@ snapshots:
   jiti@2.6.1: {}
 
   js-cookie@3.0.5: {}
+
+  js-cookie@3.0.7: {}
 
   js-tokens@10.0.0: {}
 
@@ -8862,7 +8920,7 @@ snapshots:
       call-bind: 1.0.8
       call-bound: 1.0.4
       define-properties: 1.2.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       has-symbols: 1.1.0
       object-keys: 1.1.1
 
@@ -8871,14 +8929,14 @@ snapshots:
       call-bind: 1.0.8
       call-bound: 1.0.4
       define-properties: 1.2.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   object.fromentries@2.0.8:
     dependencies:
       call-bind: 1.0.8
       define-properties: 1.2.1
       es-abstract: 1.24.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   object.groupby@1.0.3:
     dependencies:
@@ -8891,7 +8949,7 @@ snapshots:
       call-bind: 1.0.8
       call-bound: 1.0.4
       define-properties: 1.2.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   obug@2.1.1: {}
 
@@ -9216,7 +9274,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.24.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       get-intrinsic: 1.3.0
       get-proto: 1.0.1
       which-builtin-type: 1.2.1
@@ -9348,7 +9406,7 @@ snapshots:
     dependencies:
       dunder-proto: 1.0.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   sharp@0.34.5:
     dependencies:
@@ -9474,7 +9532,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.24.1
       es-errors: 1.3.0
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       get-intrinsic: 1.3.0
       gopd: 1.2.0
       has-symbols: 1.1.0
@@ -9495,7 +9553,7 @@ snapshots:
       define-data-property: 1.1.4
       define-properties: 1.2.1
       es-abstract: 1.24.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
       has-property-descriptors: 1.0.2
 
   string.prototype.trimend@1.0.9:
@@ -9503,13 +9561,13 @@ snapshots:
       call-bind: 1.0.8
       call-bound: 1.0.4
       define-properties: 1.2.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   string.prototype.trimstart@1.0.8:
     dependencies:
       call-bind: 1.0.8
       define-properties: 1.2.1
-      es-object-atoms: 1.1.1
+      es-object-atoms: 1.1.2
 
   strip-ansi@6.0.1:
     dependencies:

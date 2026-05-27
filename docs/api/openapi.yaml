@@ -4752,9 +4752,12 @@ components:
           description: Timestamp when the score was calculated.
         score_version:
           type: string
+          enum:
+          - coherence-v1
+          - coherence-v2
           title: Score Version
           description: Immutable scoring algorithm version used for this result.
-          default: v0_flag_based
+          default: coherence-v1
         score_reason:
           anyOf:
           - type: string
@@ -5115,6 +5118,9 @@ components:
         score_version:
           anyOf:
           - type: string
+            enum:
+            - coherence-v1
+            - coherence-v2
           - type: 'null'
           title: Score Version
         score_reason:
@@ -5660,9 +5666,12 @@ components:
           description: Timestamp of calculation
         score_version:
           type: string
+          enum:
+          - coherence-v1
+          - coherence-v2
           title: Score Version
           description: Immutable scoring algorithm version used for this result.
-          default: v0_flag_based
+          default: coherence-v1
         score_reason:
           anyOf:
           - type: string
