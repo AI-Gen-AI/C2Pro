@@ -340,9 +340,9 @@ class DashboardSummary(BaseModel):
     """
     project_id: str
     tenant_id: str
-    global_score: int
-    coherence_score: int
-    sub_scores: dict[str, int | None]
+    global_score: float | None
+    coherence_score: float | None
+    sub_scores: dict[str, float | None]
     weights_used: dict[str, float]
     alert_count: int
     document_count: int

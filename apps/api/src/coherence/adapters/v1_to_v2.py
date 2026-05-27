@@ -62,34 +62,81 @@ def adapt_v1_dashboard(
             categories=categories,
         )
 
-    categories = [
-        CategoryV2(
-            category=cat,
-            status=CategoryStatus.SCORED,
-            coherence_score=float(score),
-            evidence_coverage=1.0,
-            technical_reliability=1.0,
-            evidence_freshness=1.0,
-            score_explanation=ScoreExplanation(
-                positive_factors=["adapted_from_v1"],
-                score_path=[{"step": "adapter", "source": "v1_dashboard"}],
-            ),
+    # Phase B fix (ADR-009 §14): iterate over canonical DEFAULT_CATEGORY_WEIGHTS,
+    # classify null sub_scores as INSUFFICIENT_EVIDENCE, compute real active_weight.
+    # Do NOT echo v1["coherence_score"] — it may carry the buggy mean×coverage_ratio value.
+    categories = []
+    for cat in DEFAULT_CATEGORY_WEIGHTS:
+        score = sub_scores.get(cat)
+        if score is None:
+            categories.append(
+                CategoryV2(
+                    category=cat,
+                    status=CategoryStatus.INSUFFICIENT_EVIDENCE,
+                    coherence_score=None,
+                    evidence_coverage=0.0,
+                    technical_reliability=0.0,
+                    evidence_freshness=0.0,
+                )
+            )
+        else:
+            categories.append(
+                CategoryV2(
+                    category=cat,
+                    status=CategoryStatus.SCORED,
+                    coherence_score=float(score),
+                    evidence_coverage=1.0,
+                    technical_reliability=1.0,
+                    evidence_freshness=1.0,
+                    score_explanation=ScoreExplanation(
+                        positive_factors=["adapted_from_v1"],
+                        score_path=[{"step": "adapter", "source": "v1_dashboard"}],
+                    ),
+                )
+            )
+
+    # Compute real active_weight from DEFAULT_CATEGORY_WEIGHTS (single SoT)
+    total_weight = sum(DEFAULT_CATEGORY_WEIGHTS.values())
+    scored_cats = [cat for cat in DEFAULT_CATEGORY_WEIGHTS if sub_scores.get(cat) is not None]
+    active_weight = sum(DEFAULT_CATEGORY_WEIGHTS[c] for c in scored_cats) / total_weight
+
+    # §14 guard
+    if active_weight < MIN_ACTIVE_WEIGHT:
+        return CoherenceV2Payload(
+            project_id=project_id,
+            generated_at=generated_at,
+            **{
+                "global": GlobalV2(
+                    coherence_score=None,
+                    completeness_score=0.0,
+                    technical_reliability_index=0.0,
+                    status="insufficient_active_weight",
+                    score_reason="insufficient_active_weight",
+                    active_weight=round(active_weight, 4),
+                )
+            },
+            categories=categories,
         )
-        for cat, score in sub_scores.items()
-    ]
-    active_weight = 1.0  # adapted v1 categories are all considered active.
-    status = "scored" if active_weight >= MIN_ACTIVE_WEIGHT else "insufficient_active_weight"
+
+    # Weighted mean over scored categories only (no coverage_ratio multiplier)
+    scored_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS[c] for c in scored_cats)
+    computed_score = round(
+        sum(DEFAULT_CATEGORY_WEIGHTS[c] * sub_scores[c] for c in scored_cats)
+        / scored_weight_sum,
+        2,
+    )
+    status = "scored" if len(scored_cats) == len(DEFAULT_CATEGORY_WEIGHTS) else "partial"
     return CoherenceV2Payload(
         project_id=project_id,
         generated_at=generated_at,
         **{
             "global": GlobalV2(
-                coherence_score=float(coherence_score),
+                coherence_score=computed_score,
                 completeness_score=1.0,
                 technical_reliability_index=1.0,
                 status=status,
                 score_reason="scored_categories_only",
-                active_weight=active_weight,
+                active_weight=round(active_weight, 4),
             )
         },
         categories=categories,
