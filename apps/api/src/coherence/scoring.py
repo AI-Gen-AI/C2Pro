@@ -50,6 +50,10 @@ from src.coherence.models import (  # noqa: E402
     FindingSignal,
     SeverityCount,
 )
+from src.coherence.domain.v2_constants import (  # noqa: E402
+    DEFAULT_CATEGORY_WEIGHTS,
+    MIN_ACTIVE_WEIGHT,
+)
 
 # =============================================================================
 # SCORING RESULT DATACLASS
@@ -394,15 +398,56 @@ class ScoringService:
                 max(self.config.min_score, min(raw, baseline)), 1
             )
 
-        assessed_vals = [category_scores[c] for c in assessed]
-        mean_assessed = sum(assessed_vals) / len(assessed_vals)
-        coverage_ratio = len(assessed) / 6.0
-        global_score = round(mean_assessed * coverage_ratio, 1)
+        # §14 — ADR-009: compute active_weight from DEFAULT_CATEGORY_WEIGHTS.
+        # Do NOT use mean × coverage_ratio (that was the ADR-009 §1 P1 violation).
+        total_weight = sum(DEFAULT_CATEGORY_WEIGHTS.values())
+        active_weight = sum(
+            DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed
+        ) / total_weight
 
         sev = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for s in signals:
             if s.severity in sev:
                 sev[s.severity] += 1
+
+        # §14 guard: insufficient active_weight → null score, explicit reason
+        if active_weight < MIN_ACTIVE_WEIGHT:
+            return ScoringDiagnostics(
+                score=None,
+                total_findings=total_findings,
+                deterministic_findings=sum(1 for s in signals if s.source == "deterministic"),
+                llm_findings=sum(1 for s in signals if s.source == "llm"),
+                severity_distribution=sev,
+                avg_impact=round(
+                    sum(s.impact_score for s in signals) / total_findings, 3
+                ) if total_findings else 0.0,
+                avg_confidence=round(
+                    sum(s.confidence for s in signals) / total_findings, 3
+                ) if total_findings else 0.0,
+                scope_factor=round(scope_factor, 3),
+                penalty_density=round(sum(cat_penalty.values()) / scope_factor, 4),
+                raw_penalty_sum=round(sum(cat_penalty.values()), 4),
+                category_contributions=dict(cat_penalty),
+                reason="insufficient_active_weight",
+                missing_dimensions=unassessed,
+                category_scores=category_scores,
+                audit_coverage={"assessed": len(assessed), "total": 6,
+                                "pct": round(len(assessed) / 6 * 100, 1)},
+            )
+
+        # Weighted mean over assessed categories only (no coverage_ratio multiplier)
+        assessed_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed)
+        global_score = round(
+            sum(
+                DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * category_scores[c]
+                for c in assessed
+            ) / assessed_weight_sum,
+            1,
+        )
+
+        # "assessed_clean" only fires when ALL 6 categories are assessed with no findings
+        all_assessed = len(assessed) == 6
+        reason = None if total_findings else ("assessed_clean" if all_assessed else None)
 
         return ScoringDiagnostics(
             score=global_score,
@@ -420,7 +465,7 @@ class ScoringService:
             penalty_density=round(sum(cat_penalty.values()) / scope_factor, 4),
             raw_penalty_sum=round(sum(cat_penalty.values()), 4),
             category_contributions=dict(cat_penalty),
-            reason=None if total_findings else "assessed_clean",
+            reason=reason,
             missing_dimensions=unassessed,
             category_scores=category_scores,
             audit_coverage={"assessed": len(assessed), "total": 6,

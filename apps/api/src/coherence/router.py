@@ -97,11 +97,11 @@ class CoherenceEvaluateRequest(BaseModel):
     )
 
 
-def _empty_sub_scores() -> dict[str, int | None]:
+def _empty_sub_scores() -> dict[str, float | None]:
     return {category: None for category in COHERENCE_CATEGORIES}
 
 
-def _normalized_sub_scores(raw_scores: object) -> dict[str, int | None]:
+def _normalized_sub_scores(raw_scores: object) -> dict[str, float | None]:
     normalized = _empty_sub_scores()
     if not raw_scores or not isinstance(raw_scores, dict):
         return normalized
@@ -110,7 +110,7 @@ def _normalized_sub_scores(raw_scores: object) -> dict[str, int | None]:
         category_key = str(category).upper()
         if category_key in normalized and score is not None:
             try:
-                normalized[category_key] = int(score)
+                normalized[category_key] = float(score)
             except (TypeError, ValueError):
                 pass
     return normalized
@@ -674,7 +674,7 @@ async def get_coherence_dashboard(
 
     # Determine global score and breakdown
     sub_scores = _empty_sub_scores()
-    global_score = 0
+    global_score: float | None = None
 
     if latest_analysis and latest_analysis.coherence_score is not None:
         global_score = latest_analysis.coherence_score
@@ -683,7 +683,7 @@ async def get_coherence_dashboard(
         global_score = coherence_result.global_score
         sub_scores = _normalized_sub_scores(coherence_result.category_scores)
     elif project.coherence_score is not None:
-        global_score = int(project.coherence_score)
+        global_score = float(project.coherence_score)
 
     if latest_analysis and latest_analysis.alerts_count is not None:
         alert_count = latest_analysis.alerts_count

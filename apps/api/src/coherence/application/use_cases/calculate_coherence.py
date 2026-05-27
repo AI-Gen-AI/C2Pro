@@ -84,10 +84,14 @@ class CalculateCoherenceUseCase:
         weights = self._prepare_weights(command.custom_weights)
 
         # Step 6: Calculate global score
+        # NOTE: CoherenceCalculationResult.global_score is `int` per
+        # application/dtos/coherence_dtos.py:54 and ORM column is int.
+        # Phase F (TASK-COH-V2-VERSIONING-006) will widen DTO + column to float
+        # together with the score_version canonicalization. Keep int round here.
         global_score_float = self.global_calculator.calculate_global(
             subscores=subscores, weights=weights
         )
-        global_score = int(global_score_float)
+        global_score = int(round(global_score_float))
 
         # Step 7: Generate coherence alerts
         coherence_alerts = self._generate_coherence_alerts(evaluation_result.violations)
