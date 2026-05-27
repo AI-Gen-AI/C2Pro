@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.coherence.adapters.persistence import SqlAlchemyCoherenceRepository
 from src.coherence.application.dtos import CategoryScoreDetail, CoherenceCalculationResult
 from src.coherence.domain.category_weights import CoherenceCategory
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.auth.models import Tenant
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -52,7 +53,7 @@ async def test_repository_roundtrip_preserves_score_version_fields(
         is_gaming_detected=False,
         gaming_violations=[],
         penalty_points=0,
-        score_version="v1_exponential_decay",
+        score_version=SCORE_VERSION_V1,
         score_reason="insufficient_evidence",
         score_missing_dimensions=["BUDGET", "TIME"],
     )
@@ -62,6 +63,6 @@ async def test_repository_roundtrip_preserves_score_version_fields(
     retrieved = await repository.get_by_id(result_id)
 
     assert retrieved is not None
-    assert retrieved.score_version == "v1_exponential_decay"
+    assert retrieved.score_version == SCORE_VERSION_V1
     assert retrieved.score_reason == "insufficient_evidence"
     assert retrieved.score_missing_dimensions == ["BUDGET", "TIME"]

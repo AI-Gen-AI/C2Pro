@@ -65,12 +65,8 @@ export interface DashboardSummary {
   alert_count: number;
   document_count: number;
   methodology_version: string;
-  score_version?:
-    | "v0_flag_based"
-    | "v1_exponential_decay"
-    | "v2_evidence_aware"
-    | string
-    | null;
+  /** Canonical score version (Phase F, ADR-009 §F). Legacy values backfilled to "coherence-v1". */
+  score_version?: "coherence-v1" | "coherence-v2" | null;
   score_reason?: string | null;
   score_missing_dimensions?: string[];
   last_updated: string | null;

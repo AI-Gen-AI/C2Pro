@@ -21,6 +21,7 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from ..models import Clause, EnrichedCoherenceResult
 from .nodes import (
     cross_clause_eval,
@@ -250,7 +251,7 @@ def evaluate_coherence(
             overall_score=final_state.get("score"),
             alerts=final_state.get("alerts", []),
             calculated_at=datetime.now(UTC),
-            score_version="v1_exponential_decay",
+            score_version=SCORE_VERSION_V1,
             score_reason=final_state.get("diagnostics", {}).get("reason"),
             score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
             finding_signals=final_state.get("all_signals", []),
@@ -299,7 +300,7 @@ async def evaluate_coherence_async(
             overall_score=final_state.get("score"),
             alerts=final_state.get("alerts", []),
             calculated_at=datetime.now(UTC),
-            score_version="v1_exponential_decay",
+            score_version=SCORE_VERSION_V1,
             score_reason=final_state.get("diagnostics", {}).get("reason"),
             score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
             finding_signals=final_state.get("all_signals", []),
