@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.observability.coherence_tracing import _validate_attributes
 
 
@@ -17,7 +18,7 @@ def test_validate_attributes_passes_with_allowlisted_keys():
     """
     valid_attributes = {
         "coherence.node_name": "test_node",
-        "coherence.score_version": "v1",
+        "coherence.score_version": SCORE_VERSION_V1,
         "coherence.findings_count": 5,
         "coherence.rule_ids": ["rule-1", "rule-2"],
         "coherence.tenant_id": "tenant-abc",
