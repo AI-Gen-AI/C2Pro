@@ -669,6 +669,31 @@ def get_cache_service() -> CacheService | None:
     return _cache_service
 
 
+def get_redis_client() -> "redis.Redis | None":
+    """
+    Return the raw ``redis.asyncio.Redis`` client from the singleton CacheService.
+
+    Use this when you need direct Redis protocol access (e.g. ``scan_iter``,
+    ``unlink``) that the ``CacheService`` wrapper does not expose.
+
+    Returns:
+        The underlying ``redis.asyncio.Redis`` instance, or ``None`` when the
+        cache has not been initialised or was initialised without a Redis URL.
+
+    Example:
+        from src.core.cache import get_redis_client
+        from src.coherence.cache_invalidation import on_flag_flip
+
+        redis = get_redis_client()
+        if redis is not None:
+            await on_flag_flip(redis, tenant_id=tenant_id)
+    """
+    svc = get_cache_service()
+    if svc is None:
+        return None
+    return svc._redis
+
+
 async def close_cache() -> None:
     """
     Close the cache service and clean up resources.
