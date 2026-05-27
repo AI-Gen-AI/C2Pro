@@ -22,6 +22,7 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
     GateDecision,
@@ -873,7 +874,7 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         alerts=alerts,
         category_breakdown=category_breakdown,
         calculated_at=datetime.now(UTC),
-        score_version="v1_exponential_decay",
+        score_version=SCORE_VERSION_V1,
         score_reason=state.diagnostics.get("reason"),
         score_missing_dimensions=state.diagnostics.get("missing_dimensions"),
         finding_signals=state.all_signals,

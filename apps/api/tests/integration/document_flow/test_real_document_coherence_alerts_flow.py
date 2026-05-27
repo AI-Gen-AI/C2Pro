@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.graph.graph import evaluate_coherence_async
 from src.coherence.graph.state import EvaluationConfig
 from src.coherence.models import Clause as CoherenceClause
@@ -177,7 +178,7 @@ async def _exercise_real_coherence_contract(entry: dict[str, Any], fixture_path:
     }
     alert_severities = {str(alert.severity) for alert in result.alerts}
 
-    assert result.score_version == "v1_exponential_decay"
+    assert result.score_version == SCORE_VERSION_V1
     assert result.overall_score is not None
     assert expected_min <= result.overall_score <= expected_max
     assert result.score_reason is None

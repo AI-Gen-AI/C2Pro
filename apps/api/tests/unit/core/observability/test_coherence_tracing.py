@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
 from src.core.observability.coherence_tracing import traced_coherence_node
 
@@ -104,7 +105,7 @@ def test_traced_coherence_node_reads_tenant_from_runtime_state_config(
             "run_type": "chain",
             "metadata": {
                 "coherence.node_name": "prepare_context",
-                "coherence.score_version": "v1",
+                "coherence.score_version": SCORE_VERSION_V1,
                 "coherence.tenant_id": "tenant-456",
                 "coherence.project_id": "project-123",
                 "coherence.findings_count": 0,

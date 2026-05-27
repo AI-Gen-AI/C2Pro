@@ -19,6 +19,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
     CoherenceV2Payload,
 )
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 
 logger = logging.getLogger("coherence.shadow")
 
@@ -59,6 +60,9 @@ class ShadowDelta:
             "coherence_v2_score": self.coherence_v2_score,
             "delta_abs": self.delta_abs,
             "delta_signed": self.delta_signed,
+            # Canonical score_version labels (Phase F, ADR-009 §F)
+            "score_version_v1": SCORE_VERSION_V1,
+            "score_version_v2": SCORE_VERSION_V2,
             "v1_status": self.v1_status,
             "v2_status": self.v2_status,
             "v2_active_weight": self.v2_active_weight,
@@ -112,7 +116,7 @@ class ShadowRunner:
             coherence_v2_score=v2_score,
             delta_abs=delta_abs,
             delta_signed=delta_signed,
-            v1_status=str(v1.get("score_version") or v1.get("methodology_version") or "v1"),
+            v1_status=SCORE_VERSION_V1,
             v2_status=v2.global_.status,
             v2_active_weight=v2.global_.active_weight,
             v2_completeness_score=v2.global_.completeness_score,

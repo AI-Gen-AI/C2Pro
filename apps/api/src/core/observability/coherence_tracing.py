@@ -8,6 +8,7 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.ai.langsmith_client import get_client
 from src.core.observability.coherence_span_schema import COHERENCE_SPAN_ATTRIBUTE_ALLOWLIST
 
@@ -40,7 +41,7 @@ def traced_coherence_node(
             state = args[0]
             span_attributes = {
                 "coherence.node_name": node_name,
-                "coherence.score_version": "v1",  # Per task, hardcode to v1
+                "coherence.score_version": SCORE_VERSION_V1,
                 "coherence.tenant_id": str(state.tenant_id),
                 "coherence.project_id": str(state.project_id),
             }

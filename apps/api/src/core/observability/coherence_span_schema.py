@@ -26,7 +26,7 @@ class CoherenceSpanAttributes(BaseModel):
     """
 
     node_name: str = Field(..., description="The name of the graph node being executed.")
-    score_version: Literal["v0", "v1"] = Field(
+    score_version: Literal["coherence-v1", "coherence-v2"] = Field(
         ..., description="The version of the scoring logic being used."
     )
     findings_count: int | None = Field(

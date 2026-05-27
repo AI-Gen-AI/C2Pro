@@ -24,6 +24,7 @@ from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
+from .domain.v2_constants import SCORE_VERSION_V1
 from .graph.graph import evaluate_coherence
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
@@ -516,7 +517,7 @@ async def evaluate_project_coherence(
                 category_scores=category_scores,
                 category_details=category_details,
                 alerts=alerts_data,
-                score_version=enriched_result.score_version or "v0_flag_based",
+                score_version=enriched_result.score_version or SCORE_VERSION_V1,
                 score_reason=enriched_result.score_reason,
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
             )
