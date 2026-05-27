@@ -83,6 +83,28 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # ADR-009 §18: Coherence Score™ paths must never collapse null → 0.
+      # Bans `?? 0` / `|| 0` in coherence components. Weight fallbacks
+      # (`weights_used[cat] ?? 0`) are allowed because they apply to
+      # percentages, not score values.
+      - name: Coherence score-path null-fallback guard (ADR-009 §18)
+        working-directory: .
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rEn '\?\? *0([^.0-9]|$)|\|\| *0([^.0-9]|$)' \
+            apps/web/components/coherence/ \
+            apps/web/lib/api/contracts.ts \
+            --include='*.tsx' --include='*.ts' \
+            | grep -v 'weights_used' \
+            | grep -v '\.test\.' \
+            | grep -v 'test-utils' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::ADR-009 §18 violation — '?? 0' or '|| 0' detected on a Coherence Score™ path:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "✓ No null→0 collapses on coherence score paths."
+
   tests:
     name: Tests + Drift Check
     runs-on: ubuntu-latest

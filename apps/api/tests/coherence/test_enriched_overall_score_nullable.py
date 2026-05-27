@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.models import EnrichedCoherenceResult
 
 
@@ -26,7 +25,7 @@ def test_enriched_result_overall_score_accepts_none() -> None:
         result = EnrichedCoherenceResult(
             overall_score=None,
             score_reason="insufficient_active_weight",
-            score_version=SCORE_VERSION_V1,
+            score_version="v0_flag_based",
         )
     except ValidationError as exc:
         pytest.fail(
@@ -42,7 +41,7 @@ def test_enriched_result_overall_score_accepts_float() -> None:
     """Regression: numeric scores must still be accepted after the type change."""
     result = EnrichedCoherenceResult(
         overall_score=72.5,
-        score_version=SCORE_VERSION_V1,
+        score_version="v0_flag_based",
     )
     assert result.overall_score == pytest.approx(72.5)
 
@@ -53,5 +52,5 @@ def test_enriched_result_overall_score_rejects_negative() -> None:
     with pytest.raises(ValidationError):
         EnrichedCoherenceResult(
             overall_score=-1.0,
-            score_version=SCORE_VERSION_V1,
+            score_version="v0_flag_based",
         )

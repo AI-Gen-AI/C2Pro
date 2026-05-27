@@ -1458,6 +1458,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertWorkspaceSettingsPayload'
+      security:
+      - HTTPBearer: []
     put:
       tags:
       - alerts
@@ -1482,6 +1484,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/alerts:
     post:
       tags:
@@ -1515,6 +1519,8 @@ paths:
       - alerts
       summary: List alerts for a project
       operationId: list_project_alerts_api_v1_alerts_projects__project_id__get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: project_id
         in: path
@@ -1566,6 +1572,8 @@ paths:
       - alerts
       summary: List alerts for tenant
       operationId: list_tenant_alerts_api_v1_alerts_tenant_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: project_id
         in: query
@@ -1690,6 +1698,8 @@ paths:
       - alerts
       summary: Resolve alert
       operationId: resolve_alert_api_v1_alerts__alert_id__resolve_post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: alert_id
         in: path
@@ -1742,12 +1752,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/alerts/{alert_id}/history:
     get:
       tags:
       - alerts
       summary: Get alert status history
       operationId: get_alert_history_api_v1_alerts__alert_id__history_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: alert_id
         in: path
@@ -1775,6 +1789,8 @@ paths:
       - alerts
       summary: Delete alert
       operationId: delete_alert_api_v1_alerts__alert_id__delete
+      security:
+      - HTTPBearer: []
       parameters:
       - name: alert_id
         in: path
@@ -1798,6 +1814,8 @@ paths:
       - alerts
       summary: List alerts for a project
       operationId: list_project_alerts_compatibility_api_v1_projects__project_id__alerts_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: project_id
         in: path
@@ -1849,6 +1867,8 @@ paths:
       - alerts
       summary: List alerts for a project
       operationId: list_project_alerts_compatibility_api_projects__project_id__alerts_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: project_id
         in: path
@@ -1944,6 +1964,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatusResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/observability/analyses:
     get:
       tags:
@@ -1954,6 +1976,8 @@ paths:
 
         Results are filtered by tenant.'
       operationId: get_recent_analyses_api_v1_observability_analyses_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: limit
         in: query
@@ -2000,6 +2024,8 @@ paths:
                 type: object
                 title: Response Get Performance Snapshot Api V1 Observability Performance
                   Snapshot Get
+      security:
+      - HTTPBearer: []
   /api/v1/ai/feedback:
     post:
       tags:
@@ -3475,10 +3501,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Coherence Dashboard Api V1 Coherence Dashboard  Project
-                  Id  Get
+                $ref: '#/components/schemas/DashboardSummary'
         '422':
           description: Validation Error
           content:
@@ -3510,10 +3533,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Coherence Dashboard Api Coherence Dashboard  Project
-                  Id  Get
+                $ref: '#/components/schemas/DashboardSummary'
         '422':
           description: Validation Error
           content:
@@ -4557,6 +4577,88 @@ components:
       - impact_percentage
       title: CategoryBreakdown
       description: Represents the coherence score breakdown for a specific category.
+    CategoryStatus:
+      type: string
+      enum:
+      - pending_documents
+      - insufficient_evidence
+      - scored
+      - conflicting_evidence
+      - not_applicable
+      - processing_error
+      title: CategoryStatus
+    CategoryV2:
+      properties:
+        category:
+          type: string
+          title: Category
+        status:
+          $ref: '#/components/schemas/CategoryStatus'
+        coherence_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Coherence Score
+        evidence_coverage:
+          type: number
+          title: Evidence Coverage
+          default: 0.0
+        technical_reliability:
+          type: number
+          title: Technical Reliability
+          default: 0.0
+        evidence_freshness:
+          type: number
+          title: Evidence Freshness
+          default: 0.0
+        applicability_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Applicability Reason
+        score_explanation:
+          anyOf:
+          - $ref: '#/components/schemas/ScoreExplanation'
+          - type: 'null'
+        evidence_count:
+          type: integer
+          title: Evidence Count
+          default: 0
+        evidence_references:
+          items:
+            type: string
+          type: array
+          title: Evidence References
+        missing_evidence:
+          items:
+            type: string
+          type: array
+          title: Missing Evidence
+        detected_conflicts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Detected Conflicts
+        rationale:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rationale
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+        calculation_metadata:
+          additionalProperties: true
+          type: object
+          title: Calculation Metadata
+      type: object
+      required:
+      - category
+      - status
+      title: CategoryV2
     Clause:
       properties:
         id:
@@ -4675,6 +4777,34 @@ components:
       title: CoherenceResult
       description: Represents the complete result of a coherence evaluation, including
         alerts and the final score.
+    CoherenceV2Payload:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        version:
+          type: string
+          const: coherence-v2
+          title: Version
+          default: coherence-v2
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        global:
+          $ref: '#/components/schemas/GlobalV2'
+        categories:
+          items:
+            $ref: '#/components/schemas/CategoryV2'
+          type: array
+          title: Categories
+      type: object
+      required:
+      - project_id
+      - generated_at
+      - global
+      title: CoherenceV2Payload
     ConsentCategories:
       properties:
         necessary:
@@ -4942,6 +5072,86 @@ components:
       - status
       title: DLQRetryResponse
       description: 'TS-BCK-042-001: Admin DLQ retry response.'
+    DashboardSummary:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        global_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Global Score
+        coherence_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Coherence Score
+        sub_scores:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: 'null'
+          type: object
+          title: Sub Scores
+        weights_used:
+          additionalProperties:
+            type: number
+          type: object
+          title: Weights Used
+        alert_count:
+          type: integer
+          title: Alert Count
+        document_count:
+          type: integer
+          title: Document Count
+        methodology_version:
+          type: string
+          title: Methodology Version
+          default: '3.0'
+        score_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Version
+        score_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Reason
+        score_missing_dimensions:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Score Missing Dimensions
+        last_updated:
+          type: string
+          format: date-time
+          title: Last Updated
+        categories_v2:
+          anyOf:
+          - $ref: '#/components/schemas/CoherenceV2Payload'
+          - type: 'null'
+      type: object
+      required:
+      - project_id
+      - tenant_id
+      - global_score
+      - coherence_score
+      - sub_scores
+      - weights_used
+      - alert_count
+      - document_count
+      - last_updated
+      title: DashboardSummary
+      description: "Consolidated view of project coherence for the dashboard.\n\n\
+        ECOA v2 (ADR-009 \xA77.2 step 1): the optional `categories_v2` field carries\n\
+        the locked v2 contract. Defaults to None so v1 clients are unaffected."
     DisclaimerAcceptRequest:
       properties:
         version:
@@ -4965,6 +5175,10 @@ components:
           type: string
           format: uuid
           title: Project Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
         document_type:
           $ref: '#/components/schemas/DocumentType'
         filename:
@@ -5035,6 +5249,7 @@ components:
       required:
       - id
       - project_id
+      - tenant_id
       - document_type
       - filename
       - upload_status
@@ -5174,6 +5389,10 @@ components:
           type: string
           format: uuid
           title: Project Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
         document_type:
           $ref: '#/components/schemas/DocumentType'
         filename:
@@ -5248,6 +5467,7 @@ components:
       required:
       - id
       - project_id
+      - tenant_id
       - document_type
       - filename
       - upload_status
@@ -5296,6 +5516,10 @@ components:
           type: string
           format: uuid
           title: Project Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
         document_type:
           $ref: '#/components/schemas/DocumentType'
         filename:
@@ -5358,6 +5582,7 @@ components:
       required:
       - id
       - project_id
+      - tenant_id
       - document_type
       - filename
       - upload_status
@@ -5735,6 +5960,42 @@ components:
       - params
       title: FunctionCallRequest
       description: "Request para llamada a funci\xF3n."
+    GlobalV2:
+      properties:
+        coherence_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Coherence Score
+        completeness_score:
+          type: number
+          title: Completeness Score
+          default: 0.0
+        technical_reliability_index:
+          type: number
+          title: Technical Reliability Index
+          default: 0.0
+        status:
+          type: string
+          enum:
+          - scored
+          - partial
+          - insufficient_active_weight
+          - pending_documents
+          title: Status
+        score_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Reason
+        active_weight:
+          type: number
+          title: Active Weight
+          default: 0.0
+      type: object
+      required:
+      - status
+      title: GlobalV2
     HTTPValidationError:
       properties:
         detail:
@@ -6762,6 +7023,31 @@ components:
       - confidence
       - impact_level
       title: RouteForReviewRequest
+    ScoreExplanation:
+      properties:
+        positive_factors:
+          items:
+            type: string
+          type: array
+          title: Positive Factors
+        negative_factors:
+          items:
+            type: string
+          type: array
+          title: Negative Factors
+        dominant_rules:
+          items:
+            type: string
+          type: array
+          title: Dominant Rules
+        score_path:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Score Path
+      type: object
+      title: ScoreExplanation
     SecretChannelClerkResponse:
       properties:
         bundle_version:

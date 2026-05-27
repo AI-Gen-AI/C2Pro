@@ -20,11 +20,16 @@ const CHART_COLORS: Record<string, string> = {
 };
 
 interface BreakdownChartProps {
-  data: { name: string; score: number }[];
+  data: { name: string; score: number | null }[];
 }
 
 export function BreakdownChart({ data }: BreakdownChartProps) {
-  const sorted = [...data].sort((a, b) => a.score - b.score);
+  // ADR-009 §18: skip null categories from the bar chart. They render as the
+  // "Pending evidence" empty state at the dashboard level, not as zero bars.
+  const scored = data.filter(
+    (d): d is { name: string; score: number } => d.score !== null,
+  );
+  const sorted = [...scored].sort((a, b) => a.score - b.score);
 
   return (
     <div>
