@@ -26,6 +26,9 @@
 - `TASK-QA-103`
 - `TASK-1480`
 - `TASK-QA-200`..`TASK-QA-213` (EPIC-QA-CONTRACT-COVERAGE complete @2026-05-08)
+- `TASK-OPS-DOCFLOW-017` (Schemathesis frontend-support selector restored @2026-05-25)
+- `TASK-OPS-DOCFLOW-018` (DB-backed alerts contract drift restored @2026-05-25)
+- `TASK-OPS-DOCFLOW-019` (Real Document Operability GH action repaired + operator-only gate @2026-05-27)
 
 ---
 
@@ -158,6 +161,13 @@ All 14 subtasks (TASK-QA-200..213) complete:
 - QA-202: Analysis, coherence, alerts, hitl router suites ✅
 - QA-203: WBS, procurement, stakeholders router suites ✅
 - QA-204: Observability, AI feedback, admin/DLQ, frontend-support router suites ✅
+  - 2026-05-25: `TASK-OPS-DOCFLOW-017` repaired the frontend-support contract selector from stale `/api/v1/frontend*` path matching to the canonical OpenAPI `frontend-support` tag. Focused collect-only now maps all parametrized operations (`20` collected).
+- TASK-OPS-DOCFLOW-018: DB-backed alert router contract drift ✅
+  - 2026-05-25: Updated `tests/core/test_alerts_router_contract.py` to persist `tenant_id` on alert/document/clause fixtures and call the active tenant list route `/api/v1/alerts/tenant`. Focused contract file now passes (`5 passed`).
+- TASK-OPS-DOCFLOW-019: Real Document Operability GH action bootstrap and operator gate ✅
+  - 2026-05-27: Latest failing GH run `26538263766` failed before pytest at `Bootstrap backend test infrastructure` with PostgreSQL `UnsafeNewEnumValueUsageError` from `20260526_0001_coherence_score_version_canonical.py`.
+  - Added focused regression guards for the canonical score-version migration and real-document workflow trigger shape. Reclassified the real-document pytest flow as operator-only `workflow_dispatch` with `run_real_document_flow=true`; non-operator dispatch records `Real Document Flow | Needs real fixtures + env | No (operator)`.
+  - Verification: focused migration/workflow tests passed (`5 passed`), and the exact GH bootstrap command `python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db` now reaches Alembic head `20260526_0001` and completes Redis preflight.
 - QA-205: OpenAPI drift gate CI workflow ✅
 - QA-206: conftest.py refactored ≤700 LOC, fixtures extracted ✅
 

@@ -8,17 +8,39 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypeAlias
 
 import psycopg
 
 
-def parse_migration_graph(versions_dir: Path) -> tuple[dict[str, str | None], list[str]]:
-    nodes: dict[str, str | None] = {}
+DownRevision: TypeAlias = tuple[str, ...]
+
+
+def _parse_revision_value(value_node: ast.expr) -> DownRevision:
+    if isinstance(value_node, ast.Constant):
+        if isinstance(value_node.value, str):
+            return (value_node.value,)
+        return ()
+
+    if isinstance(value_node, ast.Tuple):
+        values: list[str] = []
+        for element in value_node.elts:
+            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+                return ()
+            values.append(element.value)
+        return tuple(values)
+
+    return ()
+
+
+def parse_migration_graph(versions_dir: Path) -> tuple[dict[str, DownRevision], list[str]]:
+    nodes: dict[str, DownRevision] = {}
     files: list[str] = []
 
     for path in sorted(versions_dir.glob("*.py")):
         module = ast.parse(path.read_text(encoding="utf-8"))
-        values: dict[str, str | None] = {}
+        revision: str | None = None
+        down_revision: DownRevision = ()
 
         for stmt in module.body:
             target_name: str | None = None
@@ -34,16 +56,14 @@ def parse_migration_graph(versions_dir: Path) -> tuple[dict[str, str | None], li
             if target_name not in {"revision", "down_revision"} or value_node is None:
                 continue
 
-            if isinstance(value_node, ast.Constant):
-                values[target_name] = value_node.value if isinstance(value_node.value, str) else None
-            else:
-                values[target_name] = None
+            if target_name == "revision":
+                if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str):
+                    revision = value_node.value
+            elif target_name == "down_revision":
+                down_revision = _parse_revision_value(value_node)
 
-        revision = values.get("revision")
         if not revision:
             continue
-
-        down_revision = values.get("down_revision")
 
         nodes[revision] = down_revision
         files.append(path.name)
@@ -51,38 +71,44 @@ def parse_migration_graph(versions_dir: Path) -> tuple[dict[str, str | None], li
     return nodes, files
 
 
-def validate_linear_chain(nodes: dict[str, str | None]) -> str:
+def validate_linear_chain(nodes: dict[str, DownRevision]) -> str:
     if not nodes:
         raise RuntimeError("No Alembic revisions found.")
 
-    roots = [rev for rev, down in nodes.items() if down is None]
+    roots = [rev for rev, down in nodes.items() if not down]
     if len(roots) != 1:
         raise RuntimeError(f"Expected exactly one root revision, found {len(roots)}: {roots}")
 
     children: dict[str, list[str]] = {}
-    for rev, down in nodes.items():
-        if down is None:
+    for rev, parents in nodes.items():
+        if not parents:
             continue
-        children.setdefault(down, []).append(rev)
-
-    branches = {parent: kids for parent, kids in children.items() if len(kids) > 1}
-    if branches:
-        raise RuntimeError(f"Branching migration graph detected: {branches}")
+        for parent in parents:
+            if parent not in nodes:
+                raise RuntimeError(f"Broken migration link: {rev} depends on missing {parent}")
+            children.setdefault(parent, []).append(rev)
 
     # Head is revision that is not referenced as down_revision by any other node.
-    referenced = {down for down in nodes.values() if down is not None}
+    referenced = {parent for parents in nodes.values() for parent in parents}
     heads = [rev for rev in nodes if rev not in referenced]
     if len(heads) != 1:
         raise RuntimeError(f"Expected exactly one head revision, found {len(heads)}: {heads}")
 
-    # Walk from head to root to ensure no broken link.
-    current = heads[0]
     visited: set[str] = set()
-    while current is not None:
-        if current in visited:
-            raise RuntimeError(f"Cycle detected at revision {current}")
-        visited.add(current)
-        current = nodes.get(current)
+    visiting: set[str] = set()
+
+    def visit(revision: str) -> None:
+        if revision in visiting:
+            raise RuntimeError(f"Cycle detected at revision {revision}")
+        if revision in visited:
+            return
+        visiting.add(revision)
+        for parent in nodes[revision]:
+            visit(parent)
+        visiting.remove(revision)
+        visited.add(revision)
+
+    visit(heads[0])
 
     if len(visited) != len(nodes):
         missing = set(nodes) - visited

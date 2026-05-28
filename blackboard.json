@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-24T21:45:00Z",
+  "updated_at": "2026-05-27T21:20:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,135 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T113",
+      "backlog_id": "TASK-OPS-DOCFLOW-019",
+      "tipo": "qa",
+      "descripcion": "Repair the failing GitHub Real Document Operability action by fixing Alembic bootstrap and reclassifying the real document flow as operator-only.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "GitHub bootstrap command reaches Alembic head, focused regression tests pass, and real-document pytest no longer runs as a PR/push gate.",
+      "archivos_modificados": [
+        ".github/workflows/real-document-operability.yml",
+        "apps/api/alembic/versions/20260526_0001_coherence_score_version_canonical.py",
+        "apps/api/scripts/verify_migration_health.py",
+        "apps/api/tests/unit/test_alembic_single_head.py",
+        "apps/api/tests/unit/test_coherence_score_version_migration.py",
+        "apps/api/tests/unit/test_real_document_operability_workflow.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-27T20:56:00Z",
+        "completado": "2026-05-27T21:20:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Fixed the GH Actions failure seam from run 26538263766: canonical score-version migration no longer uses unsafe enum labels in the same transaction, migration health parsing handles merge revisions, and Real Document Flow is now an operator-only workflow_dispatch path.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "gh run view 26538263766 --repo AI-Gen-AI/C2Pro --log-failed -> RED failed: Bootstrap backend test infrastructure hit asyncpg UnsafeNewEnumValueUsageError in 20260526_0001",
+          "python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db -> RED failed: UnsafeNewEnumValueUsageError on score_version = 'coherence-v1'",
+          "python -m pytest apps/api/tests/unit/test_coherence_score_version_migration.py apps/api/tests/unit/test_real_document_operability_workflow.py -q -> RED failed: unsafe ADD VALUE and PR/push workflow triggers still present",
+          "python -m pytest apps/api/tests/unit/test_alembic_single_head.py apps/api/tests/unit/test_coherence_score_version_migration.py apps/api/tests/unit/test_real_document_operability_workflow.py -q -> 5 passed",
+          "python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db -> OK migrations at head: 20260526_0001; OK Redis reachable; bootstrap complete"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T112",
+      "backlog_id": "TASK-BCK-051",
+      "tipo": "backend",
+      "descripcion": "Investigate project alerts/stakeholders 500 drift and verify tenant-hardened local contract parity.",
+      "asignado_a": "backend",
+      "estado": "bloqueado",
+      "criterio_done": "Local alerts/stakeholders contracts pass and production reference IDs are correlated with backend logs.",
+      "archivos_modificados": [
+        "apps/api/tests/core/test_stakeholders_router_contract.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-25T19:49:00Z",
+        "ultimo_avance": "2026-05-25T20:02:58Z"
+      },
+      "resultado": {
+        "exitoso": false,
+        "mensaje": "Local contract drift reproduced and fixed for stakeholder tenant_id fixtures; live production reference-ID correlation remains blocked because no production log tool/access is available in this session.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m alembic heads -> 20260524_0001 (head)",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_alerts_route_contract.py apps\\api\\tests\\core\\test_alerts_http_dependencies.py apps\\api\\tests\\core\\test_stakeholders_router_contract.py apps\\api\\tests\\unit\\test_backend_ci_guards.py::test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns -q -> RED failed: stakeholders.tenant_id NotNullViolationError",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_stakeholders_router_contract.py::test_project_scoped_stakeholders_route_returns_project_stakeholders -vv -q -> 1 passed",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_alerts_route_contract.py apps\\api\\tests\\core\\test_alerts_http_dependencies.py apps\\api\\tests\\core\\test_stakeholders_router_contract.py apps\\api\\tests\\unit\\test_backend_ci_guards.py::test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns -q -> 4 passed",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\contract\\schemathesis\\test_stakeholders_router.py --collect-only -q -> 4 collected"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T111",
+      "backlog_id": "TASK-OPS-DOCFLOW-018",
+      "tipo": "qa",
+      "descripcion": "Fix DB-backed alert API contract execution drift by aligning fixtures and routes with current alerts router and tenant_id persistence.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "Focused alert router contract tests pass against tenant-hardened alerts persistence and current active routes.",
+      "archivos_modificados": [
+        "apps/api/tests/core/test_alerts_router_contract.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-25T19:34:53Z",
+        "completado": "2026-05-25T19:41:59Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Aligned DB-backed alert contract fixtures with tenant-hardened persistence and active tenant alert routes.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_alerts_router_contract.py::test_list_alerts_returns_tenant_scoped_wrapper_response -vv -x -s -> RED failed: alerts.tenant_id NotNullViolationError",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_alerts_router_contract.py::test_list_alerts_returns_tenant_scoped_wrapper_response apps\\api\\tests\\core\\test_alerts_router_contract.py::test_list_alerts_can_filter_by_document_id -q -> 2 passed",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\core\\test_alerts_router_contract.py -q -> 5 passed"
+        ]
+      }
+    },
+    {
+      "tarea_id": "T110",
+      "backlog_id": "TASK-OPS-DOCFLOW-017",
+      "tipo": "qa",
+      "descripcion": "Fix full-suite Schemathesis no-match contract by updating frontend-support selection to current OpenAPI operations.",
+      "asignado_a": "qa",
+      "estado": "completado",
+      "criterio_done": "Focused Schemathesis collect-only maps every parametrized frontend-support contract to current OpenAPI operations.",
+      "archivos_modificados": [
+        "apps/api/tests/contract/schemathesis/test_observability_admin_router.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/QA_QUALITY_ASSURANCE.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-05-25T19:19:42Z",
+        "completado": "2026-05-25T19:22:40Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Updated the Schemathesis frontend-support contract selector to use the canonical OpenAPI tag so parametrized contracts map to current operations.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\contract\\schemathesis\\test_observability_admin_router.py --collect-only -q -> RED failed: test_frontend_support_contract does not match any API operations",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\contract\\schemathesis\\test_observability_admin_router.py --collect-only -q -> 20 collected"
+        ]
+      }
+    },
     {
       "tarea_id": "T076",
       "backlog_id": "TASK-BCK-076",
@@ -1857,13 +1986,32 @@
       "estado": "completado",
       "criterio_done": "The public /wbs response shape truthfully matches Swagger and returns the intended hierarchy/coverage contract or the docs are corrected to a flat list contract.",
       "archivos_modificados": [
+        "apps/api/src/projects/adapters/http/router.py",
+        "apps/api/tests/projects/test_projects_router.py",
         "C2PRO_MASTER_BACKLOG.md",
         "backlogs/BCK_BACKEND.md",
-        "backlogs/QA_QUALITY_ASSURANCE.md",
         "blackboard.json"
       ],
       "timestamps": {
-        "inicio": "2026-05-17T16:27:00Z"
+        "inicio": "2026-05-17T16:27:00Z",
+        "completado": "2026-05-25T20:58:30Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Project WBS read endpoint now returns the published hierarchy and coverage contract while preserving legacy total_items.",
+        "cambios_realizados": [
+          "Added RED contract assertions for root hierarchy, recursive children, and coverage summary after bulk WBS creation.",
+          "Changed GET /api/v1/projects/{project_id}/wbs to return the already-computed procurement WBS tree instead of discarding it.",
+          "Added coverage, alerts, and legacy total_items fields to the project WBS response."
+        ],
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\projects\\test_projects_router.py::TestBulkWBSCompatibilityEndpoint::test_bulk_create_wbs_items_are_visible_from_wbs_read_endpoint -vv -q -> RED failed: KeyError 'coverage'",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\projects\\test_projects_router.py::TestBulkWBSCompatibilityEndpoint::test_bulk_create_wbs_items_are_visible_from_wbs_read_endpoint -vv -q -> 1 passed",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\projects\\test_projects_router.py::TestBulkWBSCompatibilityEndpoint apps\\api\\tests\\modules\\wbs\\adapters\\test_wbs_http_dependencies.py -q -> 3 passed",
+          "C:\\Users\\esus_\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest apps\\api\\tests\\projects\\test_projects_router.py -q -> timed out after 244s before result"
+        ]
       }
     },
     {
@@ -2228,6 +2376,7 @@
       "TASK-OPS-DOCFLOW-016",
       "TASK-OPS-DOCFLOW-017",
       "TASK-OPS-DOCFLOW-018",
+      "TASK-OPS-DOCFLOW-019",
       "TASK-FRT-171",
       "TASK-BCK-051",
       "TASK-BCK-052",
