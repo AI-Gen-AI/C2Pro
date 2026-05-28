@@ -3,8 +3,20 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
 from pathlib import Path
+from types import ModuleType
+
+
+def _load_migration_health_module() -> ModuleType:
+    script_path = Path(__file__).parents[2] / "scripts" / "verify_migration_health.py"
+    spec = importlib.util.spec_from_file_location("verify_migration_health", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_alembic_version_graph_has_single_head() -> None:
@@ -48,6 +60,17 @@ def test_alembic_version_graph_has_single_head() -> None:
     }
     heads = sorted(set(revisions) - referenced_parents)
 
-    assert heads == ["20260524_0001"], {
+    assert heads == ["20260526_0001"], {
         "heads": [(head, revisions[head]) for head in heads],
     }
+
+
+def test_migration_health_parser_accepts_merge_revisions() -> None:
+    """TS-QA-SWAGGER-MIGRATION-001: bootstrap graph parser keeps merge parents."""
+    module = _load_migration_health_module()
+    versions_dir = Path(__file__).parents[2] / "alembic" / "versions"
+
+    nodes, _ = module.parse_migration_graph(versions_dir)
+
+    assert nodes["20260524_0001"] == ("20260516_0004", "20260517_0002")
+    assert module.validate_linear_chain(nodes) == "20260526_0001"
