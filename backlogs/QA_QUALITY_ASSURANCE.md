@@ -2,7 +2,7 @@
 
 **Category**: Quality Assurance (QA)
 **Owner Role**: qa
-**Last Updated**: 2026-05-17
+**Last Updated**: 2026-06-04
 
 **Quick Links**:
 - 🏠 [Master Index](../C2PRO_MASTER_BACKLOG.md)
@@ -198,19 +198,19 @@ All 14 subtasks (TASK-QA-200..213) complete:
 | --- | --- | --- | --- | --- | --- |
 | [ ] | `TASK-QA-214` | Public / Health | `GET` | `/` |  |
 | [ ] | `TASK-QA-215` | Public / Health | `GET` | `/api/v1/health/worker` |  |
-| [ ] | `TASK-QA-216` | Public / Health | `GET` | `/health/live` |  |
-| [ ] | `TASK-QA-217` | Public / Health | `GET` | `/health/ready` |  |
+| [x] | `TASK-QA-216` | Public / Health | `GET` | `/health/live` | 200 verified 2026-06-04. |
+| [x] | `TASK-QA-217` | Public / Health | `GET` | `/health/ready` | 200 database=up redis=up circuit_breaker=closed verified 2026-06-04. |
 | [ ] | `TASK-QA-218` | Public / Health | `GET` | `/health/circuit-breakers` |  |
 | [ ] | `TASK-QA-219` | Public / Health | `GET` | `/health` |  |
 | [ ] | `TASK-QA-220` | Public / Health | `GET` | `/health/worker` |  |
 | [ ] | `TASK-QA-221` | Public / Health | `GET` | `/api/v1/health/live` |  |
 | [ ] | `TASK-QA-222` | Public / Health | `GET` | `/api/v1/health/ready` |  |
 | [ ] | `TASK-QA-223` | Public / Health | `GET` | `/api/v1/health/circuit-breakers` |  |
-| [ ] | `TASK-QA-224` | Public / Health | `GET` | `/api/v1/health` |  |
+| [x] | `TASK-QA-224` | Public / Health | `GET` | `/api/v1/health` | 200 verified 2026-06-04. |
 | [x] | `TASK-QA-225` | Authentication | `POST` | `/api/v1/auth/register` | 201 verified in Swagger on 2026-05-17. |
-| [ ] | `TASK-QA-226` | Authentication | `POST` | `/api/v1/auth/login` |  |
+| [x] | `TASK-QA-226` | Authentication | `POST` | `/api/v1/auth/login` | 200 verified 2026-06-04; returns access_token, user/tenant IDs, full profile. |
 | [ ] | `TASK-QA-227` | Authentication | `POST` | `/api/v1/auth/refresh` |  |
-| [ ] | `TASK-QA-228` | Authentication | `GET` | `/api/v1/auth/me` |  |
+| [x] | `TASK-QA-228` | Authentication | `GET` | `/api/v1/auth/me` | 200 verified 2026-06-04; returns current user with tenant metadata. |
 | [ ] | `TASK-QA-229` | Authentication | `PUT` | `/api/v1/auth/me` |  |
 | [ ] | `TASK-QA-230` | Authentication | `POST` | `/api/v1/auth/logout` |  |
 | [ ] | `TASK-QA-231` | Authentication | `POST` | `/api/v1/auth/change-password` |  |
@@ -237,32 +237,32 @@ All 14 subtasks (TASK-QA-200..213) complete:
 | [x] | `TASK-QA-252` | Documents | `POST` | `/api/v1/projects/{project_id}/documents` | 202 verified again on 2026-05-17 after `TASK-BCK-061`; live schedule upload accepted as document `f04d4f22-684f-4874-b93b-dc5436ef720b`. |
 | [x] | `TASK-QA-253` | Documents | `GET` | `/api/v1/projects/{project_id}/documents` | 200 verified on 2026-05-17; project list shows both parsed documents with correct count `2`. |
 | [ ] | `TASK-QA-254` | Documents | `PATCH` | `/api/v1/documents/{document_id}/file` |  |
-| [ ] | `TASK-QA-255` | Documents | `GET` | `/api/v1/documents/{document_id}` | Functional `200` verified on 2026-05-17 for schedule document, but response exposed `parsed_at=null` after successful parse; keep open until `TASK-BCK-063` is fixed. |
+| [x] | `TASK-QA-255` | Documents | `GET` | `/api/v1/documents/{document_id}` | Functional `200` verified on 2026-05-17 for schedule document, but response exposed `parsed_at=null` after successful parse; 200 verified 2026-06-04; parsed_at populated (schedule: 2026-05-25, contract: 2026-05-28) after TASK-BCK-063 fix. |
 | [ ] | `TASK-QA-256` | Documents | `DELETE` | `/api/v1/documents/{document_id}` |  |
-| [ ] | `TASK-QA-257` | Documents | `GET` | `/api/v1/documents/{document_id}/history` | Functional `200` verified on 2026-05-17, but history only shows upload because successful parse leaves `parsed_at` null; keep open until `TASK-BCK-063` is fixed. |
+| [x] | `TASK-QA-257` | Documents | `GET` | `/api/v1/documents/{document_id}/history` | Functional `200` verified on 2026-05-17, but history only shows upload because successful parse leaves `parsed_at` null; 200 verified 2026-06-04; parsed_at populated (schedule: 2026-05-25, contract: 2026-05-28) after TASK-BCK-063 fix. |
 | [x] | `TASK-QA-258` | Documents | `GET` | `/api/v1/documents/{document_id}/relationship-explanation` | 200 verified on 2026-05-17 for schedule document; response is internally consistent with current architecture (`0` clauses, `0` linked alerts, empty citations). |
-| [ ] | `TASK-QA-259` | Documents | `GET` | `/api/v1/documents/{document_id}/entities` | Functional `200` verified on 2026-05-17 for schedule document, but response is `[]`; for schedules the decisive extraction proof must come from downstream WBS creation, not this generic entities projection. |
+| [x] | `TASK-QA-259` | Documents | `GET` | `/api/v1/documents/{document_id}/entities` | Functional `200` verified on 2026-05-17 for schedule document, but response is `[]`; 200 verified 2026-06-04; entities=[] for schedule is expected per policy — proof is WBS items (5 created). Closed. |
 | [x] | `TASK-QA-260` | Documents | `GET` | `/api/v1/documents/{document_id}/download` | 200 verified on 2026-05-17 for schedule document; binary download returned with expected attachment headers and `12131` bytes. |
 | [x] | `TASK-QA-261` | Documents | `POST` | `/api/v1/documents/{document_id}/parse` | Verified 2026-05-17 with live real schedule workbook after `TASK-BCK-062`: `202 parsed` for `f04d4f22-684f-4874-b93b-dc5436ef720b`. Re-verified 2026-05-18 after `TASK-BCK-067`: same Excel schedule can be parsed again without duplicate generated activity `500`. |
 | [x] | `TASK-QA-262` | Documents | `POST` | `/api/v1/projects/{project_id}/documents/{document_id}/reprocess` | 202 verified on 2026-05-17; document requeued successfully with new task id. |
-| [ ] | `TASK-QA-263` | Documents | `POST` | `/api/v1/projects/{project_id}/rag/answer` | Schedule-only questions were 200 after `TASK-BCK-068`/`TASK-BCK-069`, but contract penalty question on 2026-05-23 returned only schedule sources. DB confirmed contract `f6543818-b7a6-4357-8f48-43238a4f8a65` has 210 clauses and zero `document_chunks`; `TASK-BCK-070` adds contract clause RAG ingestion. Contract sources now return after reparse, but answer abstained despite damages evidence; `TASK-BCK-071` adds damages fallback. Keep open until API restart + penalty question returns a non-abstaining contract-based answer. |
+| [x] | `TASK-QA-263` | Documents | `POST` | `/api/v1/projects/{project_id}/rag/answer` | Schedule-only questions were 200 after `TASK-BCK-068`/`TASK-BCK-069`, but contract penalty question on 2026-05-23 returned only schedule sources. DB confirmed contract `f6543818-b7a6-4357-8f48-43238a4f8a65` has 210 clauses and zero `document_chunks`; `TASK-BCK-070` adds contract clause RAG ingestion. Contract sources now return after reparse, but answer abstained despite damages evidence; `TASK-BCK-071` adds damages fallback. 200 verified 2026-06-04; penalty/damages question returns non-abstaining answer citing contract delay clauses with 5 sources. Closed post TASK-BCK-070+071. |
 | [ ] | `TASK-QA-264` | Alerts | `GET` | `/api/v1/alerts/workspace-settings` |  |
 | [ ] | `TASK-QA-265` | Alerts | `PUT` | `/api/v1/alerts/workspace-settings` |  |
 | [ ] | `TASK-QA-266` | Alerts | `POST` | `/api/v1/alerts` |  |
-| [ ] | `TASK-QA-267` | Alerts | `GET` | `/api/v1/alerts/projects/{project_id}` | First live Swagger check returned `401 missing_or_invalid_token` because OpenAPI did not advertise bearer auth and Swagger omitted `Authorization`; fixed by `TASK-BCK-072`. Re-test after API restart. |
-| [ ] | `TASK-QA-268` | Alerts | `GET` | `/api/v1/alerts/tenant` |  |
+| [x] | `TASK-QA-267` | Alerts | `GET` | `/api/v1/alerts/projects/{project_id}` | First live Swagger check returned `401 missing_or_invalid_token` because OpenAPI did not advertise bearer auth and Swagger omitted `Authorization`; 200 re-verified 2026-06-04; returns 64 alerts with pagination (TASK-BCK-051 checkpointer fix unblocked). |
+| [x] | `TASK-QA-268` | Alerts | `GET` | `/api/v1/alerts/tenant` | 200 verified 2026-06-04; tenant-scoped list returns 64 alerts for project. |
 | [ ] | `TASK-QA-269` | Alerts | `POST` | `/api/v1/alerts/{alert_id}/review` |  |
 | [ ] | `TASK-QA-270` | Alerts | `POST` | `/api/v1/alerts/bulk-review` |  |
 | [ ] | `TASK-QA-271` | Alerts | `POST` | `/api/v1/alerts/{alert_id}/resolve` |  |
 | [ ] | `TASK-QA-272` | Alerts | `POST` | `/api/v1/alerts/bulk-resolve` |  |
-| [ ] | `TASK-QA-273` | Alerts | `GET` | `/api/v1/alerts/{alert_id}/history` |  |
+| [x] | `TASK-QA-273` | Alerts | `GET` | `/api/v1/alerts/{alert_id}/history` | 200 verified 2026-06-04; returns history list (empty for un-reviewed alert - expected). |
 | [ ] | `TASK-QA-274` | Alerts | `DELETE` | `/api/v1/alerts/{alert_id}` |  |
-| [ ] | `TASK-QA-275` | Alerts | `GET` | `/api/v1/projects/{project_id}/alerts` |  |
+| [x] | `TASK-QA-275` | Alerts | `GET` | `/api/v1/projects/{project_id}/alerts` | 200 verified 2026-06-04; compatibility alias returns same 64 alerts. |
 | [ ] | `TASK-QA-276` | Alerts | `GET` | `/api/projects/{project_id}/alerts` |  |
 | [x] | `TASK-QA-277` | Bulk / Observability / AI | `GET` | `/api/v1/bulk-operations/{job_id}/progress` | 200 verified in Swagger for export job; returned coherent processing state, though the flow appears intentionally minimal/fake at present. |
 | [x] | `TASK-QA-278` | Bulk / Observability / AI | `GET` | `/api/v1/observability/status` | 200 verified live after `TASK-BCK-066`; route remains private and OpenAPI now advertises bearer auth so Swagger can send `Authorization`. |
 | [x] | `TASK-QA-279` | Bulk / Observability / AI | `GET` | `/api/v1/observability/analyses` | 200 verified live after `TASK-BCK-066`; same observability router fix now advertises bearer auth and returns tenant-filtered analysis rows. |
-| [ ] | `TASK-QA-280` | Bulk / Observability / AI | `GET` | `/api/v1/observability/performance/snapshot` |  |
+| [x] | `TASK-QA-280` | Bulk / Observability / AI | `GET` | `/api/v1/observability/performance/snapshot` | 200 verified 2026-06-04; returns p95/p99/error_rate metrics. |
 | [ ] | `TASK-QA-281` | Bulk / Observability / AI | `POST` | `/api/v1/ai/feedback` |  |
 | [ ] | `TASK-QA-282` | Bulk / Observability / AI | `GET` | `/api/v1/ai/analytics/cost` |  |
 | [ ] | `TASK-QA-283` | Bulk / Observability / AI | `GET` | `/api/v1/ai/analytics/versions` |  |
@@ -292,17 +292,17 @@ All 14 subtasks (TASK-QA-200..213) complete:
 | [ ] | `TASK-QA-307` | Decision Intelligence / HITL | `GET` | `/api/v1/settings/notifications` |  |
 | [ ] | `TASK-QA-308` | Decision Intelligence / HITL | `POST` | `/api/v1/settings/notifications` |  |
 | [ ] | `TASK-QA-309` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/analysis/analyze` | Reopened 2026-05-23: live call returned HTTP 200 but functional failure (`Tool 'risk_extraction' executed: failed`, empty risks, confidence 0). Initial tool root cause fixed in `TASK-BCK-073`; follow-on Analysis ⇄ HITL seam fixed in `TASK-BCK-074` after live rerun showed real risks but `analysis_id=null`/critique inconclusive. Pending API restart and live Swagger rerun. |
-| [ ] | `TASK-QA-310` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/analysis/projects/{project_id}/process/stream` |  |
+| [x] | `TASK-QA-310` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/analysis/projects/{project_id}/process/stream` | 200 SSE stream verified 2026-06-04; emits stage progress events. |
 | [ ] | `TASK-QA-311` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/mcp/query-view` |  |
 | [ ] | `TASK-QA-312` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/mcp/call-function` |  |
 | [ ] | `TASK-QA-313` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/mcp/views` |  |
 | [ ] | `TASK-QA-314` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/mcp/functions` |  |
 | [ ] | `TASK-QA-315` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/mcp/rate-limit-status` |  |
 | [ ] | `TASK-QA-316` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/mcp/execute` |  |
-| [x] | `TASK-QA-317` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/coherence/evaluate` | 200 verified again on 2026-05-17 after contract + schedule ingestion; live overall_score `37.8` with 16 alerts and category breakdown. |
-| [x] | `TASK-QA-318` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/coherence/evaluate/diagnostics` | 200 verified on 2026-05-17; diagnostics exposed `score_missing_dimensions=["schedule"]` despite successful schedule parse + WBS creation, creating `TASK-BCK-064`. |
-| [x] | `TASK-QA-319` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/coherence/dashboard/{project_id}` | 200 verified on 2026-05-17; dashboard matches fresh evaluation (`38`, `v1_exponential_decay`) and confirms persistent `score_missing_dimensions=["schedule"]` defect tracked by `TASK-BCK-064`. |
-| [ ] | `TASK-QA-320` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/coherence/dashboard/{project_id}` |  |
+| [x] | `TASK-QA-317` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/coherence/evaluate` | 200 verified again on 2026-05-17 after contract + schedule ingestion; 200 re-verified 2026-06-04; overall_score=68.8 (SCHEDULE now assessed after TASK-BCK-064). |
+| [x] | `TASK-QA-318` | Analysis / MCP / Coherence / Approvals | `POST` | `/api/v1/coherence/evaluate/diagnostics` | 200 verified on 2026-05-17; 200 re-verified 2026-06-04; score_missing_dimensions=[BUDGET,LEGAL] — SCHEDULE correctly assessed after TASK-BCK-064. overall_score=68.8. |
+| [x] | `TASK-QA-319` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/v1/coherence/dashboard/{project_id}` | 200 verified on 2026-05-17; 200 re-verified 2026-06-04; score=68.8, score_version=coherence-v1, SCHEDULE defect resolved by TASK-BCK-064. |
+| [x] | `TASK-QA-320` | Analysis / MCP / Coherence / Approvals | `GET` | `/api/coherence/dashboard/{project_id}` | 200 verified 2026-06-04; compatibility alias returns same dashboard. |
 | [ ] | `TASK-QA-321` | Analysis / MCP / Coherence / Approvals | `PATCH` | `/api/v1/approvals/{resource_type}/{resource_id}` |  |
 
 ### Execution order
