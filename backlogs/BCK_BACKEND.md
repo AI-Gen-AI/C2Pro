@@ -15,9 +15,9 @@
 
 **Pending Tasks**: 11
 
-**Completed Tasks**: 59
+**Completed Tasks**: 60
 
-- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`, `TASK-BCK-089`
+- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`, `TASK-BCK-062`, `TASK-BCK-089`
 
 > Active runtime defects are tracked below; completed history remains archived in [COMPLETED.md](./COMPLETED.md).
 
@@ -260,8 +260,9 @@
 - Root cause confirmed locally: the running DB is at Alembic head `20260510_0001`, while code already expects direct `documents.tenant_id` and migration `20260517_0002_harden_documents_clauses_chunks_rls.py` adds/backfills that column.
 - Resolution: applied pending migrations through `20260517_0002`, verified `documents.tenant_id` exists, and the same Swagger schedule upload returned `202` with document `f04d4f22-684f-4874-b93b-dc5436ef720b`.
 
-### TASK-BCK-062 — Real schedule workbook rejected by brittle Excel parser
+### TASK-BCK-062 — Real schedule workbook rejected by brittle Excel parser ✅ DONE 2026-06-04
 
+- `[x] Verified 2026-06-04` — `ExcelFileParser._find_schedule_headers` now scans all rows (not just row 1) and accepts Spanish aliases (`actividad`/`inicio`/`fin`/`duración (días)`). Suite `TS-UD-DOC-XLS-001` (`test_parse_schedule_discovers_spanish_header_row_after_title_block`) covers the exact `Cronograma.xlsx` scenario with title block + Spanish header at row 4. 9/9 tests green. Backlog status was never updated after the fix landed.
 - Live finding: `POST /api/v1/documents/{document_id}/parse` failed on uploaded schedule `Cronograma.xlsx`.
 - Actual workbook shape: row 1 is a merged title block; the real table header is row 10 with Spanish labels `ID`, `WBS`, `Actividad`, `Duración (días)`, `Inicio`, `Fin`, `Predecesoras`, `Recursos clave`.
 - Current parser limitation: it only inspects row 1 and only accepts English `task`, `start date`, `end date`.
