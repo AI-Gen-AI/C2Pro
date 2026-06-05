@@ -85,7 +85,7 @@ class AttachEvidenceRequest(BaseModel):
 
 class ResolveAlertRequest(BaseModel):
     resolution: str
-    resolved_by: UUID
+    resolved_by: UUID | None = None  # Optional — router uses CurrentUserId when absent
     root_cause: str | None = None
 
 
