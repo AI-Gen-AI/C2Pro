@@ -15,9 +15,9 @@
 
 **Pending Tasks**: 0
 
-**Completed Tasks**: 71
+**Completed Tasks**: 76
 
-- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-051`–`TASK-BCK-054`, `TASK-BCK-062`–`TASK-BCK-064`, `TASK-BCK-089`
+- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-051`–`TASK-BCK-054`, `TASK-BCK-062`–`TASK-BCK-064`, `TASK-BCK-083`–`TASK-BCK-089`
 
 > Active runtime defects are tracked below; completed history remains archived in [COMPLETED.md](./COMPLETED.md).
 
@@ -43,7 +43,7 @@
 
 ## 2. Specifications
 
-### TASK-BCK-083..089 — Coherence Category Routing v1
+### TASK-BCK-083..089 — Coherence Category Routing v1 ✅ ALL DONE 2026-06-04/05
 
 - Critical decision: routing and scoring are separate; priors/coverage decide what is assessed, findings decide score impact.
 - Naming decision: registry may use `SCHEDULE`, but coherence boundary maps to existing `TIME`; do not mix silently.
