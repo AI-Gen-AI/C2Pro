@@ -101,8 +101,11 @@ class TestScoreGranularity:
     """Verify the score never collapses to 0 or 100 inappropriately."""
 
     def test_no_findings_returns_100(self, scorer: ScoringService):
-        """Empty findings list should return perfect score."""
-        assert scorer.calculate_from_signals([], 10, 5) == 100.0
+        """Empty findings list with no coverage → insufficient_evidence per ECOA v2 §14."""
+        result = scorer.calculate_from_signals([], 10, 5)
+        # ECOA v2: no signals + no coverage_map = all categories unassessed → null score
+        assert result.score is None
+        assert result.reason == "insufficient_evidence"
 
     def test_single_low_finding_stays_above_90(self, scorer: ScoringService):
         """A single low-impact finding should barely affect the score."""
@@ -367,8 +370,10 @@ class TestBackwardCompatibility:
         assert score < 100.0, "With alerts, score should be < 100"
 
     def test_empty_alerts_returns_100(self, scorer: ScoringService):
-        """Empty alerts list should return perfect score."""
-        assert scorer.calculate([], num_clauses=10) == 100.0
+        """Empty alerts with no coverage → insufficient_evidence per ECOA v2 §14."""
+        result = scorer.calculate([], num_clauses=10)
+        assert result.score is None
+        assert result.reason == "insufficient_evidence"
 
     def test_alert_to_signal_conversion(self, scorer: ScoringService):
         """Alert should be correctly converted to FindingSignal."""
@@ -407,7 +412,8 @@ class TestDiagnostics:
         """Empty signals should return zeroed diagnostics."""
         diag = scorer.calculate_detailed([], 10, 5)
 
-        assert diag.score == 100.0
+        # ECOA v2: no signals + no coverage = insufficient_evidence → null score
+        assert diag.score is None
         assert diag.total_findings == 0
         assert diag.deterministic_findings == 0
         assert diag.llm_findings == 0
@@ -518,19 +524,21 @@ class TestExponentialDecay:
 
         score = scorer.calculate_from_signals(signals, 1, 5)
 
-        assert score == pytest.approx(expected, abs=0.1), (
+        assert score.score == pytest.approx(expected, abs=0.1), (
             f"Score {score} should match formula result {expected}"
         )
 
     def test_diminishing_returns(self, scorer: ScoringService):
         """Each additional finding should have diminishing marginal impact."""
-        base_score = scorer.calculate_from_signals([], 10, 5)
+        # Start with 1 finding so we have a valid baseline (0 signals → insufficient_evidence)
+        base_signals = [make_signal(0.50, severity="medium")]
+        base_score = scorer.calculate_from_signals(base_signals, 10, 5).score
 
-        # Add findings one at a time
+        # Add more findings one at a time
         scores = [base_score]
-        for i in range(1, 6):
+        for i in range(2, 7):
             signals = [make_signal(0.50, severity="medium") for _ in range(i)]
-            score = scorer.calculate_from_signals(signals, 10, 5)
+            score = scorer.calculate_from_signals(signals, 10, 5).score
             scores.append(score)
 
         # Check diminishing returns: delta between scores should decrease
@@ -552,8 +560,10 @@ class TestScoreCurveScenarios:
     """Test scenarios from the design document."""
 
     def test_scenario_no_findings(self, scorer: ScoringService):
-        """0 findings → score = 100."""
-        assert scorer.calculate_from_signals([], 10, 5) == 100.0
+        """0 findings + no coverage → insufficient_evidence per ECOA v2 §14."""
+        result = scorer.calculate_from_signals([], 10, 5)
+        assert result.score is None
+        assert result.reason == "insufficient_evidence"
 
     def test_scenario_single_low_in_large_project(self, scorer: ScoringService):
         """1 low finding in 10 clauses → score at ceiling (97.0)."""
