@@ -1,7 +1,7 @@
 # C2PRO Master Backlog - Index & Overview
 
 **Purpose**: High-level project index. Only **pending** work is tracked here.
-**Last Updated**: 2026-06-04 (pending-only PM view)
+**Last Updated**: 2026-06-05 (pending-only PM view)
 **Archive**: [`backlogs/COMPLETED.md`](backlogs/COMPLETED.md)
 
 > **Navigation**: Quick Navigation → Pending Manifest → Pending by Category.
@@ -35,7 +35,7 @@
 | [ ] | P0 | `EPIC-OPS-DOCFLOW` | EPIC-COVERAGE-GATES | Real document operability gate: upload, parse, anonymize, extract, score, alert, and render through tenant-safe API/UI. | `blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md` |
 | [ ] | P3 | `EPIC-SENTRY-PERF` | TENANT-RLS-HARDENING | Sentry auth alerts remain blocked on operator prerequisites. | Manifest v3 |
 | [ ] | P3 | `TASK-FRT-041` | TENANT-RLS-HARDENING | Clerk production email templates; blocked on operator access. | `docs/runbooks/CLERK_AUTH_DEV_PROD_GUIDE.md` |
-| [ ] | P0 | `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` | EPIC-COH-V1-CONSOLIDATION | Coherence Score v2 hotfix/cutover: active-weight guard, adapter fix, frontend null-safe, canonical `score_version`, cache namespacing, per-tenant cutover. | `docs/superpowers/specs/2026-05-25-ecoa-v2-hotfix-and-cutover-design.md` |
+| [x] | P0 | `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` | EPIC-COH-V1-CONSOLIDATION | Coherence Score v2 hotfix/cutover: active-weight guard, adapter fix, frontend null-safe, canonical `score_version`, cache namespacing, per-tenant cutover. | `docs/superpowers/specs/2026-05-25-ecoa-v2-hotfix-and-cutover-design.md` |
 
 ## Pending Tasks by Category
 
@@ -50,12 +50,12 @@
 | ~~P1~~ ✅ | `TASK-BCK-089` | `TASK-BCK-086,TASK-BCK-088` | ~~Add ambiguous-chunk `CategoryClassifierNode`~~ **DONE 2026-06-04** — `CategoryClassifierNode` Capa 2 LLM escalation. 22/22 tests green. |
 | P1       | `TASK-BCK-063`        | None                             | Persist `parsed_at` when document parsing succeeds: live `GET /api/v1/documents/{document_id}` returns `upload_status="parsed"` with `parsed_at=null`, and the parse use case still contains a placeholder comment instead of a real timestamp update.                                                                                                                                                                                                                                          |
 | P0       | `TASK-BCK-064`        | `TASK-BCK-062`                   | Reconcile schedule ingestion with coherence scoring: after a live schedule upload parses successfully and creates WBS items, `/api/v1/coherence/evaluate/diagnostics` still reports `score_missing_dimensions=["schedule"]`, so schedule evidence is not yet contributing to the coherence model.                                                                                                                                                                                               |
-| P0 | `TASK-COH-V2-HOTFIX-001` | None | Enforce ECOA v2 §14 active-weight guard so insufficient active evidence returns `overall_score=null` with `score_reason="insufficient_active_weight"`. |
-| P0 | `TASK-COH-V2-ADAPTER-002` | `TASK-COH-V2-HOTFIX-001` | Fix coherence adapter contract drift and preserve canonical null/score_reason behavior through API diagnostics. |
-| P0 | `TASK-COH-V2-FRONTEND-003` | `TASK-COH-V2-HOTFIX-001` | Make frontend score rendering null-safe for insufficient evidence instead of showing misleading numeric scores. |
-| P0 | `TASK-COH-V2-VERSIONING-006` | `TASK-COH-V2-HOTFIX-001` | Canonicalize `score_version` to the approved two-value enum and add Alembic backfill. |
-| P0 | `TASK-COH-V2-CACHING-007` | `TASK-COH-V2-HOTFIX-001` | Namespace coherence caches by score version and invalidate on tenant cutover flag changes. |
-| P1 | `TASK-COH-V2-DOCS-005` | `TASK-COH-V2-HOTFIX-001` | Update ADR-009/OpenAPI/codemap after ECOA v2 hotfix behavior is verified. |
+| ~~P0~~ ✅ | `TASK-COH-V2-HOTFIX-001` | None | Enforce ECOA v2 §14 active-weight guard so insufficient active evidence returns `overall_score=null` with `score_reason="insufficient_active_weight"`. |
+| ~~P0~~ ✅ | `TASK-COH-V2-ADAPTER-002` | `TASK-COH-V2-HOTFIX-001` | Fix coherence adapter contract drift and preserve canonical null/score_reason behavior through API diagnostics. |
+| ~~P0~~ ✅ | `TASK-COH-V2-FRONTEND-003` | `TASK-COH-V2-HOTFIX-001` | Make frontend score rendering null-safe for insufficient evidence instead of showing misleading numeric scores. |
+| ~~P0~~ ✅ | `TASK-COH-V2-VERSIONING-006` | `TASK-COH-V2-HOTFIX-001` | Canonicalize `score_version` to the approved two-value enum and add Alembic backfill. |
+| ~~P0~~ ✅ | `TASK-COH-V2-CACHING-007` | `TASK-COH-V2-HOTFIX-001` | Namespace coherence caches by score version and invalidate on tenant cutover flag changes. |
+| ~~P1~~ ✅ | `TASK-COH-V2-DOCS-005` | `TASK-COH-V2-HOTFIX-001` | Update ADR-009/OpenAPI/codemap after ECOA v2 hotfix behavior is verified. |
 | P2 | `TASK-BCK-077` | None | Repair Celery task registration/import drift so worker startup includes current analysis/document tasks. |
 | P0 | `TASK-COH-V2-CUTOVER-004` | `TASK-COH-V2-HOTFIX-001,TASK-COH-V2-ADAPTER-002,TASK-COH-V2-FRONTEND-003` | Roll out v2 authoritative scoring behind per-tenant flag with shadow MAE guard and canary 10-50-100. |
 
