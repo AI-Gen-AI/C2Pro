@@ -227,8 +227,13 @@ class LangSmithClient:
             return
 
         from uuid import UUID
+        try:
+            run_uuid = UUID(run_id)
+        except (ValueError, AttributeError):
+            logger.warning("langsmith_create_feedback_invalid_run_id", run_id=run_id)
+            return
         self._client.create_feedback(
-            run_id=UUID(run_id),
+            run_id=run_uuid,
             key=key,
             score=score,
             comment=comment,

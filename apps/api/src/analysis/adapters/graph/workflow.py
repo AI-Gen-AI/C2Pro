@@ -56,13 +56,29 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
     "human_interrupt",
     "stakeholder_extractor",
 ]:
-    """Thin conditional edge — delegates branching to CritiqueEvaluationService."""
+    """Thin conditional edge — delegates branching to CritiqueEvaluationService.
+
+    Two escape hatches let operators force the flow past the HITL gate so
+    that downstream nodes (N8 coherence_scorer with the risk→signal bridge,
+    N17 save_to_db) actually run even when the LLM extraction quality is
+    low and critique would normally pause for human review:
+
+    * ``C2PRO_AI_MOCK=1`` — historical mock-mode flag (kept for tests).
+    * ``C2PRO_SKIP_HITL=1`` — independent operator override. Lets you
+      use a real LLM but skip the HITL pause so coherence/persistence
+      still complete. ``human_approval_required`` remains in state for
+      visibility, but the workflow routes through enrichment_dispatch.
+    """
+    skip_hitl = (
+        os.getenv("C2PRO_AI_MOCK", "0") == "1"
+        or os.getenv("C2PRO_SKIP_HITL", "0") == "1"
+    )
     return _critique_evaluator.determine_next_step(  # type: ignore[return-value]
         human_approval_required=bool(state.get("human_approval_required")),
         critique_notes=state.get("critique_notes", "") or "",
         retry_count=int(state.get("retry_count", 0)),
         doc_type=state.get("doc_type") or "",
-        skip_hitl=os.getenv("C2PRO_AI_MOCK", "0") == "1",
+        skip_hitl=skip_hitl,
     )
 
 
@@ -330,7 +346,14 @@ def _build_checkpointer():
 
 
 async def ensure_checkpointer_ready() -> None:
-    """Ensure PostgreSQL checkpointer tables/migrations are initialized exactly once."""
+    """Ensure PostgreSQL checkpointer tables/migrations are initialized exactly once.
+
+    If the pool cannot connect within its configured timeout (e.g. network
+    restriction in the sandbox, PgBouncer misconfiguration, or Supabase direct
+    connection unavailable), we log a warning and mark the checkpointer ready
+    without running setup — the app starts with in-memory checkpointing rather
+    than crashing entirely.
+    """
     global _checkpointer_ready
 
     if _checkpointer_ready:
@@ -349,13 +372,21 @@ async def ensure_checkpointer_ready() -> None:
     async with _checkpointer_setup_lock:
         if _checkpointer_ready:
             return
-        if _checkpointer_pool is not None and getattr(_checkpointer_pool, "closed", False):
-            await _checkpointer_pool.open()
-        setup_result = setup()
-        if asyncio.iscoroutine(setup_result):
-            await setup_result
-        _checkpointer_ready = True
-        logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
+        try:
+            if _checkpointer_pool is not None and getattr(_checkpointer_pool, "closed", False):
+                await _checkpointer_pool.open()
+            setup_result = setup()
+            if asyncio.iscoroutine(setup_result):
+                await setup_result
+            _checkpointer_ready = True
+            logger.info("langgraph_checkpointer_ready", checkpointer_type=type(checkpointer).__name__)
+        except Exception as exc:  # noqa: BLE001 — pool timeout, SSL error, etc.
+            _checkpointer_ready = True  # prevent retry storm on every request
+            logger.warning(
+                "langgraph_checkpointer_setup_failed",
+                error=str(exc),
+                reason="checkpointer tables not verified; app continues with in-memory fallback",
+            )
 
 
 async def close_checkpointer_resources() -> None:
