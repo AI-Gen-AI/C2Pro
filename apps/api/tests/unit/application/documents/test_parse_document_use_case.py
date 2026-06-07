@@ -16,7 +16,9 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 @pytest.fixture
 def mock_repository():
-    return MagicMock(spec=["get_by_id", "update_status", "commit"])
+    repo = MagicMock(spec=["get_by_id", "update_status", "update_metadata", "commit"])
+    repo.update_metadata = AsyncMock()
+    return repo
 
 
 @pytest.fixture
@@ -84,15 +86,15 @@ async def test_parse_document_updates_parsed_at(
     mock_repository.get_by_id = AsyncMock(return_value=sample_document)
     mock_repository.update_status = AsyncMock()
     mock_repository.commit = AsyncMock()
-    
+
     mock_storage.download_file = AsyncMock(return_value=Path("/tmp/contract.pdf"))
     mock_parser.parse_document_file = AsyncMock(return_value={"text_blocks": []})
-    
+
     # We use patch for datetime.now to have a stable timestamp for verification
     fixed_now = datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC)
     with patch("src.documents.application.parse_document_use_case.datetime") as mock_datetime:
         mock_datetime.now.return_value = fixed_now
-        
+
         await use_case.execute(tenant_id, document_id, user_id)
 
     # Verify update_status was called with status=PARSED and parsed_at=fixed_now
@@ -100,7 +102,7 @@ async def test_parse_document_updates_parsed_at(
     mock_repository.update_status.assert_any_call(
         tenant_id, document_id, DocumentStatus.PARSING
     )
-    
+
     mock_repository.update_status.assert_any_call(
         tenant_id,
         document_id,
@@ -108,17 +110,17 @@ async def test_parse_document_updates_parsed_at(
         parsing_error=None,
         parsed_at=fixed_now,
     )
-    
+
     assert mock_repository.commit.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_parse_document_handles_not_found(use_case, mock_repository):
     mock_repository.get_by_id = AsyncMock(return_value=None)
-    
+
     with pytest.raises(HTTPException) as exc:
         await use_case.execute(uuid4(), uuid4(), uuid4())
-    
+
     assert exc.value.status_code == 404
 
 
@@ -131,16 +133,16 @@ async def test_parse_document_handles_failure(
 ):
     tenant_id = sample_document.tenant_id
     document_id = sample_document.id
-    
+
     mock_repository.get_by_id = AsyncMock(return_value=sample_document)
     mock_repository.update_status = AsyncMock()
     mock_repository.commit = AsyncMock()
-    
+
     mock_storage.download_file = AsyncMock(side_effect=RuntimeError("Storage boom"))
-    
+
     with pytest.raises(RuntimeError, match="Storage boom"):
         await use_case.execute(tenant_id, document_id, uuid4())
-        
+
     # Verify status updated to ERROR
     mock_repository.update_status.assert_any_call(
         tenant_id, document_id, DocumentStatus.ERROR, parsing_error="Storage boom"
