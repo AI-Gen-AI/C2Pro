@@ -27,11 +27,11 @@ from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.rag_service import (
     RagProjectNotFoundError,
     RagProviderUnavailableError,
 )
+from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
