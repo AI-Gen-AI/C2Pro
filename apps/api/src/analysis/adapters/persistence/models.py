@@ -214,6 +214,7 @@ class Alert(Base):
 
     # Content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -317,6 +318,8 @@ class Alert(Base):
                         f"Invalid alert_type: {alert_type_value}. "
                         f"Must be one of: {', '.join([e.value for e in AlertType])}"
                     )
+        if kwargs.get("message") is None:
+            kwargs["message"] = kwargs.get("description") or kwargs.get("title") or "Alert"
         super().__init__(**kwargs)
 
     def __repr__(self) -> str:
