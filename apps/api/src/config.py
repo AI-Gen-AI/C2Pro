@@ -315,6 +315,18 @@ class Settings(BaseSettings):  # type: ignore[misc]
     feature_rfq_generation: bool = False  # Fase 2
     feature_expediting_vision: bool = False  # Fase 3
 
+    # C2Pro v3.0 Project Intelligence Overlay (ADR-013→021) — all default OFF;
+    # enable per-phase via canary. Resolved by require_feature()/getattr(settings, …).
+    feature_v3_spine: bool = Field(default=False, validation_alias="FEATURE_V3_SPINE")
+    feature_v3_coherence_llm: bool = Field(default=False, validation_alias="FEATURE_V3_COHERENCE_LLM")  # ADR-013/017
+    feature_v3_project_state: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_STATE")  # ADR-014
+    feature_v3_temporal: bool = Field(default=False, validation_alias="FEATURE_V3_TEMPORAL")  # ADR-015
+    feature_v3_change_impact: bool = Field(default=False, validation_alias="FEATURE_V3_CHANGE_IMPACT")  # ADR-016
+    feature_v3_project_graph: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH")  # ADR-017
+    feature_v3_health: bool = Field(default=False, validation_alias="FEATURE_V3_HEALTH")  # ADR-018
+    feature_v3_action_review: bool = Field(default=False, validation_alias="FEATURE_V3_ACTION_REVIEW")  # ADR-019/020
+    feature_v3_briefing: bool = Field(default=False, validation_alias="FEATURE_V3_BRIEFING")  # ADR-021
+
     # ECOA v2 (ADR-009) — Phase 1 (compatibility) + Phase 2 (shadow mode).
     # Per-tenant override is deferred — single global toggle for now.
     coherence_v2_enabled: bool = Field(
