@@ -77,6 +77,22 @@
 | ------- | ----- | ---- | -------- | ------------- | ------------------ |
 | `EPIC-ECOA-V2-HOTFIX-AND-CUTOVER` | ECOA v2 §14 active-weight guard + adapter fix + frontend null-safe + `score_version` canonical + cache namespacing + per-tenant v2 cutover | Bug+Feature | P0 | EPIC-COH-V1-CONSOLIDATION | 7-task epic (`TASK-COH-V2-HOTFIX-001` through `-CUTOVER-004`). Phase A+B: v1 hotfix + adapter (one PR). C: frontend null-safe (one PR). F: `score_version` canonical 2-value enum + Alembic backfill. G: cache namespace versioning + flag-flip invalidation. D: v2 authoritative behind per-tenant flag — extend existing `Tenant.settings: JSONB` (alerts pattern, no new tables); canary 10→50→100 with shadow-MAE ≤ 15 auto-block. E: ADR-009 status flip + OpenAPI regen + codemap. Branch policy: **no pushes to `main`** for any task. |
 
+### Tier 5 — C2Pro v3.0 Project Intelligence Overlay (ADR-013→021, 2026-06-07)
+
+> Canonical ADRs: `docs/architecture/decisions/ADR-013..021`. Spine = **Time · Change · Health · Evidence · Action**. Approach: SDD → Contract-First → TDD. **Build gate:** Thin Spine (P0–P3 + ADR-018 v0) is built first; Phase 7 (ADR-019/020) and Phase 8 (ADR-021) are gated behind one real Contract-Manager using the Change-Impact loop weekly. **Tickets are provisional — adapt on any new finding/decision.** Source: deep audit + multi-model ADR arbitration (`docs/audits/`) + implementation plan (session 2026-06-07). Full ticket detail: §"C2Pro v3.0 (EPIC-V3-*)" under Pending Tasks by Category. **No pushes to `main`.**
+
+| Task ID | Title | Type | Priority | Blocking Deps | Technical Strategy |
+| ------- | ----- | ---- | -------- | ------------- | ------------------ |
+| `EPIC-V3-P0` | Repo Safety & Baseline | Chore | P0 | — | Integration branch, `feature_v3_*` flags, root hygiene, secret-scan CI, green baseline. |
+| `EPIC-V3-013` | ADR-013 Runtime Trust & Typed Contracts | Refactor | P0 | EPIC-V3-P0 | Pydantic payloads + `NodeResult` + silent-failure ban + coherence signature fix + `low_budget_mode` default removal + CI graph-contract test + INV-1 honest-null scaffold. |
+| `EPIC-V3-014` | ADR-014 Project State Model | Architecture | P0 | EPIC-V3-013 | `ProjectState` aggregate + canonical entities + lifecycle + provenance + reserved future seams (Procurement/Stakeholder). |
+| `EPIC-V3-015` | ADR-015 Temporal Layer | Architecture | P0 | EPIC-V3-014 | `DocumentRevision` lineage → `ProjectEvent` log + append-only `ProjectSnapshot` + retention. Hybrid, not full event-sourcing. |
+| `EPIC-V3-016` | ADR-016 Semantic Diff & Change-Impact v0 | Feature | P0→P1 | EPIC-V3-014, EPIC-V3-015 | L1 structural diff + anchor resolver + evidence-gated Change-Impact Report. L2 semantic-LLM gated. The wedge. |
+| `EPIC-V3-017` | ADR-017 ProjectGraph Two-Tier (async) | Feature | P1 | EPIC-V3-013, EPIC-V3-014 | Tier-2 ProjectGraph, async Celery-triggered, cross-doc coherence LLM-on + canary. |
+| `EPIC-V3-018` | ADR-018 Health Engine v0 | Feature | P1 | EPIC-V3-014, EPIC-V3-015 | 4 v0 dimensions (Risk/Contract/Docs/Governance), honest nulls, coherence demoted to subscore. v1 dims gated. |
+| `EPIC-V3-019-020` | ADR-019/020 Action & Review Loop [GATED] | Feature | P2 | EPIC-V3-016, EPIC-V3-017, EPIC-V3-018 | `ActionItem` correlation + Contract-Manager HITL queue + active-learning loop. Single persona/queue at launch. |
+| `EPIC-V3-021` | ADR-021 Read-Model & Briefing [DEFERRED] | Feature | P3 | EPIC-V3-015, EPIC-V3-018, EPIC-V3-019-020 | Snapshot projection + Morning Briefing + portfolio rollup. Read-only; UI is a separate PRD epic. |
+
 ### Pruned — `[STATUS: WONT DO]`
 
 | Task ID | Justification |
@@ -120,6 +136,7 @@
 | ~~P0~~ | ~~`TASK-BCK-074`~~ | `TASK-BCK-073` | ~~Repair the Analysis ⇄ HITL seam after Swagger showed extracted risks but `analysis_id=null`, `Automatic critique inconclusive`, and auto-approved HITL rows that still interrupted before persistence.~~ `[x] Implemented (critique cost-controller tenant-session path + HITL auto-approved continuation + resume invokes LangGraph; TS-QA-SWAGGER-ANALYSIS-002 green)` |
 | ~~P0~~ | ~~`TASK-BCK-075`~~ | None | ~~Repair API startup failure from split Alembic heads after main sync; Docker startup failed with `Multiple head revisions are present for given argument 'head'`.~~ `[x] Implemented (Alembic merge revision 20260524_0001; TS-QA-SWAGGER-MIGRATION-001 green)` |
 | ~~P0~~ | ~~`TASK-BCK-076`~~ | `TASK-BCK-074` | ~~Repair API startup failure from LangGraph reserved channel `checkpoint_id` after HITL seam fix.~~ `[x] Implemented (removed reserved checkpoint_id from ProjectState; compile regression green)` |
+| ~~P0~~ | ~~`TASK-BCK-090`~~ | `TASK-BCK-074` | ~~Repair `/api/v1/analysis/analyze` persistence failure where generated risk alerts omitted legacy non-null `alerts.message`, causing Postgres `NotNullViolationError` during `save_to_db`.~~ `[x] Implemented (alert message persistence compatibility; TS-QA-SWAGGER-ANALYSIS-003 green)` |
 | ~~P0~~ | ~~`TASK-BCK-061`~~ | None | ~~Restore local document uploads by reconciling database migration state with the tenant-hardened document repository; live Swagger `POST /api/v1/projects/{project_id}/documents` failed with `UndefinedColumnError: column documents.tenant_id does not exist` while code expected direct `tenant_id` and migration `20260517_0002` existed but the running DB remained at `20260510_0001`.~~ `[x] Implemented (Applied pending migrations; live schedule upload restored)` |
 | ~~P0~~ | ~~`TASK-BCK-062`~~ | None | ~~Make Excel schedule parsing production-credible~~ `[x] Implemented` — live real schedule upload now parses from a title sheet with the actual header on row 10 and Spanish columns (`Actividad`, `Inicio`, `Fin`); malformed sheet shape is handled without HTTP `500`, parsed WBS codes are preserved, and WBS level is inferred before persistence. Verified live on 2026-05-17 via `POST /api/v1/documents/f04d4f22-684f-4874-b93b-dc5436ef720b/parse -> 202 parsed`. |
 | ~~P0~~ | ~~`TASK-BCK-055`~~ | None | ~~Coherence Score™ Structured Extraction Layer~~ `[x] Implemented` — extraction layer runs on every evaluation, populates `clause.data` from clause text via Claude Haiku, caches in `clauses.extracted_entities`. Verified: TECHNICAL score 100→71.5, deterministic findings 8→13, new rules `DET-TEC-BOMBUDGET` + `DET-TEC-SPEC` firing. Second-call latency near-zero (DB cache hits). LEGAL/SCOPE still 100 due to RAG retrieval coverage (not an extraction bug). |
@@ -205,6 +222,105 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | P1 | `[ ] TASK-COH-V2-DOCS-005` | `TASK-COH-V2-HOTFIX-001` | Rename malformed `worktrees/sentry-perf/w5b-benchmarks/docs/architecture/adr/ADR-009-` → `ADR-009-evidence-oriented-coherence-orchestration.md`; status `Proposed` → `Accepted` with date; regenerate `docs/api/openapi.yaml` via `make openapi`; update codemap. Branch `docs/coherence-adr-009-accepted`. |
 | P1 | `[ ] TASK-COH-V2-CUTOVER-004` | `-001 -003 -006 -007` | Make ECOA v2 authoritative behind per-tenant flag. D.0 audit verdict: **EXISTS_PARTIAL** — extend `Tenant.settings: JSONB` at `apps/api/src/core/auth/models.py:100` (alerts pattern at `apps/api/src/alerts/adapters/persistence/tenant_repository.py`); extract shared `apps/api/src/core/feature_flags/tenant_flags_service.py`; remove `apps/api/src/config.py:319` "Per-tenant override is deferred" comment. Canary 10→50→100% over 3 days with shadow-MAE ≤ 15 auto-block. Branches `feat/coherence-v2-authoritative-canary` (D.0) then `feat/coherence-v2-authoritative` (D.1+). |
 
+### C2Pro v3.0 (EPIC-V3-*) — Project Intelligence Overlay tickets (ADR-013→021)
+
+> 50 tickets across 9 phases. Provisional — adapt on new findings/decisions. ADRs: `docs/architecture/decisions/ADR-013..021`. Columns: Goal/Scope (· Out: = out of scope) · Expected files · Tests · Done-when. **No pushes to `main`.**
+
+#### Phase 0 — Repo Safety & Baseline (EPIC-V3-P0)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-P0-01` | P0 | — | Create `feat/v3-spine` integration branch + per-phase branches; register `feature_v3_*` flag namespace (default off). · Out: feature code | `core/feature_flags/` | flag defaults-off unit | branch exists; flags togglable in tests |
+| `[ ] TASK-V3-P0-02` | P0 | P0-01 | Root hygiene: relocate ~25 stray `*.py` + ~15 `*.txt` to `scripts/legacy/` or delete; remove `nul`, `test.db`, committed logs, malformed `C:Users…md`; add CI secret-scan. · Out: src changes | repo root, `.gitignore`, `.github/workflows/secret-scan.yml` | secret-scan green | clean `git status`; CI green |
+| `[ ] TASK-V3-P0-03` | P0 | P0-02 | Confirm `make lint typecheck test` green at HEAD; record baseline coverage. · Out: new tests | — | full suite green | baseline recorded in PR |
+
+#### Phase 1 — ADR-013 Runtime Trust (EPIC-V3-013)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-013-01` | P0 | P0-03 | Freeze Pydantic v2 payload models: `RiskItem, WbsActivity, BudgetItem, Citation, DocumentArtifact, CoherenceFinding`. · Out: node logic | `analysis/domain/contracts.py`, `tests/unit/analysis/contracts/` | model-validation unit | models frozen; 100% validation cov; broadcast to agents |
+| `[ ] TASK-V3-013-02` | P0 | 013-01 | `NodeResult{ok\|degraded\|failed\|skipped}` + `ErrorRecord` envelope. · Out: applying it | `analysis/domain/node_result.py` | envelope unit (degraded/failed) | type frozen |
+| `[ ] TASK-V3-013-03` | P0 | 013-02 | Graph-contract CI test (fails on node signature/return drift); wire into `tests.yml`. | `tests/contract/test_graph_node_contracts.py`, `.github/workflows/tests.yml` | RED on current drift → GREEN after 013-05 | CI gate active |
+| `[ ] TASK-V3-013-04` | P0 | 013-02 | Apply `NodeResult` + ban silent `except: return []/None` on material nodes; type channel values; persist errors to events. · Out: trivial passthrough nodes | `analysis/adapters/graph/{schema.py,nodes.py,nodes_extended.py}` | no-silent-failure injection suite | zero silent fallbacks in material nodes |
+| `[ ] TASK-V3-013-05` | P0 | 013-04 | Fix coherence signature drift: reconcile N8 (`nodes_extended.py:238-250`) `seed_signals`/`seed_coverage` with `evaluate_coherence_async()` (`coherence/graph/graph.py:263`). | `nodes_extended.py`, `coherence/graph/graph.py` | graph-contract green; N8→subgraph unit | no kwarg mismatch |
+| `[ ] TASK-V3-013-06` | P0 | 013-05 | Remove `low_budget_mode=True` default (`nodes_extended.py:242`); gate LLM-on behind `feature_v3_coherence_llm` + canary 10→50→100. | `nodes_extended.py`, `core/feature_flags/` | flag unit + canary stub | headline path no longer degraded-by-default |
+| `[ ] TASK-V3-013-07` | P0 | 013-04 | Route degraded/failed node counts to a typed Documentation-health signal (consumed by ADR-018). | `analysis/domain/`, graph state | failed-node→signal unit | signal emitted + asserted |
+| `[ ] TASK-V3-013-08` | P0 | 013-01 | INV-1 scaffold: `EvidenceRef` + tier enum `{verified,weak,inferred,unverified}` + honest-null helper. · Out: full gating (016/018) | `src/evidence/`, `analysis/domain/` | missing-evidence→null+reason unit | helper+tier available downstream |
+
+#### Phase 2 — ADR-014 Project State Model (EPIC-V3-014)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-014-01` | P0 | 013-01 | `ProjectState` aggregate + canonical entities (Clause/Obligation, WbsActivity, BudgetItem, RiskItem, Stakeholder/RaciCell, ChangeSet, HealthSnapshot, ActionItem) + `lifecycle_status` enum. | `src/project_state/domain/` | entity+lifecycle unit | models frozen |
+| `[ ] TASK-V3-014-02` | P0 | 014-01 | Repository Ports (Protocol) + static test asserting repos never call `commit()`. | `project_state/ports/`, `tests/ci/` | no-`commit()`-in-repo static test | ports defined; gate green |
+| `[ ] TASK-V3-014-03` | P0 | 014-02 | SQLAlchemy adapters (no `commit()` in repo). | `project_state/adapters/persistence/` | adapter integration | CRUD works under tenant |
+| `[ ] TASK-V3-014-04` | P0 | 014-03 | Alembic migration for aggregate tables (+`downgrade`). | `apps/api/alembic/versions/` | migration up/down | upgrade+downgrade clean |
+| `[ ] TASK-V3-014-05` | P0 | 014-03 | Compatibility adapter mapping per-document outputs → project entities. · Out: removing legacy path | `project_state/application/` | mapping integration | existing projects map, no data loss |
+| `[ ] TASK-V3-014-06` | P0 | 014-01 | Reserved future seams: `doc_type` enum values (`rfq,quote,purchase_order,bid_tab`), nullable `procurement_refs`, `Stakeholder.{authority_level,escalation_role,communication_preference}`. · Out: any future-domain logic | `shared_kernel/enums.py`, `project_state/domain/` | seam-persists-nullable unit | seams persist, no logic |
+| `[ ] TASK-V3-014-07` | P0 | 014-04 | RLS policies on new tables + tenant isolation tests (fail-closed). | migration, `tests/security/` | RLS/tenant tests | no cross-tenant leakage |
+
+#### Phase 3 — ADR-015 Temporal Layer (EPIC-V3-015)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-015-01` | P0 | 014-04 | Content-addressed `DocumentRevision` lineage (`rev_no, parent_revision_id, blob_hash, valid_from/to`) + R2 object. | `src/temporal/`, `documents/`, alembic | revision-lineage integration | every upload → durable revision |
+| `[ ] TASK-V3-015-02` | P0 | 015-01 | Migrate `reupload_document_use_case.py` to write revisions (kill amnesiac reset). | `documents/application/reupload_document_use_case.py` | reupload integration | re-upload preserves history |
+| `[ ] TASK-V3-015-03` | P0 | 015-01 | `ProjectEvent` append-only log (jsonb, RLS) + extensible type registry incl. reserved `procurement.*`/`stakeholder.*` namespaces. | `temporal/`, alembic | event-append + RLS | events appended, namespaces reserved |
+| `[ ] TASK-V3-015-04` | P0 | 015-03 | `ProjectSnapshot` append-only materialized read model + INSERT-only DB constraint. | `temporal/`, alembic | snapshot write/read + UPDATE-rejected | snapshots INSERT-only |
+| `[ ] TASK-V3-015-05` | P0 | 015-04 | Snapshot triggers (revision ingest, graph complete, HITL change, baseline change) + daily Celery job. | `core/tasks/`, `temporal/` | trigger integration | snapshot on each trigger |
+| `[ ] TASK-V3-015-06` | P0 | 015-04 | Retention/partition policy (daily 90d → weekly; monthly partitions). | alembic, `core/tasks/` | retention test | growth bounded |
+
+#### Phase 4 — ADR-016 Semantic Diff v0 (EPIC-V3-016)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-016-01` | P0 | 014-01, 015-01 | `ChangeSet` + `SemanticChange` typed contracts (incl. `match_confidence`, `evidence_refs`). | `src/change_intelligence/domain/` | contract unit | models frozen |
+| `[ ] TASK-V3-016-02` | P0 | 016-01 | L1 structural diff for contracts (clause add/remove/modify keyed on `clause_id`). · Out: LLM | `change_intelligence/`, `documents/` clause extraction | golden Rev-C→D fixtures; zero-LLM assert | structural diff on real pair |
+| `[ ] TASK-V3-016-03` | P0 | 016-02 | Anchor resolver: deterministic keys → fuzzy fallback + `match_confidence`; below-threshold → `needs_review`. | `change_intelligence/` | anchor edge-case unit | stable IDs across revisions |
+| `[ ] TASK-V3-016-04` | P0→P1 | 016-02, 013-08 | Evidence-gated Change-Impact Report (what changed / why / conflicts / impact honest-null / evidence / action). | `change_intelligence/application/` | report golden + evidence-gate | evidence-cited report w/ ≥1 conflict |
+| `[ ] TASK-V3-016-05` | P1 [GATED] | 016-03 | L2 semantic-LLM diff on modified pairs only (meaning + severity). · Out: whole-doc LLM | `change_intelligence/adapters/ai/` | semantic-diff golden | cost scales with modified pairs |
+
+#### Phase 5 — ADR-017 ProjectGraph Skeleton (EPIC-V3-017)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-017-01` | P1 | 013-01 | Type Tier-1 `DocumentArtifact` output contract. | `analysis/adapters/graph/` | Tier-1 contract unit | artifact typed + frozen |
+| `[ ] TASK-V3-017-02` | P1 | 017-01, 014-01 | Tier-2 `ProjectGraph` skeleton + small typed `ProjectGraphState` (serial first). | `analysis/adapters/graph/project_graph.py` | graph-contract Tier1↔Tier2 | skeleton compiles + runs |
+| `[ ] TASK-V3-017-03` | P1 | 017-02 | Async-trigger ProjectGraph on artifact change (Celery); upload non-blocking. · Out: sync-on-upload | `core/tasks/`, `project_graph.py` | async-trigger integration | upload latency unaffected |
+| `[ ] TASK-V3-017-04` | P1 | 017-03, 013-06 | Cross-doc coherence node (LLM-on, multi-clause) in Tier-2; canary 10→50→100. | `project_graph.py`, `coherence/` | coherence-live integration + canary gate | cross-doc coherence live, async |
+| `[ ] TASK-V3-017-05` | P1 | 017-03 | Cost governance: throttle + DLQ + per-tenant concurrency caps. | `core/tasks/`, `core/events/` | perf/cost + DLQ-on-failure | caps enforced; failures → DLQ |
+
+#### Phase 6 — ADR-018 Health Engine v0 (EPIC-V3-018)
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-018-01` | P1 | 014-01 | `HealthVector` + `HealthSignal` contracts (`score\|null, confidence, evidence, trend, missing_data`; bands). | `src/health/domain/` | contract + honest-null unit | models frozen |
+| `[ ] TASK-V3-018-02` | P1 | 018-01 | Risk + Contract dimension scorers (v0); honest-null branches. | `health/application/` | per-dim unit incl. null | scorers green |
+| `[ ] TASK-V3-018-03` | P1 | 018-01, 013-07 | Documentation + Governance dimension scorers (v0; consume degradation signal + HITL/SLA). | `health/application/` | per-dim unit | scorers green |
+| `[ ] TASK-V3-018-04` | P1 | 018-02 | Demote coherence to Contract subscore (not a standalone product number). | `coherence/`, `health/` | subscore integration | coherence feeds Contract dim |
+| `[ ] TASK-V3-018-05` | P1 | 018-02, 015-04 | Confidence-weighted composite over available dims + trend from snapshots; never fabricate green. | `health/application/` | composite + trend unit; evidence-gate | green impossible w/o evidence |
+| `[ ] TASK-V3-018-06` | P1 | 018-05 | Dashboard health-vector contract + `make openapi` regen. · Out: full UI build | `apps/web/` health view, `docs/api/openapi.yaml` | OpenAPI drift gate | vector renders w/ confidence+trend+insufficient_data |
+
+#### Phase 7 — ADR-019 / ADR-020 Action & Review Loop (EPIC-V3-019-020) [GATED on pilot]
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-019-01` | P2 [GATED] | 016-04, 018-05 | `ActionItem` model + correlation (group-by-revision, group-by-shared-entity). | `alerts/` (extend), `src/action_review/` | correlation unit | 1 revision → 1 ActionItem |
+| `[ ] TASK-V3-019-02` | P2 [GATED] | 019-01 | Ranking `severity×confidence×impact` + dedupe/suppress (unchanged + pending-CO). | `action_review/` | dedupe/rank unit | top-N stable across re-runs |
+| `[ ] TASK-V3-019-03` | P2 [GATED] | 019-01 | Minimal org/role model (`owner_stakeholder_id`, `escalation_path`) — shared seam. · Out: full RBAC | `action_review/`, `project_state/` | role unit | owners/escalation modeled |
+| `[ ] TASK-V3-020-01` | P2 [GATED] | 017-02, 019-01 | Productize `langgraph.interrupt` → single Contract-Manager review queue. · Out: 5-persona suite | `modules/hitl/`, `apps/web/` | queue + resume integration | CM reviews/corrects/approves |
+| `[ ] TASK-V3-020-02` | P2 [GATED] | 020-01 | Policy-driven routing (per-tenant/per-doc-type) replacing hardcoded `confidence < 0.5`. | `modules/hitl/` | routing-policy unit | no hardcoded 0.5 |
+| `[ ] TASK-V3-020-03` | P2 [GATED] | 020-01 | Dispute-grade audit trail (who/when/what/why/before-after/evidence/model version) + fallback-path alert. | `modules/hitl/`, `tests/security/` | audit-trail + fallback-alert unit | every action audited |
+| `[ ] TASK-V3-020-04` | P2 [GATED] | 020-01 | HITL correction → golden-corpus candidate → regression case (wire `ai_feedback/` → `golden/`). | `ai_feedback/`, `golden/` | correction→golden test | every correction → CI case |
+
+#### Phase 8 — ADR-021 Deferred Read Models (EPIC-V3-021) [P3 / DEFERRED]
+
+| Task ID | Pri | Depends On | Goal / Scope | Expected files | Tests | Done-when |
+| ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
+| `[ ] TASK-V3-021-01` | P3 [DEFERRED] | 015-04, 018-05 | Snapshot projection layer (read-only; no new source of truth). | `src/briefing/` | projection unit | derived from snapshots only |
+| `[ ] TASK-V3-021-02` | P3 [DEFERRED] | 021-01, 019-02 | Morning Briefing delivery (email/Slack) from snapshot deltas. · Out: UI epic | `briefing/`, `core/tasks/` | briefing golden | digest evidence-backed |
+| `[ ] TASK-V3-021-03` | P3 [DEFERRED] | 021-01 | Portfolio R/A/G rollup query over snapshot history. | `briefing/` | rollup unit | cross-project matrix |
+
 - 2026-05-17 — Added TASK-BCK-060 (Honest Coherence Scoring): ApplicabilityState + coverage_map + HeuristicBaselineProvider + coverage-penalized scoring + three-state CategoryBreakdown. Removes fabricated 100/0 subcategory scores. Implemented on branch feat/honest-coherence-scoring, 104 coherence tests green.
 
 - 2026-05-24 — **EPIC-ECOA-V2 (ADR-009 Phase 1 + Phase 2) — implemented on branch `claude/ecoa-v2-phase1-phase2-BHSq5`.** Locked the ADR-009 v2 contract with TRI terminology (`technical_reliability_index`, `evidence_coverage`, `evidence_freshness`, `score_explanation`, `active_weight`). Added 11 new backend modules: `coherence_v2_dtos.py` (nullable Pydantic v2 contract with model_validator forbidding `coherence_score` on no-evidence states), `v2_constants.py` (six-category thresholds, severity multipliers, `MIN_ACTIVE_WEIGHT = 0.35`, equal weights), `category_state_machine.py` (deterministic 6-state machine), `services/v2/{evidence_service, conflict_service, category_aggregator, aggregator_v2, orchestrator, shadow_runner}.py`, `adapters/v1_to_v2.py`, `calculate_v2_from_signals` in `scoring.py` (additive — v0.3 path untouched), `RuleExecutionTrace` + `coherence.rule_default_100_used` warning telemetry on the deprecated v0 engine. Wired the additive `categories_v2` field on `DashboardSummary`; v1 byte-equivalent when `coherence_v2_enabled=False`. Shadow Mode emits `coherence.shadow.delta` structlog events (no DB table — deferred to Phase 3). Frontend: `lib/api/contracts.ts` now exports `CategoryStatus`, `CategoryV2`, `GlobalV2`, `CoherenceV2Payload`; `DashboardClient.tsx:129` `?? 0` replaced by `<CoherenceEmptyState>` empty-state render; new `CategoryStatusBadge.tsx` honors the ADR color contract (red reserved for `conflicting_evidence` only); MSW handler accepts `?cohV2Scenario=excellent|insufficient|conflict`; `ScoreVersionBadge` learns `v2_evidence_aware`. Tests: 68 new backend tests (`tests/coherence/test_{v2_dtos,v2_constants,category_state_machine,category_aggregator,aggregator_v2,scoring_v2,rules_engine_trace,v1_to_v2_adapter,v2_feature_flag,shadow_runner,shadow_mae_guardrail,orchestrator_v2,router_v2_field}.py`) all pass with `pytest --noconftest`; 3 new frontend test files + 2 extended (`DashboardClient.test.tsx`, `CategoryStatusBadge.test.tsx`, `CoherenceEmptyState.test.tsx`) — 24 web coherence tests pass; full TS typecheck zero errors. Settings: `coherence_v2_enabled: bool = False`, `coherence_v2_shadow_mode: bool = True` (env aliases `COHERENCE_V2_ENABLED` / `COHERENCE_V2_SHADOW_MODE`). MAE guardrail asserts `mae ≤ 15` against `tests/coherence/calibration_dataset/project_excellent.json`. **Phase 3 (rollout) is deferred per ADR-009 §7.2 — gated on Shadow Mode telemetry.**
@@ -214,6 +330,8 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 **2026-05-08**: TASK-BCK-041 complete — ruff ARG/SIM noqa pass; src/ 0 violations (commit dab24151). 29 ARG + 7 SIM/F violations suppressed with # noqa across 22 files in apps/api/src/. TASK-BCK-020 closed (all 6 doc adapter issues resolved 2026-03-28 per docs/TEST_COVERAGE_ISSUES_REPORT.md). TASK-BCK-040 closed (ruff 257→0 violations, target <50 exceeded). TASK-AI-003 closed — operator created LangSmith org + API keys, .env updated. TASK-FRT-045 closed — operator rotated Clerk test credentials. TASK-INF-015 closed — FlashCacheService already fully implemented in prompt_cache.py. TASK-INF-014 deferred [~] — requires LangSmith production data (4-6 weeks).
 
 **2026-05-26**: Added **EPIC-ECOA-V2-HOTFIX-AND-CUTOVER** — 7 tasks (`TASK-COH-V2-HOTFIX-001` through `-CUTOVER-004`) covering trademark-critical Coherence Score™ fix and v1→v2 cutover. Bug repro: SCOPE-only project returns `overall_score=15` instead of `null` per ADR-009 §14. Phase D.0 audit complete: reuse `Tenant.settings: JSONB` (alerts pattern), do not build new infra. Decisions locked: widen score fields to `float \| None`, blind backfill legacy `score_version` → `"coherence-v1"`, OpenAPI minor bump, MCP grep clean (zero consumers). Spec + plan at `docs/superpowers/{specs,plans}/2026-05-25-ecoa-v2-hotfix-and-cutover*.md`. **No pushes to `main`** for any task in this epic.
+
+**2026-06-07**: Added **Tier 5 — C2Pro v3.0 Project Intelligence Overlay** (EPIC-V3-P0 + EPIC-V3-013..021) — 50 tickets across 9 phases materializing ADR-013→021 (`docs/architecture/decisions/`). SDD → Contract-First → TDD. Spine = Time · Change · Health · Evidence · Action. Build gate: Thin Spine (P0–P3 + ADR-018 v0) first; Phase 7 (ADR-019/020) and Phase 8 (ADR-021) gated behind one real Contract-Manager using the Change-Impact loop weekly. Tickets are provisional and adaptable on new findings/decisions. Sources: deep audit + multi-model ADR arbitration (`docs/audits/`) + implementation plan (session 2026-06-07). **No pushes to `main`.**
 
 ---
 
