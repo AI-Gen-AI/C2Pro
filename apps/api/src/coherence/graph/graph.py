@@ -22,7 +22,8 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
-from ..models import Clause, EnrichedCoherenceResult
+
+from ..models import Clause, EnrichedCoherenceResult, FindingSignal
 from .nodes import (
     cross_clause_eval,
     deterministic_evaluate,
@@ -264,6 +265,8 @@ async def evaluate_coherence_async(
     clauses: list[Clause],
     project_id: str = "default",
     config: EvaluationConfig | None = None,
+    seed_signals: list[FindingSignal] | None = None,
+    seed_coverage: dict[str, bool] | None = None,
 ) -> EnrichedCoherenceResult:
     """
     Async version of evaluate_coherence.
@@ -284,6 +287,8 @@ async def evaluate_coherence_async(
         project_id=project_id,
         clauses=clauses,
         config=config or EvaluationConfig(),
+        deterministic_signals=seed_signals or [],
+        coverage_map=seed_coverage or {},
     )
 
     # Get compiled graph

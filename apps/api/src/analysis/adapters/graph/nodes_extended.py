@@ -21,6 +21,7 @@ from src.analysis.adapters.graph.dependencies import (
     get_anonymization_service,
     get_pii_detector_service,
 )
+from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.generate_raci_use_case import (
     GenerateRaciCommand,
@@ -216,6 +217,24 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
 
         clauses = _build_coherence_clauses(state)
         missing_dimensions = _missing_audit_dimensions(state)
+
+        # Interim bridge: convert LLM-extracted risks into FindingSignals
+        # so LEGAL/TECHNICAL/QUALITY categories appear as assessed_findings
+        # instead of unassessed. Removed when ADR-011 2A.5 wires the
+        # evidence module through the pipeline.
+        extracted_risks = state.get("extracted_risks", [])
+        clause_id = clauses[0].id if clauses else "contract-document"
+        bridge_result = build_risk_signals(extracted_risks, clause_id=clause_id)
+        logger.info(
+            "node_coherence_scorer_bridge",
+            extra={
+                "risks_in": len(extracted_risks),
+                "signals_out": len(bridge_result.signals),
+                "coverage_seed": list(bridge_result.coverage_seed.keys()),
+                "dropped": bridge_result.dropped_reasons,
+            },
+        )
+
         result = await evaluate_coherence_async(
             clauses=clauses,
             project_id=project_id,
@@ -226,6 +245,8 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
                 poor_extraction_quality=derivation.poor_extraction_quality,
                 missing_dimensions=missing_dimensions,
             ),
+            seed_signals=list(bridge_result.signals),
+            seed_coverage=bridge_result.coverage_seed,
         )
         score = result.overall_score
         breakdown: dict[str, Any] = {
@@ -235,6 +256,10 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         quality_note = derivation.quality_note
         reason = result.score_reason
         result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
+        bridge_marker = (
+            f" bridge[seeded={len(bridge_result.signals)},"
+            f"cov={','.join(sorted(bridge_result.coverage_seed)) or '∅'}]"
+        )
     except Exception:
         logger.warning("node_coherence_scorer_failed", exc_info=True)
         score = None
@@ -242,6 +267,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         quality_note = ""
         reason = "coherence_evaluation_failed"
         result_missing_dimensions = ["schedule", "budget"]
+        bridge_marker = " bridge[error]"
 
     risk_count = len(state.get("extracted_risks", []))
     wbs_count = len(state.get("extracted_wbs", []))
@@ -254,7 +280,8 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         "messages": [
             AIMessage(
                 content=f"N8 coherence_scorer: score={score} "
-                f"(derived from {risk_count} risks, {wbs_count} WBS items{quality_note})"
+                f"(derived from {risk_count} risks, {wbs_count} WBS items"
+                f"{quality_note}){bridge_marker}"
             )
         ],
     }
