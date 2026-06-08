@@ -62,7 +62,10 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
         critique_notes=state.get("critique_notes", "") or "",
         retry_count=int(state.get("retry_count", 0)),
         doc_type=state.get("doc_type") or "",
-        skip_hitl=os.getenv("C2PRO_AI_MOCK", "0") == "1",
+        skip_hitl=(
+            os.getenv("C2PRO_SKIP_HITL", "0") == "1"
+            or os.getenv("C2PRO_AI_MOCK", "0") == "1"
+        ),
     )
 
 

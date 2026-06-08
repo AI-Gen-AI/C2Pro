@@ -114,7 +114,7 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    """N4 — Extract risks via RiskExtractionTool (AI) or deterministic rules (mock)."""
+    """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         state["extracted_risks"] = _risk_rules.extract(state.get("document_text", ""))
         state["messages"].append(
@@ -124,7 +124,43 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 
     from src.core.ai.tools import get_tool
 
-    return await get_tool("risk_extraction", version="1.0")(state)
+    original_chars = len(state.get("document_text", "") or "")
+    updated_state = await get_tool("risk_extraction", version="1.0")(state)
+    updated_state = _fallback_contract_risks_when_empty(updated_state)
+
+    # Visibility marker so the /analyze response shows the filter ran.
+    # The filter itself logs structured stats via the tool's logger.
+    updated_state["messages"].append(
+        AIMessage(
+            content=f"N4 risk_extractor: input_doc_chars={original_chars} "
+            f"risks_emitted={len(updated_state.get('extracted_risks') or [])}"
+        )
+    )
+    return updated_state
+
+
+def _fallback_contract_risks_when_empty(state: ProjectState) -> ProjectState:
+    """TS-QA-SWAGGER-ANALYSIS-001: keep N4 useful when AI risk extraction is empty."""
+    if state.get("extracted_risks"):
+        return state
+
+    fallback_risks = _risk_rules.extract(state.get("document_text", ""))
+    if not fallback_risks:
+        return state
+
+    state["extracted_risks"] = fallback_risks
+    state["confidence_score"] = max(state.get("confidence_score", 0.0), 0.7)
+    notes = state.get("critique_notes", "").strip()
+    fallback_note = (
+        f"Deterministic fallback extracted {len(fallback_risks)} risks after AI risk extraction returned empty."
+    )
+    state["critique_notes"] = f"{notes}; {fallback_note}" if notes else fallback_note
+    state["messages"].append(
+        AIMessage(
+            content=f"Risk extractor deterministic fallback: {len(fallback_risks)} risks"
+        )
+    )
+    return state
 
 
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
