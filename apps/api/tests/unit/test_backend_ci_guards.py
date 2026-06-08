@@ -152,6 +152,29 @@ def test_backend_requirements_include_schemathesis_contract_dependency() -> None
     assert "tenacity>=9.1.2,<10.0" in contents
 
 
+def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> None:
+    """Test Suite ID: TASK-BCK-078."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    requirements = repo_root / "apps" / "api" / "requirements.txt"
+    contents = requirements.read_text(encoding="utf-8")
+
+    assert "langchain-anthropic==1.3.4" in contents
+    assert "anthropic>=0.78.0,<1.0.0" in contents
+    assert "pydantic-settings>=2.10.1,<3.0.0" in contents
+    assert "supabase==2.30.1" in contents
+    assert "httpx>=0.28.1,<1.0.0" in contents
+    assert "uvicorn[standard]>=0.31.1,<1.0.0" in contents
+    assert "websockets>=13.0.0,<17.0" in contents
+    assert "anthropic==0.18.1" not in contents
+    assert "pydantic-settings==2.1.0" not in contents
+    assert "supabase==2.5.0" not in contents
+    assert "httpx==0.27.0" not in contents
+    assert "httpx>=0.27.1,<1.0.0" not in contents
+    assert "uvicorn[standard]==0.27.1" not in contents
+    assert "websockets==12.0" not in contents
+
+
 def test_production_contract_drift_repair_migration_restores_alerts_and_stakeholders_columns() -> None:
     """Test Suite ID: TS-CI-BACKEND-GUARDS-001, TASK-BCK-051."""
 
