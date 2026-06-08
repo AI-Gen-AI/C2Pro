@@ -190,6 +190,40 @@ class TestDeterministicShims:
         risks = nodes._deterministic_contract_risks("penalty 2% for delay")
         assert risks and risks[0]["category"] == "LEGAL"
 
+    def test_deterministic_contract_risks_spanish_terms(self) -> None:
+        """TS-QA-SWAGGER-ANALYSIS-001 deterministic fallback must cover Spanish contracts."""
+        from src.analysis.adapters.graph import nodes
+
+        risks = nodes._deterministic_contract_risks(
+            "Penalización por retraso. Pago dentro de 30 días. Garantía de 24 meses."
+        )
+
+        assert {"LEGAL", "BUDGET", "QUALITY"}.issubset(
+            {risk["category"] for risk in risks}
+        )
+
+    def test_deterministic_contract_risks_use_verbatim_source_sentences(self) -> None:
+        """TS-QA-SWAGGER-ANALYSIS-001 deterministic fallback must use source-grounded quotes."""
+        from src.analysis.adapters.graph import nodes
+
+        risks = nodes._deterministic_contract_risks(
+            "Clause 5.1: Payment shall be made within 30 days after certified milestones. "
+            "Clause 8.2: Warranty period is 24 months after handover."
+        )
+        by_category = {risk["category"]: risk for risk in risks}
+
+        budget_quote = by_category["BUDGET"]["source_quote"]
+        assert budget_quote.startswith(
+            "Clause 5.1: Payment shall be made within 30 days after certified milestones."
+        )
+        assert "Payment shall be made within 30 days" in budget_quote
+        assert (
+            by_category["BUDGET"]["source_text_snippet"]
+            == by_category["BUDGET"]["source_quote"]
+        )
+        quality_quote = by_category["QUALITY"]["source_quote"]
+        assert "Clause 8.2: Warranty period is 24 months after handover." in quality_quote
+
     def test_deterministic_wbs_items(self) -> None:
         from src.analysis.adapters.graph import nodes
 
@@ -457,6 +491,39 @@ class TestExtractorAIToolDelegation:
 
         result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
         assert result["extracted_risks"] == [{"title": "T"}]
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_falls_back_to_deterministic_rules_when_ai_tool_returns_empty(
+        self, monkeypatch
+    ) -> None:
+        """TS-QA-SWAGGER-ANALYSIS-001 N4 must not leave contract risks empty after AI tool failure."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        async def _failed_tool(state):
+            state["extracted_risks"] = []
+            state["confidence_score"] = 0.0
+            state["critique_notes"] = "Risk extraction failed"
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _failed_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="Daily penalty 2% for delay.")
+        )
+
+        assert result["extracted_risks"]
+        assert result["extracted_risks"][0]["category"] == "LEGAL"
+        assert "deterministic fallback" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_uses_tool_registry(self, monkeypatch) -> None:
