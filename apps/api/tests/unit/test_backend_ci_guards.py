@@ -332,6 +332,26 @@ def test_code_auditor_skips_when_anthropic_secret_is_missing() -> None:
     assert "ANTHROPIC_API_KEY is not configured" in contents
 
 
+def test_alerts_impact_level_contract_has_idempotent_repair_migration() -> None:
+    """Test Suite ID: TS-CI-BACKEND-GUARDS-001."""
+
+    repo_root = Path(__file__).resolve().parents[4]
+    migration = (
+        repo_root
+        / "apps"
+        / "api"
+        / "alembic"
+        / "versions"
+        / "20260601_0001_repair_alerts_impact_level_drift.py"
+    )
+
+    contents = migration.read_text(encoding="utf-8")
+
+    assert "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS impact_level" in contents
+    assert 'revision: str = "20260601_0001"' in contents
+    assert 'down_revision: str | None = "20260530_0001"' in contents
+
+
 def test_backend_pytest_uses_importlib_mode_for_golden_package_isolation() -> None:
     """Test Suite ID: TASK-OPS-DOCFLOW-014."""
 
