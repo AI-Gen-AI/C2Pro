@@ -31,7 +31,8 @@ class ToolValidationError(ToolError):
 
     def __init__(self, message: str, validation_errors: list[str]):
         self.validation_errors = validation_errors
-        super().__init__(f"Validation error: {message}")
+        detail = f": {'; '.join(validation_errors)}" if validation_errors else ""
+        super().__init__(f"Validation error: {message}{detail}")
 
 
 class ToolBudgetExceededError(ToolError):

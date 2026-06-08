@@ -207,6 +207,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ===========================================
 
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key para Claude")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key para embeddings/RAG")
 
     # Model selection
     ai_model_default: str = "claude-sonnet-4-20250514"  # Sonnet 4 por defecto
@@ -221,8 +222,11 @@ class Settings(BaseSettings):  # type: ignore[misc]
     ai_timeout_seconds: int = Field(default=120, ge=10, le=600)
     ai_max_retries: int = Field(default=3, ge=0, le=5)
 
-    # Token limits
-    ai_max_tokens_output: int = Field(default=4096, ge=100, le=8192)
+    # Token limits — raised to 8192 to match the standard tier
+    # in model_routing.yaml. The previous 4096 default silently clamped
+    # complex_extraction (configured as 8192 in YAML) down to 4096,
+    # causing risk_extraction to hit the limit mid-JSON on dense contracts.
+    ai_max_tokens_output: int = Field(default=8192, ge=100, le=8192)
 
     # Cache
     ai_use_cache: bool = True
