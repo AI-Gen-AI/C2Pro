@@ -2,7 +2,7 @@
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-05-24
+**Last Updated**: 2026-06-07
 
 **Quick Links**:
 
@@ -15,7 +15,7 @@
 
 **Pending Tasks**: 2
 
-**Completed Tasks**: 54
+**Completed Tasks**: 55
 
 - IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`
 
@@ -50,6 +50,7 @@
 | [x] | P0 | `TASK-BCK-074` | `TASK-BCK-073` | Repair the Analysis ⇄ HITL seam. Live Swagger extracted risks but stopped with `analysis_id=null` because critique used legacy AIService cost control without constructor DB, HITL auto-approved rows still triggered LangGraph interrupt, and resume updated checkpoint state without invoking the graph. | Swagger verification 2026-05-23 |
 | [x] | P0 | `TASK-BCK-075` | None | Repair API startup failure from split Alembic heads after main sync. Docker startup failed before app boot with `Multiple head revisions are present for given argument 'head'`; added no-op merge revision `20260524_0001` joining `20260516_0004` and `20260517_0002`. | Docker startup verification 2026-05-24 |
 | [x] | P0 | `TASK-BCK-076` | `TASK-BCK-074` | Repair API startup failure from LangGraph reserved channel `checkpoint_id`. Docker moved past Alembic, then failed compiling the analysis graph with `ValueError: Channel name 'checkpoint_id' is reserved`; removed that key from `ProjectState` and kept `thread_id` as the HITL resume correlation key. | Docker startup verification 2026-05-24 |
+| [x] | P0 | `TASK-BCK-090` | `TASK-BCK-074` | Repair `/api/v1/analysis/analyze` persistence failure where generated risk alerts omitted the legacy non-null `alerts.message` column and Postgres rejected `save_to_db` with `NotNullViolationError`. `[x] Implemented (alert message persistence compatibility)` | Swagger verification 2026-06-07 |
 | [x] | P0 | `TASK-BCK-055` | None | Coherence Score™ Structured Extraction Layer — complete. `clause_extractor.py` (combined schema, UUID-safe DB cache, `_load_cache()` validity check requiring at least one `_ALL_REQUIRED_KEYS` field), integrated into `prepare_context` in `nodes.py`. Cache check bug fixed: ingestion metadata `{source, category, affected_categories}` was treated as a cache hit; fixed to require real extracted field. Verified: extraction now fires Haiku LLM calls and enriches `clause.data`. `deterministic_findings_count` rose from 8 → 31. | 2026-05-17 |
 | [x] | P1 | `TASK-BCK-056` | None | Fix `AnthropicWrapper` calling `self.anonymizer_service.anonymize_document()` on `AnonymizationService` (wrong API). Swapped to `PiiAnonymizerService` from `core.privacy.anonymizer` which has the correct `anonymize_document()` sync API returning `AnonymizedResult` with `.mapping` and `.anonymized_text`. | 2026-05-17 |
 | [x] | P1 | `TASK-BCK-057` | BCK-055 | Category-targeted RAG retrieval: replaced `ORDER BY created_at LIMIT 50` with 6 keyword-filtered SQL queries (10 clauses per category: LEGAL/TIME/BUDGET/TECHNICAL/QUALITY/SCOPE). Penalty, warranty, notice, and deliverable clauses previously invisible now surface. `deterministic_findings_count` 13 → 31. | 2026-05-17 |
@@ -80,6 +81,13 @@
 - Root cause: `TASK-BCK-074` added `checkpoint_id` to `ProjectState`, which LangGraph treats as a reserved runtime channel name.
 - Repair: remove `checkpoint_id` from the graph state schema and from HITL item payload/metadata generation. Preserve `thread_id`, which is sufficient for the resume correlation used by `RunnableConfig.configurable.thread_id`.
 - Verification: graph compile failed before the patch with the reserved-channel error, then `test_workflow_compile_does_not_use_reserved_checkpoint_channel` and the HITL auto-approval regression passed.
+
+### TASK-BCK-090 — Analysis alert message persistence compatibility
+
+- Live finding: Swagger `POST /api/v1/analysis/analyze` advanced through risk extraction and failed during LangGraph task `save_to_db` with `asyncpg.exceptions.NotNullViolationError: null value in column "message" of relation "alerts"`.
+- Root cause: the live `alerts` table still enforces legacy non-null `message`, while the current analysis persistence mapper and ORM model only populated `title` and `description`.
+- Repair: map `Alert.message` to the legacy table column, default it from `description` when omitted, and explicitly persist `message=description` in analysis, coherence, and alerts repository creation paths.
+- Verification: `TS-QA-SWAGGER-ANALYSIS-003` first failed with missing `message`, then passed after the mapper/model repair. Full DB-backed alert contract verification is pending local Postgres availability.
 
 ### TASK-BCK-074 — Analysis ⇄ HITL seam repair
 
