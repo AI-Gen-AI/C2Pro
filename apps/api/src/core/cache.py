@@ -669,7 +669,7 @@ def get_cache_service() -> CacheService | None:
     return _cache_service
 
 
-def get_redis_client() -> "redis.Redis | None":
+def get_redis_client() -> redis.Redis | None:
     """
     Return the raw ``redis.asyncio.Redis`` client from the singleton CacheService.
 

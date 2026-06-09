@@ -20,7 +20,6 @@ from src.coherence.graph.nodes import format_output
 from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
 from src.coherence.scoring import ScoringService
 
-
 ALL_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
 
 

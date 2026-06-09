@@ -43,16 +43,16 @@ from src.coherence.config import (  # noqa: E402
     SEVERITY_WEIGHTS,
     ScoringConfig,
 )
+from src.coherence.domain.v2_constants import (  # noqa: E402
+    DEFAULT_CATEGORY_WEIGHTS,
+    MIN_ACTIVE_WEIGHT,
+)
 from src.coherence.models import (  # noqa: E402
     Alert,
     CategoryBreakdown,
     Evidence,
     FindingSignal,
     SeverityCount,
-)
-from src.coherence.domain.v2_constants import (  # noqa: E402
-    DEFAULT_CATEGORY_WEIGHTS,
-    MIN_ACTIVE_WEIGHT,
 )
 
 # =============================================================================
@@ -836,6 +836,7 @@ def calculate_v2_from_signals(
         CoherenceV2Payload — the JSON v2 contract object.
     """
     from datetime import UTC, datetime  # noqa: PLC0415
+
     from src.coherence.application.dtos.coherence_v2_dtos import (  # noqa: PLC0415
         CoherenceV2Payload,
     )

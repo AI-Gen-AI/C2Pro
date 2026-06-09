@@ -5,7 +5,7 @@ Refers to Suite ID: TS-UA-COH-V2-ORCH-001.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
@@ -14,15 +14,15 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
     CoherenceV2Payload,
 )
+from src.coherence.domain.category_state_machine import CategoryStateMachine
+from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
 from src.coherence.services.v2.category_aggregator import CategoryAggregator
 from src.coherence.services.v2.conflict_service import ConflictReport, ConflictService
 from src.coherence.services.v2.evidence_service import EvidenceBundle, EvidenceService
-from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
 from src.coherence.services.v2.orchestrator import (
     CoherenceV2Orchestrator,
     ProjectEvidenceInputs,
 )
-from src.coherence.domain.category_state_machine import CategoryStateMachine
 
 
 class _StubEvidenceService(EvidenceService):

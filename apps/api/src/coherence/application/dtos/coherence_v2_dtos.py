@@ -59,7 +59,7 @@ class CategoryV2(BaseModel):
     calculation_metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _null_score_when_no_evidence(self) -> "CategoryV2":
+    def _null_score_when_no_evidence(self) -> CategoryV2:
         if self.status in _NULL_SCORE_STATES and self.coherence_score is not None:
             raise ValueError(
                 f"coherence_score must be None when status={self.status.value!r}"

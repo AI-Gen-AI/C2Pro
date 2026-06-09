@@ -49,9 +49,7 @@ import structlog
 from src.coherence.cache_keys import (
     project_prefix,
     tenant_all_versions_prefix,
-    tenant_prefix,
 )
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 
 logger = structlog.get_logger()
 

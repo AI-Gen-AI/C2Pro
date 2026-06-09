@@ -22,11 +22,11 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
     GateDecision,
 )
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.observability.coherence_tracing import traced_coherence_node
 
 from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
