@@ -8,8 +8,8 @@ directory on the local filesystem (defaults to ``./uploads``).
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 import tempfile
+from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
@@ -71,10 +71,10 @@ class LocalFileStorageService(IStorageService):
     async def get_file_path(self, file_name_in_storage: str) -> Path:
         """
         Gets the full path to a file in storage.
-        
+
         Args:
             file_name_in_storage: The name/path of the file in storage.
-            
+
         Returns:
             Full Path to the file.
         """
