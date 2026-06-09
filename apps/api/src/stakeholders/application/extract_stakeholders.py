@@ -64,7 +64,7 @@ class ExtractStakeholdersUseCase:
     async def execute(self, contract_text: str, tenant_id: UUID) -> list[Stakeholder]:
         if not contract_text or not contract_text.strip():
             return []
-        
+
         if tenant_id is None:
             raise ValueError("tenant_id is required")
 

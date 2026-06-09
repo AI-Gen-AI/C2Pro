@@ -45,6 +45,7 @@ async def test_project_scoped_stakeholders_route_returns_project_stakeholders(
     db.add_all(
         [
             StakeholderORM(
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 name="Ana Ruiz",
                 role="PM",
@@ -55,6 +56,7 @@ async def test_project_scoped_stakeholders_route_returns_project_stakeholders(
                 stakeholder_metadata={},
             ),
             StakeholderORM(
+                tenant_id=test_tenant_2.id,
                 project_id=other_project.id,
                 name="Blocked Tenant User",
                 role="Observer",
