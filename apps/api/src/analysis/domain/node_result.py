@@ -58,7 +58,7 @@ class NodeResult(BaseModel):
     degradation_reason: str | None = None
 
     @model_validator(mode="after")
-    def _failed_requires_error(self) -> "NodeResult":
+    def _failed_requires_error(self) -> NodeResult:
         # ADR-013: a failure with no ErrorRecord is exactly the silent failure
         # this contract exists to ban.
         if self.status is NodeStatus.FAILED and self.error is None:
