@@ -27,7 +27,11 @@ async def test_coherence_scorer_invokes_canonical_subgraph_for_contract_only(
         clauses: list[Clause],
         project_id: str = "default",
         config: object | None = None,
+        seed_signals: list[object] | None = None,
+        seed_coverage: dict[str, bool] | None = None,
     ) -> EnrichedCoherenceResult:
+        assert seed_signals == []
+        assert seed_coverage == {}
         calls.append((clauses, project_id))
         return EnrichedCoherenceResult(
             overall_score=None,

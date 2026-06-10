@@ -82,4 +82,38 @@ class NodeResult(BaseModel):
         return self.status is NodeStatus.FAILED
 
 
-__all__ = ["NodeStatus", "ErrorRecord", "NodeResult"]
+def merge_node_results(
+    existing: list[NodeResult] | None,
+    incoming: list[NodeResult] | None,
+) -> list[NodeResult]:
+    """LangGraph channel reducer for ``node_results`` (ADR-013).
+
+    Two node patterns write this channel: parallel branch nodes (N6/N8) return a
+    one-item delta, and sequential nodes (N10/N11/N16) mutate-and-return the full
+    state — re-emitting the accumulated list every step. A plain ``operator.add``
+    is required for the concurrent branch merge but would *duplicate* the list
+    under sequential re-emission. This reducer concatenates *and* dedups by a
+    content signature — mirroring how ``add_messages`` dedups ``messages`` by id —
+    so both patterns are safe and the channel never collides under parallel
+    fan-out.
+    """
+    merged: list[NodeResult] = list(existing or [])
+    seen = {_node_result_signature(r) for r in merged}
+    for result in incoming or []:
+        signature = _node_result_signature(result)
+        if signature not in seen:
+            merged.append(result)
+            seen.add(signature)
+    return merged
+
+
+def _node_result_signature(result: NodeResult) -> tuple[object, ...]:
+    return (
+        result.node,
+        result.status,
+        result.degradation_reason,
+        result.error.message if result.error is not None else None,
+    )
+
+
+__all__ = ["NodeStatus", "ErrorRecord", "NodeResult", "merge_node_results"]

@@ -10,8 +10,11 @@ Refers to TASK-IMPL-010.8–.14 (node refactoring).
 
 from __future__ import annotations
 
+import hashlib
+import inspect
+import traceback
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from langchain_core.messages import AIMessage
@@ -32,6 +35,7 @@ from src.analysis.application.parse_budget_use_case import (
     ParseBudgetUseCase,
 )
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
+from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 
 logger = structlog.get_logger()
 
@@ -41,6 +45,106 @@ if TYPE_CHECKING:
 # ── Domain service instances (stateless, reusable) ──────────────────────────
 
 _document_classifier = DocumentCategoryClassifier()
+
+
+async def _maybe_await(value: object) -> None:
+    if inspect.isawaitable(value):
+        await value
+
+
+def _failed_node_result(node: str, exc: Exception) -> NodeResult:
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    return NodeResult(
+        node=node,
+        status=NodeStatus.FAILED,
+        error=ErrorRecord(
+            node=node,
+            error_type=type(exc).__name__,
+            message=str(exc),
+            traceback_digest=hashlib.sha256(tb.encode("utf-8")).hexdigest()[:16],
+        ),
+    )
+
+
+def _ok_node_result(node: str, data: object, confidence: float | None = None) -> NodeResult:
+    return NodeResult(node=node, status=NodeStatus.OK, data=data, confidence=confidence)
+
+
+async def _persist_node_error(state: ProjectState, result: NodeResult) -> None:
+    """TS-ADR-013-GRAPH-001 - Persist failed material-node errors to evidence events."""
+    if result.error is None:
+        return
+
+    tenant_id = state.get("tenant_id")
+    project_id = state.get("project_id")
+    document_id = state.get("document_id")
+    if not tenant_id or not project_id or not document_id:
+        logger.warning(
+            "node_error_not_persisted_missing_identity",
+            node=result.node,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document_id,
+        )
+        return
+
+    try:
+        from src.core.database import get_session_with_tenant
+        from src.evidence.adapters.persistence.models import EvidenceExtractionEventORM
+
+        async with get_session_with_tenant(UUID(str(tenant_id))) as session:
+            session.add(
+                EvidenceExtractionEventORM(
+                    extraction_run_id=uuid4(),
+                    tenant_id=UUID(str(tenant_id)),
+                    project_id=UUID(str(project_id)),
+                    document_id=UUID(str(document_id)),
+                    event_type="processing_error",
+                    dimension=None,
+                    claim_type="analysis_graph_node",
+                    reason="node_failed",
+                    payload_trace={
+                        "node_result": result.model_dump(mode="json"),
+                    },
+                )
+            )
+            await session.flush()
+    except Exception as exc:  # noqa: BLE001 - explicit NodeResult remains the source of truth.
+        logger.warning(
+            "node_error_persist_failed",
+            node=result.node,
+            error=str(exc),
+            exc_info=True,
+        )
+
+
+async def _is_feature_v3_coherence_llm_enabled(state: ProjectState) -> bool:
+    """TS-ADR-013-GRAPH-001 - Resolve the N8 LLM-on gate from core feature flags."""
+    tenant_id = state.get("tenant_id")
+    try:
+        from src.config import settings
+
+        if tenant_id:
+            from src.alerts.adapters.persistence.tenant_repository import (
+                SqlAlchemyTenantRepository,
+            )
+            from src.core.database import get_raw_session
+            from src.core.feature_flags import TenantFlagsService
+
+            async with get_raw_session() as session:
+                return await TenantFlagsService(
+                    tenant_repository=SqlAlchemyTenantRepository(session),
+                    settings=settings,
+                ).is_enabled(UUID(str(tenant_id)), "feature_v3_coherence_llm")
+
+        return bool(getattr(settings, "feature_v3_coherence_llm", False))
+    except Exception as exc:  # noqa: BLE001 - flag resolution fail-closed.
+        logger.warning(
+            "feature_v3_coherence_llm_resolution_failed",
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -134,12 +238,22 @@ async def stakeholder_extractor_node(state: ProjectState) -> dict[str, Any]:
             }
             for s in stakeholders
         ]
-    except Exception:
+    except Exception as exc:
         logger.warning("node_stakeholder_extractor_failed", exc_info=True)
+        node_result = _failed_node_result("stakeholder_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
         result = []
+        return {
+            "extracted_stakeholders": result,
+            "node_results": [node_result],
+            "messages": [
+                AIMessage(content="N6 stakeholder_extractor: failed (see node_results)")
+            ],
+        }
 
     return {
         "extracted_stakeholders": result,
+        "node_results": [_ok_node_result("stakeholder_extractor", result)],
         "messages": [AIMessage(content=f"N6 stakeholder_extractor: {len(result)} stakeholders found")],
     }
 
@@ -235,11 +349,12 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             },
         )
 
+        feature_v3_coherence_llm = await _is_feature_v3_coherence_llm_enabled(state)
         result = await evaluate_coherence_async(
             clauses=clauses,
             project_id=project_id,
             config=EvaluationConfig(
-                low_budget_mode=True,
+                low_budget_mode=not feature_v3_coherence_llm,
                 tenant_id=state.get("tenant_id"),
                 project_id=project_id,
                 poor_extraction_quality=derivation.poor_extraction_quality,
@@ -260,12 +375,23 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             f" bridge[seeded={len(bridge_result.signals)},"
             f"cov={','.join(sorted(bridge_result.coverage_seed)) or '∅'}]"
         )
-    except Exception:
+        node_result = _ok_node_result(
+            "coherence_scorer",
+            {
+                "score": score,
+                "breakdown": breakdown,
+                "reason": reason,
+                "missing_dimensions": result_missing_dimensions,
+            },
+        )
+    except Exception as exc:
         logger.warning("node_coherence_scorer_failed", exc_info=True)
+        node_result = _failed_node_result("coherence_scorer", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
         score = None
         breakdown = {}
         quality_note = ""
-        reason = "coherence_evaluation_failed"
+        reason = "node_failed"
         result_missing_dimensions = ["schedule", "budget"]
         bridge_marker = " bridge[error]"
 
@@ -277,6 +403,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         "coherence_breakdown": breakdown,
         "coherence_reason": reason,
         "coherence_missing_dimensions": result_missing_dimensions,
+        "node_results": [node_result],
         "messages": [
             AIMessage(
                 content=f"N8 coherence_scorer: score={score} "
@@ -370,13 +497,26 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
             {"source": str(u), "target": str(v), "data": graph.edges[u, v]}
             for u, v in graph.edges
         ]
-    except Exception:
+    except Exception as exc:
         logger.warning("node_knowledge_graph_builder_failed", exc_info=True)
+        node_result = _failed_node_result("knowledge_graph", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
         nodes = []
         edges = []
+        state["knowledge_graph_nodes"] = nodes
+        state["knowledge_graph_edges"] = edges
+        state["messages"].append(
+            AIMessage(content="N10 knowledge_graph: failed (see node_results)")
+        )
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        return state
 
     state["knowledge_graph_nodes"] = nodes
     state["knowledge_graph_edges"] = edges
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("knowledge_graph", {"nodes": nodes, "edges": edges}),
+    ]
     state["messages"].append(
         AIMessage(content=f"N10 knowledge_graph: {len(nodes)} nodes, {len(edges)} edges")
     )
