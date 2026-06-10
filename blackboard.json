@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-09T08:15:00Z",
+  "updated_at": "2026-06-10T20:55:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,47 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T115",
+      "backlog_id": "TASK-V3-013-04",
+      "tipo": "backend",
+      "descripcion": "Complete ADR-013 Runtime Trust second pass CF-2 through CF-11 on feat/v3-spine.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Material graph nodes surface failures/skips/degraded HITL routing with NodeResult, producer outputs use frozen contracts, coherence fallback returns honest null, documentation-health and INV-1 scaffolds exist, and hygiene tests cover error-event kwargs.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/graph/nodes.py",
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/src/analysis/adapters/graph/schema.py",
+        "apps/api/src/analysis/domain/documentation_health.py",
+        "apps/api/src/analysis/domain/honest_null.py",
+        "apps/api/src/evidence/domain/runtime_trust.py",
+        "apps/api/src/coherence/graph/graph.py",
+        "apps/api/tests/unit/analysis/graph/test_thin_nodes.py",
+        "apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py",
+        "apps/api/tests/unit/analysis/test_documentation_health_signal.py",
+        "apps/api/tests/unit/analysis/test_inv1_honest_null_scaffold.py",
+        "apps/api/tests/unit/analysis/test_runtime_trust_hygiene.py",
+        "apps/api/tests/unit/coherence/test_graph_honest_null.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-10T20:00:00Z",
+        "completado": "2026-06-10T20:55:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "ADR-013 second pass completed with focused commits for CF-2 through CF-11; TASK-V3-013-04/07/08/09 marked complete.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "RED/GREEN slices recorded per finding in chat/tool output",
+          "python -m pytest apps/api/tests/unit/analysis/graph/test_thin_nodes.py apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py apps/api/tests/unit/analysis/test_documentation_health_signal.py apps/api/tests/unit/analysis/test_inv1_honest_null_scaffold.py apps/api/tests/unit/analysis/test_runtime_trust_hygiene.py apps/api/tests/unit/coherence/test_graph_honest_null.py apps/api/tests/contract/test_graph_node_contracts.py -q --tb=short -> 58 passed"
+        ]
+      }
+    },
     {
       "tarea_id": "T114",
       "backlog_id": "TASK-V3-013-03",
