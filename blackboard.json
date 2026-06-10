@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-10T20:55:00Z",
+  "updated_at": "2026-06-10T22:15:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,42 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T116",
+      "backlog_id": "TASK-V3-013-11",
+      "tipo": "backend",
+      "descripcion": "Complete ADR-013 third pass integration-review fixes IR-1 and IR-2 on feat/v3-spine.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Compiled populated-data graph regression passes with risk and citation payloads; N8/N11/N17 consumers remain dict-compatible; documentation_health_signal is populated at N16.",
+      "archivos_modificados": [
+        "apps/api/src/analysis/adapters/graph/nodes.py",
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/tests/analysis/adapters/graph/test_parallel_state_updates.py",
+        "apps/api/tests/unit/analysis/graph/test_thin_nodes.py",
+        "apps/api/tests/unit/analysis/test_documentation_health_signal.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-10T21:50:00Z",
+        "completado": "2026-06-10T22:15:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "ADR-013 third pass completed locally: IR-1 producer model storage regression fixed, IR-2 documentation-health signal wired, branch remains unpushed for integration re-review.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED IR-1: compiled graph failed with AttributeError: 'RiskItem' object has no attribute 'get'; producer unit tests failed because state held Pydantic models.",
+          "GREEN IR-1: 21 graph/producer tests passed after validate-then-model_dump producer boundary fix.",
+          "RED IR-2: final_assembler_node raised KeyError for missing documentation_health_signal.",
+          "GREEN IR-2: apps/api/tests/unit/analysis/test_documentation_health_signal.py -> 3 passed.",
+          "Final: ADR-013 focused suite including TASK-V3-013-11 compiled graph regression -> 65 passed."
+        ]
+      }
+    },
     {
       "tarea_id": "T115",
       "backlog_id": "TASK-V3-013-04",
