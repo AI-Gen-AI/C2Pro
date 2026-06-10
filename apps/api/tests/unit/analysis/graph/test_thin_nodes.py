@@ -152,6 +152,9 @@ class TestCritiqueNodeThinDelegation:
         assert result["human_approval_required"] is False
         assert result["confidence_score"] == pytest.approx(0.9)
         assert result["retry_count"] == 0
+        node_result = result["node_results"][-1]
+        assert node_result.node == "critique"
+        assert node_result.status is NodeStatus.OK
 
     @pytest.mark.asyncio
     async def test_retry_path_increments(self, monkeypatch) -> None:
@@ -165,6 +168,46 @@ class TestCritiqueNodeThinDelegation:
         )
         assert result["retry_count"] == 1
         assert result["critique_notes"] == "redo"
+
+    @pytest.mark.asyncio
+    async def test_use_case_exception_emits_failed_node_result_and_persists_error(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N12 use-case failures are observable NodeResult failures."""
+        from src.analysis.adapters.graph import nodes
+
+        persisted: list[NodeResult] = []
+
+        class _FailingCritiqueUseCase:
+            def __init__(self, ai: Any) -> None:
+                self.ai = ai
+
+            async def execute(self, _command: Any) -> Any:
+                raise RuntimeError("critique service unavailable")
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.setattr(
+            nodes,
+            "CritiqueExtractionUseCase",
+            _FailingCritiqueUseCase,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "_persist_node_error",
+            lambda state, result: persisted.append(result),
+            raising=False,
+        )
+
+        result = await nodes.critique_node(_make_state(extracted_risks=[]))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "critique"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert node_result.error.message == "critique service unavailable"
+        assert persisted == [node_result]
+        assert result["human_approval_required"] is True
 
     @pytest.mark.asyncio
     async def test_mock_mode_short_circuits(self, monkeypatch) -> None:

@@ -248,23 +248,56 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
         state["human_approval_required"] = False
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result(
+                "critique",
+                {
+                    "confidence": state["confidence_score"],
+                    "retry_count": state["retry_count"],
+                    "human_approval_required": state["human_approval_required"],
+                },
+                confidence=state["confidence_score"],
+            ),
+        ]
         state["messages"].append(AIMessage(content="Critique mock mode: passed."))
         return state
 
     use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
-    result = await use_case.execute(
-        CritiqueExtractionCommand(
-            extracted_risks=state["extracted_risks"],
-            extracted_wbs=state["extracted_wbs"],
-            doc_type=state.get("doc_type"),
-            retry_count=state["retry_count"],
+    try:
+        result = await use_case.execute(
+            CritiqueExtractionCommand(
+                extracted_risks=state["extracted_risks"],
+                extracted_wbs=state["extracted_wbs"],
+                doc_type=state.get("doc_type"),
+                retry_count=state["retry_count"],
+            )
         )
-    )
+    except Exception as exc:
+        node_result = _failed_node_result("critique", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["human_approval_required"] = True
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N12 critique: failed (see node_results)"))
+        return state
 
     state["confidence_score"] = result.confidence
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result(
+            "critique",
+            {
+                "status": result.status,
+                "confidence": result.confidence,
+                "retry_count": result.retry_count,
+                "human_approval_required": result.human_approval_required,
+            },
+            confidence=result.confidence,
+        ),
+    ]
     state["messages"].append(
         AIMessage(
             content=(
