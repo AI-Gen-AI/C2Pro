@@ -683,6 +683,7 @@ async def final_assembler_node(state: ProjectState) -> ProjectState:
     )
 
     state["final_report"] = report
+    _node_update_with_health(state, existing_results=[])
     state["messages"].append(
         AIMessage(
             content=(
