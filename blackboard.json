@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-05-27T21:20:00Z",
+  "updated_at": "2026-06-09T08:15:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,42 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T114",
+      "backlog_id": "TASK-V3-013-03",
+      "tipo": "backend",
+      "descripcion": "Implement ADR-013 Runtime Trust graph contracts covering TASK-V3-013-03 through TASK-V3-013-06.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Graph-contract CI gate is active, material node failures return NodeResult envelopes, N8 seeded coherence call is explicit, and low_budget_mode is controlled by feature_v3_coherence_llm.",
+      "archivos_modificados": [
+        ".github/workflows/tests.yml",
+        "apps/api/src/analysis/adapters/graph/schema.py",
+        "apps/api/src/analysis/adapters/graph/nodes_extended.py",
+        "apps/api/tests/contract/test_graph_node_contracts.py",
+        "apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py",
+        "apps/api/tests/unit/analysis/test_coherence_scorer_node_canonical_subgraph.py",
+        "apps/api/tests/modules/analysis/adapters/graph/test_nodes_extended.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "backlogs/BCK_BACKEND.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-09T08:00:00Z",
+        "completado": "2026-06-09T08:15:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Added ADR-013 graph contract CI guard, NodeResult failure envelopes for material analysis nodes, explicit seeded N8 coherence call coverage, and feature_v3_coherence_llm gating for low_budget_mode.",
+        "tests_pasados": true,
+        "validacion_lint": false,
+        "tests": [
+          "C2PRO_AI_MOCK=1 python -m pytest apps/api/tests/contract/test_graph_node_contracts.py apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py -q --tb=short -> RED failed: hardcoded low_budget_mode=True, missing CI gate, missing _persist_node_error/_is_feature_v3_coherence_llm_enabled helpers",
+          "C2PRO_AI_MOCK=1 python -m pytest apps/api/tests/contract/test_graph_node_contracts.py apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py -q --tb=short -> 6 passed",
+          "C2PRO_AI_MOCK=1 python -m pytest apps/api/tests/unit/analysis/test_coherence_scorer_node_canonical_subgraph.py apps/api/tests/analysis/adapters/graph/test_parallel_state_updates.py apps/api/tests/modules/analysis/adapters/graph/test_nodes_extended.py -q --tb=short -> 28 passed"
+        ]
+      }
+    },
     {
       "tarea_id": "T113",
       "backlog_id": "TASK-OPS-DOCFLOW-019",

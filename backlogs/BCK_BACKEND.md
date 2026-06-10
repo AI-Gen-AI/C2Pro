@@ -2,7 +2,7 @@
 
 **Category**: Backend (BCK)
 **Owner Role**: backend
-**Last Updated**: 2026-06-07
+**Last Updated**: 2026-06-09
 
 **Quick Links**:
 
@@ -67,6 +67,15 @@
 | [ ] | P1 | `TASK-COH-V2-CUTOVER-004` | `-001 -003 -006 -007` | EPIC-ECOA-V2 Phase D — make v2 authoritative behind per-tenant flag. **D.0 audit verdict (2026-05-26): EXISTS_PARTIAL** — extend `Tenant.settings: JSONB` at `apps/api/src/core/auth/models.py:100` using alerts pattern (`apps/api/src/alerts/adapters/persistence/tenant_repository.py:27-33`). Extract shared `apps/api/src/core/feature_flags/tenant_flags_service.py`. Read order: `tenant.settings.get("feature_flags", {}).get("coherence_v2_enabled", settings.coherence_v2_enabled)`. Remove `apps/api/src/config.py:319` deferred-comment seam. Telemetry: `coherence.v2_path_used`, `coherence.v1_v2_score_delta`. Canary 10→50→100% over 3 days with shadow-MAE ≤ 15 auto-block (Sentry P1 = 0, p95 latency regression < 30%, v2_authoritative error rate < 0.5%). Branches `feat/coherence-v2-authoritative-canary` (D.0 audit memo) then `feat/coherence-v2-authoritative` (D.1+). architect + security-reviewer + database-reviewer required. | Spec 2026-05-25 §8 |
 
 ## 2. Specifications
+
+### TASK-V3-013-03/04/05/06 — ADR-013 Runtime Trust graph contracts
+
+- Scope: additive Runtime Trust changes only. Procurement and Stakeholder Intelligence domains remain future scope; N6 is only wrapped as an existing analysis material node.
+- Repair: added `tests/contract/test_graph_node_contracts.py` and wired it into `.github/workflows/tests.yml`; typed analysis graph channels with frozen ADR-013 contracts plus a `node_results` channel.
+- Runtime behavior: N6 stakeholder extraction, N8 coherence scoring, and N10 knowledge graph failures now return `NodeResult(status=failed, error=ErrorRecord(...))` and attempt to persist a `processing_error` row in `evidence_extraction_events` instead of silently returning indistinguishable empty results.
+- N8 coherence contract: the seeded `seed_signals`/`seed_coverage` call is explicit and covered by tests; old test doubles now accept the same signature.
+- LLM gate: N8 no longer hardcodes `low_budget_mode=True`; it resolves `feature_v3_coherence_llm` through `core/feature_flags`/settings and fail-closes to low-budget mode when the flag cannot be resolved.
+- Verification: RED showed hardcoded `low_budget_mode=True`, missing CI gate, and absent runtime-trust helpers; GREEN passed `apps/api/tests/contract/test_graph_node_contracts.py`, `apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py`, and focused existing graph-node suites.
 
 ### TASK-BCK-075 — Alembic split-head startup repair
 

@@ -21,7 +21,7 @@
 | Planning | [backlogs/PLN_PLANNING.md](backlogs/PLN_PLANNING.md) | planner | 0 | 0 | 0 |
 | Quality Assurance | [backlogs/QA_QUALITY_ASSURANCE.md](backlogs/QA_QUALITY_ASSURANCE.md) | qa | 120 | 108 | 12 |
 | Code Review | [backlogs/REV_CODE_REVIEW.md](backlogs/REV_CODE_REVIEW.md) | reviewer | 25 | 0 | 25 |
-| Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 0 | 0 | 0 |
+| Security | [backlogs/SEC_SECURITY.md](backlogs/SEC_SECURITY.md) | security | 1 | 1 | 0 |
 
 ---
 
@@ -149,6 +149,12 @@
 | ~~P1~~ | ~~`TASK-FRT-045`~~ | Security | ~~Rotate exposed Clerk test credentials~~ `[x] @2026-05-08 — Operator completed.` |
 | P3 | `TASK-FRT-041` | None | Production email templates and sender verified in Clerk — BLOCKED on operator access. |
 
+### Security (1 pending)
+
+| Priority | Task ID | Depends On | Description |
+| -------- | ------- | ---------- | ----------- |
+| P1 | `TASK-SEC-DEPENDABOT-001` | None | Triage + remediate the 22 GitHub Dependabot vulnerabilities on the default branch (12 high, 8 moderate, 2 low), surfaced 2026-06-09 during the `feat/v3-spine` push (github.com/AI-Gen-AI/C2Pro/security/dependabot). Review each advisory; bump affected deps across the `npm_and_yarn` and `pip` groups; run the full test suite; confirm the alert count drops (target 0 high/moderate). Coordinate with the existing Dependabot PR pattern (#142/#144). |
+
 ### AI / ML Intelligence
 
 Grouped under LangSmith epics (see Manifest v3 §Tier 2):
@@ -241,12 +247,14 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 | ------- | --- | ---------- | ------------ | -------------- | ----- | --------- |
 | `[ ] TASK-V3-013-01` | P0 | P0-03 | Freeze Pydantic v2 payload models: `RiskItem, WbsActivity, BudgetItem, Citation, DocumentArtifact, CoherenceFinding`. · Out: node logic | `analysis/domain/contracts.py`, `tests/unit/analysis/contracts/` | model-validation unit | models frozen; 100% validation cov; broadcast to agents |
 | `[ ] TASK-V3-013-02` | P0 | 013-01 | `NodeResult{ok\|degraded\|failed\|skipped}` + `ErrorRecord` envelope. · Out: applying it | `analysis/domain/node_result.py` | envelope unit (degraded/failed) | type frozen |
-| `[ ] TASK-V3-013-03` | P0 | 013-02 | Graph-contract CI test (fails on node signature/return drift); wire into `tests.yml`. | `tests/contract/test_graph_node_contracts.py`, `.github/workflows/tests.yml` | RED on current drift → GREEN after 013-05 | CI gate active |
-| `[ ] TASK-V3-013-04` | P0 | 013-02 | Apply `NodeResult` + ban silent `except: return []/None` on material nodes; type channel values; persist errors to events. · Out: trivial passthrough nodes | `analysis/adapters/graph/{schema.py,nodes.py,nodes_extended.py}` | no-silent-failure injection suite | zero silent fallbacks in material nodes |
-| `[ ] TASK-V3-013-05` | P0 | 013-04 | Fix coherence signature drift: reconcile N8 (`nodes_extended.py:238-250`) `seed_signals`/`seed_coverage` with `evaluate_coherence_async()` (`coherence/graph/graph.py:263`). | `nodes_extended.py`, `coherence/graph/graph.py` | graph-contract green; N8→subgraph unit | no kwarg mismatch |
-| `[ ] TASK-V3-013-06` | P0 | 013-05 | Remove `low_budget_mode=True` default (`nodes_extended.py:242`); gate LLM-on behind `feature_v3_coherence_llm` + canary 10→50→100. | `nodes_extended.py`, `core/feature_flags/` | flag unit + canary stub | headline path no longer degraded-by-default |
+| `[x] TASK-V3-013-03` | P0 | 013-02 | Graph-contract CI test (fails on node signature/return drift); wire into `tests.yml`. `[x] Implemented (ADR-013 graph contract CI gate)` | `tests/contract/test_graph_node_contracts.py`, `.github/workflows/tests.yml` | RED on current drift → GREEN after 013-05 | ✅ Done (commit afdf0428): tests/contract/test_graph_node_contracts.py + CI gate in tests.yml. |
+| `[ ] TASK-V3-013-04` | P0 | 013-02 | Apply `NodeResult` + ban silent `except: return []/None` on material nodes; type channel values; persist errors to events. `[x] Implemented (NodeResult material-node failure envelopes)` · Out: trivial passthrough nodes | `analysis/adapters/graph/{schema.py,nodes.py,nodes_extended.py}` | no-silent-failure injection suite | ⏳ PARTIAL: NodeResult + error-persistence done for N6/N8/N10 (commit afdf0428). REMAINING (handed to Codex): N4/N5 (CF-3), N12 (CF-6), N13/N14 DEGRADED (CF-7), N17 save (CF-2), skip paths (CF-8), producer dict→model typing (CF-4). |
+| `[x] TASK-V3-013-05` | P0 | 013-04 | Fix coherence signature drift: reconcile N8 (`nodes_extended.py:238-250`) `seed_signals`/`seed_coverage` with `evaluate_coherence_async()` (`coherence/graph/graph.py:263`). `[x] Implemented (explicit seeded coherence call contract)` | `nodes_extended.py`, `coherence/graph/graph.py` | graph-contract green; N8→subgraph unit | ✅ Verified complete — coherence signature already correct at graph.py:264-269 (seed_signals/seed_coverage), locked by contract test; no code change needed. |
+| `[x] TASK-V3-013-06` | P0 | 013-05 | Remove `low_budget_mode=True` default (`nodes_extended.py:242`); gate LLM-on behind `feature_v3_coherence_llm` + canary 10→50→100. `[x] Implemented (feature_v3_coherence_llm controls N8 low-budget mode)` | `nodes_extended.py`, `core/feature_flags/` | flag unit + canary stub | ✅ Done: low_budget_mode default removed; LLM gated behind feature_v3_coherence_llm (default OFF, per-tenant via TenantFlagsService, fail-closed). |
 | `[ ] TASK-V3-013-07` | P0 | 013-04 | Route degraded/failed node counts to a typed Documentation-health signal (consumed by ADR-018). | `analysis/domain/`, graph state | failed-node→signal unit | signal emitted + asserted |
 | `[ ] TASK-V3-013-08` | P0 | 013-01 | INV-1 scaffold: `EvidenceRef` + tier enum `{verified,weak,inferred,unverified}` + honest-null helper. · Out: full gating (016/018) | `src/evidence/`, `analysis/domain/` | missing-evidence→null+reason unit | helper+tier available downstream |
+| `[x] TASK-V3-013-10` | P0 | 013-02 | node_results channel dedup reducer (merge_node_results): safe under parallel fan-out (N6/N8) + sequential full-state re-emission (N11/N16); chosen over operator.add which would duplicate. · Out: node logic | `analysis/domain/node_result.py`, `analysis/adapters/graph/schema.py` | reducer unit tests + tenant-set compiled-graph test | ✅ Done (this session): merge_node_results + tenant-set regression test green |
+| `[ ] TASK-V3-013-09` | P1 | 013-04 | Remove fabricated minimal EnrichedCoherenceResult fallback in `coherence/graph/graph.py` (~lines 247-258, 297-308): on inner failure return honest null+reason, never synthesize a result (INV-1). Found by Gemini integration review. · Out: scoring logic | `coherence/graph/graph.py` | unit: None inner result → honest failure not fabricated | inner failure yields null+reason |
 
 #### Phase 2 — ADR-014 Project State Model (EPIC-V3-014)
 
@@ -335,6 +343,10 @@ Grouped under LangSmith epics (see Manifest v3 §Tier 2):
 **2026-06-07**: Added **Tier 5 — C2Pro v3.0 Project Intelligence Overlay** (EPIC-V3-P0 + EPIC-V3-013..021) — 50 tickets across 9 phases materializing ADR-013→021 (`docs/architecture/decisions/`). SDD → Contract-First → TDD. Spine = Time · Change · Health · Evidence · Action. Build gate: Thin Spine (P0–P3 + ADR-018 v0) first; Phase 7 (ADR-019/020) and Phase 8 (ADR-021) gated behind one real Contract-Manager using the Change-Impact loop weekly. Tickets are provisional and adaptable on new findings/decisions. Sources: deep audit + multi-model ADR arbitration (`docs/audits/`) + implementation plan (session 2026-06-07). **No pushes to `main`.**
 
 **2026-06-09**: Phase 0 (EPIC-V3-P0) completed on branch feat/v3-spine and pushed to origin. TASK-V3-P0-01/02/03 marked [x]; added TASK-V3-P0-04 (restore strict global Ruff baseline — pre-existing repo-wide lint debt). Leaked secrets (n8n JWT + Google app-password) in removed openclaw security Audit.txt rotated by owner; git-history purge still pending. No pushes to main (work is on feat/v3-spine).
+
+**2026-06-09**: Queued `TASK-SEC-DEPENDABOT-001` (P1) — remediate 22 GitHub Dependabot vulnerabilities on the default branch (12 high / 8 moderate / 2 low) surfaced during the feat/v3-spine push. Added under Pending Tasks by Category → Security; Quick Navigation Security count updated to 1/1/0.
+
+**2026-06-10**: ADR-013 first pass merged on feat/v3-spine (commits afdf0428/f9f0df3c + node_results dedup reducer). Marked TASK-V3-013-03/05/06 [x]; 013-04 PARTIAL (N6/N8/N10 done); added TASK-V3-013-10 [x] (node_results reducer) and TASK-V3-013-09 [ ] (INV-1 fabricated-result fix, found by Gemini). Remaining ADR-013 work = consolidated findings CF-2..CF-11 handed to Codex; TASK-V3-013-07/08 still open. Integration-reviewed (Opus) merging Codex + Gemini + DeepSeek.
 
 ---
 
