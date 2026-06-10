@@ -42,6 +42,7 @@ from src.analysis.domain.ai_extraction import (
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
 )
+from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 
@@ -364,6 +365,14 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
         except Exception:
             import structlog
 
+            state["node_results"] = [
+                *state.get("node_results", []),
+                NodeResult(
+                    node="human_interrupt",
+                    status=NodeStatus.DEGRADED,
+                    degradation_reason="hitl_routing_failed",
+                ),
+            ]
             structlog.get_logger().warning(
                 "hitl_routing_failed_falling_back_to_interrupt",
                 document_id=state.get("document_id"),

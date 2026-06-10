@@ -351,6 +351,37 @@ class TestHumanInterruptNode:
         assert service.calls[0]["item_data"]["thread_id"] == "thread-swagger-analysis"
         assert service.calls[0]["metadata"]["thread_id"] == "thread-swagger-analysis"
 
+    @pytest.mark.asyncio
+    async def test_hitl_routing_failure_degrades_and_still_interrupts(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N13/N14 HITL routing fails open with DEGRADED and still interrupts."""
+        from src.analysis.adapters.graph import nodes
+
+        class InterruptCalled(RuntimeError):
+            pass
+
+        def _interrupt(payload: dict[str, Any]) -> None:
+            assert payload["reason"] == "approval_required"
+            raise InterruptCalled("interrupt called")
+
+        def _failing_session(_tenant_id: UUID) -> _AsyncContext:
+            raise RuntimeError("hitl store unavailable")
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.setattr(nodes, "get_session_with_tenant", _failing_session, raising=False)
+        monkeypatch.setattr(nodes, "interrupt", _interrupt)
+
+        state = _make_state(doc_type="contract", confidence_score=0.4, retry_count=1)
+
+        with pytest.raises(InterruptCalled):
+            await nodes.human_interrupt_node(state)
+
+        node_result = state["node_results"][-1]
+        assert node_result.node == "human_interrupt"
+        assert node_result.status is NodeStatus.DEGRADED
+        assert node_result.degradation_reason == "hitl_routing_failed"
+
 
 # ── N7 raci_generator_node ──────────────────────────────────────────────────
 
