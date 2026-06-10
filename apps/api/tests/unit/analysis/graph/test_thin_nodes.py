@@ -14,8 +14,7 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3 coverage gate.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -567,6 +566,74 @@ class TestExtractorAIToolDelegation:
         assert result["extracted_risks"] == [{"title": "T"}]
 
     @pytest.mark.asyncio
+    async def test_risk_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N4 successful tool calls emit an OK NodeResult."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        risk = {"title": "Delay", "description": "Delay penalty exposure."}
+
+        async def _fake_tool(state):
+            state["extracted_risks"] = [risk]
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "risk_extractor"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == [risk]
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_tool_exception_emits_failed_node_result(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N4 tool exceptions are explicit failures, not silent empty risks."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        persisted: list[NodeResult] = []
+
+        async def _fake_tool(_state):
+            raise RuntimeError("risk tool unavailable")
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+        monkeypatch.setattr(
+            nodes,
+            "_persist_node_error",
+            lambda state, result: persisted.append(result),
+            raising=False,
+        )
+
+        result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "risk_extractor"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert node_result.error.message == "risk tool unavailable"
+        assert persisted == [node_result]
+
+    @pytest.mark.asyncio
     async def test_risk_extractor_falls_back_to_deterministic_rules_when_ai_tool_returns_empty(
         self, monkeypatch
     ) -> None:
@@ -621,6 +688,74 @@ class TestExtractorAIToolDelegation:
 
         result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
         assert result["extracted_wbs"] == [{"code": "W"}]
+
+    @pytest.mark.asyncio
+    async def test_wbs_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N5 successful tool calls emit an OK NodeResult."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        wbs_item = {"code": "W", "name": "Work package"}
+
+        async def _fake_tool(state):
+            state["extracted_wbs"] = [wbs_item]
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("wbs_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "wbs_extractor"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == [wbs_item]
+
+    @pytest.mark.asyncio
+    async def test_wbs_extractor_tool_exception_emits_failed_node_result(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N5 tool exceptions are explicit failures, not silent empty WBS."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        persisted: list[NodeResult] = []
+
+        async def _fake_tool(_state):
+            raise RuntimeError("wbs tool unavailable")
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("wbs_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+        monkeypatch.setattr(
+            nodes,
+            "_persist_node_error",
+            lambda state, result: persisted.append(result),
+            raising=False,
+        )
+
+        result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "wbs_extractor"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert node_result.error.message == "wbs tool unavailable"
+        assert persisted == [node_result]
 
     @pytest.mark.asyncio
     async def test_budget_parser_delegates_to_extended(self, monkeypatch) -> None:

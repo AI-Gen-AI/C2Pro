@@ -122,7 +122,12 @@ async def router_node(state: ProjectState) -> ProjectState:
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_risks"] = _risk_rules.extract(state.get("document_text", ""))
+        risks = _risk_rules.extract(state.get("document_text", ""))
+        state["extracted_risks"] = risks
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("risk_extractor", risks),
+        ]
         state["messages"].append(
             AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks")
         )
@@ -130,12 +135,27 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 
     from src.core.ai.tools import get_tool
 
-    original_chars = len(state.get("document_text", "") or "")
-    updated_state = await get_tool("risk_extraction", version="1.0")(state)
-    updated_state = _fallback_contract_risks_when_empty(updated_state)
+    try:
+        original_chars = len(state.get("document_text", "") or "")
+        updated_state = await get_tool("risk_extraction", version="1.0")(state)
+        updated_state = _fallback_contract_risks_when_empty(updated_state)
+    except Exception as exc:
+        node_result = _failed_node_result("risk_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["extracted_risks"] = []
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content="N4 risk_extractor: failed (see node_results)")
+        )
+        return state
 
     # Visibility marker so the /analyze response shows the filter ran.
     # The filter itself logs structured stats via the tool's logger.
+    risks = updated_state.get("extracted_risks") or []
+    updated_state["node_results"] = [
+        *updated_state.get("node_results", []),
+        _ok_node_result("risk_extractor", risks),
+    ]
     updated_state["messages"].append(
         AIMessage(
             content=f"N4 risk_extractor: input_doc_chars={original_chars} "
@@ -175,7 +195,12 @@ def _fallback_contract_risks_when_empty(state: ProjectState) -> ProjectState:
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     """N5 — Extract WBS items via WBSExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_wbs"] = _wbs_rules.extract(state.get("document_text", ""))
+        wbs_items = _wbs_rules.extract(state.get("document_text", ""))
+        state["extracted_wbs"] = wbs_items
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("wbs_extractor", wbs_items),
+        ]
         state["messages"].append(
             AIMessage(content=f"WBS extractor mock mode: {len(state['extracted_wbs'])} items")
         )
@@ -183,7 +208,24 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
 
     from src.core.ai.tools import get_tool
 
-    return await get_tool("wbs_extraction", version="1.0")(state)
+    try:
+        updated_state = await get_tool("wbs_extraction", version="1.0")(state)
+    except Exception as exc:
+        node_result = _failed_node_result("wbs_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["extracted_wbs"] = []
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content="N5 wbs_extractor: failed (see node_results)")
+        )
+        return state
+
+    wbs_items = updated_state.get("extracted_wbs") or []
+    updated_state["node_results"] = [
+        *updated_state.get("node_results", []),
+        _ok_node_result("wbs_extractor", wbs_items),
+    ]
+    return updated_state
 
 
 # ── N9 — Budget Parser (delegates to extended) ──────────────────────────────
