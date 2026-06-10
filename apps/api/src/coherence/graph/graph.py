@@ -16,7 +16,7 @@ Location: apps/api/src/coherence/graph/graph.py
 from __future__ import annotations
 
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -36,6 +36,20 @@ from .nodes import (
 from .state import CoherenceGraphState, EvaluationConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _honest_null_result(final_state: dict[str, Any]) -> EnrichedCoherenceResult:
+    diagnostics = final_state.get("diagnostics") or {}
+    reason = diagnostics.get("reason") or "coherence_result_missing"
+    return EnrichedCoherenceResult(
+        overall_score=None,
+        alerts=[],
+        calculated_at=datetime.now(UTC),
+        score_version=SCORE_VERSION_V1,
+        score_reason=reason,
+        score_missing_dimensions=diagnostics.get("missing_dimensions"),
+        finding_signals=[],
+    )
 
 
 # =============================================================================
@@ -246,17 +260,7 @@ def evaluate_coherence(
     # Extract result
     result = final_state.get("result")
     if result is None:
-        # Fallback: create minimal result
-        from datetime import datetime
-        result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score"),
-            alerts=final_state.get("alerts", []),
-            calculated_at=datetime.now(UTC),
-            score_version=SCORE_VERSION_V1,
-            score_reason=final_state.get("diagnostics", {}).get("reason"),
-            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
-            finding_signals=final_state.get("all_signals", []),
-        )
+        result = _honest_null_result(final_state)
 
     return result
 
@@ -300,16 +304,7 @@ async def evaluate_coherence_async(
     # Extract result
     result = final_state.get("result")
     if result is None:
-        from datetime import datetime
-        result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score"),
-            alerts=final_state.get("alerts", []),
-            calculated_at=datetime.now(UTC),
-            score_version=SCORE_VERSION_V1,
-            score_reason=final_state.get("diagnostics", {}).get("reason"),
-            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
-            finding_signals=final_state.get("all_signals", []),
-        )
+        result = _honest_null_result(final_state)
 
     return result
 
