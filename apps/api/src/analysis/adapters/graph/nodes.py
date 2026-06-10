@@ -22,6 +22,12 @@ from src.analysis.adapters.graph.dependencies import (
     get_ai_service,
     get_hitl_service_for_graph,
 )
+from src.analysis.adapters.graph.nodes_extended import (
+    _failed_node_result,
+    _maybe_await,
+    _ok_node_result,
+    _persist_node_error,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -320,22 +326,33 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id = UUID(state["tenant_id"])
-    async with get_session_with_tenant(tenant_id) as session:
-        result = await PersistAnalysisUseCase(
-            analysis_repo=SqlAlchemyAnalysisRepository(session),
-            wbs_repo=SQLAlchemyWBSRepository(session),
-            session=session,
-        ).execute(
-            PersistAnalysisCommand(
-                project_id=UUID(state["project_id"]),
-                tenant_id=tenant_id,
-                extracted_risks=state.get("extracted_risks", []),
-                extracted_wbs=state.get("extracted_wbs", []),
-                coherence_score=state.get("coherence_score", 0),
-                coherence_breakdown=state.get("coherence_breakdown", {}),
+    try:
+        async with get_session_with_tenant(tenant_id) as session:
+            result = await PersistAnalysisUseCase(
+                analysis_repo=SqlAlchemyAnalysisRepository(session),
+                wbs_repo=SQLAlchemyWBSRepository(session),
+                session=session,
+            ).execute(
+                PersistAnalysisCommand(
+                    project_id=UUID(state["project_id"]),
+                    tenant_id=tenant_id,
+                    extracted_risks=state.get("extracted_risks", []),
+                    extracted_wbs=state.get("extracted_wbs", []),
+                    coherence_score=state.get("coherence_score", 0),
+                    coherence_breakdown=state.get("coherence_breakdown", {}),
+                )
             )
-        )
+    except Exception as exc:
+        node_result = _failed_node_result("save_to_db", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N17 save_to_db: failed (see node_results)"))
+        return state
 
     state["analysis_id"] = str(result.analysis_id)
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("save_to_db", {"analysis_id": str(result.analysis_id)}),
+    ]
     state["messages"].append(AIMessage(content=f"Persisted analysis {result.analysis_id}."))
     return state

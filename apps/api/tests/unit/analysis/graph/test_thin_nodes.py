@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import UUID
+from uuid import uuid4
 
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.modules.hitl.domain.entities import ReviewStatus
 
 
@@ -462,6 +464,78 @@ class TestSaveToDbNodeShortCircuit:
 
         result = await nodes.save_to_db_node(_make_state(tenant_id=None))
         assert result.get("analysis_id") is None
+
+    @pytest.mark.asyncio
+    async def test_success_emits_ok_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N17 success must be visible in node_results."""
+        from src.analysis.adapters.graph import nodes
+        from src.analysis.application import persist_analysis_use_case as persist_module
+
+        analysis_id = uuid4()
+
+        class _PersistUseCase:
+            def __init__(self, **_kwargs: Any) -> None:
+                pass
+
+            async def execute(self, _command: Any) -> Any:
+                return persist_module.PersistAnalysisResult(analysis_id=analysis_id)
+
+        monkeypatch.setattr(persist_module, "PersistAnalysisUseCase", _PersistUseCase)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value=object()),
+            raising=False,
+        )
+
+        result = await nodes.save_to_db_node(_make_state())
+
+        assert result["analysis_id"] == str(analysis_id)
+        node_result = result["node_results"][-1]
+        assert node_result.node == "save_to_db"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == {"analysis_id": str(analysis_id)}
+
+    @pytest.mark.asyncio
+    async def test_db_failure_emits_failed_node_result_and_persists_error(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N17 persistence failures are NodeResult failures, not silent saves."""
+        from src.analysis.adapters.graph import nodes
+        from src.analysis.application import persist_analysis_use_case as persist_module
+
+        persisted: list[NodeResult] = []
+
+        class _PersistUseCase:
+            def __init__(self, **_kwargs: Any) -> None:
+                pass
+
+            async def execute(self, _command: Any) -> Any:
+                raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(persist_module, "PersistAnalysisUseCase", _PersistUseCase)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value=object()),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "_persist_node_error",
+            lambda state, result: persisted.append(result),
+            raising=False,
+        )
+
+        result = await nodes.save_to_db_node(_make_state())
+
+        assert result.get("analysis_id") is None
+        node_result = result["node_results"][-1]
+        assert node_result.node == "save_to_db"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert node_result.error.message == "database unavailable"
+        assert persisted == [node_result]
 
 
 # ── N4 / N5 non-mock delegation to tool registry ────────────────────────────
