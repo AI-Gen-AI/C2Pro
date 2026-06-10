@@ -216,8 +216,14 @@ async def stakeholder_extractor_node(state: ProjectState) -> dict[str, Any]:
     text = state.get("anonymized_text") or state["document_text"]
 
     if not tenant_id:
+        node_result = NodeResult(
+            node="stakeholder_extractor",
+            status=NodeStatus.SKIPPED,
+            degradation_reason="missing_tenant_id",
+        )
         return {
             "extracted_stakeholders": [],
+            "node_results": [node_result],
             "messages": [AIMessage(content="N6 stakeholder_extractor: skipped (missing tenant)")],
         }
 
@@ -303,11 +309,17 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
     project_id = state.get("project_id")
 
     if not project_id:
+        node_result = NodeResult(
+            node="coherence_scorer",
+            status=NodeStatus.SKIPPED,
+            degradation_reason="missing_project_id",
+        )
         return {
             "coherence_score": None,
             "coherence_breakdown": {},
             "coherence_reason": "missing_project_id",
             "coherence_missing_dimensions": ["schedule", "budget"],
+            "node_results": [node_result],
             "messages": [AIMessage(content="N8 coherence_scorer: skipped (missing project_id)")],
         }
 

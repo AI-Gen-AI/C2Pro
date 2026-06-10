@@ -95,6 +95,34 @@ async def test_stakeholder_extractor_returns_failed_node_result_when_extraction_
 
 
 @pytest.mark.asyncio
+async def test_stakeholder_extractor_no_tenant_returns_skipped_node_result() -> None:
+    """TS-ADR-013-GRAPH-001 - N6 no-tenant skip paths are visible NodeResult skips."""
+    from src.analysis.adapters.graph import nodes_extended
+
+    result = await nodes_extended.stakeholder_extractor_node(_state(tenant_id=None))
+
+    node_result = result["node_results"][0]
+    assert node_result.node == "stakeholder_extractor"
+    assert node_result.status is NodeStatus.SKIPPED
+    assert node_result.degradation_reason == "missing_tenant_id"
+    assert result["extracted_stakeholders"] == []
+
+
+@pytest.mark.asyncio
+async def test_coherence_scorer_no_project_returns_skipped_node_result() -> None:
+    """TS-ADR-013-GRAPH-001 - N8 no-project skip paths are visible NodeResult skips."""
+    from src.analysis.adapters.graph import nodes_extended
+
+    result = await nodes_extended.coherence_scorer_node(_state(project_id=None))
+
+    node_result = result["node_results"][0]
+    assert node_result.node == "coherence_scorer"
+    assert node_result.status is NodeStatus.SKIPPED
+    assert node_result.degradation_reason == "missing_project_id"
+    assert result["coherence_score"] is None
+
+
+@pytest.mark.asyncio
 async def test_coherence_llm_flag_controls_low_budget_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
