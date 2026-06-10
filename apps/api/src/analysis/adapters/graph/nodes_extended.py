@@ -34,8 +34,8 @@ from src.analysis.application.parse_budget_use_case import (
     ParseBudgetCommand,
     ParseBudgetUseCase,
 )
-from src.analysis.domain.document_classification import DocumentCategoryClassifier
 from src.analysis.domain.contracts import BudgetItem, Citation
+from src.analysis.domain.document_classification import DocumentCategoryClassifier
 from src.analysis.domain.documentation_health import build_documentation_health_signal
 from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 
@@ -130,7 +130,7 @@ async def _persist_node_error(state: ProjectState, result: NodeResult) -> None:
                 )
             )
             await session.flush()
-    except Exception as exc:  # noqa: BLE001 - explicit NodeResult remains the source of truth.
+    except Exception as exc:  # noqa: BLE001 - error-event persistence is best-effort.
         logger.warning(
             "node_error_persist_failed",
             node=result.node,
@@ -159,7 +159,7 @@ async def _is_feature_v3_coherence_llm_enabled(state: ProjectState) -> bool:
                 ).is_enabled(UUID(str(tenant_id)), "feature_v3_coherence_llm")
 
         return bool(getattr(settings, "feature_v3_coherence_llm", False))
-    except Exception as exc:  # noqa: BLE001 - flag resolution fail-closed.
+    except Exception as exc:  # noqa: BLE001 - feature flag resolution must fail closed.
         logger.warning(
             "feature_v3_coherence_llm_resolution_failed",
             tenant_id=tenant_id,
