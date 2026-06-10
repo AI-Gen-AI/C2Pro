@@ -36,6 +36,7 @@ from src.analysis.application.parse_budget_use_case import (
 )
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
 from src.analysis.domain.contracts import BudgetItem, Citation
+from src.analysis.domain.documentation_health import build_documentation_health_signal
 from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 
 logger = structlog.get_logger()
@@ -55,6 +56,16 @@ def _budget_contract_item(item: BudgetItem | dict[str, Any]) -> BudgetItem:
     if unknown:
         raise ValueError(f"budget_parser emitted unknown contract fields: {sorted(unknown)}")
     return BudgetItem.model_validate(item)
+
+
+def _node_update_with_health(
+    update: dict[str, Any],
+    *,
+    existing_results: list[NodeResult] | None,
+) -> dict[str, Any]:
+    node_results = [*list(existing_results or []), *list(update.get("node_results") or [])]
+    update["documentation_health_signal"] = build_documentation_health_signal(node_results)
+    return update
 
 
 async def _maybe_await(value: object) -> None:

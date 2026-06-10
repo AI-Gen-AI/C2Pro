@@ -6,6 +6,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 from src.analysis.domain.contracts import BudgetItem, Citation, RiskItem, WbsActivity
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 
 Risk = RiskItem
@@ -71,3 +72,4 @@ class ProjectState(TypedDict):
     # ── N16: Final Assembler ──
     final_report: dict[str, Any]
     node_results: Annotated[list[NodeResult], merge_node_results]
+    documentation_health_signal: DocumentationHealthSignal | None
