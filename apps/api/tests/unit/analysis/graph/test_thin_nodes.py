@@ -19,7 +19,6 @@ from uuid import UUID, uuid4
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
-from src.analysis.domain.contracts import BudgetItem, Citation, RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.modules.hitl.domain.entities import ReviewStatus
 
@@ -439,8 +438,18 @@ class TestBudgetParserExtendedNodeDelegation:
         result = await nodes_extended.budget_parser_extended_node(
             _make_state(document_text="budget", anonymized_text="")
         )
-        assert len(result["bom_items"]) == 1
-        assert isinstance(result["bom_items"][0], BudgetItem)
+        assert result["bom_items"] == [
+            {
+                "name": "Steel",
+                "amount": 100.0,
+                "currency": "EUR",
+                "category": "general",
+                "quantity": None,
+                "unit": None,
+                "unit_price": None,
+                "cost_code": None,
+            }
+        ]
         assert result["confidence_score"] == 0.7
 
     @pytest.mark.asyncio
@@ -502,8 +511,8 @@ class TestBudgetParserExtendedNodeDelegation:
 
 class TestCitationValidatorNodeTyping:
     @pytest.mark.asyncio
-    async def test_emits_citation_contract_models(self) -> None:
-        """TS-ADR-013-GRAPH-001: N15 emits frozen Citation contract models without NodeResult instrumentation."""
+    async def test_validates_and_stores_citation_dicts(self) -> None:
+        """TS-ADR-013-GRAPH-001: N15 validates Citation contracts but stores dict-shaped state without NodeResult instrumentation."""
         from src.analysis.adapters.graph import nodes_extended
 
         text = "Clause 1 requires delivery by milestone A."
@@ -521,7 +530,8 @@ class TestCitationValidatorNodeTyping:
         )
 
         assert result["citations"]
-        assert isinstance(result["citations"][0], Citation)
+        assert isinstance(result["citations"][0], dict)
+        assert result["citations"][0]["quote"] == text
         assert "node_results" not in result
 
 
@@ -692,8 +702,8 @@ class TestExtractorAIToolDelegation:
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
 
         result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
-        assert isinstance(result["extracted_risks"][0], RiskItem)
-        assert result["extracted_risks"][0].title == "T"
+        assert isinstance(result["extracted_risks"][0], dict)
+        assert result["extracted_risks"][0]["title"] == "T"
 
     @pytest.mark.asyncio
     async def test_risk_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
@@ -723,7 +733,7 @@ class TestExtractorAIToolDelegation:
         node_result = result["node_results"][-1]
         assert node_result.node == "risk_extractor"
         assert node_result.status is NodeStatus.OK
-        assert isinstance(result["extracted_risks"][0], RiskItem)
+        assert isinstance(result["extracted_risks"][0], dict)
         assert node_result.data == result["extracted_risks"]
 
     @pytest.mark.asyncio
@@ -830,7 +840,7 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"]
-        assert result["extracted_risks"][0].category == "LEGAL"
+        assert result["extracted_risks"][0]["category"] == "LEGAL"
         assert "deterministic fallback" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio
@@ -854,8 +864,8 @@ class TestExtractorAIToolDelegation:
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
 
         result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
-        assert isinstance(result["extracted_wbs"][0], WbsActivity)
-        assert result["extracted_wbs"][0].code == "W"
+        assert isinstance(result["extracted_wbs"][0], dict)
+        assert result["extracted_wbs"][0]["code"] == "W"
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
@@ -885,7 +895,7 @@ class TestExtractorAIToolDelegation:
         node_result = result["node_results"][-1]
         assert node_result.node == "wbs_extractor"
         assert node_result.status is NodeStatus.OK
-        assert isinstance(result["extracted_wbs"][0], WbsActivity)
+        assert isinstance(result["extracted_wbs"][0], dict)
         assert node_result.data == result["extracted_wbs"]
 
     @pytest.mark.asyncio

@@ -95,6 +95,10 @@ def _risk_contract_item(item: RiskItem | dict[str, Any]) -> RiskItem:
     return RiskItem.model_validate(data)
 
 
+def _risk_contract_payload(item: RiskItem | dict[str, Any]) -> dict[str, Any]:
+    return _risk_contract_item(item).model_dump(mode="python")
+
+
 def _wbs_contract_item(item: WbsActivity | dict[str, Any]) -> WbsActivity:
     if isinstance(item, WbsActivity):
         return item
@@ -107,6 +111,10 @@ def _wbs_contract_item(item: WbsActivity | dict[str, Any]) -> WbsActivity:
         raise ValueError(f"wbs_extractor emitted unknown contract fields: {sorted(unknown)}")
     data = {key: item[key] for key in WbsActivity.model_fields if key in item}
     return WbsActivity.model_validate(data)
+
+
+def _wbs_contract_payload(item: WbsActivity | dict[str, Any]) -> dict[str, Any]:
+    return _wbs_contract_item(item).model_dump(mode="python")
 
 
 # ── Backwards-compatible shims ──────────────────────────────────────────────
@@ -180,7 +188,10 @@ async def router_node(state: ProjectState) -> ProjectState:
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        risks = [_risk_contract_item(item) for item in _risk_rules.extract(state.get("document_text", ""))]
+        risks = [
+            _risk_contract_payload(item)
+            for item in _risk_rules.extract(state.get("document_text", ""))
+        ]
         state["extracted_risks"] = risks
         state["node_results"] = [
             *state.get("node_results", []),
@@ -198,7 +209,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
         updated_state = _fallback_contract_risks_when_empty(updated_state)
         risks = [
-            _risk_contract_item(item)
+            _risk_contract_payload(item)
             for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks
@@ -259,7 +270,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     """N5 — Extract WBS items via WBSExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         wbs_items = [
-            _wbs_contract_item(item)
+            _wbs_contract_payload(item)
             for item in _wbs_rules.extract(state.get("document_text", ""))
         ]
         state["extracted_wbs"] = wbs_items
@@ -277,7 +288,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     try:
         updated_state = await get_tool("wbs_extraction", version="1.0")(state)
         wbs_items = [
-            _wbs_contract_item(item)
+            _wbs_contract_payload(item)
             for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items

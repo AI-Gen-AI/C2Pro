@@ -58,6 +58,10 @@ def _budget_contract_item(item: BudgetItem | dict[str, Any]) -> BudgetItem:
     return BudgetItem.model_validate(item)
 
 
+def _budget_contract_payload(item: BudgetItem | dict[str, Any]) -> dict[str, Any]:
+    return _budget_contract_item(item).model_dump(mode="python")
+
+
 def _node_update_with_health(
     update: dict[str, Any],
     *,
@@ -490,7 +494,7 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
     try:
         use_case = ParseBudgetUseCase(ai=get_ai_service(tenant_id))
         result = await use_case.execute(ParseBudgetCommand(text=text))
-        bom_items = [_budget_contract_item(item) for item in result.bom_items]
+        bom_items = [_budget_contract_payload(item) for item in result.bom_items]
     except Exception as exc:
         logger.warning("node_budget_parser_failed", exc_info=True)
         node_result = _failed_node_result("budget_parser", exc)
@@ -628,7 +632,7 @@ async def citation_validator_node(state: ProjectState) -> dict[str, Any]:
             item=c.item,
             quote=c.quote,
             found_in_source=c.found_in_source,
-        )
+        ).model_dump(mode="python")
         for c in validation.citations
     ]
 
