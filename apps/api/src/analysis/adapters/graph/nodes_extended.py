@@ -35,6 +35,7 @@ from src.analysis.application.parse_budget_use_case import (
     ParseBudgetUseCase,
 )
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
+from src.analysis.domain.contracts import BudgetItem, Citation
 from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 
 logger = structlog.get_logger()
@@ -45,6 +46,15 @@ if TYPE_CHECKING:
 # ── Domain service instances (stateless, reusable) ──────────────────────────
 
 _document_classifier = DocumentCategoryClassifier()
+
+
+def _budget_contract_item(item: BudgetItem | dict[str, Any]) -> BudgetItem:
+    if isinstance(item, BudgetItem):
+        return item
+    unknown = set(item) - set(BudgetItem.model_fields)
+    if unknown:
+        raise ValueError(f"budget_parser emitted unknown contract fields: {sorted(unknown)}")
+    return BudgetItem.model_validate(item)
 
 
 async def _maybe_await(value: object) -> None:
@@ -466,14 +476,32 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
     text = state.get("anonymized_text") or state["document_text"]
     tenant_id = state.get("tenant_id")
 
-    use_case = ParseBudgetUseCase(ai=get_ai_service(tenant_id))
-    result = await use_case.execute(ParseBudgetCommand(text=text))
+    try:
+        use_case = ParseBudgetUseCase(ai=get_ai_service(tenant_id))
+        result = await use_case.execute(ParseBudgetCommand(text=text))
+        bom_items = [_budget_contract_item(item) for item in result.bom_items]
+    except Exception as exc:
+        logger.warning("node_budget_parser_failed", exc_info=True)
+        node_result = _failed_node_result("budget_parser", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["bom_items"] = []
+        state["extracted_wbs"] = state.get("extracted_wbs") or []
+        state["confidence_score"] = 0.0
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content="N9 budget_parser: failed (see node_results)")
+        )
+        return state
 
-    state["bom_items"] = result.bom_items
+    state["bom_items"] = bom_items
     state["extracted_wbs"] = state.get("extracted_wbs") or []
     state["confidence_score"] = result.confidence_score
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("budget_parser", bom_items, confidence=result.confidence_score),
+    ]
     state["messages"].append(
-        AIMessage(content=f"N9 budget_parser: {len(result.bom_items)} BOM items extracted")
+        AIMessage(content=f"N9 budget_parser: {len(bom_items)} BOM items extracted")
     )
     return state
 
@@ -584,7 +612,12 @@ async def citation_validator_node(state: ProjectState) -> dict[str, Any]:
     validation = CitationValidatorService().validate(text, risks, wbs_items)
 
     citations = [
-        {"type": c.type, "item": c.item, "quote": c.quote, "found_in_source": c.found_in_source}
+        Citation(
+            type=c.type,
+            item=c.item,
+            quote=c.quote,
+            found_in_source=c.found_in_source,
+        )
         for c in validation.citations
     ]
 

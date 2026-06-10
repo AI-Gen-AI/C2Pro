@@ -42,6 +42,7 @@ from src.analysis.domain.ai_extraction import (
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
 )
+from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
@@ -50,6 +51,62 @@ from src.core.database import get_session_with_tenant
 _risk_rules = DeterministicRiskRulesService()
 _wbs_rules = DeterministicWbsRulesService()
 _critique_service = CritiqueExtractionService()
+
+_RISK_LEGACY_KEYS = {
+    "summary",
+    "probability",
+    "mitigation_suggestion",
+    "source_quote",
+    "source_text_snippet",
+    "risk_score",
+    "immediate_alert",
+}
+_WBS_LEGACY_KEYS = {"item_type", "confidence"}
+
+
+def _unexpected_contract_keys(
+    item: dict[str, Any],
+    *,
+    allowed: set[str],
+    legacy: set[str],
+) -> set[str]:
+    return set(item) - allowed - legacy
+
+
+def _risk_contract_item(item: RiskItem | dict[str, Any]) -> RiskItem:
+    if isinstance(item, RiskItem):
+        return item
+    unknown = _unexpected_contract_keys(
+        item,
+        allowed=set(RiskItem.model_fields),
+        legacy=_RISK_LEGACY_KEYS,
+    )
+    if unknown:
+        raise ValueError(f"risk_extractor emitted unknown contract fields: {sorted(unknown)}")
+    data = {key: item[key] for key in RiskItem.model_fields if key in item}
+    if not data.get("description") and item.get("summary"):
+        data["description"] = item["summary"]
+    if not data.get("description") and data.get("title"):
+        data["description"] = data["title"]
+    if not data.get("source"):
+        data["source"] = item.get("source_quote") or item.get("source_text_snippet")
+    if not data.get("likelihood") and item.get("probability"):
+        data["likelihood"] = item["probability"]
+    return RiskItem.model_validate(data)
+
+
+def _wbs_contract_item(item: WbsActivity | dict[str, Any]) -> WbsActivity:
+    if isinstance(item, WbsActivity):
+        return item
+    unknown = _unexpected_contract_keys(
+        item,
+        allowed=set(WbsActivity.model_fields),
+        legacy=_WBS_LEGACY_KEYS,
+    )
+    if unknown:
+        raise ValueError(f"wbs_extractor emitted unknown contract fields: {sorted(unknown)}")
+    data = {key: item[key] for key in WbsActivity.model_fields if key in item}
+    return WbsActivity.model_validate(data)
 
 
 # ── Backwards-compatible shims ──────────────────────────────────────────────
@@ -123,7 +180,7 @@ async def router_node(state: ProjectState) -> ProjectState:
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        risks = _risk_rules.extract(state.get("document_text", ""))
+        risks = [_risk_contract_item(item) for item in _risk_rules.extract(state.get("document_text", ""))]
         state["extracted_risks"] = risks
         state["node_results"] = [
             *state.get("node_results", []),
@@ -140,6 +197,11 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         original_chars = len(state.get("document_text", "") or "")
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
         updated_state = _fallback_contract_risks_when_empty(updated_state)
+        risks = [
+            _risk_contract_item(item)
+            for item in (updated_state.get("extracted_risks") or [])
+        ]
+        updated_state["extracted_risks"] = risks
     except Exception as exc:
         node_result = _failed_node_result("risk_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
@@ -196,7 +258,10 @@ def _fallback_contract_risks_when_empty(state: ProjectState) -> ProjectState:
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     """N5 — Extract WBS items via WBSExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        wbs_items = _wbs_rules.extract(state.get("document_text", ""))
+        wbs_items = [
+            _wbs_contract_item(item)
+            for item in _wbs_rules.extract(state.get("document_text", ""))
+        ]
         state["extracted_wbs"] = wbs_items
         state["node_results"] = [
             *state.get("node_results", []),
@@ -211,6 +276,11 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
 
     try:
         updated_state = await get_tool("wbs_extraction", version="1.0")(state)
+        wbs_items = [
+            _wbs_contract_item(item)
+            for item in (updated_state.get("extracted_wbs") or [])
+        ]
+        updated_state["extracted_wbs"] = wbs_items
     except Exception as exc:
         node_result = _failed_node_result("wbs_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))

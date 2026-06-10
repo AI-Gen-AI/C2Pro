@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from src.analysis.adapters.graph.schema import ProjectState
+from src.analysis.domain.contracts import BudgetItem, Citation, RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.modules.hitl.domain.entities import ReviewStatus
 
@@ -439,6 +440,7 @@ class TestBudgetParserExtendedNodeDelegation:
             _make_state(document_text="budget", anonymized_text="")
         )
         assert len(result["bom_items"]) == 1
+        assert isinstance(result["bom_items"][0], BudgetItem)
         assert result["confidence_score"] == 0.7
 
     @pytest.mark.asyncio
@@ -468,6 +470,59 @@ class TestBudgetParserExtendedNodeDelegation:
         )
         # AI received anonymized text, not original
         assert ai.calls[0][1] == "anon version"
+
+    @pytest.mark.asyncio
+    async def test_contract_validation_failure_emits_failed_node_result(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N9 rejects hallucinated budget fields as NodeResult failures."""
+        from src.analysis.adapters.graph import nodes_extended
+        from src.analysis.application import parse_budget_use_case as parse_module
+
+        class _ParseBudgetUseCase:
+            def __init__(self, ai: Any) -> None:
+                self.ai = ai
+
+            async def execute(self, _command: Any) -> Any:
+                return parse_module.ParseBudgetResult(
+                    bom_items=[{"name": "Steel", "hallucinated_field": "x"}],
+                    confidence_score=0.7,
+                )
+
+        monkeypatch.setattr(nodes_extended, "ParseBudgetUseCase", _ParseBudgetUseCase)
+        result = await nodes_extended.budget_parser_extended_node(
+            _make_state(document_text="budget")
+        )
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "budget_parser"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+
+
+class TestCitationValidatorNodeTyping:
+    @pytest.mark.asyncio
+    async def test_emits_citation_contract_models(self) -> None:
+        """TS-ADR-013-GRAPH-001: N15 emits frozen Citation contract models without NodeResult instrumentation."""
+        from src.analysis.adapters.graph import nodes_extended
+
+        text = "Clause 1 requires delivery by milestone A."
+        result = await nodes_extended.citation_validator_node(
+            _make_state(
+                document_text=text,
+                extracted_risks=[
+                    {
+                        "title": "Delivery risk",
+                        "description": "Delivery risk.",
+                        "source_quote": text,
+                    }
+                ],
+            )
+        )
+
+        assert result["citations"]
+        assert isinstance(result["citations"][0], Citation)
+        assert "node_results" not in result
 
 
 # ── Phase 4: conditional edge routing ───────────────────────────────────────
@@ -622,7 +677,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
-            state["extracted_risks"] = [{"title": "T"}]
+            state["extracted_risks"] = [{"title": "T", "description": "Risk T"}]
             return state
 
         def _fake_get_tool(name, *, version):
@@ -637,7 +692,8 @@ class TestExtractorAIToolDelegation:
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
 
         result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
-        assert result["extracted_risks"] == [{"title": "T"}]
+        assert isinstance(result["extracted_risks"][0], RiskItem)
+        assert result["extracted_risks"][0].title == "T"
 
     @pytest.mark.asyncio
     async def test_risk_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
@@ -667,7 +723,44 @@ class TestExtractorAIToolDelegation:
         node_result = result["node_results"][-1]
         assert node_result.node == "risk_extractor"
         assert node_result.status is NodeStatus.OK
-        assert node_result.data == [risk]
+        assert isinstance(result["extracted_risks"][0], RiskItem)
+        assert node_result.data == result["extracted_risks"]
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_contract_validation_failure_emits_failed_node_result(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N4 rejects hallucinated risk fields as NodeResult failures."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        async def _fake_tool(state):
+            state["extracted_risks"] = [
+                {
+                    "title": "Delay",
+                    "description": "Delay penalty exposure.",
+                    "hallucinated_field": "not in contract",
+                }
+            ]
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "risk_extractor"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
 
     @pytest.mark.asyncio
     async def test_risk_extractor_tool_exception_emits_failed_node_result(
@@ -737,7 +830,7 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"]
-        assert result["extracted_risks"][0]["category"] == "LEGAL"
+        assert result["extracted_risks"][0].category == "LEGAL"
         assert "deterministic fallback" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio
@@ -747,7 +840,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
-            state["extracted_wbs"] = [{"code": "W"}]
+            state["extracted_wbs"] = [{"code": "W", "name": "Work package"}]
             return state
 
         def _fake_get_tool(name, *, version):
@@ -761,7 +854,8 @@ class TestExtractorAIToolDelegation:
         monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
 
         result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
-        assert result["extracted_wbs"] == [{"code": "W"}]
+        assert isinstance(result["extracted_wbs"][0], WbsActivity)
+        assert result["extracted_wbs"][0].code == "W"
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_success_emits_ok_node_result(self, monkeypatch) -> None:
@@ -791,7 +885,40 @@ class TestExtractorAIToolDelegation:
         node_result = result["node_results"][-1]
         assert node_result.node == "wbs_extractor"
         assert node_result.status is NodeStatus.OK
-        assert node_result.data == [wbs_item]
+        assert isinstance(result["extracted_wbs"][0], WbsActivity)
+        assert node_result.data == result["extracted_wbs"]
+
+    @pytest.mark.asyncio
+    async def test_wbs_extractor_contract_validation_failure_emits_failed_node_result(
+        self, monkeypatch
+    ) -> None:
+        """TS-ADR-013-GRAPH-001: N5 rejects hallucinated WBS fields as NodeResult failures."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        async def _fake_tool(state):
+            state["extracted_wbs"] = [
+                {"code": "W", "name": "Work package", "hallucinated_field": "x"}
+            ]
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("wbs_extraction", "1.0")
+            return _fake_tool
+
+        import sys
+        import types
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.wbs_extractor_node(_make_state(document_text="real text"))
+
+        node_result = result["node_results"][-1]
+        assert node_result.node == "wbs_extractor"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_tool_exception_emits_failed_node_result(
