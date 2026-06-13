@@ -131,6 +131,32 @@ class R2StorageService(IStorageService):
         """Return a local temporary path for a remotely stored object."""
         return await self.download_file(file_name_in_storage)
 
+    async def file_exists(self, key: str) -> bool:
+        """Check whether a file exists in the R2 bucket by its object key."""
+        await self._check_circuit_breaker()
+        try:
+            await self._client.get_object(Bucket=self._bucket, Key=key)
+            return True
+        except Exception:
+            return False
+
+    async def upload_bytes(self, data: bytes, key: str) -> str:
+        """Upload raw bytes to R2 under a content-addressed key."""
+        await self._check_circuit_breaker()
+        try:
+            await self._client.put_object(Bucket=self._bucket, Key=key, Body=data)
+            if self._circuit_breaker:
+                await self._circuit_breaker.record_success()
+            logger.debug("r2_upload_bytes_success", key=key, bucket=self._bucket)
+            return f"{self._endpoint}/{self._bucket}/{key}"
+        except CircuitBreakerOpenError:
+            raise
+        except Exception as exc:
+            if self._circuit_breaker:
+                await self._circuit_breaker.record_failure(exc)
+            logger.warning("r2_upload_bytes_failed", key=key, error=str(exc))
+            raise StorageError(str(exc)) from exc
+
     async def _read_content(self, file_content: BinaryIO) -> bytes:
         read_method = file_content.read
         if inspect.iscoroutinefunction(read_method):

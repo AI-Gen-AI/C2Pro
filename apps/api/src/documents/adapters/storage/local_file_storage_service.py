@@ -69,16 +69,18 @@ class LocalFileStorageService(IStorageService):
             logger.info("file_deleted", path=str(path))
 
     async def get_file_path(self, file_name_in_storage: str) -> Path:
-        """
-        Gets the full path to a file in storage.
-
-        Args:
-            file_name_in_storage: The name/path of the file in storage.
-
-        Returns:
-            Full Path to the file.
-        """
         path = Path(file_name_in_storage)
         if path.exists():
             return path
         return self._base_dir / file_name_in_storage
+
+    async def file_exists(self, key: str) -> bool:
+        path = self._base_dir / key
+        return path.exists()
+
+    async def upload_bytes(self, data: bytes, key: str) -> str:
+        dest = self._base_dir / key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        logger.info("bytes_uploaded", path=str(dest))
+        return str(dest)
