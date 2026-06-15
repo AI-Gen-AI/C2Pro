@@ -93,7 +93,7 @@ class ProjectSnapshotORM(Base):
     snapshot_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
-    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, primary_key=True, nullable=False)
     trigger: Mapped[str] = mapped_column(String(40), nullable=False)
     health_vector: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     coherence_subscore: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -113,7 +113,10 @@ class ProjectSnapshotORM(Base):
             name="ck_project_snapshots_trigger",
         ),
         Index("ix_project_snapshots_project_captured", "project_id", "captured_at"),
-        {"info": {"rls_policy": "tenant_isolation"}},
+        {
+            "info": {"rls_policy": "tenant_isolation"},
+            "postgresql_partition_by": "RANGE (captured_at)",
+        },
     )
 
 
@@ -178,9 +181,48 @@ def _install_temporal_ddl(table: Any, table_name: str, prefix: str, block_delete
         )
 
 
+def _install_project_snapshot_partitions(table: Any) -> None:
+    default_partition_ddl = """
+        CREATE TABLE IF NOT EXISTS project_snapshots_default
+        PARTITION OF project_snapshots DEFAULT
+        """
+    monthly_partition_ddl = """
+        DO $$
+        DECLARE
+            month_start date := date_trunc('month', now())::date;
+            partition_start date;
+            partition_end date;
+            partition_name text;
+        BEGIN
+            FOR offset_month IN 0..2 LOOP
+                partition_start := (month_start + (offset_month || ' months')::interval)::date;
+                partition_end := (partition_start + interval '1 month')::date;
+                partition_name := format(
+                    'project_snapshots_%%s',
+                    to_char(partition_start, 'YYYY_MM')
+                );
+                EXECUTE format(
+                    'CREATE TABLE IF NOT EXISTS %%I PARTITION OF project_snapshots '
+                    'FOR VALUES FROM (%%L) TO (%%L)',
+                    partition_name,
+                    partition_start,
+                    partition_end
+                );
+            END LOOP;
+        END $$;
+        """
+    for statement in (default_partition_ddl, monthly_partition_ddl):
+        event.listen(
+            table,
+            "after_create",
+            DDL(statement).execute_if(dialect="postgresql"),
+        )
+
+
 _install_temporal_ddl(
     ProjectEventORM.__table__, "project_events", "project_events", block_delete=True
 )
+_install_project_snapshot_partitions(ProjectSnapshotORM.__table__)
 _install_temporal_ddl(
     ProjectSnapshotORM.__table__,
     "project_snapshots",

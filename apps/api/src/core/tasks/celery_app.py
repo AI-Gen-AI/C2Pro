@@ -29,6 +29,7 @@ celery_app = Celery(
         "src.core.tasks.ingestion_tasks",
         "src.core.tasks.budget_alerts",
         "src.core.tasks.snapshot_tasks",
+        "src.core.tasks.snapshot_retention",
     ],
 )
 
@@ -56,6 +57,10 @@ celery_app.conf.update(
         },
         "project-snapshots-daily": {
             "task": "project_snapshots.enqueue_daily",
+            "schedule": 86400.0,
+        },
+        "project-snapshots-retention": {
+            "task": "project_snapshots.retention",
             "schedule": 86400.0,
         },
     },
