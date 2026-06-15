@@ -11,11 +11,13 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, UploadFile, status
 
 from src.config import settings
+from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
 from src.temporal.domain.document_revision import DocumentRevision
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
 
 
@@ -71,7 +73,7 @@ class UploadDocumentUseCase:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. "
-                       f"Allowed types: {', '.join(settings.allowed_document_types)}",
+                f"Allowed types: {', '.join(settings.allowed_document_types)}",
             )
 
         project_exists = await self.project_repository.exists_by_id(project_id, tenant_id)
@@ -104,8 +106,12 @@ class UploadDocumentUseCase:
         file_hash = hashlib.sha256(content_bytes).hexdigest()
 
         await self.document_repository.update_storage_path(tenant_id, new_document.id, storage_path)
-        await self.document_repository.update_status(tenant_id, new_document.id, DocumentStatus.UPLOADED)
-        await self.document_repository.update_metadata(tenant_id, new_document.id, {"file_hash": file_hash})
+        await self.document_repository.update_status(
+            tenant_id, new_document.id, DocumentStatus.UPLOADED
+        )
+        await self.document_repository.update_metadata(
+            tenant_id, new_document.id, {"file_hash": file_hash}
+        )
         await self.document_repository.commit()
 
         # H1: genesis revision at initial upload, content-addressed
@@ -127,6 +133,12 @@ class UploadDocumentUseCase:
                 created_at=now,
             )
             await self.revision_repository.append_revision(genesis)
+            enqueue_project_snapshot(
+                project_id=project_id,
+                tenant_id=tenant_id,
+                trigger=SnapshotTrigger.REVISION_INGESTED,
+                source_event_id=genesis.revision_id,
+            )
 
         await self.document_repository.refresh(new_document)
         return new_document

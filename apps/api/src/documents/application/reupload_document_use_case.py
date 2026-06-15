@@ -10,11 +10,13 @@ import hashlib
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.documents.application.dtos import DocumentDTO
 from src.documents.domain.models import DocumentStatus
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
 
 
@@ -23,7 +25,6 @@ def _now_naive():
 
 
 class ReuploadDocumentUseCase:
-
     def __init__(
         self,
         document_repository: IDocumentRepository,
@@ -38,7 +39,7 @@ class ReuploadDocumentUseCase:
     def _blob_key(blob_hash: str, filename: str | None = None) -> str:
         ext = ""
         if filename and "." in filename:
-            ext = filename[filename.rindex("."):]
+            ext = filename[filename.rindex(".") :]
         return f"revisions/{blob_hash}{ext}"
 
     async def _store_blob(self, blob_key: str, file_content: bytes) -> None:
@@ -125,6 +126,12 @@ class ReuploadDocumentUseCase:
             await self.revision_repository.close_current(document_id, tenant_id, now)
 
         await self.revision_repository.append_revision(new_revision)
+        enqueue_project_snapshot(
+            project_id=document.project_id,
+            tenant_id=tenant_id,
+            trigger=SnapshotTrigger.REVISION_INGESTED,
+            source_event_id=new_revision.revision_id,
+        )
 
         new_version = document.version + 1
         updated_document = await self.document_repository.update_version(
