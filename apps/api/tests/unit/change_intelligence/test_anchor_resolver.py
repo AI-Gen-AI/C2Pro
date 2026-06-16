@@ -81,3 +81,35 @@ def test_low_confidence_fuzzy_pair_is_flagged_for_review() -> None:
     assert len(result.matched) == 1
     assert result.matched[0].match_confidence < 0.9
     assert result.matched[0].needs_review is True
+
+
+def test_duplicate_old_clause_code_is_not_silently_dropped_after_exact_match() -> None:
+    from src.change_intelligence.application.anchor_resolver import resolve_clause_anchors
+
+    old_a = _clause("5.2", "A")
+    old_b = _clause("5.2", "B")
+    new_c = _clause("5.2", "C")
+
+    result = resolve_clause_anchors([old_a, old_b], [new_c])
+
+    assert len(result.matched) == 1
+    assert result.matched[0].old is old_a
+    assert result.matched[0].new is new_c
+    assert result.unmatched_old == [old_b]
+    assert result.unmatched_new == []
+
+
+def test_duplicate_empty_clause_code_is_not_silently_dropped_after_exact_match() -> None:
+    from src.change_intelligence.application.anchor_resolver import resolve_clause_anchors
+
+    old_a = _clause("", "A")
+    old_b = _clause("", "B")
+    new_c = _clause("", "C")
+
+    result = resolve_clause_anchors([old_a, old_b], [new_c])
+
+    assert len(result.matched) == 1
+    assert result.matched[0].old is old_a
+    assert result.matched[0].new is new_c
+    assert result.unmatched_old == [old_b]
+    assert result.unmatched_new == []

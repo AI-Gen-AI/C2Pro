@@ -71,6 +71,8 @@ def resolve_clause_anchors(
                 )
             )
             del unmatched_new_by_index[new_index]
+        else:
+            unmatched_old.append(old_clause)
 
     candidates: list[tuple[float, int, int, Clause, Clause]] = []
     for old_index, old_clause in enumerate(unmatched_old):
