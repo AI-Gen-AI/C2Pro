@@ -326,6 +326,10 @@ class Settings(BaseSettings):  # type: ignore[misc]
     feature_v3_project_state: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_STATE")  # ADR-014
     feature_v3_temporal: bool = Field(default=False, validation_alias="FEATURE_V3_TEMPORAL")  # ADR-015
     feature_v3_change_impact: bool = Field(default=False, validation_alias="FEATURE_V3_CHANGE_IMPACT")  # ADR-016
+    feature_v3_change_semantic_llm: bool = Field(
+        default=False,
+        validation_alias="FEATURE_V3_CHANGE_SEMANTIC_LLM",
+    )  # ADR-016 L2
     feature_v3_project_graph: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH")  # ADR-017
     feature_v3_health: bool = Field(default=False, validation_alias="FEATURE_V3_HEALTH")  # ADR-018
     feature_v3_action_review: bool = Field(default=False, validation_alias="FEATURE_V3_ACTION_REVIEW")  # ADR-019/020
