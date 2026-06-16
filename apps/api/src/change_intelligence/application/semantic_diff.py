@@ -30,28 +30,6 @@ def _clause_text(snapshot: dict[str, Any] | None) -> str:
     return value if isinstance(value, str) else ""
 
 
-async def _default_anonymizer() -> Any:
-    from src.anonymizer.application.anonymization_service import AnonymizationService
-    from src.anonymizer.domain.pii_detector_service import PiiDetectorService
-
-    return AnonymizationService(pii_detector=PiiDetectorService())
-
-
-async def _anonymize_text(anonymizer: Any, text: str) -> str:
-    from src.anonymizer.application.anonymization_service import (
-        AnonymizationConfig,
-        AnonymizationStrategy,
-    )
-    from src.anonymizer.domain.pii_detector_service import PiiType
-
-    return await anonymizer.anonymize(
-        text,
-        AnonymizationConfig(
-            strategies={pii_type: AnonymizationStrategy.REDACT for pii_type in PiiType}
-        ),
-    )
-
-
 def _build_request(
     *,
     change: SemanticChange,
@@ -74,7 +52,6 @@ def _build_request(
         max_tokens=512,
         temperature=0.0,
         use_cache=True,
-        bypass_anonymization=True,
         metadata={
             "adr": "ADR-016",
             "layer": "L2",
@@ -89,14 +66,11 @@ async def _enrich_change(
     change: SemanticChange,
     tenant_id: UUID,
     llm: Any,
-    anonymizer: Any,
 ) -> SemanticChange:
-    before_text = await _anonymize_text(anonymizer, _clause_text(change.before))
-    after_text = await _anonymize_text(anonymizer, _clause_text(change.after))
     request = _build_request(
         change=change,
-        before_text=before_text,
-        after_text=after_text,
+        before_text=_clause_text(change.before),
+        after_text=_clause_text(change.after),
         tenant_id=tenant_id,
     )
     classification = await llm.generate_structured(request, SemanticClassification)
@@ -114,7 +88,6 @@ async def enrich_modified_changes(
     tenant_id: UUID,
     *,
     llm: Any | None = None,
-    anonymizer: Any | None = None,
 ) -> ChangeSet:
     """Enrich modified changes when the tenant L2 flag is on."""
 
@@ -122,7 +95,6 @@ async def enrich_modified_changes(
         return changeset
 
     resolved_llm = llm or get_anthropic_wrapper()
-    resolved_anonymizer = anonymizer or await _default_anonymizer()
     enriched_changes: list[SemanticChange] = []
     for change in changeset.changes:
         if change.change_type != "modified":
@@ -134,7 +106,6 @@ async def enrich_modified_changes(
                     change=change,
                     tenant_id=tenant_id,
                     llm=resolved_llm,
-                    anonymizer=resolved_anonymizer,
                 )
             )
         except Exception as exc:  # noqa: BLE001 - per-change L2 failure must be honest-null.

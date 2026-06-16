@@ -5,7 +5,7 @@ TS-UT-CI-REPORT-001
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from statistics import mean
 from uuid import UUID, uuid4
 
@@ -96,7 +96,6 @@ async def build_change_impact_report(
     tenant_id: UUID,
     *,
     llm: object | None = None,
-    anonymizer: object | None = None,
 ) -> ChangeImpactReport:
     """Assemble an honest report from L1 changes and optional L2 enrichment."""
 
@@ -111,7 +110,6 @@ async def build_change_impact_report(
         changeset,
         tenant_id,
         llm=llm,
-        anonymizer=anonymizer,
     )
     changes = enriched_changeset.changes
     return ChangeImpactReport(
@@ -128,7 +126,7 @@ async def build_change_impact_report(
         evidence_refs=_union_evidence_refs(changes),
         recommended_actions=_recommended_actions(changes),
         hitl_routing=_hitl_routing(changes),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
     )
 
 

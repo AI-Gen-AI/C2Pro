@@ -62,15 +62,6 @@ class _FakeLlm:
         )
 
 
-class _RecordingAnonymizer:
-    def __init__(self) -> None:
-        self.inputs: list[str] = []
-
-    async def anonymize(self, text: str, _config) -> str:
-        self.inputs.append(text)
-        return text.replace("john@example.com", "[REDACTED_EMAIL]")
-
-
 async def _flag_enabled(_tenant_id) -> bool:
     return True
 
@@ -95,7 +86,6 @@ async def test_flag_off_returns_unchanged_and_never_calls_llm(monkeypatch) -> No
         changeset,
         changeset.tenant_id,
         llm=llm,
-        anonymizer=_RecordingAnonymizer(),
     )
 
     assert enriched is changeset
@@ -126,7 +116,6 @@ async def test_flag_on_enriches_modified_changes_only(monkeypatch) -> None:
         changeset,
         changeset.tenant_id,
         llm=llm,
-        anonymizer=_RecordingAnonymizer(),
     )
 
     assert len(llm.requests) == 1
@@ -138,7 +127,7 @@ async def test_flag_on_enriches_modified_changes_only(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_anonymizer_runs_before_llm_request_is_built(monkeypatch) -> None:
+async def test_llm_request_uses_wrapper_governed_anonymization(monkeypatch) -> None:
     from src.change_intelligence.application import semantic_diff
 
     monkeypatch.setattr(
@@ -147,7 +136,6 @@ async def test_anonymizer_runs_before_llm_request_is_built(monkeypatch) -> None:
         _flag_enabled,
     )
     llm = _FakeLlm()
-    anonymizer = _RecordingAnonymizer()
     changeset = _changeset(
         [
             _change(
@@ -163,16 +151,11 @@ async def test_anonymizer_runs_before_llm_request_is_built(monkeypatch) -> None:
         changeset,
         changeset.tenant_id,
         llm=llm,
-        anonymizer=anonymizer,
     )
 
-    assert anonymizer.inputs == [
-        "Contact john@example.com before notice.",
-        "Contact john@example.com after notice.",
-    ]
-    prompt = llm.requests[0].prompt
-    assert "john@example.com" not in prompt
-    assert "[REDACTED_EMAIL]" in prompt
+    request = llm.requests[0]
+    assert request.bypass_anonymization is False
+    assert "john@example.com" in request.prompt
 
 
 @pytest.mark.asyncio
@@ -195,7 +178,6 @@ async def test_per_change_llm_error_keeps_l1_null_and_continues(monkeypatch) -> 
         changeset,
         changeset.tenant_id,
         llm=_FakeLlm(fail_first=True),
-        anonymizer=_RecordingAnonymizer(),
     )
 
     assert enriched.changes[0].severity is None

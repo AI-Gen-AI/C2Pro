@@ -114,7 +114,6 @@ async def test_l1_only_report_keeps_honest_nulls_and_routes_review(monkeypatch: 
         tenant_id: object,
         *,
         llm: object | None = None,
-        anonymizer: object | None = None,
     ) -> ChangeSet:
         return changeset
 
@@ -146,7 +145,6 @@ async def test_l2_enriched_high_severity_routes_to_review(monkeypatch: Any) -> N
         tenant_id: object,
         *,
         llm: object | None = None,
-        anonymizer: object | None = None,
     ) -> ChangeSet:
         enriched = [
             change.model_copy(
@@ -184,7 +182,6 @@ async def test_report_never_fabricates_conflicts_or_impact(monkeypatch: Any) -> 
         tenant_id: object,
         *,
         llm: object | None = None,
-        anonymizer: object | None = None,
     ) -> ChangeSet:
         return changeset
 
