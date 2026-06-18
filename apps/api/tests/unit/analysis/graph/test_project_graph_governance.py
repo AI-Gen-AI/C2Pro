@@ -5,6 +5,7 @@ TS-UT-ADR017-GOV-001
 
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 import pytest
@@ -23,6 +24,43 @@ class _FakeCache:
 
     async def delete(self, key: str) -> bool:
         return self.values.pop(key, None) is not None
+
+    async def incr(
+        self,
+        key: str,
+        *,
+        amount: int = 1,
+        ttl_seconds: int | None = None,  # noqa: ARG002
+    ) -> int:
+        current = int(self.values.get(key, 0) or 0) + amount
+        self.values[key] = current
+        return current
+
+    async def decr(self, key: str, *, amount: int = 1) -> int:
+        current = max(0, int(self.values.get(key, 0) or 0) - amount)
+        if current == 0:
+            self.values.pop(key, None)
+            return 0
+        self.values[key] = current
+        return current
+
+    async def set_if_absent(self, key: str, value: object, *, ttl_seconds: int) -> bool:  # noqa: ARG002
+        if key in self.values:
+            return False
+        self.values[key] = value
+        return True
+
+
+class _RacyLegacyCache(_FakeCache):
+    async def get(self, key: str, default: object | None = None) -> object | None:
+        value = self.values.get(key, default)
+        await asyncio.sleep(0)
+        return value
+
+    async def set(self, key: str, value: object, ttl: int | None = None) -> bool:  # noqa: ARG002
+        await asyncio.sleep(0)
+        self.values[key] = value
+        return True
 
 
 @pytest.mark.asyncio
@@ -72,6 +110,51 @@ async def test_project_graph_tenant_slot_released_on_success_and_error() -> None
     await governance.release_tenant_slot(tenant_id)
     await governance.release_tenant_slot(tenant_id)
     assert await governance.current_tenant_slots(tenant_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_project_graph_concurrent_acquire_never_exceeds_limit() -> None:
+    from src.core.tasks.project_graph_governance import ProjectGraphGovernance
+
+    tenant_id = uuid4()
+    limit = 3
+    governance = ProjectGraphGovernance(
+        cache=_RacyLegacyCache(),
+        tenant_concurrency_limit=limit,
+    )
+
+    results = await asyncio.gather(
+        *(governance.acquire_tenant_slot(tenant_id) for _ in range(limit + 5))
+    )
+
+    assert results.count(True) == limit
+    assert results.count(False) == 5
+    assert await governance.current_tenant_slots(tenant_id) == limit
+
+
+@pytest.mark.asyncio
+async def test_project_graph_concurrent_debounce_has_single_winner() -> None:
+    from src.core.tasks.project_graph_governance import ProjectGraphGovernance
+
+    project_id = uuid4()
+    governance = ProjectGraphGovernance(cache=_RacyLegacyCache())
+
+    results = await asyncio.gather(
+        *(governance.should_enqueue_project(project_id) for _ in range(8))
+    )
+
+    assert results.count(True) == 1
+    assert results.count(False) == 7
+
+
+@pytest.mark.asyncio
+async def test_project_graph_governance_fails_open_without_cache() -> None:
+    from src.core.tasks.project_graph_governance import ProjectGraphGovernance
+
+    governance = ProjectGraphGovernance(cache=None)
+
+    assert await governance.acquire_tenant_slot(uuid4()) is True
+    assert await governance.should_enqueue_project(uuid4()) is True
 
 
 @pytest.mark.asyncio

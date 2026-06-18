@@ -46,11 +46,13 @@ class ProjectGraphGovernance:
     async def should_enqueue_project(self, project_id: UUID) -> bool:
         if self._cache is None:
             return True
-        key = self._project_pending_key(project_id)
-        if await self._cache_get(key, default=None) is not None:
-            return False
-        await self._cache_set(key, "1", ttl=self.debounce_ttl_seconds)
-        return True
+        return bool(
+            await self._cache.set_if_absent(
+                self._project_pending_key(project_id),
+                "1",
+                ttl_seconds=self.debounce_ttl_seconds,
+            )
+        )
 
     async def clear_project_pending(self, project_id: UUID) -> None:
         if self._cache is not None:
@@ -65,35 +67,28 @@ class ProjectGraphGovernance:
     async def acquire_tenant_slot(self, tenant_id: UUID) -> bool:
         if self._cache is None:
             return True
-        current = await self.current_tenant_slots(tenant_id)
-        if current >= self.tenant_concurrency_limit:
-            return False
-        await self._cache_set(
-            self._tenant_slots_key(tenant_id),
-            current + 1,
-            ttl=max(self.debounce_ttl_seconds, self.requeue_countdown_seconds),
+        slots_key = self._tenant_slots_key(tenant_id)
+        new_value = int(
+            await self._cache.incr(
+                slots_key,
+                ttl_seconds=max(
+                    self.debounce_ttl_seconds,
+                    self.requeue_countdown_seconds,
+                ),
+            )
         )
+        if new_value > self.tenant_concurrency_limit:
+            await self._cache.decr(slots_key)
+            return False
         return True
 
     async def release_tenant_slot(self, tenant_id: UUID) -> None:
         if self._cache is None:
             return
-        key = self._tenant_slots_key(tenant_id)
-        current = await self.current_tenant_slots(tenant_id)
-        if current <= 1:
-            await self._cache_delete(key)
-            return
-        await self._cache_set(
-            key,
-            current - 1,
-            ttl=max(self.debounce_ttl_seconds, self.requeue_countdown_seconds),
-        )
+        await self._cache.decr(self._tenant_slots_key(tenant_id))
 
     async def _cache_get(self, key: str, *, default: object | None) -> object | None:
         return await self._cache.get(key, default=default)
-
-    async def _cache_set(self, key: str, value: object, *, ttl: int) -> None:
-        await self._cache.set(key, value, ttl=ttl)
 
     async def _cache_delete(self, key: str) -> None:
         await self._cache.delete(key)
