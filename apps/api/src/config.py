@@ -331,6 +331,21 @@ class Settings(BaseSettings):  # type: ignore[misc]
         validation_alias="FEATURE_V3_CHANGE_SEMANTIC_LLM",
     )  # ADR-016 L2
     feature_v3_project_graph: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH")  # ADR-017
+    project_graph_debounce_ttl_seconds: int = Field(
+        default=300,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_DEBOUNCE_TTL_SECONDS",
+    )
+    project_graph_tenant_concurrency_limit: int = Field(
+        default=2,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_TENANT_CONCURRENCY_LIMIT",
+    )
+    project_graph_requeue_countdown_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_REQUEUE_COUNTDOWN_SECONDS",
+    )
     feature_v3_health: bool = Field(default=False, validation_alias="FEATURE_V3_HEALTH")  # ADR-018
     feature_v3_action_review: bool = Field(default=False, validation_alias="FEATURE_V3_ACTION_REVIEW")  # ADR-019/020
     feature_v3_briefing: bool = Field(default=False, validation_alias="FEATURE_V3_BRIEFING")  # ADR-021
