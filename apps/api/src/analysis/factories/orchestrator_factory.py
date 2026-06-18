@@ -40,20 +40,23 @@ class LangGraphOrchestrator(AnalysisOrchestrator):
         # Lazy import to avoid circular dependencies
         from src.analysis.adapters.graph.workflow import run_orchestration
 
-        # Use override or real implementation
         if self._graph_app is not None:
-            # Test mode: use provided mock graph
-            # In test scenarios, the mock should have an ainvoke method
             config = {
                 "configurable": {"thread_id": thread_id},
                 "run_name": f"test_{thread_id}",
                 "tags": ["test"],
                 "metadata": {"thread_id": thread_id},
             }
-            return await self._graph_app.ainvoke(initial_state, config)
+            result = await self._graph_app.ainvoke(initial_state, config)
         else:
-            # Production mode: use real workflow
-            return await run_orchestration(initial_state, thread_id)
+            result = await run_orchestration(initial_state, thread_id)
+
+        from src.analysis.application.document_artifact_completion import (
+            persist_artifact_and_enqueue_project_graph,
+        )
+
+        await persist_artifact_and_enqueue_project_graph(result)
+        return result
 
 
 class AnalysisOrchestratorFactory:
