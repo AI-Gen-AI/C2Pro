@@ -66,9 +66,8 @@ def band_for_score(score: float | None) -> HealthBand:
 class HealthSignal(BaseModel):
     """One dimension's health result.
 
-    A non-null score must be backed by either concrete evidence or non-zero
-    confidence. A null score must carry an explicit null reason. This prevents
-    fabricated greens while allowing honest unknowns.
+    A non-null score must be backed by concrete evidence. Confidence remains a
+    separate evidence-quality axis and cannot substitute for provenance.
     """
 
     model_config = _FROZEN_CONTRACT
@@ -96,8 +95,8 @@ class HealthSignal(BaseModel):
             raise ValueError("health band must match score")
         if self.null_reason is not None:
             raise ValueError("non-null health score cannot carry a null_reason")
-        if not self.evidence and self.confidence == 0:
-            raise ValueError("non-null health score requires evidence or confidence")
+        if not self.evidence:
+            raise ValueError("non-null health score requires supporting evidence")
         return self
 
 

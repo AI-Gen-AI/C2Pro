@@ -47,13 +47,21 @@ def test_band_for_score_boundaries(score: float | None, expected: HealthBand) ->
     assert band_for_score(score) == expected
 
 
-def test_non_null_score_requires_evidence_or_confidence_and_matching_band() -> None:
+def test_non_null_score_requires_evidence_and_matching_band() -> None:
     with pytest.raises(ValidationError):
         HealthSignal(
             dimension=HealthDimension.CONTRACT,
             score=85,
             band=HealthBand.HEALTHY,
             confidence=0,
+        )
+
+    with pytest.raises(ValidationError):
+        HealthSignal(
+            dimension=HealthDimension.CONTRACT,
+            score=85,
+            band=HealthBand.HEALTHY,
+            confidence=0.8,
         )
 
     signal = HealthSignal(
