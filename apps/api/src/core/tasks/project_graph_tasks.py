@@ -82,7 +82,15 @@ async def run_project_graph_once(
         "status": "ok",
         "artifact_count": len(artifacts),
         "node_result_count": len(result.get("node_results", [])),
+        "coherence_result": _serializable(result.get("coherence_result")),
+        "node_results": result.get("node_results", []),
     }
+
+
+def _serializable(value: object) -> object:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return value
 
 
 async def _run_project_graph_async(

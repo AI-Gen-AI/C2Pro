@@ -13,6 +13,7 @@ import pytest
 
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.node_result import NodeStatus
+from src.coherence.models import EnrichedCoherenceResult
 
 
 def _artifact(document_id: str, *, revision_id: str) -> DocumentArtifact:
@@ -77,6 +78,23 @@ def _disable_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _patch_cross_doc_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.analysis.adapters.graph import project_graph
+
+    async def _fake_evaluate(_clauses, _project_id, *, config, seed_signals, seed_coverage):
+        return EnrichedCoherenceResult(
+            overall_score=None,
+            score_reason="insufficient_cross_doc_fixture",
+            score_missing_dimensions=["SCOPE"],
+        )
+
+    async def _llm_disabled(_tenant_id):
+        return False
+
+    monkeypatch.setattr(project_graph, "evaluate_coherence_async", _fake_evaluate)
+    monkeypatch.setattr(project_graph, "is_coherence_llm_enabled", _llm_disabled)
+
+
 def test_build_project_graph_compiles() -> None:
     from src.analysis.adapters.graph.project_graph import build_project_graph
 
@@ -95,6 +113,7 @@ async def test_project_graph_runs_serially_and_emits_every_node_result(
     )
 
     _disable_tracing(monkeypatch)
+    _patch_cross_doc_engine(monkeypatch)
     result = await build_project_graph().ainvoke(_initial_state())
 
     node_results = result["node_results"]
@@ -107,21 +126,22 @@ async def test_project_graph_runs_serially_and_emits_every_node_result(
 
 
 @pytest.mark.asyncio
-async def test_project_graph_stubs_remain_honest_null_and_skipped(
+async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.analysis.adapters.graph.project_graph import build_project_graph
 
     _disable_tracing(monkeypatch)
+    _patch_cross_doc_engine(monkeypatch)
     result = await build_project_graph().ainvoke(_initial_state())
     by_node = {node_result.node: node_result for node_result in result["node_results"]}
 
-    assert result["coherence_result"] is None
+    assert result["coherence_result"] is not None
+    assert by_node["cross_doc_coherence"].status is NodeStatus.OK
     assert result["impact_result"] is None
     assert result["health_result"] is None
     assert result["snapshot_id"] is None
     for node_name in {
-        "cross_doc_coherence",
         "change_impact",
         "health",
         "write_snapshot",
@@ -142,6 +162,7 @@ async def test_project_graph_skeleton_has_no_llm_celery_or_db_dependencies(
     forbidden_tokens = [
         "get_anthropic_wrapper",
         "generate_structured",
+        "bypass_anonymization",
         "celery",
         ".delay(",
         "AsyncSession",
@@ -152,9 +173,10 @@ async def test_project_graph_skeleton_has_no_llm_celery_or_db_dependencies(
         assert token not in source
 
     _disable_tracing(monkeypatch)
+    _patch_cross_doc_engine(monkeypatch)
     result = await project_graph.build_project_graph().ainvoke(_initial_state())
 
-    assert result["coherence_result"] is None
+    assert result["coherence_result"] is not None
 
 
 @pytest.mark.asyncio
