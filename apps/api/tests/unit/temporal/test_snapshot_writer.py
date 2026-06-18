@@ -93,7 +93,7 @@ def _state(project_id: UUID, tenant_id: UUID) -> ProjectState:
 
 
 @pytest.mark.asyncio
-async def test_snapshot_writer_assembles_counts_totals_and_placeholder_health() -> None:
+async def test_snapshot_writer_assembles_counts_totals_and_real_health_vector() -> None:
     from src.temporal.application.snapshot_writer import SnapshotWriter
 
     project_id = uuid4()
@@ -111,7 +111,15 @@ async def test_snapshot_writer_assembles_counts_totals_and_placeholder_health() 
         trigger=SnapshotTrigger.REVISION_INGESTED,
     )
 
-    assert snapshot.health_vector == {"status": "pending_health_engine"}
+    assert snapshot.health_vector["project_id"] == str(project_id)
+    assert snapshot.health_vector["tenant_id"] == str(tenant_id)
+    assert snapshot.health_vector["composite_score"] is not None
+    assert snapshot.health_vector["composite_band"] != "unknown"
+    dimensions = {item["dimension"]: item for item in snapshot.health_vector["dimensions"]}
+    assert dimensions["risk"]["score"] is not None
+    assert dimensions["contract"]["score"] is not None
+    assert dimensions["documentation"]["score"] is None
+    assert dimensions["governance"]["score"] is None
     assert snapshot.counts == {
         "clauses": 1,
         "obligations": 0,

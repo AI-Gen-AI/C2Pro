@@ -9,6 +9,11 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from src.health.application.contract_scorer import score_contract_dimension
+from src.health.application.documentation_scorer import score_documentation_dimension
+from src.health.application.governance_scorer import score_governance_dimension
+from src.health.application.health_engine import assemble_health_vector
+from src.health.application.risk_scorer import score_risk_dimension
 from src.project_state.domain.aggregate import ProjectState
 from src.project_state.ports.project_state_repository import ProjectStateRepository
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
@@ -55,13 +60,32 @@ class SnapshotWriter:
         state = await self._project_state_repository.get(project_id, tenant_id)
         counts = self._counts(state)
         totals = self._totals(state)
+        prior_snapshot = await self._snapshot_repository.latest(project_id, tenant_id)
+        health_vector = assemble_health_vector(
+            project_id,
+            tenant_id,
+            signals=[
+                score_risk_dimension(
+                    state.risks if state is not None else [],
+                    assessment_ran=state is not None,
+                ),
+                score_contract_dimension(
+                    state.clauses if state is not None else [],
+                    state.obligations if state is not None else [],
+                    coherence_subscore=None,
+                ),
+                score_documentation_dimension(None),
+                score_governance_dimension(None),
+            ],
+            prior_composite=self._prior_composite(prior_snapshot),
+        )
         snapshot = ProjectSnapshot(
             snapshot_id=uuid4(),
             project_id=project_id,
             tenant_id=tenant_id,
             captured_at=now,
             trigger=trigger,
-            health_vector={"status": "pending_health_engine"},
+            health_vector=health_vector.model_dump(mode="json"),
             coherence_subscore=None,
             counts=counts,
             totals=totals,
@@ -131,3 +155,12 @@ class SnapshotWriter:
             "budget_amount": sum(by_currency.values()),
             "budget_amount_by_currency": by_currency,
         }
+
+    @staticmethod
+    def _prior_composite(snapshot: ProjectSnapshot | None) -> float | None:
+        if snapshot is None:
+            return None
+        value = snapshot.health_vector.get("composite_score")
+        if isinstance(value, int | float):
+            return float(value)
+        return None

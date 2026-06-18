@@ -19,6 +19,13 @@ from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.coherence.graph.graph import evaluate_coherence_async
 from src.coherence.graph.state import EvaluationConfig
 from src.coherence.models import EnrichedCoherenceResult, FindingSignal
+from src.health.application.coherence_subscore import coherence_subscore_from_result
+from src.health.application.contract_scorer import score_contract_dimension
+from src.health.application.documentation_scorer import score_documentation_dimension
+from src.health.application.governance_scorer import score_governance_dimension
+from src.health.application.health_engine import assemble_health_vector
+from src.health.application.risk_scorer import score_risk_dimension
+from src.project_state.domain.entities import ProjectRisk
 
 logger = structlog.get_logger(__name__)
 
@@ -259,11 +266,72 @@ def change_impact(_state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def health(_state: ProjectGraphState) -> dict[str, object]:
-    return {
-        "health_result": None,
-        "node_results": _skipped("health", "pending ADR-018 health computation"),
-    }
+def health(state: ProjectGraphState) -> dict[str, object]:
+    try:
+        artifacts = state.get("artifacts", [])
+        project_id = state["project_id"]
+        tenant_id = state["tenant_id"]
+        risks = [
+            ProjectRisk(entity_id=UUID(risk.source or artifact.document_id), payload=risk)
+            if _is_uuid(risk.source)
+            else ProjectRisk(entity_id=UUID(int=0), payload=risk)
+            for artifact in artifacts
+            for risk in artifact.extracted_risks
+        ]
+        coherence = state.get("coherence_result")
+        if isinstance(coherence, dict):
+            coherence_result = ProjectCoherenceResult.model_validate(coherence)
+        else:
+            coherence_result = coherence
+        vector = assemble_health_vector(
+            project_id,
+            tenant_id,
+            signals=[
+                score_risk_dimension(
+                    risks,
+                    assessment_ran=bool(artifacts),
+                    extraction_quality=_artifact_confidence(artifacts),
+                ),
+                score_contract_dimension(
+                    [],
+                    [],
+                    coherence_subscore=coherence_subscore_from_result(coherence_result),
+                ),
+                score_documentation_dimension(None),
+                score_governance_dimension(None),
+            ],
+            prior_composite=None,
+        )
+        return {
+            "health_result": vector.model_dump(mode="json"),
+            "node_results": _ok("health", {"composite_score": vector.composite_score}),
+        }
+    except Exception as exc:  # noqa: BLE001 - ProjectGraph node must degrade, not crash.
+        return {
+            "health_result": None,
+            "node_results": _degraded("health", str(exc)),
+        }
+
+
+def _is_uuid(value: str | None) -> bool:
+    if value is None:
+        return False
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _artifact_confidence(artifacts: list[DocumentArtifact]) -> float | None:
+    scores = [
+        artifact.confidence_score
+        for artifact in artifacts
+        if artifact.confidence_score is not None
+    ]
+    if not scores:
+        return None
+    return sum(scores) / len(scores)
 
 
 def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:

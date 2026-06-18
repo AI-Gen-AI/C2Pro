@@ -139,11 +139,11 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     assert result["coherence_result"] is not None
     assert by_node["cross_doc_coherence"].status is NodeStatus.OK
     assert result["impact_result"] is None
-    assert result["health_result"] is None
+    assert result["health_result"] is not None
+    assert by_node["health"].status is NodeStatus.OK
     assert result["snapshot_id"] is None
     for node_name in {
         "change_impact",
-        "health",
         "write_snapshot",
         "alert_correlation",
         "hitl_routing",
