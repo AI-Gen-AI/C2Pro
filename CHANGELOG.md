@@ -10,6 +10,8 @@ Trademark-critical fix for ADR-009 §1 P1 + §14 violations in the v1 coherence 
 
 #### Added
 
+- Category-routing prototype centroid build/cache (`TASK-BCK-088`): `category_centroids` pgvector table (migration `20260603_0019`, `(category, embedding_model, score_version)` unique key + `seed_hash`), `CentroidBuilderService` with seed_hash reproducibility and L2-normalized centroids, and a two-layer embedding-dimension compatibility guard. Live model: OpenAI `text-embedding-3-small` (1536). Builder unwired pending `TASK-BCK-089`.
+- Runtime `CategoryRegistry` loader and Pydantic v2 validation (`TASK-BCK-084`) enforcing structural constraints, default weights (sum=1.0), priors (0-1), threshold hierarchy, and regex integrity. Switched YAML config to use `text-embedding-3-small`.
 - ADR-009 §14 active-weight guard in `apps/api/src/coherence/scoring.py:_calculate_detailed_with_coverage`. When the sum of weights of assessed categories falls below `MIN_ACTIVE_WEIGHT (0.35)`, the engine returns `score=None` with `reason="insufficient_active_weight"` instead of collapsing to a low integer. Mirrors the v2 implementation in `services/v2/aggregator_v2.py`.
 - Frontend "Pending evidence" empty state per ADR-009 §18. Null `coherence_score` and null per-category sub-scores render as neutral `—` / `Pending`, never as `0` or red.
 - CI guard step in `.github/workflows/frontend-ci.yml` ("Coherence score-path null-fallback guard") that fails the build if `?? 0` or `|| 0` appears on coherence score paths in `apps/web/components/coherence/**` or `apps/web/lib/api/contracts.ts`. `weights_used` fallbacks are exempted.

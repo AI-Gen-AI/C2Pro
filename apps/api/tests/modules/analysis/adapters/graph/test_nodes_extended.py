@@ -209,7 +209,7 @@ class TestCoherenceScorerNode:
 
         state = _make_state(project_id="")
         result = await coherence_scorer_node(state)
-        assert result["coherence_score"] == 0
+        assert result["coherence_score"] is None
         assert result["coherence_breakdown"] == {}
 
 

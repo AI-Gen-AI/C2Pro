@@ -22,11 +22,11 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
     GateDecision,
 )
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.core.observability.coherence_tracing import traced_coherence_node
 
 from ..alert_generator import TEMPLATES  # TASK-COH-V1-06
@@ -64,6 +64,10 @@ def infer_document_type(clause: Clause) -> str:
     """Infer document type from clause data or ID patterns."""
     clause_id = clause.id.lower()
     data_keys = set(clause.data.keys()) if clause.data else set()
+    data_doc_type = clause.data.get("document_type") if clause.data else None
+
+    if data_doc_type:
+        return str(data_doc_type).strip().lower()
 
     # Check data keys for strong indicators
     if {"unit_price", "quantity", "line_total"} & data_keys:
@@ -84,6 +88,53 @@ def infer_document_type(clause: Clause) -> str:
         return "contract"
 
     return "other"
+
+
+_ROUTER_DOC_TYPE_ALIASES = {
+    "boq": "budget_boq",
+    "budget": "budget_boq",
+    "gantt": "schedule_gantt",
+    "schedule": "schedule_gantt",
+    "specification": "technical_spec",
+    "technical": "technical_spec",
+}
+
+_ROUTER_CATEGORY_TO_COVERAGE = {
+    "SCHEDULE": "TIME",
+}
+
+
+def _routing_coverage_priors_from_clauses(clauses: list[Clause]) -> dict[str, bool]:
+    """Convert CategoryRouter evidence priors into graph coverage flags."""
+    if not clauses:
+        return {}
+
+    try:
+        from src.coherence.application.services.category_router import (
+            CategoryRouter,
+            ChunkSignal,
+        )
+
+        router = CategoryRouter.from_registry()
+        coverage: dict[str, bool] = {}
+        for clause in clauses:
+            doc_type = infer_document_type(clause)
+            routed_doc_type = _ROUTER_DOC_TYPE_ALIASES.get(doc_type, doc_type)
+            result = router.route(
+                chunks=[ChunkSignal(chunk_id=clause.id, text=clause.text)],
+                doc_type=routed_doc_type,
+                segments=[],
+            )
+            for category, status in result.category_status.items():
+                if status == "has_evidence":
+                    canonical = _ROUTER_CATEGORY_TO_COVERAGE.get(
+                        category.value, category.value
+                    )
+                    coverage[canonical] = True
+        return coverage
+    except Exception as exc:  # noqa: BLE001 — routing priors must not crash scoring
+        logger.warning("category routing coverage priors failed: %s", exc)
+        return {}
 
 
 # =============================================================================
@@ -283,7 +334,7 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     ]
     signals: list[FindingSignal] = []
     errors: list[str] = []
-    coverage: dict[str, bool] = {}
+    coverage = _routing_coverage_priors_from_clauses(state.clauses)
     clauses_to_eval = state.clauses
 
     for clause in clauses_to_eval:

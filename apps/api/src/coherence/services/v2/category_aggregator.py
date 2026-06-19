@@ -11,8 +11,6 @@ Refers to Suite ID: TS-UA-COH-V2-CATAGG-001.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
     CategoryV2,

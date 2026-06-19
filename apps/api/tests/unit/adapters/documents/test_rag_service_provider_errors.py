@@ -7,10 +7,10 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from src.documents.application.dtos import RetrievedChunk
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.documents.adapters.rag import rag_service
 from src.documents.adapters.rag.rag_service import RagProviderUnavailableError, RagService
+from src.documents.application.dtos import RetrievedChunk
 
 
 @pytest.mark.asyncio

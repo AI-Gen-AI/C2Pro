@@ -72,6 +72,18 @@ class InMemoryCache:
     def __init__(self) -> None:
         self._items: dict[str, tuple[bytes, float | None]] = {}
 
+    @staticmethod
+    def _build_key(key: str, namespace: str | None = None) -> str:
+        if namespace:
+            return f"{namespace}:{key}"
+        return key
+
+    @staticmethod
+    def _encode_value(value: Any) -> bytes:
+        if isinstance(value, bytes):
+            return value
+        return str(value).encode("utf-8")
+
     async def get(self, key: str) -> bytes | None:
         """Get value from cache by key."""
         entry = self._items.get(key)
@@ -89,6 +101,59 @@ class InMemoryCache:
         if ttl_seconds and ttl_seconds > 0:
             expires_at = time.monotonic() + ttl_seconds
         self._items[key] = (value, expires_at)
+
+    async def incr(
+        self,
+        key: str,
+        *,
+        amount: int = 1,
+        ttl_seconds: int | None = None,
+        namespace: str | None = None,
+    ) -> int:
+        """Atomically increment an integer key in the in-memory fallback."""
+        full_key = self._build_key(key, namespace)
+        current = await self.get(full_key)
+        new_value = int(current.decode("utf-8")) + amount if current is not None else amount
+        expires_at = None
+        if ttl_seconds and ttl_seconds > 0:
+            expires_at = time.monotonic() + ttl_seconds
+        elif full_key in self._items:
+            _, expires_at = self._items[full_key]
+        self._items[full_key] = (str(new_value).encode("utf-8"), expires_at)
+        return new_value
+
+    async def decr(
+        self,
+        key: str,
+        *,
+        amount: int = 1,
+        namespace: str | None = None,
+    ) -> int:
+        """Atomically decrement an integer key, flooring at zero."""
+        full_key = self._build_key(key, namespace)
+        current = await self.get(full_key)
+        new_value = max(0, (int(current.decode("utf-8")) if current is not None else 0) - amount)
+        if new_value <= 0:
+            self._items.pop(full_key, None)
+            return 0
+        _, expires_at = self._items.get(full_key, (b"", None))
+        self._items[full_key] = (str(new_value).encode("utf-8"), expires_at)
+        return new_value
+
+    async def set_if_absent(
+        self,
+        key: str,
+        value: Any,
+        *,
+        ttl_seconds: int,
+        namespace: str | None = None,
+    ) -> bool:
+        """Atomically set a key only when it is absent."""
+        full_key = self._build_key(key, namespace)
+        if await self.exists(full_key):
+            return False
+        await self.set(full_key, self._encode_value(value), ttl_seconds)
+        return True
 
     async def delete(self, key: str) -> bool:
         """Delete key from cache. Returns True if key existed."""
@@ -359,6 +424,83 @@ class CacheService:
                 logger.warning("cache_exists_failed", key=full_key, error=str(exc))
 
         return await self._memory.exists(full_key)
+
+    async def incr(
+        self,
+        key: str,
+        *,
+        amount: int = 1,
+        ttl_seconds: int | None = None,
+        namespace: str | None = None,
+    ) -> int:
+        """Atomically increment an integer cache key."""
+        full_key = self._build_key(key, namespace)
+        if await self._can_use_redis():
+            try:
+                assert self._redis is not None
+                new_value = int(await self._redis.incrby(full_key, amount))
+                if ttl_seconds and new_value == amount:
+                    await self._redis.expire(full_key, ttl_seconds)
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
+                return new_value
+            except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
+                logger.warning("cache_incr_failed", key=full_key, error=str(exc))
+        return await self._memory.incr(full_key, amount=amount, ttl_seconds=ttl_seconds)
+
+    async def decr(
+        self,
+        key: str,
+        *,
+        amount: int = 1,
+        namespace: str | None = None,
+    ) -> int:
+        """Atomically decrement an integer cache key, flooring at zero."""
+        full_key = self._build_key(key, namespace)
+        if await self._can_use_redis():
+            try:
+                assert self._redis is not None
+                new_value = int(await self._redis.decrby(full_key, amount))
+                if new_value <= 0:
+                    await self._redis.delete(full_key)
+                    new_value = 0
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
+                return new_value
+            except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
+                logger.warning("cache_decr_failed", key=full_key, error=str(exc))
+        return await self._memory.decr(full_key, amount=amount)
+
+    async def set_if_absent(
+        self,
+        key: str,
+        value: Any,
+        *,
+        ttl_seconds: int,
+        namespace: str | None = None,
+    ) -> bool:
+        """Atomically set a cache key only when it is absent."""
+        full_key = self._build_key(key, namespace)
+        if await self._can_use_redis():
+            try:
+                assert self._redis is not None
+                was_set = bool(await self._redis.set(full_key, value, nx=True, ex=ttl_seconds))
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_success()
+                return was_set
+            except RedisError as exc:
+                if self._circuit_breaker:
+                    await self._circuit_breaker.record_failure(exc)
+                logger.warning("cache_set_if_absent_failed", key=full_key, error=str(exc))
+        return await self._memory.set_if_absent(
+            full_key,
+            value,
+            ttl_seconds=ttl_seconds,
+        )
 
     # =============================================
     # Internal Methods (Bytes Level)
@@ -669,7 +811,7 @@ def get_cache_service() -> CacheService | None:
     return _cache_service
 
 
-def get_redis_client() -> "redis.Redis | None":
+def get_redis_client() -> redis.Redis | None:
     """
     Return the raw ``redis.asyncio.Redis`` client from the singleton CacheService.
 

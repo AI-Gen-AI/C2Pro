@@ -3,10 +3,12 @@
 Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 """
 
+from contextlib import suppress
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,7 @@ from src.analysis.domain.enums import AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
-from src.core.database import get_session, get_session_with_tenant
+from src.core.database import get_session
 from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
@@ -30,6 +32,8 @@ from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
+logger = structlog.get_logger()
+
 router = APIRouter(
     prefix="/coherence",
     tags=["Coherence Engine"],
@@ -110,10 +114,8 @@ def _normalized_sub_scores(raw_scores: object) -> dict[str, float | None]:
     for category, score in raw_scores.items():
         category_key = str(category).upper()
         if category_key in normalized and score is not None:
-            try:
+            with suppress(TypeError, ValueError):
                 normalized[category_key] = float(score)
-            except (TypeError, ValueError):
-                pass
     return normalized
 
 
@@ -420,9 +422,6 @@ async def evaluate_project_coherence(
 
     Returns the evaluation result, including alerts and a granular score (5-97 range).
     """
-    import structlog
-    logger = structlog.get_logger()
-
     # Determine clauses source
     if payload.clauses:
         clauses = payload.clauses
@@ -730,9 +729,9 @@ async def get_coherence_dashboard(
     # new tri-axis dashboard. Until the v2 orchestrator persists native rows
     # (Phase 3), we adapt from the v1 summary using the pure v1→v2 adapter.
     try:
-        from src.config import get_settings  # local import to avoid circular deps
         from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
         from src.coherence.services.v2.shadow_runner import ShadowRunner
+        from src.config import get_settings  # local import to avoid circular deps
         settings = get_settings()
         if getattr(settings, "coherence_v2_enabled", False):
             v2_payload = adapt_v1_dashboard(

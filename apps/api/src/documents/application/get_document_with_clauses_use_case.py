@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from src.core.tenants.types import TenantId
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
 

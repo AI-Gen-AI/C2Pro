@@ -156,6 +156,18 @@ class TestPersistAnalysisUseCase:
         self.analysis_repo.commit.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_generated_risk_alerts_include_legacy_message_column(self):
+        """Test Suite ID: TS-QA-SWAGGER-ANALYSIS-003."""
+        cmd = _make_command(
+            extracted_risks=[{"title": "R1", "category": "LEGAL", "impact": "HIGH"}],
+        )
+
+        await self.use_case.execute(cmd)
+
+        alerts = self.analysis_repo.add_alerts.call_args.args[0]
+        assert alerts[0].message == alerts[0].description
+
+    @pytest.mark.asyncio
     async def test_persist_with_wbs_deletes_and_creates(self):
         cmd = _make_command(
             extracted_wbs=[{"code": "W1"}, {"code": "W2"}],

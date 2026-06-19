@@ -48,6 +48,7 @@ from src.core.observability.router import router as observability_router
 from src.core.routers.health import router as health_router
 from src.core.routers.health import worker_health_check
 from src.documents.adapters.http.router import router as documents_router
+from src.health.adapters.http.router import router as project_health_router
 from src.modules.decision_intelligence.adapters.http.router import (
     router as decision_intelligence_router,
 )
@@ -294,6 +295,7 @@ def create_application() -> FastAPI:
     app.include_router(health_router, prefix=api_v1_prefix)  # prefixed: /api/v1/health/... (gateway, deploy workflow)
     app.include_router(auth_router, prefix=api_v1_prefix)
     app.include_router(projects_router, prefix=api_v1_prefix)
+    app.include_router(project_health_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)

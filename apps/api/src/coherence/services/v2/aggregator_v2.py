@@ -10,7 +10,7 @@ Refers to Suite ID: TS-UA-COH-V2-GLBAGG-001.
 """
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
@@ -21,7 +21,6 @@ from src.coherence.domain.v2_constants import (
     DEFAULT_CATEGORY_WEIGHTS,
     MIN_ACTIVE_WEIGHT,
 )
-
 
 _ACTIVE_STATES: frozenset[CategoryStatus] = frozenset(
     {CategoryStatus.SCORED, CategoryStatus.CONFLICTING_EVIDENCE}

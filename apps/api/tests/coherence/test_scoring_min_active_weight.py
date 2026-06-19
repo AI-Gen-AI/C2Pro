@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 
 from src.coherence.scoring import ScoringDiagnostics, ScoringService
-from src.coherence.domain.v2_constants import MIN_ACTIVE_WEIGHT, DEFAULT_CATEGORY_WEIGHTS
 
 ALL_CATEGORIES = ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
 

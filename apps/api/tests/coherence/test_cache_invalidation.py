@@ -7,15 +7,13 @@ References: ADR-009 §G, spec §6 (2026-05-25-ecoa-v2-hotfix-and-cutover-design.
 
 from __future__ import annotations
 
-import asyncio
-from typing import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch, call
+import importlib
+from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 import structlog.testing
-
-import importlib
 
 
 @pytest.fixture()
@@ -89,7 +87,7 @@ class TestOnFlagFlip:
         with structlog.testing.capture_logs() as logs:
             await cache_invalidation.on_flag_flip(redis_mock, tenant_id=TENANT_ID)
 
-        events = [l["event"] for l in logs]
+        events = [entry["event"] for entry in logs]
         assert "coherence.cache_invalidated" in events
 
     @pytest.mark.asyncio
@@ -100,7 +98,9 @@ class TestOnFlagFlip:
         with structlog.testing.capture_logs() as logs:
             await cache_invalidation.on_flag_flip(redis_mock, tenant_id=TENANT_ID)
 
-        relevant = [l for l in logs if l.get("event") == "coherence.cache_invalidated"]
+        relevant = [
+            entry for entry in logs if entry.get("event") == "coherence.cache_invalidated"
+        ]
         assert relevant, "Expected at least one coherence.cache_invalidated log entry"
         log = relevant[0]
         assert log.get("trigger") == "flag_flip"
@@ -115,9 +115,9 @@ class TestOnFlagFlip:
             await cache_invalidation.on_flag_flip(redis_mock, tenant_id=TENANT_ID)
 
         for log in logs:
-            # No raw strings beyond UUIDs should appear; specifically no key values
+            # No raw strings beyond UUIDs should appear; specifically no full cache keys.
             log_str = str(log)
-            assert "dashboard" not in log_str or True  # keys themselves are not logged in values
+            assert "coherence:coherence-" not in log_str
 
 
 class TestOnFlagFlipBatching:
@@ -196,7 +196,9 @@ class TestOnResultPersisted:
                 redis_mock, tenant_id=TENANT_ID, project_id=PROJECT_ID
             )
 
-        relevant = [l for l in logs if l.get("event") == "coherence.cache_invalidated"]
+        relevant = [
+            entry for entry in logs if entry.get("event") == "coherence.cache_invalidated"
+        ]
         assert relevant
         assert relevant[0].get("trigger") == "result_persisted"
         assert relevant[0].get("tenant_id") == str(TENANT_ID)
@@ -245,7 +247,9 @@ class TestOnDeploy:
         with structlog.testing.capture_logs() as logs:
             await cache_invalidation.on_deploy(redis_mock)
 
-        relevant = [l for l in logs if l.get("event") == "coherence.cache_invalidated"]
+        relevant = [
+            entry for entry in logs if entry.get("event") == "coherence.cache_invalidated"
+        ]
         assert relevant
         assert relevant[0].get("trigger") == "deploy"
 

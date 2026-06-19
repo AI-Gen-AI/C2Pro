@@ -1,0 +1,9 @@
+﻿services:
+  celery-worker:
+    command:
+      - celery
+      - -A
+      - src.core.tasks.celery_app.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=2

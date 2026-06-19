@@ -26,8 +26,10 @@ class StubAnthropicWrapper:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        self.calls = 0
 
     async def generate(self, _request: Any) -> AIResponse:
+        self.calls += 1
         return AIResponse(
             content=self.content,
             model_used="stub-model",
@@ -71,6 +73,40 @@ async def test_risk_extraction_tool_accepts_basetool_tenant_keyword_contract() -
 
     assert result.success is True
     assert result.data[0].title == "Delay damages exposure"
+
+
+@pytest.mark.asyncio
+async def test_risk_extraction_tool_rejects_empty_extraction_success() -> None:
+    """TS-QA-SWAGGER-ANALYSIS-001 empty risk payload must not be success."""
+    tool = RiskExtractionTool(
+        anthropic_wrapper=StubAnthropicWrapper('{"risks": []}')
+    )
+
+    result = await tool.execute(
+        RiskExtractionInput(
+            document_text="Contract includes penalties, delay damages, guarantees, and termination clauses."
+        )
+    )
+
+    assert result.success is False
+    assert result.error
+    assert "No risk items extracted" in result.error
+
+
+@pytest.mark.asyncio
+async def test_risk_extraction_tool_does_not_retry_empty_extraction_validation_failure() -> None:
+    """TS-QA-SWAGGER-ANALYSIS-001 empty extraction validation must fail without costly retries."""
+    wrapper = StubAnthropicWrapper('{"risks": []}')
+    tool = RiskExtractionTool(anthropic_wrapper=wrapper)
+
+    result = await tool.execute(
+        RiskExtractionInput(
+            document_text="Contract includes penalties, delay damages, guarantees, and termination clauses."
+        )
+    )
+
+    assert result.success is False
+    assert wrapper.calls == 1
 
 
 @pytest.mark.asyncio

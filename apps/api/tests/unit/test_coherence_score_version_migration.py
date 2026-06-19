@@ -9,7 +9,6 @@ import importlib.util
 from pathlib import Path
 from types import ModuleType
 
-
 MIGRATION_PATH = (
     Path(__file__).resolve().parents[2]
     / "alembic"

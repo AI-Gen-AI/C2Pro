@@ -181,6 +181,7 @@ class SqlAlchemyCoherenceRepository(ICoherenceRepository):
                         severity=AlertSeverity[alert_data.get("severity", "LOW").upper()],
                         rule_id=alert_data.get("rule_id"),
                         title=f"Inconsistency Detected: {alert_data.get('rule_id')}",
+                        message=alert_data.get("message", "No message provided."),
                         description=alert_data.get("message", "No message provided."),
                         recommendation=alert_data.get("suggested_action"),
                         source_clause_id=source_clause_id,

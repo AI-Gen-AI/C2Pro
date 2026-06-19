@@ -1,9 +1,9 @@
 """
-TASK-QA-204: Schemathesis contract tests — observability, ai_feedback, admin/dlq,
-frontend_support routers.
+TASK-QA-204 / TS-QA-SCHEMATHESIS-FRONTEND-001: Schemathesis contract tests
+for observability, ai_feedback, admin/dlq, and frontend_support routers.
 
 Covers operations under /api/v1/observability/*, /api/v1/ai/*, /api/v1/admin/*,
-and /api/v1/frontend-support/*.
+and OpenAPI operations tagged frontend-support.
 Replaces: TASK-QA-063..064, TASK-QA-069..070 (remaining surface).
 """
 
@@ -24,7 +24,7 @@ _SCHEMA = schemathesis.from_path(str(SCHEMA_PATH), base_url="http://testserver")
 _OBSERVABILITY_SCHEMA = _SCHEMA.include(path_regex=r"^/api/v1/observability")
 _AI_FEEDBACK_SCHEMA = _SCHEMA.include(path_regex=r"^/api/v1/ai")
 _ADMIN_SCHEMA = _SCHEMA.include(path_regex=r"^/api/v1/admin")
-_FRONTEND_SUPPORT_SCHEMA = _SCHEMA.include(path_regex=r"^/api/v1/frontend")
+_FRONTEND_SUPPORT_SCHEMA = _SCHEMA.include(tag="frontend-support")
 
 
 @_OBSERVABILITY_SCHEMA.parametrize()
@@ -52,6 +52,6 @@ def test_admin_contract(case: schemathesis.Case, contract_app, contract_headers)
 def test_frontend_support_contract(
     case: schemathesis.Case, contract_app, contract_headers
 ) -> None:
-    """Frontend support endpoints return responses conforming to the OpenAPI spec."""
+    """TS-QA-SCHEMATHESIS-FRONTEND-001: Frontend support endpoints match OpenAPI."""
     response = case.call_asgi(app=contract_app, headers=contract_headers)
     case.validate_response(response)

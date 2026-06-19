@@ -27,12 +27,12 @@ from anthropic import AsyncAnthropic
 from anthropic.types import Message
 from pydantic import BaseModel
 
-from src.core.privacy.anonymizer import PiiAnonymizerService
 from src.config import settings
 from src.core.ai.llm_client import LLMClient, LLMRequest
 from src.core.ai.model_router import AITaskType, ModelTier, get_model_router
 from src.core.ai.structured_output import parse_llm_json
 from src.core.cache import get_cache_service
+from src.core.privacy.anonymizer import PiiAnonymizerService
 
 _T = TypeVar("_T", bound=BaseModel)
 
@@ -216,6 +216,8 @@ class AnthropicWrapper:
         enable_cache: bool = True,
         enable_retry: bool = True,
         max_retries: int = 3,
+        timeout_seconds: float | None = None,
+        max_tokens_limit: int | None = None,
     ):
         """
         Inicializa el wrapper de Anthropic.
@@ -232,15 +234,21 @@ class AnthropicWrapper:
 
         self.enable_cache = enable_cache
         self.enable_retry = enable_retry
+        self.max_tokens_limit = max_tokens_limit
 
         # Initialize dependencies
         self.model_router = get_model_router()
         self.cache_service = get_cache_service() if enable_cache else None
-        self.llm_client = LLMClient(api_key=self.api_key, max_retries=max_retries)
+        resolved_timeout = timeout_seconds or settings.ai_timeout_seconds
+        self.llm_client = LLMClient(
+            api_key=self.api_key,
+            max_retries=max_retries,
+            timeout_seconds=resolved_timeout,
+        )
         self.anonymizer_service: PiiAnonymizerService = PiiAnonymizerService()
 
         # Initialize async client for direct calls
-        self.async_client = AsyncAnthropic(api_key=self.api_key)
+        self.async_client = AsyncAnthropic(api_key=self.api_key, timeout=resolved_timeout)
 
         # Statistics
         self.total_requests = 0
@@ -317,6 +325,8 @@ class AnthropicWrapper:
         )
 
         max_tokens = request.max_tokens or model_config.max_tokens
+        if self.max_tokens_limit is not None:
+            max_tokens = min(max_tokens, self.max_tokens_limit)
 
         logger.info(
             "model_selected",
@@ -606,9 +616,11 @@ def get_anthropic_wrapper() -> AnthropicWrapper:
 
     if _wrapper is None:
         _wrapper = AnthropicWrapper(
-            enable_cache=True,
+            enable_cache=settings.ai_use_cache,
             enable_retry=True,
-            max_retries=3,
+            max_retries=settings.ai_max_retries,
+            timeout_seconds=settings.ai_timeout_seconds,
+            max_tokens_limit=settings.ai_max_tokens_output,
         )
 
     return _wrapper

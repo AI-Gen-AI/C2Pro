@@ -6,7 +6,7 @@ Incluye trazabilidad legal mediante FKs a clauses (ROADMAP §5.3).
 
 Refers to Suite ID: TS-INT-DB-CLS-001.
 """
-# ruff: noqa: E402  — _utcnow helper must be defined before SQLAlchemy models that use it as a default
+# ruff: noqa: E402,I001  — _utcnow helper must be defined before SQLAlchemy models that use it as a default
 
 from datetime import UTC, datetime
 
@@ -19,6 +19,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     ARRAY,
+    CheckConstraint,
+    DDL,
     DateTime,
     Float,
     ForeignKey,
@@ -27,7 +29,9 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -214,6 +218,7 @@ class Alert(Base):
 
     # Content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -317,6 +322,8 @@ class Alert(Base):
                         f"Invalid alert_type: {alert_type_value}. "
                         f"Must be one of: {', '.join([e.value for e in AlertType])}"
                     )
+        if kwargs.get("message") is None:
+            kwargs["message"] = kwargs.get("description") or kwargs.get("title") or "Alert"
         super().__init__(**kwargs)
 
     def __repr__(self) -> str:
@@ -550,3 +557,88 @@ class KnowledgeGraphEdgeORM(Base):
 
     def __repr__(self) -> str:
         return f"<KnowledgeGraphEdgeORM(id={self.id}, type={self.relationship_type})>"
+
+
+class DocumentArtifactORM(Base):
+    """Persisted Tier-1 DocumentArtifact for ADR-017 ProjectGraph loading."""
+
+    __tablename__ = "document_artifacts"
+
+    artifact_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    document_revision_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("document_revisions.revision_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=_utcnow,
+        server_default=text("(now() AT TIME ZONE 'utc')"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_status IN ('active','superseded')",
+            name="ck_document_artifacts_lifecycle",
+        ),
+        Index("ix_document_artifacts_project_lifecycle", "project_id", "lifecycle_status"),
+        Index(
+            "uq_document_artifacts_active_document",
+            "document_id",
+            unique=True,
+            postgresql_where=(lifecycle_status == "active"),
+        ),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
+
+_DOCUMENT_ARTIFACT_POLICY_USING = (
+    "tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant', true), "
+    "'')::uuid, tenant_id)"
+)
+
+
+def _install_document_artifact_rls() -> None:
+    statements = [
+        "ALTER TABLE document_artifacts ENABLE ROW LEVEL SECURITY",
+    ]
+    policy_specs = {
+        "select": f"FOR SELECT USING ({_DOCUMENT_ARTIFACT_POLICY_USING})",
+        "insert": f"FOR INSERT WITH CHECK ({_DOCUMENT_ARTIFACT_POLICY_USING})",
+        "update": f"FOR UPDATE USING ({_DOCUMENT_ARTIFACT_POLICY_USING})",
+        "delete": f"FOR DELETE USING ({_DOCUMENT_ARTIFACT_POLICY_USING})",
+    }
+    for suffix, clause in policy_specs.items():
+        policy_name = f"document_artifacts_{suffix}"
+        statements.append(
+            f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_policies
+                    WHERE tablename = 'document_artifacts'
+                    AND policyname = '{policy_name}'
+                ) THEN
+                    CREATE POLICY {policy_name} ON document_artifacts {clause};
+                END IF;
+            END $$;
+            """
+        )
+
+    for statement in statements:
+        event.listen(
+            DocumentArtifactORM.__table__,
+            "after_create",
+            DDL(statement).execute_if(dialect="postgresql"),
+        )
+
+
+_install_document_artifact_rls()

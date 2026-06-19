@@ -87,7 +87,7 @@ class TestSqlAlchemyDocumentRepository:
         # Mock session
         mock_session = MagicMock()
         mock_session.execute = AsyncMock()
-        
+
         # Setup mock result for select
         orm_doc = DocumentORM(
             id=document_id,
@@ -99,7 +99,7 @@ class TestSqlAlchemyDocumentRepository:
         mock_session.execute.return_value = mock_result
 
         repo = SqlAlchemyDocumentRepository(session=mock_session)
-        
+
         await repo.update_status(
             tenant_id,
             document_id,
