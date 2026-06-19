@@ -1040,6 +1040,48 @@ async def get_project_budget(
     }
 
 
+def _serialize_wbs_item_tree(item) -> dict[str, object]:
+    """TS-E2E-FLW-BLK-001: serialize procurement WBS domain rows as a hierarchy."""
+    return {
+        "id": str(item.id),
+        "project_id": str(item.project_id),
+        "code": item.code,
+        "name": item.name,
+        "level": item.level,
+        "description": item.description,
+        "parent_code": item.parent_code,
+        "item_type": item.item_type.value if item.item_type else None,
+        "budget_allocated": float(item.budget_allocated) if item.budget_allocated is not None else None,
+        "budget_spent": float(item.budget_spent),
+        "planned_start": item.planned_start.isoformat() if item.planned_start else None,
+        "planned_end": item.planned_end.isoformat() if item.planned_end else None,
+        "actual_start": item.actual_start.isoformat() if item.actual_start else None,
+        "actual_end": item.actual_end.isoformat() if item.actual_end else None,
+        "source_clause_id": str(item.source_clause_id) if item.source_clause_id else None,
+        "version": item.version,
+        "metadata": item.wbs_metadata,
+        "children": [_serialize_wbs_item_tree(child) for child in item.children],
+    }
+
+
+def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
+    """TS-E2E-FLW-BLK-001: summarize project WBS evidence coverage."""
+    total_items = len(items)
+    completed_items = sum(1 for item in items if getattr(item, "actual_end", None) is not None)
+    return {
+        "total_items": total_items,
+        "items_with_budget": sum(1 for item in items if getattr(item, "budget_allocated", None) is not None),
+        "items_with_dates": sum(
+            1
+            for item in items
+            if getattr(item, "planned_start", None) is not None
+            and getattr(item, "planned_end", None) is not None
+        ),
+        "items_with_alerts": 0,
+        "completion_average": 0.0 if total_items == 0 else round((completed_items / total_items) * 100, 2),
+    }
+
+
 @router.get(
     "/{project_id}/wbs",
     summary="Get Project WBS Tree",
@@ -1060,14 +1102,16 @@ async def get_project_wbs(
     async with get_session_with_tenant(current_user.tenant_id) as session:
         wbs_repo = SQLAlchemyWBSRepository(session)
         wbs_use_case = GetWBSTreeUseCase(wbs_repo)
-        await wbs_use_case.execute(project_id, current_user.tenant_id)
+        tree_items = await wbs_use_case.execute(project_id, current_user.tenant_id)
 
         list_use_case = ListWBSItemsUseCase(wbs_repo)
         flat_items = await list_use_case.execute(project_id, current_user.tenant_id)
 
     return {
         "project_id": str(project_id),
-        "items": flat_items,
+        "items": [_serialize_wbs_item_tree(item) for item in tree_items],
+        "coverage": _build_wbs_coverage(flat_items),
+        "alerts": [],
         "total_items": len(flat_items),
     }
 

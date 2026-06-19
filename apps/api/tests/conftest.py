@@ -64,8 +64,10 @@ from src.core.security import get_current_user_id  # noqa: E402
 from src.core.security.adapters.persistence import models as security_models  # noqa: F401, E402
 from src.documents.adapters.persistence import models as document_models  # noqa: F401, E402
 from src.procurement.adapters.persistence import models as procurement_models  # noqa: F401, E402
+from src.project_state.adapters.persistence import models as project_state_models  # noqa: F401, E402
 from src.projects.adapters.persistence import models as project_models  # noqa: F401, E402
 from src.stakeholders.adapters.persistence import models as stakeholder_models  # noqa: F401, E402
+from src.temporal.adapters.persistence import models as temporal_models  # noqa: F401, E402
 from tests._bootstrap import _ensure_test_fk_stub_tables  # noqa: E402
 from tests.support.postgres_bootstrap import ensure_pgvector_extension  # noqa: E402
 from tests.support.seeded_identity_guard import assert_seeded_identity_isolation_safe  # noqa: E402

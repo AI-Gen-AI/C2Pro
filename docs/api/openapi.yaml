@@ -968,6 +968,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/health:
+    get:
+      tags:
+      - project-health
+      summary: Get latest project health vector
+      description: Return latest tenant-scoped project HealthVector or honest insufficient
+        data.
+      operationId: get_project_health_api_v1_projects__project_id__health_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthVector'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/projects/{project_id}/documents:
     post:
       tags:
@@ -5797,6 +5828,38 @@ components:
       - occurred_at
       title: EvidenceHistoryEventResponse
       description: A persisted evidence-history event for a document timeline.
+    EvidenceRef:
+      properties:
+        ref_id:
+          type: string
+          title: Ref Id
+        source:
+          type: string
+          title: Source
+        tier:
+          $ref: '#/components/schemas/EvidenceTier'
+        locator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Locator
+      additionalProperties: false
+      type: object
+      required:
+      - ref_id
+      - source
+      - tier
+      title: EvidenceRef
+      description: Reference to evidence supporting or withholding a critical output.
+    EvidenceTier:
+      type: string
+      enum:
+      - verified
+      - weak
+      - inferred
+      - unverified
+      title: EvidenceTier
+      description: Evidence confidence tier used by Runtime Trust and downstream health.
     ExecuteDecisionRequestDTO:
       properties:
         project_id:
@@ -6014,6 +6077,130 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HealthBand:
+      type: string
+      enum:
+      - healthy
+      - watch
+      - at_risk
+      - critical
+      - unknown
+      title: HealthBand
+    HealthDimension:
+      type: string
+      enum:
+      - contract
+      - risk
+      - documentation
+      - governance
+      - schedule
+      - cost
+      - deliverables
+      title: HealthDimension
+    HealthNullReason:
+      type: string
+      enum:
+      - insufficient_evidence
+      - not_applicable
+      - budget_exhausted
+      title: HealthNullReason
+    HealthSignal:
+      properties:
+        dimension:
+          $ref: '#/components/schemas/HealthDimension'
+        score:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Score
+        band:
+          $ref: '#/components/schemas/HealthBand'
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        evidence:
+          items:
+            $ref: '#/components/schemas/EvidenceRef'
+          type: array
+          title: Evidence
+        trend:
+          $ref: '#/components/schemas/HealthTrend'
+          default: unknown
+        missing_data:
+          items:
+            type: string
+          type: array
+          title: Missing Data
+        null_reason:
+          anyOf:
+          - $ref: '#/components/schemas/HealthNullReason'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - dimension
+      - band
+      - confidence
+      title: HealthSignal
+      description: 'One dimension''s health result.
+
+
+        A non-null score must be backed by concrete evidence. Confidence remains a
+
+        separate evidence-quality axis and cannot substitute for provenance.'
+    HealthTrend:
+      type: string
+      enum:
+      - up
+      - down
+      - flat
+      - unknown
+      title: HealthTrend
+    HealthVector:
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        dimensions:
+          items:
+            $ref: '#/components/schemas/HealthSignal'
+          type: array
+          title: Dimensions
+        composite_score:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Composite Score
+        composite_band:
+          $ref: '#/components/schemas/HealthBand'
+          default: unknown
+        composite_trend:
+          $ref: '#/components/schemas/HealthTrend'
+          default: unknown
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+      additionalProperties: false
+      type: object
+      required:
+      - project_id
+      - tenant_id
+      - dimensions
+      - computed_at
+      title: HealthVector
+      description: Project-level health vector across supported dimensions.
     ImpactLevel:
       type: string
       enum:

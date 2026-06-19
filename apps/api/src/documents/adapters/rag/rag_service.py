@@ -11,6 +11,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
 from src.core.resilience import with_circuit_breaker
@@ -22,6 +23,14 @@ logger = structlog.get_logger()
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 1536
 DEFAULT_TOP_K = 5
+
+
+def _resolve_openai_api_key() -> str | None:
+    """Resolve OpenAI key from environment or settings.
+
+    Test Suite ID: TS-UD-RAG-CONFIG-001
+    """
+    return os.getenv("OPENAI_API_KEY") or settings.openai_api_key
 
 
 class RagProviderUnavailableError(RuntimeError):
@@ -187,7 +196,7 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     Protected by circuit breaker to prevent cascading failures
     when OpenAI API is unavailable.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = _resolve_openai_api_key()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
 
@@ -338,7 +347,6 @@ def _extractive_answer(*, question: str, chunks: list[RetrievedChunk]) -> str | 
 def _is_no_answer(answer: str) -> bool:
     normalized = answer.strip().lower().rstrip(".")
     return normalized in {
-        "no lo encuentro en el documento",
         "no lo encuentro en el documento",
     }
 

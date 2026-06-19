@@ -136,17 +136,28 @@ class TestCheckBudgetAvailability:
 
     @pytest.mark.asyncio
     @pytest.mark.red_phase
+    async def test_spend_reset_uses_naive_utc_timestamp_for_legacy_tenant_column(self):
+        """TS-UD-AI-COST-001: monthly reset stores naive UTC for TIMESTAMP WITHOUT TIME ZONE."""
+        tenant = _make_tenant(spend=50.0, last_reset=None)
+        service = _make_service()
+
+        with patch(_GET_TENANT_PATH, new=AsyncMock(return_value=tenant)):
+            await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
+
+        assert tenant.ai_spend_last_reset is not None
+        assert tenant.ai_spend_last_reset.tzinfo is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.red_phase
     async def test_spend_reset_when_year_has_advanced(self):
         """Year > last_reset.year → ai_spend_current is zeroed."""
         last_reset = datetime(2024, 12, 1)
         tenant = _make_tenant(spend=40.0, last_reset=last_reset)
         service = _make_service()
 
-        # Patch datetime.utcnow so it reports a future year
         future_now = datetime(2026, 1, 1)
         with patch(_GET_TENANT_PATH, new=AsyncMock(return_value=tenant)):
-            with patch("src.core.ai.cost_controller.datetime") as mock_dt:
-                mock_dt.utcnow.return_value = future_now
+            with patch("src.core.ai.cost_controller._utcnow_naive", return_value=future_now):
                 await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
 
         assert tenant.ai_spend_current == pytest.approx(0.0)
@@ -161,8 +172,7 @@ class TestCheckBudgetAvailability:
 
         same_year_next_month = datetime(2025, 4, 1)
         with patch(_GET_TENANT_PATH, new=AsyncMock(return_value=tenant)):
-            with patch("src.core.ai.cost_controller.datetime") as mock_dt:
-                mock_dt.utcnow.return_value = same_year_next_month
+            with patch("src.core.ai.cost_controller._utcnow_naive", return_value=same_year_next_month):
                 await service.check_budget_availability(uuid.uuid4(), estimated_cost=0.01)
 
         assert tenant.ai_spend_current == pytest.approx(0.0)

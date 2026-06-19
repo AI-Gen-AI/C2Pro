@@ -58,6 +58,7 @@ async def test_list_alerts_returns_tenant_scoped_wrapper_response(
     db.add_all(
         [
             Alert(
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 severity=AlertSeverity.HIGH,
                 category="LEGAL",
@@ -70,6 +71,7 @@ async def test_list_alerts_returns_tenant_scoped_wrapper_response(
                 alert_metadata={},
             ),
             Alert(
+                tenant_id=test_tenant_2.id,
                 project_id=other_project.id,
                 severity=AlertSeverity.LOW,
                 category="TIME",
@@ -85,7 +87,10 @@ async def test_list_alerts_returns_tenant_scoped_wrapper_response(
     )
     await db.commit()
 
-    response = await client.get("/api/v1/alerts", headers=get_auth_headers(user=test_user, tenant=test_tenant))
+    response = await client.get(
+        "/api/v1/alerts/tenant",
+        headers=get_auth_headers(user=test_user, tenant=test_tenant),
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -115,6 +120,7 @@ async def test_list_alerts_can_filter_by_document_id(
 
     document = DocumentORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_type=DocumentType.CONTRACT,
         filename="contract.pdf",
@@ -128,6 +134,7 @@ async def test_list_alerts_can_filter_by_document_id(
 
     clause = ClauseORM(
         id=uuid4(),
+        tenant_id=test_tenant.id,
         project_id=project.id,
         document_id=document.id,
         clause_code="1.1",
@@ -141,6 +148,7 @@ async def test_list_alerts_can_filter_by_document_id(
     db.add_all(
         [
             Alert(
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 severity=AlertSeverity.HIGH,
                 category="LEGAL",
@@ -154,6 +162,7 @@ async def test_list_alerts_can_filter_by_document_id(
                 alert_metadata={},
             ),
             Alert(
+                tenant_id=test_tenant.id,
                 project_id=project.id,
                 severity=AlertSeverity.LOW,
                 category="TIME",
@@ -170,7 +179,7 @@ async def test_list_alerts_can_filter_by_document_id(
     await db.commit()
 
     response = await client.get(
-        f"/api/v1/alerts?document_id={document.id}",
+        f"/api/v1/alerts/tenant?document_id={document.id}",
         headers=get_auth_headers(user=test_user, tenant=test_tenant),
     )
 
@@ -201,6 +210,7 @@ async def test_list_project_alerts_handles_legacy_list_affected_entities(
 
     db.add(
         Alert(
+            tenant_id=test_tenant.id,
             project_id=project.id,
             severity=AlertSeverity.HIGH,
             category="TIME",

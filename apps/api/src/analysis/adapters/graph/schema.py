@@ -5,13 +5,16 @@ from typing import Annotated, Any, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-Risk = dict[str, Any]
-Task = dict[str, Any]
+from src.analysis.domain.contracts import BudgetItem, Citation, RiskItem, WbsActivity
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
+from src.analysis.domain.node_result import NodeResult, merge_node_results
+
+Risk = RiskItem
+Task = WbsActivity
 StakeholderDict = dict[str, Any]
 RaciEntry = dict[str, Any]
-CoherenceBreakdown = dict[str, Any]
-BomEntry = dict[str, Any]
-Citation = dict[str, Any]
+CoherenceBreakdown = dict[str, float | None]
+BomEntry = BudgetItem
 
 
 class ProjectState(TypedDict):
@@ -68,3 +71,5 @@ class ProjectState(TypedDict):
 
     # ── N16: Final Assembler ──
     final_report: dict[str, Any]
+    node_results: Annotated[list[NodeResult], merge_node_results]
+    documentation_health_signal: DocumentationHealthSignal | None

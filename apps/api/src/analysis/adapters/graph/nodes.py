@@ -22,6 +22,12 @@ from src.analysis.adapters.graph.dependencies import (
     get_ai_service,
     get_hitl_service_for_graph,
 )
+from src.analysis.adapters.graph.nodes_extended import (
+    _failed_node_result,
+    _maybe_await,
+    _ok_node_result,
+    _persist_node_error,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -36,6 +42,8 @@ from src.analysis.domain.ai_extraction import (
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
 )
+from src.analysis.domain.contracts import RiskItem, WbsActivity
+from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 
@@ -43,6 +51,70 @@ from src.core.database import get_session_with_tenant
 _risk_rules = DeterministicRiskRulesService()
 _wbs_rules = DeterministicWbsRulesService()
 _critique_service = CritiqueExtractionService()
+
+_RISK_LEGACY_KEYS = {
+    "summary",
+    "probability",
+    "mitigation_suggestion",
+    "source_quote",
+    "source_text_snippet",
+    "risk_score",
+    "immediate_alert",
+}
+_WBS_LEGACY_KEYS = {"item_type", "confidence"}
+
+
+def _unexpected_contract_keys(
+    item: dict[str, Any],
+    *,
+    allowed: set[str],
+    legacy: set[str],
+) -> set[str]:
+    return set(item) - allowed - legacy
+
+
+def _risk_contract_item(item: RiskItem | dict[str, Any]) -> RiskItem:
+    if isinstance(item, RiskItem):
+        return item
+    unknown = _unexpected_contract_keys(
+        item,
+        allowed=set(RiskItem.model_fields),
+        legacy=_RISK_LEGACY_KEYS,
+    )
+    if unknown:
+        raise ValueError(f"risk_extractor emitted unknown contract fields: {sorted(unknown)}")
+    data = {key: item[key] for key in RiskItem.model_fields if key in item}
+    if not data.get("description") and item.get("summary"):
+        data["description"] = item["summary"]
+    if not data.get("description") and data.get("title"):
+        data["description"] = data["title"]
+    if not data.get("source"):
+        data["source"] = item.get("source_quote") or item.get("source_text_snippet")
+    if not data.get("likelihood") and item.get("probability"):
+        data["likelihood"] = item["probability"]
+    return RiskItem.model_validate(data)
+
+
+def _risk_contract_payload(item: RiskItem | dict[str, Any]) -> dict[str, Any]:
+    return _risk_contract_item(item).model_dump(mode="python")
+
+
+def _wbs_contract_item(item: WbsActivity | dict[str, Any]) -> WbsActivity:
+    if isinstance(item, WbsActivity):
+        return item
+    unknown = _unexpected_contract_keys(
+        item,
+        allowed=set(WbsActivity.model_fields),
+        legacy=_WBS_LEGACY_KEYS,
+    )
+    if unknown:
+        raise ValueError(f"wbs_extractor emitted unknown contract fields: {sorted(unknown)}")
+    data = {key: item[key] for key in WbsActivity.model_fields if key in item}
+    return WbsActivity.model_validate(data)
+
+
+def _wbs_contract_payload(item: WbsActivity | dict[str, Any]) -> dict[str, Any]:
+    return _wbs_contract_item(item).model_dump(mode="python")
 
 
 # ── Backwards-compatible shims ──────────────────────────────────────────────
@@ -114,9 +186,17 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    """N4 — Extract risks via RiskExtractionTool (AI) or deterministic rules (mock)."""
+    """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_risks"] = _risk_rules.extract(state.get("document_text", ""))
+        risks = [
+            _risk_contract_payload(item)
+            for item in _risk_rules.extract(state.get("document_text", ""))
+        ]
+        state["extracted_risks"] = risks
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("risk_extractor", risks),
+        ]
         state["messages"].append(
             AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks")
         )
@@ -124,7 +204,63 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 
     from src.core.ai.tools import get_tool
 
-    return await get_tool("risk_extraction", version="1.0")(state)
+    try:
+        original_chars = len(state.get("document_text", "") or "")
+        updated_state = await get_tool("risk_extraction", version="1.0")(state)
+        updated_state = _fallback_contract_risks_when_empty(updated_state)
+        risks = [
+            _risk_contract_payload(item)
+            for item in (updated_state.get("extracted_risks") or [])
+        ]
+        updated_state["extracted_risks"] = risks
+    except Exception as exc:
+        node_result = _failed_node_result("risk_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["extracted_risks"] = []
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content="N4 risk_extractor: failed (see node_results)")
+        )
+        return state
+
+    # Visibility marker so the /analyze response shows the filter ran.
+    # The filter itself logs structured stats via the tool's logger.
+    risks = updated_state.get("extracted_risks") or []
+    updated_state["node_results"] = [
+        *updated_state.get("node_results", []),
+        _ok_node_result("risk_extractor", risks),
+    ]
+    updated_state["messages"].append(
+        AIMessage(
+            content=f"N4 risk_extractor: input_doc_chars={original_chars} "
+            f"risks_emitted={len(updated_state.get('extracted_risks') or [])}"
+        )
+    )
+    return updated_state
+
+
+def _fallback_contract_risks_when_empty(state: ProjectState) -> ProjectState:
+    """TS-QA-SWAGGER-ANALYSIS-001: keep N4 useful when AI risk extraction is empty."""
+    if state.get("extracted_risks"):
+        return state
+
+    fallback_risks = _risk_rules.extract(state.get("document_text", ""))
+    if not fallback_risks:
+        return state
+
+    state["extracted_risks"] = fallback_risks
+    state["confidence_score"] = max(state.get("confidence_score", 0.0), 0.7)
+    notes = state.get("critique_notes", "").strip()
+    fallback_note = (
+        f"Deterministic fallback extracted {len(fallback_risks)} risks after AI risk extraction returned empty."
+    )
+    state["critique_notes"] = f"{notes}; {fallback_note}" if notes else fallback_note
+    state["messages"].append(
+        AIMessage(
+            content=f"Risk extractor deterministic fallback: {len(fallback_risks)} risks"
+        )
+    )
+    return state
 
 
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
@@ -133,7 +269,15 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     """N5 — Extract WBS items via WBSExtractionTool (AI) or deterministic rules (mock)."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_wbs"] = _wbs_rules.extract(state.get("document_text", ""))
+        wbs_items = [
+            _wbs_contract_payload(item)
+            for item in _wbs_rules.extract(state.get("document_text", ""))
+        ]
+        state["extracted_wbs"] = wbs_items
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result("wbs_extractor", wbs_items),
+        ]
         state["messages"].append(
             AIMessage(content=f"WBS extractor mock mode: {len(state['extracted_wbs'])} items")
         )
@@ -141,7 +285,29 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
 
     from src.core.ai.tools import get_tool
 
-    return await get_tool("wbs_extraction", version="1.0")(state)
+    try:
+        updated_state = await get_tool("wbs_extraction", version="1.0")(state)
+        wbs_items = [
+            _wbs_contract_payload(item)
+            for item in (updated_state.get("extracted_wbs") or [])
+        ]
+        updated_state["extracted_wbs"] = wbs_items
+    except Exception as exc:
+        node_result = _failed_node_result("wbs_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["extracted_wbs"] = []
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(
+            AIMessage(content="N5 wbs_extractor: failed (see node_results)")
+        )
+        return state
+
+    wbs_items = updated_state.get("extracted_wbs") or []
+    updated_state["node_results"] = [
+        *updated_state.get("node_results", []),
+        _ok_node_result("wbs_extractor", wbs_items),
+    ]
+    return updated_state
 
 
 # ── N9 — Budget Parser (delegates to extended) ──────────────────────────────
@@ -164,23 +330,56 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
         state["human_approval_required"] = False
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result(
+                "critique",
+                {
+                    "confidence": state["confidence_score"],
+                    "retry_count": state["retry_count"],
+                    "human_approval_required": state["human_approval_required"],
+                },
+                confidence=state["confidence_score"],
+            ),
+        ]
         state["messages"].append(AIMessage(content="Critique mock mode: passed."))
         return state
 
     use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
-    result = await use_case.execute(
-        CritiqueExtractionCommand(
-            extracted_risks=state["extracted_risks"],
-            extracted_wbs=state["extracted_wbs"],
-            doc_type=state.get("doc_type"),
-            retry_count=state["retry_count"],
+    try:
+        result = await use_case.execute(
+            CritiqueExtractionCommand(
+                extracted_risks=state["extracted_risks"],
+                extracted_wbs=state["extracted_wbs"],
+                doc_type=state.get("doc_type"),
+                retry_count=state["retry_count"],
+            )
         )
-    )
+    except Exception as exc:
+        node_result = _failed_node_result("critique", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["human_approval_required"] = True
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N12 critique: failed (see node_results)"))
+        return state
 
     state["confidence_score"] = result.confidence
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result(
+            "critique",
+            {
+                "status": result.status,
+                "confidence": result.confidence,
+                "retry_count": result.retry_count,
+                "human_approval_required": result.human_approval_required,
+            },
+            confidence=result.confidence,
+        ),
+    ]
     state["messages"].append(
         AIMessage(
             content=(
@@ -247,6 +446,14 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
         except Exception:
             import structlog
 
+            state["node_results"] = [
+                *state.get("node_results", []),
+                NodeResult(
+                    node="human_interrupt",
+                    status=NodeStatus.DEGRADED,
+                    degradation_reason="hitl_routing_failed",
+                ),
+            ]
             structlog.get_logger().warning(
                 "hitl_routing_failed_falling_back_to_interrupt",
                 document_id=state.get("document_id"),
@@ -284,22 +491,33 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id = UUID(state["tenant_id"])
-    async with get_session_with_tenant(tenant_id) as session:
-        result = await PersistAnalysisUseCase(
-            analysis_repo=SqlAlchemyAnalysisRepository(session),
-            wbs_repo=SQLAlchemyWBSRepository(session),
-            session=session,
-        ).execute(
-            PersistAnalysisCommand(
-                project_id=UUID(state["project_id"]),
-                tenant_id=tenant_id,
-                extracted_risks=state.get("extracted_risks", []),
-                extracted_wbs=state.get("extracted_wbs", []),
-                coherence_score=state.get("coherence_score", 0),
-                coherence_breakdown=state.get("coherence_breakdown", {}),
+    try:
+        async with get_session_with_tenant(tenant_id) as session:
+            result = await PersistAnalysisUseCase(
+                analysis_repo=SqlAlchemyAnalysisRepository(session),
+                wbs_repo=SQLAlchemyWBSRepository(session),
+                session=session,
+            ).execute(
+                PersistAnalysisCommand(
+                    project_id=UUID(state["project_id"]),
+                    tenant_id=tenant_id,
+                    extracted_risks=state.get("extracted_risks", []),
+                    extracted_wbs=state.get("extracted_wbs", []),
+                    coherence_score=state.get("coherence_score", 0),
+                    coherence_breakdown=state.get("coherence_breakdown", {}),
+                )
             )
-        )
+    except Exception as exc:
+        node_result = _failed_node_result("save_to_db", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        state["messages"].append(AIMessage(content="N17 save_to_db: failed (see node_results)"))
+        return state
 
     state["analysis_id"] = str(result.analysis_id)
+    state["node_results"] = [
+        *state.get("node_results", []),
+        _ok_node_result("save_to_db", {"analysis_id": str(result.analysis_id)}),
+    ]
     state["messages"].append(AIMessage(content=f"Persisted analysis {result.analysis_id}."))
     return state

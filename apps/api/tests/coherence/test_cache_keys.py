@@ -7,14 +7,13 @@ References: ADR-009 §G, spec §6 (2026-05-25-ecoa-v2-hotfix-and-cutover-design.
 
 from __future__ import annotations
 
+# Delay import to allow RED phase to fail at import
+import importlib
 from uuid import UUID, uuid4
 
 import pytest
 
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
-
-# Delay import to allow RED phase to fail at import
-import importlib
 
 
 @pytest.fixture()

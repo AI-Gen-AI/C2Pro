@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[4]
     / ".github"

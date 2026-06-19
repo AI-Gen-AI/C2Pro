@@ -207,6 +207,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ===========================================
 
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key para Claude")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key para embeddings/RAG")
 
     # Model selection
     ai_model_default: str = "claude-sonnet-4-20250514"  # Sonnet 4 por defecto
@@ -221,8 +222,11 @@ class Settings(BaseSettings):  # type: ignore[misc]
     ai_timeout_seconds: int = Field(default=120, ge=10, le=600)
     ai_max_retries: int = Field(default=3, ge=0, le=5)
 
-    # Token limits
-    ai_max_tokens_output: int = Field(default=4096, ge=100, le=8192)
+    # Token limits — raised to 8192 to match the standard tier
+    # in model_routing.yaml. The previous 4096 default silently clamped
+    # complex_extraction (configured as 8192 in YAML) down to 4096,
+    # causing risk_extraction to hit the limit mid-JSON on dense contracts.
+    ai_max_tokens_output: int = Field(default=8192, ge=100, le=8192)
 
     # Cache
     ai_use_cache: bool = True
@@ -314,6 +318,37 @@ class Settings(BaseSettings):  # type: ignore[misc]
     feature_raci_generation: bool = False  # Fase 2
     feature_rfq_generation: bool = False  # Fase 2
     feature_expediting_vision: bool = False  # Fase 3
+
+    # C2Pro v3.0 Project Intelligence Overlay (ADR-013→021) — all default OFF;
+    # enable per-phase via canary. Resolved by require_feature()/getattr(settings, …).
+    feature_v3_spine: bool = Field(default=False, validation_alias="FEATURE_V3_SPINE")
+    feature_v3_coherence_llm: bool = Field(default=False, validation_alias="FEATURE_V3_COHERENCE_LLM")  # ADR-013/017
+    feature_v3_project_state: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_STATE")  # ADR-014
+    feature_v3_temporal: bool = Field(default=False, validation_alias="FEATURE_V3_TEMPORAL")  # ADR-015
+    feature_v3_change_impact: bool = Field(default=False, validation_alias="FEATURE_V3_CHANGE_IMPACT")  # ADR-016
+    feature_v3_change_semantic_llm: bool = Field(
+        default=False,
+        validation_alias="FEATURE_V3_CHANGE_SEMANTIC_LLM",
+    )  # ADR-016 L2
+    feature_v3_project_graph: bool = Field(default=False, validation_alias="FEATURE_V3_PROJECT_GRAPH")  # ADR-017
+    project_graph_debounce_ttl_seconds: int = Field(
+        default=300,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_DEBOUNCE_TTL_SECONDS",
+    )
+    project_graph_tenant_concurrency_limit: int = Field(
+        default=2,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_TENANT_CONCURRENCY_LIMIT",
+    )
+    project_graph_requeue_countdown_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias="PROJECT_GRAPH_REQUEUE_COUNTDOWN_SECONDS",
+    )
+    feature_v3_health: bool = Field(default=False, validation_alias="FEATURE_V3_HEALTH")  # ADR-018
+    feature_v3_action_review: bool = Field(default=False, validation_alias="FEATURE_V3_ACTION_REVIEW")  # ADR-019/020
+    feature_v3_briefing: bool = Field(default=False, validation_alias="FEATURE_V3_BRIEFING")  # ADR-021
 
     # ECOA v2 (ADR-009) — Phase 1 (compatibility) + Phase 2 (shadow mode).
     # Per-tenant override is deferred — single global toggle for now.

@@ -11,8 +11,8 @@ import inspect
 import pkgutil
 from typing import Literal, get_args, get_origin
 
-import pytest
 import pydantic
+import pytest
 
 
 def _collect_coherence_models() -> list[type[pydantic.BaseModel]]:
