@@ -16,7 +16,9 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 @pytest.fixture
 def mock_repository():
-    return MagicMock(spec=["get_by_id", "update_status", "commit"])
+    repo = MagicMock(spec=["get_by_id", "update_status", "update_metadata", "commit"])
+    repo.update_metadata = AsyncMock()
+    return repo
 
 
 @pytest.fixture

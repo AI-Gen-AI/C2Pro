@@ -13,11 +13,11 @@
 
 ## 0. Status View
 
-**Pending Tasks**: 2
+**Pending Tasks**: 0
 
 **Completed Tasks**: 55
 
-- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-052`–`TASK-BCK-054`
+- IDs: `TASK-BCK-001`–`TASK-BCK-033`, `TASK-BCK-035`–`TASK-BCK-049`, `TASK-BCK-051`–`TASK-BCK-054`, `TASK-BCK-062`–`TASK-BCK-064`, `TASK-BCK-083`–`TASK-BCK-089`
 
 > Active runtime defects are tracked below; completed history remains archived in [COMPLETED.md](./COMPLETED.md).
 
@@ -78,6 +78,124 @@
 - N8 coherence contract: the seeded `seed_signals`/`seed_coverage` call is explicit and covered by tests; old test doubles now accept the same signature.
 - LLM gate: N8 no longer hardcodes `low_budget_mode=True`; it resolves `feature_v3_coherence_llm` through `core/feature_flags`/settings and fail-closes to low-budget mode when the flag cannot be resolved.
 - Verification: RED showed hardcoded `low_budget_mode=True`, missing CI gate, and absent runtime-trust helpers; GREEN passed `apps/api/tests/contract/test_graph_node_contracts.py`, `apps/api/tests/unit/analysis/test_runtime_trust_graph_nodes.py`, and focused existing graph-node suites.
+| Status | Priority | Task ID                      | Depends On                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Source                                 |
+| ------ | -------- | ---------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| [x]    | P0       | `TASK-BCK-051`               | None                                              | Investigate live `500` responses on project alerts and project stakeholders. `[x] Verified + fixed 2026-06-04` — Live test with `swagger.test01@ejemplo.com` confirmed: `GET /api/v1/alerts/projects/{id}` → 200 OK, `GET /api/v1/stakeholders/projects/{id}` → 200 OK. Root cause of 500s: (1) `alerts.impact_level` column drift → fixed by migration `20260601_0001`; (2) stakeholder fixture missing `tenant_id` → fixed 2026-05-25; (3) **Critical: `ensure_checkpointer_ready()` in `analysis/adapters/graph/workflow.py` propagated `psycopg_pool.PoolTimeout` (30s) to the top-level lifespan, crashing the entire app on every startup when the psycopg direct connection to Supabase times out.** Fix: wrapped `setup()` call in try/except; on any exception logs warning and marks `_checkpointer_ready=True` to prevent retry storm; app starts with in-memory fallback instead of crashing. `docker restart c2pro-api` required after code change. | Production report 2026-05-15           |
+| [x]    | P1       | `TASK-BCK-063`               | None                                              | Persist `parsed_at` on successful parse. `[x] Verified + test repaired 2026-06-04` — Implementation was already correct (`parse_document_use_case.py` step 8 passes `parsed_at=datetime.now(UTC)` to `update_status`). Root cause of null: `test_parse_document_updates_parsed_at` mock fixture was missing `update_metadata` in spec, so the success path threw `AttributeError` before reaching `update_status(parsed_at=...)`. Fix: added `update_metadata=AsyncMock()` to `mock_repository` fixture. 3/3 tests green, ruff clean.                                                                                                                                                                                                                                                                                                                                                                                                                     | Swagger verification 2026-05-17        |
+| [x]    | P0       | `TASK-BCK-064`               | `TASK-BCK-062`                                    | Wire parsed schedule evidence into coherence scoring. `[x] Fixed 2026-06-04` — Root cause: `DocumentType.SCHEDULE="schedule"` but registry `doc_type_priors` uses key `"schedule_gantt"`. `_seed_coverage_from_category_router()` passed the raw DB value to `router.route()`, so no prior floor (0.75) was applied; schedule rows (task names/dates) lacked enough coherence vocabulary to clear the threshold, leaving TIME unassessed. Fix: added `_DB_DOC_TYPE_TO_REGISTRY = {"schedule": "schedule_gantt", "budget": "budget_boq"}` mapping in `coherence/graph/graph.py`; normalize before routing. Same fix preventively covers the `budget`→`budget_boq` gap. Suite `TS-UD-COH-SCH-001`: **7/7 green**, ruff clean. Files: `src/coherence/graph/graph.py`, `tests/coherence/test_schedule_coverage_routing.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Swagger verification 2026-05-17        |
+| [x] | P1 | `TASK-BCK-088` | `TASK-BCK-084` | Implement prototype centroid build/cache only after embedding dimension decision; current pgvector path expects 1536 dims, so `bge-m3` requires explicit compatibility check or migration. Owner: Gemini bake-off/spec tests. `[x] Implemented (Centroid build/cache + explicit dimension guard)` — `category_centroids` table (`(category, embedding_model, score_version)` unique key + `seed_hash`, `vector(1536)`) via migration `20260603_0019`; `CentroidBuilderService.ensure_centroids_built` (seed_hash reproducibility, L2-normalized mean, hash-mismatch rebuild, idempotent skip). **Embedding-model decision recorded:** OpenAI `text-embedding-3-small` (1536) chosen for pgvector compatibility (SPEC §9.2 empirical bake-off bypassed for v1 — swappable via the composite key, no migration). **Compatibility guard (two-layer):** (a) `_KNOWN_MODEL_DIMS` pre-flight reject of known incompatible-dim models before any embedding call; (b) name-independent post-embedding length backstop aborting before pgvector INSERT. Verified 2026-06-03: `pytest tests/coherence/test_centroid_builder.py` = **8/8 green**, ruff clean. Builder intentionally unwired pending `TASK-BCK-089` (Capa 2 consumer). | `SPEC_category_routing_coherence_v1.md` §9.2 |
+| [x] | P1 | `TASK-BCK-089` | `TASK-BCK-086,TASK-BCK-088` | Add `CategoryClassifierNode` for ambiguous chunks only; clear chunks must not call LLM and classifier returns multi-label relevance scores. `[x] Implemented (Capa 2 LLM escalation)` — `CategoryClassifierNode` service + `ChunkClassificationResult` frozen dataclass in `apps/api/src/coherence/application/services/category_classifier_node.py`. Ambiguity gate: `escalate_low < relevance < escalate_high` (strict bounds) per category. LLM called at most once per ambiguous chunk via `AITaskType.CLASSIFICATION` (Haiku, low_budget_mode=True). Scores clamped to [0,1]; merge rule: LLM overrides only ambiguous categories, clear/low categories keep Capa 1 score. Graceful degradation on LLM error or JSON parse failure → returns Capa 1 scores unchanged with `was_escalated=False`. Suite `TS-UD-COH-CCN-001`: **22/22 green**, ruff clean. Verified 2026-06-04. | `SPEC_category_routing_coherence_v1.md` §D3 |
+| [x]    | P0       | `TASK-COH-V2-HOTFIX-001`     | None                                              | EPIC-ECOA-V2 Phase A — v1 scoring §14 active-weight guard. Replace `mean × coverage_ratio` collapse in `apps/api/src/coherence/scoring.py:397-400`; when `active_weight < MIN_ACTIVE_WEIGHT (0.35)` return `score=None, reason="insufficient_active_weight"`. Widen `EnrichedCoherenceResult.overall_score`, `DashboardSummary.global_score`, `.coherence_score` to nullable (the score fields to `float \| None`). Propagate `score_reason` through router. Branch `fix/coherence-v1-active-weight-guard`.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Spec 2026-05-25                        |
+| [x]    | P0       | `TASK-COH-V2-ADAPTER-002`    | `TASK-COH-V2-HOTFIX-001`                          | EPIC-ECOA-V2 Phase B — fix `apps/api/src/coherence/adapters/v1_to_v2.py:65-96` partial-coverage branch: classify null `sub_scores` as `CategoryStatus.INSUFFICIENT_EVIDENCE` (not silent drop), compute real `active_weight` from `DEFAULT_CATEGORY_WEIGHTS`, apply §14 guard. Ships inside HOTFIX-001 PR.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Spec 2026-05-25                        |
+| [x]    | P0       | `TASK-COH-V2-FRONTEND-003`   | `TASK-COH-V2-HOTFIX-001`                          | EPIC-ECOA-V2 Phase C — frontend null-safe rendering per ADR-009 §18. Remove `?? 0`/`\|\| 0` on all score paths under `apps/web/components/coherence/**`; null score → "Pending evidence" neutral state (no red, no zero); CI grep guard. Vitest + Playwright E2E. Branch `feat/coherence-frontend-null-safe`. **No UI flag**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Spec 2026-05-25                        |
+| [x]    | P0       | `TASK-COH-V2-VERSIONING-006` | `TASK-COH-V2-HOTFIX-001`                          | EPIC-ECOA-V2 Phase F — mandatory `score_version` on every surface: DB columns, Pydantic DTOs (`models.py:241,282,350`, `application/dtos/coherence_dtos.py:61`), graph nodes (`graph/nodes.py:876`, `graph/graph.py:253,302`), telemetry, shadow logs (`services/v2/shadow_runner.py:115`), CSV/PDF/XLS exports, cache keys, frontend (`apps/web/lib/api/contracts.ts`). Canonical 2-value enum `"coherence-v1"`/`"coherence-v2"`. Alembic backfill of NULL + `"v0_flag_based"` + `"v1_exponential_decay"` → `"coherence-v1"` (blind, no row inspection). CI contract test fails if any Pydantic model with `Coherence`/`Dashboard` in name lacks `score_version`. Branch `feat/coherence-score-version-canonical`.                                                                                                                                                                                                                                          | Spec 2026-05-25 §5                     |
+| [x]    | P0       | `TASK-COH-V2-CACHING-007`    | `TASK-COH-V2-VERSIONING-006`                      | EPIC-ECOA-V2 Phase G — cache namespace versioning. New module `apps/api/src/coherence/cache_keys.py` is sole producer of keys (format `coherence:{version}:{namespace}:{tenant_id}:{project_id}[:{suffix}]`); CI grep ban on ad-hoc `f"coherence:..."` literals outside that module. New `apps/api/src/coherence/cache_invalidation.py` for `on_flag_flip`/`on_result_persisted`/`on_deploy` handlers. New one-shot purge script `apps/api/scripts/invalidate_coherence_cache.py` (dry-run + apply modes) run at Phase A deploy. Integration test `test_flag_toggle_cache_invalidation.py`. Branch `feat/coherence-cache-namespacing`.                                                                                                                                                                                                                                                                                                                       | Spec 2026-05-25 §6                     |
+| [x]    | P1       | `TASK-COH-V2-DOCS-005`       | `TASK-COH-V2-HOTFIX-001`                          | EPIC-ECOA-V2 Phase E — rename malformed `worktrees/sentry-perf/w5b-benchmarks/docs/architecture/adr/ADR-009-` → `ADR-009-evidence-oriented-coherence-orchestration.md` via `git mv`; status `Proposed` → `Accepted` with date; regenerate `docs/api/openapi.yaml` via `make openapi` after Phase A merges; update codemap; CHANGELOG entries for A/B/C/F/G. No new task-specific .md files per `.claude/rules/DOCUMENTATION_STRUCTURE.md`. Branch `docs/coherence-adr-009-accepted`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Spec 2026-05-25                        |
+| [x]    | P2       | `TASK-BCK-077`               | None                                              | Pre-existing test infra failures uncovered during ECOA v2 Phase A+B review. (a) LangGraph tracer `KeyError: 'parent'` blocks `tests/coherence/test_regression.py` end-to-end and scenario tests; (b) `tests/coherence/test_scoring_v3.py` compares `ScoringResult` to floats via `pytest.approx` instead of `.score` attribute; (c) some scoring tests hit real Anthropic API (401 auth) instead of mock when `C2PRO_AI_MOCK=1` is set but the LLM evaluator path bypasses the mock. Confirmed NOT introduced by Phase A (CR verdict 2026-05-26). Source: tdd-guide report + code-reviewer verdict.                                                                                                                                                                                                                                                                                                                                                          | CR 2026-05-26                          |
+| [x]    | P1       | `TASK-COH-V2-CUTOVER-004`    | `-001 -003 -006 -007`                             | EPIC-ECOA-V2 Phase D — make v2 authoritative behind per-tenant flag. **D.0 audit verdict (2026-05-26): EXISTS_PARTIAL** — extend `Tenant.settings: JSONB` at `apps/api/src/core/auth/models.py:100` using alerts pattern (`apps/api/src/alerts/adapters/persistence/tenant_repository.py:27-33`). Extract shared `apps/api/src/core/feature_flags/tenant_flags_service.py`. Read order: `tenant.settings.get("feature_flags", {}).get("coherence_v2_enabled", settings.coherence_v2_enabled)`. Remove `apps/api/src/config.py:319` deferred-comment seam. Telemetry: `coherence.v2_path_used`, `coherence.v1_v2_score_delta`. Canary 10→50→100% over 3 days with shadow-MAE ≤ 15 auto-block (Sentry P1 = 0, p95 latency regression < 30%, v2_authoritative error rate < 0.5%). Branches `feat/coherence-v2-authoritative-canary` (D.0 audit memo) then `feat/coherence-v2-authoritative` (D.1+). architect + security-reviewer + database-reviewer required. | Spec 2026-05-25 §8                     |
+
+## 2. Specifications
+
+### TASK-BCK-083..089 — Coherence Category Routing v1 ✅ ALL DONE 2026-06-04/05
+
+- Critical decision: routing and scoring are separate; priors/coverage decide what is assessed, findings decide score impact.
+- Naming decision: registry may use `SCHEDULE`, but coherence boundary maps to existing `TIME`; do not mix silently.
+- First shippable slice: registry loader + prior-floor deterministic router, no embeddings/LLM yet.
+- Parallel plan: Codex orchestrates/integrates, Gemini handles registry validation and tests, DeepSeek handles router/segmentation spike.
+- Known risk: current pgvector infrastructure expects 1536 dimensions; do not assume `bge-m3` fits without migration/bake-off.
+- Centroid RLS decision for TASK-BCK-088: use nullable `tenant_id` with RLS enabled. v1 rows are global (`tenant_id IS NULL`) and service-written only; reads may include global rows plus current-tenant rows for future tenant overrides. Do not create a no-tenant table.
+- Boundary contract:
+  - Registry category enum is `LEGAL|SCOPE|BUDGET|SCHEDULE|TECHNICAL|QUALITY`.
+  - Coherence graph/scoring category enum remains `LEGAL|SCOPE|BUDGET|TIME|TECHNICAL|QUALITY|CROSS`.
+  - Only one explicit adapter may translate `SCHEDULE -> TIME`; no inline silent mapping in evaluators, scoring, prompts, or persistence.
+  - Router output is relevance/coverage evidence: `category`, `score`, `source_breakdown`, `status`, `segment_id`, `chunk_id`, evidence pointers. It must not emit `FindingSignal` directly.
+  - N4 risk bridge remains finding evidence only. It can seed `FindingSignal`s and coverage, but it is not the category router.
+  - `coverage_map` receives assessed categories from routing and evaluators; scoring still consumes findings and existing `ScoringService`.
+  - `InsufficientEvidence` is a first-class router/coherence state, not a missing key.
+- Agent handoff:
+  - Gemini Code (`TASK-BCK-084`): create failing registry tests first; validate schema, regex compilation, thresholds, priors, version fields, and category naming. Do not implement embeddings.
+  - DeepSeek (`TASK-BCK-085`): produce segment/chunk domain contracts and structural segmentation tests. Do not split on English `schedule`.
+  - DeepSeek + Codex (`TASK-BCK-086`): implement deterministic router over priors + structural + lexicon only; embeddings and LLM remain blocked for later tasks.
+  - Codex (`TASK-BCK-087`): integrate router relevance into coherence coverage after T084-T086 are green.
+- TASK-BCK-087 result: `evaluate_coherence()` and `evaluate_coherence_async()` now seed `coverage_map` from `CategoryRouter` before graph execution. This only marks assessed categories; it does not create `FindingSignal`s. Contract priors now keep `LEGAL` assessed_clean even when the N4 risk bridge has no extracted risk evidence.
+
+### TASK-BCK-081 — AI Budget Reset Timestamp Normalization
+
+- Root cause: `CostControllerService.check_budget_availability()` used timezone-aware UTC for `Tenant.ai_spend_last_reset`.
+- Persistence contract: `tenants.ai_spend_last_reset` is `DateTime`/`TIMESTAMP WITHOUT TIME ZONE`, matching other legacy tenant timestamps.
+- Fix: added `_utcnow_naive()` in `apps/api/src/core/ai/cost_controller.py` and assigned naive UTC on monthly budget reset.
+- Regression: `TS-UD-AI-COST-001` in `apps/api/tests/core/ai/test_cost_controller_swarm.py` asserts reset timestamps have `tzinfo is None`.
+- Verification: focused RED failed on aware UTC; after fix, `python -m pytest apps/api/tests/core/ai/test_cost_controller_swarm.py -q` passed 35 tests and `ruff check` returned 0 errors.
+
+### TASK-BCK-082 — Risk Extraction Deterministic Fallback
+
+- Root cause: live Swagger analysis no longer hit the budget timestamp DB error, but `risk_extraction` consumed max-token LLM responses, validated to no risk items, retried, and left `extracted_risks=[]`.
+- Fix: set `RiskExtractionTool.retry_policy` to zero retries for empty-extraction validation failures and added N4 fallback from `risk_extractor_node()` to `DeterministicRiskRulesService` when the AI tool leaves a non-empty contract without risks.
+- Coverage: `TS-QA-SWAGGER-ANALYSIS-001` now proves N4 fills deterministic risks after AI tool failure and that `risk_extraction` performs only one wrapper call for empty validation failures.
+- Language coverage: deterministic fallback recognizes Spanish contract terms for penalties, payment, warranty, schedule, and technical/specification risks.
+- Traceability: deterministic fallback now derives `source_quote` and `source_text_snippet` from verbatim source sentences that match each risk category's trigger terms, avoiding placeholder citations rejected by critique.
+- Verification: `python -m pytest apps/api/tests/unit/analysis/test_ai_tool_execution_contract.py apps/api/tests/unit/analysis/graph/test_thin_nodes.py -q` passed 34 tests and `ruff check` returned 0 errors.
+
+### TASK-CE-F1-01 — EvidenceClaim + SourceRef + VerificationStatus + LocatorQuality (ADR-011 Phase 1)
+
+- Implemented the universal evidence claim contract per ADR-011 §4.
+- `Dimension` (str, Enum): SCOPE|BUDGET|TIME|TECHNICAL|LEGAL|QUALITY — independent of CoherenceCategory, mapping at boundary layer.
+- `LocatorQuality` (str, Enum): EXACT|APPROXIMATE|MISSING — input to verification state transitions, not a second multiplier.
+- `VerificationStatus` (str, Enum): VERIFIED|UNCERTAIN|UNSUPPORTED|FABRICATION_SUSPECTED.
+- `SourceRef` (frozen dataclass): document_id, page, char_start/end, quote, locator_quality.
+- `EvidenceClaim` (frozen dataclass): 13 fields + `certainty_effective` @property.
+- Module: `apps/api/src/evidence/domain/models.py`.
+- Suite: TS-UD-EVI-CLM-001.
+
+### TASK-CE-F1-02 — EvidenceMaturityLayer (ADR-010 Phase 1)
+
+- Implemented the EML contracts per ADR-010 §3-4.
+- `EvidenceMaturityLevel` (int, Enum): 0-5 normalized invariant scale; composition per profile.
+- `DocumentPresence` (frozen dataclass): document_type (reuses DocumentType), count, latest_uploaded_at.
+- `EvidenceMaturityReport` (frozen dataclass): project_id, level, level_name, ladder_version, cross_validation_capability, present_types, missing_for_next_level, next_level_unlocks, computed_at.
+- `cross_validation_capability` is named deliberately to avoid collision with `evidence_coverage` (ADR-011).
+- Module: `apps/api/src/evidence/domain/models.py`.
+- Suite: TS-UD-EVI-EML-001.
+
+### TASK-CE-F1-03 — Test suite (immutability + serialization + certainty_effective matrix)
+
+- 25 tests, all green (`pytest --no-header -p no:asyncio`).
+- `TestImmutability` (4): FrozenInstanceError on EvidenceClaim, EMR, SourceRef, DocumentPresence.
+- `TestSerialization` (4): dataclasses.asdict() round-trip + JSON serialization.
+- `TestCertaintyEffective` (9): Full matrix — VERIFIED(×1.0), UNCERTAIN(×0.6), UNSUPPORTED(×0.2), FABRICATION_SUSPECTED(0.0), verification_deferred uses UNCERTAIN, locator_quality NOT a second multiplier, default status is UNCERTAIN.
+- `TestEnumExhaustiveness` (4): Exact cardinality for all 4 enums.
+- `TestDefaults` (1): ADR-012 hooks default to inert (human_verified=False, human_certainty=None, etc.).
+- File: `apps/api/tests/modules/evidence/domain/test_evidence_contracts.py`.
+- Suite: TS-UD-EVI-CTS-001.
+
+### TASK-CE-F2-01 — LEGAL pilot extraction adapter (ADR-011/ADR-012 Phase 2A.1)
+
+- Implemented isolated LEGAL extraction boundary under `apps/api/src/evidence/legal/`.
+- Supported pilot claim types: `payment_terms`, `late_fees_penalties`, and `liability_cap`.
+- Contractual value schemas default all missing fields to `None`; no currency, term, cap, rate, or percentage is fabricated.
+- Schema and envelope failures emit `ProcessingError` outside the `EvidenceClaim` stream; structural errors never map to `FABRICATION_SUSPECTED`.
+- Wrong dimensions and unknown claim types emit `OutOfScopeEvent`, `logger.warning`, and `evidence.claims.out_of_scope` metrics.
+- Phase 2A shadow claims are always `VerificationStatus.UNCERTAIN` with `verification_trace={"phase": "2A_shadow", "cvc_disabled": True}`.
+- Verification: `pytest apps/api/tests/modules/evidence/legal -q` passed 58/58 after adding traceability coverage; `pytest apps/api/tests/modules/evidence -q` passed 83/83.
+- Suite: TS-UD-EVI-LEGAL-001.
+
+### TASK-CE-F2A3-01 — DB Round-trip Certification (ADR-011 Phase 2A.3.1)
+
+- Alembic cycle: `upgrade head` → `downgrade -1` → `upgrade head` verified against real Postgres `c2pro_test`.
+- Migration `20260529_0001` creates `evidence_claims` and `evidence_extraction_events` shadow tables.
+- ORM models registered in `alembic/env.py` for autogenerate discovery.
+- `SqlAlchemyEvidenceShadowRepository` persists the adapter's three output channels (claims, processing_errors, out_of_scope) as write-only shadow data.
+- 7 integration tests (`tests/modules/evidence/persistence/test_evidence_persistence_roundtrip.py`):
+  - `test_full_roundtrip_cardinality`: 4 claims + 3 events.
+  - `test_claims_channel_populated`: lifecycle_status=shadow, dimension=LEGAL, cvc_disabled=True, all claims within [0,1] ranges.
+  - `test_events_channel_populated`: 2 out_of_scope (wrong_dimension + unknown_claim_type) + 1 processing_error (schema_validation_error).
+  - `test_shared_extraction_run_id`: Same run_id across claims and events.
+  - `test_jsonb_null_preservation`: Schedule 4 silent fields remain null, not absent or defaulted.
+  - `test_db_enum_constraints_enforced`: Invalid dimension rejected at DB level.
+  - `test_db_range_constraints_enforced`: Negative algorithmic_certainty rejected at DB level.
+- Verification: `pytest ...test_evidence_persistence_roundtrip.py` → 7/7 passed (201.46s).
+- Suite: TS-INT-DB-EVI-SHADOW-001.
+- NOT connected to Celery, NOT read by Coherence Engine, NOT touching scoring.
 
 ### TASK-BCK-075 — Alembic split-head startup repair
 
@@ -157,7 +275,6 @@
 - 2026-05-25 completion: `GET /api/v1/projects/{project_id}/wbs` now uses the already-computed procurement WBS tree, returns root items with recursive `children`, includes a `coverage` summary (`total_items`, budget/date/alert counts, completion average), preserves `alerts: []`, and keeps `total_items` for legacy clients.
 - Verification: RED `pytest apps/api/tests/projects/test_projects_router.py::TestBulkWBSCompatibilityEndpoint::test_bulk_create_wbs_items_are_visible_from_wbs_read_endpoint -vv -q` failed with missing `coverage`; GREEN targeted test passed, then `pytest apps/api/tests/projects/test_projects_router.py::TestBulkWBSCompatibilityEndpoint apps/api/tests/modules/wbs/adapters/test_wbs_http_dependencies.py -q` passed `3/3`. Full `apps/api/tests/projects/test_projects_router.py -q` timed out after 244s before producing a result.
 
-
 ### TASK-BCK-068 — RAG answer completion after provider credit
 
 - Live finding: after OpenAI credit was added, `/api/v1/projects/{project_id}/rag/answer` moved past embeddings and failed on `match_documents(uuid, uuid, vector, unknown)` because the running database only exposes `match_documents(project_id uuid, embedding vector, match_count integer)`.
@@ -178,20 +295,17 @@
   4. if no deterministic answer exists, convert generation failure to `RagProviderUnavailableError` so the router returns controlled retryable `503`.
 - Live proof: `POST /api/v1/projects/25916ab2-03a3-4df5-bf5f-1f8dde07fb8c/rag/answer` returned `200` with `Transformador 100 MVA; Transformador 25/31.5 MVA.` and schedule sources.
 
-
 ### TASK-BCK-070 — Contract clauses missing from RAG chunks
 
 - Live finding: `POST /api/v1/projects/25916ab2-03a3-4df5-bf5f-1f8dde07fb8c/rag/answer` with `waht could be the penalty` returned `200` but all five sources were `document_type=schedule`. Database inspection showed only schedule chunks in `document_chunks`; contract `f6543818-b7a6-4357-8f48-43238a4f8a65` was parsed and had 210 `clauses` rows but zero RAG chunks.
 - Repair shape: extend `SqlAlchemyRagIngestionService` payload normalization beyond `text_blocks` and `schedule` to include parsed `clauses` plus generic `full_text`/`text`/`raw_text` fallbacks.
 - Verification: `pytest apps/api/tests/unit/adapters/documents/test_composite_rag.py::TestRagIngestionServiceAdvanced -q` -> `4 passed`. Live Swagger verification remains open until the API is restarted and the contract is reparsed/reindexed.
 
-
 ### TASK-BCK-071 — RAG penalty answer fallback after contract retrieval
 
 - Live finding: after contract chunks were available, `POST /api/v1/projects/25916ab2-03a3-4df5-bf5f-1f8dde07fb8c/rag/answer` with `what are the liquidated damages or delay penalties for the contractor?` retrieved only `document_type=contract` sources, including `recover damages` and `decrease in the Contract Price`, but the answer still returned `No lo encuentro en el documento.`
 - Repair shape: if the LLM answer is the configured no-answer phrase, run deterministic extractive fallback before returning. Add a contract damages fallback for penalty/delay/damages questions that summarizes retrieved evidence without inventing a percentage.
 - Verification: `pytest apps/api/tests/unit/adapters/documents/test_rag_service_provider_errors.py apps/api/tests/unit/adapters/documents/test_composite_rag.py::TestRagIngestionServiceAdvanced -q` -> `11 passed`. Live Swagger needs API restart before this behavior appears.
-
 
 ### TASK-BCK-072 — Alerts Swagger bearer auth contract
 
@@ -206,15 +320,14 @@
 - Root cause confirmed locally: the running DB is at Alembic head `20260510_0001`, while code already expects direct `documents.tenant_id` and migration `20260517_0002_harden_documents_clauses_chunks_rls.py` adds/backfills that column.
 - Resolution: applied pending migrations through `20260517_0002`, verified `documents.tenant_id` exists, and the same Swagger schedule upload returned `202` with document `f04d4f22-684f-4874-b93b-dc5436ef720b`.
 
-### TASK-BCK-062 — Real schedule workbook rejected by brittle Excel parser
+### TASK-BCK-062 — Real schedule workbook rejected by brittle Excel parser ✅ DONE 2026-06-04
 
+- `[x] Verified 2026-06-04` — `ExcelFileParser._find_schedule_headers` now scans all rows (not just row 1) and accepts Spanish aliases (`actividad`/`inicio`/`fin`/`duración (días)`). Suite `TS-UD-DOC-XLS-001` (`test_parse_schedule_discovers_spanish_header_row_after_title_block`) covers the exact `Cronograma.xlsx` scenario with title block + Spanish header at row 4. 9/9 tests green. Backlog status was never updated after the fix landed.
 - Live finding: `POST /api/v1/documents/{document_id}/parse` failed on uploaded schedule `Cronograma.xlsx`.
 - Actual workbook shape: row 1 is a merged title block; the real table header is row 10 with Spanish labels `ID`, `WBS`, `Actividad`, `Duración (días)`, `Inicio`, `Fin`, `Predecesoras`, `Recursos clave`.
 - Current parser limitation: it only inspects row 1 and only accepts English `task`, `start date`, `end date`.
 - Product implication: the schedule lane is not yet credible for real construction files; Phase 1 cannot honestly mark schedule analysis green until this parser accepts realistic workbooks and reports format issues as controlled validation failures.
-- Follow-up discovered during live verification: `TASK-BCK-063` is needed because successful parse currently updates status but leaves `parsed_at` null, which weakens downstream history/evidence integrity.
-  2. the route summary says “Get Project WBS Tree” and promises “Hierarchical WBS tree with children”;
-  3. implementation calls `GetWBSTreeUseCase(...)` but discards that result, then returns `ListWBSItemsUseCase(...)` instead.
+- Follow-up discovered during live verification: `TASK-BCK-063` is needed because successful parse currently updates status but leaves `parsed_at` null, which weakens downstream history/evidence integrity. 2. the route summary says “Get Project WBS Tree” and promises “Hierarchical WBS tree with children”; 3. implementation calls `GetWBSTreeUseCase(...)` but discards that result, then returns `ListWBSItemsUseCase(...)` instead.
 - Acceptance:
   1. either return the documented tree + coverage shape, or change the public schema/docs so they truthfully describe a flat list;
   2. no duplicate `/wbs` contracts should compete for the same path;
@@ -372,62 +485,63 @@
 
 ## 2. Completed Task IDs (summary)
 
-| Task ID        | Description                                              | Completed     |
-| -------------- | -------------------------------------------------------- | ------------- |
-| `TASK-BCK-001` | Dependencies injected via FastAPI / service constructors | 2026-04-04    |
-| `TASK-BCK-002` | Retire legacy `app/dashboard/`                           | 2026-02-19    |
-| `TASK-BCK-003` | Remove `_Default*Service` dummy implementations          | 2026-02-19    |
-| `TASK-BCK-004` | LangGraph nodes wrap existing use cases                  | 2026-02-19    |
-| `TASK-BCK-005` | HITL real service implementation                         | 2026-02-19    |
-| `TASK-BCK-006` | Verifier produces JSON for dashboarding                  | 2026-04-04    |
-| `TASK-BCK-007` | Fix Alembic WBS uniqueness migration                     | 2026-04-04    |
-| `TASK-BCK-008` | Repair clause-embeddings Alembic revision chain          | 2026-04-04    |
-| `TASK-BCK-009` | Fix Railway LangGraph checkpointer psycopg regression    | 2026-04-04    |
-| `TASK-BCK-010` | Remove internal constructor fallback wiring              | 2026-02-19    |
-| `TASK-BCK-011` | dashboard→app/(app)/ migration plan                      | 2026-04-01    |
-| `TASK-BCK-012` | Canonical route parity under app/(app)/                  | 2026-04-01    |
-| `TASK-BCK-013` | Preserve /dashboard compatibility                        | 2026-04-01    |
-| `TASK-BCK-014` | Retire app/dashboard/                                    | 2026-04-01    |
-| `TASK-BCK-015` | Migrate Playwright tests off /dashboard/ paths           | 2026-04-01    |
-| `TASK-BCK-016` | Replace canonical route re-exports                       | 2026-04-01    |
-| `TASK-BCK-017` | OpenSpec follow-up change creation support               | 2026-04-04    |
-| `TASK-BCK-018` | AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY config           | 2026-04-07    |
-| `TASK-BCK-019` | Prevent Clerk personal-tenant collisions                 | 2026-04-04    |
-| `TASK-BCK-020` | Reconcile document adapter contract quality issues       | 2026-05-08    |
-| `TASK-BCK-021` | Supabase RLS, composite indexes, pg_stat_statements      | 2026-04-03    |
-| `TASK-BCK-022` | Wire TriggerDocumentAnalysisUseCase to Celery            | 2026-04-05    |
-| `TASK-BCK-023` | Document update re-trigger flow                          | 2026-04-06    |
-| `TASK-BCK-024` | HITL workflow resume mechanism after approval            | 2026-04-06    |
-| `TASK-BCK-025` | Real notification delivery (email/Slack/webhook)         | 2026-04-06    |
-| `TASK-BCK-026` | Unify AlertGenerator with pipeline save_to_db_node       | 2026-04-06    |
-| `TASK-BCK-027` | Reconcile two orchestration systems (deleted unused)     | 2026-04-06    |
-| `TASK-BCK-028` | E2E tests for document→LangChain→alerts flow             | 2026-04-06    |
-| `TASK-BCK-029` | WBS API endpoint with nested set model                   | 2026-04-06    |
-| `TASK-BCK-030` | Authenticated test fixtures for HITL resume tests        | 2026-04-06    |
-| `TASK-BCK-031` | LangGraph checkpoint restoration for HITL resume         | 2026-04-06    |
-| `TASK-BCK-032` | Monitoring/metrics for workflow resumption               | 2026-04-21    |
-| `TASK-BCK-033` | HITL resume API in OpenAPI spec                          | 2026-04-21    |
-| `TASK-BCK-035` | Fix duplicate index in Alert model (DuplicateTableError) | 2026-04-06    |
-| `TASK-BCK-036` | Fix syntax error in monitoring.py:175                    | 2026-04-06    |
-| `TASK-BCK-037` | Update conftest.py for all security models               | 2026-04-06    |
-| `TASK-BCK-038` | Implement AIUsageLogORM with schema parity               | 2026-04-06    |
-| `TASK-BCK-039` | Gate 4 traceability: sync AuditLogORM                    | 2026-04-06    |
-| `TASK-BCK-040` | Ruff linting debt resolution (257→0 violations)          | 2026-05-08    |
-| `TASK-BCK-041` | Ruff ARG audit — tenant_id/user_id review                | 2026-05-08    |
-| `TASK-BCK-042` | DLQ admin endpoints (GET+POST /api/v1/admin/dlq)         | 2026-04-27    |
-| `TASK-BCK-043` | WBS integration tests relocated to tests/integration/    | 2026-04-21    |
-| `TASK-BCK-044` | Flaky SLA calculator test fixed with freezegun           | 2026-04-21    |
-| `TASK-BCK-045` | Railway alerts import crash (ModuleNotFoundError)        | 2026-04-10    |
-| `TASK-BCK-046` | Project status update contract fix                       | 2026-04-11    |
-| `TASK-BCK-047` | Document reprocess and status mapping fix                | 2026-04-11    |
-| `TASK-BCK-048` | Production alerts route + upload CORS parity             | 2026-04-11    |
-| `TASK-BCK-049` | Direct upload Clerk token + error CORS fix               | 2026-04-11    |
-| `TASK-BCK-051` | Production alerts/stakeholders 500 triage              | Blocked 2026-05-25 - production log access |
-| `TASK-BCK-052` | Analysis graph parallel state merge fix                | 2026-05-17    |
-| `TASK-BCK-053` | Fresh analysis checkpoint isolation                    | 2026-05-17    |
-| `TASK-BCK-054` | Coherence tracing contract + fail-open telemetry       | 2026-05-17    |
-| `TASK-BCK-055` | Coherence structured extraction layer                  | 2026-05-17    |
-| `TASK-BCK-056` | AnthropicWrapper anonymizer API mismatch fix           | 2026-05-17    |
-| `TASK-BCK-057` | Category-targeted RAG retrieval (6-category SQL)       | 2026-05-17    |
-| `TASK-BCK-058` | DET-TIM-STATUS false positive guard                    | 2026-05-17    |
-| `TASK-BCK-059` | DET-TEC-SPEC / DET-QUA-* category guards               | 2026-05-17    |
+| Task ID         | Description                                              | Completed                                  |
+| --------------- | -------------------------------------------------------- | ------------------------------------------ |
+| `TASK-BCK-001`  | Dependencies injected via FastAPI / service constructors | 2026-04-04                                 |
+| `TASK-BCK-002`  | Retire legacy `app/dashboard/`                           | 2026-02-19                                 |
+| `TASK-BCK-003`  | Remove `_Default*Service` dummy implementations          | 2026-02-19                                 |
+| `TASK-BCK-004`  | LangGraph nodes wrap existing use cases                  | 2026-02-19                                 |
+| `TASK-BCK-005`  | HITL real service implementation                         | 2026-02-19                                 |
+| `TASK-BCK-006`  | Verifier produces JSON for dashboarding                  | 2026-04-04                                 |
+| `TASK-BCK-007`  | Fix Alembic WBS uniqueness migration                     | 2026-04-04                                 |
+| `TASK-BCK-008`  | Repair clause-embeddings Alembic revision chain          | 2026-04-04                                 |
+| `TASK-BCK-009`  | Fix Railway LangGraph checkpointer psycopg regression    | 2026-04-04                                 |
+| `TASK-BCK-010`  | Remove internal constructor fallback wiring              | 2026-02-19                                 |
+| `TASK-BCK-011`  | dashboard→app/(app)/ migration plan                      | 2026-04-01                                 |
+| `TASK-BCK-012`  | Canonical route parity under app/(app)/                  | 2026-04-01                                 |
+| `TASK-BCK-013`  | Preserve /dashboard compatibility                        | 2026-04-01                                 |
+| `TASK-BCK-014`  | Retire app/dashboard/                                    | 2026-04-01                                 |
+| `TASK-BCK-015`  | Migrate Playwright tests off /dashboard/ paths           | 2026-04-01                                 |
+| `TASK-BCK-016`  | Replace canonical route re-exports                       | 2026-04-01                                 |
+| `TASK-BCK-017`  | OpenSpec follow-up change creation support               | 2026-04-04                                 |
+| `TASK-BCK-018`  | AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY config           | 2026-04-07                                 |
+| `TASK-BCK-019`  | Prevent Clerk personal-tenant collisions                 | 2026-04-04                                 |
+| `TASK-BCK-020`  | Reconcile document adapter contract quality issues       | 2026-05-08                                 |
+| `TASK-BCK-021`  | Supabase RLS, composite indexes, pg_stat_statements      | 2026-04-03                                 |
+| `TASK-BCK-022`  | Wire TriggerDocumentAnalysisUseCase to Celery            | 2026-04-05                                 |
+| `TASK-BCK-023`  | Document update re-trigger flow                          | 2026-04-06                                 |
+| `TASK-BCK-024`  | HITL workflow resume mechanism after approval            | 2026-04-06                                 |
+| `TASK-BCK-025`  | Real notification delivery (email/Slack/webhook)         | 2026-04-06                                 |
+| `TASK-BCK-026`  | Unify AlertGenerator with pipeline save_to_db_node       | 2026-04-06                                 |
+| `TASK-BCK-027`  | Reconcile two orchestration systems (deleted unused)     | 2026-04-06                                 |
+| `TASK-BCK-028`  | E2E tests for document→LangChain→alerts flow             | 2026-04-06                                 |
+| `TASK-BCK-029`  | WBS API endpoint with nested set model                   | 2026-04-06                                 |
+| `TASK-BCK-030`  | Authenticated test fixtures for HITL resume tests        | 2026-04-06                                 |
+| `TASK-BCK-031`  | LangGraph checkpoint restoration for HITL resume         | 2026-04-06                                 |
+| `TASK-BCK-032`  | Monitoring/metrics for workflow resumption               | 2026-04-21                                 |
+| `TASK-BCK-033`  | HITL resume API in OpenAPI spec                          | 2026-04-21                                 |
+| `TASK-BCK-035`  | Fix duplicate index in Alert model (DuplicateTableError) | 2026-04-06                                 |
+| `TASK-BCK-036`  | Fix syntax error in monitoring.py:175                    | 2026-04-06                                 |
+| `TASK-BCK-037`  | Update conftest.py for all security models               | 2026-04-06                                 |
+| `TASK-BCK-038`  | Implement AIUsageLogORM with schema parity               | 2026-04-06                                 |
+| `TASK-BCK-039`  | Gate 4 traceability: sync AuditLogORM                    | 2026-04-06                                 |
+| `TASK-BCK-040`  | Ruff linting debt resolution (257→0 violations)          | 2026-05-08                                 |
+| `TASK-BCK-041`  | Ruff ARG audit — tenant_id/user_id review                | 2026-05-08                                 |
+| `TASK-BCK-042`  | DLQ admin endpoints (GET+POST /api/v1/admin/dlq)         | 2026-04-27                                 |
+| `TASK-BCK-043`  | WBS integration tests relocated to tests/integration/    | 2026-04-21                                 |
+| `TASK-BCK-044`  | Flaky SLA calculator test fixed with freezegun           | 2026-04-21                                 |
+| `TASK-BCK-045`  | Railway alerts import crash (ModuleNotFoundError)        | 2026-04-10                                 |
+| `TASK-BCK-046`  | Project status update contract fix                       | 2026-04-11                                 |
+| `TASK-BCK-047`  | Document reprocess and status mapping fix                | 2026-04-11                                 |
+| `TASK-BCK-048`  | Production alerts route + upload CORS parity             | 2026-04-11                                 |
+| `TASK-BCK-049`  | Direct upload Clerk token + error CORS fix               | 2026-04-11                                 |
+| `TASK-BCK-051`  | Production alerts/stakeholders 500 triage                | Blocked 2026-05-25 - production log access |
+| `TASK-BCK-052`  | Analysis graph parallel state merge fix                  | 2026-05-17                                 |
+| `TASK-BCK-053`  | Fresh analysis checkpoint isolation                      | 2026-05-17                                 |
+| `TASK-BCK-054`  | Coherence tracing contract + fail-open telemetry         | 2026-05-17                                 |
+| `TASK-BCK-055`  | Coherence structured extraction layer                    | 2026-05-17                                 |
+| `TASK-BCK-056`  | AnthropicWrapper anonymizer API mismatch fix             | 2026-05-17                                 |
+| `TASK-BCK-057`  | Category-targeted RAG retrieval (6-category SQL)         | 2026-05-17                                 |
+| `TASK-BCK-058`  | DET-TIM-STATUS false positive guard                      | 2026-05-17                                 |
+| `TASK-BCK-059`  | DET-TEC-SPEC / DET-QUA-\* category guards                | 2026-05-17                                 |
+| `TASK-CE-F2-01` | LEGAL pilot extraction adapter                           | 2026-05-29                                 |

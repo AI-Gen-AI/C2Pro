@@ -105,15 +105,15 @@ def get_resolve_alert_use_case(
 
 
 def get_bulk_review_use_case(
-    repository: IAlertRepository = Depends(get_alert_repository),
+    review_use_case: ReviewAlertUseCase = Depends(get_review_alert_use_case),
 ) -> BulkReviewAlertsUseCase:
-    return BulkReviewAlertsUseCase(repository=repository)
+    return BulkReviewAlertsUseCase(review_use_case=review_use_case)
 
 
 def get_bulk_resolve_use_case(
-    repository: IAlertRepository = Depends(get_alert_repository),
+    resolve_use_case: ResolveAlertUseCase = Depends(get_resolve_alert_use_case),
 ) -> BulkResolveAlertsUseCase:
-    return BulkResolveAlertsUseCase(repository=repository)
+    return BulkResolveAlertsUseCase(resolve_use_case=resolve_use_case)
 
 
 def get_get_settings_use_case(
@@ -306,13 +306,14 @@ async def resolve_alert(
     alert_id: UUID,
     request: ResolveAlertRequest,
     tenant_id: CurrentTenantId,
+    user_id: CurrentUserId,
     resolve_use_case: ResolveAlertUseCase = Depends(get_resolve_alert_use_case),
 ) -> AlertResponse:
     try:
         return await resolve_use_case.execute(
             alert_id=alert_id,
             tenant_id=tenant_id,
-            user_id=request.resolved_by,
+            user_id=request.resolved_by or user_id,
             resolution=request.resolution,
             root_cause=request.root_cause,
         )
@@ -328,12 +329,13 @@ async def resolve_alert(
 async def bulk_resolve_alerts(
     request: BulkResolveRequest,
     tenant_id: CurrentTenantId,
+    user_id: CurrentUserId,
     use_case: BulkResolveAlertsUseCase = Depends(get_bulk_resolve_use_case),
 ) -> BulkOperationResponse:
     return await use_case.execute(
         alert_ids=request.alert_ids,
         tenant_id=tenant_id,
-        user_id=tenant_id,  # System-level or tenant-level resolution
+        user_id=user_id,
         resolution=request.resolution,
         root_cause=request.root_cause,
     )

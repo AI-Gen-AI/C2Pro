@@ -21,6 +21,12 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from src.coherence.application.services.category_router import (
+    CategoryRouter,
+    ChunkSignal,
+)
+from src.coherence.category_registry import CanonicalCategory
+from src.coherence.domain.segments import Segment, SegmentSource, SegmentType
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 
 from ..models import Clause, EnrichedCoherenceResult, FindingSignal
@@ -181,6 +187,71 @@ def _fan_in_node(state: CoherenceGraphState) -> dict[str, Any]:
     return {}  # No state changes, just synchronization
 
 
+def _seed_coverage_from_category_router(clauses: list[Clause]) -> dict[str, bool]:
+    """TS-IA-COH-ROUTING-001 — Convert router relevance into coherence coverage.
+
+    Routing is intentionally separate from scoring: this helper only marks
+    categories as assessed. It does not create FindingSignal objects. The
+    `SCHEDULE -> TIME` boundary mapping is explicit here because the registry
+    uses SCHEDULE while the current coherence scoring enum uses TIME.
+    """
+    if not clauses:
+        return {}
+
+    try:
+        router = CategoryRouter.from_registry()
+    except Exception as exc:  # noqa: BLE001 — routing must fail open
+        logger.warning("category_router_unavailable: %s", exc)
+        return {}
+
+    coverage: dict[str, bool] = {}
+    for clause in clauses:
+        doc_type = str(clause.data.get("document_type") or "other")
+        segment_type = _segment_type_for_doc_type(doc_type)
+        segment = Segment(
+            segment_type=segment_type,
+            ordinal=0,
+            source=SegmentSource.FILE,
+            start_offset=0,
+            end_offset=len(clause.text),
+        )
+        # BCK-064: normalize domain doc_type → registry prior key before routing.
+        registry_doc_type = _DB_DOC_TYPE_TO_REGISTRY.get(doc_type, doc_type)
+        result = router.route(
+            chunks=[
+                ChunkSignal(
+                    chunk_id=clause.id,
+                    text=clause.text,
+                )
+            ],
+            doc_type=registry_doc_type,
+            segments=[segment],
+        )
+        for category in result.relevant_categories():
+            mapped = _ROUTER_TO_COHERENCE_CATEGORY[category]
+            coverage[mapped] = True
+
+    return coverage
+
+
+def _segment_type_for_doc_type(doc_type: str) -> SegmentType:
+    """Map document type labels into the routing segment enum."""
+    normalized = doc_type.strip().lower()
+    if normalized == "contract":
+        return SegmentType.LEGAL
+    if normalized == "budget_boq" or normalized == "budget":
+        return SegmentType.BUDGET
+    if normalized == "schedule_gantt" or normalized == "schedule":
+        return SegmentType.SCHEDULE
+    if normalized == "technical_spec" or normalized == "technical":
+        return SegmentType.TECHNICAL
+    if normalized == "quality":
+        return SegmentType.QUALITY
+    if normalized == "scope":
+        return SegmentType.SCOPE
+    return SegmentType.MIXED
+
+
 # =============================================================================
 # COMPILED SUBGRAPH
 # =============================================================================
@@ -244,11 +315,14 @@ def evaluate_coherence(
         >>> result = evaluate_coherence(clauses)
         >>> print(f"Score: {result.overall_score}")
     """
+    router_coverage = _seed_coverage_from_category_router(clauses)
+
     # Create initial state
     initial_state = CoherenceGraphState(
         project_id=project_id,
         clauses=clauses,
         config=config or EvaluationConfig(),
+        coverage_map=router_coverage,
     )
 
     # Get compiled graph
@@ -282,10 +356,21 @@ async def evaluate_coherence_async(
         clauses: List of Clause objects to evaluate
         project_id: Optional project identifier
         config: Optional evaluation configuration
+        seed_signals: Optional list of pre-built FindingSignals to inject
+            as deterministic_signals before evaluation (used by the
+            risk→signal bridge for LLM-extracted risks).
+        seed_coverage: Optional coverage map seed to pre-mark categories
+            as assessed before evaluation (used by the risk→signal bridge).
 
     Returns:
         EnrichedCoherenceResult with score, alerts, and diagnostics
     """
+    router_coverage = _seed_coverage_from_category_router(clauses)
+    coverage_seed = dict(router_coverage)
+    if seed_coverage:
+        for category, assessed in seed_coverage.items():
+            coverage_seed[category] = coverage_seed.get(category, False) or assessed
+
     # Create initial state
     initial_state = CoherenceGraphState(
         project_id=project_id,
