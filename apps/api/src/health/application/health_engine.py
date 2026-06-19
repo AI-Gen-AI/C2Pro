@@ -40,13 +40,14 @@ def assemble_health_vector(
             )
         composite_band = band_for_score(composite_score)
 
-    _ = composite_trend(composite_score, prior_composite)
+    trend = composite_trend(composite_score, prior_composite)
     return HealthVector(
         project_id=project_id,
         tenant_id=tenant_id,
         dimensions=signals,
         composite_score=composite_score,
         composite_band=composite_band,
+        composite_trend=trend,
         computed_at=datetime.now(UTC).replace(tzinfo=None),
     )
 

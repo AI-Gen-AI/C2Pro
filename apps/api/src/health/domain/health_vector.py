@@ -110,6 +110,7 @@ class HealthVector(BaseModel):
     dimensions: list[HealthSignal]
     composite_score: float | None = Field(default=None, ge=0.0, le=100.0)
     composite_band: HealthBand = HealthBand.UNKNOWN
+    composite_trend: HealthTrend = HealthTrend.UNKNOWN
     computed_at: datetime
 
 

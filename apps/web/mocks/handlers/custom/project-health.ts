@@ -27,6 +27,7 @@ export function mockProjectHealthVector(
     })),
     composite_score: null,
     composite_band: "unknown",
+    composite_trend: "unknown",
     computed_at: new Date(0).toISOString(),
   };
 }

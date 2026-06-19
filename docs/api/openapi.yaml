@@ -6185,6 +6185,9 @@ components:
         composite_band:
           $ref: '#/components/schemas/HealthBand'
           default: unknown
+        composite_trend:
+          $ref: '#/components/schemas/HealthTrend'
+          default: unknown
         computed_at:
           type: string
           format: date-time

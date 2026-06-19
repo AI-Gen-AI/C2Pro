@@ -68,6 +68,7 @@ def test_composite_is_confidence_weighted_over_non_null_dimensions_only() -> Non
 
     assert vector.composite_score == pytest.approx(75)
     assert vector.composite_band is HealthBand.WATCH
+    assert vector.composite_trend is HealthTrend.UNKNOWN
     assert [signal.dimension for signal in vector.dimensions] == [
         HealthDimension.CONTRACT,
         HealthDimension.RISK,
@@ -109,3 +110,26 @@ def test_composite_trend_from_prior_snapshot_score() -> None:
     assert composite_trend(current=81, prior=80) is HealthTrend.UP
     assert composite_trend(current=79, prior=80) is HealthTrend.DOWN
     assert composite_trend(current=80.004, prior=80) is HealthTrend.FLAT
+
+
+@pytest.mark.parametrize(
+    ("prior", "expected"),
+    [
+        (70, HealthTrend.UP),
+        (90, HealthTrend.DOWN),
+        (80.004, HealthTrend.FLAT),
+        (None, HealthTrend.UNKNOWN),
+    ],
+)
+def test_assemble_health_vector_surfaces_composite_trend(
+    prior: float | None,
+    expected: HealthTrend,
+) -> None:
+    vector = assemble_health_vector(
+        uuid4(),
+        uuid4(),
+        signals=[_scored(HealthDimension.CONTRACT, 80, 1.0, "contract")],
+        prior_composite=prior,
+    )
+
+    assert vector.composite_trend is expected

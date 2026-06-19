@@ -68,6 +68,7 @@ def _snapshot(project_id: UUID, tenant_id: UUID, composite_score: float) -> Proj
             ],
             "composite_score": composite_score,
             "composite_band": "healthy",
+            "composite_trend": "up",
             "computed_at": now.isoformat(),
         },
         created_at=now,
@@ -103,6 +104,7 @@ async def test_project_health_returns_latest_snapshot_vector() -> None:
     assert body["project_id"] == str(project_id)
     assert body["tenant_id"] == str(tenant_id)
     assert body["composite_score"] == 88
+    assert body["composite_trend"] == "up"
 
 
 @pytest.mark.asyncio
@@ -120,6 +122,7 @@ async def test_project_health_is_tenant_scoped() -> None:
     assert body["tenant_id"] == str(tenant_id)
     assert body["composite_score"] is None
     assert body["composite_band"] == HealthBand.UNKNOWN.value
+    assert body["composite_trend"] == "unknown"
 
 
 @pytest.mark.asyncio

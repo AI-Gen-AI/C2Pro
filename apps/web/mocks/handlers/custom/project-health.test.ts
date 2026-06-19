@@ -16,6 +16,7 @@ describe("project health MSW contract", () => {
     expect(vector.tenant_id).toBe("tenant-1");
     expect(vector.composite_score).toBeNull();
     expect(vector.composite_band).toBe("unknown");
+    expect(vector.composite_trend).toBe("unknown");
     expect(vector.dimensions.every((dimension) => dimension.score === null)).toBe(
       true,
     );

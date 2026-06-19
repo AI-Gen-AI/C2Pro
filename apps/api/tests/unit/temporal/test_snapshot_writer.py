@@ -115,6 +115,7 @@ async def test_snapshot_writer_assembles_counts_totals_and_real_health_vector() 
     assert snapshot.health_vector["tenant_id"] == str(tenant_id)
     assert snapshot.health_vector["composite_score"] is not None
     assert snapshot.health_vector["composite_band"] != "unknown"
+    assert snapshot.health_vector["composite_trend"] == "unknown"
     dimensions = {item["dimension"]: item for item in snapshot.health_vector["dimensions"]}
     assert dimensions["risk"]["score"] is not None
     assert dimensions["contract"]["score"] is not None
@@ -131,6 +132,37 @@ async def test_snapshot_writer_assembles_counts_totals_and_real_health_vector() 
     }
     assert snapshot.totals == {"budget_amount": 15.0, "budget_amount_by_currency": {"EUR": 15.0}}
     assert snapshot_repo.snapshots == [snapshot]
+
+
+@pytest.mark.asyncio
+async def test_snapshot_writer_persists_composite_trend_from_prior_snapshot() -> None:
+    from src.temporal.application.snapshot_writer import SnapshotWriter
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    prior = ProjectSnapshot(
+        snapshot_id=uuid4(),
+        project_id=project_id,
+        tenant_id=tenant_id,
+        captured_at=datetime(2026, 6, 15, 9, 0, 0),
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+        health_vector={"composite_score": 10.0},
+        created_at=datetime(2026, 6, 15, 9, 0, 0),
+    )
+    snapshot_repo = _SnapshotRepo([prior])
+    writer = SnapshotWriter(
+        project_state_repository=_ProjectStateRepo(_state(project_id, tenant_id)),
+        snapshot_repository=snapshot_repo,
+        clock=_now,
+    )
+
+    snapshot = await writer.write_snapshot(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.REVISION_INGESTED,
+    )
+
+    assert snapshot.health_vector["composite_trend"] == "up"
 
 
 @pytest.mark.asyncio

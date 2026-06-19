@@ -42,5 +42,6 @@ export interface HealthVector {
   dimensions: HealthSignal[];
   composite_score: number | null;
   composite_band: HealthBand;
+  composite_trend: HealthTrend;
   computed_at: string;
 }
