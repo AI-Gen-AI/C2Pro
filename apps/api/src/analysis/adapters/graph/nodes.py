@@ -45,6 +45,19 @@ _risk_rules = DeterministicRiskRulesService()
 _wbs_rules = DeterministicWbsRulesService()
 _critique_service = CritiqueExtractionService()
 logger = structlog.get_logger()
+MIN_EXTRACTABLE_TEXT_CHARS = 8
+
+
+def _meaningful_text_length(text: str | None) -> int:
+    return len("".join((text or "").split()))
+
+
+def _has_extractable_text(text: str | None) -> bool:
+    return _meaningful_text_length(text) >= MIN_EXTRACTABLE_TEXT_CHARS
+
+
+def _insufficient_extractable_text_message() -> str:
+    return "No extractable text — document may be scanned; OCR required"
 
 
 def _tool_error_detail(exc: Exception, *, max_length: int = 300) -> str:
@@ -135,6 +148,10 @@ def _map_risk_severity(item: dict[str, Any]):
 
 async def router_node(state: ProjectState) -> ProjectState:
     """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
+    if not _has_extractable_text(state.get("document_text")):
+        state["doc_type"] = "insufficient_extractable_text"
+        state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
+        return state
     if state.get("doc_type") in DOC_TYPES:
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))

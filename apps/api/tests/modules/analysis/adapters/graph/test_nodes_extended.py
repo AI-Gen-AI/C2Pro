@@ -55,6 +55,21 @@ def _make_state(**overrides) -> ProjectState:
 
 class TestDocumentIngestionNode:
     @pytest.mark.asyncio
+    async def test_empty_text_short_circuits_as_insufficient_extractable_text(self):
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-NO-TEXT-001."""
+        from src.analysis.adapters.graph.nodes_extended import document_ingestion_node
+
+        result = await document_ingestion_node(_make_state(document_text=" \n\t "))
+
+        assert result["document_parsed"] is False
+        assert result["document_category"] == "insufficient_extractable_text"
+        assert any(
+            "No extractable text" in message.content
+            and "OCR required" in message.content
+            for message in result["messages"]
+        )
+
+    @pytest.mark.asyncio
     async def test_classifies_legal_document(self):
         from src.analysis.adapters.graph.nodes_extended import document_ingestion_node
 

@@ -40,6 +40,19 @@ if TYPE_CHECKING:
 # ── Domain service instances (stateless, reusable) ──────────────────────────
 
 _document_classifier = DocumentCategoryClassifier()
+MIN_EXTRACTABLE_TEXT_CHARS = 8
+
+
+def _meaningful_text_length(text: str | None) -> int:
+    return len("".join((text or "").split()))
+
+
+def _has_extractable_text(text: str | None) -> bool:
+    return _meaningful_text_length(text) >= MIN_EXTRACTABLE_TEXT_CHARS
+
+
+def _insufficient_extractable_text_message() -> str:
+    return "No extractable text — document may be scanned; OCR required"
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +63,19 @@ _document_classifier = DocumentCategoryClassifier()
 async def document_ingestion_node(state: ProjectState) -> ProjectState:
     """N1 — Parse the document and classify its coherence category."""
     text = state.get("anonymized_text") or state["document_text"]
+    if not _has_extractable_text(text):
+        state["document_parsed"] = False
+        state["document_category"] = "insufficient_extractable_text"
+        state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
+        logger.warning(
+            "node_document_ingestion_insufficient_extractable_text",
+            project_id=state.get("project_id"),
+            document_id=state.get("document_id"),
+            meaningful_chars=_meaningful_text_length(text),
+            threshold=MIN_EXTRACTABLE_TEXT_CHARS,
+        )
+        return state
+
     category = _document_classifier.classify(text)
 
     state["document_parsed"] = True

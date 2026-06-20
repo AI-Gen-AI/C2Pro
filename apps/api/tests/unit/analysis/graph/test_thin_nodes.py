@@ -97,6 +97,25 @@ class _FakeHitlService:
 
 class TestRouterNodeThinDelegation:
     @pytest.mark.asyncio
+    async def test_empty_text_routes_to_insufficient_extractable_text(self, monkeypatch) -> None:
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-NO-TEXT-001."""
+        from src.analysis.adapters.graph import nodes
+
+        def _explode(*_a, **_kw):
+            raise AssertionError("get_ai_service called for empty text")
+
+        monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
+
+        result = await nodes.router_node(_make_state(document_text=" \n\t "))
+
+        assert result["doc_type"] == "insufficient_extractable_text"
+        assert any(
+            "No extractable text" in message.content
+            and "OCR required" in message.content
+            for message in result["messages"]
+        )
+
+    @pytest.mark.asyncio
     async def test_uses_existing_doc_type_when_valid(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
