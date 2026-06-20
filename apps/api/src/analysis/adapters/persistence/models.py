@@ -214,6 +214,7 @@ class Alert(Base):
 
     # Content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False)
     recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 

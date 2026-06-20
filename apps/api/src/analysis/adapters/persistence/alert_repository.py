@@ -100,6 +100,7 @@ class SqlAlchemyAlertRepository(AlertRepository):
             category=payload.category,
             rule_id=payload.rule_id,
             title=payload.title,
+            message=payload.description or payload.title,
             description=payload.description,
             recommendation=payload.recommendation,
             source_clause_id=payload.source_clause_id,
