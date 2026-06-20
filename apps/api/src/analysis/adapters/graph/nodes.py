@@ -15,6 +15,7 @@ import os
 from typing import Any
 from uuid import UUID
 
+import structlog
 from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 
@@ -43,6 +44,41 @@ from src.core.database import get_session_with_tenant
 _risk_rules = DeterministicRiskRulesService()
 _wbs_rules = DeterministicWbsRulesService()
 _critique_service = CritiqueExtractionService()
+logger = structlog.get_logger()
+
+
+def _tool_error_detail(exc: Exception, *, max_length: int = 300) -> str:
+    detail = str(exc).replace("\n", " ").strip()
+    if len(detail) > max_length:
+        return f"{detail[:max_length]}..."
+    return detail
+
+
+def _mark_risk_extraction_honest_failure(
+    state: ProjectState,
+    *,
+    reason: str,
+    exc: Exception | None = None,
+    previous_confidence: float | None = None,
+) -> ProjectState:
+    if previous_confidence is not None:
+        state["confidence_score"] = previous_confidence
+    state["extracted_risks"] = []
+    error_type = type(exc).__name__ if exc is not None else None
+    error_detail = _tool_error_detail(exc) if exc is not None else None
+    message = reason
+    if error_type and error_detail:
+        message = f"{reason}; {error_type}: {error_detail}"
+    state["messages"].append(AIMessage(content=message))
+    logger.warning(
+        "risk_extraction_honest_failure",
+        reason=reason,
+        error_type=error_type,
+        error_detail=error_detail,
+        project_id=state.get("project_id"),
+        document_id=state.get("document_id"),
+    )
+    return state
 
 
 # ── Backwards-compatible shims ──────────────────────────────────────────────
@@ -114,17 +150,34 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    """N4 — Extract risks via RiskExtractionTool (AI) or deterministic rules (mock)."""
+    """N4 — Extract risks via RiskExtractionTool, failing honestly on unavailable output."""
+    previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["extracted_risks"] = _risk_rules.extract(state.get("document_text", ""))
-        state["messages"].append(
-            AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks")
+        return _mark_risk_extraction_honest_failure(
+            state,
+            reason="AI risk extraction unavailable in mock mode — no risks extracted",
+            previous_confidence=previous_confidence,
         )
-        return state
 
     from src.core.ai.tools import get_tool
 
-    return await get_tool("risk_extraction", version="1.0")(state)
+    try:
+        result = await get_tool("risk_extraction", version="1.0")(state)
+    except Exception as exc:
+        return _mark_risk_extraction_honest_failure(
+            state,
+            reason="AI risk extraction failed/empty — no risks extracted",
+            exc=exc,
+            previous_confidence=previous_confidence,
+        )
+
+    if not result.get("extracted_risks"):
+        return _mark_risk_extraction_honest_failure(
+            result,
+            reason="AI risk extraction failed/empty — no risks extracted",
+            previous_confidence=previous_confidence,
+        )
+    return result
 
 
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
