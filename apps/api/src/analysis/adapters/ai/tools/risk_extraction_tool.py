@@ -21,6 +21,7 @@ from src.analysis.adapters.ai.agents.risk_extractor import (
     RiskItem,
     RiskProbability,
 )
+from src.analysis.domain.risk_categories import normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, ToolResult, register_tool
@@ -101,7 +102,9 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         logger.info(
             "risk_extraction_parse_diagnostics",
             raw_output_chars=len(ai_response.content or ""),
+            raw_output_sample=(ai_response.content or "")[:600],
             payload_type=type(payload).__name__,
+            payload_keys=list(payload.keys())[:20] if isinstance(payload, dict) else None,
             candidate_item_count=len(items),
             parsed_risk_count=len(risks),
         )
@@ -184,19 +187,15 @@ Identifica:
 
 Para cada riesgo devuelve:
 {
-  "category": "LEGAL|FINANCIAL|SCHEDULE|TECHNICAL|HSE|QUALITY",
   "title": "Título breve del riesgo",
-  "summary": "Resumen corto",
   "description": "Descripción detallada",
-  "probability": "LOW|MEDIUM|HIGH",
-  "impact": "LOW|MEDIUM|HIGH|CRITICAL",
-  "mitigation_suggestion": "Sugerencia de mitigación",
-  "source_quote": "Cita textual del documento",
-  "source_text_snippet": "Fragmento del texto fuente"
+  "category": "LEGAL|FINANCIAL|SCHEDULE|TECHNICAL|HSE|QUALITY",
+  "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+  "source": "Cita textual exacta del documento"
 }
 
-IMPORTANTE: Devuelve SOLO un JSON con formato:
-{"risks": [... array de objetos de riesgo ...]}
+IMPORTANTE: Devuelve SOLO este JSON, sin Markdown, sin texto adicional:
+{"risks":[{"title":"...","description":"...","category":"LEGAL","severity":"HIGH","source":"..."}]}
 """.strip()
 
         user_prompt = f"DOCUMENTO:\n\n{input_data.document_text}"
@@ -238,12 +237,37 @@ IMPORTANTE: Devuelve SOLO un JSON con formato:
 
     def _extract_items(self, payload: Any) -> list[dict[str, Any]]:
         """Extract risk items from payload."""
+        def dict_items(value: Any) -> list[dict[str, Any]]:
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+            if isinstance(value, dict) and self._looks_like_risk_item(value):
+                return [value]
+            return []
+
         if isinstance(payload, dict):
-            raw_items = payload.get("risks")
-            if isinstance(raw_items, list):
-                return [item for item in raw_items if isinstance(item, dict)]
-            if isinstance(raw_items, dict):
-                return [raw_items]
+            for key in (
+                "risks",
+                "risks_identified",
+                "identified_risks",
+                "risk_items",
+                "items",
+                "findings",
+            ):
+                items = dict_items(payload.get(key))
+                if items:
+                    return items
+            nested_data = payload.get("data")
+            if isinstance(nested_data, dict):
+                items = self._extract_items(nested_data)
+                if items:
+                    return items
+            value_items = [
+                value
+                for value in payload.values()
+                if isinstance(value, dict) and self._looks_like_risk_item(value)
+            ]
+            if value_items:
+                return value_items
             return []
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
@@ -251,19 +275,23 @@ IMPORTANTE: Devuelve SOLO un JSON con formato:
 
     def _coerce_risk(self, item: dict[str, Any]) -> RiskItem | None:
         """Coerce dict to RiskItem with validation."""
-        title = self._clean_text(item.get("title"))
+        title = self._first_text(item, "title", "risk", "name")
         summary = self._clean_text(item.get("summary"))
-        description = self._clean_text(item.get("description"))
+        description = self._first_text(item, "description", "detail")
         if not summary and not title and not description:
             return None
 
         mitigation = self._clean_text(item.get("mitigation_suggestion"))
-        source_quote = self._clean_text(item.get("source_quote"))
+        source_quote = self._first_text(item, "source_quote", "source", "quote", "evidence")
         source_text_snippet = self._clean_text(item.get("source_text_snippet"))
 
         category = self._normalize_category(item.get("category"))
-        probability = self._normalize_probability(item.get("probability"))
-        impact = self._normalize_impact(item.get("impact"))
+        probability = self._normalize_probability(
+            item.get("probability") or item.get("likelihood") or item.get("chance")
+        )
+        impact = self._normalize_impact(item.get("impact") or item.get("severity"))
+        if probability is None and item.get("severity"):
+            probability = RiskProbability.MEDIUM
         if category is None or probability is None or impact is None:
             return None
 
@@ -286,15 +314,26 @@ IMPORTANTE: Devuelve SOLO un JSON con formato:
         cleaned = value.strip()
         return cleaned or None
 
+    def _first_text(self, item: dict[str, Any], *keys: str) -> str | None:
+        for key in keys:
+            cleaned = self._clean_text(item.get(key))
+            if cleaned:
+                return cleaned
+        return None
+
+    def _looks_like_risk_item(self, item: dict[str, Any]) -> bool:
+        has_label = any(self._clean_text(item.get(key)) for key in ("title", "risk", "name"))
+        has_detail = any(
+            self._clean_text(item.get(key))
+            for key in ("summary", "description", "detail")
+        )
+        has_category = self._normalize_category(item.get("category")) is not None
+        has_severity = self._normalize_impact(item.get("impact") or item.get("severity")) is not None
+        return has_label or (has_detail and (has_category or has_severity))
+
     def _normalize_category(self, value: Any) -> RiskCategory | None:
         """Normalize category value."""
-        if not isinstance(value, str):
-            return None
-        normalized = value.strip().upper()
-        for candidate in RiskCategory:
-            if candidate.value == normalized:
-                return candidate
-        return None
+        return normalize_category(value if isinstance(value, str) else None)
 
     def _normalize_probability(self, value: Any) -> RiskProbability | None:
         """Normalize probability value."""
@@ -385,21 +424,40 @@ IMPORTANTE: Devuelve SOLO un JSON con formato:
 
     def _extract_json_from_text(self, text: str) -> Any:
         """Extract JSON from text that may contain markdown or other formatting."""
-        # Try to find JSON in code blocks
-        json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if json_match:
+        def parse_candidate(candidate: str) -> Any | None:
+            cleaned = candidate.strip()
+            if not cleaned:
+                return None
             try:
-                return json.loads(json_match.group(1))
+                return json.loads(cleaned)
             except json.JSONDecodeError:
                 pass
+            try:
+                payload, _ = json.JSONDecoder().raw_decode(cleaned)
+                return payload
+            except json.JSONDecodeError:
+                return None
 
-        # Try to find raw JSON
-        json_match = re.search(r"\{.*\}", text, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
+        direct_payload = parse_candidate(text)
+        if direct_payload is not None:
+            return direct_payload
+
+        # Try to find JSON in code blocks
+        for json_match in re.finditer(
+            r"```(?:json)?\s*([\s\S]*?)(?:```|$)",
+            text,
+            re.IGNORECASE,
+        ):
+            payload = parse_candidate(json_match.group(1))
+            if payload is not None:
+                return payload
+
+        # Try to find raw JSON object or array after leading prose/fences.
+        starts = [idx for idx in (text.find("{"), text.find("[")) if idx >= 0]
+        for start in sorted(starts):
+            payload = parse_candidate(text[start:])
+            if payload is not None:
+                return payload
 
         return {}
 
