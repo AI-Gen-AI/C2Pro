@@ -31,6 +31,7 @@ class ProjectState(TypedDict):
     thread_id: str | None
     analysis_id: str | None
     human_approval_required: bool
+    force_full_pipeline: bool
 
     # ── N1: Document Ingestion ──
     document_parsed: bool
