@@ -1,0 +1,228 @@
+# =============================================================================
+# C2Pro — Category Registry (Coherence Score v1.0)
+# =============================================================================
+# Fuente de verdad del routing de categorías. Se carga y valida en Pydantic v2
+# al arranque (adaptador hexagonal).
+#
+# IMPORTANTE:
+#   - Los `prototypes` son TEXTO SEMILLA para construir los centroides. NO son
+#     vectores. Los embeddings se precalculan en build step y se cachean en
+#     pgvector con clave (category, embedding_model, score_version).
+#   - `lexicon` está DEGRADADO a "una señal más" (peso bajo), no es un gate.
+#   - Contenido curado v1 con dominio EPC/industrial (ES+EN). Es un punto de
+#     partida sólido, NO definitivo: validar y extender contra el golden corpus.
+#   - Ubicación sugerida en el repo: config/category_registry.yaml
+# =============================================================================
+
+version:
+  registry_version: "1.0.0"
+  score_version: 7
+  embedding_model: "text-embedding-3-small"          # Aligned with 1536-dim pgvector constraint
+  cutoff_date: "2026-06-01"
+  languages: [es, en]
+
+defaults:
+  weights:
+    embedding: 0.60
+    structural: 0.25
+    lexicon: 0.15                    # fijos en v1.0; hook de calibración para v1.1+
+  thresholds:
+    escalate_low: 0.35               # < low  → no escala a LLM
+    escalate_high: 0.65              # > high → no escala a LLM (relevancia clara)
+    insufficient_evidence: 0.20      # < este valor y sin prior → InsufficientEvidence
+
+# -----------------------------------------------------------------------------
+# Categorías
+# -----------------------------------------------------------------------------
+categories:
+
+  LEGAL:
+    enum: LEGAL
+    prototypes:
+      es:
+        - "Cláusula de indemnización y limitación de responsabilidad de las partes"
+        - "Resolución y terminación del contrato por incumplimiento"
+        - "Penalizaciones por demora y daños y perjuicios liquidados"
+        - "Fuerza mayor y suspensión de obligaciones contractuales"
+        - "Ley aplicable, jurisdicción y resolución de disputas mediante arbitraje"
+        - "Garantías legales, confidencialidad y cesión del contrato"
+        - "Régimen de seguros, avales y garantías de cumplimiento"
+      en:
+        - "Indemnification and limitation of liability of the parties"
+        - "Termination of the contract for breach or default"
+        - "Liquidated damages and penalties for delay"
+        - "Force majeure and suspension of contractual obligations"
+        - "Governing law, jurisdiction and dispute resolution by arbitration"
+        - "Legal warranties, confidentiality and assignment of the contract"
+        - "Insurance, bonds and performance guarantees"
+    structural_signals:
+      section_titles:
+        es: [indemnización, responsabilidad, resolución, terminación, jurisdicción, "ley aplicable", "fuerza mayor", arbitraje, garantía, confidencialidad, seguros]
+        en: [indemnification, liability, termination, jurisdiction, "governing law", "force majeure", arbitration, warranty, confidentiality, insurance]
+      patterns: ['\bcláusula\s+\d+', '\bclause\s+\d+', '\bartículo\s+\d+', '\barticle\s+\d+']
+    lexicon:
+      es: [contrato, cláusula, penalización, responsabilidad, incumplimiento, garantía]
+      en: [contract, clause, penalty, liability, breach, warranty]
+
+  SCOPE:
+    enum: SCOPE
+    prototypes:
+      es:
+        - "Alcance del trabajo y descripción de los suministros y servicios"
+        - "Estructura de desglose del trabajo y paquetes de entregables"
+        - "Exclusiones del alcance y límites de batería (battery limits)"
+        - "Matriz de responsabilidades e interfaces entre las partes"
+        - "Gestión de cambios y modificaciones del alcance"
+        - "Entregables del proyecto y criterios de aceptación de alcance"
+      en:
+        - "Scope of work and description of supplies and services"
+        - "Work breakdown structure and deliverable packages"
+        - "Scope exclusions and battery limits"
+        - "Responsibility matrix and interfaces between the parties"
+        - "Change management and scope variations"
+        - "Project deliverables and scope acceptance criteria"
+    structural_signals:
+      section_titles:
+        es: [alcance, "alcance del trabajo", exclusiones, entregables, "límites de batería", interfaces]
+        en: [scope, "scope of work", exclusions, deliverables, "battery limits", interfaces]
+      patterns: ['\bWBS\b', '\bEDT\b', '\bSOW\b']
+    lexicon:
+      es: [alcance, suministro, entregable, exclusión, interfaz]
+      en: [scope, supply, deliverable, exclusion, interface]
+
+  BUDGET:
+    enum: BUDGET
+    prototypes:
+      es:
+        - "Precio del contrato y condiciones de pago"
+        - "Calendario de pagos por hitos y certificaciones de obra"
+        - "Presupuesto detallado y mediciones (Bill of Quantities)"
+        - "Precios unitarios, partidas alzadas y sumas provisionales"
+        - "Fórmula de revisión de precios y ajuste por escalación"
+        - "Retenciones, facturación y moneda del contrato"
+        - "Valoración económica de cambios y contingencias"
+      en:
+        - "Contract price and payment terms"
+        - "Milestone payment schedule and progress certificates"
+        - "Detailed budget and bill of quantities"
+        - "Unit rates, lump sums and provisional sums"
+        - "Price adjustment and escalation formula"
+        - "Retention, invoicing and contract currency"
+        - "Pricing of variations and contingencies"
+    structural_signals:
+      section_titles:
+        es: [precio, "condiciones de pago", presupuesto, mediciones, "precios unitarios", "revisión de precios", facturación]
+        en: [price, "payment terms", budget, "bill of quantities", "unit rates", escalation, invoicing]
+      patterns: ['\b\d+[.,]\d{2}\s?(€|EUR|USD)\b', '€\s?\d', '\$\s?\d', '\bBoQ\b']
+    lexicon:
+      es: [precio, pago, presupuesto, importe, partida, factura]
+      en: [price, payment, budget, amount, invoice, cost]
+
+  SCHEDULE:
+    enum: SCHEDULE                   # alinear con enum de dominio (ver brief §9.4: TIME vs SCHEDULE)
+    prototypes:
+      es:
+        - "Programa de ejecución del proyecto y cronograma de obra"
+        - "Hitos contractuales y fechas de finalización"
+        - "Camino crítico y secuenciación de actividades"
+        - "Plazos de entrega, demoras y ampliación de plazo"
+        - "Programa base (baseline) y curvas de avance"
+        - "Movilización, plan de trabajo y previsiones a corto plazo"
+      en:
+        - "Project execution program and construction schedule"
+        - "Contractual milestones and completion dates"
+        - "Critical path and sequencing of activities"
+        - "Delivery times, delays and extension of time"
+        - "Baseline program and progress curves"
+        - "Mobilization, work plan and look-ahead schedule"
+    structural_signals:
+      section_titles:
+        es: [programa, cronograma, plazo, hitos, planificación, calendario]
+        en: [schedule, program, programme, timeline, milestones, completion]
+      # La desambiguación de SCHEDULE se apoya en fechas/duraciones, NO en la palabra suelta.
+      patterns: ['\b\d{1,2}/\d{1,2}/\d{2,4}\b', '\b\d+\s?(días|semanas|meses|days|weeks|months)\b', '\bGantt\b']
+    lexicon:
+      es: [plazo, hito, cronograma, fecha, demora, planificación]
+      en: [milestone, deadline, date, delay, completion, timeline]
+
+  TECHNICAL:
+    enum: TECHNICAL
+    prototypes:
+      es:
+        - "Especificaciones técnicas y bases de diseño"
+        - "Normas y códigos aplicables (IEC, IEEE, UNE, EN)"
+        - "Hojas de datos y requisitos de funcionamiento de equipos"
+        - "Planos, cálculos y memorias de diseño"
+        - "Materiales, componentes y requisitos de suministro técnico"
+        - "Pruebas técnicas, puesta en marcha y comisionado"
+      en:
+        - "Technical specifications and design basis"
+        - "Applicable standards and codes (IEC, IEEE, EN, ISO)"
+        - "Datasheets and equipment performance requirements"
+        - "Drawings, calculations and design reports"
+        - "Materials, components and technical supply requirements"
+        - "Technical testing, start-up and commissioning"
+    structural_signals:
+      section_titles:
+        es: ["especificaciones técnicas", "bases de diseño", normas, planos, "hojas de datos", comisionado]
+        en: ["technical specifications", "design basis", standards, drawings, datasheets, commissioning]
+      patterns: ['\b(IEC|IEEE|ISO|EN|UNE|ASTM|ASME)\s?\d', '\b\d+\s?(kW|MW|kV|Hz|mm|°C)\b']
+    lexicon:
+      es: [especificación, técnico, norma, plano, equipo, diseño]
+      en: [specification, technical, standard, drawing, equipment, design]
+
+  QUALITY:
+    enum: QUALITY
+    prototypes:
+      es:
+        - "Plan de calidad y aseguramiento y control de calidad (QA/QC)"
+        - "Plan de inspección y ensayos (ITP) y criterios de aceptación"
+        - "No conformidades, defectos y lista de repasos (punch list)"
+        - "Pruebas de aceptación en fábrica (FAT) y en sitio (SAT)"
+        - "Certificaciones, trazabilidad y conformidad con ISO 9001"
+        - "Garantía de calidad, periodo de garantía y subsanación de defectos"
+      en:
+        - "Quality plan and quality assurance and control (QA/QC)"
+        - "Inspection and test plan (ITP) and acceptance criteria"
+        - "Non-conformities, defects and punch list"
+        - "Factory acceptance test (FAT) and site acceptance test (SAT)"
+        - "Certifications, traceability and ISO 9001 conformity"
+        - "Quality warranty, defects liability period and rectification"
+    structural_signals:
+      section_titles:
+        es: ["plan de calidad", "control de calidad", inspección, ensayos, "no conformidad", "garantía de calidad"]
+        en: ["quality plan", "quality control", inspection, "test plan", "non-conformity", "defects liability"]
+      patterns: ['\bQA/QC\b', '\bITP\b', '\bFAT\b', '\bSAT\b', '\bISO\s?9001\b']
+    lexicon:
+      es: [calidad, inspección, ensayo, conformidad, defecto, certificación]
+      en: [quality, inspection, test, conformity, defect, certification]
+
+# -----------------------------------------------------------------------------
+# Priors por tipo de segmento — SOLO categorías definitorias (brief §2 D7)
+# -----------------------------------------------------------------------------
+doc_type_priors:
+  contract:        { LEGAL: 0.70, SCOPE: 0.55 }
+  budget_boq:      { BUDGET: 0.75 }
+  schedule_gantt:  { SCHEDULE: 0.75 }
+  technical_spec:  { TECHNICAL: 0.70 }
+
+# -----------------------------------------------------------------------------
+# Ingesta / segmentación (brief §2 D7)
+# -----------------------------------------------------------------------------
+ingestion:
+  segmentation:
+    monolith_strategy: structural_markers
+    fallback: single_segment_declared_type
+    markers:
+      es: [anexo, apéndice, pliego]
+      en: [annex, appendix]          # OJO: "schedule" excluido a propósito (trampa léxica EN)
+
+# -----------------------------------------------------------------------------
+# Agregación chunk -> segmento -> documento (brief §2 D4)
+# -----------------------------------------------------------------------------
+aggregation:
+  chunk_combiner: weighted_mean
+  doc_method: top_k_saturating
+  top_k: 3
+  doc_relevance: "max(prior_floor, aggregated_chunk_relevance)"
+  keep_evidence_pointers: true
