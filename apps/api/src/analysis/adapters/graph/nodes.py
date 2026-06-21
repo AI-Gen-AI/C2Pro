@@ -94,6 +94,19 @@ def _mark_risk_extraction_honest_failure(
     return state
 
 
+def _append_risk_extraction_summary(state: ProjectState) -> None:
+    input_chars = len(state.get("document_text") or "")
+    risks_emitted = len(state.get("extracted_risks") or [])
+    state["messages"].append(
+        AIMessage(
+            content=(
+                f"N4 risk_extractor: input_doc_chars={input_chars} "
+                f"risks_emitted={risks_emitted}"
+            )
+        )
+    )
+
+
 # ── Backwards-compatible shims ──────────────────────────────────────────────
 # Kept because legacy facade modules (src.ai.graph) and the TS-ADP-GRAPH-DI-001
 # suite import these helpers by name and monkeypatch them at runtime.
@@ -188,6 +201,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             previous_confidence=previous_confidence,
         )
 
+    _append_risk_extraction_summary(result)
     if not result.get("extracted_risks"):
         return _mark_risk_extraction_honest_failure(
             result,

@@ -319,7 +319,8 @@ async def _run_document_analysis(
             "document_analysis_task_started",
             extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
         )
-        result = await graph_orchestrator.run(initial_state, thread_id=str(document.project_id))
+        thread_id = f"document:{document_id}:analysis:{uuid4()}"
+        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
         analysis_id = result.get("analysis_id")
         if analysis_id:
             await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)

@@ -562,6 +562,10 @@ class TestExtractorAIToolDelegation:
         assert result["extracted_risks"] == []
         assert result["confidence_score"] == pytest.approx(0.25)
         assert any(
+            message.content == "N4 risk_extractor: input_doc_chars=9 risks_emitted=0"
+            for message in result["messages"]
+        )
+        assert any(
             "AI risk extraction failed/empty" in message.content
             for message in result["messages"]
         )

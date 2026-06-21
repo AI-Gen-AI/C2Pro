@@ -12,6 +12,7 @@ import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import structlog
 from pydantic import BaseModel, Field
 
 from src.analysis.adapters.ai.agents.risk_extractor import (
@@ -26,6 +27,8 @@ from src.core.ai.tools import BaseTool, ToolResult, register_tool
 
 if TYPE_CHECKING:
     from src.analysis.adapters.graph.schema import ProjectState
+
+logger = structlog.get_logger()
 
 
 class RiskExtractionInput(BaseModel):
@@ -94,6 +97,14 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
                 risk.risk_score = self._calculate_risk_score(risk)
                 risk.immediate_alert = self._is_immediate_alert(risk)
                 risks.append(risk)
+
+        logger.info(
+            "risk_extraction_parse_diagnostics",
+            raw_output_chars=len(ai_response.content or ""),
+            payload_type=type(payload).__name__,
+            candidate_item_count=len(items),
+            parsed_risk_count=len(risks),
+        )
 
         # Sort by risk score
         risks.sort(key=lambda r: r.risk_score, reverse=True)
