@@ -98,6 +98,25 @@ class _FakeHitlService:
 
 class TestRouterNodeThinDelegation:
     @pytest.mark.asyncio
+    async def test_empty_text_routes_to_insufficient_extractable_text(self, monkeypatch) -> None:
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-NO-TEXT-001."""
+        from src.analysis.adapters.graph import nodes
+
+        def _explode(*_a, **_kw):
+            raise AssertionError("get_ai_service called for empty text")
+
+        monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
+
+        result = await nodes.router_node(_make_state(document_text=" \n\t "))
+
+        assert result["doc_type"] == "insufficient_extractable_text"
+        assert any(
+            "No extractable text" in message.content
+            and "OCR required" in message.content
+            for message in result["messages"]
+        )
+
+    @pytest.mark.asyncio
     async def test_uses_existing_doc_type_when_valid(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
@@ -288,14 +307,32 @@ class TestDeterministicShims:
 
 class TestRiskExtractorMockBranch:
     @pytest.mark.asyncio
-    async def test_mock_mode_uses_deterministic_rules(self, monkeypatch) -> None:
+    async def test_mock_mode_returns_honest_empty_risks(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
         monkeypatch.setenv("C2PRO_AI_MOCK", "1")
         result = await nodes.risk_extractor_node(
             _make_state(document_text="penalty for delay")
         )
-        assert len(result["extracted_risks"]) == 1
+        assert result["extracted_risks"] == []
+
+    @pytest.mark.asyncio
+    async def test_mock_mode_does_not_fabricate_risks(self, monkeypatch) -> None:
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-HONEST-RISK-001."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="penalty for delay", confidence_score=0.2)
+        )
+
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] == pytest.approx(0.2)
+        assert any(
+            "mock mode" in message.content.lower()
+            and "no risks extracted" in message.content.lower()
+            for message in result["messages"]
+        )
 
 
 class TestWbsExtractorMockBranch:
@@ -842,6 +879,81 @@ class TestExtractorAIToolDelegation:
         assert result["extracted_risks"]
         assert result["extracted_risks"][0]["category"] == "LEGAL"
         assert "deterministic fallback" in result["critique_notes"].lower()
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_tool_failure_returns_honest_empty_result(
+        self, monkeypatch
+    ) -> None:
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-HONEST-RISK-001."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        async def _failing_tool(_state):
+            raise RuntimeError("JSON parse failed at char 12: invalid schema")
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _failing_tool
+
+        import sys
+        import types
+
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="real text", confidence_score=0.33)
+        )
+
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] == pytest.approx(0.33)
+        assert any(
+            "RuntimeError" in message.content
+            and "JSON parse failed" in message.content
+            for message in result["messages"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_tool_empty_returns_honest_degraded_result(
+        self, monkeypatch
+    ) -> None:
+        """Test Suite ID: TS-HOTFIX-ANALYSIS-HONEST-RISK-001."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+        async def _empty_tool(state):
+            state["extracted_risks"] = []
+            state["confidence_score"] = 0.7
+            return state
+
+        def _fake_get_tool(name, *, version):
+            assert (name, version) == ("risk_extraction", "1.0")
+            return _empty_tool
+
+        import sys
+        import types
+
+        fake_mod = types.ModuleType("src.core.ai.tools")
+        fake_mod.get_tool = _fake_get_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="real text", confidence_score=0.25)
+        )
+
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] == pytest.approx(0.25)
+        assert any(
+            message.content == "N4 risk_extractor: input_doc_chars=9 risks_emitted=0"
+            for message in result["messages"]
+        )
+        assert any(
+            "AI risk extraction failed/empty" in message.content
+            for message in result["messages"]
+        )
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_uses_tool_registry(self, monkeypatch) -> None:

@@ -72,6 +72,7 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
     skip_hitl = (
         os.getenv("C2PRO_AI_MOCK", "0") == "1"
         or os.getenv("C2PRO_SKIP_HITL", "0") == "1"
+        or bool(state.get("force_full_pipeline"))
     )
     return _critique_evaluator.determine_next_step(  # type: ignore[return-value]
         human_approval_required=bool(state.get("human_approval_required")),

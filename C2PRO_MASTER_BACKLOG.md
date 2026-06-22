@@ -316,3 +316,39 @@
 ### Cross-Category
 
 No pending cross-category tasks in this view. Historical items are archived in [backlogs/COMPLETED.md](backlogs/COMPLETED.md).
+
+---
+
+## Hotfix — Alerts/Analysis Honesty (2026-06-22, PR #162, branch hotfix/alerts-analysis-honesty)
+
+Pre-existing existing-app bugs found during real-contract pilot testing (separate from the flag-OFF v3 thin spine / PR #158). Opus-gate APPROVED; awaiting merge to main. Outcome: a real ADIF-AV contract now yields 14 evidence-grounded risks → alerts, and the Coherence engine works on main for the first time.
+
+COMPLETED (all [x], on the hotfix branch):
+
+| Task | Status | Commit | Summary |
+| ---- | ------ | ------ | ------- |
+| `[x] TASK-HOTFIX-001` | Done | a0bc2798 | alerts.message schema drift → repair migration 20260620_0001 (ADD COLUMN IF NOT EXISTS + backfill + SET NOT NULL); gate-verified up/down on fresh DB. Fixes alerts list 500. + ORM-columns-match-DB guard test. |
+| `[x] TASK-HOTFIX-002` | Done | acdfb8d3 | Risk extractor honest-fail: stop fabricating misattributed risks + inflating confidence when AI tool fails; emit honest empty + DEGRADED. |
+| `[x] TASK-HOTFIX-003` | Done | 769908ae | Honest no-text guard: scanned/empty PDF → insufficient_extractable_text instead of silent technical_spec default. |
+| `[x] TASK-HOTFIX-004` | Done | 2ee50b0f | /analyze preview honesty: response now persisted=false, mode=preview (it never persists/creates alerts; full pipeline does). |
+| `[x] TASK-HOTFIX-005` | Done | b005a577 | Async full-analysis task (documents.analyze_document, routed to document_parsing) + ingestion enqueues it; force_full_pipeline so N17 persist+alerts is reached. |
+| `[x] TASK-HOTFIX-006` | Done | 0cfe282e | Celery worker AI tool registration: celery_app now imports src.analysis.adapters.ai.tools (was empty registry → ToolNotFound → fabrication). Guard test asserts registry non-empty. |
+| `[x] TASK-HOTFIX-007` | Done | 684846df | API startup: start.sh CRLF→LF (.gitattributes *.sh eol=lf + Dockerfile sed hardening). API back up. |
+| `[x] TASK-HOTFIX-008` | Done | d0fbf2d3 | Checkpoint isolation: per-document analysis uses unique per-run thread_id (document:{id}:analysis:{uuid4}) instead of project_id → no stale LangGraph replay. |
+| `[x] TASK-HOTFIX-009` | Done | 9f1d9224 | Risk parser shape handling: handle fenced/raw/trailing JSON + container-key + alias variants in _extract_items (LLM returned fenced {"risks":[...]} that recovery dropped). 14 risks now parse + ground. |
+| `[x] TASK-HOTFIX-010` | Done | 4e73e79d | Restore REAL coherence modules on main (category_router/segments byte-identical to feat/v3-spine; category_registry real model + Docker-safe YAML path-resolution fix) + regenerate openapi. main coherence was broken (modules never merged). |
+
+FOLLOW-UPS (open):
+
+| Task | Pri | Summary |
+| ---- | --- | ------- |
+| `[ ] TASK-HOTFIX-F1` | P1 | Apply the category_registry Docker-safe YAML path fix to feat/v3-spine / PR #158 (same latent parents[4/5] bug there; reconverges the branches so #158 doesn't ship Docker-broken coherence). |
+| `[ ] TASK-HOTFIX-F2` | P2 | Verify re-analysis SUPERSEDES prior alerts rather than accumulating (alerts went 14→42 once coherence became active); ensure no duplicate alerts across reprocess runs. |
+| `[ ] TASK-HOTFIX-F3` | P2 | Confirm pre-existing TASK-V3-017-06 critique-router tests (test_thin_nodes TestCritiqueRouter::test_retry_*) now pass after the critique-routing changes; else keep tracked. |
+| `[ ] TASK-HOTFIX-F4` | P2 | KnowledgeGraphAdapter degraded node in stakeholder extraction (import missing; honest-degraded, does not block persistence; absent on feat/v3-spine too). |
+
+---
+
+## Change Log
+
+**2026-06-22**: Hotfix alerts/analysis honesty (PR #162, branch hotfix/alerts-analysis-honesty) — Opus-gate APPROVED, awaiting merge to main. Fixed a 7-layer pre-existing failure chain so a real contract produces grounded output end-to-end: alerts.message migration drift (TASK-HOTFIX-001), risk-extractor honest-fail (002), no-text honesty (003), /analyze preview clarity (004), async analysis trigger (005), Celery worker tool registration — the empty-registry root cause of fabricated risks (006), start.sh CRLF API-startup (007), LangGraph checkpoint isolation (008), risk-parser fenced-JSON shape handling (009 → 14 grounded risks), and restoration of the REAL coherence category-routing modules main was missing (010, + openapi regen). Live: real ADIF-AV contract → 14 grounded risks → alerts; coherence engine now loads on main. Gate independently re-verified the migration up/down on a fresh DB and the coherence-module faithfulness. Filed follow-ups TASK-HOTFIX-F1..F4. NOTE: coherence score still requires the contract+schedule+budget triplet (contract-only honest-null by design). These are existing-app fixes, independent of v3 PR #158 (still pending). No push to main (PR awaiting review).

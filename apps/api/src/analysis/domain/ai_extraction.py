@@ -34,6 +34,8 @@ class AIExtractionPort(Protocol):
 
 
 def _fallback_doc_type(text: str) -> str:
+    if len("".join((text or "").split())) < 8:
+        return "insufficient_extractable_text"
     low = text.lower()
     if any(k in low for k in ("contrato", "clausula", "contract", "clause", "obligaciones")):
         return "contract"

@@ -244,6 +244,12 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     project_id: str
     analysis_id: str | None
+    persisted: bool = False
+    mode: str = "preview"
+    persistence_message: str = (
+        "Preview only - not persisted; alerts and coherence are produced by the full "
+        "analysis pipeline. Trigger it via document reprocess."
+    )
     risks: list[dict[str, Any]]
     wbs: list[dict[str, Any]]
     human_approval_required: bool
@@ -254,7 +260,17 @@ class AnalyzeResponse(BaseModel):
     messages: list[str]
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
+@router.post(
+    "/analyze",
+    response_model=AnalyzeResponse,
+    summary="Preview document analysis without persistence",
+    description=(
+        "Runs a synchronous non-persisting analysis preview. This endpoint may stop "
+        "at critique/HITL and does not create Analysis rows, alerts, or coherence "
+        "records. Use the document reprocess/full pipeline path for persisted "
+        "analysis and alert generation."
+    ),
+)
 async def analyze_document(
     payload: AnalyzeRequest,
     _request: Request,
@@ -290,6 +306,12 @@ async def analyze_document(
     return AnalyzeResponse(
         project_id=result["project_id"],
         analysis_id=result.get("analysis_id"),
+        persisted=False,
+        mode="preview",
+        persistence_message=(
+            "Preview only - not persisted; alerts and coherence are produced by the full "
+            "analysis pipeline. Trigger it via document reprocess."
+        ),
         risks=result["extracted_risks"],
         wbs=result["extracted_wbs"],
         human_approval_required=result["human_approval_required"],

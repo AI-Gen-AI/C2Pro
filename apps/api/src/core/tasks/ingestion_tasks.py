@@ -215,7 +215,13 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
     return data
 
 
-def _extract_contract_clauses(*, document_id: UUID, project_id: UUID, parsed_text: str) -> list[Clause]:
+def _extract_contract_clauses(
+    *,
+    document_id: UUID,
+    project_id: UUID,
+    tenant_id: UUID,
+    parsed_text: str,
+) -> list[Clause]:
     segments = [segment.strip() for segment in re.split(r"(?<=[\.!?])\s+|\n\n+", parsed_text) if segment.strip()]
     clauses: list[Clause] = []
     for index, segment in enumerate(segments, start=1):
@@ -226,6 +232,7 @@ def _extract_contract_clauses(*, document_id: UUID, project_id: UUID, parsed_tex
             Clause(
                 id=uuid4(),
                 project_id=project_id,
+                tenant_id=tenant_id,
                 document_id=document_id,
                 clause_code=f"AUTO-{index:03d}",
                 clause_type=clause_type,
@@ -266,6 +273,73 @@ async def _push_trigger_failure_to_dlq(
         payload={"document_id": str(document_id)},
         error_message=str(error),
     )
+
+
+async def _run_document_analysis(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    orchestrator=None,
+) -> dict:
+    """Run the full analysis graph for a parsed document and persist via N17."""
+    await init_db()
+
+    async with get_raw_session() as session:
+        repo = SqlAlchemyDocumentRepository(session=session)
+        document = await repo.get_by_id(tenant_id, document_id)
+        if not document:
+            raise ValueError("document not found or access denied")
+        if not document.is_parsed():
+            raise ValueError("document must be parsed before analysis")
+
+        parsed_text = document.document_metadata.get("parsed_text") if document.document_metadata else None
+        if not parsed_text:
+            raise ValueError("parsed_text not available")
+
+        graph_orchestrator = orchestrator or AnalysisOrchestratorFactory.create()
+        initial_state = {
+            "document_text": parsed_text,
+            "project_id": str(document.project_id),
+            "document_id": str(document.id),
+            "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
+            "tenant_id": str(tenant_id),
+            "messages": [],
+            "extracted_risks": [],
+            "extracted_wbs": [],
+            "confidence_score": 0.0,
+            "critique_notes": "",
+            "human_feedback": "",
+            "retry_count": 0,
+            "human_approval_required": False,
+            "analysis_id": None,
+            "force_full_pipeline": True,
+        }
+
+        logger.info(
+            "document_analysis_task_started",
+            extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
+        )
+        thread_id = f"document:{document_id}:analysis:{uuid4()}"
+        result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
+        analysis_id = result.get("analysis_id")
+        if analysis_id:
+            await repo.update_status(tenant_id, document_id, DocumentStatus.ANALYZED)
+            await session.commit()
+        logger.info(
+            "document_analysis_task_finished",
+            extra={
+                "document_id": str(document_id),
+                "tenant_id": str(tenant_id),
+                "analysis_id": analysis_id,
+                "persisted": bool(analysis_id),
+            },
+        )
+        return {
+            "status": "completed" if analysis_id else "completed_without_persistence",
+            "document_id": str(document_id),
+            "analysis_id": analysis_id,
+            "persisted": bool(analysis_id),
+        }
 
 
 async def _process(document_id: UUID) -> dict:
@@ -344,6 +418,7 @@ async def _process(document_id: UUID) -> dict:
                         extracted_clauses = _extract_contract_clauses(
                             document_id=document_id,
                             project_id=document.project_id,
+                            tenant_id=tenant_id,
                             parsed_text=parsed_text,
                         )
                         for clause in extracted_clauses:
@@ -368,9 +443,20 @@ async def _process(document_id: UUID) -> dict:
             try:
                 trigger_use_case = TriggerDocumentAnalysisUseCase(
                     document_repository=repo,
-                    orchestrator=AnalysisOrchestratorFactory.create(),
                 )
-                await trigger_use_case.execute(tenant_id=tenant_id, document_id=document_id)
+                trigger_result = await trigger_use_case.execute(
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                )
+                logger.info(
+                    "document_analysis_trigger_enqueued",
+                    extra={
+                        "document_id": str(document_id),
+                        "task_id": trigger_result.get("task_id"),
+                        "task_name": trigger_result.get("task_name"),
+                        "queue": trigger_result.get("queue"),
+                    },
+                )
             except Exception as trigger_error:
                 logger.error(
                     "document_analysis_trigger_failed",
@@ -434,3 +520,50 @@ def process_document_async(self, document_id: str):
         document_id,
     )
     return asyncio.run(_process(UUID(document_id)))
+
+
+@celery_app.task(
+    name="documents.analyze_document",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=60,
+    task_track_started=True,
+    queue="document_parsing",
+)
+def process_document_analysis_async(self, tenant_id: str, document_id: str):
+    """Run full document analysis after parsing; persists via graph N17."""
+    logger.info(
+        "Starting document analysis for task_id: %s, document_id: %s",
+        self.request.id,
+        document_id,
+    )
+    try:
+        return asyncio.run(
+            _run_document_analysis(
+                tenant_id=UUID(tenant_id),
+                document_id=UUID(document_id),
+            )
+        )
+    except Exception as error:
+        logger.exception(
+            "document_analysis_task_failed",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "task_id": self.request.id,
+            },
+        )
+        asyncio.run(
+            _push_trigger_failure_to_dlq(
+                tenant_id=UUID(tenant_id),
+                document_id=UUID(document_id),
+                error=error,
+            )
+        )
+        raise
+
+
+process_document_analysis_async.queue = "document_parsing"
+process_document_analysis_async.name = "documents.analyze_document"
