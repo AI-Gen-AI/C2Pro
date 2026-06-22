@@ -16,7 +16,7 @@ Location: apps/api/src/coherence/graph/graph.py
 from __future__ import annotations
 
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -44,25 +44,18 @@ from .state import CoherenceGraphState, EvaluationConfig
 logger = logging.getLogger(__name__)
 
 
-_ROUTER_TO_COHERENCE_CATEGORY: dict[CanonicalCategory, str] = {
-    CanonicalCategory.LEGAL: "LEGAL",
-    CanonicalCategory.SCOPE: "SCOPE",
-    CanonicalCategory.BUDGET: "BUDGET",
-    CanonicalCategory.SCHEDULE: "TIME",
-    CanonicalCategory.TECHNICAL: "TECHNICAL",
-    CanonicalCategory.QUALITY: "QUALITY",
-}
-
-# BCK-064: map domain DocumentType DB values → registry doc_type_priors keys.
-# DocumentType enum uses short names ("schedule", "budget") while the registry
-# uses descriptive keys ("schedule_gantt", "budget_boq"). Without this mapping
-# the prior floor (e.g. SCHEDULE: 0.75) is never applied, so schedule/budget
-# documents with sparse coherence vocabulary fall below the threshold and are
-# reported as missing dimensions.
-_DB_DOC_TYPE_TO_REGISTRY: dict[str, str] = {
-    "schedule": "schedule_gantt",
-    "budget": "budget_boq",
-}
+def _honest_null_result(final_state: dict[str, Any]) -> EnrichedCoherenceResult:
+    diagnostics = final_state.get("diagnostics") or {}
+    reason = diagnostics.get("reason") or "coherence_result_missing"
+    return EnrichedCoherenceResult(
+        overall_score=None,
+        alerts=[],
+        calculated_at=datetime.now(UTC),
+        score_version=SCORE_VERSION_V1,
+        score_reason=reason,
+        score_missing_dimensions=diagnostics.get("missing_dimensions"),
+        finding_signals=[],
+    )
 
 
 # =============================================================================
@@ -341,17 +334,7 @@ def evaluate_coherence(
     # Extract result
     result = final_state.get("result")
     if result is None:
-        # Fallback: create minimal result
-        from datetime import datetime
-        result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score"),
-            alerts=final_state.get("alerts", []),
-            calculated_at=datetime.now(UTC),
-            score_version=SCORE_VERSION_V1,
-            score_reason=final_state.get("diagnostics", {}).get("reason"),
-            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
-            finding_signals=final_state.get("all_signals", []),
-        )
+        result = _honest_null_result(final_state)
 
     return result
 
@@ -360,7 +343,6 @@ async def evaluate_coherence_async(
     clauses: list[Clause],
     project_id: str = "default",
     config: EvaluationConfig | None = None,
-    *,
     seed_signals: list[FindingSignal] | None = None,
     seed_coverage: dict[str, bool] | None = None,
 ) -> EnrichedCoherenceResult:
@@ -394,8 +376,8 @@ async def evaluate_coherence_async(
         project_id=project_id,
         clauses=clauses,
         config=config or EvaluationConfig(),
-        deterministic_signals=list(seed_signals) if seed_signals else [],
-        coverage_map=coverage_seed,
+        deterministic_signals=seed_signals or [],
+        coverage_map=seed_coverage or {},
     )
 
     # Get compiled graph
@@ -407,16 +389,7 @@ async def evaluate_coherence_async(
     # Extract result
     result = final_state.get("result")
     if result is None:
-        from datetime import datetime
-        result = EnrichedCoherenceResult(
-            overall_score=final_state.get("score"),
-            alerts=final_state.get("alerts", []),
-            calculated_at=datetime.now(UTC),
-            score_version=SCORE_VERSION_V1,
-            score_reason=final_state.get("diagnostics", {}).get("reason"),
-            score_missing_dimensions=final_state.get("diagnostics", {}).get("missing_dimensions"),
-            finding_signals=final_state.get("all_signals", []),
-        )
+        result = _honest_null_result(final_state)
 
     return result
 

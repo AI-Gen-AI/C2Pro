@@ -22,7 +22,6 @@ from src.coherence.models import (
     EnrichedCoherenceResult,
 )
 
-
 # ---------------------------------------------------------------------------
 # Constants presence and values
 # ---------------------------------------------------------------------------

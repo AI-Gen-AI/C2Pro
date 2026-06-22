@@ -45,3 +45,20 @@ class IStorageService(ABC):
         :return: Full Path to the file.
         """
         pass
+
+    @abstractmethod
+    async def file_exists(self, key: str) -> bool:
+        """Check whether a file exists in storage by its object key.
+        :param key: The object key in the bucket.
+        :return: True if the object exists, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    async def upload_bytes(self, data: bytes, key: str) -> str:
+        """Upload raw bytes to storage under a string key (content-addressed).
+        :param data: Raw bytes to upload.
+        :param key: Object key in the bucket.
+        :return: URL or path to the stored object.
+        """
+        pass

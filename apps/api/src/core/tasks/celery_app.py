@@ -30,6 +30,8 @@ celery_app = Celery(
         "src.analysis.adapters.ai.tools",
         "src.core.tasks.ingestion_tasks",
         "src.core.tasks.budget_alerts",
+        "src.core.tasks.snapshot_tasks",
+        "src.core.tasks.snapshot_retention",
     ],
 )
 
@@ -38,7 +40,6 @@ celery_app = Celery(
 celery_app.conf.update(
     # Broker settings
     broker_connection_retry_on_startup=True,
-
     # Task settings
     task_default_queue="document_parsing",
     task_default_exchange="document_parsing",
@@ -48,16 +49,22 @@ celery_app.conf.update(
     result_serializer="json",
     result_expires=3600,  # Expire results after 1 hour
     task_track_started=True,
-
     # Worker settings
-    worker_prefetch_multiplier=1, # Ensures workers only take one task at a time (good for long-running tasks)
-
+    worker_prefetch_multiplier=1,  # Ensures workers only take one task at a time (good for long-running tasks)
     # Beat schedule (periodic tasks)
     beat_schedule={
         "budget-alerts-every-10-mins": {
             "task": "budget_alerts.run",
             "schedule": 600.0,
-        }
+        },
+        "project-snapshots-daily": {
+            "task": "project_snapshots.enqueue_daily",
+            "schedule": 86400.0,
+        },
+        "project-snapshots-retention": {
+            "task": "project_snapshots.retention",
+            "schedule": 86400.0,
+        },
     },
 )
 

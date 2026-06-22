@@ -100,7 +100,7 @@ class PersistAnalysisUseCase:
                     alert_type=dto.alert_type,
                     severity=dto.severity,
                     title=dto.title,
-                    message=dto.description or dto.title,
+                    message=dto.description,
                     description=dto.description,
                     category=dto.category,
                     impact_level=dto.impact_level,

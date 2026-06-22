@@ -35,9 +35,7 @@ class CoherenceResultORM(Base):
     __tablename__ = "coherence_results"
 
     # Primary key
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Project reference
     project_id: Mapped[UUID] = mapped_column(
@@ -74,9 +72,7 @@ class CoherenceResultORM(Base):
 
     # Gaming detection
     is_gaming_detected: Mapped[bool] = mapped_column(default=False)
-    gaming_violations: Mapped[list[str]] = mapped_column(
-        ARRAY(String), nullable=False, default=[]
-    )
+    gaming_violations: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=[])
     penalty_points: Mapped[int] = mapped_column(Integer, default=0)
 
     # Score-version audit trail — canonical 2-value enum (Phase F, ADR-009 §F)
@@ -117,22 +113,14 @@ class ClauseEmbeddingORM(Base):
 
     __tablename__ = "clause_embeddings"
 
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    tenant_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False, index=True
-    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     clause_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    project_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False, index=True
-    )
+    project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     document_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True, index=True
     )
-    document_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, server_default="other"
-    )
+    document_type: Mapped[str] = mapped_column(String(50), nullable=False, server_default="other")
     text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
     category: Mapped[str] = mapped_column(
@@ -147,4 +135,32 @@ class ClauseEmbeddingORM(Base):
         UniqueConstraint("clause_id", "project_id", name="uq_clause_embeddings_clause_project"),
         Index("ix_clause_embeddings_tenant", "tenant_id"),
         {"info": {"rls_policy": "tenant_isolation"}},
+    )
+
+
+class CategoryCentroidORM(Base):
+    """
+    Cached prototype centroids for deterministic Category Router matching.
+
+    Keyed by category, embedding_model, and score_version to allow seamless migration.
+    This is a global reference table based on category_registry.yaml and
+    does not enforce tenant isolation (RLS).
+    """
+
+    __tablename__ = "category_centroids"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    score_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    seed_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "category", "embedding_model", "score_version", name="uq_category_centroids_key"
+        ),
     )

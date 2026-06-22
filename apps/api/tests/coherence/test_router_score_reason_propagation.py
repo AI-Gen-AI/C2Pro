@@ -9,7 +9,6 @@ Suite IDs: TS-UA-COH-ROUTER-021, TS-UA-COH-ROUTER-022
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
 
 import pytest
 

@@ -874,7 +874,7 @@ class TestBulkWBSCompatibilityEndpoint:
         test_project,
         auth_headers,
     ):
-        """TS-E2E-FLW-BLK-001: bulk-created WBS rows must be readable through GET /wbs."""
+        """TS-E2E-FLW-BLK-001: bulk-created WBS rows must be readable as hierarchy through GET /wbs."""
         create_response = await client.post(
             f"{API_PREFIX}/projects/{test_project.id}/wbs/bulk",
             json={
@@ -909,8 +909,16 @@ class TestBulkWBSCompatibilityEndpoint:
         assert read_response.status_code == status.HTTP_200_OK
         payload = read_response.json()
         assert payload["total_items"] == 2
-        assert [item["code"] for item in payload["items"]] == ["1", "1.1"]
-        assert payload["items"][1]["parent_code"] == "1"
+        assert payload["coverage"] == {
+            "total_items": 2,
+            "items_with_budget": 0,
+            "items_with_dates": 0,
+            "items_with_alerts": 0,
+            "completion_average": 0.0,
+        }
+        assert [item["code"] for item in payload["items"]] == ["1"]
+        assert payload["items"][0]["children"][0]["code"] == "1.1"
+        assert payload["items"][0]["children"][0]["parent_code"] == "1"
 
 
 # ===========================================

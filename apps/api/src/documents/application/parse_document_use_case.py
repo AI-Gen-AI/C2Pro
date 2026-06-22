@@ -17,6 +17,87 @@ from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
 
+
+def _extract_parsed_text(parsed_payload: dict) -> str:
+    """Extract readable text from parsed payload for analysis fallback.
+
+    Mirrors the priority chain from _extract_rag_text in the RAG ingestion
+    service, adding budget handling that was previously missing.
+    """
+    # Priority 1: PDF text blocks
+    text_blocks = parsed_payload.get("text_blocks", [])
+    if text_blocks:
+        return "\n\n".join(
+            block.get("text", "")
+            for block in text_blocks
+            if isinstance(block.get("text"), str)
+        ).strip()
+
+    # Priority 2: Legacy/extracted clauses
+    clauses = parsed_payload.get("clauses", [])
+    if clauses:
+        parts: list[str] = []
+        for clause in clauses:
+            if not isinstance(clause, dict):
+                continue
+            title = clause.get("title", "")
+            content = clause.get("content", clause.get("text", ""))
+            if title and content:
+                parts.append(f"{title}: {content}")
+            elif content:
+                parts.append(str(content))
+        if parts:
+            return "\n\n".join(parts).strip()
+
+    # Priority 3: Schedule rows
+    schedule_rows = parsed_payload.get("schedule", [])
+    if schedule_rows:
+        lines: list[str] = []
+        for row in schedule_rows:
+            if not isinstance(row, dict):
+                continue
+            desc = row.get("description", row.get("activity", row.get("task", "")))
+            start = row.get("start_date", row.get("start", ""))
+            end = row.get("end_date", row.get("end", ""))
+            parts_row = [str(desc)]
+            if start:
+                parts_row.append(f"start: {start}")
+            if end:
+                parts_row.append(f"end: {end}")
+            lines.append(" | ".join(parts_row))
+        if lines:
+            return "\n".join(lines).strip()
+
+    # Priority 4: Budget chapters (Excel BUDGET / BC3)
+    budget = parsed_payload.get("budget", {})
+    if isinstance(budget, dict):
+        budget_parts: list[str] = []
+        header = budget.get("header", {})
+        if isinstance(header, dict) and "project_name" in header:
+            budget_parts.append(f"Project: {header['project_name']}")
+        chapters = budget.get("chapters", [])
+        for ch in chapters:
+            if not isinstance(ch, dict):
+                continue
+            code = ch.get("code", ch.get("chapter_code", ""))
+            description = ch.get("description", ch.get("name", ""))
+            amount = ch.get("amount", ch.get("total", ""))
+            line = f"  {code} {description}"
+            if amount:
+                line += f" — {amount}"
+            budget_parts.append(line)
+        if len(budget_parts) > 1:
+            return "\n".join(budget_parts).strip()
+
+    # Priority 5: Generic raw text keys
+    for key in ("full_text", "text", "raw_text", "content"):
+        value = parsed_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return ""
+
+
 class ParseDocumentUseCase:
     def __init__(
         self,
@@ -66,10 +147,15 @@ class ParseDocumentUseCase:
                 tenant_id=tenant_id,
             )
 
-            # 7. Update document status to PARSED
-            # This would also involve updating document metadata (parsed_content, parsed_at, extraction_summary)
-            # which might require an update_document_metadata method in the repository.
-            # For simplicity now, only status and parsed_at.
+            # 7. Extract parsed_text and store in document_metadata
+            # This enables the analysis endpoint to find and use the document text.
+            parsed_text = _extract_parsed_text(parsed_payload)
+            metadata = dict(document.document_metadata or {})
+            if parsed_text:
+                metadata["parsed_text"] = parsed_text
+            await self.document_repository.update_metadata(tenant_id, document_id, metadata)
+
+            # 8. Update document status to PARSED
             await self.document_repository.update_status(
                 tenant_id,
                 document_id,

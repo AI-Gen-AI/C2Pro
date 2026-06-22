@@ -22,6 +22,7 @@ from src.core.database import Base
 from src.core.dlq.models import *  # TASK-BCK-022: DLQ for analysis trigger failures
 from src.documents.adapters.persistence.models import *
 from src.projects.adapters.persistence.models import *
+from src.evidence.adapters.persistence.models import *  # ADR-011 Phase 2A.3 shadow persistence
 
 # Agrega aquí futuros modelos ORM para que Alembic los detecte
 # from src.analysis.adapters.persistence.models import *

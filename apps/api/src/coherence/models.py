@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.coherence.application.dtos.coherence_v2_dtos import CoherenceV2Payload
-from src.coherence.domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
+from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 
 # Canonical six-value risk / alert taxonomy — see
 # src.analysis.domain.risk_categories for the authoritative enum. The

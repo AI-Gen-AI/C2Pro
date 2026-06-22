@@ -1,4 +1,5 @@
 import { healthHandler } from "./custom/health";
+import { projectHealthHandler } from "./custom/project-health";
 import { demoDataHandlers } from "./custom/demo-data";
 import { processingStreamHandler } from "./custom/processing-stream";
 import { uploadHandlers } from "./custom/uploads";
@@ -14,6 +15,7 @@ import { aiAnalyticsHandlers } from "./custom/ai-analytics";
 
 export const browserHandlers = [
   healthHandler,
+  projectHealthHandler,
   processingStreamHandler,
   ...demoDataHandlers,
   ...alertReviewHandlers,

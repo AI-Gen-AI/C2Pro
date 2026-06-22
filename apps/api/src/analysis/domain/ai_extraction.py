@@ -157,6 +157,61 @@ class BudgetExtractionService:
 # ── Deterministic Rule-Based Extractors (N4/N5 mock mode) ────────────────────
 
 
+def _source_sentences(text: str) -> list[str]:
+    return [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
+        if sentence.strip()
+    ]
+
+
+_MIN_QUOTE_CHARS = 80
+_CONTEXT_NEIGHBORS = 1
+
+
+def _source_sentence_for(text: str, keywords: tuple[str, ...]) -> str:
+    """Return a multi-sentence excerpt around the first keyword match.
+
+    The previous implementation returned a single sentence, which on
+    PDF-extracted text was often a fragment like "Payment" or
+    "(e) Specification" because the sentence splitter treats line breaks
+    as terminators. Critique rejected those as untraceable.
+
+    This version returns the matching sentence joined with up to
+    ``_CONTEXT_NEIGHBORS`` neighbors on each side, then expands forward
+    until the excerpt is at least ``_MIN_QUOTE_CHARS`` long so the
+    resulting source_quote can stand on its own as evidence.
+    """
+    sentences = _source_sentences(text)
+    if not sentences:
+        return text.strip()
+
+    normalized_keywords = tuple(keyword.casefold() for keyword in keywords)
+    match_index: int | None = None
+    for i, sentence in enumerate(sentences):
+        if any(k in sentence.casefold() for k in normalized_keywords):
+            match_index = i
+            break
+
+    if match_index is None:
+        return sentences[0]
+
+    start = max(0, match_index - _CONTEXT_NEIGHBORS)
+    end = min(len(sentences), match_index + _CONTEXT_NEIGHBORS + 1)
+    excerpt = " ".join(sentences[start:end]).strip()
+
+    # Expand forward until we hit the minimum length, so very short PDF
+    # sentences don't yield a one-word quote.
+    while len(excerpt) < _MIN_QUOTE_CHARS and end < len(sentences):
+        end += 1
+        excerpt = " ".join(sentences[start:end]).strip()
+    while len(excerpt) < _MIN_QUOTE_CHARS and start > 0:
+        start -= 1
+        excerpt = " ".join(sentences[start:end]).strip()
+
+    return excerpt
+
+
 @dataclass(frozen=True)
 class DeterministicRiskRulesService:
     """Pure keyword-rule extractor used by N4 mock mode & offline tests.
@@ -169,7 +224,25 @@ class DeterministicRiskRulesService:
         risks: list[dict[str, Any]] = []
         lower = text.lower()
 
-        if "penalt" in lower or "% for delay" in lower:
+        legal_terms = (
+            "penalt",
+            "% for delay",
+            "penal",
+            "multa",
+            "demora",
+            "default",
+            "breach",
+            "terminate",
+            "termination",
+            "liability",
+            "indemnif",
+            "governing law",
+            "dispute",
+            "arbitration",
+            "force majeure",
+        )
+        if any(term in lower for term in legal_terms):
+            source_quote = _source_sentence_for(text, legal_terms)
             risks.append(
                 {
                     "category": "LEGAL",
@@ -179,15 +252,19 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "HIGH",
                     "mitigation_suggestion": "Validate schedule buffers, milestone logic, and penalty caps before execution.",
-                    "source_quote": "Daily penalty 2% for delay.",
-                    "source_text_snippet": "Daily penalty 2% for delay.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 6,
                     "immediate_alert": False,
                     "confidence": 0.82,
                 }
             )
 
-        if re.search(r"\b30\s+days\b", lower) and "payment" in lower:
+        budget_terms = ("payment", "pago", "30 days", "30 dias", "30 días")
+        if re.search(r"\b30\s+(days|dias|días)\b", lower) and any(
+            term in lower for term in ("payment", "pago")
+        ):
+            source_quote = _source_sentence_for(text, budget_terms)
             risks.append(
                 {
                     "category": "BUDGET",
@@ -197,15 +274,17 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "MEDIUM",
                     "mitigation_suggestion": "Check certification workflow, invoice timing, and interim financing assumptions.",
-                    "source_quote": "Payment subject to certified milestones within 30 days.",
-                    "source_text_snippet": "Payment subject to certified milestones within 30 days.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 4,
                     "immediate_alert": False,
                     "confidence": 0.79,
                 }
             )
 
-        if "warranty" in lower:
+        quality_terms = ("warranty", "garantia", "garantía")
+        if any(term in lower for term in quality_terms):
+            source_quote = _source_sentence_for(text, quality_terms)
             risks.append(
                 {
                     "category": "QUALITY",
@@ -215,15 +294,29 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "MEDIUM",
                     "mitigation_suggestion": "Confirm defect response process, retention terms, and warranty reserve assumptions.",
-                    "source_quote": "Warranty period is 24 months.",
-                    "source_text_snippet": "Warranty period is 24 months.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 4,
                     "immediate_alert": False,
                     "confidence": 0.77,
                 }
             )
 
-        if any(term in lower for term in ("deadline", "milestone", "completion date", "delivery date", "schedule")):
+        schedule_terms = (
+            "deadline",
+            "milestone",
+            "completion date",
+            "delivery date",
+            "schedule",
+            "plazo",
+            "hito",
+            "cronograma",
+            "fecha de finalización",
+            "fecha de finalizacion",
+            "retraso",
+        )
+        if any(term in lower for term in schedule_terms):
+            source_quote = _source_sentence_for(text, schedule_terms)
             risks.append(
                 {
                     "category": "SCHEDULE",
@@ -233,15 +326,17 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "HIGH",
                     "mitigation_suggestion": "Build critical-path analysis and contingency buffers; document external dependencies.",
-                    "source_quote": "Completion milestones referenced in the contract.",
-                    "source_text_snippet": "Completion milestones referenced in the contract.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 6,
                     "immediate_alert": False,
                     "confidence": 0.76,
                 }
             )
 
-        if any(term in lower for term in ("scope", "as required", "as necessary", "lo necesario", "alcance")):
+        scope_terms = ("scope", "as required", "as necessary", "lo necesario", "alcance")
+        if any(term in lower for term in scope_terms):
+            source_quote = _source_sentence_for(text, scope_terms)
             risks.append(
                 {
                     "category": "SCOPE",
@@ -251,15 +346,28 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "MEDIUM",
                     "mitigation_suggestion": "Replace open-ended language with a bounded scope list and a change-order protocol.",
-                    "source_quote": "Scope of work referenced without bounded list.",
-                    "source_text_snippet": "Scope of work referenced without bounded list.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 4,
                     "immediate_alert": False,
                     "confidence": 0.74,
                 }
             )
 
-        if any(term in lower for term in ("specification", "standard", "compliance", "interface", "especificacion", "tolerance")):
+        technical_terms = (
+            "specification",
+            "standard",
+            "compliance",
+            "interface",
+            "especificacion",
+            "especificación",
+            "norma",
+            "cumplimiento",
+            "tolerance",
+            "tolerancia",
+        )
+        if any(term in lower for term in technical_terms):
+            source_quote = _source_sentence_for(text, technical_terms)
             risks.append(
                 {
                     "category": "TECHNICAL",
@@ -269,8 +377,8 @@ class DeterministicRiskRulesService:
                     "probability": "MEDIUM",
                     "impact": "MEDIUM",
                     "mitigation_suggestion": "Run a constructability and technology-readiness review against the cited standards.",
-                    "source_quote": "Referenced specifications and standards.",
-                    "source_text_snippet": "Referenced specifications and standards.",
+                    "source_quote": source_quote,
+                    "source_text_snippet": source_quote,
                     "risk_score": 4,
                     "immediate_alert": False,
                     "confidence": 0.73,

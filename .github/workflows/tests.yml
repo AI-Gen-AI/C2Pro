@@ -120,6 +120,11 @@ jobs:
           fi
           echo "✓ All coherence cache keys go through cache_keys.key()."
 
+      - name: ADR-013 graph node contract gate
+        working-directory: apps/api
+        run: |
+          python -m pytest tests/contract/test_graph_node_contracts.py -v --tb=short
+
       - name: Run unit tests
         working-directory: apps/api
         run: |

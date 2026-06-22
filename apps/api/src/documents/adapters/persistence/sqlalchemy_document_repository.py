@@ -8,7 +8,7 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import column, func, inspect, select, table, text
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import Alert
@@ -23,7 +23,6 @@ from src.documents.domain.models import (
     DocumentStatus,
 )
 from src.documents.ports.document_repository import IDocumentRepository
-from src.projects.adapters.persistence.models import ProjectORM
 
 
 class SqlAlchemyDocumentRepository(IDocumentRepository):
@@ -196,7 +195,7 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         proj_tenant = await self.get_project_tenant_id(document.project_id)
         if proj_tenant is None or proj_tenant != tenant_id:
             raise PermissionError("Cannot add document for project outside tenant")
-        
+
         orm_document = self._to_orm_document(document)
         self.session.add(orm_document)
 
@@ -420,7 +419,7 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             DocumentORM.project_id == project_id,
             DocumentORM.tenant_id == tenant_id
         ).offset(skip).limit(limit)
-        
+
         count_stmt = (
             select(func.count())
             .select_from(DocumentORM)

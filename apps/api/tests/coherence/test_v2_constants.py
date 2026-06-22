@@ -17,14 +17,14 @@ from src.coherence.domain.v2_constants import (
 
 @pytest.mark.unit
 def test_thresholds_match_adr_009() -> None:
-    assert MIN_EVIDENCE_BY_CATEGORY == {
+    assert {
         "SCOPE": 2,
         "BUDGET": 3,
         "QUALITY": 2,
         "TECHNICAL": 2,
         "LEGAL": 1,
         "TIME": 2,
-    }
+    } == MIN_EVIDENCE_BY_CATEGORY
 
 
 @pytest.mark.unit

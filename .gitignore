@@ -5,6 +5,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+api_logs.txt
+
+# Stray agent-session / wrong-dir artifacts (the real Alembic lives in apps/api/alembic)
+/alembic/
+/alembic.ini
+/~/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 .report/
@@ -65,7 +71,7 @@ apps/api/venv/
 credentials.json
 Captura de pantalla*.png
 zzz- capturas/
-storage/
+/storage/
 codex*.txt
 
 # Supabase specific
@@ -87,6 +93,7 @@ claves postgre.txt
 .~lock.*
 
 # Test artifacts
+.pytest-tmp/
 .pytest-tmp-local/
 ruff_errors.json
 
@@ -126,3 +133,6 @@ logs/metrics.json
 evals/results.json
 evals/results/
 blackboard.json
+
+# Retired one-off / backlog-generator scripts (Phase 0 TASK-V3-P0-02)
+scripts/legacy/

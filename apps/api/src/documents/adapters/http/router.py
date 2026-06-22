@@ -27,11 +27,11 @@ from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.rag_service import (
     RagProjectNotFoundError,
     RagProviderUnavailableError,
 )
+from src.documents.adapters.rag.rag_service_adapter import SqlAlchemyRagService
 from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
@@ -86,6 +86,9 @@ from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository imp
     SqlAlchemyStakeholderRepository,
 )
 from src.stakeholders.application.create_stakeholder_use_case import CreateStakeholderUseCase
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
 
 logger = structlog.get_logger()
 
@@ -211,23 +214,36 @@ def get_rag_ingestion_service(
     return SqlAlchemyRagIngestionService(db_session=db)
 
 
+def get_document_revision_repository(
+    db: AsyncSession = Depends(get_session),
+) -> SqlAlchemyDocumentRevisionRepository:
+    return SqlAlchemyDocumentRevisionRepository(session=db)
+
+
 def get_upload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     storage: LocalFileStorageService = Depends(get_storage_service),
     project_repo: ProjectRepository = Depends(get_project_repository),
+    rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
 ) -> UploadDocumentUseCase:
     return UploadDocumentUseCase(
         document_repository=repo,
         storage_service=storage,
         project_repository=project_repo,
+        revision_repository=rev_repo,
     )
 
 
 def get_reupload_use_case(
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
+    storage: LocalFileStorageService = Depends(get_storage_service),
 ) -> ReuploadDocumentUseCase:
-    """Dependency for ReuploadDocumentUseCase (TASK-BCK-023)."""
-    return ReuploadDocumentUseCase(document_repository=repo)
+    return ReuploadDocumentUseCase(
+        document_repository=repo,
+        revision_repository=rev_repo,
+        storage_service=storage,
+    )
 
 
 def get_get_document_use_case(

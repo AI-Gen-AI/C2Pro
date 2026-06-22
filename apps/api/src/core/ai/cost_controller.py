@@ -11,6 +11,11 @@ from src.core.tenants.service import get_tenant_by_id
 logger = structlog.get_logger()
 
 
+def _utcnow_naive() -> datetime:
+    """TS-UD-AI-COST-001: return UTC now for legacy TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class BudgetExceededException(Exception):
     """Raised when a tenant's budget is exceeded."""
 
@@ -40,7 +45,7 @@ class CostControllerService:
             )
 
         # Reset monthly budget if needed.
-        now = datetime.now(UTC)
+        now = _utcnow_naive()
         if tenant.ai_spend_last_reset is None or (
             now.year > tenant.ai_spend_last_reset.year
             or now.month > tenant.ai_spend_last_reset.month
@@ -123,4 +128,3 @@ class CostControllerService:
         input_cost = (input_tokens / 1_000_000) * input_price_per_million
         output_cost = (output_tokens / 1_000_000) * output_price_per_million
         return input_cost + output_cost
-

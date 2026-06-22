@@ -8,6 +8,8 @@ Test Suite ID: TS-QA-SWAGGER-ANALYSIS-001
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -24,12 +26,134 @@ from src.analysis.adapters.ai.agents.risk_extractor import (
 from src.analysis.domain.risk_categories import normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
-from src.core.ai.tools import BaseTool, ToolResult, register_tool
+from src.core.ai.tools import BaseTool, RetryPolicy, ToolResult, register_tool
 
 if TYPE_CHECKING:
     from src.analysis.adapters.graph.schema import ProjectState
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Filter configuration — multilingual (ES + EN) and env-tunable.
+#
+# Background: the filter is applied to the full document text before the LLM
+# call. It (1) drops obviously irrelevant paragraphs (price tables, BOMs) and
+# (2) selects substantive risk-bearing paragraphs. Until this change the
+# keyword lists were Spanish-only, which silently fell through on English
+# contracts ("filter matched nothing → use all paragraphs") and then
+# truncated to 15000 chars — losing ~37% of even modestly-sized contracts.
+# Diagnosis: scripts/diagnose_chunks.py on the live EPC contract.
+# ---------------------------------------------------------------------------
+
+_INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
+    "condiciones particulares",
+    "condiciones especiales",
+    "memoria tecnica",
+    "memoria del proyecto",
+    "alcance",
+    "penal",
+    "multa",
+    "garantia",
+    "responsabilidad",
+    "retraso",
+    "cronograma",
+    "ruta critica",
+    "dependencia",
+    "permisos",
+    "aprobacion",
+    "geotec",
+    "suelo",
+    "seguridad",
+    "ambiental",
+    "calidad",
+    "especificacion",
+    "ensayo",
+    "prueba",
+)
+
+_INCLUDE_KEYWORDS_EN: tuple[str, ...] = (
+    "particular conditions",
+    "general conditions",
+    "scope",
+    "penalty",
+    "liquidated damages",
+    "fine",
+    "warranty",
+    "warranties",
+    "liability",
+    "liabilities",
+    "indemnif",          # indemnify, indemnification, indemnity
+    "responsibility",
+    "obligation",
+    "default",
+    "breach",
+    "terminate",
+    "termination",
+    "force majeure",
+    "delay",
+    "schedule",
+    "completion",
+    "milestone",
+    "critical path",
+    "dependency",
+    "permit",
+    "approval",
+    "geotech",
+    "soil",
+    "safety",
+    "environmental",
+    "quality",
+    "specification",
+    "test",
+    "commissioning",
+    "performance",
+    "governing law",
+    "dispute",
+    "arbitration",
+    "insurance",
+)
+
+_EXCLUDE_KEYWORDS_ES: tuple[str, ...] = (
+    "tabla de precios",
+    "precio unitario",
+    "medicion y pago",
+    "presupuesto",
+    "subtotal",
+)
+
+_EXCLUDE_KEYWORDS_EN: tuple[str, ...] = (
+    "price schedule",
+    "unit price",
+    "bill of materials",
+    "bom",
+    "subtotal",
+)
+
+_INCLUDE_KEYWORDS: tuple[str, ...] = _INCLUDE_KEYWORDS_ES + _INCLUDE_KEYWORDS_EN
+_EXCLUDE_KEYWORDS: tuple[str, ...] = _EXCLUDE_KEYWORDS_ES + _EXCLUDE_KEYWORDS_EN
+
+
+def _resolve_max_chars() -> int:
+    """Read RISK_EXTRACTION_MAX_CHARS env var, with safe defaults.
+
+    The previous hard-coded 15000 was tuned for Claude pre-200K-context
+    models. Modern Claude models accept far more — 40000 chars (~10K
+    tokens) is still well within any reasonable context budget.
+    Configurable so ops can tune per-environment.
+    """
+    raw = os.getenv("RISK_EXTRACTION_MAX_CHARS")
+    if raw is None:
+        return 40_000
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "risk_extraction_max_chars_invalid",
+            extra={"raw_value": raw, "fallback": 40_000},
+        )
+        return 40_000
+    return max(5_000, min(value, 200_000))
 
 
 class RiskExtractionInput(BaseModel):
@@ -62,6 +186,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     description = "Extracts and scores risks from contract documents"
     task_type = AITaskType.COMPLEX_EXTRACTION
     prompt_template_name = None  # Using inline prompt for now
+    retry_policy = RetryPolicy(max_retries=0)
 
     async def _execute_impl(
         self,
@@ -69,15 +194,14 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         tenant_id: UUID | None,
         ai_response: AIResponse,
     ) -> list[RiskItem]:
-        """Parse AI response and apply domain logic."""
-        _ = tenant_id
+        """Parse AI response and apply domain logic.
 
-        # Apply filtering if requested
-        if input_data.filter_relevant:
-            filtered_text = self._filter_relevant_text(input_data.document_text)
-        else:
-            filtered_text = input_data.document_text
-        input_data = input_data.model_copy(update={"document_text": filtered_text})
+        Note: relevance filtering is applied in ``extract_input_from_state``
+        BEFORE the LLM call, not here. Historically the filter ran in this
+        method on a local copy that was immediately discarded, so the LLM
+        always saw the unfiltered text. That was a latent no-op.
+        """
+        _ = tenant_id
 
         # Parse JSON response
         try:
@@ -88,6 +212,11 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Extract risk items
         items = self._extract_items(payload)
+        if not items and input_data.document_text.strip():
+            raise ValueError(
+                "No risk items extracted from non-empty contract text. "
+                "The model response must include at least one valid risk item."
+            )
 
         # Coerce to RiskItem models with validation
         risks: list[RiskItem] = []
@@ -98,6 +227,11 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
                 risk.risk_score = self._calculate_risk_score(risk)
                 risk.immediate_alert = self._is_immediate_alert(risk)
                 risks.append(risk)
+        if not risks and input_data.document_text.strip():
+            raise ValueError(
+                "No risk items extracted from non-empty contract text. "
+                "The model response did not contain any valid risk items."
+            )
 
         logger.info(
             "risk_extraction_parse_diagnostics",
@@ -119,10 +253,32 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         return risks
 
     def extract_input_from_state(self, state: ProjectState) -> RiskExtractionInput:
-        """Extract input from LangGraph state."""
-        # Apply document augmentation from state
-        doc_text = state["document_text"]
+        """Extract input from LangGraph state.
 
+        Applies relevance filtering HERE (pre-LLM) so the prompt actually
+        respects the multilingual include/exclude keywords and the
+        ``RISK_EXTRACTION_MAX_CHARS`` cap. The augmentation suffixes
+        (critique_notes, human_feedback) are appended after filtering so
+        they are never stripped — they are always relevant signal.
+        """
+        doc_text = state["document_text"]
+        original_chars = len(doc_text)
+
+        filter_relevant = True
+        if filter_relevant:
+            filtered = self._filter_relevant_text(doc_text)
+            logger.info(
+                "risk_extraction_input_prepared",
+                extra={
+                    "original_chars": original_chars,
+                    "filtered_chars": len(filtered),
+                    "delta": original_chars - len(filtered),
+                },
+            )
+            doc_text = filtered
+
+        # Augmentation suffixes — keep them OUTSIDE the filter so they
+        # always reach the LLM.
         if state.get("critique_notes"):
             doc_text = f"{doc_text}\n\nCRITIQUE: {state['critique_notes']}"
 
@@ -132,7 +288,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         return RiskExtractionInput(
             document_text=doc_text,
             max_risks=20,
-            filter_relevant=True,
+            filter_relevant=filter_relevant,
         )
 
     def inject_output_into_state(
@@ -172,39 +328,58 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
     def _build_default_prompt(
         self, input_data: RiskExtractionInput, is_retry: bool
     ) -> tuple[str, str | None]:
-        """Build prompt for risk extraction."""
+        """Build prompt for risk extraction.
+
+        Prompt is in English (LLM-native language) per [[reference_model_routing_c2pro]] —
+        Spanish prompts on English contracts make Claude generate prose
+        instead of strict JSON and hit the output token cap before closing
+        the JSON. Output text fields ARE allowed to be in any language;
+        what matters is that the JSON envelope and keywords stay machine-
+        parseable.
+        """
         system_prompt = """
-Eres un analista senior de riesgos de proyectos de infraestructura.
-Extrae riesgos contractuales y del proyecto de las secciones narrativas del contrato.
+You are a senior project risk analyst for infrastructure contracts (EPC, IPC, EPCM, civil works).
 
-Identifica:
-- Riesgos LEGALES: obligaciones, penalizaciones, responsabilidades
-- Riesgos FINANCIEROS: garantías, multas, pagos
-- Riesgos de CRONOGRAMA: plazos críticos, dependencias, retrasos
-- Riesgos TÉCNICOS: especificaciones, geotecnia, calidad
-- Riesgos HSE: seguridad, medio ambiente, permisos
-- Riesgos de CALIDAD: ensayos, pruebas, normativas
+Extract risks from the narrative clauses of the contract. Identify:
 
-Para cada riesgo devuelve:
+- LEGAL risks: obligations, penalties, termination, indemnification, dispute resolution, governing law, force majeure, liability cap, warranty
+- BUDGET risks: bank guarantees, liquidated damages, payment terms, advance/retention, price escalation, currency
+- SCHEDULE risks: critical deadlines, milestones, dependencies, delay events, effective date conditions
+- TECHNICAL risks: specifications, performance tests, geotechnics, interface, commissioning
+- QUALITY risks: inspections, standards, factory/site acceptance tests, defects liability, safety, environmental, permits
+- SCOPE risks: scope of work, exclusions, responsibilities, interfaces, change management
+
+For each risk, return a JSON object with EXACTLY these keys:
+
 {
-  "title": "Título breve del riesgo",
-  "description": "Descripción detallada",
-  "category": "LEGAL|FINANCIAL|SCHEDULE|TECHNICAL|HSE|QUALITY",
-  "severity": "LOW|MEDIUM|HIGH|CRITICAL",
-  "source": "Cita textual exacta del documento"
+  "category": "LEGAL|SCHEDULE|QUALITY|SCOPE|TECHNICAL|BUDGET",
+  "title": "Short risk title",
+  "summary": "One-sentence summary",
+  "description": "Detailed risk description grounded in the cited clause",
+  "probability": "LOW|MEDIUM|HIGH",
+  "impact": "LOW|MEDIUM|HIGH|CRITICAL",
+  "mitigation_suggestion": "Concrete mitigation step",
+  "source_quote": "Verbatim multi-sentence excerpt from the contract that substantiates the risk (NOT a section heading or single word — at least 80 chars of real contract text)",
+  "source_text_snippet": "Same or longer surrounding context for traceability"
 }
 
-IMPORTANTE: Devuelve SOLO este JSON, sin Markdown, sin texto adicional:
-{"risks":[{"title":"...","description":"...","category":"LEGAL","severity":"HIGH","source":"..."}]}
+CRITICAL OUTPUT RULES:
+
+1. Respond with ONLY a JSON object — no markdown, no prose, no explanations, no code fences.
+2. The JSON envelope MUST be exactly: {"risks": [ ... ]}
+3. Every risk MUST have all keys above. Omit risks you cannot ground in a verbatim quote.
+4. Prefer FEWER, well-grounded risks (3-8) over many superficial ones.
+5. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
 """.strip()
 
-        user_prompt = f"DOCUMENTO:\n\n{input_data.document_text}"
+        user_prompt = f"CONTRACT:\n\n{input_data.document_text}"
 
         if is_retry:
             user_prompt = (
                 f"{user_prompt}\n\n"
-                "IMPORTANTE: Responde SOLO con JSON válido. "
-                "No uses Markdown, no agregues explicaciones."
+                "REMINDER: Respond with ONLY valid JSON. "
+                "No markdown, no prose, no explanations. "
+                'Envelope must be exactly {"risks": [...]}.'
             )
 
         return user_prompt, system_prompt
@@ -356,60 +531,52 @@ IMPORTANTE: Devuelve SOLO este JSON, sin Markdown, sin texto adicional:
         return None
 
     def _filter_relevant_text(self, text: str) -> str:
-        """Filter text to relevant sections for risk extraction."""
+        """Filter text to relevant sections for risk extraction.
+
+        Multilingual (ES+EN) keyword include/exclude. Truncation cap is
+        configurable via ``RISK_EXTRACTION_MAX_CHARS`` (default 40,000).
+        Logs structured events when the include filter falls through
+        (no paragraphs matched), so this failure mode is observable.
+        """
         paragraphs = self._split_paragraphs(text)
         if not paragraphs:
             return text.strip()
 
-        include_keywords = (
-            "condiciones particulares",
-            "condiciones especiales",
-            "memoria tecnica",
-            "memoria del proyecto",
-            "alcance",
-            "penal",
-            "multa",
-            "garantia",
-            "responsabilidad",
-            "retraso",
-            "cronograma",
-            "ruta critica",
-            "dependencia",
-            "permisos",
-            "aprobacion",
-            "geotec",
-            "suelo",
-            "seguridad",
-            "ambiental",
-            "calidad",
-            "especificacion",
-            "ensayo",
-            "prueba",
-        )
-        exclude_keywords = (
-            "tabla de precios",
-            "precio unitario",
-            "medicion y pago",
-            "presupuesto",
-            "subtotal",
-            "total",
-            "bill of materials",
-            "bom",
-        )
-
-        selected = []
+        selected: list[str] = []
         for paragraph in paragraphs:
             lower = paragraph.lower()
-            if any(keyword in lower for keyword in exclude_keywords):
+            if any(keyword in lower for keyword in _EXCLUDE_KEYWORDS):
                 continue
-            if any(keyword in lower for keyword in include_keywords):
+            if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
                 selected.append(paragraph)
 
-        if not selected:
+        filter_fell_through = not selected
+        if filter_fell_through:
             selected = paragraphs
+            logger.info(
+                "risk_extraction_filter_fellthrough",
+                extra={
+                    "paragraphs_total": len(paragraphs),
+                    "doc_chars": len(text),
+                    "reason": "no_include_keyword_match",
+                },
+            )
 
         combined = "\n\n".join(selected)
-        return self._truncate(combined, max_chars=15000)
+        max_chars = _resolve_max_chars()
+        truncated = self._truncate(combined, max_chars=max_chars)
+        if len(combined) > len(truncated):
+            logger.info(
+                "risk_extraction_filter_truncated",
+                extra={
+                    "original_chars": len(combined),
+                    "truncated_chars": len(truncated),
+                    "dropped_chars": len(combined) - len(truncated),
+                    "max_chars_cap": max_chars,
+                    "filter_fell_through": filter_fell_through,
+                },
+            )
+        return truncated
 
     def _split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""
