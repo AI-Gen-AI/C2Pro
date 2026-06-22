@@ -11,6 +11,7 @@ Refers to Suite ID: TS-OPS-CELERY-QUEUE-001.
 
 from celery import Celery
 
+import src.analysis.adapters.ai.tools  # noqa: F401 - registers @register_tool classes for workers
 from src.config import settings
 
 # --- Celery Application Instance ---
@@ -26,6 +27,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
+        "src.analysis.adapters.ai.tools",
         "src.core.tasks.ingestion_tasks",
         "src.core.tasks.budget_alerts",
         "src.core.tasks.snapshot_tasks",

@@ -3218,7 +3218,11 @@ paths:
     post:
       tags:
       - analysis
-      summary: Analyze Document
+      summary: Preview document analysis without persistence
+      description: Runs a synchronous non-persisting analysis preview. This endpoint
+        may stop at critique/HITL and does not create Analysis rows, alerts, or coherence
+        records. Use the document reprocess/full pipeline path for persisted analysis
+        and alert generation.
       operationId: analyze_document_api_v1_analysis_analyze_post
       requestBody:
         content:
@@ -4229,6 +4233,19 @@ components:
           - type: string
           - type: 'null'
           title: Analysis Id
+        persisted:
+          type: boolean
+          title: Persisted
+          default: false
+        mode:
+          type: string
+          title: Mode
+          default: preview
+        persistence_message:
+          type: string
+          title: Persistence Message
+          default: Preview only - not persisted; alerts and coherence are produced
+            by the full analysis pipeline. Trigger it via document reprocess.
         risks:
           items:
             additionalProperties: true
@@ -6992,8 +7009,10 @@ components:
           type: string
           title: Resolution
         resolved_by:
-          type: string
-          format: uuid
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
           title: Resolved By
         root_cause:
           anyOf:
@@ -7003,7 +7022,6 @@ components:
       type: object
       required:
       - resolution
-      - resolved_by
       title: ResolveAlertRequest
     ResumeWorkflowRequest:
       properties:
