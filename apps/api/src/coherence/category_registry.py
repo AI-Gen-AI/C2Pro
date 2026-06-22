@@ -183,14 +183,13 @@ def load_category_registry(path: str | Path | None = None) -> CategoryRegistry:
             path = Path(env_path)
         else:
             # Fallback path checking sequence
+            source_path = Path(__file__)
             candidates = [
-                # 1. Path relative to workspace root (when running from workspace root or tests)
+                source_path.with_name("category_registry.yaml"),
                 Path("docs/coherence_engine/category_registry.yaml"),
-                # 2. Path relative to this source file
-                Path(__file__).parents[4] / "docs" / "coherence_engine" / "category_registry.yaml",
-                # 3. Alternative local workspace path
-                Path(__file__).parents[5] / "docs" / "coherence_engine" / "category_registry.yaml",
             ]
+            for parent in source_path.parents:
+                candidates.append(parent / "docs" / "coherence_engine" / "category_registry.yaml")
             for candidate in candidates:
                 if candidate.exists():
                     path = candidate
