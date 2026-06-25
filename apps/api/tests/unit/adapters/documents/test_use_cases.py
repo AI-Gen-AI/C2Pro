@@ -7,11 +7,74 @@ Priority: P2
 Tests to improve coverage for document use cases.
 """
 
+from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+
+from src.config import settings
+from src.documents.domain.models import DocumentType
+
+
+def _make_upload_file(filename: str, size: int = 4):
+    return SimpleNamespace(filename=filename, size=size, file=BytesIO(b"x" * size))
+
+
+class TestCreateAndQueueDocumentUseCase:
+    """Tests for CreateAndQueueDocumentUseCase."""
+
+    @pytest.mark.asyncio
+    async def test_contract_docx_is_allowed(self, monkeypatch):
+        """Test queued contract uploads accept DOCX as a text document format."""
+        from src.documents.application.create_and_queue_document_use_case import (
+            CreateAndQueueDocumentUseCase,
+        )
+
+        monkeypatch.setattr(settings, "allowed_document_types", [".pdf", ".docx"])
+        project_id = uuid4()
+        tenant_id = uuid4()
+        repo = AsyncMock()
+        repo.get_project_tenant_id.return_value = tenant_id
+
+        use_case = CreateAndQueueDocumentUseCase(repo)
+        document = await use_case.execute(
+            project_id=project_id,
+            file=_make_upload_file("contract.docx"),
+            document_type=DocumentType.CONTRACT,
+            user_id=uuid4(),
+            tenant_id=tenant_id,
+        )
+
+        assert document.file_format == ".docx"
+        assert document.document_type == DocumentType.CONTRACT
+        repo.add.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_schedule_docx_is_rejected_before_queueing(self, monkeypatch):
+        """Test DOCX is rejected for structured schedule documents."""
+        from src.documents.application.create_and_queue_document_use_case import (
+            CreateAndQueueDocumentUseCase,
+        )
+
+        monkeypatch.setattr(settings, "allowed_document_types", [".pdf", ".docx", ".xlsx", ".bc3"])
+        repo = AsyncMock()
+        use_case = CreateAndQueueDocumentUseCase(repo)
+
+        with pytest.raises(HTTPException) as exc:
+            await use_case.execute(
+                project_id=uuid4(),
+                file=_make_upload_file("schedule.docx"),
+                document_type=DocumentType.SCHEDULE,
+                user_id=uuid4(),
+                tenant_id=uuid4(),
+            )
+
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "budget/schedule require .xlsx/.bc3"
+        repo.get_project_tenant_id.assert_not_awaited()
 
 
 class TestExtractEntitiesUseCase:

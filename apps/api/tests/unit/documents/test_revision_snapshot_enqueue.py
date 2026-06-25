@@ -158,3 +158,36 @@ async def test_reupload_enqueues_revision_ingested_snapshot(monkeypatch) -> None
             "source_event_id": revision_repo.appended[-1].revision_id,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_reupload_rejects_docx_for_schedule_document() -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    current_doc = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.SCHEDULE,
+        filename="schedule.xlsx",
+        file_hash="old",
+        version=1,
+        upload_status=DocumentStatus.UPLOADED,
+    )
+
+    class _DocRepo:
+        async def get_by_id(self, _tenant_id, _document_id):
+            return current_doc
+
+    with pytest.raises(ValueError, match="budget/schedule require .xlsx/.bc3"):
+        await ReuploadDocumentUseCase(
+            document_repository=_DocRepo(),
+            revision_repository=_RevisionRepo(),
+            storage_service=_Storage(),
+        ).execute(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            file_content=b"new content",
+            filename="schedule.docx",
+        )

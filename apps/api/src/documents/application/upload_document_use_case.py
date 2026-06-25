@@ -20,6 +20,9 @@ from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.ports.document_revision_repository import IDocumentRevisionRepository
 
+STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
+STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
+
 
 def _now_naive():
     return datetime.now(UTC).replace(tzinfo=None)
@@ -74,6 +77,11 @@ class UploadDocumentUseCase:
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. "
                 f"Allowed types: {', '.join(settings.allowed_document_types)}",
+            )
+        if file_extension == ".docx" and document_type in STRUCTURED_DOCUMENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=STRUCTURED_DOCX_ERROR,
             )
 
         project_exists = await self.project_repository.exists_by_id(project_id, tenant_id)

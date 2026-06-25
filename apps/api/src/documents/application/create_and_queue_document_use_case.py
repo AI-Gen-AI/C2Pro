@@ -10,6 +10,9 @@ from src.config import settings  # Keep settings for validation for now
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
 
+STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
+STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
+
 
 class CreateAndQueueDocumentUseCase:
     def __init__(self, document_repository: IDocumentRepository):
@@ -47,6 +50,11 @@ class CreateAndQueueDocumentUseCase:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. Allowed types: {', '.join(settings.allowed_document_types)}",
+            )
+        if file_extension == ".docx" and document_type in STRUCTURED_DOCUMENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=STRUCTURED_DOCX_ERROR,
             )
 
         # 2. Verify project ownership (optional but recommended if tenant_id is available)
