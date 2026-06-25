@@ -83,7 +83,7 @@ async def test_stakeholder_repository_get_by_id_filters_by_tenant_id() -> None:
     await repo.get_by_id(stakeholder_id=uuid4(), tenant_id=uuid4())
 
     stmt = session.execute.call_args.args[0]
-    assert "projects.tenant_id" in str(stmt)
+    assert "stakeholders.tenant_id" in str(stmt)
 
 
 @pytest.mark.asyncio
@@ -99,4 +99,4 @@ async def test_stakeholder_repository_list_by_project_filters_by_tenant_id() -> 
     await repo.get_stakeholders_by_project(project_id=uuid4(), tenant_id=uuid4())
 
     first_stmt = session.execute.call_args_list[0].args[0]
-    assert "projects.tenant_id" in str(first_stmt)
+    assert "stakeholders.tenant_id" in str(first_stmt)

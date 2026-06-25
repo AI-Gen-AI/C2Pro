@@ -26,6 +26,7 @@ class TestIEntityExtractionServicePort:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -51,6 +52,7 @@ class TestIFileParserServicePort:
         result = await mock_service.parse_document_file(Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -73,6 +75,7 @@ class TestIRagServicePort:
         result = await mock_service.ingest_document(
             document_id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             text_content="Test content"
         )
 
@@ -111,6 +114,7 @@ class TestIRagIngestionServicePort:
         result = await mock_service.ingest_document_chunks(
             document_id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             text_content="Test content"
         )
 

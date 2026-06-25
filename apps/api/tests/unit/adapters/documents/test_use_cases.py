@@ -32,6 +32,7 @@ class TestExtractEntitiesUseCase:
         mock_doc = Document(
             id=document_id,
             project_id=project_id,
+            tenant_id=tenant_id,
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             file_format=".pdf",
@@ -49,7 +50,7 @@ class TestExtractEntitiesUseCase:
             entity_extraction_service=mock_extraction,
         )
 
-        result = await use_case.execute(document_id, {"text": "test"})
+        result = await use_case.execute(tenant_id, document_id, {"text": "test"})
 
         assert result == {"companies": 2, "dates": 5}
 
@@ -69,30 +70,21 @@ class TestExtractEntitiesUseCase:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await use_case.execute(uuid4(), {})
+            await use_case.execute(uuid4(), uuid4(), {})
 
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_execute_project_not_found(self):
-        """Test execute raises 404 when project not found."""
+    async def test_execute_access_denied(self):
+        """Test execute raises 404 when tenant-scoped document lookup fails."""
         from src.documents.application.extract_entities_use_case import ExtractEntitiesUseCase
-        from src.documents.domain.models import Document, DocumentType
 
         mock_repo = MagicMock()
         mock_extraction = MagicMock()
 
-        mock_doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            document_type=DocumentType.CONTRACT,
-            filename="test.pdf",
-            file_format=".pdf",
-            upload_status="uploaded",
-        )
-
-        mock_repo.get_by_id = AsyncMock(return_value=mock_doc)
-        mock_repo.get_project_tenant_id = AsyncMock(return_value=None)
+        tenant_id = uuid4()
+        document_id = uuid4()
+        mock_repo.get_by_id = AsyncMock(return_value=None)
 
         use_case = ExtractEntitiesUseCase(
             document_repository=mock_repo,
@@ -100,9 +92,10 @@ class TestExtractEntitiesUseCase:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await use_case.execute(uuid4(), {})
+            await use_case.execute(tenant_id, document_id, {})
 
         assert exc_info.value.status_code == 404
+        mock_repo.get_by_id.assert_awaited_once_with(tenant_id, document_id)
 
 
 class TestListProjectDocumentsUseCase:
@@ -125,6 +118,7 @@ class TestListProjectDocumentsUseCase:
             Document(
                 id=uuid4(),
                 project_id=project_id,
+                tenant_id=uuid4(),
                 document_type=DocumentType.CONTRACT,
                 filename="doc1.pdf",
                 file_format=".pdf",
@@ -190,6 +184,7 @@ class TestAnswerRagQuestionUseCase:
         result = await use_case.execute(
             question="What is the total?",
             project_id=uuid4(),
+            tenant_id=uuid4(),
             top_k=5,
         )
 
@@ -213,6 +208,7 @@ class TestAnswerRagQuestionUseCase:
         result = await use_case.execute(
             question="What is the total?",
             project_id=uuid4(),
+            tenant_id=uuid4(),
             top_k=5,
         )
 
@@ -235,7 +231,7 @@ class TestCheckClauseExistsUseCase:
         mock_repo.clause_exists = AsyncMock(return_value=True)
 
         use_case = CheckClauseExistsUseCase(document_repository=mock_repo)
-        result = await use_case.execute(clause_id=clause_id)
+        result = await use_case.execute(tenant_id=uuid4(), clause_id=clause_id)
 
         assert result is True
 
@@ -252,7 +248,7 @@ class TestCheckClauseExistsUseCase:
         mock_repo.clause_exists = AsyncMock(return_value=False)
 
         use_case = CheckClauseExistsUseCase(document_repository=mock_repo)
-        result = await use_case.execute(clause_id=clause_id)
+        result = await use_case.execute(tenant_id=uuid4(), clause_id=clause_id)
 
         assert result is False
 
@@ -275,7 +271,7 @@ class TestGetClauseTextMapUseCase:
         )
 
         use_case = GetClauseTextMapUseCase(document_repository=mock_repo)
-        result = await use_case.execute(clause_ids=clause_ids)
+        result = await use_case.execute(tenant_id=uuid4(), clause_ids=clause_ids)
 
         assert isinstance(result, dict)
 
@@ -289,6 +285,6 @@ class TestGetClauseTextMapUseCase:
         mock_repo = MagicMock()
 
         use_case = GetClauseTextMapUseCase(document_repository=mock_repo)
-        result = await use_case.execute(clause_ids=[])
+        result = await use_case.execute(tenant_id=uuid4(), clause_ids=[])
 
         assert result == {}

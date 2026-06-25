@@ -29,7 +29,14 @@ def test_persist_node_error_event_kwargs_match_evidence_event_orm() -> None:
 
 def test_helper_broad_except_comments_are_specific() -> None:
     """TS-ADR-013-GRAPH-001 - Helper broad-except comments must describe the actual fail-closed behavior."""
-    source = Path("apps/api/src/analysis/adapters/graph/nodes_extended.py").read_text()
+    source = (
+        Path(__file__).parents[3]
+        / "src"
+        / "analysis"
+        / "adapters"
+        / "graph"
+        / "nodes_extended.py"
+    ).read_text()
 
     assert "explicit NodeResult remains the source of truth" not in source
     assert "flag resolution fail-closed." not in source
