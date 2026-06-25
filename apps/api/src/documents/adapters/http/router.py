@@ -22,6 +22,7 @@ from src.documents.adapters.extraction.documents_entity_extraction_service impor
 )
 from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
+from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
@@ -103,7 +104,9 @@ router = APIRouter(
     },
 )
 
-ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".bc3"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".bc3"}
+STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
+STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
 
 def _get_upload_file_size(file: UploadFile) -> int:
@@ -116,6 +119,26 @@ def _get_upload_file_size(file: UploadFile) -> int:
     size = file.file.tell()
     file.file.seek(current_position)
     return size
+
+
+def _validate_upload_extension(
+    file_extension: str,
+    document_type: DocumentType | None = None,
+) -> None:
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type '{file_extension}' is not allowed.",
+        )
+    if (
+        file_extension == ".docx"
+        and document_type is not None
+        and document_type in STRUCTURED_DOCUMENT_TYPES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=STRUCTURED_DOCX_ERROR,
+        )
 
 
 def _enqueue_document_processing(document_id: UUID) -> str | None:
@@ -179,6 +202,7 @@ def get_file_parser_service() -> CompositeFileParser:
         bc3_parser=BC3FileParser(),
         excel_parser=ExcelFileParser(),
         pdf_parser=PDFFileParser(),
+        docx_parser=DocxFileParser(),
     )
 
 
@@ -362,11 +386,7 @@ async def upload_document_for_processing(
         )
 
     file_extension = pathlib.Path(file.filename).suffix.lower()
-    if file_extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type '{file_extension}' is not allowed.",
-        )
+    _validate_upload_extension(file_extension, document_type)
 
     document = await upload_use_case.execute(
         project_id=project_id,
@@ -417,11 +437,7 @@ async def reupload_document_file(
         )
 
     file_extension = pathlib.Path(file.filename).suffix.lower()
-    if file_extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type '{file_extension}' is not allowed.",
-        )
+    _validate_upload_extension(file_extension)
 
     # Read file content
     file_content = await file.read()
@@ -434,6 +450,11 @@ async def reupload_document_file(
             filename=file.filename,
         )
     except ValueError as e:
+        if str(e) == STRUCTURED_DOCX_ERROR:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),

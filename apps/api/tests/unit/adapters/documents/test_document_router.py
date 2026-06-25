@@ -172,6 +172,29 @@ class TestDocumentUpload:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert ".exe" in response.json()["detail"]
 
+    def test_doc_http_000c_upload_rejects_budget_docx(self, client, app, sample_document):
+        """DOC-HTTP-000C - budget/schedule DOCX uploads are rejected as structured docs."""
+        from src.documents.adapters.http.router import get_upload_use_case
+
+        mock_upload_use_case = MagicMock()
+        mock_upload_use_case.execute = AsyncMock(return_value=sample_document)
+        app.dependency_overrides[get_upload_use_case] = lambda: mock_upload_use_case
+
+        files = {
+            "file": (
+                "budget.docx",
+                b"docx content",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        }
+        data = {"document_type": "budget"}
+
+        response = client.post(f"/projects/{sample_document.project_id}/documents", files=files, data=data)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["detail"] == "budget/schedule require .xlsx/.bc3"
+        mock_upload_use_case.execute.assert_not_awaited()
+
     def test_doc_http_001_upload_success(self, client):
         """
         🔴 RED: DOC-HTTP-001 - Test successful document upload
@@ -678,6 +701,7 @@ class TestDocumentHelpers:
         from src.documents.adapters.http.router import ALLOWED_EXTENSIONS
 
         assert ".pdf" in ALLOWED_EXTENSIONS
+        assert ".docx" in ALLOWED_EXTENSIONS
         assert ".xlsx" in ALLOWED_EXTENSIONS
         assert ".bc3" in ALLOWED_EXTENSIONS
 

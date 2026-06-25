@@ -7,12 +7,13 @@ Blobs are content-addressed by sha256 and stored via IStorageService.
 Part of TASK-BCK-023 + TASK-V3-015-02.
 """
 import hashlib
+import os
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.documents.application.dtos import DocumentDTO
-from src.documents.domain.models import DocumentStatus
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
@@ -22,6 +23,10 @@ from src.temporal.ports.document_revision_repository import IDocumentRevisionRep
 
 def _now_naive():
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
+STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
 
 class ReuploadDocumentUseCase:
@@ -83,6 +88,9 @@ class ReuploadDocumentUseCase:
         document = await self.document_repository.get_by_id(tenant_id, document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found or access denied")
+        file_extension = os.path.splitext(filename or document.filename)[1].lower()
+        if file_extension == ".docx" and document.document_type in STRUCTURED_DOCUMENT_TYPES:
+            raise ValueError(STRUCTURED_DOCX_ERROR)
 
         new_file_hash = hashlib.sha256(file_content).hexdigest()
 

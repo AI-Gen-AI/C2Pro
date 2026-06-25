@@ -23,7 +23,10 @@ class TestUploadDocumentUseCase:
     def _make_upload_file(self, filename: str, size: int):
         file_obj = BytesIO(b"x" * size)
         file_obj.seek = Mock(wraps=file_obj.seek)
-        return SimpleNamespace(filename=filename, size=size, file=file_obj)
+        async def read() -> bytes:
+            return file_obj.read()
+
+        return SimpleNamespace(filename=filename, size=size, file=file_obj, read=read)
 
     @pytest.mark.asyncio
     async def test_001_rejects_file_over_size_limit(self):
@@ -134,3 +137,55 @@ class TestUploadDocumentUseCase:
         project_repository.exists_by_id.assert_awaited_once_with(project_id, tenant_id)
         repo.refresh.assert_awaited_once_with(added_doc)
         assert isinstance(document.id, UUID)
+
+    @pytest.mark.asyncio
+    async def test_005_contract_docx_upload_is_allowed(self, monkeypatch):
+        monkeypatch.setattr(settings, "allowed_document_types", [".pdf", ".docx"])
+
+        file = self._make_upload_file("contract.docx", 4)
+        project_id = uuid4()
+        user_id = uuid4()
+        tenant_id = uuid4()
+
+        repo = AsyncMock()
+        storage = AsyncMock()
+        storage.upload_file.return_value = "/local-storage/contract.docx"
+        project_repository = AsyncMock()
+        project_repository.exists_by_id.return_value = True
+
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
+
+        document = await use_case.execute(
+            project_id=project_id,
+            file=file,
+            document_type=DocumentType.CONTRACT,
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+
+        assert document.file_format == ".docx"
+        storage.upload_file.assert_awaited_once()
+        assert storage.upload_file.call_args.kwargs["file_extension"] == ".docx"
+
+    @pytest.mark.asyncio
+    async def test_006_budget_docx_upload_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(settings, "allowed_document_types", [".pdf", ".docx", ".xlsx", ".bc3"])
+        file = self._make_upload_file("budget.docx", 4)
+
+        repo = AsyncMock()
+        storage = AsyncMock()
+        project_repository = AsyncMock()
+        use_case = UploadDocumentUseCase(repo, storage, project_repository)
+
+        with pytest.raises(HTTPException) as exc:
+            await use_case.execute(
+                project_id=uuid4(),
+                file=file,
+                document_type=DocumentType.BUDGET,
+                user_id=uuid4(),
+                tenant_id=uuid4(),
+            )
+
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "budget/schedule require .xlsx/.bc3"
+        project_repository.exists_by_id.assert_not_awaited()

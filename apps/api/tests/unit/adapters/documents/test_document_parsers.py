@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from docx import Document as DocxDocument
 from openpyxl import Workbook
 
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
@@ -172,6 +173,46 @@ class TestPDFParser:
             side_effect=RuntimeError("ocr boom"),
         ):
             assert parser._ocr_page(page, 0) is None
+
+
+# ===========================================
+# DOCX PARSER TESTS
+# ===========================================
+
+
+class TestDocxParser:
+    """Tests for DocxFileParser."""
+
+    @staticmethod
+    def _write_docx(tmp_path: Path) -> Path:
+        document = DocxDocument()
+        document.add_paragraph("Contract introduction")
+        table = document.add_table(rows=1, cols=2)
+        table.cell(0, 0).text = "Table party"
+        table.cell(0, 1).text = "Table obligation"
+        document.add_paragraph("Quality closing")
+        docx_path = tmp_path / "contract.docx"
+        document.save(docx_path)
+        return docx_path
+
+    @pytest.mark.asyncio
+    async def test_docx_parser_extracts_paragraphs_and_table_cells_in_order(self, tmp_path):
+        """Test DOCX text extraction includes paragraphs and table cells in document order."""
+        from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
+
+        docx_path = self._write_docx(tmp_path)
+
+        parser = DocxFileParser()
+        result = await parser.extract_text_and_offsets(docx_path)
+
+        assert [block["text"] for block in result] == [
+            "Contract introduction",
+            "Table party",
+            "Table obligation",
+            "Quality closing",
+        ]
+        assert all(block["page"] == 1 for block in result)
+        assert all("bbox" in block for block in result)
 
 
 # ===========================================
@@ -517,18 +558,26 @@ class TestCompositeParser:
         """Test composite parser initialization."""
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
         from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
+        from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
         from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 
         bc3 = BC3FileParser()
         excel = ExcelFileParser()
         pdf = PDFFileParser()
+        docx = DocxFileParser()
 
-        parser = CompositeFileParser(bc3_parser=bc3, excel_parser=excel, pdf_parser=pdf)
+        parser = CompositeFileParser(
+            bc3_parser=bc3,
+            excel_parser=excel,
+            pdf_parser=pdf,
+            docx_parser=docx,
+        )
         assert parser is not None
         assert parser.bc3_parser is bc3
         assert parser.excel_parser is excel
         assert parser.pdf_parser is pdf
+        assert parser.docx_parser is docx
 
     @pytest.mark.asyncio
     async def test_composite_parser_parse_pdf(self, tmp_path):
@@ -594,6 +643,34 @@ class TestCompositeParser:
         assert result == {"file_format": ".pdf", "text_blocks": [{"text": "alpha"}]}
 
     @pytest.mark.asyncio
+    async def test_composite_parser_routes_docx_text_documents(self, sample_document):
+        """Test composite parser delegates DOCX text documents to the docx parser."""
+        from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
+
+        docx_parser = MagicMock()
+        docx_parser.extract_text_and_offsets = AsyncMock(return_value=[{"text": "contract"}])
+        parser = CompositeFileParser(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            docx_parser=docx_parser,
+        )
+        document = Document(
+            id=sample_document.id,
+            project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
+            document_type=DocumentType.CONTRACT,
+            filename="contract.docx",
+            upload_status=DocumentStatus.UPLOADED,
+            file_format=".docx",
+        )
+
+        result = await parser.parse_document_file(document, Path("contract.docx"))
+
+        assert result == {"file_format": ".docx", "text_blocks": [{"text": "contract"}]}
+        docx_parser.extract_text_and_offsets.assert_awaited_once_with(Path("contract.docx"))
+
+    @pytest.mark.asyncio
     async def test_composite_parser_routes_excel_schedule(self, sample_document):
         """Test composite parser routes schedule spreadsheets to parse_schedule."""
         from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
@@ -636,6 +713,34 @@ class TestCompositeParser:
         result = await parser.parse_document_file(document, Path("budget.xlsx"))
 
         assert result == {"file_format": ".xlsx", "budget": [{"item": "Steel"}]}
+
+    @pytest.mark.asyncio
+    async def test_composite_parser_rejects_docx_budget(self, sample_document):
+        """Test DOCX is rejected for structured budget documents."""
+        from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
+
+        docx_parser = MagicMock()
+        docx_parser.extract_text_and_offsets = AsyncMock(return_value=[{"text": "budget"}])
+        parser = CompositeFileParser(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            docx_parser=docx_parser,
+        )
+        document = Document(
+            id=sample_document.id,
+            project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
+            document_type=DocumentType.BUDGET,
+            filename="budget.docx",
+            upload_status=DocumentStatus.UPLOADED,
+            file_format=".docx",
+        )
+
+        with pytest.raises(ValueError, match="budget/schedule require .xlsx/.bc3"):
+            await parser.parse_document_file(document, Path("budget.docx"))
+
+        docx_parser.extract_text_and_offsets.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_composite_parser_routes_bc3(self, sample_document):
