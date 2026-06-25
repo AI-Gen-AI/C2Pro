@@ -14,7 +14,6 @@ import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-import structlog
 from pydantic import BaseModel, Field
 
 from src.analysis.adapters.ai.agents.risk_extractor import (
@@ -212,11 +211,6 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
 
         # Extract risk items
         items = self._extract_items(payload)
-        if not items and input_data.document_text.strip():
-            raise ValueError(
-                "No risk items extracted from non-empty contract text. "
-                "The model response must include at least one valid risk item."
-            )
 
         # Coerce to RiskItem models with validation
         risks: list[RiskItem] = []
@@ -227,11 +221,6 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
                 risk.risk_score = self._calculate_risk_score(risk)
                 risk.immediate_alert = self._is_immediate_alert(risk)
                 risks.append(risk)
-        if not risks and input_data.document_text.strip():
-            raise ValueError(
-                "No risk items extracted from non-empty contract text. "
-                "The model response did not contain any valid risk items."
-            )
 
         logger.info(
             "risk_extraction_parse_diagnostics",
@@ -242,6 +231,9 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
             candidate_item_count=len(items),
             parsed_risk_count=len(risks),
         )
+
+        if not risks:
+            return []
 
         # Sort by risk score
         risks.sort(key=lambda r: r.risk_score, reverse=True)
