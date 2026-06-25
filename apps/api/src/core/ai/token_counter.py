@@ -220,26 +220,34 @@ class TokenCounter:
         for msg in messages:
             # Message overhead (~4 tokens per message for role + formatting)
             total += 4
-
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                total += self.count_tokens(content)
-            elif isinstance(content, list):
-                # Handle multi-part content (e.g., images + text)
-                for part in content:
-                    if isinstance(part, dict):
-                        if part.get("type") == "text":
-                            total += self.count_tokens(part.get("text", ""))
-                        elif part.get("type") == "image":
-                            # Images use ~1600 tokens for 1024x1024
-                            total += 1600
-                    elif isinstance(part, str):
-                        total += self.count_tokens(part)
+            total += self._count_message_content_tokens(msg.get("content", ""))
 
         # Add reply priming overhead
         total += 3
 
         return total
+
+    def _count_message_content_tokens(self, content: Any) -> int:
+        """Count tokens for a message content field."""
+        if isinstance(content, str):
+            return self.count_tokens(content)
+        if isinstance(content, list):
+            # Handle multi-part content (e.g., images + text)
+            return sum(self._count_content_part_tokens(part) for part in content)
+        return 0
+
+    def _count_content_part_tokens(self, part: Any) -> int:
+        """Count tokens for one multi-part message item."""
+        if isinstance(part, str):
+            return self.count_tokens(part)
+        if not isinstance(part, dict):
+            return 0
+        if part.get("type") == "text":
+            return self.count_tokens(part.get("text", ""))
+        if part.get("type") == "image":
+            # Images use ~1600 tokens for 1024x1024
+            return 1600
+        return 0
 
     def estimate_request(
         self,

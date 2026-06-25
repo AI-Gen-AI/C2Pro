@@ -291,24 +291,18 @@ class TestBC3ParserEdgeCases:
     """Test BC3 parser edge cases."""
 
     @pytest.mark.asyncio
-    async def test_bc3_parser_empty_content(self):
+    async def test_bc3_parser_empty_content(self, tmp_path):
         """Test BC3 parser handles empty content."""
-        import tempfile
-        from pathlib import Path
 
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 
         parser = BC3FileParser()
 
-        with tempfile.NamedTemporaryFile(suffix='.bc3', delete=False, mode='w') as tmp:
-            tmp.write("")
-            tmp_path = tmp.name
+        bc3_path = tmp_path / "empty.bc3"
+        bc3_path.write_text("")
 
-        try:
-            result = await parser.parse(Path(tmp_path))
-            assert isinstance(result, dict)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+        result = await parser.parse(bc3_path)
+        assert isinstance(result, dict)
 
 
 class TestPDFParserEdgeCases:

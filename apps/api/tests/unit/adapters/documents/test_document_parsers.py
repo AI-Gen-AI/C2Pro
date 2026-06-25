@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: TS-UAD-DOC-002 - Document Parser Tests
 Component: Documents Module - Parser Adapters
@@ -14,6 +15,7 @@ Methodology: Unit tests with mocked dependencies
 
 import os
 import tempfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -47,36 +49,32 @@ class TestPDFParser:
         assert parser.ocr_language == "eng"
 
     @pytest.mark.asyncio
-    async def test_pdf_parser_extract_text_success(self):
+    async def test_pdf_parser_extract_text_success(self, tmp_path):
         """Test successful text extraction from PDF."""
         from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 
         # Create a temporary PDF-like file
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as tmp:
-            tmp.write(b'%PDF-1.4 test content')
-            tmp_path = tmp.name
+        pdf_path = tmp_path / "test.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 test content")
 
-        try:
-            parser = PDFFileParser()
+        parser = PDFFileParser()
 
-            # Mock fitz.open
-            with patch('src.documents.adapters.parsers.pdf_file_parser.fitz.open') as mock_fitz:
-                mock_doc = MagicMock()
-                mock_page = MagicMock()
-                mock_page.get_text.return_value = "Test contract content"
-                mock_page.get_textblocks.return_value = [
-                    (0, 0, 100, 20, "Test block 1", 0, 0),
-                    (0, 25, 100, 45, "Test block 2", 0, 0)
-                ]
-                mock_doc.__len__ = MagicMock(return_value=1)
-                mock_doc.__getitem__ = MagicMock(return_value=mock_page)
-                mock_fitz.return_value = mock_doc
+        # Mock fitz.open
+        with patch('src.documents.adapters.parsers.pdf_file_parser.fitz.open') as mock_fitz:
+            mock_doc = MagicMock()
+            mock_page = MagicMock()
+            mock_page.get_text.return_value = "Test contract content"
+            mock_page.get_textblocks.return_value = [
+                (0, 0, 100, 20, "Test block 1", 0, 0),
+                (0, 25, 100, 45, "Test block 2", 0, 0)
+            ]
+            mock_doc.__len__ = MagicMock(return_value=1)
+            mock_doc.__getitem__ = MagicMock(return_value=mock_page)
+            mock_fitz.return_value = mock_doc
 
-                result = await parser.extract_text_and_offsets(Path(tmp_path))
+            result = await parser.extract_text_and_offsets(pdf_path)
 
-                assert isinstance(result, list)
-        finally:
-            os.unlink(tmp_path)
+            assert isinstance(result, list)
 
     def test_pdf_parser_error_handling(self):
         """Test PDF parser error handling for invalid file."""
@@ -124,35 +122,31 @@ class TestPDFParser:
         assert result == [{"text": "Alpha Beta", "bbox": (0, 0, 10, 10), "page": 2}]
 
     @pytest.mark.asyncio
-    async def test_pdf_parser_uses_ocr_fallback_when_page_has_no_text(self):
+    async def test_pdf_parser_uses_ocr_fallback_when_page_has_no_text(self, tmp_path):
         """Test OCR fallback path when extractable text is absent."""
         from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
 
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as tmp:
-            tmp.write(b"%PDF-1.4 ocr fallback")
-            tmp_path = tmp.name
+        pdf_path = tmp_path / "ocr-fallback.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 ocr fallback")
 
-        try:
-            parser = PDFFileParser()
-            page = MagicMock()
-            page.rect.width = 200
-            page.rect.height = 300
-            document = MagicMock()
-            document.page_count = 1
-            document.load_page.return_value = page
+        parser = PDFFileParser()
+        page = MagicMock()
+        page.rect.width = 200
+        page.rect.height = 300
+        document = MagicMock()
+        document.page_count = 1
+        document.load_page.return_value = page
 
-            with patch("src.documents.adapters.parsers.pdf_file_parser.fitz.open", return_value=document), patch(
-                "src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True
-            ), patch.object(parser, "_extract_page_text_blocks", return_value=[]), patch.object(
-                parser, "_ocr_page", return_value="OCR text"
-            ):
-                result = await parser.extract_text_and_offsets(Path(tmp_path))
+        with patch("src.documents.adapters.parsers.pdf_file_parser.fitz.open", return_value=document), patch(
+            "src.documents.adapters.parsers.pdf_file_parser.OCR_AVAILABLE", True
+        ), patch.object(parser, "_extract_page_text_blocks", return_value=[]), patch.object(
+            parser, "_ocr_page", return_value="OCR text"
+        ):
+            result = await parser.extract_text_and_offsets(pdf_path)
 
-            assert result == [
-                {"text": "OCR text", "bbox": (0, 0, 200, 300), "page": 1, "ocr": True}
-            ]
-        finally:
-            os.unlink(tmp_path)
+        assert result == [
+            {"text": "OCR text", "bbox": (0, 0, 200, 300), "page": 1, "ocr": True}
+        ]
 
     def test_pdf_ocr_page_returns_none_when_ocr_disabled(self):
         """Test OCR helper returns None when OCR is unavailable."""
@@ -195,7 +189,7 @@ class TestBC3Parser:
         assert parser is not None
 
     @pytest.mark.asyncio
-    async def test_bc3_parser_parse_sample(self):
+    async def test_bc3_parser_parse_sample(self, tmp_path):
         """Test BC3 parser with sample data."""
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
 
@@ -209,15 +203,11 @@ A2;Second Item;200.00
 
 *"""
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.bc3', delete=False) as tmp:
-            tmp.write(sample_bc3)
-            tmp_path = tmp.name
+        bc3_path = tmp_path / "sample.bc3"
+        bc3_path.write_text(sample_bc3)
 
-        try:
-            result = await parser.parse(Path(tmp_path))
-            assert result is not None
-        finally:
-            os.unlink(tmp_path)
+        result = await parser.parse(bc3_path)
+        assert result is not None
 
     @pytest.mark.asyncio
     async def test_bc3_parser_rejects_missing_file(self):
@@ -230,23 +220,19 @@ A2;Second Item;200.00
             await parser.parse(Path("missing.bc3"))
 
     @pytest.mark.asyncio
-    async def test_bc3_parser_rejects_invalid_suffix(self):
+    async def test_bc3_parser_rejects_invalid_suffix(self, tmp_path):
         """Test BC3 parser rejects non-bc3 inputs."""
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser, BC3ParsingError
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
-            tmp.write("noop")
-            tmp_path = tmp.name
+        txt_path = tmp_path / "noop.txt"
+        txt_path.write_text("noop")
 
-        try:
-            parser = BC3FileParser()
-            with pytest.raises(BC3ParsingError, match="not a BC3"):
-                await parser.parse(Path(tmp_path))
-        finally:
-            os.unlink(tmp_path)
+        parser = BC3FileParser()
+        with pytest.raises(BC3ParsingError, match="not a BC3"):
+            await parser.parse(txt_path)
 
     @pytest.mark.asyncio
-    async def test_bc3_parser_wraps_invalid_file_errors(self):
+    async def test_bc3_parser_wraps_invalid_file_errors(self, tmp_path):
         """Test BC3 parser wraps library invalid-file exceptions."""
         from src.documents.adapters.parsers.bc3_file_parser import (
             BC3FileParser,
@@ -254,20 +240,16 @@ A2;Second Item;200.00
             InvalidFileException,
         )
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".bc3", delete=False) as tmp:
-            tmp.write("*")
-            tmp_path = tmp.name
+        bc3_path = tmp_path / "invalid.bc3"
+        bc3_path.write_text("*")
 
-        try:
-            parser = BC3FileParser()
-            with patch(
-                "src.documents.adapters.parsers.bc3_file_parser.pyfiebdc.Fiebdc"
-            ) as mock_fiebdc:
-                mock_fiebdc.return_value.parse.side_effect = InvalidFileException("bad bc3")
-                with pytest.raises(BC3ParsingError, match="Invalid BC3 file format"):
-                    await parser.parse(Path(tmp_path))
-        finally:
-            os.unlink(tmp_path)
+        parser = BC3FileParser()
+        with patch(
+            "src.documents.adapters.parsers.bc3_file_parser.pyfiebdc.Fiebdc"
+        ) as mock_fiebdc:
+            mock_fiebdc.return_value.parse.side_effect = InvalidFileException("bad bc3")
+            with pytest.raises(BC3ParsingError, match="Invalid BC3 file format"):
+                await parser.parse(bc3_path)
 
     def test_bc3_parsing_error_class(self):
         """Test BC3ParsingError exception class."""
@@ -303,14 +285,12 @@ class TestExcelParser:
             tmp.write(b'PK\x03\x04')  # ZIP header
             tmp_path = tmp.name
 
-        try:
+        with suppress(Exception):
             parser = ExcelFileParser()
             # Should handle gracefully
             result = parser.parse(Path(tmp_path))
             assert result is not None
-        except Exception:
-            pass  # Expected for invalid file
-        finally:
+        if Path(tmp_path).exists():
             os.unlink(tmp_path)
 
     def test_excel_parsing_error_class(self):
@@ -437,7 +417,7 @@ class TestCompositeParser:
         assert parser.pdf_parser is pdf
 
     @pytest.mark.asyncio
-    async def test_composite_parser_parse_pdf(self):
+    async def test_composite_parser_parse_pdf(self, tmp_path):
         """Test composite parser parses PDF file."""
         from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
         from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser
@@ -450,18 +430,13 @@ class TestCompositeParser:
         )
 
         # Create temp PDF
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as tmp:
-            tmp.write(b'%PDF-1.4 test content')
-            tmp_path = tmp.name
+        (tmp_path / "composite.pdf").write_bytes(b"%PDF-1.4 test content")
 
-        try:
-            # Mock the PDF parser
-            with patch.object(pdf, 'extract_text_and_offsets', new_callable=AsyncMock) as mock_extract:
-                mock_extract.return_value = [{"text": "test", "bbox": (0,0,100,20)}]
-                # Just test the method exists and is callable
-                assert callable(parser.parse_document_file)
-        finally:
-            os.unlink(tmp_path)
+        # Mock the PDF parser
+        with patch.object(pdf, 'extract_text_and_offsets', new_callable=AsyncMock) as mock_extract:
+            mock_extract.return_value = [{"text": "test", "bbox": (0,0,100,20)}]
+            # Just test the method exists and is callable
+            assert callable(parser.parse_document_file)
 
     def test_composite_parser_has_required_methods(self):
         """Test composite parser has required interface methods."""
