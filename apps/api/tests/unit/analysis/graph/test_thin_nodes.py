@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """Thin-node delegation tests for the decoupled LangGraph nodes.
 
 These tests prove that:
@@ -21,6 +22,8 @@ import pytest
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.modules.hitl.domain.entities import ReviewStatus
+
+_ASYNC_CONTEXT_DEFAULT = object()
 
 
 class _FakeAI:
@@ -73,7 +76,7 @@ def _make_state(**overrides) -> ProjectState:
 
 
 class _AsyncContext:
-    def __init__(self, value: Any = object()) -> None:
+    def __init__(self, value: Any = _ASYNC_CONTEXT_DEFAULT) -> None:
         self.value = value
 
     async def __aenter__(self) -> Any:
@@ -241,7 +244,7 @@ class TestCritiqueNodeThinDelegation:
         monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
 
         result = await nodes.critique_node(_make_state())
-        assert result["confidence_score"] == 0.95
+        assert result["confidence_score"] == pytest.approx(0.95)
         assert result["human_approval_required"] is False
 
 
@@ -489,7 +492,7 @@ class TestBudgetParserExtendedNodeDelegation:
                 "cost_code": None,
             }
         ]
-        assert result["confidence_score"] == 0.7
+        assert result["confidence_score"] == pytest.approx(0.7)
 
     @pytest.mark.asyncio
     async def test_empty_items_zero_confidence(self, monkeypatch) -> None:
@@ -660,7 +663,7 @@ class TestSaveToDbNodeShortCircuit:
 
         class _PersistUseCase:
             def __init__(self, **_kwargs: Any) -> None:
-                pass
+                """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
                 return persist_module.PersistAnalysisResult(analysis_id=analysis_id)
@@ -693,7 +696,7 @@ class TestSaveToDbNodeShortCircuit:
 
         class _PersistUseCase:
             def __init__(self, **_kwargs: Any) -> None:
-                pass
+                """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
                 raise RuntimeError("database unavailable")
@@ -887,7 +890,7 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"] == []
-        assert result["confidence_score"] == 0.25
+        assert result["confidence_score"] == pytest.approx(0.25)
         assert "no risks extracted" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio

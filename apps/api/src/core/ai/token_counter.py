@@ -175,7 +175,6 @@ class TokenCounter:
             ValueError,
             KeyError,
             ImportError,
-            ConnectionError,
             RuntimeError,
         ) as exc:
             self._encoding = _ApproximateEncoding()

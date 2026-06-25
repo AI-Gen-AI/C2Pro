@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Composite Parser and RAG Service Additional Tests
 Component: Documents Module - Composite Parser & RAG
@@ -360,7 +361,7 @@ class TestRagServicePureFunctions:
 
         assert result.startswith("[")
         assert result.endswith("]")
-        assert "0.100000" in result or "0.100000" in result
+        assert "0.100000" in result or "0.200000" in result
 
     def test_format_vector_truncates_long(self):
         """Test _format_vector truncates to EMBEDDING_DIMENSION."""

@@ -256,18 +256,16 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         doc_text = state["document_text"]
         original_chars = len(doc_text)
 
-        filter_relevant = True
-        if filter_relevant:
-            filtered = self._filter_relevant_text(doc_text)
-            logger.info(
-                "risk_extraction_input_prepared",
-                extra={
-                    "original_chars": original_chars,
-                    "filtered_chars": len(filtered),
-                    "delta": original_chars - len(filtered),
-                },
-            )
-            doc_text = filtered
+        filtered = self._filter_relevant_text(doc_text)
+        logger.info(
+            "risk_extraction_input_prepared",
+            extra={
+                "original_chars": original_chars,
+                "filtered_chars": len(filtered),
+                "delta": original_chars - len(filtered),
+            },
+        )
+        doc_text = filtered
 
         # Augmentation suffixes — keep them OUTSIDE the filter so they
         # always reach the LLM.
@@ -280,7 +278,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskItem]]):
         return RiskExtractionInput(
             document_text=doc_text,
             max_risks=20,
-            filter_relevant=filter_relevant,
+            filter_relevant=True,
         )
 
     def inject_output_into_state(

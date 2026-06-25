@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Document Use Cases
 Component: Documents Module - Application Layer Use Cases
@@ -133,7 +134,7 @@ class TestListProjectDocumentsUseCase:
             document_repository=mock_repo,
             project_repository=mock_project_repo,
         )
-        result, count = await use_case.execute(project_id, tenant_id, skip=0, limit=10)
+        result, _ = await use_case.execute(project_id, tenant_id, skip=0, limit=10)
 
         assert len(result) == 1
 
@@ -153,7 +154,7 @@ class TestListProjectDocumentsUseCase:
             document_repository=mock_repo,
             project_repository=mock_project_repo,
         )
-        result, count = await use_case.execute(uuid4(), uuid4())
+        result, _ = await use_case.execute(uuid4(), uuid4())
 
         assert result == []
 

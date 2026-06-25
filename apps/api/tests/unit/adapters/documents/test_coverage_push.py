@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Additional Coverage Tests
 Component: Documents Module
@@ -178,7 +179,7 @@ class TestDocumentDTOCreation:
         )
 
         assert chunk.content == "Test content"
-        assert chunk.similarity == 0.95
+        assert chunk.similarity == pytest.approx(0.95)
 
     def test_rag_answer_dto_empty(self):
         """Test RagAnswer DTO with empty sources."""

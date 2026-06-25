@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Entity Extraction Additional Tests
 Component: Documents Module - Entity Extraction Adapter
@@ -711,7 +712,7 @@ class TestParseDecimal:
         result = _parse_decimal("100.50")
 
         assert result is not None
-        assert float(result) == 100.50
+        assert float(result) == pytest.approx(100.50)
 
     def test_parse_decimal_from_int(self):
         """Test parsing int returns Decimal."""

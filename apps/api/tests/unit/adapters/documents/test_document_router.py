@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: TS-UAD-DOC-001 - Document Router Tests
 Component: Documents Module - HTTP Adapter
@@ -21,6 +22,8 @@ from src.documents.adapters.http.router import router as documents_router
 from src.documents.adapters.http.router import settings
 from src.documents.application.dtos import RagAnswer, RetrievedChunk
 from src.documents.domain.models import Clause, ClauseType, Document, DocumentStatus, DocumentType
+
+PLACEHOLDER_AUTH_HASH = "placeholder-auth-hash"
 
 # ===========================================
 # TEST APPLICATION SETUP
@@ -67,7 +70,7 @@ def app(mock_session, tenant_id, user_id):
         id=user_id,
         tenant_id=tenant_id,
         email="test@example.com",
-        hashed_password="x",
+        hashed_password=PLACEHOLDER_AUTH_HASH,
         first_name="Test",
         last_name="User",
         role="admin",
@@ -633,12 +636,12 @@ class TestDocumentHelpers:
         body = response.json()
         assert body[0]["text"] == "Legal clause"
         assert body[0]["page"] == 4
-        assert body[0]["confidence"] == 0.77
+        assert body[0]["confidence"] == pytest.approx(0.77)
         assert body[0]["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.3, 0.4]
         assert body[0]["metadata"]["evidence_location"]["normalized"] is False
         assert body[1]["text"] == "CLS-002"
         assert body[1]["page"] == 1
-        assert body[1]["confidence"] == 1.0
+        assert body[1]["confidence"] == pytest.approx(1.0)
         assert body[1]["metadata"]["clause_type"] is None
         assert body[1]["metadata"]["evidence_location"]["bbox"] == [0.08, 0.12, 0.84, 0.06]
 
