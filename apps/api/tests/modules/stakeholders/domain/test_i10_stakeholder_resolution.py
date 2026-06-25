@@ -30,6 +30,7 @@ def _make_stakeholder(**overrides) -> Stakeholder:
     base = {
         "id": uuid4(),
         "project_id": uuid4(),
+        "tenant_id": uuid4(),
         "power_level": PowerLevel.MEDIUM,
         "interest_level": InterestLevel.MEDIUM,
         "approval_status": "approved",
@@ -92,13 +93,29 @@ def test_i10_resolver_flags_ambiguous_party_for_human_validation() -> None:
 
 def test_i10_raci_validator_rejects_multiple_accountable_assignments() -> None:
     """Refers to I10.2: each activity must have exactly one Accountable assignment."""
+    tenant_id = uuid4()
     activity = RaciActivity(
         description="Approve change order package for structural revision.",
         confidence=0.92,
         responsibilities=[
-            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.96),
-            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.ACCOUNTABLE, confidence=0.94),
-            RaciResponsibility(stakeholder_id=uuid4(), role=RACIRole.RESPONSIBLE, confidence=0.90),
+            RaciResponsibility(
+                stakeholder_id=uuid4(),
+                role=RACIRole.ACCOUNTABLE,
+                tenant_id=tenant_id,
+                confidence=0.96,
+            ),
+            RaciResponsibility(
+                stakeholder_id=uuid4(),
+                role=RACIRole.ACCOUNTABLE,
+                tenant_id=tenant_id,
+                confidence=0.94,
+            ),
+            RaciResponsibility(
+                stakeholder_id=uuid4(),
+                role=RACIRole.RESPONSIBLE,
+                tenant_id=tenant_id,
+                confidence=0.90,
+            ),
         ],
     )
     validator = RACIValidator()

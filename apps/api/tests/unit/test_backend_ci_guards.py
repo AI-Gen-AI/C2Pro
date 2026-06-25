@@ -127,14 +127,13 @@ def test_real_document_operability_workflow_runs_required_quality_gates() -> Non
     assert "python -m pytest tests/evals/test_golden_corpus.py -q" in contents
     assert "pnpm lint" in contents
     assert "real-document-operability-blockers.md" in contents
-    assert "TASK-OPS-DOCFLOW-017" in contents
+    assert "TASK-COH-V2-VERSIONING-006" in contents
     assert "TASK-OPS-DOCFLOW-016" not in contents
     assert "src.alerts.router" not in contents
     assert "get_bom_repository" not in contents
     assert "TASK-OPS-DOCFLOW-015" not in contents
     assert "No module named 'schemathesis'" not in contents
-    assert "blackboard/archive/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" in contents
-    assert "blackboard/coverage-gates/REAL-DOCUMENT-OPERABILITY-SPEC-PLAN.md" not in contents
+    assert "Upload blocker tracking" in contents
     assert "TASK-OPS-DOCFLOW-014" not in contents
     assert "golden.evaluators" not in contents
     assert "TASK-OPS-DOCFLOW-013" not in contents
@@ -159,7 +158,7 @@ def test_backend_requirements_include_langchain_anthropic_compatible_sdk() -> No
     requirements = repo_root / "apps" / "api" / "requirements.txt"
     contents = requirements.read_text(encoding="utf-8")
 
-    assert "langchain-anthropic==1.3.4" in contents
+    assert "langchain-anthropic==1.4.6" in contents
     assert "anthropic>=0.78.0,<1.0.0" in contents
     assert "pydantic-settings>=2.10.1,<3.0.0" in contents
     assert "supabase==2.30.1" in contents

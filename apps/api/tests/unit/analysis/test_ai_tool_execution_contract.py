@@ -76,8 +76,8 @@ async def test_risk_extraction_tool_accepts_basetool_tenant_keyword_contract() -
 
 
 @pytest.mark.asyncio
-async def test_risk_extraction_tool_rejects_empty_extraction_success() -> None:
-    """TS-QA-SWAGGER-ANALYSIS-001 empty risk payload must not be success."""
+async def test_risk_extraction_tool_returns_empty_payload_without_fabrication() -> None:
+    """TS-HOTFIX-ANALYSIS-HONEST-RISK-001 empty risk payload stays honest and empty."""
     tool = RiskExtractionTool(
         anthropic_wrapper=StubAnthropicWrapper('{"risks": []}')
     )
@@ -88,14 +88,14 @@ async def test_risk_extraction_tool_rejects_empty_extraction_success() -> None:
         )
     )
 
-    assert result.success is False
-    assert result.error
-    assert "No risk items extracted" in result.error
+    assert result.success is True
+    assert result.data == []
+    assert result.error is None
 
 
 @pytest.mark.asyncio
-async def test_risk_extraction_tool_does_not_retry_empty_extraction_validation_failure() -> None:
-    """TS-QA-SWAGGER-ANALYSIS-001 empty extraction validation must fail without costly retries."""
+async def test_risk_extraction_tool_does_not_retry_empty_extraction() -> None:
+    """TS-HOTFIX-ANALYSIS-HONEST-RISK-001 empty extraction must not trigger costly retries."""
     wrapper = StubAnthropicWrapper('{"risks": []}')
     tool = RiskExtractionTool(anthropic_wrapper=wrapper)
 
@@ -105,7 +105,8 @@ async def test_risk_extraction_tool_does_not_retry_empty_extraction_validation_f
         )
     )
 
-    assert result.success is False
+    assert result.success is True
+    assert result.data == []
     assert wrapper.calls == 1
 
 

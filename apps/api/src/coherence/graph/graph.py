@@ -44,6 +44,26 @@ from .state import CoherenceGraphState, EvaluationConfig
 logger = logging.getLogger(__name__)
 
 
+_DB_DOC_TYPE_TO_REGISTRY: dict[str, str] = {
+    "contract": "contract",
+    "budget": "budget_boq",
+    "budget_boq": "budget_boq",
+    "schedule": "schedule_gantt",
+    "schedule_gantt": "schedule_gantt",
+    "technical": "technical_spec",
+    "technical_spec": "technical_spec",
+}
+
+_ROUTER_TO_COHERENCE_CATEGORY: dict[CanonicalCategory, str] = {
+    CanonicalCategory.LEGAL: "LEGAL",
+    CanonicalCategory.SCOPE: "SCOPE",
+    CanonicalCategory.BUDGET: "BUDGET",
+    CanonicalCategory.SCHEDULE: "TIME",
+    CanonicalCategory.TECHNICAL: "TECHNICAL",
+    CanonicalCategory.QUALITY: "QUALITY",
+}
+
+
 def _honest_null_result(final_state: dict[str, Any]) -> EnrichedCoherenceResult:
     diagnostics = final_state.get("diagnostics") or {}
     reason = diagnostics.get("reason") or "coherence_result_missing"

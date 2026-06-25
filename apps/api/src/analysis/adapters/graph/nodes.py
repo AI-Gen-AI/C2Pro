@@ -90,6 +90,7 @@ def _mark_risk_extraction_honest_failure(
     message = reason
     if error_type and error_detail:
         message = f"{reason}; {error_type}: {error_detail}"
+    state["critique_notes"] = message
     state["messages"].append(AIMessage(content=message))
     logger.warning(
         "risk_extraction_honest_failure",
@@ -233,11 +234,11 @@ def _map_risk_severity(item: dict[str, Any]):
 
 async def router_node(state: ProjectState) -> ProjectState:
     """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
+    if state.get("doc_type") in DOC_TYPES:
+        return state
     if not _has_extractable_text(state.get("document_text")):
         state["doc_type"] = "insufficient_extractable_text"
         state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
-        return state
-    if state.get("doc_type") in DOC_TYPES:
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
     doc_type = await use_case.execute(
@@ -252,41 +253,56 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
-    """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI with deterministic fallback."""
+    """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
+    previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        risks = [
-            _risk_contract_payload(item)
-            for item in _risk_rules.extract(state.get("document_text", ""))
-        ]
-        state["extracted_risks"] = risks
-        state["node_results"] = [
-            *state.get("node_results", []),
-            _ok_node_result("risk_extractor", risks),
-        ]
-        state["messages"].append(
-            AIMessage(content=f"Risk extractor mock mode: {len(state['extracted_risks'])} risks")
+        _mark_risk_extraction_honest_failure(
+            state,
+            reason="AI risk extraction unavailable in mock mode — no risks extracted",
+            previous_confidence=previous_confidence,
         )
+        _append_risk_extraction_summary(state)
+        return state
 
     from src.core.ai.tools import get_tool
 
     try:
         original_chars = len(state.get("document_text", "") or "")
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
-        updated_state = _fallback_contract_risks_when_empty(updated_state)
         risks = [
             _risk_contract_payload(item)
             for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks
-    except Exception as exc:
+    # N4 must convert any tool/LLM failure into an honest empty extraction.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("risk_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
-        state["extracted_risks"] = []
-        state["node_results"] = [*state.get("node_results", []), node_result]
-        state["messages"].append(
-            AIMessage(content="N4 risk_extractor: failed (see node_results)")
+        _mark_risk_extraction_honest_failure(
+            state,
+            reason="AI risk extraction failed/empty — no risks extracted",
+            exc=exc,
+            previous_confidence=previous_confidence,
         )
+        state["node_results"] = [*state.get("node_results", []), node_result]
+        _append_risk_extraction_summary(state)
         return state
+
+    if not updated_state.get("extracted_risks"):
+        updated_state["confidence_score"] = 0.25
+        _mark_risk_extraction_honest_failure(
+            updated_state,
+            reason="AI risk extraction failed/empty — no risks extracted",
+        )
+        updated_state["node_results"] = [
+            *updated_state.get("node_results", []),
+            _failed_node_result(
+                "risk_extractor",
+                RuntimeError("AI risk extraction returned no risk items"),
+            ),
+        ]
+        _append_risk_extraction_summary(updated_state)
+        return updated_state
 
     # Visibility marker so the /analyze response shows the filter ran.
     # The filter itself logs structured stats via the tool's logger.
@@ -302,30 +318,6 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         )
     )
     return updated_state
-
-
-def _fallback_contract_risks_when_empty(state: ProjectState) -> ProjectState:
-    """TS-QA-SWAGGER-ANALYSIS-001: keep N4 useful when AI risk extraction is empty."""
-    if state.get("extracted_risks"):
-        return state
-
-    fallback_risks = _risk_rules.extract(state.get("document_text", ""))
-    if not fallback_risks:
-        return state
-
-    state["extracted_risks"] = fallback_risks
-    state["confidence_score"] = max(state.get("confidence_score", 0.0), 0.7)
-    notes = state.get("critique_notes", "").strip()
-    fallback_note = (
-        f"Deterministic fallback extracted {len(fallback_risks)} risks after AI risk extraction returned empty."
-    )
-    state["critique_notes"] = f"{notes}; {fallback_note}" if notes else fallback_note
-    state["messages"].append(
-        AIMessage(
-            content=f"Risk extractor deterministic fallback: {len(fallback_risks)} risks"
-        )
-    )
-    return state
 
 
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
@@ -357,7 +349,8 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items
-    except Exception as exc:
+    # N5 isolates extraction tool failures and surfaces them as NodeResult.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("wbs_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["extracted_wbs"] = []
@@ -420,7 +413,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 retry_count=state["retry_count"],
             )
         )
-    except Exception as exc:
+    # N12 isolates critique service failures and routes to HITL for review.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("critique", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["human_approval_required"] = True
@@ -508,7 +502,8 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         AIMessage(content="HITL auto-approved; continuing analysis.")
                     )
                     return state
-        except Exception:
+        # HITL routing must fail open to LangGraph interrupt instead of approving.
+        except Exception as exc:  # noqa: BLE001
             import structlog
 
             state["node_results"] = [
@@ -522,6 +517,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             structlog.get_logger().warning(
                 "hitl_routing_failed_falling_back_to_interrupt",
                 document_id=state.get("document_id"),
+                error_type=type(exc).__name__,
                 exc_info=True,
             )
 
@@ -572,7 +568,8 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     coherence_breakdown=state.get("coherence_breakdown", {}),
                 )
             )
-    except Exception as exc:
+    # N17 persists best-effort and reports persistence failures as NodeResult.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("save_to_db", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["node_results"] = [*state.get("node_results", []), node_result]

@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """Thin-node delegation tests for the decoupled LangGraph nodes.
 
 These tests prove that:
@@ -21,6 +22,8 @@ import pytest
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.modules.hitl.domain.entities import ReviewStatus
+
+_ASYNC_CONTEXT_DEFAULT = object()
 
 
 class _FakeAI:
@@ -73,7 +76,7 @@ def _make_state(**overrides) -> ProjectState:
 
 
 class _AsyncContext:
-    def __init__(self, value: Any = object()) -> None:
+    def __init__(self, value: Any = _ASYNC_CONTEXT_DEFAULT) -> None:
         self.value = value
 
     async def __aenter__(self) -> Any:
@@ -162,6 +165,7 @@ class TestCritiqueNodeThinDelegation:
     async def test_ok_path(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         ai = _FakeAI(payload={"status": "OK", "notes": ""})
         monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
 
@@ -179,6 +183,7 @@ class TestCritiqueNodeThinDelegation:
     async def test_retry_path_increments(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         ai = _FakeAI(payload={"status": "RETRY", "notes": "redo"})
         monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
 
@@ -239,7 +244,7 @@ class TestCritiqueNodeThinDelegation:
         monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
 
         result = await nodes.critique_node(_make_state())
-        assert result["confidence_score"] == 0.95
+        assert result["confidence_score"] == pytest.approx(0.95)
         assert result["human_approval_required"] is False
 
 
@@ -487,7 +492,7 @@ class TestBudgetParserExtendedNodeDelegation:
                 "cost_code": None,
             }
         ]
-        assert result["confidence_score"] == 0.7
+        assert result["confidence_score"] == pytest.approx(0.7)
 
     @pytest.mark.asyncio
     async def test_empty_items_zero_confidence(self, monkeypatch) -> None:
@@ -576,17 +581,21 @@ class TestCitationValidatorNodeTyping:
 
 
 class TestCritiqueRouter:
-    def test_hitl_path(self) -> None:
+    def test_hitl_path(self, monkeypatch) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         assert (
             _next_after_critique_v2(_make_state(human_approval_required=True))
             == "human_interrupt"
         )
 
-    def test_retry_contract_branch(self) -> None:
+    def test_retry_contract_branch(self, monkeypatch) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         assert (
             _next_after_critique_v2(
                 _make_state(critique_notes="x", retry_count=1, doc_type="contract")
@@ -594,9 +603,11 @@ class TestCritiqueRouter:
             == "risk_extractor"
         )
 
-    def test_retry_budget_branch(self) -> None:
+    def test_retry_budget_branch(self, monkeypatch) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         assert (
             _next_after_critique_v2(
                 _make_state(critique_notes="x", retry_count=1, doc_type="budget")
@@ -604,9 +615,11 @@ class TestCritiqueRouter:
             == "budget_parser"
         )
 
-    def test_retry_default_branch(self) -> None:
+    def test_retry_default_branch(self, monkeypatch) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         assert (
             _next_after_critique_v2(
                 _make_state(critique_notes="x", retry_count=1, doc_type="technical_spec")
@@ -650,7 +663,7 @@ class TestSaveToDbNodeShortCircuit:
 
         class _PersistUseCase:
             def __init__(self, **_kwargs: Any) -> None:
-                pass
+                """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
                 return persist_module.PersistAnalysisResult(analysis_id=analysis_id)
@@ -683,7 +696,7 @@ class TestSaveToDbNodeShortCircuit:
 
         class _PersistUseCase:
             def __init__(self, **_kwargs: Any) -> None:
-                pass
+                """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
                 raise RuntimeError("database unavailable")
@@ -848,10 +861,10 @@ class TestExtractorAIToolDelegation:
         assert persisted == [node_result]
 
     @pytest.mark.asyncio
-    async def test_risk_extractor_falls_back_to_deterministic_rules_when_ai_tool_returns_empty(
+    async def test_risk_extractor_returns_honest_empty_when_ai_tool_returns_empty(
         self, monkeypatch
     ) -> None:
-        """TS-QA-SWAGGER-ANALYSIS-001 N4 must not leave contract risks empty after AI tool failure."""
+        """TS-HOTFIX-ANALYSIS-HONEST-RISK-001: empty AI output must not fabricate risks."""
         from src.analysis.adapters.graph import nodes
 
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
@@ -876,9 +889,9 @@ class TestExtractorAIToolDelegation:
             _make_state(document_text="Daily penalty 2% for delay.")
         )
 
-        assert result["extracted_risks"]
-        assert result["extracted_risks"][0]["category"] == "LEGAL"
-        assert "deterministic fallback" in result["critique_notes"].lower()
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] == pytest.approx(0.25)
+        assert "no risks extracted" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio
     async def test_risk_extractor_tool_failure_returns_honest_empty_result(

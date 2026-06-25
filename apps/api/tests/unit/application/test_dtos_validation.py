@@ -423,6 +423,7 @@ class TestDTOSerialization:
         response = DocumentResponse(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -517,6 +518,7 @@ class TestDTOSerialization:
         data = {
             "id": uuid4(),
             "project_id": uuid4(),
+            "tenant_id": uuid4(),
             "document_type": "contract",
             "filename": "test.pdf",
             "upload_status": "uploaded",

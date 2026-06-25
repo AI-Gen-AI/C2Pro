@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Document Ports/Interfaces Tests
 Component: Documents Module - Port Interfaces
@@ -26,6 +27,7 @@ class TestIEntityExtractionServicePort:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -41,20 +43,25 @@ class TestIFileParserServicePort:
     """Tests for IFileParserService interface."""
 
     @pytest.mark.asyncio
-    async def test_parse_document_file(self):
+    async def test_parse_document_file(self, tmp_path):
         """Test parse_document_file method."""
         from src.documents.ports.file_parser_service import IFileParserService
 
         mock_service = MagicMock(spec=IFileParserService)
 
         mock_service.parse_document_file = AsyncMock(return_value={"pages": 1})
-        result = await mock_service.parse_document_file(Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            document_type=DocumentType.CONTRACT,
-            filename="test.pdf",
-            upload_status=DocumentStatus.UPLOADED,
-        ), "/tmp/file.pdf")
+        test_file = tmp_path / "file.pdf"
+        result = await mock_service.parse_document_file(
+            Document(
+                id=uuid4(),
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                document_type=DocumentType.CONTRACT,
+                filename="test.pdf",
+                upload_status=DocumentStatus.UPLOADED,
+            ),
+            str(test_file),
+        )
 
         assert "pages" in result
 
@@ -73,6 +80,7 @@ class TestIRagServicePort:
         result = await mock_service.ingest_document(
             document_id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             text_content="Test content"
         )
 
@@ -111,6 +119,7 @@ class TestIRagIngestionServicePort:
         result = await mock_service.ingest_document_chunks(
             document_id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             text_content="Test content"
         )
 

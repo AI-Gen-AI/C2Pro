@@ -48,7 +48,7 @@ class TestFallbackDocType:
             ("Capex breakdown and budget", "budget"),
             ("Cronograma with hito milestones and gantt", "schedule"),
             ("pure material spec sheet", "technical_spec"),
-            ("", "technical_spec"),
+            ("", "insufficient_extractable_text"),
         ],
     )
     def test_keyword_buckets(self, text: str, expected: str) -> None:
