@@ -49,6 +49,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             file_format=".pdf",
@@ -84,6 +85,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="test.bc3",
             file_format=".bc3",
@@ -115,6 +117,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.OTHER,
             filename="test.txt",
             file_format=".txt",

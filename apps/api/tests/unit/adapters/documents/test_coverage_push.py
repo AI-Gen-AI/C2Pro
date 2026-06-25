@@ -22,6 +22,7 @@ class TestDocumentModelsEdgeCases:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.OTHER,
             filename="test.txt",
             upload_status=DocumentStatus.UPLOADED,
@@ -41,6 +42,7 @@ class TestDocumentModelsEdgeCases:
         doc = Document(
             id=doc_id,
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -68,6 +70,7 @@ class TestDocumentModelsEdgeCases:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.bc3",
             upload_status=DocumentStatus.ERROR,
@@ -88,9 +91,11 @@ class TestDocumentModelsEdgeCases:
         )
 
         doc_id = uuid4()
+        tenant_id = uuid4()
         doc = Document(
             id=doc_id,
             project_id=uuid4(),
+            tenant_id=tenant_id,
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -99,6 +104,7 @@ class TestDocumentModelsEdgeCases:
         clause1 = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=tenant_id,
             document_id=doc_id,
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -109,6 +115,7 @@ class TestDocumentModelsEdgeCases:
         clause2 = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=tenant_id,
             document_id=doc_id,
             clause_code="2.0",
             clause_type=ClauseType.PAYMENT,
@@ -132,6 +139,7 @@ class TestDocumentDTOCreation:
 
         dto = CreateDocumentDTO(
             project_id=uuid4(),
+            tenant_id=uuid4(),
             filename="test.pdf",
             document_type=DocumentType.CONTRACT,
         )
@@ -146,6 +154,7 @@ class TestDocumentDTOCreation:
 
         dto = CreateDocumentDTO(
             project_id=uuid4(),
+            tenant_id=uuid4(),
             filename="test.pdf",
             document_type=DocumentType.CONTRACT,
             file_format=".pdf",

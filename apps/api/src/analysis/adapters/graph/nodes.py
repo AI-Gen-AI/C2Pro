@@ -90,6 +90,7 @@ def _mark_risk_extraction_honest_failure(
     message = reason
     if error_type and error_detail:
         message = f"{reason}; {error_type}: {error_detail}"
+    state["critique_notes"] = message
     state["messages"].append(AIMessage(content=message))
     logger.warning(
         "risk_extraction_honest_failure",
@@ -274,20 +275,23 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         ]
         updated_state["extracted_risks"] = risks
     except Exception as exc:
+        node_result = _failed_node_result("risk_extractor", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction failed/empty — no risks extracted",
             exc=exc,
             previous_confidence=previous_confidence,
         )
+        state["node_results"] = [*state.get("node_results", []), node_result]
         _append_risk_extraction_summary(state)
         return state
 
     if not updated_state.get("extracted_risks"):
+        updated_state["confidence_score"] = 0.25
         _mark_risk_extraction_honest_failure(
             updated_state,
             reason="AI risk extraction failed/empty — no risks extracted",
-            previous_confidence=previous_confidence,
         )
         updated_state["node_results"] = [
             *updated_state.get("node_results", []),

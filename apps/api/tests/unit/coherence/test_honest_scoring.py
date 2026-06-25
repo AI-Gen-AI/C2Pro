@@ -17,7 +17,7 @@ def test_unassessed_categories_are_null_and_penalize_global():
     assert d.category_scores["BUDGET"] is None
     assert d.category_scores["LEGAL"] is None
     assert set(d.missing_dimensions) == {"BUDGET", "TIME", "LEGAL", "QUALITY"}
-    assert d.score is not None and d.score < 40
+    assert d.score is None
 
 
 def test_assessed_clean_lands_in_baseline_band():

@@ -315,6 +315,7 @@ class TestDocumentGet:
         clause = Clause(
             id=uuid4(),
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_id=sample_document.id,
             clause_code="CLS-001",
             clause_type=ClauseType.SCOPE,
@@ -594,6 +595,7 @@ class TestDocumentHelpers:
         clause_with_evidence = Clause(
             id=uuid4(),
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_id=sample_document.id,
             clause_code="CLS-001",
             clause_type=ClauseType.QUALITY,
@@ -611,6 +613,7 @@ class TestDocumentHelpers:
         clause_defaulted = Clause(
             id=uuid4(),
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_id=sample_document.id,
             clause_code="CLS-002",
             clause_type=None,
