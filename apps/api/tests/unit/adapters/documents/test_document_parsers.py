@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from openpyxl import Workbook
 
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
@@ -268,6 +269,17 @@ A2;Second Item;200.00
 class TestExcelParser:
     """Tests for ExcelFileParser."""
 
+    @staticmethod
+    def _write_workbook(tmp_path: Path, rows: list[list[object]]) -> Path:
+        workbook = Workbook()
+        sheet = workbook.active
+        for row in rows:
+            sheet.append(row)
+        workbook_path = tmp_path / "budget.xlsx"
+        workbook.save(workbook_path)
+        workbook.close()
+        return workbook_path
+
     def test_excel_parser_init(self):
         """Test Excel parser initialization."""
         from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
@@ -356,6 +368,108 @@ class TestExcelParser:
                 "total": 150.0,
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_spanish_headers(self, tmp_path):
+        """Test budget parsing supports Spanish header aliases and numeric strings."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Partida", "Cantidad", "Precio unitario", "Importe total"],
+                ["Hormigon", "1.234,50", "12,30 EUR", "15184,35 EUR"],
+            ],
+        )
+
+        parser = ExcelFileParser()
+        result = await parser.parse_budget(workbook_path)
+
+        assert result == [
+            {
+                "item": "Hormigon",
+                "quantity": 1234.5,
+                "unit_price": 12.3,
+                "total": 15184.35,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_finds_header_below_first_row(self, tmp_path):
+        """Test budget parsing scans for a header row below title rows."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Presupuesto de obra"],
+                [None],
+                ["Concepto", "Uds", "Precio/ud", "Total partida"],
+                ["Acero", 3, "1.200,00", "3.600,00"],
+            ],
+        )
+
+        parser = ExcelFileParser()
+        result = await parser.parse_budget(workbook_path)
+
+        assert result == [
+            {
+                "item": "Acero",
+                "quantity": 3,
+                "unit_price": 1200.0,
+                "total": 3600.0,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_english_headers_unchanged(self, tmp_path):
+        """Test budget parsing preserves the existing English row-one contract."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Item", "Quantity", "Unit Price", "Total"],
+                ["Concrete", 3, 50.0, 150.0],
+            ],
+        )
+
+        parser = ExcelFileParser()
+        result = await parser.parse_budget(workbook_path)
+
+        assert result == [
+            {
+                "item": "Concrete",
+                "quantity": 3,
+                "unit_price": 50.0,
+                "total": 150.0,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_missing_headers_lists_aliases(self, tmp_path):
+        """Test budget parsing explains accepted aliases when headers are missing."""
+        from src.documents.adapters.parsers.excel_file_parser import (
+            ExcelFileParser,
+            ExcelParsingError,
+        )
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Concepto", "Notas"],
+                ["Hormigon", "sin medicion"],
+            ],
+        )
+
+        parser = ExcelFileParser()
+        with pytest.raises(ExcelParsingError) as exc_info:
+            await parser.parse_budget(workbook_path)
+
+        message = str(exc_info.value)
+        assert "Missing one or more required headers" in message
+        assert "Accepted aliases" in message
+        assert "partida" in message
 
     @pytest.mark.asyncio
     async def test_excel_parser_schedule_requires_headers(self):

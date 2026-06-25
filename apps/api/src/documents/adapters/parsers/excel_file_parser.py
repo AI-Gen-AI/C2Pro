@@ -5,6 +5,8 @@ This adapter provides functionality to parse schedule and budget data from Excel
 using the openpyxl library, encapsulating external library details.
 """
 
+import re
+from numbers import Number
 from pathlib import Path
 from typing import Any
 
@@ -133,8 +135,8 @@ class ExcelFileParser:
         """
         Parses budget data from a standard Excel file format.
 
-        Assumes the first sheet contains the budget with a header row.
-        Expected columns (case-insensitive): 'Item', 'Quantity', 'Unit Price', 'Total'.
+        Scans the first sheet for a budget header row.
+        Expected canonical columns: 'Item', 'Quantity', 'Unit Price', 'Total'.
 
         Args:
             file_path: The path to the Excel file (.xlsx).
@@ -149,30 +151,157 @@ class ExcelFileParser:
             workbook = openpyxl.load_workbook(file_path, data_only=True)
             sheet = workbook.active
 
-            headers = [cell.value.lower() if cell.value else "" for cell in sheet[1]]
-
-            # Define expected headers
-            expected_headers = ["item", "quantity", "unit price", "total"]
-            if not all(h in headers for h in expected_headers):
+            header_row_index, headers = self._find_budget_headers(sheet)
+            if header_row_index is None:
+                expected_headers = ["item", "quantity", "unit price", "total"]
+                accepted_aliases = "; ".join(
+                    f"{canonical}: {', '.join(sorted(aliases))}"
+                    for canonical, aliases in self._budget_header_aliases().items()
+                )
                 raise ExcelParsingError(
-                    f"Missing one or more required headers: {', '.join(expected_headers)}"
+                    "Missing one or more required headers: "
+                    f"{', '.join(expected_headers)}. Accepted aliases: {accepted_aliases}"
                 )
 
             budget_data = []
-            for row in sheet.iter_rows(min_row=2, values_only=True):
+            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
                 row_data = dict(zip(headers, row, strict=False))
                 if any(row_data.values()):
                     budget_data.append(
                         {
                             "item": row_data.get("item"),
-                            "quantity": row_data.get("quantity"),
-                            "unit_price": row_data.get("unit price"),
-                            "total": row_data.get("total"),
+                            "quantity": self._coerce_budget_number(row_data.get("quantity")),
+                            "unit_price": self._coerce_budget_number(row_data.get("unit price")),
+                            "total": self._coerce_budget_number(row_data.get("total")),
                         }
                     )
             return budget_data
 
+        except ExcelParsingError:
+            raise
         except (InvalidFileException, FileNotFoundError) as e:
             raise ExcelParsingError(f"Failed to open or read Excel file: {e}")
         except Exception as e:
             raise ExcelParsingError(f"An unexpected error occurred during Excel budget parsing: {e}")
+        finally:
+            workbook_to_close = locals().get("workbook")
+            if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
+                workbook_to_close.close()
+
+    @staticmethod
+    def _budget_header_aliases() -> dict[str, set[str]]:
+        return {
+            "item": {
+                "item",
+                "partida",
+                "descripción",
+                "descripcion",
+                "concepto",
+                "código",
+                "codigo",
+                "capítulo",
+                "capitulo",
+            },
+            "quantity": {
+                "quantity",
+                "cantidad",
+                "medición",
+                "medicion",
+                "cant",
+                "cant.",
+                "uds",
+                "ud",
+                "unidades",
+            },
+            "unit price": {
+                "unit price",
+                "precio unitario",
+                "precio",
+                "p. unitario",
+                "precio ud",
+                "precio/ud",
+                "importe unitario",
+                "coste unitario",
+            },
+            "total": {
+                "total",
+                "importe",
+                "importe total",
+                "total partida",
+                "subtotal",
+                "coste",
+            },
+        }
+
+    @classmethod
+    def _find_budget_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
+        aliases = cls._budget_header_aliases()
+        required = {"item", "quantity", "unit price", "total"}
+
+        for row_index, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+            canonical_headers = cls._canonicalize_headers(row, aliases)
+            if required.issubset(set(canonical_headers)):
+                return row_index, canonical_headers
+
+        first_row = getattr(sheet, "__getitem__", lambda _: [])(1)
+        fallback_headers = [
+            getattr(cell, "value", cell) if cell is not None else ""
+            for cell in first_row
+        ]
+        fallback_canonical_headers = cls._canonicalize_headers(fallback_headers, aliases)
+        if required.issubset(set(fallback_canonical_headers)):
+            return 1, fallback_canonical_headers
+
+        return None, []
+
+    @staticmethod
+    def _canonicalize_headers(row: Any, aliases: dict[str, set[str]]) -> list[str]:
+        normalized = [
+            str(value).strip().lower() if value is not None else ""
+            for value in row
+        ]
+        return [
+            next(
+                (
+                    canonical
+                    for canonical, accepted in aliases.items()
+                    if header in accepted
+                ),
+                header,
+            )
+            for header in normalized
+        ]
+
+    @staticmethod
+    def _coerce_budget_number(value: Any) -> Any:
+        if value is None or isinstance(value, Number):
+            return value
+        if not isinstance(value, str):
+            return None
+
+        text = value.strip()
+        if not text:
+            return None
+
+        cleaned = re.sub(r"[^0-9,.\-]", "", text)
+        if cleaned in {"", "-", ".", ","}:
+            return None
+
+        if "," in cleaned and "." in cleaned:
+            if cleaned.rfind(",") > cleaned.rfind("."):
+                normalized = cleaned.replace(".", "").replace(",", ".")
+            else:
+                normalized = cleaned.replace(",", "")
+        elif "," in cleaned:
+            left, right = cleaned.rsplit(",", 1)
+            if len(right) in {1, 2}:
+                normalized = f"{left.replace(',', '')}.{right}"
+            else:
+                normalized = cleaned.replace(",", "")
+        else:
+            normalized = cleaned
+
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
