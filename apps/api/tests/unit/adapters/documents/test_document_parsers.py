@@ -345,6 +345,8 @@ class TestExcelParser:
                 "start_date": "2026-01-01",
                 "end_date": "2026-01-05",
                 "duration": 4,
+                "wbs": None,
+                "predecessors": None,
             }
         ]
 
@@ -480,6 +482,7 @@ class TestCompositeParser:
         return Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="document.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -512,6 +515,7 @@ class TestCompositeParser:
         document = Document(
             id=sample_document.id,
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_type=DocumentType.SCHEDULE,
             filename="schedule.xlsx",
             upload_status=DocumentStatus.UPLOADED,
@@ -533,6 +537,7 @@ class TestCompositeParser:
         document = Document(
             id=sample_document.id,
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_type=DocumentType.BUDGET,
             filename="budget.xlsx",
             upload_status=DocumentStatus.UPLOADED,
@@ -554,6 +559,7 @@ class TestCompositeParser:
         document = Document(
             id=sample_document.id,
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_type=DocumentType.BUDGET,
             filename="budget.bc3",
             upload_status=DocumentStatus.UPLOADED,
@@ -573,6 +579,7 @@ class TestCompositeParser:
         document = Document(
             id=sample_document.id,
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_type=DocumentType.CONTRACT,
             filename="contract.xlsx",
             upload_status=DocumentStatus.UPLOADED,
@@ -604,6 +611,7 @@ class TestCompositeParser:
         document = Document(
             id=sample_document.id,
             project_id=sample_document.project_id,
+            tenant_id=sample_document.tenant_id,
             document_type=DocumentType.OTHER,
             filename="notes.txt",
             upload_status=DocumentStatus.UPLOADED,
