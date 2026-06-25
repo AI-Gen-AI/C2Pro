@@ -233,11 +233,11 @@ def _map_risk_severity(item: dict[str, Any]):
 
 async def router_node(state: ProjectState) -> ProjectState:
     """N3 — Delegates doc-type classification to ClassifyDocumentUseCase."""
+    if state.get("doc_type") in DOC_TYPES:
+        return state
     if not _has_extractable_text(state.get("document_text")):
         state["doc_type"] = "insufficient_extractable_text"
         state["messages"].append(AIMessage(content=_insufficient_extractable_text_message()))
-        return state
-    if state.get("doc_type") in DOC_TYPES:
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
     doc_type = await use_case.execute(
