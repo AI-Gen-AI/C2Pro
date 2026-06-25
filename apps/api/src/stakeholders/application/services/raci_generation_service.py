@@ -72,10 +72,12 @@ class RaciGenerationService:
                 assignments=result.assignments,
                 known_stakeholder_ids={stakeholder.id for stakeholder in stakeholders},
             )
-        except Exception:
+        # Persistence failures are sanitized before they cross the application boundary.
+        except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "raci_assignments_persist_failed",
                 project_id=str(project_id),
+                error_type=type(exc).__name__,
             )
             raise ValueError("unable to persist raci assignments") from None
 

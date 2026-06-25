@@ -170,7 +170,14 @@ class TokenCounter:
         # Use cl100k_base encoding (closest to Claude's tokenizer)
         try:
             self._encoding = tiktoken.get_encoding("cl100k_base")
-        except Exception as exc:  # noqa: BLE001 - offline tests must not fetch tokenizer assets.
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            ImportError,
+            ConnectionError,
+            RuntimeError,
+        ) as exc:
             self._encoding = _ApproximateEncoding()
             logger.warning(
                 "token_counter_using_approximate_encoding",

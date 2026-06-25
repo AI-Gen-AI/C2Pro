@@ -274,7 +274,8 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks
-    except Exception as exc:
+    # N4 must convert any tool/LLM failure into an honest empty extraction.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("risk_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         _mark_risk_extraction_honest_failure(
@@ -348,7 +349,8 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items
-    except Exception as exc:
+    # N5 isolates extraction tool failures and surfaces them as NodeResult.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("wbs_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["extracted_wbs"] = []
@@ -411,7 +413,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 retry_count=state["retry_count"],
             )
         )
-    except Exception as exc:
+    # N12 isolates critique service failures and routes to HITL for review.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("critique", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["human_approval_required"] = True
@@ -499,7 +502,8 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         AIMessage(content="HITL auto-approved; continuing analysis.")
                     )
                     return state
-        except Exception:
+        # HITL routing must fail open to LangGraph interrupt instead of approving.
+        except Exception as exc:  # noqa: BLE001
             import structlog
 
             state["node_results"] = [
@@ -513,6 +517,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             structlog.get_logger().warning(
                 "hitl_routing_failed_falling_back_to_interrupt",
                 document_id=state.get("document_id"),
+                error_type=type(exc).__name__,
                 exc_info=True,
             )
 
@@ -563,7 +568,8 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     coherence_breakdown=state.get("coherence_breakdown", {}),
                 )
             )
-    except Exception as exc:
+    # N17 persists best-effort and reports persistence failures as NodeResult.
+    except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("save_to_db", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["node_results"] = [*state.get("node_results", []), node_result]
