@@ -64,6 +64,7 @@ def checkpoint_service():
 def graph_app():
     app = MagicMock()
     app.aupdate_state = AsyncMock()
+    app.ainvoke = AsyncMock()
     return app
 
 

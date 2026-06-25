@@ -17,6 +17,29 @@ import tiktoken
 
 logger = structlog.get_logger()
 
+
+class _ApproximateEncoding:
+    """Offline fallback when tiktoken cannot load its bundled encoding."""
+
+    def encode(self, text: str) -> list[str]:
+        tokens: list[str] = []
+        current = []
+        for char in text:
+            if char.isspace():
+                if current:
+                    tokens.append("".join(current))
+                    current = []
+            elif char.isalnum() or char in "_-":
+                current.append(char)
+            else:
+                if current:
+                    tokens.append("".join(current))
+                    current = []
+                tokens.append(char)
+        if current:
+            tokens.append("".join(current))
+        return tokens
+
 # ===========================================
 # MODEL PRICING (USD per 1M tokens)
 # ===========================================
@@ -145,7 +168,21 @@ class TokenCounter:
     def __init__(self):
         """Initialize with tiktoken encoder."""
         # Use cl100k_base encoding (closest to Claude's tokenizer)
-        self._encoding = tiktoken.get_encoding("cl100k_base")
+        try:
+            self._encoding = tiktoken.get_encoding("cl100k_base")
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            ImportError,
+            RuntimeError,
+        ) as exc:
+            self._encoding = _ApproximateEncoding()
+            logger.warning(
+                "token_counter_using_approximate_encoding",
+                encoding="cl100k_base",
+                error_type=type(exc).__name__,
+            )
 
         logger.debug("token_counter_initialized", encoding="cl100k_base")
 

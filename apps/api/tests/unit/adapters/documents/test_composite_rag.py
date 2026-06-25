@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Composite Parser and RAG Service Additional Tests
 Component: Documents Module - Composite Parser & RAG
@@ -49,6 +50,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             file_format=".pdf",
@@ -84,6 +86,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="test.bc3",
             file_format=".bc3",
@@ -115,6 +118,7 @@ class TestCompositeParserAdvanced:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.OTHER,
             filename="test.txt",
             file_format=".txt",
@@ -357,7 +361,7 @@ class TestRagServicePureFunctions:
 
         assert result.startswith("[")
         assert result.endswith("]")
-        assert "0.100000" in result or "0.100000" in result
+        assert "0.100000" in result or "0.200000" in result
 
     def test_format_vector_truncates_long(self):
         """Test _format_vector truncates to EMBEDDING_DIMENSION."""

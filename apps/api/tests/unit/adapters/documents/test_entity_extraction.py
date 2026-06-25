@@ -1,3 +1,4 @@
+# ruff: noqa: S101
 """
 Test Suite: Entity Extraction Additional Tests
 Component: Documents Module - Entity Extraction Adapter
@@ -86,6 +87,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -132,6 +134,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.SCHEDULE,
             filename="schedule.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -215,6 +218,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -259,6 +263,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.bc3",
             upload_status=DocumentStatus.PARSED,
@@ -307,6 +312,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -343,6 +349,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -381,6 +388,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="contract.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -417,6 +425,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.SCHEDULE,
             filename="schedule.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -453,6 +462,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.SCHEDULE,
             filename="schedule.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -486,6 +496,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -522,6 +533,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -558,6 +570,7 @@ class TestExtractionServiceIntegration:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.BUDGET,
             filename="budget.xlsx",
             upload_status=DocumentStatus.PARSED,
@@ -699,7 +712,7 @@ class TestParseDecimal:
         result = _parse_decimal("100.50")
 
         assert result is not None
-        assert float(result) == 100.50
+        assert float(result) == pytest.approx(100.50)
 
     def test_parse_decimal_from_int(self):
         """Test parsing int returns Decimal."""
@@ -777,6 +790,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -791,6 +805,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -805,6 +820,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.ERROR,
@@ -819,6 +835,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -840,6 +857,7 @@ class TestDocumentDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=doc_id,
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -849,6 +867,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=doc_id,
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -871,6 +890,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=doc_id,
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -878,6 +898,7 @@ class TestDocumentDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=doc_id,
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -902,6 +923,7 @@ class TestDocumentDomainModel:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -909,6 +931,7 @@ class TestDocumentDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=uuid4(),  # Different ID
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -934,6 +957,7 @@ class TestClauseDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=uuid4(),
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -952,6 +976,7 @@ class TestClauseDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=uuid4(),
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -969,6 +994,7 @@ class TestClauseDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=uuid4(),
             clause_code="1.0",
             clause_type=ClauseType.PENALTY,
@@ -985,6 +1011,7 @@ class TestClauseDomainModel:
         clause = Clause(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_id=uuid4(),
             clause_code="1.0",
             clause_type=ClauseType.SCOPE,
@@ -1005,6 +1032,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -1021,6 +1049,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -1037,6 +1066,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.QUEUED,
@@ -1053,6 +1083,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSING,
@@ -1069,6 +1100,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.PARSED,
@@ -1085,6 +1117,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.UPLOADED,
@@ -1102,6 +1135,7 @@ class TestDocumentTransition:
         doc = Document(
             id=uuid4(),
             project_id=uuid4(),
+            tenant_id=uuid4(),
             document_type=DocumentType.CONTRACT,
             filename="test.pdf",
             upload_status=DocumentStatus.ERROR,

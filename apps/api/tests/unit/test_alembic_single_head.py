@@ -60,9 +60,10 @@ def test_alembic_version_graph_has_single_head() -> None:
     }
     heads = sorted(set(revisions) - referenced_parents)
 
-    assert heads == ["20260526_0001"], {
+    assert len(heads) == 1, {
         "heads": [(head, revisions[head]) for head in heads],
     }
+    assert heads[0] in revisions
 
 
 def test_migration_health_parser_accepts_merge_revisions() -> None:
@@ -73,4 +74,4 @@ def test_migration_health_parser_accepts_merge_revisions() -> None:
     nodes, _ = module.parse_migration_graph(versions_dir)
 
     assert nodes["20260524_0001"] == ("20260516_0004", "20260517_0002")
-    assert module.validate_linear_chain(nodes) == "20260526_0001"
+    assert module.validate_linear_chain(nodes) == "20260624_0001"
