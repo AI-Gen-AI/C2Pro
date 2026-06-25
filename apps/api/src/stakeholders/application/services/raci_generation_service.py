@@ -156,6 +156,7 @@ class RaciGenerationService:
                 RaciAssignment(
                     id=uuid4(),
                     project_id=project_id,
+                    tenant_id=self.tenant_id,
                     stakeholder_id=assignment.stakeholder_id,
                     wbs_item_id=assignment.wbs_item_id,
                     raci_role=assignment.role,

@@ -18,11 +18,12 @@ from src.stakeholders.application.services.raci_generation_service import RaciGe
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, RACIRole, Stakeholder
 
 
-def _stakeholder(project_id, stakeholder_id) -> Stakeholder:
+def _stakeholder(project_id, stakeholder_id, tenant_id) -> Stakeholder:
     now = datetime.now(UTC)
     return Stakeholder(
         id=stakeholder_id,
         project_id=project_id,
+        tenant_id=tenant_id,
         power_level=PowerLevel.HIGH,
         interest_level=InterestLevel.HIGH,
         approval_status="approved",
@@ -60,7 +61,7 @@ async def test_i10_sec_ambiguity_requires_hitl_and_blocks_auto_persist_red() -> 
 
     list_stakeholders_use_case = AsyncMock()
     list_stakeholders_use_case.execute.return_value = (
-        [_stakeholder(project_id, stakeholder_id)],
+        [_stakeholder(project_id, stakeholder_id, tenant_id)],
         1,
     )
     wbs_repository = AsyncMock()
@@ -120,7 +121,7 @@ async def test_i10_sec_repository_reads_are_tenant_scoped_for_raci_assignments_r
 
     list_stakeholders_use_case = AsyncMock()
     list_stakeholders_use_case.execute.return_value = (
-        [_stakeholder(project_id, stakeholder_id)],
+        [_stakeholder(project_id, stakeholder_id, tenant_id)],
         1,
     )
     wbs_repository = AsyncMock()
@@ -174,7 +175,7 @@ async def test_i10_sec_persistence_errors_are_sanitized_before_surface_red() -> 
 
     list_stakeholders_use_case = AsyncMock()
     list_stakeholders_use_case.execute.return_value = (
-        [_stakeholder(project_id, known_stakeholder_id)],
+        [_stakeholder(project_id, known_stakeholder_id, tenant_id)],
         1,
     )
     wbs_repository = AsyncMock()
