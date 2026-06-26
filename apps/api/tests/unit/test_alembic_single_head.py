@@ -74,4 +74,4 @@ def test_migration_health_parser_accepts_merge_revisions() -> None:
     nodes, _ = module.parse_migration_graph(versions_dir)
 
     assert nodes["20260524_0001"] == ("20260516_0004", "20260517_0002")
-    assert module.validate_linear_chain(nodes) == "20260626_0001"
+    assert module.validate_linear_chain(nodes) == "20260627_0001"
