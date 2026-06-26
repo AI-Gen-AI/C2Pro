@@ -39,7 +39,7 @@ class BudgetItemORM(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     code = Column(String, nullable=False, unique=True)
-    amount = Column(DECIMAL(10, 2), nullable=False)
+    amount = Column(DECIMAL(18, 2), nullable=False)
 
     project = relationship("ProjectORM", backref="budget_items")
 
@@ -74,8 +74,8 @@ class WBSItemORM(Base):
         Enum(WBSItemType, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    budget_allocated = Column(DECIMAL(10, 2), nullable=True)
-    budget_spent = Column(DECIMAL(10, 2), default=Decimal(0), nullable=False)
+    budget_allocated = Column(DECIMAL(18, 2), nullable=True)
+    budget_spent = Column(DECIMAL(18, 2), default=Decimal(0), nullable=False)
     planned_start = Column(DateTime(timezone=True), nullable=True)
     planned_end = Column(DateTime(timezone=True), nullable=True)
     actual_start = Column(DateTime(timezone=True), nullable=True)
@@ -115,7 +115,7 @@ class BOMItemORM(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     item_name = Column(String, nullable=False)
-    quantity = Column(DECIMAL(10, 2), nullable=False)
+    quantity = Column(DECIMAL(18, 4), nullable=False)
     wbs_item_id = Column(UUID(as_uuid=True), ForeignKey("procurement_wbs_items.id"), nullable=True)
     item_code = Column(String, nullable=True)
     description = Column(Text, nullable=True)
@@ -124,8 +124,8 @@ class BOMItemORM(Base):
         nullable=True,
     )
     unit = Column(String, nullable=True)
-    unit_price = Column(DECIMAL(10, 2), nullable=True)
-    total_price = Column(DECIMAL(10, 2), nullable=True)
+    unit_price = Column(DECIMAL(18, 2), nullable=True)
+    total_price = Column(DECIMAL(18, 2), nullable=True)
     currency = Column(String, default="EUR", nullable=False)
     supplier = Column(String, nullable=True)
     lead_time_days = Column(Integer, nullable=True)
