@@ -58,6 +58,8 @@ def test_llm_evaluator_evaluated_when_enabled():
     (D.BudgetOverrunEvaluator, {}, "cost overrun", ApplicabilityState.SKIPPED_MISSING_INPUTS),
     (D.BudgetLineItemEvaluator, {"unit_price": 2.0, "quantity": 3.0, "line_total": 6.0}, "x", ApplicabilityState.EVALUATED),
     (D.BudgetLineItemEvaluator, {"unit_price": 2.0}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
+    (D.BudgetSumMismatchEvaluator, {"budget_items": [{"amount": 10.0}], "contract_total": 12.0}, "x", ApplicabilityState.EVALUATED),
+    (D.BudgetSumMismatchEvaluator, {"budget_items": [{"amount": 10.0}]}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
     (D.BomBudgetLinkEvaluator, {"bom_items": [{"item_name": "pump"}]}, "x", ApplicabilityState.EVALUATED),
     (D.BomBudgetLinkEvaluator, {"bom_items": []}, "x", ApplicabilityState.SKIPPED_MISSING_INPUTS),
     (D.SpecReferenceEvaluator, {"material": "concrete"}, "x", ApplicabilityState.EVALUATED),

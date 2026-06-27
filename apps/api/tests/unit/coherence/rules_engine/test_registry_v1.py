@@ -85,6 +85,18 @@ DETERMINISTIC_CASES = [
         ),
     ),
     (
+        "DET-BUD-SUM",
+        "BUDGET",
+        Clause(
+            id="budget-3",
+            text="Budget reconciliation.",
+            data={
+                "budget_items": [{"amount": 636_044_805}],
+                "contract_total": 628_624_801,
+            },
+        ),
+    ),
+    (
         "DET-TIM-STATUS",
         "TIME",
         Clause(id="time-1", text="Schedule status.", data={"status": "delayed"}),
@@ -152,23 +164,25 @@ LLM_CASES = [
 ]
 
 
-def test_v1_registry_exposes_exactly_18_evaluators_with_12_det_and_6_llm() -> None:
+def test_v1_registry_exposes_exactly_19_evaluators_with_13_det_and_6_llm() -> None:
     evaluators = registry.list_evaluators(llm_port=FakeLLMRulePort())
 
     deterministic = [e for e in evaluators if getattr(e, "source", "deterministic") == "deterministic"]
     llm = [e for e in evaluators if getattr(e, "source", "deterministic") == "llm"]
 
-    assert len(evaluators) == 18
-    assert len(deterministic) == 12
+    # TASK-COH-BUD-RECON-001 deliberately adds cross-document DET-BUD-SUM.
+    assert len(evaluators) == 19
+    assert len(deterministic) == 13
     assert len(llm) == 6
 
 
-def test_v1_registry_has_two_deterministic_and_one_llm_evaluator_per_category() -> None:
+def test_v1_registry_has_budget_reconciliation_plus_v1_category_coverage() -> None:
     coverage = registry.registry_coverage_by_category(llm_port=FakeLLMRulePort())
 
     assert coverage == {
         "SCOPE": {"deterministic": 2, "llm": 1},
-        "BUDGET": {"deterministic": 2, "llm": 1},
+        # TASK-COH-BUD-RECON-001: BUDGET gains deterministic DET-BUD-SUM.
+        "BUDGET": {"deterministic": 3, "llm": 1},
         "TIME": {"deterministic": 2, "llm": 1},
         "TECHNICAL": {"deterministic": 2, "llm": 1},
         "LEGAL": {"deterministic": 2, "llm": 1},

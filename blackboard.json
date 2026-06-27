@@ -2395,6 +2395,40 @@
         "validacion_lint": false,
         "nota_verificacion": "Targeted RAG provider tests passed 6/6; live POST /api/v1/projects/{project_id}/rag/answer returned 200 for equipment question with schedule sources."
       }
+    },
+    {
+      "tarea_id": "T117",
+      "backlog_id": "TASK-COH-BUD-RECON-001",
+      "tipo": "ai",
+      "descripcion": "Wire deterministic budget reconciliation into the coherence engine with structured BOM clauses and DET-BUD-SUM.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "BUDGET dimension is assessed deterministically from tenant-scoped BOM rows plus contract total, DET-BUD-SUM is registered and templated, and missing inputs remain honest-null.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/budget_clause_builder.py",
+        "apps/api/src/coherence/router.py",
+        "apps/api/src/coherence/rules_engine/deterministic.py",
+        "apps/api/src/coherence/rules_engine/registry.py",
+        "apps/api/src/coherence/alert_generator.py",
+        "apps/api/tests/coherence/test_deterministic_evaluators.py",
+        "apps/api/tests/unit/coherence/test_budget_clause_builder.py",
+        "apps/api/tests/unit/coherence/test_budget_router_wiring.py",
+        "apps/api/tests/unit/coherence/test_budget_reconciliation_integration.py",
+        "apps/api/tests/unit/coherence/rules_engine/test_applicability.py",
+        "apps/api/tests/unit/coherence/rules_engine/test_registry_v1.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-27T00:35:00Z",
+        "completado": "2026-06-27T00:55:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Deterministic budget reconciliation wired into coherence with zero LLM calls and honest-null behavior for missing BOM or contract total.",
+        "tests_pasados": true,
+        "validacion_lint": true
+      }
     }
   ],
   "backlog_sync": {
@@ -2593,8 +2627,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 20,
-    "tareas_completadas": 19,
+    "total_tareas": 21,
+    "tareas_completadas": 20,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,

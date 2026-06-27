@@ -282,6 +282,47 @@ class TestBudgetSumMismatchEvaluator:
         assert signal is not None
         assert signal.raw_data["direction"] == "exceeds"
 
+    def test_real_budget_contract_deviation_emits_budget_signal(self, evaluator):
+        """TS-COH-BUD-RECON-001: DET-BUD-SUM emits for BOM total vs contract total drift."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs contract reconciliation",
+            data={
+                "budget_items": [{"amount": 636_044_805}],
+                "contract_total": 628_624_801,
+            },
+        )
+
+        signal = evaluator.evaluate_v3(clause)
+
+        assert signal is not None
+        assert signal.rule_id == "DET-BUD-SUM"
+        assert signal.category == "BUDGET"
+        assert signal.raw_data["deviation_pct"] == pytest.approx(1.18, abs=0.01)
+
+    def test_within_tolerance_returns_none(self, evaluator):
+        """TS-COH-BUD-RECON-001: DET-BUD-SUM stays clean within tolerance."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs contract reconciliation",
+            data={
+                "budget_items": [{"amount": 100_500}],
+                "contract_total": 100_000,
+            },
+        )
+
+        assert evaluator.evaluate_v3(clause) is None
+
+    def test_missing_contract_total_returns_none(self, evaluator):
+        """TS-COH-BUD-RECON-001: DET-BUD-SUM never fabricates a contract total."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs contract reconciliation",
+            data={"budget_items": [{"amount": 100_500}]},
+        )
+
+        assert evaluator.evaluate_v3(clause) is None
+
     def test_sum_below_contract(self, evaluator):
         """Test finding when budget items are below contract."""
         clause = Clause(
