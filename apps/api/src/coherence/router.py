@@ -463,6 +463,8 @@ async def evaluate_project_coherence(
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
         include_rag_similarity=payload.include_rag_similarity,
+        tenant_id=str(current_user.tenant_id),
+        project_id=str(payload.project_id) if payload.project_id else None,
     )
 
     # Evaluate using LangGraph subgraph

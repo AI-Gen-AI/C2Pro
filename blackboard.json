@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-27T21:30:00Z",
+  "updated_at": "2026-06-27T22:00:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,35 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T120",
+      "backlog_id": "TASK-COH-EVAL-TENANT-008",
+      "tipo": "backend",
+      "descripcion": "Pass authenticated tenant/project into coherence EvaluationConfig to unblock the LLM semantic layer.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "POST /api/v1/coherence/evaluate builds EvaluationConfig with current_user.tenant_id and payload.project_id so low_budget_mode=false reaches the LLM gate with the real tenant instead of the zero-UUID fallback.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/router.py",
+        "apps/api/tests/coherence/test_api_v3.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-27T21:45:00Z",
+        "completado": "2026-06-27T22:00:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Endpoint config propagation fixed locally on fix/coherence-evaluate-pass-tenant-id.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: endpoint regression failed because EvaluationConfig.tenant_id and project_id were None.",
+          "GREEN: endpoint regression passed after router passed current_user.tenant_id and payload.project_id; mocked LLM gate tests remained green."
+        ]
+      }
+    },
     {
       "tarea_id": "T119",
       "backlog_id": "TASK-COH-BUD-RECON-004",
