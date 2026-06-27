@@ -55,6 +55,9 @@ class BOMItemBase(BaseModel):
     incoterm: str | None = Field(
         None, max_length=20, description="Incoterm for delivery (e.g., 'FOB', 'CIF')"
     )
+    source_document_id: UUID | None = Field(
+        None, description="Source document that produced this parsed BOM item"
+    )
     procurement_status: ProcurementStatus = Field(
         ProcurementStatus.PENDING, description="Current procurement status"
     )
@@ -106,6 +109,7 @@ class BOMItemUpdate(BaseModel):
     total_price: Decimal | None = None
     supplier: str | None = Field(None, max_length=255)
     lead_time_days: int | None = Field(None, ge=0)
+    source_document_id: UUID | None = None
     procurement_status: ProcurementStatus | None = None
     bom_metadata: dict | None = None
 
