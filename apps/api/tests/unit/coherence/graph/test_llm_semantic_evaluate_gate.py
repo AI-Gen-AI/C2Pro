@@ -115,3 +115,65 @@ def test_evaluation_config_low_budget_mode_default_is_false():
     from src.coherence.graph.state import EvaluationConfig
     cfg = EvaluationConfig()
     assert cfg.low_budget_mode is False
+
+
+_RULE_CATEGORY = {
+    "R-SCOPE-CLARITY-01": "SCOPE", "R-PAYMENT-CLARITY-01": "BUDGET",
+    "R-SCHEDULE-CLARITY-01": "TIME", "R-TECHNICAL-SPEC-CLARITY-01": "TECHNICAL",
+    "R-RESPONSIBILITY-01": "LEGAL", "R-QUALITY-STANDARDS-01": "QUALITY",
+}
+
+
+class RecordingGate:
+    """Records every (rule_id, clause_id) reaching the gate; returns a benign
+    'evaluated' finding so coverage is marked for whatever actually runs."""
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+
+    async def evaluate_rule(self, tenant_id, rule_id, clause):
+        self.calls.append((rule_id, clause.id))
+        return GateDecision(
+            state="evaluated",
+            finding=_finding(rule_id, clause.id, _RULE_CATEGORY[rule_id]),
+            reason=None, reset_date=None, cache_key="k", cost_charged_usd=0.0,
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_gate_skips_llm_rules_for_irrelevant_clause_categories():
+    """TASK-COH-LLM-APPLIC-009: LLM rules only evaluate clauses whose inferred
+    category matches the rule's category (mirrors deterministic applicability).
+    The legal rule must NOT fire on a budget clause; LEGAL stays assessed via a
+    real legal clause; the budget clause still gets its own (budget) rule."""
+    from src.coherence.graph.nodes import llm_semantic_evaluate_async
+
+    budget_clause = Clause(
+        id="budget-1",
+        text="Unit price and total amount payment for the contingency line item.",
+        data={"document_type": "budget", "category": "BUDGET"},
+    )
+    legal_clause = Clause(
+        id="legal-1",
+        text="This contract clause assigns liability and penalty; termination "
+             "requires notice and disputes are resolved by arbitration.",
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    state = CoherenceGraphState(
+        project_id="p", clauses=[budget_clause, legal_clause],
+        config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
+    )
+
+    gate = RecordingGate()
+    out = await llm_semantic_evaluate_async(state, gate=gate)
+
+    called = set(gate.calls)
+    # The over-flagging bug: legal rule must NOT run on a budget clause.
+    assert ("R-RESPONSIBILITY-01", "budget-1") not in called
+    # LEGAL must remain assessed → legal rule runs on the real legal clause.
+    assert ("R-RESPONSIBILITY-01", "legal-1") in called
+    assert out["coverage_map"]["LEGAL"] is True
+    # No over-skipping: the budget clause still gets its own rule.
+    assert ("R-PAYMENT-CLARITY-01", "budget-1") in called
+    # Gating actually pruned irrelevant (clause, rule) pairs.
+    assert out["llm_skipped_count"] > 0
+    assert len(called) < len(state.clauses) * len(_RULE_CATEGORY)
