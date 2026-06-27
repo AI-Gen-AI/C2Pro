@@ -8,6 +8,19 @@ from src.procurement.domain.models import BOMItem, ProcurementStatus
 from src.procurement.ports.bom_repository import IBOMRepository
 
 
+def _source_document_id_from_payload(bom_create: BOMItemCreate) -> UUID | None:
+    if bom_create.source_document_id is not None:
+        return bom_create.source_document_id
+
+    raw_source = bom_create.bom_metadata.get("source_document_id")
+    if raw_source is None:
+        return None
+    try:
+        return UUID(str(raw_source))
+    except (TypeError, ValueError):
+        return None
+
+
 class CreateBOMItemUseCase:
     """Use case for creating a new BOM item."""
 
@@ -42,11 +55,54 @@ class CreateBOMItemUseCase:
             lead_time_days=bom_create.lead_time_days,
             incoterm=bom_create.incoterm,
             contract_clause_id=bom_create.contract_clause_id,
+            source_document_id=_source_document_id_from_payload(bom_create),
             procurement_status=bom_create.procurement_status,
             bom_metadata=bom_create.bom_metadata
         )
 
         return await self.bom_repository.create(bom_item, tenant_id)
+
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        bom_items: list[BOMItemCreate],
+        tenant_id: UUID,
+    ) -> list[BOMItem]:
+        """Replace parsed BOM rows for one source document in a single repository operation."""
+        domain_items = [
+            BOMItem(
+                project_id=item.project_id,
+                wbs_item_id=item.wbs_item_id,
+                item_code=item.item_code,
+                item_name=item.item_name,
+                description=item.description,
+                category=item.category,
+                quantity=item.quantity,
+                unit=item.unit,
+                unit_price=item.unit_price,
+                total_price=item.total_price,
+                currency=item.currency,
+                supplier=item.supplier,
+                lead_time_days=item.lead_time_days,
+                incoterm=item.incoterm,
+                contract_clause_id=item.contract_clause_id,
+                source_document_id=source_document_id,
+                procurement_status=item.procurement_status,
+                bom_metadata={
+                    **item.bom_metadata,
+                    "source_document_id": str(source_document_id),
+                },
+            )
+            for item in bom_items
+        ]
+        return await self.bom_repository.replace_for_source_document(
+            project_id=project_id,
+            source_document_id=source_document_id,
+            bom_items=domain_items,
+            tenant_id=tenant_id,
+        )
 
 
 class ListBOMItemsUseCase:

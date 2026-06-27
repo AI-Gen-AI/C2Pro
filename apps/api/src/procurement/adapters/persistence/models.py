@@ -133,6 +133,9 @@ class BOMItemORM(Base):
     transit_time_days = Column(Integer, nullable=True)
     incoterm = Column(String, nullable=True)
     contract_clause_id = Column(UUID(as_uuid=True), nullable=True)
+    source_document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
+    )
     budget_item_id = Column(UUID(as_uuid=True), ForeignKey("procurement_budget_items.id"), nullable=True)
     procurement_status = Column(
         Enum(ProcurementStatus, values_callable=lambda x: [e.value for e in x]),
@@ -144,6 +147,7 @@ class BOMItemORM(Base):
     # Relationships
     wbs_item = relationship("WBSItemORM", backref="bom_items")
     budget_item = relationship("BudgetItemORM", backref="bom_items")
+    source_document = relationship("DocumentORM", backref="bom_items")
 
     def __repr__(self):
         return f"<BOMItemORM(id={self.id}, item_name='{self.item_name}', quantity={self.quantity})>"

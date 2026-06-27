@@ -172,26 +172,39 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                         }
                     })
 
+        payloads: list[BOMItemCreate] = []
         for item in items_to_process:
             if not item["name"] or item["quantity"] is None:
                 continue
 
-            payload = BOMItemCreate(
-                project_id=document.project_id,
-                item_code=item["code"],
-                item_name=item["name"],
-                quantity=item["quantity"],
-                unit=item["unit"],
-                unit_price=item["price"],
-                total_price=item["total"],
-                currency="EUR",
-                bom_metadata=item["metadata"]
+            payloads.append(
+                BOMItemCreate(
+                    project_id=document.project_id,
+                    item_code=item["code"],
+                    item_name=item["name"],
+                    quantity=item["quantity"],
+                    unit=item["unit"],
+                    unit_price=item["price"],
+                    total_price=item["total"],
+                    currency="EUR",
+                    source_document_id=document.id,
+                    bom_metadata=item["metadata"],
+                )
             )
-            try:
-                await use_case.execute(payload, _tenant_id)
-                count += 1
-            except Exception as exc:
-                logger.debug("bom_extraction_skipped", name=item["name"], error=str(exc))
+
+        if not payloads:
+            return 0
+
+        try:
+            created = await use_case.replace_for_source_document(
+                project_id=document.project_id,
+                source_document_id=document.id,
+                bom_items=payloads,
+                tenant_id=_tenant_id,
+            )
+            count = len(created)
+        except Exception as exc:
+            logger.debug("bom_extraction_skipped", document_id=str(document.id), error=str(exc))
 
         return count
 

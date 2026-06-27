@@ -29,6 +29,18 @@ class IBOMRepository(ABC):
         pass
 
     @abstractmethod
+    async def replace_for_source_document(
+        self,
+        *,
+        project_id: UUID,
+        source_document_id: UUID,
+        bom_items: list[BOMItem],
+        tenant_id: TenantId,
+    ) -> list[BOMItem]:
+        """Replace all BOM rows produced by one parsed source document."""
+        pass
+
+    @abstractmethod
     async def get_by_id(self, bom_id: UUID, tenant_id: TenantId) -> BOMItem | None:
         """
         Retrieve a BOM item by ID.

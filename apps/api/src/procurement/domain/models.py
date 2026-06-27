@@ -155,6 +155,7 @@ class BOMItem:
     incoterm: str | None = None
     contract_clause_id: UUID | None = None
     budget_item_id: UUID | None = None
+    source_document_id: UUID | None = None
     procurement_status: ProcurementStatus = ProcurementStatus.PENDING
     bom_metadata: dict = field(default_factory=dict)
 
