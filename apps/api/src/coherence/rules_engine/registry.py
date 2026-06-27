@@ -21,6 +21,7 @@ from .deterministic import (
     BomBudgetLinkEvaluator,
     BudgetLineItemEvaluator,
     BudgetOverrunEvaluator,
+    BudgetSumMismatchEvaluator,
     InspectionFrequencyEvaluator,
     NoticePeriodEvaluator,
     PenaltyCapEvaluator,
@@ -41,13 +42,15 @@ logger = structlog.get_logger()
 # ===========================================
 
 # Maps rule ID to evaluator CLASS for deterministic rules.
-# TASK-COH-V1-05 fixes the canonical v1 registry at 12 deterministic
-# evaluators: 2 per category across the six C2Pro categories.
+# TASK-COH-V1-05 fixed the v1 registry at 12 deterministic evaluators.
+# TASK-COH-BUD-RECON-001 deliberately adds DET-BUD-SUM as the 13th
+# deterministic rule for cross-document budget reconciliation.
 DETERMINISTIC_EVALUATORS: dict[str, type[RuleEvaluator]] = {
     "DET-SCP-DELIVERABLES": ScopeDeliverablesEvaluator,
     "DET-CRS-SCPBUD": ScopeVsBudgetCoverageEvaluator,
     "DET-BUD-OVERRUN": BudgetOverrunEvaluator,
     "DET-BUD-LINEITEM": BudgetLineItemEvaluator,
+    "DET-BUD-SUM": BudgetSumMismatchEvaluator,
     "DET-TIM-STATUS": ScheduleStatusEvaluator,
     "DET-TIM-DURATION": ScheduleDurationEvaluator,
     "DET-TEC-SPEC": SpecReferenceEvaluator,
