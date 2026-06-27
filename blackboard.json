@@ -2429,6 +2429,42 @@
         "tests_pasados": true,
         "validacion_lint": true
       }
+    },
+    {
+      "tarea_id": "T118",
+      "backlog_id": "TASK-COH-BUD-IDEM-003",
+      "tipo": "backend",
+      "descripcion": "Make parsed budget BOM persistence idempotent per source document.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Re-parsing one budget document replaces only that document's BOM rows, different budget documents in the same project are retained, and source_document_id schema/RLS migrations are present.",
+      "archivos_modificados": [
+        "apps/api/src/procurement/domain/models.py",
+        "apps/api/src/procurement/application/dtos.py",
+        "apps/api/src/procurement/application/use_cases/bom_use_cases.py",
+        "apps/api/src/procurement/adapters/persistence/models.py",
+        "apps/api/src/procurement/adapters/persistence/bom_repository.py",
+        "apps/api/src/documents/adapters/extraction/documents_entity_extraction_service.py",
+        "apps/api/alembic/versions/20260628_0001_add_bom_source_document_id.py",
+        "supabase/migrations/20260628000100_add_bom_source_document_id.sql",
+        "apps/api/tests/unit/procurement/test_bom_repository_idempotency.py",
+        "apps/api/tests/unit/adapters/documents/test_bom_extraction_idempotency.py",
+        "apps/api/tests/unit/procurement/test_numeric_precision.py",
+        "apps/api/tests/modules/procurement/application/test_bom_use_cases_contract.py",
+        "apps/api/tests/unit/test_alembic_single_head.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-27T01:10:00Z",
+        "completado": "2026-06-27T01:35:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "BOM persistence is source-document scoped and idempotent; budget extraction performs one set-level replacement per parsed budget document.",
+        "tests_pasados": true,
+        "validacion_lint": true
+      }
     }
   ],
   "backlog_sync": {
@@ -2627,8 +2663,8 @@
     ]
   },
   "metricas": {
-    "total_tareas": 21,
-    "tareas_completadas": 20,
+    "total_tareas": 22,
+    "tareas_completadas": 21,
     "tareas_en_progreso": 1,
     "tareas_pendientes": 0,
     "total_horas_estimadas": 229,
