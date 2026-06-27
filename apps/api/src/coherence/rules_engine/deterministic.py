@@ -149,6 +149,18 @@ class BudgetSumMismatchEvaluator(RuleEvaluator):
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        budget_items = clause.data.get("budget_items")
+        contract_total = clause.data.get("contract_total") or clause.data.get("total_amount")
+        if (
+            isinstance(budget_items, list)
+            and budget_items
+            and _num(contract_total)
+            and contract_total > 0
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -164,7 +176,7 @@ class BudgetSumMismatchEvaluator(RuleEvaluator):
         if items_sum <= 0:
             return None
         dev = abs(items_sum - contract_total) / contract_total
-        if dev <= self.config.budget_unit_price_tolerance_pct:
+        if dev <= self.config.budget_sum_tolerance_pct:
             return None
         # Budget items sum > contract = overcommitted; < contract = incomplete coverage
         direction = "exceeds" if items_sum > contract_total else "below"

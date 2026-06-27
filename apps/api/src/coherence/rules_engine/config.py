@@ -10,6 +10,7 @@ Location: apps/api/src/coherence/rules_engine/config.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -37,8 +38,11 @@ class EvaluatorConfig:
     budget_contingency_min_pct: float = 0.05  # Below 5% = too low
     budget_contingency_max_pct: float = 0.20  # Above 20% = suspiciously high
 
-    # DET-BUD-LINEITEM / DET-BUD-SUM: Arithmetic tolerance
+    # DET-BUD-LINEITEM: Arithmetic tolerance
     budget_unit_price_tolerance_pct: float = 0.02  # 2% tolerance for rounding
+
+    # DET-BUD-SUM: cross-document budget total reconciliation tolerance
+    budget_sum_tolerance_pct: float = 0.01  # 1% tolerance for contract-vs-BOM drift
 
     # DET-BUD-RETENTION: Retention rate bounds
     retention_min_pct: float = 0.03  # Below 3% = insufficient
@@ -106,7 +110,7 @@ class EvaluatorConfig:
 DEFAULT_CONFIG = EvaluatorConfig()
 
 
-def get_config(**overrides) -> EvaluatorConfig:
+def get_config(**overrides: Any) -> EvaluatorConfig:
     """
     Get an EvaluatorConfig with optional overrides.
 

@@ -26,6 +26,7 @@ from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 
 # Import v0.3 graph evaluation
+from .budget_clause_builder import build_budget_clauses
 from .domain.v2_constants import SCORE_VERSION_V1
 from .graph.graph import evaluate_coherence
 from .graph.state import EvaluationConfig
@@ -242,6 +243,13 @@ async def get_clauses_from_rag(
     seen_ids: set[str] = set()
     targeted_clauses: list[Clause] = []
 
+    async def _append_budget_clauses() -> None:
+        for clause in await build_budget_clauses(db, project_id, tenant_id):
+            if clause.id in seen_ids:
+                continue
+            targeted_clauses.append(clause)
+            seen_ids.add(clause.id)
+
     base_query = """
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
@@ -303,6 +311,7 @@ async def get_clauses_from_rag(
                 if remaining <= 0:
                     break
 
+    await _append_budget_clauses()
     if targeted_clauses:
         return targeted_clauses
 
@@ -340,7 +349,8 @@ async def get_clauses_from_rag(
         clauses.append(clause)
 
     if clauses:
-        return clauses
+        targeted_clauses.extend(clauses)
+        return targeted_clauses
 
     fallback_stmt = text("""
         SELECT d.id, d.document_type::text, d.document_metadata
@@ -379,7 +389,8 @@ async def get_clauses_from_rag(
                 },
             )
         )
-    return fallback_clauses
+    targeted_clauses.extend(fallback_clauses)
+    return targeted_clauses
 
 
 # ---- API Endpoint ----
