@@ -86,18 +86,38 @@ async def build_budget_clauses(
         {"project_id": str(project_id), "tenant_id": str(tenant_id)},
     )
     contract_total = _as_float(contract_result.scalar_one_or_none())
-    if reconciliation_items and contract_total is not None:
+    stated_total_stmt = text("""
+        SELECT (d.document_metadata->>'stated_total')::numeric AS amt
+        FROM documents d
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id = CAST(:project_id AS uuid)
+          AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.document_type::text = 'budget'
+          AND d.document_metadata ? 'stated_total'
+        ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
+        LIMIT 1
+    """)
+    stated_total_result = await db.execute(
+        stated_total_stmt,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
+    )
+    stated_total = _as_float(stated_total_result.scalar_one_or_none())
+    if reconciliation_items and (contract_total is not None or stated_total is not None):
+        data: dict[str, Any] = {
+            "document_type": "budget",
+            "category": "BUDGET",
+            "affected_categories": ["BUDGET"],
+            "budget_items": reconciliation_items,
+        }
+        if contract_total is not None:
+            data["contract_total"] = contract_total
+        if stated_total is not None:
+            data["stated_total"] = stated_total
         clauses.append(
             Clause(
                 id=f"budget-reconciliation-{project_id}",
                 text="Project budget vs contract reconciliation",
-                data={
-                    "document_type": "budget",
-                    "category": "BUDGET",
-                    "affected_categories": ["BUDGET"],
-                    "budget_items": reconciliation_items,
-                    "contract_total": contract_total,
-                },
+                data=data,
             )
         )
 

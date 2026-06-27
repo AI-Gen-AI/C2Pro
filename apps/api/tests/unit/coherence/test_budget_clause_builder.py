@@ -59,7 +59,7 @@ async def test_build_budget_clauses_returns_line_items_and_reconciliation() -> N
         _row(item_name="Concrete", total_price=Decimal("250.00")),
         _row(item_name="Steel", quantity=Decimal("1.0000"), unit_price=Decimal("50.00"), total_price=Decimal("50.00")),
     ]
-    session = _Session([_Result(rows), _Result([Decimal("280.00")])])
+    session = _Session([_Result(rows), _Result([Decimal("280.00")]), _Result([Decimal("310.00")])])
 
     clauses = await build_budget_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
 
@@ -74,6 +74,7 @@ async def test_build_budget_clauses_returns_line_items_and_reconciliation() -> N
     reconciliation = clauses[-1]
     assert reconciliation.id == f"budget-reconciliation-{project_id}"
     assert reconciliation.data["contract_total"] == 280.0
+    assert reconciliation.data["stated_total"] == 310.0
     assert reconciliation.data["budget_items"] == [
         {"amount": 250.0, "name": "Concrete"},
         {"amount": 50.0, "name": "Steel"},
@@ -93,12 +94,44 @@ async def test_build_budget_clauses_returns_empty_without_bom_rows() -> None:
 
 @pytest.mark.asyncio
 async def test_build_budget_clauses_skips_reconciliation_without_contract_total() -> None:
-    """TS-COH-BUD-RECON-001: missing contract total keeps only honest line items."""
+    """TS-COH-BUD-RECON-004: missing totals keep only honest line items."""
     rows = [_row(item_name="Concrete")]
-    session = _Session([_Result(rows), _Result([])])
+    session = _Session([_Result(rows), _Result([]), _Result([])])
 
     clauses = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
 
     assert len(clauses) == 1
     assert clauses[0].id.startswith("bom-")
     assert "budget_items" not in clauses[0].data
+
+
+@pytest.mark.asyncio
+async def test_build_budget_clauses_reconciles_with_stated_total_only() -> None:
+    """TS-COH-BUD-RECON-004: stated total can drive internal reconciliation alone."""
+    project_id = uuid4()
+    rows = [_row(item_name="Concrete", total_price=Decimal("250.00"))]
+    session = _Session([_Result(rows), _Result([]), _Result([Decimal("310.00")])])
+
+    clauses = await build_budget_clauses(session, project_id, uuid4())  # type: ignore[arg-type]
+
+    assert len(clauses) == 2
+    reconciliation = clauses[-1]
+    assert reconciliation.id == f"budget-reconciliation-{project_id}"
+    assert reconciliation.data["budget_items"] == [{"amount": 250.0, "name": "Concrete"}]
+    assert reconciliation.data["stated_total"] == 310.0
+    assert "contract_total" not in reconciliation.data
+
+
+@pytest.mark.asyncio
+async def test_build_budget_clauses_reconciles_with_contract_total_only() -> None:
+    """TS-COH-BUD-RECON-004: contract total remains sufficient for DET-BUD-SUM."""
+    project_id = uuid4()
+    rows = [_row(item_name="Concrete", total_price=Decimal("250.00"))]
+    session = _Session([_Result(rows), _Result([Decimal("280.00")]), _Result([])])
+
+    clauses = await build_budget_clauses(session, project_id, uuid4())  # type: ignore[arg-type]
+
+    assert len(clauses) == 2
+    reconciliation = clauses[-1]
+    assert reconciliation.data["contract_total"] == 280.0
+    assert "stated_total" not in reconciliation.data
