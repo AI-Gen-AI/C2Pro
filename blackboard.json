@@ -4,7 +4,7 @@
   "objetivo_global": "Deploy to staging",
   "estado_actual": "planificacion",
   "created_at": "2026-04-09T21:09:03.497016+00:00",
-  "updated_at": "2026-06-10T22:15:00Z",
+  "updated_at": "2026-06-27T21:30:00Z",
   "role_assignment": {
     "planner": "completed",
     "backend": "completed",
@@ -17,6 +17,48 @@
     "devops": null
   },
   "tareas": [
+    {
+      "tarea_id": "T119",
+      "backlog_id": "TASK-COH-BUD-RECON-004",
+      "tipo": "backend",
+      "descripcion": "Capture budget comparison totals and add dual deterministic budget reconciliation.",
+      "asignado_a": "backend",
+      "estado": "completado",
+      "criterio_done": "Contract base total and budget declared total are captured without fabrication; DET-BUD-INTERNAL is registered and the budget coherence path emits both deterministic alerts with zero LLM when both totals exist.",
+      "archivos_modificados": [
+        "apps/api/src/coherence/budget_clause_builder.py",
+        "apps/api/src/coherence/rules_engine/deterministic.py",
+        "apps/api/src/coherence/rules_engine/registry.py",
+        "apps/api/src/coherence/alert_generator.py",
+        "apps/api/src/core/tasks/ingestion_tasks.py",
+        "apps/api/src/documents/adapters/parsers/excel_file_parser.py",
+        "apps/api/src/documents/application/parse_document_use_case.py",
+        "apps/api/tests/coherence/test_deterministic_evaluators.py",
+        "apps/api/tests/unit/coherence/test_budget_clause_builder.py",
+        "apps/api/tests/unit/coherence/test_budget_reconciliation_integration.py",
+        "apps/api/tests/unit/coherence/rules_engine/test_applicability.py",
+        "apps/api/tests/unit/coherence/rules_engine/test_registry_v1.py",
+        "apps/api/tests/unit/adapters/documents/test_document_parsers.py",
+        "apps/api/tests/unit/application/documents/test_parse_document_use_case.py",
+        "apps/api/tests/unit/core/tasks/test_ingestion_contract_totals.py",
+        "C2PRO_MASTER_BACKLOG.md",
+        "blackboard.json"
+      ],
+      "timestamps": {
+        "inicio": "2026-06-27T20:45:00Z",
+        "completado": "2026-06-27T21:30:00Z"
+      },
+      "resultado": {
+        "exitoso": true,
+        "mensaje": "Spec B implemented locally on fix/coherence-budget-comparison-totals: dual budget reconciliation totals flow into deterministic coherence with honest-null handling.",
+        "tests_pasados": true,
+        "validacion_lint": true,
+        "tests": [
+          "RED: focused tests failed because BudgetInternalConsistencyEvaluator did not exist and contract total extraction missed Spanish base-total text.",
+          "GREEN: focused Spec B tests passed after evaluator, registry/template, parser metadata, builder, and contract-total extraction changes."
+        ]
+      }
+    },
     {
       "tarea_id": "T116",
       "backlog_id": "TASK-V3-013-11",

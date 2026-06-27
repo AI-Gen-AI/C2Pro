@@ -26,6 +26,7 @@ from src.coherence.rules_engine.deterministic import (
     # TECHNICAL
     BomLeadTimeEvaluator,
     BudgetContingencyEvaluator,
+    BudgetInternalConsistencyEvaluator,
     BudgetLineItemEvaluator,
     # BUDGET
     BudgetOverrunEvaluator,
@@ -336,6 +337,57 @@ class TestBudgetSumMismatchEvaluator:
         signal = evaluator.evaluate_v3(clause)
         assert signal is not None
         assert signal.raw_data["direction"] == "below"
+
+
+class TestBudgetInternalConsistencyEvaluator:
+    """Tests for DET-BUD-INTERNAL evaluator."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return BudgetInternalConsistencyEvaluator()
+
+    def test_real_budget_declared_total_deviation_emits_budget_signal(self, evaluator):
+        """TS-COH-BUD-RECON-004: budget leaf sum is compared to its declared total."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs declared total reconciliation",
+            data={
+                "budget_items": [{"amount": 636_044_805}],
+                "stated_total": 654_144_805,
+            },
+        )
+
+        signal = evaluator.evaluate_v3(clause)
+
+        assert signal is not None
+        assert signal.rule_id == "DET-BUD-INTERNAL"
+        assert signal.category == "BUDGET"
+        assert signal.raw_data["items_sum"] == 636_044_805
+        assert signal.raw_data["stated_total"] == 654_144_805
+        assert signal.raw_data["deviation_pct"] == pytest.approx(2.77, abs=0.01)
+
+    def test_within_tolerance_returns_none(self, evaluator):
+        """TS-COH-BUD-RECON-004: declared-total check stays clean within tolerance."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs declared total reconciliation",
+            data={
+                "budget_items": [{"amount": 100_500}],
+                "stated_total": 100_000,
+            },
+        )
+
+        assert evaluator.evaluate_v3(clause) is None
+
+    def test_missing_stated_total_returns_none(self, evaluator):
+        """TS-COH-BUD-RECON-004: missing stated total is honest-null, not inferred."""
+        clause = Clause(
+            id="budget-reconciliation",
+            text="Project budget vs declared total reconciliation",
+            data={"budget_items": [{"amount": 100_500}]},
+        )
+
+        assert evaluator.evaluate_v3(clause) is None
 
 
 class TestRetentionRateEvaluator:

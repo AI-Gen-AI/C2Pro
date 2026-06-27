@@ -187,6 +187,69 @@ class BudgetSumMismatchEvaluator(RuleEvaluator):
              "deviation_pct": round(dev*100, 2), "direction": direction})
 
 
+class BudgetInternalConsistencyEvaluator(RuleEvaluator):
+    """
+    DET-BUD-INTERNAL — Checks that sum of budget_items ≈ the budget's declared total.
+
+    TASK-COH-BUD-RECON-004: this is an intra-document budget check. It only
+    evaluates when the source budget provided an explicit stated_total.
+    """
+
+    rule_id = "DET-BUD-INTERNAL"
+    rule_name = "Budget Items vs Declared Total"
+    category = "BUDGET"
+
+    def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
+        self.config = config
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        budget_items = clause.data.get("budget_items")
+        stated_total = clause.data.get("stated_total")
+        if (
+            isinstance(budget_items, list)
+            and budget_items
+            and _num(stated_total)
+            and stated_total > 0
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
+    def evaluate(self, clause: Clause) -> Finding | None:
+        s = self.evaluate_v3(clause)
+        return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
+
+    def evaluate_v3(self, clause: Clause) -> FindingSignal | None:
+        budget_items = clause.data.get("budget_items", [])
+        stated_total = clause.data.get("stated_total")
+        if not isinstance(budget_items, list) or not _num(stated_total) or stated_total <= 0:
+            return None
+        items_sum = sum(
+            item.get("amount", 0) for item in budget_items if isinstance(item, dict)
+        )
+        if items_sum <= 0:
+            return None
+        dev = abs(items_sum - stated_total) / stated_total
+        if dev <= self.config.budget_sum_tolerance_pct:
+            return None
+        direction = "exceeds" if items_sum > stated_total else "below"
+        impact = min(0.85, 0.35 + dev * 2.0)
+        return _signal(
+            self,
+            clause,
+            impact,
+            (
+                f"Budget line items sum {items_sum:,.2f} differ from declared total "
+                f"{stated_total:,.2f} ({dev*100:.1f}%)"
+            ),
+            {
+                "items_sum": round(items_sum, 2),
+                "stated_total": stated_total,
+                "deviation_pct": round(dev * 100, 2),
+                "direction": direction,
+            },
+        )
+
+
 class RetentionRateEvaluator(RuleEvaluator):
     """DET-BUD-RETENTION — Retention % within 3-10% norms."""
     rule_id = "DET-BUD-RETENTION"
