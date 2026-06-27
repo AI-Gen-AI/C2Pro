@@ -19,7 +19,8 @@ Location: apps/api/tests/coherence/test_api_v3.py
 """
 
 from datetime import UTC, datetime
-from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -110,13 +111,23 @@ def sample_enriched_result():
     )
 
 
+@pytest.fixture
+def sample_current_user():
+    """Authenticated user shape used by direct router unit tests."""
+    return SimpleNamespace(tenant_id=uuid4())
+
+
 # =============================================================================
 # TEST 1: Backward Compatibility
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_evaluate_backward_compatible_response_shape(sample_clauses, sample_enriched_result):
+async def test_evaluate_backward_compatible_response_shape(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that POST /v0/coherence/evaluate returns the same response shape as v0.2.
 
@@ -143,6 +154,7 @@ async def test_evaluate_backward_compatible_response_shape(sample_clauses, sampl
             payload=request,
             include_diagnostics=False,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify response type
@@ -171,7 +183,11 @@ async def test_evaluate_backward_compatible_response_shape(sample_clauses, sampl
 
 
 @pytest.mark.asyncio
-async def test_evaluate_granular_scoring_not_binary(sample_clauses, sample_enriched_result):
+async def test_evaluate_granular_scoring_not_binary(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that scores are granular floats in 5-97 range, not binary 0/100.
 
@@ -192,6 +208,7 @@ async def test_evaluate_granular_scoring_not_binary(sample_clauses, sample_enric
             payload=request,
             include_diagnostics=False,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify granular scoring
@@ -207,7 +224,11 @@ async def test_evaluate_granular_scoring_not_binary(sample_clauses, sample_enric
 
 
 @pytest.mark.asyncio
-async def test_evaluate_low_budget_mode_defaults_to_true(sample_clauses, sample_enriched_result):
+async def test_evaluate_low_budget_mode_defaults_to_true(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that low_budget_mode defaults to True.
 
@@ -229,6 +250,7 @@ async def test_evaluate_low_budget_mode_defaults_to_true(sample_clauses, sample_
             payload=request,
             include_diagnostics=False,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify evaluate_coherence was called with low_budget_mode=True
@@ -245,7 +267,11 @@ async def test_evaluate_low_budget_mode_defaults_to_true(sample_clauses, sample_
 
 
 @pytest.mark.asyncio
-async def test_evaluate_diagnostics_via_query_param(sample_clauses, sample_enriched_result):
+async def test_evaluate_diagnostics_via_query_param(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that ?include_diagnostics=true returns EnrichedCoherenceResult.
 
@@ -265,6 +291,7 @@ async def test_evaluate_diagnostics_via_query_param(sample_clauses, sample_enric
             payload=request,
             include_diagnostics=True,  # Query param
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify response type
@@ -285,7 +312,7 @@ async def test_evaluate_diagnostics_via_query_param(sample_clauses, sample_enric
 
 
 @pytest.mark.asyncio
-async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_result):
+async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_result, sample_current_user):
     """
     Test POST /v0/coherence/evaluate/diagnostics returns full diagnostics.
 
@@ -305,6 +332,7 @@ async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_res
         result = await evaluate_with_diagnostics(
             payload=request,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify response type
@@ -398,7 +426,11 @@ def test_category_inference_from_clause_data():
 
 
 @pytest.mark.asyncio
-async def test_evaluate_rag_similarity_enabled_by_default(sample_clauses, sample_enriched_result):
+async def test_evaluate_rag_similarity_enabled_by_default(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that include_rag_similarity defaults to True.
 
@@ -419,6 +451,7 @@ async def test_evaluate_rag_similarity_enabled_by_default(sample_clauses, sample
             payload=request,
             include_diagnostics=False,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify evaluate_coherence was called with include_rag_similarity=True
@@ -429,13 +462,53 @@ async def test_evaluate_rag_similarity_enabled_by_default(sample_clauses, sample
         assert config_arg.include_rag_similarity is True  # Default
 
 
+@pytest.mark.asyncio
+async def test_evaluate_passes_authenticated_tenant_to_evaluation_config(
+    sample_clauses,
+    sample_enriched_result,
+):
+    """TASK-COH-EVAL-TENANT-008: LLM gate receives the real tenant, not zero UUID."""
+    from src.coherence.graph.state import EvaluationConfig
+    from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
+
+    tenant_id = uuid4()
+    project_id = uuid4()
+    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+        mock_evaluate.return_value = sample_enriched_result
+
+        request = CoherenceEvaluateRequest(
+            project_id=project_id,
+            clauses=sample_clauses,
+            low_budget_mode=False,
+        )
+        mock_db = Mock()
+        mock_db.commit = AsyncMock()
+
+        await evaluate_project_coherence(
+            payload=request,
+            include_diagnostics=False,
+            db=mock_db,
+            current_user=SimpleNamespace(tenant_id=tenant_id),
+        )
+
+        config_arg = mock_evaluate.call_args.kwargs["config"]
+        assert isinstance(config_arg, EvaluationConfig)
+        assert config_arg.low_budget_mode is False
+        assert config_arg.tenant_id == str(tenant_id)
+        assert config_arg.project_id == str(project_id)
+
+
 # =============================================================================
 # TEST 8: Explicit Clauses vs Project ID
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_evaluate_accepts_explicit_clauses(sample_clauses, sample_enriched_result):
+async def test_evaluate_accepts_explicit_clauses(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that endpoint accepts explicit clauses without project_id.
 
@@ -456,6 +529,7 @@ async def test_evaluate_accepts_explicit_clauses(sample_clauses, sample_enriched
                 payload=request,
                 include_diagnostics=False,
                 db=mock_db,
+                current_user=sample_current_user,
             )
 
             # Verify RAG was NOT called
@@ -467,7 +541,11 @@ async def test_evaluate_accepts_explicit_clauses(sample_clauses, sample_enriched
 
 
 @pytest.mark.asyncio
-async def test_evaluate_fetches_from_rag_with_project_id(sample_clauses, sample_enriched_result):
+async def test_evaluate_fetches_from_rag_with_project_id(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that endpoint fetches clauses from RAG when project_id is provided.
 
@@ -486,15 +564,17 @@ async def test_evaluate_fetches_from_rag_with_project_id(sample_clauses, sample_
             project_id = uuid4()
             request = CoherenceEvaluateRequest(project_id=project_id)
             mock_db = Mock()
+            mock_db.commit = AsyncMock()
 
             await evaluate_project_coherence(
                 payload=request,
                 include_diagnostics=False,
                 db=mock_db,
+                current_user=sample_current_user,
             )
 
             # Verify RAG was called
-            mock_rag.assert_called_once_with(mock_db, project_id, 50)
+            mock_rag.assert_called_once_with(mock_db, project_id, sample_current_user.tenant_id, 50)
 
             # Verify evaluate_coherence was called with fetched clauses
             call_args = mock_evaluate.call_args
@@ -502,7 +582,7 @@ async def test_evaluate_fetches_from_rag_with_project_id(sample_clauses, sample_
 
 
 @pytest.mark.asyncio
-async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result):
+async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result, sample_current_user):
     """
     Test that endpoint raises 422 when neither project_id nor clauses are provided.
 
@@ -525,6 +605,7 @@ async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result
                 payload=request,
                 include_diagnostics=False,
                 db=mock_db,
+                current_user=sample_current_user,
             )
 
         assert exc_info.value.status_code == 422
@@ -537,7 +618,7 @@ async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result
 
 
 @pytest.mark.asyncio
-async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
+async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses, sample_current_user):
     """
     Test that diagnostics response includes llm_cost_usd field.
 
@@ -570,6 +651,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
             payload=request,
             include_diagnostics=True,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify cost tracking
@@ -583,7 +665,11 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses):
 
 
 @pytest.mark.asyncio
-async def test_evaluate_no_regression_in_response_fields(sample_clauses, sample_enriched_result):
+async def test_evaluate_no_regression_in_response_fields(
+    sample_clauses,
+    sample_enriched_result,
+    sample_current_user,
+):
     """
     Test that all existing v0.2 response fields are preserved in v0.3.
 
@@ -605,6 +691,7 @@ async def test_evaluate_no_regression_in_response_fields(sample_clauses, sample_
             payload=request,
             include_diagnostics=False,
             db=mock_db,
+            current_user=sample_current_user,
         )
 
         # Verify all v0.2 fields exist
