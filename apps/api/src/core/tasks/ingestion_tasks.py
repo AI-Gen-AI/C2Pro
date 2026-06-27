@@ -89,18 +89,59 @@ def _infer_contract_clause_type(text: str) -> ClauseType:
     return ClauseType.OTHER
 
 
-def _extract_numeric_money(text: str) -> float | None:
-    match = re.search(r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE)
-    if not match:
-        return None
-    raw = match.group(1) or match.group(2)
+def _parse_money_number(raw: str) -> float | None:
     if not raw:
         return None
-    normalized = raw.replace(",", "").replace(" ", "")
+    compact = raw.replace(" ", "")
+    if "," in compact and "." in compact:
+        if compact.rfind(",") > compact.rfind("."):
+            normalized = compact.replace(".", "").replace(",", ".")
+        else:
+            normalized = compact.replace(",", "")
+    elif "," in compact:
+        left, right = compact.rsplit(",", 1)
+        if len(right) in {1, 2}:
+            normalized = f"{left.replace(',', '')}.{right}"
+        else:
+            normalized = compact.replace(",", "")
+    else:
+        parts = compact.split(".")
+        if len(parts) > 2 and all(len(part) == 3 for part in parts[1:]):
+            normalized = compact.replace(".", "")
+        else:
+            normalized = compact
     try:
         return float(normalized)
     except ValueError:
         return None
+
+
+def _extract_numeric_money(text: str) -> float | None:
+    match = re.search(r"(?:eur|€)\s*([0-9][0-9\.,]*)|([0-9][0-9\.,]*)\s*(?:eur|€)", text, re.IGNORECASE)
+    if not match:
+        return None
+    return _parse_money_number(match.group(1) or match.group(2) or "")
+
+
+def _extract_contract_base_total(text: str) -> float | None:
+    label_pattern = (
+        r"(?:"
+        r"presupuesto\s+base(?:\s+de\s+licitaci[oó]n)?|"
+        r"importe\s+(?:del\s+)?contrato|"
+        r"precio\s+(?:del\s+)?contrato|"
+        r"valor\s+(?:estimado\s+)?(?:del\s+)?contrato|"
+        r"importe\s+de\s+adjudicaci[oó]n"
+        r")"
+    )
+    pattern = re.compile(
+        rf"{label_pattern}[^0-9€]{{0,80}}(?:eur|€)?\s*([0-9][0-9\.,]*)\s*(?:eur|€)?",
+        re.IGNORECASE,
+    )
+    candidates = [_parse_money_number(match.group(1)) for match in pattern.finditer(text)]
+    numeric_candidates = [candidate for candidate in candidates if candidate is not None]
+    if not numeric_candidates:
+        return None
+    return max(numeric_candidates)
 
 
 def _extract_percentage(text: str) -> float | None:
@@ -178,7 +219,12 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict:
         "source": "contract_ingestion_deterministic",
     }
 
-    amount = _extract_numeric_money(text) or _extract_numeric_money(parsed_text)
+    amount = (
+        _extract_contract_base_total(text)
+        or _extract_contract_base_total(parsed_text)
+        or _extract_numeric_money(text)
+        or _extract_numeric_money(parsed_text)
+    )
     if amount is not None:
         data.setdefault("currency", "EUR")
         data["planned"] = amount

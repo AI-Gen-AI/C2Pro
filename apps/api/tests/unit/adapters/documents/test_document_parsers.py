@@ -488,6 +488,33 @@ class TestExcelParser:
         ]
 
     @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_captures_declared_total(self, tmp_path):
+        """TS-COH-BUD-RECON-004: budget parser keeps declared total separate from line items."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Concepto", "Cantidad", "Precio unitario", "Importe total"],
+                ["Capitulo 01", 1, 100.0, 100.0],
+                ["TOTAL PRESUPUESTO", None, None, "654.144.805,00"],
+            ],
+        )
+
+        parser = ExcelFileParser()
+        result = await parser.parse_budget(workbook_path)
+
+        assert result == [
+            {
+                "item": "Capitulo 01",
+                "quantity": 1,
+                "unit_price": 100.0,
+                "total": 100.0,
+            }
+        ]
+        assert result.stated_total == 654_144_805.0
+
+    @pytest.mark.asyncio
     async def test_excel_parser_parse_budget_missing_headers_lists_aliases(self, tmp_path):
         """Test budget parsing explains accepted aliases when headers are missing."""
         from src.documents.adapters.parsers.excel_file_parser import (

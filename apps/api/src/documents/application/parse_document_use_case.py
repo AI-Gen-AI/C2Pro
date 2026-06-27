@@ -98,6 +98,19 @@ def _extract_parsed_text(parsed_payload: dict) -> str:
     return ""
 
 
+def _extract_budget_stated_total(parsed_payload: dict) -> float | int | None:
+    """TS-COH-BUD-RECON-004: extract budget declared total from parser payload."""
+    budget = parsed_payload.get("budget")
+    stated_total = getattr(budget, "stated_total", None)
+    if isinstance(stated_total, int | float) and not isinstance(stated_total, bool):
+        return stated_total
+    if isinstance(budget, dict):
+        dict_total = budget.get("stated_total")
+        if isinstance(dict_total, int | float) and not isinstance(dict_total, bool):
+            return dict_total
+    return None
+
+
 class ParseDocumentUseCase:
     def __init__(
         self,
@@ -153,6 +166,9 @@ class ParseDocumentUseCase:
             metadata = dict(document.document_metadata or {})
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
+            stated_total = _extract_budget_stated_total(parsed_payload)
+            if stated_total is not None:
+                metadata["stated_total"] = stated_total
             await self.document_repository.update_metadata(tenant_id, document_id, metadata)
 
             # 8. Update document status to PARSED

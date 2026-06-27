@@ -19,6 +19,19 @@ class ExcelParsingError(Exception):
     pass
 
 
+class BudgetRows(list[dict[str, Any]]):
+    """TS-COH-BUD-RECON-004: budget line items with optional declared total."""
+
+    def __init__(
+        self,
+        rows: list[dict[str, Any]] | None = None,
+        *,
+        stated_total: float | int | None = None,
+    ) -> None:
+        super().__init__(rows or [])
+        self.stated_total = stated_total
+
+
 class ExcelFileParser:
     """
     Adapter class for parsing Excel files.
@@ -163,10 +176,14 @@ class ExcelFileParser:
                     f"{', '.join(expected_headers)}. Accepted aliases: {accepted_aliases}"
                 )
 
-            budget_data = []
+            budget_data: BudgetRows = BudgetRows()
             for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
                 row_data = dict(zip(headers, row, strict=False))
                 if any(row_data.values()):
+                    stated_total = self._extract_declared_total(row_data)
+                    if stated_total is not None:
+                        budget_data.stated_total = stated_total
+                        continue
                     budget_data.append(
                         {
                             "item": row_data.get("item"),
@@ -305,3 +322,27 @@ class ExcelFileParser:
             return float(normalized)
         except ValueError:
             return None
+
+    @classmethod
+    def _extract_declared_total(cls, row_data: dict[str, Any]) -> float | int | None:
+        item = row_data.get("item")
+        quantity = row_data.get("quantity")
+        unit_price = row_data.get("unit price")
+        total = cls._coerce_budget_number(row_data.get("total"))
+        if total is None or quantity not in (None, "") or unit_price not in (None, ""):
+            return None
+        if not isinstance(item, str):
+            return None
+        label = item.strip().lower()
+        declared_total_labels = (
+            "total presupuesto",
+            "total general",
+            "total licitacion",
+            "total licitación",
+            "presupuesto total",
+            "grand total",
+            "declared total",
+        )
+        if label == "total" or any(marker in label for marker in declared_total_labels):
+            return total
+        return None
