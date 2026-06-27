@@ -440,8 +440,24 @@ async def _run_gate(
     tenant_id = (state.config.tenant_id or "").strip() or \
         "00000000-0000-0000-0000-000000000000"
 
+    skipped_not_applicable = 0
     for clause in state.clauses:
+        # TASK-COH-LLM-APPLIC-009: gate LLM rules by clause category, mirroring the
+        # deterministic applicability contract (infer_category(clause) == rule.category)
+        # so e.g. the legal rule does not fire on budget line-items / headers and
+        # explode the finding count. Skipped pairs make NO LLM call and do NOT mark
+        # coverage (preserves honest 'unassessed' when a category has no relevant clause).
+        clause_category = infer_category(clause)
         for rule_id in rule_ids:
+            cat = _category_for_rule(rule_id)
+            if cat != clause_category:
+                skipped_not_applicable += 1
+                logger.debug(
+                    "coherence_llm_gate.skipped_not_applicable",
+                    clause_id=clause.id, rule_id=rule_id,
+                    clause_category=clause_category, rule_category=cat,
+                )
+                continue
             try:
                 decision: GateDecision = await gate.evaluate_rule(
                     tenant_id, rule_id, clause
@@ -452,7 +468,6 @@ async def _run_gate(
                 errors.append(msg)
                 continue
             total_calls += 1
-            cat = _category_for_rule(rule_id)
             if decision.state in ("evaluated", "cache_hit"):
                 if decision.finding is not None:
                     signals.append(decision.finding)
@@ -466,10 +481,20 @@ async def _run_gate(
                     budget_reset = decision.reset_date
             # rolled_out_off: leave coverage[cat] at its current value (False).
 
+    # INFO-level summary so applicability gating is observable in default logs
+    # (per-pair skips are DEBUG and suppressed at INFO; TASK-COH-LLM-APPLIC-009).
+    logger.info(
+        "coherence_llm_gate.applicability_summary",
+        clauses=len(state.clauses),
+        evaluated=total_calls,
+        skipped_not_applicable=skipped_not_applicable,
+    )
+
     out: dict[str, Any] = {
         "llm_signals": signals,
         "llm_cost_usd": total_cost,
         "llm_calls_count": total_calls,
+        "llm_skipped_count": skipped_not_applicable,
         "coverage_map": coverage,
         "errors": errors,
     }
