@@ -132,8 +132,19 @@
        - Qué incluye y qué no incluye
        - Límites claros
 
-    Si las responsabilidades son AMBIGUAS o NO están claramente asignadas,
-    la regla está VIOLADA.
+    GUARDIA DE NO VIOLACIÓN:
+    - Si aparece una parte nombrada (por ejemplo, Contratista, Cliente, Propietario,
+      Ingeniero, Comprador, Vendedor, Suministrador) junto con un verbo obligatorio
+      ("deberá", "será responsable", "garantizará", "proporcionará", "entregará",
+      "shall", "must", "is responsible"), NO es violación aunque el alcance sea
+      amplio o la cláusula haga referencia a otras cláusulas o contratos.
+    - Las cláusulas estándar de incumplimiento cruzado (cross-default), de garantía de
+      desempeño ("dará un rendimiento satisfactorio") y de asignación de riesgo/coste
+      NO son violaciones por sí mismas.
+    - La amplitud de alcance o las referencias cruzadas, por sí solas, son a lo sumo
+      severidad "low" — NUNCA "high".
+
+    Sólo si NINGUNA parte específica es identificable como responsable, la regla está VIOLADA.
   inputs: []
   evidence_fields: ["clause.text"]
 

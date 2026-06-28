@@ -475,3 +475,28 @@ class TestQualitativeRules:
             assert "encabezado" in logic
             assert "título" in logic or "titulo" in logic
             assert "rule_violated=false" in logic
+
+    def test_responsibility_rule_does_not_flag_named_party_obligations(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 must not flag
+        clauses that assign responsibility to a named party with a mandatory verb."""
+        from pathlib import Path
+
+        import yaml
+
+        path = (
+            Path(__file__).parents[2]
+            / "src"
+            / "coherence"
+            / "qualitative_rules.yaml"
+        )
+        rules = yaml.safe_load(path.read_text(encoding="utf-8"))
+        responsibility_rule = next(
+            rule for rule in rules if rule["id"] == "R-RESPONSIBILITY-01"
+        )
+
+        logic = responsibility_rule["detection_logic"].lower()
+
+        assert "no es violación" in logic
+        assert "parte nombrada" in logic
+        assert "incumplimiento cruzado" in logic
+        assert 'severidad "low"' in logic
