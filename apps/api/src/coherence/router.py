@@ -28,7 +28,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
 from .domain.v2_constants import SCORE_VERSION_V1
-from .graph.graph import evaluate_coherence
+from .graph.graph import evaluate_coherence_async
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 
@@ -468,7 +468,7 @@ async def evaluate_project_coherence(
     )
 
     # Evaluate using LangGraph subgraph
-    enriched_result = evaluate_coherence(
+    enriched_result = await evaluate_coherence_async(
         clauses=clauses,
         project_id=str(payload.project_id) if payload.project_id else "manual",
         config=config,

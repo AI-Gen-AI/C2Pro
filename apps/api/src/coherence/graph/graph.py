@@ -15,6 +15,7 @@ Location: apps/api/src/coherence/graph/graph.py
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -34,9 +35,9 @@ from .nodes import (
     cross_clause_eval,
     deterministic_evaluate,
     format_output,
-    llm_semantic_evaluate,
+    llm_semantic_evaluate_async,
     prepare_context,
-    rag_similarity_check,
+    rag_similarity_check_async,
     scoring_arbiter,
 )
 from .state import CoherenceGraphState, EvaluationConfig
@@ -105,8 +106,8 @@ def build_coherence_subgraph() -> StateGraph:
     # Add nodes
     graph.add_node("prepare_context", prepare_context)
     graph.add_node("deterministic_evaluate", deterministic_evaluate)
-    graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate)
-    graph.add_node("rag_similarity_check", rag_similarity_check)
+    graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate_async)
+    graph.add_node("rag_similarity_check", rag_similarity_check_async)
     graph.add_node("cross_clause_eval", cross_clause_eval)
     graph.add_node("scoring_arbiter", scoring_arbiter)
     graph.add_node("format_output", format_output)
@@ -160,8 +161,8 @@ def build_parallel_coherence_subgraph() -> StateGraph:
     # Add nodes
     graph.add_node("prepare_context", prepare_context)
     graph.add_node("deterministic_evaluate", deterministic_evaluate)
-    graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate)
-    graph.add_node("rag_similarity_check", rag_similarity_check)
+    graph.add_node("llm_semantic_evaluate", llm_semantic_evaluate_async)
+    graph.add_node("rag_similarity_check", rag_similarity_check_async)
     graph.add_node("fan_in", _fan_in_node)  # Synchronization point
     graph.add_node("cross_clause_eval", cross_clause_eval)
     graph.add_node("scoring_arbiter", scoring_arbiter)
@@ -345,11 +346,20 @@ def evaluate_coherence(
         coverage_map=router_coverage,
     )
 
-    # Get compiled graph
     graph = get_coherence_subgraph()
 
-    # Run evaluation
-    final_state = graph.invoke(initial_state)
+    async def _invoke_async() -> dict[str, Any]:
+        return await graph.ainvoke(initial_state)
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        final_state = asyncio.run(_invoke_async())
+    else:
+        raise RuntimeError(
+            "evaluate_coherence cannot run inside an active event loop; "
+            "use evaluate_coherence_async instead."
+        )
 
     # Extract result
     result = final_state.get("result")
@@ -397,7 +407,7 @@ async def evaluate_coherence_async(
         clauses=clauses,
         config=config or EvaluationConfig(),
         deterministic_signals=seed_signals or [],
-        coverage_map=seed_coverage or {},
+        coverage_map=coverage_seed,
     )
 
     # Get compiled graph
