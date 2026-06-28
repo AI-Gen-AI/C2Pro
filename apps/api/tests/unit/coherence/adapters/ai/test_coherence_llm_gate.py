@@ -114,7 +114,7 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     assert decision.finding is None
 
 
-PROMPT_VERSION_FOR_TESTS = "p3-v2"  # the canonical version the gate uses
+PROMPT_VERSION_FOR_TESTS = "p3-v3"  # the canonical version the gate uses
 
 
 @pytest.mark.asyncio
