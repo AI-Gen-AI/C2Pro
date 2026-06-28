@@ -442,3 +442,36 @@ class TestQualitativeRules:
 
         ids = [rule["id"] for rule in QUALITATIVE_RULES]
         assert len(ids) == len(set(ids)), "Duplicate rule IDs found"
+
+    def test_yaml_rules_include_applicability_self_check(self):
+        """TASK-COH-LLM-APPLIC-009-P3: YAML prompts must tell the LLM to
+        return no finding for headings, titles, table rows, and non-applicable
+        category content before evaluating the actual rule."""
+        from pathlib import Path
+
+        import yaml
+
+        path = (
+            Path(__file__).parents[2]
+            / "src"
+            / "coherence"
+            / "qualitative_rules.yaml"
+        )
+        rules = yaml.safe_load(path.read_text(encoding="utf-8"))
+        active_rule_ids = {
+            "R-SCOPE-CLARITY-01",
+            "R-PAYMENT-CLARITY-01",
+            "R-SCHEDULE-CLARITY-01",
+            "R-TECHNICAL-SPEC-CLARITY-01",
+            "R-RESPONSIBILITY-01",
+            "R-QUALITY-STANDARDS-01",
+        }
+
+        for rule in rules:
+            if rule["id"] not in active_rule_ids:
+                continue
+            logic = rule["detection_logic"].lower()
+            assert "primero determina" in logic
+            assert "encabezado" in logic
+            assert "título" in logic or "titulo" in logic
+            assert "rule_violated=false" in logic

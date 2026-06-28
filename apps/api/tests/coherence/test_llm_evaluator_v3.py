@@ -181,6 +181,72 @@ class TestLlmEvaluationMetrics:
 
         assert metrics.cache_hit_rate == 0.5
 
+
+@pytest.mark.asyncio
+async def test_v3_evaluator_drops_low_impact_and_low_confidence_results(
+    sample_clause: Clause,
+) -> None:
+    """TASK-COH-LLM-APPLIC-009-P3: calibrated thresholds reject weak LLM
+    findings without changing the LLM call path or deterministic rules."""
+    low_impact_port = AsyncMock(spec=LLMRulePort)
+    low_impact_port.evaluate.return_value = make_llm_result(
+        impact_score=0.29,
+        confidence=0.95,
+    )
+    low_impact_evaluator = LlmRuleEvaluator(
+        rule_id="R-TEST-001",
+        rule_name="Test Rule",
+        rule_description="A test rule for validation",
+        detection_logic="Check for test patterns",
+        category="scope",
+        llm_port=low_impact_port,
+    )
+
+    assert await low_impact_evaluator.evaluate_v3_async(sample_clause) is None
+
+    low_confidence_port = AsyncMock(spec=LLMRulePort)
+    low_confidence_port.evaluate.return_value = make_llm_result(
+        impact_score=0.85,
+        confidence=0.59,
+    )
+    low_confidence_evaluator = LlmRuleEvaluator(
+        rule_id="R-TEST-001",
+        rule_name="Test Rule",
+        rule_description="A test rule for validation",
+        detection_logic="Check for test patterns",
+        category="scope",
+        llm_port=low_confidence_port,
+    )
+
+    assert await low_confidence_evaluator.evaluate_v3_async(sample_clause) is None
+
+
+@pytest.mark.asyncio
+async def test_v3_evaluator_keeps_substantive_result_at_calibrated_thresholds(
+    sample_clause: Clause,
+) -> None:
+    """TASK-COH-LLM-APPLIC-009-P3: substantive findings at or above both
+    configured thresholds are still emitted."""
+    port = AsyncMock(spec=LLMRulePort)
+    port.evaluate.return_value = make_llm_result(
+        impact_score=0.30,
+        confidence=0.60,
+    )
+    evaluator = LlmRuleEvaluator(
+        rule_id="R-TEST-001",
+        rule_name="Test Rule",
+        rule_description="A test rule for validation",
+        detection_logic="Check for test patterns",
+        category="scope",
+        llm_port=port,
+    )
+
+    signal = await evaluator.evaluate_v3_async(sample_clause)
+
+    assert signal is not None
+    assert signal.impact_score == pytest.approx(0.30)
+    assert signal.confidence == pytest.approx(0.60)
+
     def test_to_dict(self):
         """to_dict exports all metrics."""
         metrics = LlmEvaluationMetrics()
@@ -351,7 +417,6 @@ class TestContinuousScoring:
             (0.95, "critical"),
             (0.75, "high"),
             (0.50, "medium"),
-            (0.20, "low"),
         ]
 
         for impact, expected_severity in test_cases:
@@ -367,6 +432,12 @@ class TestContinuousScoring:
             assert signal.severity == expected_severity, (
                 f"Impact {impact} should map to {expected_severity}"
             )
+
+        fake_port.evaluate.return_value = make_llm_result(
+            impact_score=0.20,
+            severity="low",
+        )
+        assert await evaluator.evaluate_v3_async(sample_clause) is None
 
     @pytest.mark.asyncio
     async def test_port_receives_correct_args(self, evaluator, fake_port, sample_clause):

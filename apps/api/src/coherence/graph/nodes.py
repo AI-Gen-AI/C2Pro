@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -52,6 +53,15 @@ from .state import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not any(
+    getattr(handler, "name", None) == "coherence_graph_nodes_stream"
+    for handler in logger.handlers
+):
+    _stream_handler = logging.StreamHandler()
+    _stream_handler.set_name("coherence_graph_nodes_stream")
+    _stream_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(_stream_handler)
 
 
 # =============================================================================
@@ -441,6 +451,7 @@ async def _run_gate(
         "00000000-0000-0000-0000-000000000000"
 
     skipped_not_applicable = 0
+    skipped_non_substantive = 0
     for clause in state.clauses:
         # TASK-COH-LLM-APPLIC-009: gate LLM rules by clause category, mirroring the
         # deterministic applicability contract (infer_category(clause) == rule.category)
@@ -448,14 +459,26 @@ async def _run_gate(
         # explode the finding count. Skipped pairs make NO LLM call and do NOT mark
         # coverage (preserves honest 'unassessed' when a category has no relevant clause).
         clause_category = infer_category(clause)
+        if _is_non_substantive_clause(clause):
+            skipped_non_substantive += 1
+            logger.debug(
+                "coherence_llm_gate.skipped_non_substantive "
+                "clause_id=%s clause_category=%s",
+                clause.id,
+                clause_category,
+            )
+            continue
         for rule_id in rule_ids:
             cat = _category_for_rule(rule_id)
             if cat != clause_category:
                 skipped_not_applicable += 1
                 logger.debug(
-                    "coherence_llm_gate.skipped_not_applicable",
-                    clause_id=clause.id, rule_id=rule_id,
-                    clause_category=clause_category, rule_category=cat,
+                    "coherence_llm_gate.skipped_not_applicable "
+                    "clause_id=%s rule_id=%s clause_category=%s rule_category=%s",
+                    clause.id,
+                    rule_id,
+                    clause_category,
+                    cat,
                 )
                 continue
             try:
@@ -484,10 +507,12 @@ async def _run_gate(
     # INFO-level summary so applicability gating is observable in default logs
     # (per-pair skips are DEBUG and suppressed at INFO; TASK-COH-LLM-APPLIC-009).
     logger.info(
-        "coherence_llm_gate.applicability_summary",
-        clauses=len(state.clauses),
-        evaluated=total_calls,
-        skipped_not_applicable=skipped_not_applicable,
+        "coherence_llm_gate.applicability_summary clauses=%d evaluated=%d "
+        "skipped_not_applicable=%d skipped_non_substantive=%d",
+        len(state.clauses),
+        total_calls,
+        skipped_not_applicable,
+        skipped_non_substantive,
     )
 
     out: dict[str, Any] = {
@@ -495,6 +520,7 @@ async def _run_gate(
         "llm_cost_usd": total_cost,
         "llm_calls_count": total_calls,
         "llm_skipped_count": skipped_not_applicable,
+        "skipped_non_substantive_count": skipped_non_substantive,
         "coverage_map": coverage,
         "errors": errors,
     }
@@ -527,6 +553,80 @@ def _category_for_rule(rule_id: str) -> str:
         )
         return "SCOPE"
     return cat
+
+
+_OBLIGATION_RE = re.compile(
+    r"\b("
+    r"shall|must|will|requires?|provide|deliver|perform|maintain|submit|"
+    r"debera|deberá|debe|sera|será|realizara|realizará|proporcionara|"
+    r"proporcionará|entregara|entregará|mantendra|mantendrá|presentara|"
+    r"presentará"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_HEADING_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:appendix|annex|schedule|price schedule|section|chapter|capitulo|"
+    r"capítulo|anexo)\s+[\w.\- ]{0,80}|"
+    r"\d+(?:\.\d+){0,4}\s+[^\.;:]{1,100}|"
+    r"[ivxlcdm]+\)\s+[^\.;:]{1,100}"
+    r")\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_non_substantive_clause(clause: Clause) -> bool:
+    """Return True for headings/table rows that should not consume an LLM rule.
+
+    This is deliberately conservative: substantive clauses with obligation verbs
+    still reach the category-matched LLM rule, while BOM rows, synthetic budget
+    reconciliation clauses, and bare headings/list rows are skipped.
+    """
+    text = (clause.text or "").strip()
+    data = clause.data or {}
+    source = str(data.get("source", "")).lower()
+    if source == "procurement_bom":
+        return True
+
+    lowered = text.lower()
+    if lowered == "project budget vs contract reconciliation":
+        return True
+    if not text:
+        return True
+    if _looks_like_reference_list(text):
+        return True
+    if _OBLIGATION_RE.search(text):
+        return False
+
+    words = re.findall(r"\b[\wÀ-ÿ]+\b", text)
+    if len(words) <= 3:
+        return True
+    if lowered.endswith(("certificate.", "certificate")) and len(words) <= 6:
+        return True
+    if text == text.upper() and len(words) <= 12:
+        return True
+    if _HEADING_RE.match(text) and len(words) <= 12:
+        return True
+
+    return False
+
+
+def _looks_like_reference_list(text: str) -> bool:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return False
+    reference_lines = 0
+    for line in lines:
+        lower = line.lower()
+        words = re.findall(r"\b[\wÀ-ÿ]+\b", line)
+        if (
+            lower.startswith(("appendix", "annex", "schedule"))
+            or "certificate" in lower
+            or len(words) <= 6
+        ):
+            reference_lines += 1
+    return reference_lines == len(lines)
 
 
 def _emit_budget_alert(reset_date: date | None) -> Alert:

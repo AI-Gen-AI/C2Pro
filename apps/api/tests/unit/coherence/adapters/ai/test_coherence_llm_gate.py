@@ -114,7 +114,7 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     assert decision.finding is None
 
 
-PROMPT_VERSION_FOR_TESTS = "p3-v1"  # the canonical version the gate uses
+PROMPT_VERSION_FOR_TESTS = "p3-v2"  # the canonical version the gate uses
 
 
 @pytest.mark.asyncio
@@ -159,6 +159,43 @@ async def test_gate_returns_cache_hit_without_consulting_budget_or_llm():
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on hit
     assert gate._cache.get_calls == 1
     assert gate._cache.set_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_gate_cache_hit_applies_calibrated_thresholds():
+    """TASK-COH-LLM-APPLIC-009-P3: stale cached weak findings must not bypass
+    the calibrated LLM thresholds."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause, FindingSignal
+
+    weak_cached_finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.15,
+        confidence=0.95, severity="low", category="SCOPE",
+        evidence_summary="weak cached", quote="q", raw_data={},
+    )
+
+    class FakeContentHashCache:
+        async def get(self, key):
+            return weak_cached_finding
+        async def set(self, key, value):  # pragma: no cover - hit path
+            raise AssertionError("cache set should not run on hit")
+
+    class ExplodingCost:
+        async def check_budget_availability(self, *a, **kw):
+            raise AssertionError("budget should not run on cache hit")
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = FakeContentHashCache()
+    gate._cost = ExplodingCost()
+
+    decision = await gate.evaluate_rule(
+        "tenant-1", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="The scope is to design a substation.", data={}),
+    )
+
+    assert decision.state == "cache_hit"
+    assert decision.finding is None
+    assert decision.cost_charged_usd == 0.0
 
 
 def test_content_hash_is_deterministic_and_canonicalized():
@@ -473,6 +510,58 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
     #    semantically), with finding=None.
     assert decision.state == "evaluated"
     assert decision.finding is None
+
+
+@pytest.mark.asyncio
+async def test_gate_drops_findings_below_calibrated_thresholds(monkeypatch):
+    """TASK-COH-LLM-APPLIC-009-P3: the live gate path must apply the same
+    impact/confidence thresholds as the v1 evaluator path."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause, FindingSignal
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        def __init__(self):
+            self.set_calls = 0
+        async def get(self, key): return None
+        async def set(self, key, value):
+            self.set_calls += 1
+
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw): pass
+
+    recorded: list[dict] = []
+    class FakeUsage:
+        def record_usage(self, **kw):
+            recorded.append(kw)
+
+    weak_finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.15,
+        confidence=0.95, severity="low", category="SCOPE",
+        evidence_summary="weak", quote="q", raw_data={},
+    )
+
+    async def fake_call_rule(rule_id, clause):
+        return weak_finding, 10, 5, 0.0001, 20.0, "claude-3-haiku-20240307"
+
+    cache = EmptyCache()
+    gate = g.CoherenceLlmGate()
+    gate._cache = cache
+    gate._cost = FakeCost()
+    gate._usage = FakeUsage()
+    monkeypatch.setattr(gate, "_call_rule_via_llm", fake_call_rule)
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001",
+        "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="The contractor shall perform work as needed.", data={}),
+    )
+
+    assert decision.state == "evaluated"
+    assert decision.finding is None
+    assert cache.set_calls == 0
+    assert recorded[0]["success"] is False
 
 
 @pytest.mark.asyncio

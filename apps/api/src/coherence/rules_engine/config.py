@@ -105,6 +105,15 @@ class EvaluatorConfig:
 
     # Category-specific required fields (defined per-evaluator, not here)
 
+    # ═══════════════════════════════════════════════════════════════
+    # LLM semantic evaluator thresholds
+    # ═══════════════════════════════════════════════════════════════
+
+    # R-* qualitative rules: drop weak/uncertain findings so headings and
+    # marginal concerns do not flood scoring. Deterministic rules are unaffected.
+    llm_min_impact: float = 0.30
+    llm_min_confidence: float = 0.60
+
 
 # Default configuration instance
 DEFAULT_CONFIG = EvaluatorConfig()
