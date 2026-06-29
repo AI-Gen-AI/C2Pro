@@ -223,6 +223,22 @@ def _build_clause(row: tuple) -> Clause | None:
     )
 
 
+def _append_unique_clause(
+    row: tuple[object, ...],
+    clauses: list[Clause],
+    seen_ids: set[str],
+) -> bool:
+    clause_id = str(row[0])
+    if clause_id in seen_ids:
+        return False
+    clause = _build_clause(row)
+    if not clause:
+        return False
+    clauses.append(clause)
+    seen_ids.add(clause_id)
+    return True
+
+
 async def get_clauses_from_rag(
     db: AsyncSession,
     project_id: UUID,
@@ -280,8 +296,6 @@ async def _get_persisted_clause_candidates(
 ) -> list[Clause]:
     """Load persisted document clauses using category-targeted queries."""
     seen_ids: set[str] = set()
-    targeted_clauses: list[Clause] = []
-
     base_query = """
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
@@ -293,11 +307,32 @@ async def _get_persisted_clause_candidates(
         ORDER BY c.created_at ASC
         LIMIT :limit
     """
+    targeted_clauses = await _load_category_clause_candidates(
+        db, base_query, project_id, tenant_id, seen_ids
+    )
 
+    remaining = max(0, max_chunks - len(targeted_clauses))
+    if remaining > 0:
+        targeted_clauses.extend(
+            await _load_fallback_clause_candidates(
+                db, project_id, tenant_id, remaining, seen_ids
+            )
+        )
+
+    return targeted_clauses
+
+
+async def _load_category_clause_candidates(
+    db: AsyncSession,
+    base_query: str,
+    project_id: UUID,
+    tenant_id: UUID,
+    seen_ids: set[str],
+) -> list[Clause]:
+    clauses: list[Clause] = []
     for _category, keywords in _CATEGORY_KEYWORDS.items():
-        stmt = text(base_query)
         result = await db.execute(
-            stmt,
+            text(base_query),
             {
                 "project_id": str(project_id),
                 "tenant_id": str(tenant_id),
@@ -306,44 +341,40 @@ async def _get_persisted_clause_candidates(
             },
         )
         for row in result.fetchall():
-            cid = str(row[0])
-            if cid in seen_ids:
-                continue
-            clause = _build_clause(row)
-            if clause:
-                targeted_clauses.append(clause)
-                seen_ids.add(cid)
+            _append_unique_clause(row, clauses, seen_ids)
+    return clauses
 
-    # Chronological fallback: fill remaining budget so boilerplate is not lost
-    remaining = max(0, max_chunks - len(targeted_clauses))
-    if remaining > 0:
-        fallback_stmt = text("""
-            SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
-            FROM clauses c
-            JOIN documents d ON c.document_id = d.id
-            JOIN projects p ON d.project_id = p.id
-            WHERE d.project_id = CAST(:project_id AS uuid)
-              AND p.tenant_id = CAST(:tenant_id AS uuid)
-            ORDER BY c.created_at ASC
-            LIMIT :limit
-        """)
-        fallback_result = await db.execute(
-            fallback_stmt,
-            {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": remaining + len(seen_ids)},
-        )
-        for row in fallback_result.fetchall():
-            cid = str(row[0])
-            if cid in seen_ids:
-                continue
-            clause = _build_clause(row)
-            if clause:
-                targeted_clauses.append(clause)
-                seen_ids.add(cid)
-                remaining -= 1
-                if remaining <= 0:
-                    break
 
-    return targeted_clauses
+async def _load_fallback_clause_candidates(
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    remaining: int,
+    seen_ids: set[str],
+) -> list[Clause]:
+    fallback_stmt = text("""
+        SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
+        FROM clauses c
+        JOIN documents d ON c.document_id = d.id
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id = CAST(:project_id AS uuid)
+          AND p.tenant_id = CAST(:tenant_id AS uuid)
+        ORDER BY c.created_at ASC
+        LIMIT :limit
+    """)
+    fallback_result = await db.execute(
+        fallback_stmt,
+        {
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+            "limit": remaining + len(seen_ids),
+        },
+    )
+    clauses: list[Clause] = []
+    for row in fallback_result.fetchall():
+        if _append_unique_clause(row, clauses, seen_ids) and len(clauses) >= remaining:
+            break
+    return clauses
 
 
 async def _get_rag_chunk_clauses(
