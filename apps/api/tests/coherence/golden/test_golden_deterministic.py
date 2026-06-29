@@ -273,7 +273,7 @@ def test_low_budget_mode_costs_under_one_cent():
         total_cost += result.llm_cost_usd
 
     # Verify total cost across all test cases
-    assert total_cost == 0.0, (
+    assert total_cost == pytest.approx(0.0), (
         f"Total cost across {len(GOLDEN_TEST_CASES)} test cases: ${total_cost}, expected $0.00"
     )
 
