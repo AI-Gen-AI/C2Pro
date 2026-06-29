@@ -181,6 +181,116 @@ class TestLlmRuleEvaluatorEvaluate:
             assert finding is not None
             assert finding.raw_data["cached"] is True
 
+    @pytest.mark.asyncio
+    async def test_responsibility_golden_flags_shared_passive_remediation(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 positive golden
+        anchor for shared/passive remediation with no named responsible party."""
+        from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+
+        clause = Clause(
+            id="RESP-GOLDEN-POS-001",
+            text=(
+                "En caso de incumplimiento, las responsabilidades de remediación "
+                "serán compartidas por las partes y el trabajo correctivo será "
+                "realizado según se requiera."
+            ),
+            data={"category": "LEGAL"},
+        )
+        fake_port = MagicMock()
+        fake_port.evaluate = AsyncMock(
+            return_value=LLMRuleResult(
+                rule_id="R-RESPONSIBILITY-01",
+                clause_id=clause.id,
+                impact_score=0.7,
+                confidence=0.9,
+                severity="high",
+                category="LEGAL",
+                evidence_summary=(
+                    "Uses shared responsibility and passive voice without a "
+                    "named responsible party."
+                ),
+                quote=(
+                    "las responsabilidades de remediación serán compartidas "
+                    "por las partes"
+                ),
+                raw_data={
+                    "recommendation": "Asignar la remediación a una parte específica.",
+                },
+            )
+        )
+
+        evaluator = LlmRuleEvaluator(
+            rule_id="R-RESPONSIBILITY-01",
+            rule_name="Responsibility Assignment",
+            rule_description=(
+                "Las responsabilidades deben asignarse claramente a una parte "
+                "específica"
+            ),
+            detection_logic="Sólo si NINGUNA parte específica es identificable.",
+            default_severity="medium",
+            category="legal",
+            llm_port=fake_port,
+        )
+
+        finding = await evaluator.evaluate_async(clause)
+
+        assert finding is not None
+        assert finding.raw_data["rule_id"] == "R-RESPONSIBILITY-01"
+        assert finding.raw_data["evidence"]["quote"].startswith(
+            "las responsabilidades de remediación"
+        )
+
+    @pytest.mark.asyncio
+    async def test_responsibility_golden_skips_named_party_obligation(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 negative golden
+        anchor for a named party with a mandatory responsibility verb."""
+        from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+
+        clause = Clause(
+            id="RESP-GOLDEN-NEG-001",
+            text=(
+                "El Contratista será responsable de ejecutar el trabajo correctivo "
+                "y entregar la remediación en un plazo de diez días."
+            ),
+            data={"category": "LEGAL"},
+        )
+        fake_port = MagicMock()
+        fake_port.evaluate = AsyncMock(
+            return_value=LLMRuleResult(
+                rule_id="R-RESPONSIBILITY-01",
+                clause_id=clause.id,
+                impact_score=0.0,
+                confidence=1.0,
+                severity="low",
+                category="LEGAL",
+                evidence_summary=(
+                    "A named party is assigned responsibility with a mandatory "
+                    "verb."
+                ),
+                quote="El Contratista será responsable",
+                raw_data={"recommendation": "No change required."},
+            )
+        )
+
+        evaluator = LlmRuleEvaluator(
+            rule_id="R-RESPONSIBILITY-01",
+            rule_name="Responsibility Assignment",
+            rule_description=(
+                "Las responsabilidades deben asignarse claramente a una parte "
+                "específica"
+            ),
+            detection_logic="Una parte nombrada con verbo obligatorio NO es violación.",
+            default_severity="medium",
+            category="legal",
+            llm_port=fake_port,
+        )
+
+        finding = await evaluator.evaluate_async(clause)
+
+        assert finding is None
+
 
 # ===========================================
 # TEST: PROMPT BUILDING
