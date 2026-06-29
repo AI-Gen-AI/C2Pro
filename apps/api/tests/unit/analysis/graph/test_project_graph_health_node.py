@@ -7,17 +7,21 @@ from uuid import uuid4
 import pytest
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem, Severity
 from src.analysis.domain.node_result import NodeStatus
 from src.health.domain.health_vector import HealthDimension
 
 
-def _artifact() -> DocumentArtifact:
+def _artifact(
+    documentation_health_signal: DocumentationHealthSignal | None = None,
+) -> DocumentArtifact:
     return DocumentArtifact(
         document_id="doc-1",
         document_revision_id=str(uuid4()),
         doc_type="contract",
         document_category="LEGAL",
+        documentation_health_signal=documentation_health_signal,
         extracted_risks=[
             RiskItem(
                 title="Risk",
@@ -57,6 +61,40 @@ async def test_project_graph_health_node_populates_health_result_from_artifacts(
     assert dimensions[HealthDimension.DOCUMENTATION.value]["score"] is None
     assert dimensions[HealthDimension.GOVERNANCE.value]["score"] is None
     assert result["node_results"][0].status is NodeStatus.OK
+
+
+@pytest.mark.asyncio
+async def test_project_graph_health_node_consumes_documentation_health_signal() -> None:
+    """TS-ADR-013-GRAPH-001 - Degraded Tier-1 signal reaches Tier-2 documentation health."""
+    from src.analysis.adapters.graph.project_graph import health
+
+    result = health(
+        {
+            "project_id": uuid4(),
+            "tenant_id": uuid4(),
+            "artifacts": [
+                _artifact(
+                    DocumentationHealthSignal(
+                        total_count=2,
+                        failed_count=0,
+                        degraded_count=1,
+                        skipped_count=0,
+                        degraded_nodes=["human_interrupt"],
+                    )
+                )
+            ],
+            "coherence_result": None,
+            "node_results": [],
+        }
+    )
+
+    dimensions = {
+        item["dimension"]: item for item in result["health_result"]["dimensions"]
+    }
+    documentation = dimensions[HealthDimension.DOCUMENTATION.value]
+    assert documentation["score"] is not None
+    assert documentation["band"] != "unknown"
+    assert documentation["missing_data"] == []
 
 
 @pytest.mark.asyncio

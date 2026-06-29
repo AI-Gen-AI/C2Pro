@@ -46,6 +46,7 @@ def build_document_artifact(final_state: Mapping[str, Any]) -> DocumentArtifact:
             "bom_items": _list_value(final_state, "bom_items"),
             "citations": _list_value(final_state, "citations"),
             "coherence_findings": _list_value(final_state, "coherence_findings"),
+            "documentation_health_signal": final_state.get("documentation_health_signal"),
             "confidence_score": _confidence_score(final_state.get("confidence_score")),
             "pii_redaction_count": _pii_redaction_count(final_state),
         }

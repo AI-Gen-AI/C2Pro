@@ -15,6 +15,7 @@ from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenc
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
 from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.coherence.graph.graph import evaluate_coherence_async
 from src.coherence.graph.state import EvaluationConfig
@@ -297,7 +298,7 @@ def health(state: ProjectGraphState) -> dict[str, object]:
                     [],
                     coherence_subscore=coherence_subscore_from_result(coherence_result),
                 ),
-                score_documentation_dimension(None),
+                score_documentation_dimension(_documentation_health_signal(artifacts)),
                 score_governance_dimension(None),
             ],
             prior_composite=None,
@@ -332,6 +333,27 @@ def _artifact_confidence(artifacts: list[DocumentArtifact]) -> float | None:
     if not scores:
         return None
     return sum(scores) / len(scores)
+
+
+def _documentation_health_signal(
+    artifacts: list[DocumentArtifact],
+) -> DocumentationHealthSignal | None:
+    signals = [
+        artifact.documentation_health_signal
+        for artifact in artifacts
+        if artifact.documentation_health_signal is not None
+    ]
+    if not signals:
+        return None
+    return DocumentationHealthSignal(
+        total_count=sum(signal.total_count for signal in signals),
+        failed_count=sum(signal.failed_count for signal in signals),
+        degraded_count=sum(signal.degraded_count for signal in signals),
+        skipped_count=sum(signal.skipped_count for signal in signals),
+        failed_nodes=[node for signal in signals for node in signal.failed_nodes],
+        degraded_nodes=[node for signal in signals for node in signal.degraded_nodes],
+        skipped_nodes=[node for signal in signals for node in signal.skipped_nodes],
+    )
 
 
 def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:
