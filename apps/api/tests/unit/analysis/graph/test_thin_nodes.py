@@ -446,14 +446,33 @@ class TestRaciGeneratorNodeDelegation:
         )
         assert result["raci_matrix"] == [{"task": "T1", "role": "R"}]
         assert len(ai.calls) == 1
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == [{"task": "T1", "role": "R"}]
 
     @pytest.mark.asyncio
-    async def test_ai_failure_returns_empty(self, monkeypatch) -> None:
+    async def test_ai_failure_returns_failed_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N7 failures are explicit NodeResult failures."""
         from src.analysis.adapters.graph import nodes_extended
 
-        ai = _FakeAI(raises=RuntimeError())
+        class FailingGenerateRaciUseCase:
+            def __init__(self, ai: Any) -> None:
+                self.ai = ai
+
+            async def execute(self, _cmd: Any) -> object:
+                raise RuntimeError("raci generation failed")
+
+        ai = _FakeAI()
         monkeypatch.setattr(
             nodes_extended, "get_ai_service", lambda tenant_id: ai, raising=False
+        )
+        monkeypatch.setattr(nodes_extended, "GenerateRaciUseCase", FailingGenerateRaciUseCase)
+        persisted: list[NodeResult] = []
+        monkeypatch.setattr(
+            nodes_extended,
+            "_persist_node_error",
+            lambda _state, result: persisted.append(result),
         )
         result = await nodes_extended.raci_generator_node(
             _make_state(
@@ -462,6 +481,24 @@ class TestRaciGeneratorNodeDelegation:
             )
         )
         assert result["raci_matrix"] == []
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert persisted == [node_result]
+
+    @pytest.mark.asyncio
+    async def test_missing_inputs_returns_skipped_node_result(self) -> None:
+        """TS-ADR-013-GRAPH-001: N7 skip paths are explicit NodeResult skips."""
+        from src.analysis.adapters.graph import nodes_extended
+
+        result = await nodes_extended.raci_generator_node(_make_state())
+
+        assert result["raci_matrix"] == []
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.SKIPPED
+        assert node_result.degradation_reason == "missing_stakeholders_or_wbs"
 
 
 # ── N9 budget_parser_extended_node ──────────────────────────────────────────
@@ -554,7 +591,7 @@ class TestBudgetParserExtendedNodeDelegation:
 class TestCitationValidatorNodeTyping:
     @pytest.mark.asyncio
     async def test_validates_and_stores_citation_dicts(self) -> None:
-        """TS-ADR-013-GRAPH-001: N15 validates Citation contracts but stores dict-shaped state without NodeResult instrumentation."""
+        """TS-ADR-013-GRAPH-001: N15 validates Citation contracts and emits NodeResult."""
         from src.analysis.adapters.graph import nodes_extended
 
         text = "Clause 1 requires delivery by milestone A."
@@ -574,7 +611,44 @@ class TestCitationValidatorNodeTyping:
         assert result["citations"]
         assert isinstance(result["citations"][0], dict)
         assert result["citations"][0]["quote"] == text
-        assert "node_results" not in result
+        node_result = result["node_results"][-1]
+        assert node_result.node == "citation_validator"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data["validation_passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_validation_failure_returns_failed_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N15 failures are explicit NodeResult failures."""
+        from src.analysis.adapters.graph import nodes_extended
+        from src.analysis.domain import citation_validation
+
+        class FailingCitationValidatorService:
+            def validate(self, *_args: object, **_kwargs: object) -> object:
+                raise RuntimeError("citation validation failed")
+
+        monkeypatch.setattr(
+            citation_validation,
+            "CitationValidatorService",
+            FailingCitationValidatorService,
+        )
+        persisted: list[NodeResult] = []
+        monkeypatch.setattr(
+            nodes_extended,
+            "_persist_node_error",
+            lambda _state, result: persisted.append(result),
+        )
+
+        result = await nodes_extended.citation_validator_node(
+            _make_state(document_text="source")
+        )
+
+        assert result["citations"] == []
+        assert result["citation_validation_passed"] is False
+        node_result = result["node_results"][-1]
+        assert node_result.node == "citation_validator"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert persisted == [node_result]
 
 
 # ── Phase 4: conditional edge routing ───────────────────────────────────────

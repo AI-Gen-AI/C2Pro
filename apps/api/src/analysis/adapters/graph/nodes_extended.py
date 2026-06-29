@@ -325,8 +325,14 @@ async def raci_generator_node(state: ProjectState) -> dict[str, Any]:
     wbs_items = state.get("extracted_wbs", [])
 
     if not stakeholders or not wbs_items:
+        node_result = NodeResult(
+            node="raci_generator",
+            status=NodeStatus.SKIPPED,
+            degradation_reason="missing_stakeholders_or_wbs",
+        )
         return {
             "raci_matrix": [],
+            "node_results": [node_result],
             "messages": [
                 AIMessage(
                     content=(
@@ -337,13 +343,26 @@ async def raci_generator_node(state: ProjectState) -> dict[str, Any]:
             ],
         }
 
-    use_case = GenerateRaciUseCase(ai=get_ai_service(state.get("tenant_id")))
-    matrix = await use_case.execute(
-        GenerateRaciCommand(stakeholders=stakeholders, wbs_items=wbs_items)
-    )
+    try:
+        use_case = GenerateRaciUseCase(ai=get_ai_service(state.get("tenant_id")))
+        matrix = await use_case.execute(
+            GenerateRaciCommand(stakeholders=stakeholders, wbs_items=wbs_items)
+        )
+    except Exception as exc:
+        logger.warning("node_raci_generator_failed", exc_info=True)
+        node_result = _failed_node_result("raci_generator", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        return {
+            "raci_matrix": [],
+            "node_results": [node_result],
+            "messages": [
+                AIMessage(content="N7 raci_generator: failed (see node_results)")
+            ],
+        }
 
     return {
         "raci_matrix": matrix,
+        "node_results": [_ok_node_result("raci_generator", matrix)],
         "messages": [AIMessage(content=f"N7 raci_generator: {len(matrix)} assignments generated")],
     }
 
@@ -650,21 +669,41 @@ async def citation_validator_node(state: ProjectState) -> dict[str, Any]:
     risks = state.get("extracted_risks", [])
     wbs_items = state.get("extracted_wbs", [])
 
-    validation = CitationValidatorService().validate(text, risks, wbs_items)
+    try:
+        validation = CitationValidatorService().validate(text, risks, wbs_items)
+        citations = [
+            Citation(
+                type=c.type,
+                item=c.item,
+                quote=c.quote,
+                found_in_source=c.found_in_source,
+            ).model_dump(mode="python")
+            for c in validation.citations
+        ]
+    except Exception as exc:
+        logger.warning("node_citation_validator_failed", exc_info=True)
+        node_result = _failed_node_result("citation_validator", exc)
+        await _maybe_await(_persist_node_error(state, node_result))
+        return {
+            "citations": [],
+            "citation_validation_passed": False,
+            "node_results": [node_result],
+            "messages": [
+                AIMessage(content="N15 citation_validator: failed (see node_results)")
+            ],
+        }
 
-    citations = [
-        Citation(
-            type=c.type,
-            item=c.item,
-            quote=c.quote,
-            found_in_source=c.found_in_source,
-        ).model_dump(mode="python")
-        for c in validation.citations
-    ]
+    node_data = {
+        "citations": citations,
+        "validation_passed": validation.validation_passed,
+        "validated_count": validation.validated_count,
+        "total_count": validation.total_count,
+    }
 
     return {
         "citations": citations,
         "citation_validation_passed": validation.validation_passed,
+        "node_results": [_ok_node_result("citation_validator", node_data)],
         "messages": [
             AIMessage(
                 content=f"N15 citation_validator: {validation.validated_count}/{validation.total_count} "
