@@ -41,7 +41,7 @@ from src.coherence.rules_engine.config import DEFAULT_CONFIG
 logger = structlog.get_logger()
 
 
-_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+_JSON_FENCE_RE = re.compile(r"```(?:json)?(.*?)```", re.DOTALL)
 
 
 def _extract_json_payload(content: str) -> str:

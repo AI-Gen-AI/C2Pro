@@ -52,7 +52,7 @@ def test_empty_clauses_handled_gracefully(clauses):
     assert result is not None
     assert result.overall_score >= 95.0  # No issues = high score
     assert len(result.alerts) == 0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -91,7 +91,7 @@ def test_missing_data_fields_handled_gracefully(clause_data):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -137,7 +137,7 @@ def test_malformed_dates_handled_gracefully(date_value):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -183,7 +183,7 @@ def test_invalid_numeric_values_handled_gracefully(numeric_field, value):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -226,7 +226,7 @@ def test_null_field_values_handled_gracefully(field_name, null_value):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -271,7 +271,7 @@ def test_unicode_and_special_chars_handled(text_value):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -319,7 +319,7 @@ def test_large_clause_count_handled_efficiently(clause_count):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
     # Should complete in reasonable time
     assert elapsed_time < 10.0, f"Evaluation took {elapsed_time:.2f}s for {clause_count} clauses"
@@ -366,7 +366,7 @@ def test_very_long_clause_text_handled(text_length):
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -414,5 +414,5 @@ def test_mixed_edge_cases_all_together():
     # Should not crash
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
     assert len(result.alerts) >= 0  # May or may not have alerts

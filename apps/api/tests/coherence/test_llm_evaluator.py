@@ -8,6 +8,7 @@ Uses mocking to ensure deterministic test results.
 Version: 1.0.0
 """
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,6 +19,30 @@ from src.coherence.rules_engine.base import Finding
 # ===========================================
 # TEST: LlmRuleEvaluator INITIALIZATION
 # ===========================================
+
+
+class TestJsonPayloadExtraction:
+    """Tests for LLM JSON payload extraction."""
+
+    def test_fenced_json_payload_extracts_with_trimmed_content(self):
+        """TS-COH-LLM-JSON-001: fenced JSON content is extracted unchanged."""
+        from src.coherence.rules_engine.llm_evaluator import _extract_json_payload
+
+        payload = _extract_json_payload('```json\n  {"rule_violated": true}  \n```')
+
+        assert payload == '{"rule_violated": true}'
+
+    def test_unclosed_fence_with_whitespace_returns_promptly(self):
+        """TS-COH-LLM-JSON-001: unclosed fence input does not trigger ReDoS."""
+        from src.coherence.rules_engine.llm_evaluator import _extract_json_payload
+
+        pathological = "```json" + (" " * 100_000)
+        started = time.perf_counter()
+        payload = _extract_json_payload(pathological)
+        elapsed = time.perf_counter() - started
+
+        assert payload == pathological.strip()
+        assert elapsed < 0.5
 
 
 class TestLlmRuleEvaluatorInit:

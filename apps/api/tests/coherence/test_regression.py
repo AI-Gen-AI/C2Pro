@@ -243,7 +243,7 @@ def test_regression_low_budget_mode_default_true():
     clauses = [Clause(id="test-1", text="Test", data={})]
     result = evaluate_coherence(clauses=clauses, project_id="regression-default-config", config=config)
 
-    assert result.llm_cost_usd == 0.0, "Default config should have zero cost"
+    assert result.llm_cost_usd == pytest.approx(0.0), "Default config should have zero cost"
 
 
 def test_regression_scoring_still_continuous():
@@ -337,7 +337,7 @@ def test_regression_full_workflow_end_to_end():
     assert hasattr(result, "llm_cost_usd")
     assert hasattr(result, "evaluation_mode")
     assert hasattr(result, "penalty_density")
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================

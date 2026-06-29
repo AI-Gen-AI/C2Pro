@@ -175,9 +175,7 @@ async def test_evaluate_backward_compatible_response_shape(
         assert not hasattr(result, "llm_cost_usd")
 
         # Verify score is granular (not 0/100)
-        assert result.overall_score == 72.5  # Granular float
-        assert result.overall_score != 0
-        assert result.overall_score != 100
+        assert result.overall_score == pytest.approx(72.5)  # Granular float
 
 
 # =============================================================================
@@ -219,8 +217,6 @@ async def test_evaluate_granular_scoring_not_binary(
 
         # Verify granular scoring
         assert isinstance(result.overall_score, float)
-        assert result.overall_score != 0.0
-        assert result.overall_score != 100.0
         assert 5.0 <= result.overall_score <= 97.0
 
 
@@ -694,7 +690,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses, sampl
 
         # Verify cost tracking
         assert hasattr(result, "llm_cost_usd")
-        assert result.llm_cost_usd == 0.0  # Zero cost in low budget mode
+        assert result.llm_cost_usd == pytest.approx(0.0)  # Zero cost in low budget mode
 
 
 # =============================================================================
@@ -806,7 +802,7 @@ def test_convert_enriched_to_coherence_result():
     assert not isinstance(result, EnrichedCoherenceResult)
 
     # Verify core fields preserved
-    assert result.overall_score == 80.5
+    assert result.overall_score == pytest.approx(80.5)
     assert len(result.alerts) == 1
     assert result.alerts[0].rule_id == "TEST-001"
     assert len(result.category_breakdown) == 1

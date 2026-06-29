@@ -64,7 +64,7 @@ def test_golden_score_curve(test_case):
     )
 
     # Verify cost is zero (low_budget_mode)
-    assert result.llm_cost_usd == 0.0, (
+    assert result.llm_cost_usd == pytest.approx(0.0), (
         f"{test_case['name']}: Expected zero cost in low_budget_mode, got ${result.llm_cost_usd}"
     )
 
@@ -94,7 +94,7 @@ def test_golden_perfect_project_scores_100():
 
     assert result.overall_score >= 95.0, f"Perfect project scored {result.overall_score}, expected ≥95"
     assert len(result.alerts) == 0, f"Perfect project had {len(result.alerts)} alerts, expected 0"
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_moderate_scores_50_to_80():
@@ -127,7 +127,7 @@ def test_golden_moderate_scores_50_to_80():
         assert 1 <= len(result.alerts) <= 4, (
             f"{test_case['name']} had {len(result.alerts)} alerts, expected 1-4"
         )
-        assert result.llm_cost_usd == 0.0
+        assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_severe_scores_10_to_30():
@@ -163,7 +163,7 @@ def test_golden_severe_scores_10_to_30():
         assert len(result.alerts) >= 1, (
             f"{test_case['name']} had {len(result.alerts)} alerts, expected ≥1"
         )
-        assert result.llm_cost_usd == 0.0
+        assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -191,7 +191,7 @@ def test_golden_empty_project_does_not_crash():
 
     assert result.overall_score >= 95.0
     assert len(result.alerts) == 0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_missing_data_handled_gracefully():
@@ -215,7 +215,7 @@ def test_golden_missing_data_handled_gracefully():
     # Should not crash
     assert result.overall_score >= 0.0
     assert result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 def test_golden_malformed_dates_handled_gracefully():
@@ -239,7 +239,7 @@ def test_golden_malformed_dates_handled_gracefully():
     # Should not crash
     assert result.overall_score >= 0.0
     assert result.overall_score <= 100.0
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)
 
 
 # =============================================================================
@@ -266,7 +266,7 @@ def test_low_budget_mode_costs_under_one_cent():
         )
 
         # Verify individual test case cost
-        assert result.llm_cost_usd == 0.0, (
+        assert result.llm_cost_usd == pytest.approx(0.0), (
             f"{test_case['name']} cost ${result.llm_cost_usd} in low_budget_mode, expected $0.00"
         )
 
