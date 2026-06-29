@@ -26,8 +26,6 @@ from datetime import UTC, date, datetime
 from itertools import islice, product
 from typing import Any
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from src.coherence.domain.ports.coherence_llm_gate_port import (
     CoherenceLlmGatePort,
     GateDecision,
@@ -786,10 +784,6 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
     except ImportError as e:
         logger.warning(f"Embedding repository not available: {e}")
         errors.append(f"RAG similarity check unavailable: {e}")
-        rag_pairs = []
-    except SQLAlchemyError as e:
-        logger.error(f"Error in RAG similarity check: {e}")
-        errors.append(f"RAG similarity check error: {e}")
         rag_pairs = []
 
     logger.info(f"rag_similarity_check: {len(rag_pairs)} pairs found via embedding similarity")
