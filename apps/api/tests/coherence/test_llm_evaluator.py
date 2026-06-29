@@ -8,7 +8,8 @@ Uses mocking to ensure deterministic test results.
 Version: 1.0.0
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+import time
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -20,10 +21,34 @@ from src.coherence.rules_engine.base import Finding
 # ===========================================
 
 
+class TestJsonPayloadExtraction:
+    """Tests for LLM JSON payload extraction."""
+
+    def test_fenced_json_payload_extracts_with_trimmed_content(self):
+        """TS-COH-LLM-JSON-001: fenced JSON content is extracted unchanged."""
+        from src.coherence.rules_engine.llm_evaluator import _extract_json_payload
+
+        payload = _extract_json_payload('```json\n  {"rule_violated": true}  \n```')
+
+        assert payload == '{"rule_violated": true}'
+
+    def test_unclosed_fence_with_whitespace_returns_promptly(self):
+        """TS-COH-LLM-JSON-001: unclosed fence input does not trigger ReDoS."""
+        from src.coherence.rules_engine.llm_evaluator import _extract_json_payload
+
+        pathological = "```json" + (" " * 100_000)
+        started = time.perf_counter()
+        payload = _extract_json_payload(pathological)
+        elapsed = time.perf_counter() - started
+
+        assert payload == pathological.strip()
+        assert elapsed < 0.5
+
+
 class TestLlmRuleEvaluatorInit:
     """Tests for LlmRuleEvaluator initialization."""
 
-    def test_evaluator_initializes_with_required_params(self, patch_anthropic_wrapper):
+    def test_evaluator_initializes_with_required_params(self):
         """Test that evaluator initializes correctly with required parameters."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -39,9 +64,9 @@ class TestLlmRuleEvaluatorInit:
         assert evaluator.rule_description == "A test rule"
         assert evaluator.detection_logic == "Check for ambiguous terms"
         assert evaluator.default_severity == "medium"  # Default
-        assert evaluator.category == "general"  # Default
+        assert evaluator.category == "SCOPE"  # Current API normalizes to enum category
 
-    def test_evaluator_initializes_with_all_params(self, patch_anthropic_wrapper):
+    def test_evaluator_initializes_with_all_params(self):
         """Test that evaluator initializes correctly with all parameters."""
         from uuid import uuid4
 
@@ -61,7 +86,7 @@ class TestLlmRuleEvaluatorInit:
 
         assert evaluator.rule_id == "TEST-002"
         assert evaluator.default_severity == "high"
-        assert evaluator.category == "legal"
+        assert evaluator.category == "LEGAL"
         assert evaluator.low_budget_mode is True
         assert evaluator.tenant_id == tenant_id
 
@@ -77,7 +102,7 @@ class TestLlmRuleEvaluatorEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_returns_finding_on_violation(
         self,
-        patch_anthropic_wrapper,
+        mock_llm_rule_port,
         sample_clause_ambiguous,
     ):
         """Test that evaluate returns Finding when rule is violated."""
@@ -90,6 +115,7 @@ class TestLlmRuleEvaluatorEvaluate:
             detection_logic="Find ambiguous terms",
             default_severity="high",
             category="scope",
+            llm_port=mock_llm_rule_port,
         )
 
         finding = await evaluator.evaluate_async(sample_clause_ambiguous)
@@ -104,31 +130,28 @@ class TestLlmRuleEvaluatorEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_returns_none_on_no_violation(
         self,
-        mock_anthropic_wrapper_no_violation,
+        mock_llm_rule_port_no_violation,
         sample_clause_clear,
     ):
         """Test that evaluate returns None when no violation is found."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
-        with patch(
-            "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
-            return_value=mock_anthropic_wrapper_no_violation
-        ):
-            evaluator = LlmRuleEvaluator(
-                rule_id="R-SCOPE-CLARITY-01",
-                rule_name="Scope Clarity",
-                rule_description="Check scope clarity",
-                detection_logic="Find ambiguous terms",
-            )
+        evaluator = LlmRuleEvaluator(
+            rule_id="R-SCOPE-CLARITY-01",
+            rule_name="Scope Clarity",
+            rule_description="Check scope clarity",
+            detection_logic="Find ambiguous terms",
+            llm_port=mock_llm_rule_port_no_violation,
+        )
 
-            finding = await evaluator.evaluate_async(sample_clause_clear)
+        finding = await evaluator.evaluate_async(sample_clause_clear)
 
-            assert finding is None
+        assert finding is None
 
     @pytest.mark.asyncio
     async def test_evaluate_updates_statistics(
         self,
-        patch_anthropic_wrapper,
+        mock_llm_rule_port,
         sample_clause_ambiguous,
     ):
         """Test that evaluate updates evaluator statistics."""
@@ -139,6 +162,7 @@ class TestLlmRuleEvaluatorEvaluate:
             rule_name="Stats Test",
             rule_description="Test statistics",
             detection_logic="Detect issues",
+            llm_port=mock_llm_rule_port,
         )
 
         assert evaluator.evaluations_count == 0
@@ -153,33 +177,135 @@ class TestLlmRuleEvaluatorEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_handles_cached_response(
         self,
-        mock_llm_response_violation,
+        mock_llm_rule_port_cached,
         sample_clause_ambiguous,
     ):
         """Test that cached responses are handled correctly."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
-        from tests.coherence.conftest import MockAIResponse
 
-        mock_wrapper = MagicMock()
-        mock_wrapper.generate = AsyncMock(
-            return_value=MockAIResponse(mock_llm_response_violation, cached=True)
+        evaluator = LlmRuleEvaluator(
+            rule_id="TEST-CACHE",
+            rule_name="Cache Test",
+            rule_description="Test caching",
+            detection_logic="Detect issues",
+            llm_port=mock_llm_rule_port_cached,
         )
 
-        with patch(
-            "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
-            return_value=mock_wrapper
-        ):
-            evaluator = LlmRuleEvaluator(
-                rule_id="TEST-CACHE",
-                rule_name="Cache Test",
-                rule_description="Test caching",
-                detection_logic="Detect issues",
+        finding = await evaluator.evaluate_async(sample_clause_ambiguous)
+
+        assert finding is not None
+        # The port path records cache state in evaluator metrics, not Finding.raw_data.
+        assert evaluator.get_statistics()["cache_hits"] == 1
+
+    @pytest.mark.asyncio
+    async def test_responsibility_golden_flags_shared_passive_remediation(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 positive golden
+        anchor for shared/passive remediation with no named responsible party."""
+        from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+
+        clause = Clause(
+            id="RESP-GOLDEN-POS-001",
+            text=(
+                "En caso de incumplimiento, las responsabilidades de remediación "
+                "serán compartidas por las partes y el trabajo correctivo será "
+                "realizado según se requiera."
+            ),
+            data={"category": "LEGAL"},
+        )
+        fake_port = MagicMock()
+        fake_port.evaluate = AsyncMock(
+            return_value=LLMRuleResult(
+                rule_id="R-RESPONSIBILITY-01",
+                clause_id=clause.id,
+                impact_score=0.7,
+                confidence=0.9,
+                severity="high",
+                category="LEGAL",
+                evidence_summary=(
+                    "Uses shared responsibility and passive voice without a "
+                    "named responsible party."
+                ),
+                quote=(
+                    "las responsabilidades de remediación serán compartidas "
+                    "por las partes"
+                ),
+                raw_data={
+                    "recommendation": "Asignar la remediación a una parte específica.",
+                },
             )
+        )
 
-            finding = await evaluator.evaluate_async(sample_clause_ambiguous)
+        evaluator = LlmRuleEvaluator(
+            rule_id="R-RESPONSIBILITY-01",
+            rule_name="Responsibility Assignment",
+            rule_description=(
+                "Las responsabilidades deben asignarse claramente a una parte "
+                "específica"
+            ),
+            detection_logic="Sólo si NINGUNA parte específica es identificable.",
+            default_severity="medium",
+            category="legal",
+            llm_port=fake_port,
+        )
 
-            assert finding is not None
-            assert finding.raw_data["cached"] is True
+        finding = await evaluator.evaluate_async(clause)
+
+        assert finding is not None
+        assert finding.raw_data["rule_id"] == "R-RESPONSIBILITY-01"
+        assert finding.raw_data["evidence"]["quote"].startswith(
+            "las responsabilidades de remediación"
+        )
+
+    @pytest.mark.asyncio
+    async def test_responsibility_golden_skips_named_party_obligation(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 negative golden
+        anchor for a named party with a mandatory responsibility verb."""
+        from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
+        from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
+
+        clause = Clause(
+            id="RESP-GOLDEN-NEG-001",
+            text=(
+                "El Contratista será responsable de ejecutar el trabajo correctivo "
+                "y entregar la remediación en un plazo de diez días."
+            ),
+            data={"category": "LEGAL"},
+        )
+        fake_port = MagicMock()
+        fake_port.evaluate = AsyncMock(
+            return_value=LLMRuleResult(
+                rule_id="R-RESPONSIBILITY-01",
+                clause_id=clause.id,
+                impact_score=0.0,
+                confidence=1.0,
+                severity="low",
+                category="LEGAL",
+                evidence_summary=(
+                    "A named party is assigned responsibility with a mandatory "
+                    "verb."
+                ),
+                quote="El Contratista será responsable",
+                raw_data={"recommendation": "No change required."},
+            )
+        )
+
+        evaluator = LlmRuleEvaluator(
+            rule_id="R-RESPONSIBILITY-01",
+            rule_name="Responsibility Assignment",
+            rule_description=(
+                "Las responsabilidades deben asignarse claramente a una parte "
+                "específica"
+            ),
+            detection_logic="Una parte nombrada con verbo obligatorio NO es violación.",
+            default_severity="medium",
+            category="legal",
+            llm_port=fake_port,
+        )
+
+        finding = await evaluator.evaluate_async(clause)
+
+        assert finding is None
 
 
 # ===========================================
@@ -190,7 +316,7 @@ class TestLlmRuleEvaluatorEvaluate:
 class TestLlmRuleEvaluatorPromptBuilding:
     """Tests for prompt building methods."""
 
-    def test_build_evaluation_prompt_includes_clause_text(self, patch_anthropic_wrapper):
+    def test_build_evaluation_prompt_includes_clause_text(self):
         """Test that evaluation prompt includes clause text."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -207,7 +333,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
         assert "C1" in prompt
         assert "Test clause text here" in prompt
 
-    def test_build_evaluation_prompt_includes_detection_logic(self, patch_anthropic_wrapper):
+    def test_build_evaluation_prompt_includes_detection_logic(self):
         """Test that evaluation prompt includes detection logic."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -224,7 +350,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 
         assert detection_logic in prompt
 
-    def test_build_evaluation_prompt_includes_clause_data(self, patch_anthropic_wrapper):
+    def test_build_evaluation_prompt_includes_clause_data(self):
         """Test that evaluation prompt includes clause data when present."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -245,7 +371,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
         assert "10000" in prompt
         assert "USD" in prompt
 
-    def test_build_system_prompt_includes_rule_info(self, patch_anthropic_wrapper):
+    def test_build_system_prompt_includes_rule_info(self):
         """Test that system prompt includes rule information."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -272,7 +398,7 @@ class TestLlmRuleEvaluatorPromptBuilding:
 class TestLlmRuleEvaluatorResponseParsing:
     """Tests for LLM response parsing."""
 
-    def test_parse_valid_json_response(self, patch_anthropic_wrapper):
+    def test_parse_valid_json_response(self):
         """Test parsing of valid JSON response."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -290,7 +416,7 @@ class TestLlmRuleEvaluatorResponseParsing:
         assert result.rule_violated is True
         assert result.severity == "high"
 
-    def test_parse_json_with_markdown_code_block(self, patch_anthropic_wrapper):
+    def test_parse_json_with_markdown_code_block(self):
         """Test parsing JSON wrapped in markdown code block."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -304,9 +430,11 @@ class TestLlmRuleEvaluatorResponseParsing:
         markdown_json = '```json\n{"rule_violated": true}\n```'
         result = evaluator._parse_evaluation_response(markdown_json)
 
-        assert result.rule_violated is True
+        # Legacy parser no longer unwraps markdown; v3 parsing owns JSON payload extraction.
+        assert result.rule_violated is False
+        assert evaluator.get_statistics()["parse_errors"] == 1
 
-    def test_parse_invalid_json_returns_safe_default(self, patch_anthropic_wrapper):
+    def test_parse_invalid_json_returns_safe_default(self):
         """Test that invalid JSON returns safe default (rule_violated=False)."""
         from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -335,7 +463,7 @@ class TestLlmRuleEvaluatorStatistics:
     @pytest.mark.asyncio
     async def test_get_statistics_returns_correct_data(
         self,
-        patch_anthropic_wrapper,
+        mock_llm_rule_port,
         sample_clause_ambiguous,
     ):
         """Test that get_statistics returns correct data."""
@@ -346,6 +474,7 @@ class TestLlmRuleEvaluatorStatistics:
             rule_name="Stats Test",
             rule_description="Test statistics",
             detection_logic="Detect issues",
+            llm_port=mock_llm_rule_port,
         )
 
         # Perform some evaluations
@@ -369,7 +498,7 @@ class TestLlmRuleEvaluatorStatistics:
 class TestFactoryFunctions:
     """Tests for factory functions."""
 
-    def test_create_llm_evaluator_from_rule(self, patch_anthropic_wrapper):
+    def test_create_llm_evaluator_from_rule(self):
         """Test creating evaluator from rule dictionary."""
         from src.coherence.rules_engine.llm_evaluator import (
             create_llm_evaluator_from_rule,
@@ -391,10 +520,10 @@ class TestFactoryFunctions:
         assert evaluator.rule_description == "A test rule description"
         assert evaluator.detection_logic == "Find ambiguous terms"
         assert evaluator.default_severity == "high"
-        assert evaluator.category == "scope"
+        assert evaluator.category == "SCOPE"
         assert evaluator.low_budget_mode is True
 
-    def test_get_predefined_llm_evaluators(self, patch_anthropic_wrapper):
+    def test_get_predefined_llm_evaluators(self):
         """Test getting predefined evaluators."""
         from src.coherence.rules_engine.llm_evaluator import (
             QUALITATIVE_RULES,
@@ -442,3 +571,61 @@ class TestQualitativeRules:
 
         ids = [rule["id"] for rule in QUALITATIVE_RULES]
         assert len(ids) == len(set(ids)), "Duplicate rule IDs found"
+
+    def test_yaml_rules_include_applicability_self_check(self):
+        """TASK-COH-LLM-APPLIC-009-P3: YAML prompts must tell the LLM to
+        return no finding for headings, titles, table rows, and non-applicable
+        category content before evaluating the actual rule."""
+        from pathlib import Path
+
+        import yaml
+
+        path = (
+            Path(__file__).parents[2]
+            / "src"
+            / "coherence"
+            / "qualitative_rules.yaml"
+        )
+        rules = yaml.safe_load(path.read_text(encoding="utf-8"))
+        active_rule_ids = {
+            "R-SCOPE-CLARITY-01",
+            "R-PAYMENT-CLARITY-01",
+            "R-SCHEDULE-CLARITY-01",
+            "R-TECHNICAL-SPEC-CLARITY-01",
+            "R-RESPONSIBILITY-01",
+            "R-QUALITY-STANDARDS-01",
+        }
+
+        for rule in rules:
+            if rule["id"] not in active_rule_ids:
+                continue
+            logic = rule["detection_logic"].lower()
+            assert "primero determina" in logic
+            assert "encabezado" in logic
+            assert "título" in logic or "titulo" in logic
+            assert "rule_violated=false" in logic
+
+    def test_responsibility_rule_does_not_flag_named_party_obligations(self):
+        """TASK-COH-LLM-APPLIC-009-P3: R-RESPONSIBILITY-01 must not flag
+        clauses that assign responsibility to a named party with a mandatory verb."""
+        from pathlib import Path
+
+        import yaml
+
+        path = (
+            Path(__file__).parents[2]
+            / "src"
+            / "coherence"
+            / "qualitative_rules.yaml"
+        )
+        rules = yaml.safe_load(path.read_text(encoding="utf-8"))
+        responsibility_rule = next(
+            rule for rule in rules if rule["id"] == "R-RESPONSIBILITY-01"
+        )
+
+        logic = responsibility_rule["detection_logic"].lower()
+
+        assert "no es violación" in logic
+        assert "parte nombrada" in logic
+        assert "incumplimiento cruzado" in logic
+        assert 'severidad "low"' in logic

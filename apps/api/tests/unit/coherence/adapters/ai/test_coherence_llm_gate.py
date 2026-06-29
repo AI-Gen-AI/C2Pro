@@ -92,11 +92,11 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     gate = CoherenceLlmGate()
     class _MissCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
     class _OkCost:
         async def check_budget_availability(self, *a, **kw): return None
     class _NoopUsage:
-        def record_usage(self, **kw): pass
+        def record_usage(self, **kw): return None
     gate._cache = _MissCache()
     gate._cost = _OkCost()
     gate._usage = _NoopUsage()
@@ -114,7 +114,7 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     assert decision.finding is None
 
 
-PROMPT_VERSION_FOR_TESTS = "p3-v1"  # the canonical version the gate uses
+PROMPT_VERSION_FOR_TESTS = "p3-v3"  # the canonical version the gate uses
 
 
 @pytest.mark.asyncio
@@ -154,11 +154,48 @@ async def test_gate_returns_cache_hit_without_consulting_budget_or_llm():
 
     assert decision.state == "cache_hit"
     assert decision.finding is cached_finding
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert decision.cache_key is not None and len(decision.cache_key) == 64  # sha256 hex
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on hit
     assert gate._cache.get_calls == 1
     assert gate._cache.set_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_gate_cache_hit_applies_calibrated_thresholds():
+    """TASK-COH-LLM-APPLIC-009-P3: stale cached weak findings must not bypass
+    the calibrated LLM thresholds."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause, FindingSignal
+
+    weak_cached_finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.15,
+        confidence=0.95, severity="low", category="SCOPE",
+        evidence_summary="weak cached", quote="q", raw_data={},
+    )
+
+    class FakeContentHashCache:
+        async def get(self, key):
+            return weak_cached_finding
+        async def set(self, key, value):  # pragma: no cover - hit path
+            raise AssertionError("cache set should not run on hit")
+
+    class ExplodingCost:
+        async def check_budget_availability(self, *a, **kw):
+            raise AssertionError("budget should not run on cache hit")
+
+    gate = g.CoherenceLlmGate()
+    gate._cache = FakeContentHashCache()
+    gate._cost = ExplodingCost()
+
+    decision = await gate.evaluate_rule(
+        "tenant-1", "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="The scope is to design a substation.", data={}),
+    )
+
+    assert decision.state == "cache_hit"
+    assert decision.finding is None
+    assert decision.cost_charged_usd == pytest.approx(0.0)
 
 
 def test_content_hash_is_deterministic_and_canonicalized():
@@ -217,7 +254,7 @@ async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -236,7 +273,7 @@ async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
     assert decision.state == "rolled_out_off"
     assert decision.finding is None
     assert decision.reason == "rule_rollout_disabled"
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert decision.cache_key is not None  # still computed
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on rollout deny
 
@@ -253,7 +290,7 @@ async def test_gate_budget_exhausted_returns_distinct_state_with_reset_date(monk
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     class FakeCost:
         async def check_budget_availability(self, tenant_uuid, estimated_cost):
@@ -283,7 +320,7 @@ async def test_gate_budget_exhausted_returns_distinct_state_with_reset_date(monk
         else datetime.date(today.year, today.month + 1, 1)
     )
     assert decision.reset_date == expected
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert llm_consulted["called"] is False  # LLM NOT consulted on exhausted
 
 
@@ -296,7 +333,7 @@ async def test_gate_invalid_tenant_id_fails_closed_to_budget_exhausted(monkeypat
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -330,7 +367,7 @@ async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypat
         async def set(self, key, value): saved[key] = value
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass  # ok
+        async def check_budget_availability(self, *a, **kw): return None  # ok
 
     recorded: list[dict] = []
     class FakeUsage:
@@ -367,14 +404,14 @@ async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypat
 
     assert decision.state == "evaluated"
     assert decision.finding is finding
-    assert decision.cost_charged_usd == 0.0007
+    assert decision.cost_charged_usd == pytest.approx(0.0007)
     assert decision.cache_key in saved and saved[decision.cache_key] is finding
     assert len(recorded) == 1
     r = recorded[0]
     assert r["model"] == "claude-3-haiku-20240307"
     assert r["task_name"] == "coherence_R-SCOPE-CLARITY-01"
     assert r["input_tokens"] == 120 and r["output_tokens"] == 80
-    assert r["cost_usd"] == 0.0007
+    assert r["cost_usd"] == pytest.approx(0.0007)
     assert r["tenant_id"] == "00000000-0000-0000-0000-000000000001"
     assert r["success"] is True
 
@@ -394,7 +431,7 @@ async def test_gate_llm_error_does_not_charge_or_cache(monkeypatch):
         async def set(self, key, value): saved[key] = value
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass
+        async def check_budget_availability(self, *a, **kw): return None
 
     recorded: list = []
     class FakeUsage:
@@ -436,7 +473,7 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
             self.set_calls += 1
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass
+        async def check_budget_availability(self, *a, **kw): return None
 
     recorded: list[dict] = []
     class FakeUsage:
@@ -464,7 +501,7 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
     # 2. record_usage called with success=False on swallowed-error path.
     assert len(recorded) == 1
     assert recorded[0]["success"] is False
-    assert recorded[0]["cost_usd"] == 0.0
+    assert recorded[0]["cost_usd"] == pytest.approx(0.0)
     assert recorded[0]["input_tokens"] == 0
     assert recorded[0]["output_tokens"] == 0
 
@@ -473,6 +510,58 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
     #    semantically), with finding=None.
     assert decision.state == "evaluated"
     assert decision.finding is None
+
+
+@pytest.mark.asyncio
+async def test_gate_drops_findings_below_calibrated_thresholds(monkeypatch):
+    """TASK-COH-LLM-APPLIC-009-P3: the live gate path must apply the same
+    impact/confidence thresholds as the v1 evaluator path."""
+    from src.coherence.adapters.ai import coherence_llm_gate as g
+    from src.coherence.models import Clause, FindingSignal
+
+    monkeypatch.setenv("COHERENCE_LLM_ROLLOUT_R_SCOPE_CLARITY_01", "100")
+
+    class EmptyCache:
+        def __init__(self):
+            self.set_calls = 0
+        async def get(self, key): return None
+        async def set(self, key, value):
+            self.set_calls += 1
+
+    class FakeCost:
+        async def check_budget_availability(self, *a, **kw): return None
+
+    recorded: list[dict] = []
+    class FakeUsage:
+        def record_usage(self, **kw):
+            recorded.append(kw)
+
+    weak_finding = FindingSignal(
+        rule_id="R-SCOPE-CLARITY-01", clause_id="c1", impact_score=0.15,
+        confidence=0.95, severity="low", category="SCOPE",
+        evidence_summary="weak", quote="q", raw_data={},
+    )
+
+    async def fake_call_rule(rule_id, clause):
+        return weak_finding, 10, 5, 0.0001, 20.0, "claude-3-haiku-20240307"
+
+    cache = EmptyCache()
+    gate = g.CoherenceLlmGate()
+    gate._cache = cache
+    gate._cost = FakeCost()
+    gate._usage = FakeUsage()
+    monkeypatch.setattr(gate, "_call_rule_via_llm", fake_call_rule)
+
+    decision = await gate.evaluate_rule(
+        "00000000-0000-0000-0000-000000000001",
+        "R-SCOPE-CLARITY-01",
+        Clause(id="c1", text="The contractor shall perform work as needed.", data={}),
+    )
+
+    assert decision.state == "evaluated"
+    assert decision.finding is None
+    assert cache.set_calls == 0
+    assert recorded[0]["success"] is False
 
 
 @pytest.mark.asyncio
@@ -485,7 +574,7 @@ async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch)
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -505,3 +594,4 @@ async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch)
     assert decision.state == "budget_exhausted"
     assert decision.reason == "invalid_tenant_id"
     assert cost_consulted["called"] is False
+

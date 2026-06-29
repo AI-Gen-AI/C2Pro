@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from src.coherence.graph.graph import evaluate_coherence
 from src.coherence.graph.state import EvaluationConfig
 from src.coherence.models import Clause
@@ -53,4 +55,4 @@ def test_budget_reconciliation_marks_budget_assessed_with_both_alerts(monkeypatc
     assert budget.state == "assessed_findings"
     assert any(alert.rule_id == "DET-BUD-SUM" for alert in result.alerts)
     assert any(alert.rule_id == "DET-BUD-INTERNAL" for alert in result.alerts)
-    assert result.llm_cost_usd == 0.0
+    assert result.llm_cost_usd == pytest.approx(0.0)

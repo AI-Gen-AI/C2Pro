@@ -13,6 +13,10 @@
   category: scope
   severity: high
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo SCOPE y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que el alcance del trabajo NO contenga:
 
     1. TÉRMINOS VAGOS como:
@@ -64,6 +68,10 @@
   category: financial
   severity: high
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo BUDGET y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que las condiciones de pago especifiquen CLARAMENTE:
 
     1. MONTOS:
@@ -100,6 +108,10 @@
   category: legal
   severity: medium
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo LEGAL y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que las responsabilidades:
 
     1. SE ASIGNEN A UNA PARTE ESPECÍFICA:
@@ -120,8 +132,19 @@
        - Qué incluye y qué no incluye
        - Límites claros
 
-    Si las responsabilidades son AMBIGUAS o NO están claramente asignadas,
-    la regla está VIOLADA.
+    GUARDIA DE NO VIOLACIÓN:
+    - Si aparece una parte nombrada (por ejemplo, Contratista, Cliente, Propietario,
+      Ingeniero, Comprador, Vendedor, Suministrador) junto con un verbo obligatorio
+      ("deberá", "será responsable", "garantizará", "proporcionará", "entregará",
+      "shall", "must", "is responsible"), NO es violación aunque el alcance sea
+      amplio o la cláusula haga referencia a otras cláusulas o contratos.
+    - Las cláusulas estándar de incumplimiento cruzado (cross-default), de garantía de
+      desempeño ("dará un rendimiento satisfactorio") y de asignación de riesgo/coste
+      NO son violaciones por sí mismas.
+    - La amplitud de alcance o las referencias cruzadas, por sí solas, son a lo sumo
+      severidad "low" — NUNCA "high".
+
+    Sólo si NINGUNA parte específica es identificable como responsable, la regla está VIOLADA.
   inputs: []
   evidence_fields: ["clause.text"]
 
@@ -132,6 +155,10 @@
   category: legal
   severity: high
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo LEGAL y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que las condiciones de terminación:
 
     1. ESPECIFIQUEN CAUSALES CLARAS:
@@ -173,6 +200,10 @@
   category: quality
   severity: medium
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo QUALITY y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que los estándares de calidad:
 
     1. REFERENCIEN NORMAS ESPECÍFICAS:
@@ -213,6 +244,10 @@
   category: technical
   severity: high
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo TECHNICAL y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que las especificaciones técnicas:
 
     1. IDENTIFIQUEN MATERIALES O SISTEMAS CONCRETOS:
@@ -243,6 +278,10 @@
   category: schedule
   severity: high
   detection_logic: |
+    PRIMERO determina si esta cláusula es del tipo TIME y contiene una obligación/contenido sustantivo evaluable.
+    Si es un ENCABEZADO, TÍTULO, fila de tabla, partida presupuestaria, lista de apéndices, o NO impone obligación relevante a esta categoría → responde rule_violated=false con impact 0.
+    SÓLO si es aplicable, evalúa la regla.
+
     Verifica que los términos de cronograma:
 
     1. ESPECIFIQUEN FECHAS O DURACIONES CONCRETAS:
