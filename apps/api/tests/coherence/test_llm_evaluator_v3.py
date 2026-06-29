@@ -108,7 +108,7 @@ class TestLlmEvaluationMetrics:
     def test_initial_state(self):
         """Metrics should start at zero."""
         metrics = LlmEvaluationMetrics()
-        assert metrics.total_cost_usd == 0.0
+        assert metrics.total_cost_usd == pytest.approx(0.0)
         assert metrics.llm_calls_count == 0
         assert metrics.cache_hits == 0
         assert metrics.evaluations_count == 0
@@ -127,9 +127,9 @@ class TestLlmEvaluationMetrics:
         assert metrics.evaluations_count == 1
         assert metrics.llm_calls_count == 1
         assert metrics.violations_found == 1
-        assert metrics.total_cost_usd == 0.001
-        assert metrics.avg_impact_score == 0.75
-        assert metrics.avg_confidence == 0.90
+        assert metrics.total_cost_usd == pytest.approx(0.001)
+        assert metrics.avg_impact_score == pytest.approx(0.75)
+        assert metrics.avg_confidence == pytest.approx(0.90)
 
     def test_record_cached_evaluation(self):
         """Cached evaluations don't increase cost or call count."""
@@ -144,7 +144,7 @@ class TestLlmEvaluationMetrics:
         assert metrics.evaluations_count == 1
         assert metrics.llm_calls_count == 0
         assert metrics.cache_hits == 1
-        assert metrics.total_cost_usd == 0.0  # No cost for cached
+        assert metrics.total_cost_usd == pytest.approx(0.0)  # No cost for cached
 
     def test_record_no_violation(self):
         """No violation means impact_score is None."""
@@ -158,7 +158,7 @@ class TestLlmEvaluationMetrics:
 
         assert metrics.evaluations_count == 1
         assert metrics.violations_found == 0
-        assert metrics.avg_impact_score == 0.0
+        assert metrics.avg_impact_score == pytest.approx(0.0)
 
     def test_violation_rate(self):
         """Violation rate calculated correctly."""
@@ -179,7 +179,7 @@ class TestLlmEvaluationMetrics:
         metrics.record_evaluation(0.001, False, 0.5, 0.9)
         metrics.record_evaluation(0.0, True, 0.5, 0.9)
 
-        assert metrics.cache_hit_rate == 0.5
+        assert metrics.cache_hit_rate == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
@@ -299,8 +299,8 @@ class TestJsonParsing:
 
         result = evaluator._parse_v3_response(content)
 
-        assert result.impact_score == 0.75
-        assert result.confidence == 0.90
+        assert result.impact_score == pytest.approx(0.75)
+        assert result.confidence == pytest.approx(0.90)
         assert result.evidence.quote == "as necessary"
 
     def test_parse_json_in_markdown_block(self, evaluator):
@@ -318,8 +318,8 @@ class TestJsonParsing:
 """
         result = evaluator._parse_v3_response(content)
 
-        assert result.impact_score == 0.60
-        assert result.confidence == 0.85
+        assert result.impact_score == pytest.approx(0.60)
+        assert result.confidence == pytest.approx(0.85)
 
     def test_parse_json_in_generic_code_block(self, evaluator):
         """JSON inside generic code block is extracted."""
@@ -328,7 +328,7 @@ class TestJsonParsing:
 ```"""
         result = evaluator._parse_v3_response(content)
 
-        assert result.impact_score == 0.50
+        assert result.impact_score == pytest.approx(0.50)
 
     def test_parse_malformed_json_falls_back_to_zero_impact(self, evaluator):
         """Malformed JSON falls back to safe default (impact_score=0.0)."""
@@ -337,7 +337,7 @@ class TestJsonParsing:
         result = evaluator._parse_v3_response(content)
 
         # Safe default from LlmEvaluationV3Response on parse failure
-        assert result.impact_score == 0.0
+        assert result.impact_score == pytest.approx(0.0)
 
     def test_parse_completely_invalid_returns_safe_default(self, evaluator):
         """Completely invalid content returns safe defaults."""
@@ -345,7 +345,7 @@ class TestJsonParsing:
 
         result = evaluator._parse_v3_response(content)
 
-        assert result.impact_score == 0.0
+        assert result.impact_score == pytest.approx(0.0)
         assert result.rule_violated is False
 
     def test_parse_result_type_is_pydantic(self, evaluator):
@@ -379,8 +379,8 @@ class TestContinuousScoring:
 
         assert signal is not None
         assert isinstance(signal, FindingSignal)
-        assert signal.impact_score == 0.75
-        assert signal.confidence == 0.90
+        assert signal.impact_score == pytest.approx(0.75)
+        assert signal.confidence == pytest.approx(0.90)
         assert signal.source == "llm"
         assert signal.severity == "high"
 
@@ -471,7 +471,7 @@ class TestCostTracking:
 
         await evaluator.evaluate_v3_async(sample_clause)
 
-        assert evaluator.total_cost_usd == 0.002
+        assert evaluator.total_cost_usd == pytest.approx(0.002)
         assert evaluator.llm_calls_count == 1
 
     @pytest.mark.asyncio
@@ -485,7 +485,7 @@ class TestCostTracking:
 
         await evaluator.evaluate_v3_async(sample_clause)
 
-        assert evaluator.total_cost_usd == 0.0  # Not added when cached
+        assert evaluator.total_cost_usd == pytest.approx(0.0)  # Not added when cached
         assert evaluator.llm_calls_count == 0
         assert evaluator.metrics.cache_hits == 1
 
@@ -512,7 +512,7 @@ class TestCostTracking:
         stats = evaluator.get_statistics()
 
         assert "total_cost_usd" in stats
-        assert stats["total_cost_usd"] == 0.005
+        assert stats["total_cost_usd"] == pytest.approx(0.005)
         assert "llm_calls_count" in stats
 
     def test_reset_metrics(self, evaluator):
@@ -523,7 +523,7 @@ class TestCostTracking:
 
         evaluator.reset_metrics()
 
-        assert evaluator.total_cost_usd == 0.0
+        assert evaluator.total_cost_usd == pytest.approx(0.0)
         assert evaluator.llm_calls_count == 0
         assert evaluator.evaluations_count == 0
 

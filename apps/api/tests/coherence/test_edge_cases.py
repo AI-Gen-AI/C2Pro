@@ -415,4 +415,4 @@ def test_mixed_edge_cases_all_together():
     assert result is not None
     assert 0.0 <= result.overall_score <= 100.0
     assert result.llm_cost_usd == pytest.approx(0.0)
-    assert len(result.alerts) >= 0  # May or may not have alerts
+    assert isinstance(result.alerts, list)  # May or may not have alerts

@@ -154,7 +154,7 @@ async def test_gate_returns_cache_hit_without_consulting_budget_or_llm():
 
     assert decision.state == "cache_hit"
     assert decision.finding is cached_finding
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert decision.cache_key is not None and len(decision.cache_key) == 64  # sha256 hex
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on hit
     assert gate._cache.get_calls == 1
@@ -195,7 +195,7 @@ async def test_gate_cache_hit_applies_calibrated_thresholds():
 
     assert decision.state == "cache_hit"
     assert decision.finding is None
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
 
 
 def test_content_hash_is_deterministic_and_canonicalized():
@@ -273,7 +273,7 @@ async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
     assert decision.state == "rolled_out_off"
     assert decision.finding is None
     assert decision.reason == "rule_rollout_disabled"
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert decision.cache_key is not None  # still computed
     assert cost_consulted["called"] is False  # critical: budget NOT consulted on rollout deny
 
@@ -320,7 +320,7 @@ async def test_gate_budget_exhausted_returns_distinct_state_with_reset_date(monk
         else datetime.date(today.year, today.month + 1, 1)
     )
     assert decision.reset_date == expected
-    assert decision.cost_charged_usd == 0.0
+    assert decision.cost_charged_usd == pytest.approx(0.0)
     assert llm_consulted["called"] is False  # LLM NOT consulted on exhausted
 
 
@@ -404,14 +404,14 @@ async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypat
 
     assert decision.state == "evaluated"
     assert decision.finding is finding
-    assert decision.cost_charged_usd == 0.0007
+    assert decision.cost_charged_usd == pytest.approx(0.0007)
     assert decision.cache_key in saved and saved[decision.cache_key] is finding
     assert len(recorded) == 1
     r = recorded[0]
     assert r["model"] == "claude-3-haiku-20240307"
     assert r["task_name"] == "coherence_R-SCOPE-CLARITY-01"
     assert r["input_tokens"] == 120 and r["output_tokens"] == 80
-    assert r["cost_usd"] == 0.0007
+    assert r["cost_usd"] == pytest.approx(0.0007)
     assert r["tenant_id"] == "00000000-0000-0000-0000-000000000001"
     assert r["success"] is True
 
@@ -501,7 +501,7 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
     # 2. record_usage called with success=False on swallowed-error path.
     assert len(recorded) == 1
     assert recorded[0]["success"] is False
-    assert recorded[0]["cost_usd"] == 0.0
+    assert recorded[0]["cost_usd"] == pytest.approx(0.0)
     assert recorded[0]["input_tokens"] == 0
     assert recorded[0]["output_tokens"] == 0
 

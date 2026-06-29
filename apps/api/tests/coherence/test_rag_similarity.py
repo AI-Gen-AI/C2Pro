@@ -149,7 +149,7 @@ def test_embedding_search_result_top_match(sample_project_id: UUID):
     top = result.top_match()
     assert top is not None
     assert top.target_clause_id == "SCH-002"
-    assert top.similarity_score == 0.92
+    assert top.similarity_score == pytest.approx(0.92)
 
     # Empty result
     empty_result = EmbeddingSearchResult(query_clause_id="BUD-001", matches=[])
@@ -281,10 +281,10 @@ async def test_pgvector_find_similar_returns_matches(
 
     assert len(matches) == 2
     assert matches[0].target_clause_id == "SCH-001"
-    assert matches[0].similarity_score == 0.92
+    assert matches[0].similarity_score == pytest.approx(0.92)
     assert matches[0].target_category == "TIME"
     assert matches[1].target_clause_id == "SCH-002"
-    assert matches[1].similarity_score == 0.87
+    assert matches[1].similarity_score == pytest.approx(0.87)
 
 
 @pytest.mark.asyncio
@@ -313,7 +313,7 @@ async def test_pgvector_find_cross_document_pairs(sample_project_id: UUID):
     assert matches[0].source_clause_id == "BUD-001"
     assert matches[0].target_clause_id == "SCH-001"
     assert matches[0].target_document_type == "schedule"
-    assert matches[0].similarity_score == 0.89
+    assert matches[0].similarity_score == pytest.approx(0.89)
     assert matches[0].match_reason == "cross_document_similarity"
 
 
