@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import UUID
@@ -35,8 +36,25 @@ from src.coherence.domain.ports.llm_rule_port import LLMRulePort
 from src.coherence.llm_schemas import LlmEvaluationLegacyResponse, LlmEvaluationV3Response
 from src.coherence.models import Clause, CoherenceCategory, FindingSignal
 from src.coherence.rules_engine.base import ApplicabilityState, Finding, RuleEvaluator
+from src.coherence.rules_engine.config import DEFAULT_CONFIG
 
 logger = structlog.get_logger()
+
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?(.*?)```", re.DOTALL)
+
+
+def _extract_json_payload(content: str) -> str:
+    """Extract a JSON object from plain or fenced LLM response text."""
+    stripped = content.strip()
+    fence_match = _JSON_FENCE_RE.search(stripped)
+    if fence_match:
+        stripped = fence_match.group(1).strip()
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if 0 <= start < end:
+        return stripped[start : end + 1]
+    return stripped
 
 
 # =============================================================================
@@ -333,12 +351,18 @@ class LlmRuleEvaluator(RuleEvaluator):
             self.evaluations_count += 1
             self.total_cost += raw_data.get("cost_usd", 0.0)
 
-            if impact_score < 0.05:
+            if (
+                impact_score < DEFAULT_CONFIG.llm_min_impact
+                or confidence < DEFAULT_CONFIG.llm_min_confidence
+            ):
                 logger.debug(
                     "llm_rule_no_violation_v3",
                     rule_id=self.rule_id,
                     clause_id=clause.id,
                     impact_score=impact_score,
+                    confidence=confidence,
+                    min_impact=DEFAULT_CONFIG.llm_min_impact,
+                    min_confidence=DEFAULT_CONFIG.llm_min_confidence,
                 )
                 return None
 
@@ -374,7 +398,9 @@ class LlmRuleEvaluator(RuleEvaluator):
         so the evaluation pipeline never hard-crashes on a bad LLM response.
         """
         try:
-            return LlmEvaluationV3Response.model_validate(json.loads(content))
+            return LlmEvaluationV3Response.model_validate(
+                json.loads(_extract_json_payload(content))
+            )
         except Exception as e:
             logger.warning(
                 "llm_response_parse_failed_v3",
@@ -437,6 +463,12 @@ SEVERIDADES:
 - high: Riesgo significativo de malentendidos o incumplimiento
 - medium: Problema que debería corregirse pero no es urgente
 - low: Mejora recomendada para claridad
+
+CALIBRACIÓN:
+- Reserva critical/high para ambigüedades sustantivas y exigibles que puedan
+  causar incumplimiento, disputa, coste, retraso o rechazo de calidad.
+- No eleves severidad por encabezados, títulos, listas, filas de tabla o
+  menciones aisladas sin una obligación evaluable.
 
 IMPORTANTE: Responde SOLO en JSON válido."""
 

@@ -19,7 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from itertools import islice, product
 from typing import Any
 
 from src.coherence.domain.ports.coherence_llm_gate_port import (
@@ -48,10 +52,49 @@ from .state import (
     ClauseWithEmbedding,
     CoherenceGraphState,
     CrossClausePair,
+    EvaluationConfig,
     NodeOutput,
 )
 
 logger = logging.getLogger(__name__)
+
+_EXPECTED_EVALUATOR_ERRORS = (
+    ArithmeticError,
+    AttributeError,
+    LookupError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_CATEGORY_CROSS_CHECK_PAIRS = (
+    ("BUDGET", "TIME"),
+    ("BUDGET", "SCOPE"),
+    ("TIME", "TECHNICAL"),
+    ("SCOPE", "BUDGET"),
+)
+
+
+@dataclass
+class _GateAccum:
+    signals: list[FindingSignal] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    coverage: dict[str, bool] = field(default_factory=dict)
+    total_cost: float = 0.0
+    total_calls: int = 0
+    skipped_not_applicable: int = 0
+    skipped_non_substantive: int = 0
+    budget_reset: date | None = None
+    budget_exhausted_seen: bool = False
+
+logger.setLevel(logging.INFO)
+if not any(
+    getattr(handler, "name", None) == "coherence_graph_nodes_stream"
+    for handler in logger.handlers
+):
+    _stream_handler = logging.StreamHandler()
+    _stream_handler.set_name("coherence_graph_nodes_stream")
+    _stream_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(_stream_handler)
 
 
 # =============================================================================
@@ -132,7 +175,7 @@ def _routing_coverage_priors_from_clauses(clauses: list[Clause]) -> dict[str, bo
                     )
                     coverage[canonical] = True
         return coverage
-    except Exception as exc:  # noqa: BLE001 — routing priors must not crash scoring
+    except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
         logger.warning("category routing coverage priors failed: %s", exc)
         return {}
 
@@ -161,14 +204,31 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
     Returns:
         Partial state update with enriched_clauses and cross_pairs
     """
-    enriched: list[ClauseWithEmbedding] = []
     errors: list[str] = []
+    embeddings_by_clause, embedding_errors = await _load_context_embeddings(state)
+    errors.extend(embedding_errors)
+    enriched_raw = await _enrich_context_clauses(state.clauses)
+    enriched = _build_enriched_clauses(enriched_raw, embeddings_by_clause)
+    cross_pairs = _build_category_cross_pairs(enriched, state.config)
 
-    # Batch-load pre-computed vectors for RAG similarity, if enabled.
-    # Embeddings are produced during document ingestion; this node is
-    # read-only and degrades gracefully (empty vector) if the table or
-    # session isn't available in the current environment.
+    logger.info(
+        f"prepare_context: {len(enriched)} clauses enriched, "
+        f"{len(cross_pairs)} cross-pairs identified"
+    )
+
+    return {
+        "enriched_clauses": enriched,
+        "cross_pairs": cross_pairs,
+        "errors": errors,
+    }
+
+
+async def _load_context_embeddings(
+    state: CoherenceGraphState,
+) -> tuple[dict[str, list[float]], list[str]]:
+    """Load pre-computed vectors for RAG similarity, degrading to empty vectors."""
     embeddings_by_clause: dict[str, list[float]] = {}
+    errors: list[str] = []
     if state.config.include_rag_similarity and state.clauses:
         try:
             from uuid import UUID
@@ -206,22 +266,31 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
         except PermissionError as e:
             logger.warning(f"Tenant isolation rejected embedding load: {e}")
             errors.append(f"Embedding load denied: {e}")
-        except Exception as e:  # noqa: BLE001 — degrade gracefully
+        except (AttributeError, RuntimeError, TypeError) as e:
             logger.warning(f"Embedding batch load failed, continuing without RAG: {e}")
             errors.append(f"Embedding batch load failed: {e}")
 
-    # Enrich clause.data with structured fields the deterministic rules need.
-    # Cache-first: DB hit = zero LLM cost; miss = one Claude Haiku call per clause.
-    # This runs regardless of low_budget_mode — it serves deterministic rules, not LLM evaluators.
+    return embeddings_by_clause, errors
+
+
+async def _enrich_context_clauses(clauses: list[Clause]) -> list[Clause]:
+    """Enrich clause data for deterministic rules without blocking evaluation."""
     try:
         from src.coherence.extraction.clause_extractor import enrich_clauses
 
-        enriched_raw = await enrich_clauses(list(state.clauses))
-    except Exception as _exc:  # noqa: BLE001 — never block evaluation
+        return await enrich_clauses(list(clauses))
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError) as _exc:
         logger.warning("prepare_context: clause enrichment failed, continuing: %s", _exc)
-        enriched_raw = list(state.clauses)
+        return list(clauses)
 
-    for clause in enriched_raw:
+
+def _build_enriched_clauses(
+    clauses: list[Clause],
+    embeddings_by_clause: dict[str, list[float]],
+) -> list[ClauseWithEmbedding]:
+    """Attach inferred metadata and optional embeddings to clauses."""
+    enriched: list[ClauseWithEmbedding] = []
+    for clause in clauses:
         category = infer_category(clause)
         doc_type = infer_document_type(clause)
 
@@ -233,57 +302,39 @@ async def prepare_context_async(state: CoherenceGraphState) -> NodeOutput:
         )
         enriched.append(enriched_clause)
 
-    # Identify cross-clause pairs by matching categories
-    cross_pairs: list[CrossClausePair] = []
+    return enriched
 
-    if state.config.include_cross_clause and len(enriched) > 1:
-        # Group by category
-        by_category: dict[str, list[ClauseWithEmbedding]] = {}
-        for ec in enriched:
-            by_category.setdefault(ec.category, []).append(ec)
 
-        # Create pairs within categories that need cross-checking
-        # Focus on BUDGET-TIME, BUDGET-SCOPE, TIME-TECHNICAL relationships
-        cross_check_pairs = [
-            ("BUDGET", "TIME"),
-            ("BUDGET", "SCOPE"),
-            ("TIME", "TECHNICAL"),
-            ("SCOPE", "BUDGET"),
-        ]
+def _build_category_cross_pairs(
+    enriched: list[ClauseWithEmbedding],
+    config: EvaluationConfig,
+) -> list[CrossClausePair]:
+    """Identify category-based cross-clause pairs."""
+    if not config.include_cross_clause or len(enriched) <= 1:
+        return []
 
-        for cat_a, cat_b in cross_check_pairs:
-            clauses_a = by_category.get(cat_a, [])
-            clauses_b = by_category.get(cat_b, [])
+    by_category: dict[str, list[ClauseWithEmbedding]] = {}
+    for ec in enriched:
+        by_category.setdefault(ec.category, []).append(ec)
 
-            for ca in clauses_a[:5]:  # Limit to prevent explosion
-                for cb in clauses_b[:5]:
-                    if ca.clause_id != cb.clause_id:
-                        cross_pairs.append(
-                            CrossClausePair(
-                                clause_a=ca,
-                                clause_b=cb,
-                                similarity_score=0.0,
-                                match_reason=f"{cat_a}-{cat_b} category cross-check",
-                            )
-                        )
+    return list(islice(_iter_category_cross_pairs(by_category), config.max_cross_pairs))
 
-                        if len(cross_pairs) >= state.config.max_cross_pairs:
-                            break
-                if len(cross_pairs) >= state.config.max_cross_pairs:
-                    break
-            if len(cross_pairs) >= state.config.max_cross_pairs:
-                break
 
-    logger.info(
-        f"prepare_context: {len(enriched)} clauses enriched, "
-        f"{len(cross_pairs)} cross-pairs identified"
-    )
-
-    return {
-        "enriched_clauses": enriched,
-        "cross_pairs": cross_pairs,
-        "errors": errors,
-    }
+def _iter_category_cross_pairs(
+    by_category: dict[str, list[ClauseWithEmbedding]],
+) -> Iterator[CrossClausePair]:
+    """Yield category cross-check pairs in deterministic priority order."""
+    for cat_a, cat_b in _CATEGORY_CROSS_CHECK_PAIRS:
+        clauses_a = by_category.get(cat_a, [])[:5]
+        clauses_b = by_category.get(cat_b, [])[:5]
+        for ca, cb in product(clauses_a, clauses_b):
+            if ca.clause_id != cb.clause_id:
+                yield CrossClausePair(
+                    clause_a=ca,
+                    clause_b=cb,
+                    similarity_score=0.0,
+                    match_reason=f"{cat_a}-{cat_b} category cross-check",
+                )
 
 
 @traced_coherence_node(node_name="prepare_context")
@@ -338,28 +389,11 @@ def deterministic_evaluate(state: CoherenceGraphState) -> NodeOutput:
     clauses_to_eval = state.clauses
 
     for clause in clauses_to_eval:
-        for evaluator in evaluators:
-            category = evaluator.category
-            try:
-                app_state = evaluator.applicability(clause)
-            except Exception as e:  # noqa: BLE001 — applicability must never crash eval
-                logger.warning(f"applicability {evaluator.rule_id} failed: {e}")
-                app_state = ApplicabilityState.SKIPPED_MISSING_INPUTS
-
-            if app_state == ApplicabilityState.EVALUATED:
-                coverage[category] = True
-                try:
-                    signal = evaluator.evaluate_v3(clause)
-                    if signal is not None:
-                        signals.append(signal)
-                except Exception as e:
-                    error_msg = (
-                        f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
-                    )
-                    logger.warning(error_msg)
-                    errors.append(error_msg)
-            else:
-                coverage.setdefault(category, False)
+        clause_signals, clause_errors = _evaluate_deterministic_clause(
+            clause, evaluators, coverage
+        )
+        signals.extend(clause_signals)
+        errors.extend(clause_errors)
 
     logger.info(
         f"deterministic_evaluate: {len(signals)} findings, "
@@ -411,7 +445,7 @@ async def llm_semantic_evaluate_async(
         try:
             from src.core import database as _db_mod  # noqa: PLC0415
             _session_factory = getattr(_db_mod, "_session_factory", None)
-        except Exception:
+        except (AttributeError, ImportError):
             _session_factory = None
         if _session_factory is not None:
             async with _session_factory() as session:
@@ -429,79 +463,151 @@ async def _run_gate(
     rule_ids: tuple[str, ...],
 ) -> NodeOutput:
     """Inner loop: dispatch each (clause, rule) to the gate and aggregate."""
-    signals: list[FindingSignal] = []
-    errors: list[str] = []
-    coverage: dict[str, bool] = {cat: False for cat in _LLM_CATEGORIES}
-    total_cost = 0.0
-    total_calls = 0
-    budget_reset: date | None = None
-    budget_exhausted_seen = False
-
+    accum = _GateAccum(coverage={cat: False for cat in _LLM_CATEGORIES})
     tenant_id = (state.config.tenant_id or "").strip() or \
         "00000000-0000-0000-0000-000000000000"
 
-    skipped_not_applicable = 0
     for clause in state.clauses:
-        # TASK-COH-LLM-APPLIC-009: gate LLM rules by clause category, mirroring the
-        # deterministic applicability contract (infer_category(clause) == rule.category)
-        # so e.g. the legal rule does not fire on budget line-items / headers and
-        # explode the finding count. Skipped pairs make NO LLM call and do NOT mark
-        # coverage (preserves honest 'unassessed' when a category has no relevant clause).
-        clause_category = infer_category(clause)
-        for rule_id in rule_ids:
-            cat = _category_for_rule(rule_id)
-            if cat != clause_category:
-                skipped_not_applicable += 1
-                logger.debug(
-                    "coherence_llm_gate.skipped_not_applicable",
-                    clause_id=clause.id, rule_id=rule_id,
-                    clause_category=clause_category, rule_category=cat,
-                )
-                continue
-            try:
-                decision: GateDecision = await gate.evaluate_rule(
-                    tenant_id, rule_id, clause
-                )
-            except Exception as e:  # noqa: BLE001
-                msg = f"LLM gate {rule_id} failed for clause {clause.id}: {e}"
-                logger.warning(msg)
-                errors.append(msg)
-                continue
-            total_calls += 1
-            if decision.state in ("evaluated", "cache_hit"):
-                if decision.finding is not None:
-                    signals.append(decision.finding)
-                coverage[cat] = True
-                total_cost += decision.cost_charged_usd
-            elif decision.state == "budget_exhausted":
-                budget_exhausted_seen = True
-                if budget_reset is None or (
-                    decision.reset_date and decision.reset_date < budget_reset
-                ):
-                    budget_reset = decision.reset_date
-            # rolled_out_off: leave coverage[cat] at its current value (False).
+        await _run_gate_for_clause(clause, rule_ids, gate, tenant_id, accum)
 
     # INFO-level summary so applicability gating is observable in default logs
     # (per-pair skips are DEBUG and suppressed at INFO; TASK-COH-LLM-APPLIC-009).
     logger.info(
-        "coherence_llm_gate.applicability_summary",
-        clauses=len(state.clauses),
-        evaluated=total_calls,
-        skipped_not_applicable=skipped_not_applicable,
+        "coherence_llm_gate.applicability_summary clauses=%d evaluated=%d "
+        "skipped_not_applicable=%d skipped_non_substantive=%d",
+        len(state.clauses),
+        accum.total_calls,
+        accum.skipped_not_applicable,
+        accum.skipped_non_substantive,
     )
 
     out: dict[str, Any] = {
-        "llm_signals": signals,
-        "llm_cost_usd": total_cost,
-        "llm_calls_count": total_calls,
-        "llm_skipped_count": skipped_not_applicable,
-        "coverage_map": coverage,
-        "errors": errors,
+        "llm_signals": accum.signals,
+        "llm_cost_usd": accum.total_cost,
+        "llm_calls_count": accum.total_calls,
+        "llm_skipped_count": accum.skipped_not_applicable,
+        "skipped_non_substantive_count": accum.skipped_non_substantive,
+        "coverage_map": accum.coverage,
+        "errors": accum.errors,
     }
-    if budget_exhausted_seen:
-        out["alerts"] = [_emit_budget_alert(budget_reset)]
-        out["budget_exhausted_reset_date"] = budget_reset
+    if accum.budget_exhausted_seen:
+        out["alerts"] = [_emit_budget_alert(accum.budget_reset)]
+        out["budget_exhausted_reset_date"] = accum.budget_reset
     return out
+
+
+async def _run_gate_for_clause(
+    clause: Clause,
+    rule_ids: tuple[str, ...],
+    gate: CoherenceLlmGatePort,
+    tenant_id: str,
+    accum: _GateAccum,
+) -> None:
+    """Evaluate all applicable LLM rules for one clause."""
+    clause_category = infer_category(clause)
+    if _is_non_substantive_clause(clause):
+        accum.skipped_non_substantive += 1
+        _log_skipped_non_substantive(clause, clause_category)
+        return
+
+    for rule_id in rule_ids:
+        cat = _category_for_rule(rule_id)
+        if cat != clause_category:
+            accum.skipped_not_applicable += 1
+            _log_skipped_not_applicable(clause, rule_id, clause_category, cat)
+            continue
+        await _evaluate_applicable_gate_rule(clause, rule_id, cat, gate, tenant_id, accum)
+
+
+def _log_skipped_non_substantive(clause: Clause, clause_category: str) -> None:
+    logger.debug(
+        "coherence_llm_gate.skipped_non_substantive "
+        "clause_id=%s clause_category=%s",
+        clause.id,
+        clause_category,
+    )
+
+
+def _log_skipped_not_applicable(
+    clause: Clause,
+    rule_id: str,
+    clause_category: str,
+    rule_category: str,
+) -> None:
+    logger.debug(
+        "coherence_llm_gate.skipped_not_applicable "
+        "clause_id=%s rule_id=%s clause_category=%s rule_category=%s",
+        clause.id,
+        rule_id,
+        clause_category,
+        rule_category,
+    )
+
+
+async def _evaluate_applicable_gate_rule(
+    clause: Clause,
+    rule_id: str,
+    category: str,
+    gate: CoherenceLlmGatePort,
+    tenant_id: str,
+    accum: _GateAccum,
+) -> None:
+    try:
+        decision: GateDecision = await gate.evaluate_rule(tenant_id, rule_id, clause)
+    except Exception as e:  # noqa: BLE001
+        msg = f"LLM gate {rule_id} failed for clause {clause.id}: {e}"
+        logger.warning(msg)
+        accum.errors.append(msg)
+        return
+
+    accum.total_calls += 1
+    if decision.state in ("evaluated", "cache_hit"):
+        if decision.finding is not None:
+            accum.signals.append(decision.finding)
+        accum.coverage[category] = True
+        accum.total_cost += decision.cost_charged_usd
+    elif decision.state == "budget_exhausted":
+        accum.budget_exhausted_seen = True
+        if accum.budget_reset is None or (
+            decision.reset_date and decision.reset_date < accum.budget_reset
+        ):
+            accum.budget_reset = decision.reset_date
+
+
+def _evaluate_deterministic_clause(
+    clause: Clause,
+    evaluators: list[Any],
+    coverage: dict[str, bool],
+) -> tuple[list[FindingSignal], list[str]]:
+    """Run deterministic evaluators for one clause."""
+    signals: list[FindingSignal] = []
+    errors: list[str] = []
+    for evaluator in evaluators:
+        category = evaluator.category
+        app_state = _deterministic_applicability(evaluator, clause)
+        if app_state != ApplicabilityState.EVALUATED:
+            coverage.setdefault(category, False)
+            continue
+
+        coverage[category] = True
+        try:
+            signal = evaluator.evaluate_v3(clause)
+            if signal is not None:
+                signals.append(signal)
+        except _EXPECTED_EVALUATOR_ERRORS as e:
+            error_msg = f"Evaluator {evaluator.rule_id} failed on clause {clause.id}: {e}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+    return signals, errors
+
+
+def _deterministic_applicability(evaluator: Any, clause: Clause) -> ApplicabilityState:
+    """Return evaluator applicability while letting unexpected defects propagate."""
+    try:
+        return evaluator.applicability(clause)
+    except _EXPECTED_EVALUATOR_ERRORS as e:
+        logger.warning(f"applicability {evaluator.rule_id} failed: {e}")
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
 
 _RULE_TO_CATEGORY: dict[str, str] = {
@@ -527,6 +633,80 @@ def _category_for_rule(rule_id: str) -> str:
         )
         return "SCOPE"
     return cat
+
+
+_OBLIGATION_RE = re.compile(
+    r"\b("
+    r"shall|must|will|requires?|provide|deliver|perform|maintain|submit|"
+    r"debera|deberá|debe|sera|será|realizara|realizará|proporcionara|"
+    r"proporcionará|entregara|entregará|mantendra|mantendrá|presentara|"
+    r"presentará"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_HEADING_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:appendix|annex|schedule|price schedule|section|chapter|capitulo|"
+    r"capítulo|anexo)\s+[\w.\- ]{0,80}|"
+    r"\d+(?:\.\d+){0,4}\s+[^\.;:]{1,100}|"
+    r"[ivxlcdm]+\)\s+[^\.;:]{1,100}"
+    r")\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_non_substantive_clause(clause: Clause) -> bool:
+    """Return True for headings/table rows that should not consume an LLM rule.
+
+    This is deliberately conservative: substantive clauses with obligation verbs
+    still reach the category-matched LLM rule, while BOM rows, synthetic budget
+    reconciliation clauses, and bare headings/list rows are skipped.
+    """
+    text = (clause.text or "").strip()
+    data = clause.data or {}
+    source = str(data.get("source", "")).lower()
+    if source == "procurement_bom":
+        return True
+
+    lowered = text.lower()
+    if lowered == "project budget vs contract reconciliation":
+        return True
+    if not text:
+        return True
+    if _looks_like_reference_list(text):
+        return True
+    if _OBLIGATION_RE.search(text):
+        return False
+
+    words = re.findall(r"\b[\wÀ-ÿ]+\b", text)
+    if len(words) <= 3:
+        return True
+    if lowered.endswith(("certificate.", "certificate")) and len(words) <= 6:
+        return True
+    if text == text.upper() and len(words) <= 12:
+        return True
+    if _HEADING_RE.match(text) and len(words) <= 12:
+        return True
+
+    return False
+
+
+def _looks_like_reference_list(text: str) -> bool:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return False
+    reference_lines = 0
+    for line in lines:
+        lower = line.lower()
+        words = re.findall(r"\b[\wÀ-ÿ]+\b", line)
+        if (
+            lower.startswith(("appendix", "annex", "schedule"))
+            or "certificate" in lower
+            or len(words) <= 6
+        ):
+            reference_lines += 1
+    return reference_lines == len(lines)
 
 
 def _emit_budget_alert(reset_date: date | None) -> Alert:
@@ -591,69 +771,20 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
         logger.info("rag_similarity_check: skipped (no enriched clauses)")
         return {"cross_pairs": []}
 
-    rag_pairs: list[CrossClausePair] = []
     errors: list[str] = []
 
     try:
-        from uuid import UUID
-
-        from src.core.database import _session_factory
-
-        from ...adapters.persistence.pgvector_embedding_repository import (
-            PgvectorEmbeddingRepository,
-        )
-
-        project_uuid = UUID(state.project_id) if state.project_id else None
-        if not project_uuid:
-            logger.warning("rag_similarity_check: No project_id, skipping")
-            return {"cross_pairs": []}
-
-        if _session_factory is None:
-            logger.warning("rag_similarity_check: _session_factory not initialized")
-            return {"cross_pairs": []}
-
-        # Try to resolve tenant_id from state.config
-        tenant_uuid = UUID(state.config.tenant_id) if state.config.tenant_id else None
-
-        async with _session_factory() as session:
-            repo = PgvectorEmbeddingRepository(session, tenant_id=tenant_uuid)
-
-            embedding_matches = await repo.find_cross_document_pairs(
-                project_id=project_uuid,
-                similarity_threshold=state.config.similarity_threshold,
-                max_pairs=state.config.max_cross_pairs,
-            )
-
-            for match in embedding_matches:
-                clause_a = next(
-                    (c for c in state.enriched_clauses if c.clause_id == str(match.source_clause_id)),
-                    None
-                )
-                clause_b = next(
-                    (c for c in state.enriched_clauses if c.clause_id == str(match.target_clause_id)),
-                    None
-                )
-
-                if clause_a and clause_b:
-                    rag_pairs.append(
-                        CrossClausePair(
-                            clause_a=clause_a,
-                            clause_b=clause_b,
-                            similarity_score=match.similarity_score,
-                            match_reason=match.match_reason,
-                        )
-                    )
+        rag_pairs = await _load_rag_similarity_pairs(state)
 
     except ValueError as e:
         error_msg = f"Invalid format: {e}"
         logger.warning(error_msg)
         errors.append(error_msg)
+        rag_pairs = []
     except ImportError as e:
         logger.warning(f"Embedding repository not available: {e}")
         errors.append(f"RAG similarity check unavailable: {e}")
-    except Exception as e:
-        logger.error(f"Error in RAG similarity check: {e}")
-        errors.append(f"RAG similarity check error: {e}")
+        rag_pairs = []
 
     logger.info(f"rag_similarity_check: {len(rag_pairs)} pairs found via embedding similarity")
 
@@ -661,6 +792,58 @@ async def rag_similarity_check_async(state: CoherenceGraphState) -> NodeOutput:
         "cross_pairs": rag_pairs,
         "errors": errors,
     }
+
+
+async def _load_rag_similarity_pairs(state: CoherenceGraphState) -> list[CrossClausePair]:
+    """Load cross-document RAG similarity pairs from pgvector."""
+    from uuid import UUID
+
+    from src.core.database import _session_factory
+
+    from ...adapters.persistence.pgvector_embedding_repository import (
+        PgvectorEmbeddingRepository,
+    )
+
+    project_uuid = UUID(state.project_id) if state.project_id else None
+    if not project_uuid:
+        logger.warning("rag_similarity_check: No project_id, skipping")
+        return []
+
+    if _session_factory is None:
+        logger.warning("rag_similarity_check: _session_factory not initialized")
+        return []
+
+    tenant_uuid = UUID(state.config.tenant_id) if state.config.tenant_id else None
+    async with _session_factory() as session:
+        repo = PgvectorEmbeddingRepository(session, tenant_id=tenant_uuid)
+        embedding_matches = await repo.find_cross_document_pairs(
+            project_id=project_uuid,
+            similarity_threshold=state.config.similarity_threshold,
+            max_pairs=state.config.max_cross_pairs,
+        )
+    return _pairs_from_embedding_matches(state.enriched_clauses, embedding_matches)
+
+
+def _pairs_from_embedding_matches(
+    enriched_clauses: list[ClauseWithEmbedding],
+    embedding_matches: list[Any],
+) -> list[CrossClausePair]:
+    """Convert repository similarity matches into graph cross-clause pairs."""
+    by_clause_id = {clause.clause_id: clause for clause in enriched_clauses}
+    pairs: list[CrossClausePair] = []
+    for match in embedding_matches:
+        clause_a = by_clause_id.get(str(match.source_clause_id))
+        clause_b = by_clause_id.get(str(match.target_clause_id))
+        if clause_a and clause_b:
+            pairs.append(
+                CrossClausePair(
+                    clause_a=clause_a,
+                    clause_b=clause_b,
+                    similarity_score=match.similarity_score,
+                    match_reason=match.match_reason,
+                )
+            )
+    return pairs
 
 
 @traced_coherence_node(node_name="rag_similarity_check")
@@ -724,7 +907,7 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
             signal = _check_cross_clause_heuristic(pair)
             if signal is not None:
                 signals.append(signal)
-        except Exception as e:
+        except (AttributeError, RuntimeError, TypeError, ValueError) as e:
             error_msg = f"Cross-clause check failed: {e}"
             logger.warning(error_msg)
             errors.append(error_msg)
@@ -746,45 +929,60 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
     - Schedule dates conflicting with delivery dates
     - Scope items without budget coverage
     """
+    return _check_budget_scope_mismatch(pair) or _check_schedule_delivery_conflict(pair)
+
+
+def _check_budget_scope_mismatch(pair: CrossClausePair) -> FindingSignal | None:
+    """Check for budget vs contract total mismatch."""
     clause_a = pair.clause_a
     clause_b = pair.clause_b
+    if clause_a.category != "BUDGET" or clause_b.category != "SCOPE":
+        return None
 
-    # Check for budget vs contract total mismatch
-    if clause_a.category == "BUDGET" and clause_b.category == "SCOPE":
-        budget_total = clause_a.data.get("total") or clause_a.data.get("line_total")
-        scope_estimate = clause_b.data.get("estimated_cost") or clause_b.data.get("budget")
+    budget_total = clause_a.data.get("total") or clause_a.data.get("line_total")
+    scope_estimate = clause_b.data.get("estimated_cost") or clause_b.data.get("budget")
+    if not budget_total or not scope_estimate:
+        return None
 
-        if budget_total and scope_estimate:
-            try:
-                bt = float(budget_total)
-                se = float(scope_estimate)
-                if bt > 0 and se > 0:
-                    variance = abs(bt - se) / max(bt, se)
-                    if variance > 0.1:  # >10% variance
-                        impact = min(0.8, 0.3 + variance)
-                        return FindingSignal(
-                            rule_id="CROSS-BUDGET-SCOPE",
-                            clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
-                            source="deterministic",
-                            impact_score=impact,
-                            confidence=0.85,
-                            severity=impact_to_severity(impact),
-                            category="CROSS",
-                            evidence_summary=(
-                                f"Budget ({bt:,.2f}) and scope estimate ({se:,.2f}) "
-                                f"differ by {variance*100:.1f}%"
-                            ),
-                            quote=f"Budget: {clause_a.text[:100]}... | Scope: {clause_b.text[:100]}...",
-                            raw_data={
-                                "budget_total": bt,
-                                "scope_estimate": se,
-                                "variance_pct": round(variance * 100, 2),
-                            },
-                        )
-            except (ValueError, TypeError):
-                pass
+    try:
+        bt = float(budget_total)
+        se = float(scope_estimate)
+    except (ValueError, TypeError):
+        return None
 
-    # Check for schedule vs delivery date conflicts
+    if bt <= 0 or se <= 0:
+        return None
+
+    variance = abs(bt - se) / max(bt, se)
+    if variance <= 0.1:
+        return None
+
+    impact = min(0.8, 0.3 + variance)
+    return FindingSignal(
+        rule_id="CROSS-BUDGET-SCOPE",
+        clause_id=f"{clause_a.clause_id}|{clause_b.clause_id}",
+        source="deterministic",
+        impact_score=impact,
+        confidence=0.85,
+        severity=impact_to_severity(impact),
+        category="CROSS",
+        evidence_summary=(
+            f"Budget ({bt:,.2f}) and scope estimate ({se:,.2f}) "
+            f"differ by {variance*100:.1f}%"
+        ),
+        quote=f"Budget: {clause_a.text[:100]}... | Scope: {clause_b.text[:100]}...",
+        raw_data={
+            "budget_total": bt,
+            "scope_estimate": se,
+            "variance_pct": round(variance * 100, 2),
+        },
+    )
+
+
+def _check_schedule_delivery_conflict(pair: CrossClausePair) -> FindingSignal | None:
+    """Check for schedule vs delivery date conflicts."""
+    clause_a = pair.clause_a
+    clause_b = pair.clause_b
     if clause_a.category == "TIME" and clause_b.category == "TECHNICAL":
         task_end = clause_a.data.get("end_date")
         required_date = clause_b.data.get("required_on_site_date")
@@ -811,7 +1009,7 @@ def _check_cross_clause_heuristic(pair: CrossClausePair) -> FindingSignal | None
                             "required_on_site_date": str(required_date),
                         },
                     )
-            except Exception:
+            except (TypeError, ValueError):
                 pass
 
     return None

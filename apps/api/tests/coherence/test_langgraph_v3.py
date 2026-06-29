@@ -459,7 +459,7 @@ class TestFormatOutputNode:
 
         enriched_result = result["result"]
         assert isinstance(enriched_result, EnrichedCoherenceResult)
-        assert enriched_result.overall_score == 85.0
+        assert enriched_result.overall_score == pytest.approx(85.0)
         assert len(enriched_result.finding_signals) == 1
 
 

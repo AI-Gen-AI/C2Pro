@@ -244,6 +244,84 @@ def mock_ai_response_factory():
 # ===========================================
 
 
+class FakeLLMRulePort:
+    """Current LlmRuleEvaluator test double for the LLMRulePort DI seam."""
+
+    CATEGORY_MAP = {
+        "general": "SCOPE",
+        "scope": "SCOPE",
+        "financial": "BUDGET",
+        "budget": "BUDGET",
+        "payment": "BUDGET",
+        "schedule": "TIME",
+        "time": "TIME",
+        "legal": "LEGAL",
+        "technical": "TECHNICAL",
+        "quality": "QUALITY",
+    }
+
+    def __init__(
+        self,
+        response: dict | None = None,
+        *,
+        cached: bool = False,
+        error: Exception | None = None,
+    ):
+        self.response = response or {}
+        self.cached = cached
+        self.error = error
+        self.calls = []
+
+    async def evaluate(self, **kwargs):
+        if self.error is not None:
+            raise self.error
+
+        self.calls.append(kwargs)
+
+        from src.coherence.domain.ports.llm_rule_port import LLMRuleResult
+
+        response = self.response
+        evidence = response.get("evidence") or {}
+        violated = bool(response.get("rule_violated", False))
+        impact_score = response.get("impact_score", 0.75 if violated else 0.0)
+        confidence = response.get("confidence", 0.9 if violated else 1.0)
+        severity = response.get("severity", "high" if violated else "low")
+
+        return LLMRuleResult(
+            rule_id=kwargs["rule_id"],
+            clause_id=kwargs["clause_id"],
+            impact_score=impact_score,
+            confidence=confidence,
+            severity=severity,
+            category=self.CATEGORY_MAP.get(kwargs["category"].lower(), "SCOPE"),
+            evidence_summary=evidence.get("explanation", ""),
+            quote=evidence.get("quote"),
+            raw_data={
+                "recommendation": response.get("recommendation", ""),
+                "cached": self.cached,
+                "cost_usd": 0.0 if self.cached else 0.0002,
+            },
+        )
+
+
+@pytest.fixture
+def mock_llm_rule_port(mock_llm_response_violation):
+    """Fake LLMRulePort returning a violation."""
+    return FakeLLMRulePort(mock_llm_response_violation)
+
+
+@pytest.fixture
+def mock_llm_rule_port_no_violation(mock_llm_response_no_violation):
+    """Fake LLMRulePort returning no violation."""
+    return FakeLLMRulePort(mock_llm_response_no_violation)
+
+
+@pytest.fixture
+def mock_llm_rule_port_cached(mock_llm_response_violation):
+    """Fake LLMRulePort preserving the current cached raw_data contract."""
+    return FakeLLMRulePort(mock_llm_response_violation, cached=True)
+
+
 @pytest.fixture
 def mock_anthropic_wrapper(mock_llm_response_violation):
     """Mock AnthropicWrapper for testing without API calls."""
@@ -284,13 +362,9 @@ def mock_anthropic_wrapper_no_violation(mock_llm_response_no_violation):
 
 
 @pytest.fixture
-def patch_anthropic_wrapper(mock_anthropic_wrapper):
-    """Patch get_anthropic_wrapper to return mock."""
-    with patch(
-        "src.coherence.rules_engine.llm_evaluator.get_anthropic_wrapper",
-        return_value=mock_anthropic_wrapper
-    ):
-        yield mock_anthropic_wrapper
+def patch_anthropic_wrapper(mock_llm_rule_port):
+    """Retired rules-engine wrapper patch; use LLMRulePort injection instead."""
+    yield mock_llm_rule_port
 
 
 @pytest.fixture
@@ -309,7 +383,7 @@ def patch_anthropic_wrapper_for_integration(mock_anthropic_wrapper):
 
 
 @pytest.fixture
-def llm_evaluator_scope_clarity(patch_anthropic_wrapper):
+def llm_evaluator_scope_clarity(mock_llm_rule_port):
     """LlmRuleEvaluator for scope clarity with mocked wrapper."""
     from src.coherence.rules_engine.llm_evaluator import LlmRuleEvaluator
 
@@ -321,6 +395,7 @@ def llm_evaluator_scope_clarity(patch_anthropic_wrapper):
         default_severity="high",
         category="scope",
         low_budget_mode=True,
+        llm_port=mock_llm_rule_port,
     )
 
 

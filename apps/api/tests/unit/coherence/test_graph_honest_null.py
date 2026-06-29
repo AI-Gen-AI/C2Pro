@@ -17,6 +17,9 @@ class _SyncGraph:
             "diagnostics": {"reason": "inner_graph_failed"},
         }
 
+    async def ainvoke(self, _state: object) -> dict[str, object]:
+        return self.invoke(_state)
+
 
 class _AsyncGraph:
     async def ainvoke(self, _state: object) -> dict[str, object]:

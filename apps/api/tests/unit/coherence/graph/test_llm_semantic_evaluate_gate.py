@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 import pytest
@@ -40,7 +41,14 @@ def _rolled_off(cache_key):
 @pytest.mark.asyncio
 async def test_node_uses_gate_findings_and_marks_coverage_evaluated():
     from src.coherence.graph.nodes import llm_semantic_evaluate_async
-    clause = Clause(id="c1", text="ambiguous", data={})
+    clause = Clause(
+        id="c1",
+        text=(
+            "The contractor shall perform work as necessary and appropriate "
+            "without objective acceptance criteria."
+        ),
+        data={},
+    )
     state = CoherenceGraphState(
         project_id="p", clauses=[clause],
         config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
@@ -68,7 +76,11 @@ async def test_node_uses_gate_findings_and_marks_coverage_evaluated():
 async def test_node_emits_single_advisory_when_any_rule_budget_exhausted():
     from src.coherence.graph.nodes import llm_semantic_evaluate_async
     reset = date(2026, 6, 1)
-    clause = Clause(id="c1", text="x", data={})
+    clause = Clause(
+        id="c1",
+        text="The contractor shall perform work as necessary under the contract.",
+        data={},
+    )
     state = CoherenceGraphState(
         project_id="p", clauses=[clause],
         config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
@@ -103,7 +115,7 @@ async def test_node_low_budget_escape_hatch_still_works():
     # gate=None is fine — the escape hatch returns before any gate construction.
     out = await llm_semantic_evaluate_async(state, gate=None)
     assert out["llm_signals"] == []
-    assert out["llm_cost_usd"] == 0.0
+    assert out["llm_cost_usd"] == pytest.approx(0.0)
     # coverage_map carries the 6 categories as False (LLM layer didn't run)
     cov = out["coverage_map"]
     for cat in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):
@@ -115,6 +127,15 @@ def test_evaluation_config_low_budget_mode_default_is_false():
     from src.coherence.graph.state import EvaluationConfig
     cfg = EvaluationConfig()
     assert cfg.low_budget_mode is False
+
+
+def test_nodes_logger_emits_info_by_default_for_live_gate_summary():
+    """TASK-COH-LLM-APPLIC-009-P3: stdlib INFO gate summaries must be observable
+    in default application logs without requiring DEBUG logging."""
+    from src.coherence.graph import nodes
+
+    assert nodes.logger.isEnabledFor(logging.INFO)
+    assert any(isinstance(handler, logging.StreamHandler) for handler in nodes.logger.handlers)
 
 
 _RULE_CATEGORY = {
@@ -177,3 +198,114 @@ async def test_run_gate_skips_llm_rules_for_irrelevant_clause_categories():
     # Gating actually pruned irrelevant (clause, rule) pairs.
     assert out["llm_skipped_count"] > 0
     assert len(called) < len(state.clauses) * len(_RULE_CATEGORY)
+
+
+@pytest.mark.asyncio
+async def test_run_gate_skips_non_substantive_clauses_before_llm_call():
+    """TASK-COH-LLM-APPLIC-009-P3: headings and structured BOM rows are not
+    substantive legal/payment clauses, so they must not consume LLM calls."""
+    from src.coherence.graph.nodes import llm_semantic_evaluate_async
+
+    heading_clause = Clause(
+        id="legal-heading",
+        text="Appendix 3 Insurance Requirements",
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    budget_line_clause = Clause(
+        id="bom-1",
+        text="1.1 Personal PMO, site manager, administrativo",
+        data={
+            "document_type": "budget",
+            "category": "BUDGET",
+            "source": "procurement_bom",
+            "unit_price": 100.0,
+            "quantity": 2.0,
+            "line_total": 200.0,
+        },
+    )
+    certificate_clause = Clause(
+        id="legal-certificate",
+        text="Manufacturer's / suppliers warranty certificate.",
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    appendix_list_clause = Clause(
+        id="legal-appendix-list",
+        text=(
+            "Approved Subcontractors\n"
+            "Appendix 6 Scope of Works and Supply by the Employer\n"
+            "Appendix 7 List of Documents for Approval or Review\n"
+            "Appendix 8 Functional Guarantees"
+        ),
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    substantive_clause = Clause(
+        id="legal-obligation",
+        text=(
+            "This contract clause assigns liability, penalty, notice and "
+            "arbitration duties, but the parties will collaborate without "
+            "specifying which party shall maintain the insurance."
+        ),
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    state = CoherenceGraphState(
+        project_id="p",
+        clauses=[
+            heading_clause,
+            budget_line_clause,
+            certificate_clause,
+            appendix_list_clause,
+            substantive_clause,
+        ],
+        config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
+    )
+
+    gate = RecordingGate()
+    out = await llm_semantic_evaluate_async(state, gate=gate)
+
+    called = set(gate.calls)
+    assert ("R-RESPONSIBILITY-01", "legal-heading") not in called
+    assert ("R-PAYMENT-CLARITY-01", "bom-1") not in called
+    assert ("R-RESPONSIBILITY-01", "legal-certificate") not in called
+    assert ("R-RESPONSIBILITY-01", "legal-appendix-list") not in called
+    assert ("R-RESPONSIBILITY-01", "legal-obligation") in called
+    assert out["skipped_non_substantive_count"] == 4
+    assert out["llm_calls_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_gate_applicability_logs_render_with_stdlib_logger(caplog):
+    """TASK-COH-LLM-APPLIC-009-P3: applicability logs render as grep-friendly
+    stdlib log messages when INFO/DEBUG logging is enabled."""
+    from src.coherence.graph.nodes import llm_semantic_evaluate_async
+
+    heading_clause = Clause(
+        id="legal-heading",
+        text="Appendix 3 Insurance Requirements",
+        data={"document_type": "contract", "category": "LEGAL"},
+    )
+    budget_clause = Clause(
+        id="budget-1",
+        text="Payment amount and unit price are defined for the line item.",
+        data={"document_type": "budget", "category": "BUDGET"},
+    )
+    state = CoherenceGraphState(
+        project_id="p",
+        clauses=[heading_clause, budget_clause],
+        config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
+    )
+
+    gate = RecordingGate()
+    with caplog.at_level(logging.DEBUG, logger="src.coherence.graph.nodes"):
+        out = await llm_semantic_evaluate_async(state, gate=gate)
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert out["llm_calls_count"] == 1
+    assert "coherence_llm_gate.skipped_non_substantive" in messages
+    assert "clause_id=legal-heading" in messages
+    assert "coherence_llm_gate.skipped_not_applicable" in messages
+    assert "rule_id=R-SCOPE-CLARITY-01" in messages
+    assert "coherence_llm_gate.applicability_summary" in messages
+    assert "clauses=2" in messages
+    assert "evaluated=1" in messages
+    assert "skipped_not_applicable=5" in messages
+    assert "skipped_non_substantive=1" in messages

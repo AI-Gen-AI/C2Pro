@@ -137,8 +137,11 @@ async def test_evaluate_backward_compatible_response_shape(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    # Mock evaluate_coherence to return sample result
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    # Mock async coherence evaluation to return sample result.
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         # Create request
@@ -172,9 +175,7 @@ async def test_evaluate_backward_compatible_response_shape(
         assert not hasattr(result, "llm_cost_usd")
 
         # Verify score is granular (not 0/100)
-        assert result.overall_score == 72.5  # Granular float
-        assert result.overall_score != 0
-        assert result.overall_score != 100
+        assert result.overall_score == pytest.approx(72.5)  # Granular float
 
 
 # =============================================================================
@@ -198,7 +199,10 @@ async def test_evaluate_granular_scoring_not_binary(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         request = CoherenceEvaluateRequest(clauses=sample_clauses)
@@ -213,8 +217,6 @@ async def test_evaluate_granular_scoring_not_binary(
 
         # Verify granular scoring
         assert isinstance(result.overall_score, float)
-        assert result.overall_score != 0.0
-        assert result.overall_score != 100.0
         assert 5.0 <= result.overall_score <= 97.0
 
 
@@ -239,7 +241,10 @@ async def test_evaluate_low_budget_mode_defaults_to_true(
     from src.coherence.graph.state import EvaluationConfig
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         # Request WITHOUT low_budget_mode specified
@@ -253,8 +258,9 @@ async def test_evaluate_low_budget_mode_defaults_to_true(
             current_user=sample_current_user,
         )
 
-        # Verify evaluate_coherence was called with low_budget_mode=True
-        call_args = mock_evaluate.call_args
+        # Verify evaluate_coherence_async was awaited with low_budget_mode=True
+        mock_evaluate.assert_awaited_once()
+        call_args = mock_evaluate.await_args
         config_arg = call_args.kwargs.get("config")
 
         assert isinstance(config_arg, EvaluationConfig)
@@ -281,7 +287,10 @@ async def test_evaluate_diagnostics_via_query_param(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         request = CoherenceEvaluateRequest(clauses=sample_clauses)
@@ -323,7 +332,10 @@ async def test_evaluate_diagnostics_endpoint(sample_clauses, sample_enriched_res
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_with_diagnostics
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         request = CoherenceEvaluateRequest(clauses=sample_clauses)
@@ -440,7 +452,10 @@ async def test_evaluate_rag_similarity_enabled_by_default(
     from src.coherence.graph.state import EvaluationConfig
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         # Request WITHOUT include_rag_similarity specified
@@ -454,8 +469,9 @@ async def test_evaluate_rag_similarity_enabled_by_default(
             current_user=sample_current_user,
         )
 
-        # Verify evaluate_coherence was called with include_rag_similarity=True
-        call_args = mock_evaluate.call_args
+        # Verify evaluate_coherence_async was awaited with include_rag_similarity=True
+        mock_evaluate.assert_awaited_once()
+        call_args = mock_evaluate.await_args
         config_arg = call_args.kwargs.get("config")
 
         assert isinstance(config_arg, EvaluationConfig)
@@ -473,7 +489,10 @@ async def test_evaluate_passes_authenticated_tenant_to_evaluation_config(
 
     tenant_id = uuid4()
     project_id = uuid4()
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         request = CoherenceEvaluateRequest(
@@ -491,7 +510,8 @@ async def test_evaluate_passes_authenticated_tenant_to_evaluation_config(
             current_user=SimpleNamespace(tenant_id=tenant_id),
         )
 
-        config_arg = mock_evaluate.call_args.kwargs["config"]
+        mock_evaluate.assert_awaited_once()
+        config_arg = mock_evaluate.await_args.kwargs["config"]
         assert isinstance(config_arg, EvaluationConfig)
         assert config_arg.low_budget_mode is False
         assert config_arg.tenant_id == str(tenant_id)
@@ -517,7 +537,10 @@ async def test_evaluate_accepts_explicit_clauses(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         with patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
             mock_evaluate.return_value = sample_enriched_result
 
@@ -535,8 +558,9 @@ async def test_evaluate_accepts_explicit_clauses(
             # Verify RAG was NOT called
             mock_rag.assert_not_called()
 
-            # Verify evaluate_coherence was called with provided clauses
-            call_args = mock_evaluate.call_args
+            # Verify evaluate_coherence_async was awaited with provided clauses
+            mock_evaluate.assert_awaited_once()
+            call_args = mock_evaluate.await_args
             assert call_args.kwargs.get("clauses") == sample_clauses
 
 
@@ -555,7 +579,10 @@ async def test_evaluate_fetches_from_rag_with_project_id(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         with patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
             mock_evaluate.return_value = sample_enriched_result
             mock_rag.return_value = sample_clauses
@@ -576,8 +603,9 @@ async def test_evaluate_fetches_from_rag_with_project_id(
             # Verify RAG was called
             mock_rag.assert_called_once_with(mock_db, project_id, sample_current_user.tenant_id, 50)
 
-            # Verify evaluate_coherence was called with fetched clauses
-            call_args = mock_evaluate.call_args
+            # Verify evaluate_coherence_async was awaited with fetched clauses
+            mock_evaluate.assert_awaited_once()
+            call_args = mock_evaluate.await_args
             assert call_args.kwargs.get("clauses") == sample_clauses
 
 
@@ -593,7 +621,10 @@ async def test_evaluate_raises_422_when_no_input_provided(sample_enriched_result
 
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         # Request with NEITHER project_id NOR clauses
@@ -638,7 +669,10 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses, sampl
         llm_cost_usd=0.0,  # Zero cost in low_budget_mode
     )
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = enriched_with_cost
 
         request = CoherenceEvaluateRequest(
@@ -656,7 +690,7 @@ async def test_evaluate_diagnostics_includes_cost_tracking(sample_clauses, sampl
 
         # Verify cost tracking
         assert hasattr(result, "llm_cost_usd")
-        assert result.llm_cost_usd == 0.0  # Zero cost in low budget mode
+        assert result.llm_cost_usd == pytest.approx(0.0)  # Zero cost in low budget mode
 
 
 # =============================================================================
@@ -681,7 +715,10 @@ async def test_evaluate_no_regression_in_response_fields(
     """
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 
-    with patch("src.coherence.router.evaluate_coherence") as mock_evaluate:
+    with patch(
+        "src.coherence.router.evaluate_coherence_async",
+        new_callable=AsyncMock,
+    ) as mock_evaluate:
         mock_evaluate.return_value = sample_enriched_result
 
         request = CoherenceEvaluateRequest(clauses=sample_clauses)
@@ -765,7 +802,7 @@ def test_convert_enriched_to_coherence_result():
     assert not isinstance(result, EnrichedCoherenceResult)
 
     # Verify core fields preserved
-    assert result.overall_score == 80.5
+    assert result.overall_score == pytest.approx(80.5)
     assert len(result.alerts) == 1
     assert result.alerts[0].rule_id == "TEST-001"
     assert len(result.category_breakdown) == 1

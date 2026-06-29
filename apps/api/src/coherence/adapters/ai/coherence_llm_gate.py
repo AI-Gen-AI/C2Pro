@@ -17,11 +17,12 @@ import structlog
 
 from src.coherence.domain.ports.coherence_llm_gate_port import GateDecision
 from src.coherence.models import Clause, FindingSignal
+from src.coherence.rules_engine.config import DEFAULT_CONFIG
 
 logger = structlog.get_logger()
 
 
-PROMPT_VERSION = "p3-v1"
+PROMPT_VERSION = "p3-v3"
 ESTIMATED_HAIKU_COST_USD = 0.0008  # conservative per-call estimate for budget pre-check
 
 
@@ -108,13 +109,14 @@ class CoherenceLlmGate:
         cache = self._get_cache()
         cached = await cache.get(cache_key)
         if cached is not None:
+            finding = None if _below_calibrated_threshold(cached) else cached
             logger.debug(
                 "coherence_llm_gate.cache_hit",
                 tenant_id=tenant_id, rule_id=rule_id, key=cache_key,
             )
             return GateDecision(
                 state="cache_hit",
-                finding=cached,
+                finding=finding,
                 reason=None,
                 reset_date=None,
                 cache_key=cache_key,
@@ -188,6 +190,19 @@ class CoherenceLlmGate:
                 tenant_id=tenant_id, rule_id=rule_id, err=str(exc),
             )
             raise  # node converts to errors[] + SKIPPED for this (clause, rule)
+
+        if finding is not None and _below_calibrated_threshold(finding):
+            logger.debug(
+                "coherence_llm_gate.finding_below_threshold",
+                tenant_id=tenant_id,
+                rule_id=rule_id,
+                clause_id=clause.id,
+                impact_score=finding.impact_score,
+                confidence=finding.confidence,
+                min_impact=DEFAULT_CONFIG.llm_min_impact,
+                min_confidence=DEFAULT_CONFIG.llm_min_confidence,
+            )
+            finding = None
 
         # Step 5a: cache write (only on non-None finding; cache is best-effort).
         if finding is not None:
@@ -266,3 +281,10 @@ class CoherenceLlmGate:
         model = str(last_call.get("model", "claude-3-haiku-20240307"))
 
         return signal, input_tokens, output_tokens, actual_cost, latency_ms, model
+
+
+def _below_calibrated_threshold(finding: FindingSignal) -> bool:
+    return (
+        finding.impact_score < DEFAULT_CONFIG.llm_min_impact
+        or finding.confidence < DEFAULT_CONFIG.llm_min_confidence
+    )
