@@ -115,7 +115,7 @@ async def test_node_low_budget_escape_hatch_still_works():
     # gate=None is fine — the escape hatch returns before any gate construction.
     out = await llm_semantic_evaluate_async(state, gate=None)
     assert out["llm_signals"] == []
-    assert out["llm_cost_usd"] == 0.0
+    assert out["llm_cost_usd"] == pytest.approx(0.0)
     # coverage_map carries the 6 categories as False (LLM layer didn't run)
     cov = out["coverage_map"]
     for cat in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):

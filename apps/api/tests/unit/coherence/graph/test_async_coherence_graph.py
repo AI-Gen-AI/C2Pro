@@ -279,5 +279,5 @@ async def test_router_awaits_async_coherence_entrypoint(monkeypatch):
         current_user=user,
     )
 
-    assert result.overall_score == 88.0
+    assert result.overall_score == pytest.approx(88.0)
     assert called == [([clause], "manual")]

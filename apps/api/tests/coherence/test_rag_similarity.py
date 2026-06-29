@@ -497,7 +497,7 @@ async def test_rag_similarity_zero_llm_cost():
         mock_client.assert_not_called()
 
     # Verify no LLM cost in result
-    assert result.get("llm_cost_usd", 0.0) == 0.0
+    assert result.get("llm_cost_usd", 0.0) == pytest.approx(0.0)
     assert result.get("llm_calls_count", 0) == 0
 
 
