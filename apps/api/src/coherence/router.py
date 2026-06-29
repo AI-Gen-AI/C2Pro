@@ -243,7 +243,7 @@ async def get_clauses_from_rag(
     targeted_clauses = await _get_persisted_clause_candidates(
         db, project_id, tenant_id, max_chunks
     )
-    await _append_budget_clause_candidates(
+    targeted_clauses = await _with_budget_clause_candidates(
         targeted_clauses, db, project_id, tenant_id
     )
     if targeted_clauses:
@@ -256,18 +256,20 @@ async def get_clauses_from_rag(
     return await _get_parsed_text_fallback_clauses(db, project_id, tenant_id)
 
 
-async def _append_budget_clause_candidates(
+async def _with_budget_clause_candidates(
     clauses: list[Clause],
     db: AsyncSession,
     project_id: UUID,
     tenant_id: UUID,
-) -> None:
-    """Append synthetic budget clauses without duplicating IDs."""
+) -> list[Clause]:
+    """Return persisted clauses plus synthetic budget clauses, without duplicate IDs."""
+    combined = list(clauses)
     seen_ids = {clause.id for clause in clauses}
     for clause in await build_budget_clauses(db, project_id, tenant_id):
         if clause.id not in seen_ids:
-            clauses.append(clause)
+            combined.append(clause)
             seen_ids.add(clause.id)
+    return combined
 
 
 async def _get_persisted_clause_candidates(
