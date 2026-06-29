@@ -240,15 +240,45 @@ async def get_clauses_from_rag(
     _CLAUSES_PER_CATEGORY hits each, deduplicate, then fill remaining budget
     with a chronological fallback so boilerplate clauses are still present.
     """
+    targeted_clauses = await _get_persisted_clause_candidates(
+        db, project_id, tenant_id, max_chunks
+    )
+    await _append_budget_clause_candidates(
+        targeted_clauses, db, project_id, tenant_id
+    )
+    if targeted_clauses:
+        return targeted_clauses
+
+    rag_clauses = await _get_rag_chunk_clauses(db, project_id, tenant_id, max_chunks)
+    if rag_clauses:
+        return rag_clauses
+
+    return await _get_parsed_text_fallback_clauses(db, project_id, tenant_id)
+
+
+async def _append_budget_clause_candidates(
+    clauses: list[Clause],
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+) -> None:
+    """Append synthetic budget clauses without duplicating IDs."""
+    seen_ids = {clause.id for clause in clauses}
+    for clause in await build_budget_clauses(db, project_id, tenant_id):
+        if clause.id not in seen_ids:
+            clauses.append(clause)
+            seen_ids.add(clause.id)
+
+
+async def _get_persisted_clause_candidates(
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    max_chunks: int,
+) -> list[Clause]:
+    """Load persisted document clauses using category-targeted queries."""
     seen_ids: set[str] = set()
     targeted_clauses: list[Clause] = []
-
-    async def _append_budget_clauses() -> None:
-        for clause in await build_budget_clauses(db, project_id, tenant_id):
-            if clause.id in seen_ids:
-                continue
-            targeted_clauses.append(clause)
-            seen_ids.add(clause.id)
 
     base_query = """
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
@@ -257,21 +287,21 @@ async def get_clauses_from_rag(
         JOIN projects p ON d.project_id = p.id
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
-          AND (
-            {keyword_filter}
-          )
+          AND LOWER(c.full_text) LIKE ANY(CAST(:keyword_patterns AS text[]))
         ORDER BY c.created_at ASC
         LIMIT :limit
     """
 
     for _category, keywords in _CATEGORY_KEYWORDS.items():
-        conditions = " OR ".join(
-            f"LOWER(c.full_text) LIKE '%{kw.lower()}%'" for kw in keywords
-        )
-        stmt = text(base_query.format(keyword_filter=conditions))
+        stmt = text(base_query)
         result = await db.execute(
             stmt,
-            {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": _CLAUSES_PER_CATEGORY},
+            {
+                "project_id": str(project_id),
+                "tenant_id": str(tenant_id),
+                "limit": _CLAUSES_PER_CATEGORY,
+                "keyword_patterns": [f"%{kw.lower()}%" for kw in keywords],
+            },
         )
         for row in result.fetchall():
             cid = str(row[0])
@@ -311,10 +341,16 @@ async def get_clauses_from_rag(
                 if remaining <= 0:
                     break
 
-    await _append_budget_clauses()
-    if targeted_clauses:
-        return targeted_clauses
+    return targeted_clauses
 
+
+async def _get_rag_chunk_clauses(
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    max_chunks: int,
+) -> list[Clause]:
+    """Load RAG chunk fallback clauses."""
     stmt = text("""
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
@@ -348,10 +384,15 @@ async def get_clauses_from_rag(
         )
         clauses.append(clause)
 
-    if clauses:
-        targeted_clauses.extend(clauses)
-        return targeted_clauses
+    return clauses
 
+
+async def _get_parsed_text_fallback_clauses(
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+) -> list[Clause]:
+    """Load parsed document text fallback clauses."""
     fallback_stmt = text("""
         SELECT d.id, d.document_type::text, d.document_metadata
         FROM documents d
@@ -389,8 +430,7 @@ async def get_clauses_from_rag(
                 },
             )
         )
-    targeted_clauses.extend(fallback_clauses)
-    return targeted_clauses
+    return fallback_clauses
 
 
 # ---- API Endpoint ----
@@ -737,10 +777,15 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
-    # ECOA v2 additive field (ADR-009 §7.2). When the global flag is on, project
-    # the persisted v1 row into the v2 contract so the frontend can render the
-    # new tri-axis dashboard. Until the v2 orchestrator persists native rows
-    # (Phase 3), we adapt from the v1 summary using the pure v1→v2 adapter.
+    return _maybe_add_v2_dashboard(summary, project_id, last_updated)
+
+
+def _maybe_add_v2_dashboard(
+    summary: DashboardSummary,
+    project_id: UUID,
+    last_updated: datetime,
+) -> DashboardSummary:
+    """Attach additive ECOA v2 dashboard data when enabled; v1 remains fail-closed."""
     try:
         from src.coherence.adapters.v1_to_v2 import adapt_v1_dashboard
         from src.coherence.services.v2.shadow_runner import ShadowRunner
@@ -764,7 +809,7 @@ async def get_coherence_dashboard(
                         "coherence_v2_shadow_mode": True,
                     },
                 )
-    except Exception:  # noqa: BLE001 — v2 must NEVER break v1 dashboard
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
         logger.exception("coherence_v2_adapter_failed")
 
     return summary

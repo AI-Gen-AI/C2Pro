@@ -92,11 +92,11 @@ async def test_gate_evaluate_rule_returns_gate_decision_type(monkeypatch):
     gate = CoherenceLlmGate()
     class _MissCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
     class _OkCost:
         async def check_budget_availability(self, *a, **kw): return None
     class _NoopUsage:
-        def record_usage(self, **kw): pass
+        def record_usage(self, **kw): return None
     gate._cache = _MissCache()
     gate._cost = _OkCost()
     gate._usage = _NoopUsage()
@@ -254,7 +254,7 @@ async def test_gate_rolled_out_off_when_rule_pct_is_zero(monkeypatch):
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -290,7 +290,7 @@ async def test_gate_budget_exhausted_returns_distinct_state_with_reset_date(monk
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     class FakeCost:
         async def check_budget_availability(self, tenant_uuid, estimated_cost):
@@ -333,7 +333,7 @@ async def test_gate_invalid_tenant_id_fails_closed_to_budget_exhausted(monkeypat
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -367,7 +367,7 @@ async def test_gate_evaluated_path_calls_llm_caches_result_and_charges(monkeypat
         async def set(self, key, value): saved[key] = value
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass  # ok
+        async def check_budget_availability(self, *a, **kw): return None  # ok
 
     recorded: list[dict] = []
     class FakeUsage:
@@ -431,7 +431,7 @@ async def test_gate_llm_error_does_not_charge_or_cache(monkeypatch):
         async def set(self, key, value): saved[key] = value
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass
+        async def check_budget_availability(self, *a, **kw): return None
 
     recorded: list = []
     class FakeUsage:
@@ -473,7 +473,7 @@ async def test_gate_none_finding_recorded_as_failure_not_success(monkeypatch):
             self.set_calls += 1
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass
+        async def check_budget_availability(self, *a, **kw): return None
 
     recorded: list[dict] = []
     class FakeUsage:
@@ -529,7 +529,7 @@ async def test_gate_drops_findings_below_calibrated_thresholds(monkeypatch):
             self.set_calls += 1
 
     class FakeCost:
-        async def check_budget_availability(self, *a, **kw): pass
+        async def check_budget_availability(self, *a, **kw): return None
 
     recorded: list[dict] = []
     class FakeUsage:
@@ -574,7 +574,7 @@ async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch)
 
     class EmptyCache:
         async def get(self, key): return None
-        async def set(self, key, value): pass
+        async def set(self, key, value): return None
 
     cost_consulted = {"called": False}
     class FakeCost:
@@ -594,3 +594,4 @@ async def test_gate_none_tenant_id_fails_closed_to_budget_exhausted(monkeypatch)
     assert decision.state == "budget_exhausted"
     assert decision.reason == "invalid_tenant_id"
     assert cost_consulted["called"] is False
+
