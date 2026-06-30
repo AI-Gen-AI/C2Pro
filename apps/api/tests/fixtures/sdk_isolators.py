@@ -23,12 +23,13 @@ import pytest
 def isolate_langsmith_and_langchain_sdks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """TS-AI-LANGSMITH-VALIDATION-FIXTURE: Prevent external SDK HTTP leakage during tests."""
     sdk_client = mock.MagicMock(name="langsmith_client")
+    isolated_tracing_context = {"parent": None, "project_name": None, "enabled": False}
     langsmith_module = SimpleNamespace(
         Client=mock.MagicMock(return_value=sdk_client),
         RunTree=mock.MagicMock,
-        get_tracing_context=mock.MagicMock(return_value={}),
+        get_tracing_context=mock.MagicMock(return_value=isolated_tracing_context),
         run_helpers=SimpleNamespace(
-            get_tracing_context=mock.MagicMock(return_value={}),
+            get_tracing_context=mock.MagicMock(return_value=isolated_tracing_context),
             tracing_context=mock.MagicMock(),
         ),
         run_trees=SimpleNamespace(RunTree=mock.MagicMock),
