@@ -5,6 +5,7 @@ TS-UT-ADR016-L3-001
 
 from __future__ import annotations
 
+from asyncio import sleep
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -118,6 +119,7 @@ class FakeArtifactRepository:
         self.calls: list[dict[str, object]] = []
 
     async def list_superseded_for_document(self, *, project_id, tenant_id, document_id):
+        await sleep(0)
         self.calls.append(
             {
                 "project_id": project_id,
@@ -171,6 +173,7 @@ async def test_change_impact_compares_prior_and_current_extraction_payloads(
     captured = {}
 
     async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
         captured["changeset"] = changeset
         captured["tenant_id"] = tenant_id
         return _report_from_changeset(changeset)
@@ -212,6 +215,7 @@ async def test_change_impact_identical_prior_yields_empty_report(
     current = prior.model_copy(update={"document_revision_id": str(uuid4())})
 
     async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
         return _report_from_changeset(changeset)
 
     monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
@@ -247,6 +251,7 @@ async def test_change_impact_uses_report_builder_for_l2_enrichment(
     )
 
     async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
         enriched = [
             change.model_copy(update={"severity": "high", "confidence": 0.82})
             for change in changeset.changes
@@ -266,7 +271,7 @@ async def test_change_impact_uses_report_builder_for_l2_enrichment(
     report = result["impact_result"]
     assert isinstance(report, ChangeImpactReport)
     assert report.changes[0].severity == "high"
-    assert report.changes[0].confidence == 0.82
+    assert report.changes[0].confidence == pytest.approx(0.82)
 
 
 @pytest.mark.asyncio
