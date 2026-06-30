@@ -14,6 +14,7 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3 coverage gate.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -33,6 +34,7 @@ class _FakeAI:
         self.calls: list[tuple[str, str]] = []
 
     async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
+        await asyncio.sleep(0)
         self.calls.append((system_prompt, user_content))
         if self._raises:
             raise self._raises
@@ -92,6 +94,7 @@ class _FakeHitlService:
         self.calls: list[dict[str, Any]] = []
 
     async def route_for_review(self, **kwargs: Any) -> ReviewStatus:
+        await asyncio.sleep(0)
         self.calls.append(kwargs)
         return self.status
 
@@ -446,14 +449,33 @@ class TestRaciGeneratorNodeDelegation:
         )
         assert result["raci_matrix"] == [{"task": "T1", "role": "R"}]
         assert len(ai.calls) == 1
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data == [{"task": "T1", "role": "R"}]
 
     @pytest.mark.asyncio
-    async def test_ai_failure_returns_empty(self, monkeypatch) -> None:
+    async def test_ai_failure_returns_failed_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N7 failures are explicit NodeResult failures."""
         from src.analysis.adapters.graph import nodes_extended
 
-        ai = _FakeAI(raises=RuntimeError())
+        class FailingGenerateRaciUseCase:
+            def __init__(self, ai: Any) -> None:
+                self.ai = ai
+
+            async def execute(self, _cmd: Any) -> object:
+                raise RuntimeError("raci generation failed")
+
+        ai = _FakeAI()
         monkeypatch.setattr(
             nodes_extended, "get_ai_service", lambda tenant_id: ai, raising=False
+        )
+        monkeypatch.setattr(nodes_extended, "GenerateRaciUseCase", FailingGenerateRaciUseCase)
+        persisted: list[NodeResult] = []
+        monkeypatch.setattr(
+            nodes_extended,
+            "_persist_node_error",
+            lambda _state, result: persisted.append(result),
         )
         result = await nodes_extended.raci_generator_node(
             _make_state(
@@ -462,6 +484,24 @@ class TestRaciGeneratorNodeDelegation:
             )
         )
         assert result["raci_matrix"] == []
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert persisted == [node_result]
+
+    @pytest.mark.asyncio
+    async def test_missing_inputs_returns_skipped_node_result(self) -> None:
+        """TS-ADR-013-GRAPH-001: N7 skip paths are explicit NodeResult skips."""
+        from src.analysis.adapters.graph import nodes_extended
+
+        result = await nodes_extended.raci_generator_node(_make_state())
+
+        assert result["raci_matrix"] == []
+        node_result = result["node_results"][-1]
+        assert node_result.node == "raci_generator"
+        assert node_result.status is NodeStatus.SKIPPED
+        assert node_result.degradation_reason == "missing_stakeholders_or_wbs"
 
 
 # ── N9 budget_parser_extended_node ──────────────────────────────────────────
@@ -506,7 +546,7 @@ class TestBudgetParserExtendedNodeDelegation:
             _make_state(document_text="budget")
         )
         assert result["bom_items"] == []
-        assert result["confidence_score"] == 0.0
+        assert result["confidence_score"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     async def test_prefers_anonymized_text(self, monkeypatch) -> None:
@@ -535,6 +575,7 @@ class TestBudgetParserExtendedNodeDelegation:
                 self.ai = ai
 
             async def execute(self, _command: Any) -> Any:
+                await asyncio.sleep(0)
                 return parse_module.ParseBudgetResult(
                     bom_items=[{"name": "Steel", "hallucinated_field": "x"}],
                     confidence_score=0.7,
@@ -554,7 +595,7 @@ class TestBudgetParserExtendedNodeDelegation:
 class TestCitationValidatorNodeTyping:
     @pytest.mark.asyncio
     async def test_validates_and_stores_citation_dicts(self) -> None:
-        """TS-ADR-013-GRAPH-001: N15 validates Citation contracts but stores dict-shaped state without NodeResult instrumentation."""
+        """TS-ADR-013-GRAPH-001: N15 validates Citation contracts and emits NodeResult."""
         from src.analysis.adapters.graph import nodes_extended
 
         text = "Clause 1 requires delivery by milestone A."
@@ -574,7 +615,44 @@ class TestCitationValidatorNodeTyping:
         assert result["citations"]
         assert isinstance(result["citations"][0], dict)
         assert result["citations"][0]["quote"] == text
-        assert "node_results" not in result
+        node_result = result["node_results"][-1]
+        assert node_result.node == "citation_validator"
+        assert node_result.status is NodeStatus.OK
+        assert node_result.data["validation_passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_validation_failure_returns_failed_node_result(self, monkeypatch) -> None:
+        """TS-ADR-013-GRAPH-001: N15 failures are explicit NodeResult failures."""
+        from src.analysis.adapters.graph import nodes_extended
+        from src.analysis.domain import citation_validation
+
+        class FailingCitationValidatorService:
+            def validate(self, *_args: object, **_kwargs: object) -> object:
+                raise RuntimeError("citation validation failed")
+
+        monkeypatch.setattr(
+            citation_validation,
+            "CitationValidatorService",
+            FailingCitationValidatorService,
+        )
+        persisted: list[NodeResult] = []
+        monkeypatch.setattr(
+            nodes_extended,
+            "_persist_node_error",
+            lambda _state, result: persisted.append(result),
+        )
+
+        result = await nodes_extended.citation_validator_node(
+            _make_state(document_text="source")
+        )
+
+        assert result["citations"] == []
+        assert result["citation_validation_passed"] is False
+        node_result = result["node_results"][-1]
+        assert node_result.node == "citation_validator"
+        assert node_result.status is NodeStatus.FAILED
+        assert node_result.error is not None
+        assert persisted == [node_result]
 
 
 # ── Phase 4: conditional edge routing ───────────────────────────────────────
@@ -666,6 +744,7 @@ class TestSaveToDbNodeShortCircuit:
                 """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
+                await asyncio.sleep(0)
                 return persist_module.PersistAnalysisResult(analysis_id=analysis_id)
 
         monkeypatch.setattr(persist_module, "PersistAnalysisUseCase", _PersistUseCase)
@@ -737,6 +816,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [{"title": "T", "description": "Risk T"}]
             return state
 
@@ -765,6 +845,7 @@ class TestExtractorAIToolDelegation:
         risk = {"title": "Delay", "description": "Delay penalty exposure."}
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [risk]
             return state
 
@@ -796,6 +877,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [
                 {
                     "title": "Delay",
@@ -870,6 +952,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _failed_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = []
             state["confidence_score"] = 0.0
             state["critique_notes"] = "Risk extraction failed"
@@ -938,6 +1021,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _empty_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = []
             state["confidence_score"] = 0.7
             return state
@@ -975,6 +1059,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [{"code": "W", "name": "Work package"}]
             return state
 
@@ -1002,6 +1087,7 @@ class TestExtractorAIToolDelegation:
         wbs_item = {"code": "W", "name": "Work package"}
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [wbs_item]
             return state
 
@@ -1033,6 +1119,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [
                 {"code": "W", "name": "Work package", "hallucinated_field": "x"}
             ]

@@ -37,6 +37,7 @@ class CategoryAggregator:
         rule_signals: list[tuple[str, float]],
         applicable: bool,
         applicability_reason: str | None = None,
+        assessed: bool = True,
     ) -> CategoryV2:
         if not applicable:
             return CategoryV2(
@@ -78,6 +79,26 @@ class CategoryAggregator:
             )
 
         base = self._aggregate_rule_signals(rule_signals)
+        if base is None:
+            if not assessed:
+                return CategoryV2(
+                    category=category,
+                    status=CategoryStatus.INSUFFICIENT_EVIDENCE,
+                    coherence_score=None,
+                    evidence_coverage=evidence.evidence_coverage,
+                    technical_reliability=evidence.avg_technical_reliability,
+                    evidence_freshness=evidence.evidence_freshness,
+                    evidence_count=evidence.count,
+                    evidence_references=list(evidence.references),
+                    missing_evidence=list(evidence.missing_required),
+                    rationale="rule_assessment_unavailable",
+                    calculation_metadata={"assessment_state": "unassessed"},
+                )
+            base = 100.0
+            assessment_state = "assessed_clean"
+        else:
+            assessment_state = "assessed_with_signals"
+
         if conflict.hard_conflict:
             multiplier = SEVERITY_MULTIPLIERS.get(conflict.severity, 0.4)
             adjusted = base * multiplier * conflict.evidence_certainty
@@ -103,6 +124,7 @@ class CategoryAggregator:
                 evidence_references=list(evidence.references),
                 detected_conflicts=list(conflict.conflict_set),
                 score_explanation=explanation,
+                calculation_metadata={"assessment_state": assessment_state},
             )
 
         explanation = ScoreExplanation(
@@ -120,12 +142,13 @@ class CategoryAggregator:
             evidence_count=evidence.count,
             evidence_references=list(evidence.references),
             score_explanation=explanation,
+            calculation_metadata={"assessment_state": assessment_state},
         )
 
     @staticmethod
-    def _aggregate_rule_signals(signals: list[tuple[str, float]]) -> float:
+    def _aggregate_rule_signals(signals: list[tuple[str, float]]) -> float | None:
         if not signals:
-            return 100.0
+            return None
         values = [score for _, score in signals]
         return max(0.0, min(100.0, sum(values) / len(values)))
 

@@ -44,6 +44,41 @@ def test_graph_node_update_includes_documentation_health_signal() -> None:
     assert signal.failed_count == 0
 
 
+def test_document_artifact_preserves_documentation_health_signal() -> None:
+    """TS-ADR-013-GRAPH-001 - Tier-1 artifact carries runtime trust into Tier-2."""
+    from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
+
+    node_result = NodeResult(
+        node="citation_validator",
+        status=NodeStatus.FAILED,
+        error=ErrorRecord(
+            node="citation_validator",
+            error_type="RuntimeError",
+            message="citation failed",
+        ),
+    )
+
+    artifact = build_document_artifact(
+        {
+            "document_id": "document-1",
+            "doc_type": "contract",
+            "documentation_health_signal": {
+                "total_count": 1,
+                "failed_count": 1,
+                "degraded_count": 0,
+                "skipped_count": 0,
+                "failed_nodes": [node_result.node],
+                "degraded_nodes": [],
+                "skipped_nodes": [],
+            },
+        }
+    )
+
+    assert artifact.documentation_health_signal is not None
+    assert artifact.documentation_health_signal.failed_count == 1
+    assert artifact.documentation_health_signal.failed_nodes == ["citation_validator"]
+
+
 @pytest.mark.asyncio
 async def test_final_assembler_populates_documentation_health_signal_from_accumulated_node_results() -> None:
     """TS-ADR-013-GRAPH-001 - N16 publishes ADR-018 documentation health after fan-in."""
