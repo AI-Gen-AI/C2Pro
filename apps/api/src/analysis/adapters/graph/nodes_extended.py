@@ -10,6 +10,7 @@ Refers to TASK-IMPL-010.8–.14 (node refactoring).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
 import traceback
@@ -192,6 +193,7 @@ async def _is_feature_v3_coherence_llm_enabled(state: ProjectState) -> bool:
 
 async def document_ingestion_node(state: ProjectState) -> ProjectState:
     """N1 — Parse the document and classify its coherence category."""
+    await asyncio.sleep(0)
     text = state.get("anonymized_text") or state["document_text"]
     if not _has_extractable_text(text):
         state["document_parsed"] = False
@@ -629,6 +631,7 @@ async def knowledge_graph_builder_node(state: ProjectState) -> ProjectState:
 
 async def decision_intelligence_node(state: ProjectState) -> ProjectState:
     """N11 — Assemble decision package via DecisionPackageAssemblyService."""
+    await asyncio.sleep(0)
     from src.analysis.domain.report_assembly import (
         DecisionPackageAssemblyService,
         DecisionPackageInput,
@@ -719,6 +722,7 @@ async def citation_validator_node(state: ProjectState) -> dict[str, Any]:
 
 async def final_assembler_node(state: ProjectState) -> ProjectState:
     """N16 — Assemble final report via ReportAssemblyService."""
+    await asyncio.sleep(0)
     from src.analysis.domain.report_assembly import ReportAssemblyService, ReportInput
 
     report = ReportAssemblyService().assemble(

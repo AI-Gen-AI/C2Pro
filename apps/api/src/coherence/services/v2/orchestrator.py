@@ -8,6 +8,7 @@ Refers to Suite ID: TS-UA-COH-V2-ORCH-001.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -51,6 +52,7 @@ class CoherenceV2Orchestrator:
         project_id: UUID,
         evidence_inputs: ProjectEvidenceInputs,
     ) -> CoherenceV2Payload:
+        await asyncio.sleep(0)
         categories: list[CategoryV2] = []
         for cat in MIN_EVIDENCE_BY_CATEGORY:
             applicable, reason = evidence_inputs.applicability.get(cat, (True, None))

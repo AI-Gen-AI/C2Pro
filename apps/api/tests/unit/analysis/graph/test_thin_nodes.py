@@ -14,6 +14,7 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3 coverage gate.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -33,6 +34,7 @@ class _FakeAI:
         self.calls: list[tuple[str, str]] = []
 
     async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
+        await asyncio.sleep(0)
         self.calls.append((system_prompt, user_content))
         if self._raises:
             raise self._raises
@@ -92,6 +94,7 @@ class _FakeHitlService:
         self.calls: list[dict[str, Any]] = []
 
     async def route_for_review(self, **kwargs: Any) -> ReviewStatus:
+        await asyncio.sleep(0)
         self.calls.append(kwargs)
         return self.status
 
@@ -543,7 +546,7 @@ class TestBudgetParserExtendedNodeDelegation:
             _make_state(document_text="budget")
         )
         assert result["bom_items"] == []
-        assert result["confidence_score"] == 0.0
+        assert result["confidence_score"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     async def test_prefers_anonymized_text(self, monkeypatch) -> None:
@@ -572,6 +575,7 @@ class TestBudgetParserExtendedNodeDelegation:
                 self.ai = ai
 
             async def execute(self, _command: Any) -> Any:
+                await asyncio.sleep(0)
                 return parse_module.ParseBudgetResult(
                     bom_items=[{"name": "Steel", "hallucinated_field": "x"}],
                     confidence_score=0.7,
@@ -740,6 +744,7 @@ class TestSaveToDbNodeShortCircuit:
                 """Intentional no-op test double initializer."""
 
             async def execute(self, _command: Any) -> Any:
+                await asyncio.sleep(0)
                 return persist_module.PersistAnalysisResult(analysis_id=analysis_id)
 
         monkeypatch.setattr(persist_module, "PersistAnalysisUseCase", _PersistUseCase)
@@ -811,6 +816,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [{"title": "T", "description": "Risk T"}]
             return state
 
@@ -839,6 +845,7 @@ class TestExtractorAIToolDelegation:
         risk = {"title": "Delay", "description": "Delay penalty exposure."}
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [risk]
             return state
 
@@ -870,6 +877,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = [
                 {
                     "title": "Delay",
@@ -944,6 +952,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _failed_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = []
             state["confidence_score"] = 0.0
             state["critique_notes"] = "Risk extraction failed"
@@ -1012,6 +1021,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _empty_tool(state):
+            await asyncio.sleep(0)
             state["extracted_risks"] = []
             state["confidence_score"] = 0.7
             return state
@@ -1049,6 +1059,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [{"code": "W", "name": "Work package"}]
             return state
 
@@ -1076,6 +1087,7 @@ class TestExtractorAIToolDelegation:
         wbs_item = {"code": "W", "name": "Work package"}
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [wbs_item]
             return state
 
@@ -1107,6 +1119,7 @@ class TestExtractorAIToolDelegation:
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
 
         async def _fake_tool(state):
+            await asyncio.sleep(0)
             state["extracted_wbs"] = [
                 {"code": "W", "name": "Work package", "hallucinated_field": "x"}
             ]

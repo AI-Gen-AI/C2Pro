@@ -239,7 +239,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         )
         status = _ok("cross_doc_coherence", summary)
         return {"coherence_result": summary, "node_results": status}
-    except Exception as exc:  # noqa: BLE001 - ProjectGraph node must degrade, not crash.
+    except Exception as exc:  # noqa: BLE001
         degraded = True
         return {
             "coherence_result": None,
@@ -307,7 +307,7 @@ def health(state: ProjectGraphState) -> dict[str, object]:
             "health_result": vector.model_dump(mode="json"),
             "node_results": _ok("health", {"composite_score": vector.composite_score}),
         }
-    except Exception as exc:  # noqa: BLE001 - ProjectGraph node must degrade, not crash.
+    except Exception as exc:  # noqa: BLE001
         return {
             "health_result": None,
             "node_results": _degraded("health", str(exc)),
