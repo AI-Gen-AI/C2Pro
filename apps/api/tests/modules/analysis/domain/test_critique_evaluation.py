@@ -27,12 +27,12 @@ class TestCalculateConfidence:
         assert abs(self.service.calculate_confidence(items) - 0.8) < 0.01
 
     def test_empty_list_returns_zero(self):
-        assert self.service.calculate_confidence([]) == 0.0
+        assert self.service.calculate_confidence([]) == pytest.approx(0.0)
 
     def test_items_without_confidence_field(self):
         items = [{"title": "Risk A"}, {"title": "Risk B"}]
         # Items exist but no confidence → default 0.9
-        assert self.service.calculate_confidence(items) == 0.9
+        assert self.service.calculate_confidence(items) == pytest.approx(0.9)
 
     def test_mixed_valid_and_missing_confidence(self):
         items = [
@@ -50,7 +50,7 @@ class TestCalculateConfidence:
             {"confidence": 0.5},
         ]
         result = self.service.calculate_confidence(items)
-        assert result == 0.5
+        assert result == pytest.approx(0.5)
 
 
 class TestEvaluateCritique:
@@ -126,7 +126,7 @@ class TestEvaluateCritique:
             critique_notes="",
             retry_count=0,
         )
-        assert result.confidence == 0.85
+        assert result.confidence == pytest.approx(0.85)
 
     def test_retry_status_is_case_insensitive(self):
         result = self.service.evaluate_critique(
