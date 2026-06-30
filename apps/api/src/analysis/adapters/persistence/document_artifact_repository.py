@@ -80,5 +80,27 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             for orm in result.scalars().all()
         ]
 
+    async def list_superseded_for_document(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: UUID,
+        document_id: UUID,
+    ) -> list[DocumentArtifact]:
+        result = await self._session.execute(
+            select(DocumentArtifactORM)
+            .where(
+                DocumentArtifactORM.project_id == project_id,
+                DocumentArtifactORM.tenant_id == tenant_id,
+                DocumentArtifactORM.document_id == document_id,
+                DocumentArtifactORM.lifecycle_status == "superseded",
+            )
+            .order_by(DocumentArtifactORM.created_at.desc())
+        )
+        return [
+            DocumentArtifact.model_validate(orm.payload)
+            for orm in result.scalars().all()
+        ]
+
 
 __all__ = ["SqlAlchemyDocumentArtifactRepository"]

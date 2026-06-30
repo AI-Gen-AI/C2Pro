@@ -87,3 +87,47 @@ async def test_document_artifact_list_filters_tenant(db: AsyncSession) -> None:
 
     assert len(active) == 1
     assert active[0].extracted_risks[0].title == "Tenant A risk"
+
+
+@pytest.mark.asyncio
+async def test_document_artifact_lists_superseded_for_document_newest_first(
+    db: AsyncSession,
+) -> None:
+    """TS-INT-ADR017-ART-001: superseded artifact lookup is tenant/document scoped."""
+
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    document_id = uuid4()
+    repo = SqlAlchemyDocumentArtifactRepository(db)
+
+    first = await repo.save(
+        _artifact(str(document_id), "First risk"),
+        project_id=project_id,
+        tenant_id=tenant_id,
+    )
+    second = await repo.save(
+        _artifact(str(document_id), "Second risk"),
+        project_id=project_id,
+        tenant_id=tenant_id,
+    )
+    await repo.save(
+        _artifact(str(document_id), "Third risk"),
+        project_id=project_id,
+        tenant_id=tenant_id,
+    )
+
+    superseded = await repo.list_superseded_for_document(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_id=document_id,
+    )
+
+    assert superseded == [second, first]
+    assert [item.extracted_risks[0].title for item in superseded] == [
+        "Second risk",
+        "First risk",
+    ]

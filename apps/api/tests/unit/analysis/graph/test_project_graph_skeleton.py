@@ -6,6 +6,7 @@ TS-UT-ADR017-PG-001
 from __future__ import annotations
 
 import inspect
+from asyncio import sleep
 from contextlib import contextmanager
 from uuid import uuid4
 
@@ -82,6 +83,7 @@ def _patch_cross_doc_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.analysis.adapters.graph import project_graph
 
     async def _fake_evaluate(_clauses, _project_id, *, config, seed_signals, seed_coverage):
+        await sleep(0)
         return EnrichedCoherenceResult(
             overall_score=None,
             score_reason="insufficient_cross_doc_fixture",
@@ -89,6 +91,7 @@ def _patch_cross_doc_engine(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     async def _llm_disabled(_tenant_id):
+        await sleep(0)
         return False
 
     monkeypatch.setattr(project_graph, "evaluate_coherence_async", _fake_evaluate)
@@ -142,8 +145,9 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     assert result["health_result"] is not None
     assert by_node["health"].status is NodeStatus.OK
     assert result["snapshot_id"] is None
+    assert by_node["change_impact"].status is NodeStatus.SKIPPED
+    assert "no prior snapshot" in (by_node["change_impact"].degradation_reason or "")
     for node_name in {
-        "change_impact",
         "write_snapshot",
         "alert_correlation",
         "hitl_routing",
