@@ -17,7 +17,16 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from src.evidence.domain.runtime_trust import EvidenceRef
 
-ObjectType = Literal["clause", "milestone", "budget_item", "rfi", "change_order"]
+ObjectType = Literal[
+    "clause",
+    "milestone",
+    "budget_item",
+    "rfi",
+    "change_order",
+    "risk",
+    "wbs_activity",
+    "citation",
+]
 ChangeType = Literal[
     "added",
     "removed",

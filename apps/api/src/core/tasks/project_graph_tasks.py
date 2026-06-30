@@ -76,6 +76,7 @@ async def run_project_graph_once(
             "health_result": None,
             "snapshot_id": None,
             "node_results": [],
+            "artifact_repository": artifact_repository,
         }
     )
     return {
