@@ -6,6 +6,8 @@ Pure domain — no os, langgraph, or langchain imports.
 
 from __future__ import annotations
 
+import pytest
+
 from src.analysis.domain.critique_evaluation import (
     CritiqueEvaluationResult,
     CritiqueEvaluationService,
@@ -204,3 +206,22 @@ class TestDetermineNextStep:
             skip_hitl=True,
         )
         assert result == "stakeholder_extractor"
+
+    @pytest.mark.parametrize(
+        ("doc_type", "expected"),
+        [
+            ("contract", "risk_extractor"),
+            ("budget", "budget_parser"),
+            ("technical_spec", "wbs_extractor"),
+        ],
+    )
+    def test_skip_hitl_preserves_automated_retry_routing(self, doc_type, expected):
+        result = self.service.determine_next_step(
+            human_approval_required=True,
+            critique_notes="Retry extraction",
+            retry_count=1,
+            doc_type=doc_type,
+            skip_hitl=True,
+        )
+
+        assert result == expected
