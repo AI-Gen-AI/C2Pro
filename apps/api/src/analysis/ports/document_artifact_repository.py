@@ -27,5 +27,13 @@ class IDocumentArtifactRepository(Protocol):
         tenant_id: UUID,
     ) -> list[DocumentArtifact]: ...
 
+    async def list_superseded_for_document(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: UUID,
+        document_id: UUID,
+    ) -> list[DocumentArtifact]: ...
+
 
 __all__ = ["IDocumentArtifactRepository"]

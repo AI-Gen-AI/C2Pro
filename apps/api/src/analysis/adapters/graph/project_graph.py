@@ -5,8 +5,10 @@ TS-UT-ADR017-PG-001
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from time import perf_counter
-from uuid import UUID
+from typing import Any
+from uuid import UUID, uuid4
 
 import structlog
 from langgraph.graph import END, StateGraph
@@ -14,9 +16,17 @@ from langgraph.graph import END, StateGraph
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
-from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.contracts import (
+    BudgetItem,
+    Citation,
+    DocumentArtifact,
+    RiskItem,
+    WbsActivity,
+)
 from src.analysis.domain.documentation_health import DocumentationHealthSignal
-from src.analysis.domain.node_result import NodeResult, NodeStatus
+from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
+from src.change_intelligence.application.change_impact_report import build_change_impact_report
+from src.change_intelligence.domain.contracts import ChangeSet, SemanticChange
 from src.coherence.graph.graph import evaluate_coherence_async
 from src.coherence.graph.state import EvaluationConfig
 from src.coherence.models import EnrichedCoherenceResult, FindingSignal
@@ -53,6 +63,20 @@ def _skipped(node: str, reason: str) -> list[NodeResult]:
 
 def _degraded(node: str, reason: str) -> list[NodeResult]:
     return [NodeResult(node=node, status=NodeStatus.DEGRADED, degradation_reason=reason)]
+
+
+def _failed(node: str, exc: Exception) -> list[NodeResult]:
+    return [
+        NodeResult(
+            node=node,
+            status=NodeStatus.FAILED,
+            error=ErrorRecord(
+                node=node,
+                error_type=type(exc).__name__,
+                message=str(exc),
+            ),
+        )
+    ]
 
 
 def _artifact_key(artifact: DocumentArtifact) -> str:
@@ -260,11 +284,186 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         )
 
 
-def change_impact(_state: ProjectGraphState) -> dict[str, object]:
+def _risk_anchor(item: RiskItem) -> str:
+    return item.source or item.title
+
+
+def _wbs_anchor(item: WbsActivity) -> str:
+    return item.code
+
+
+def _budget_anchor(item: BudgetItem) -> str:
+    return item.cost_code or item.name
+
+
+def _citation_anchor(item: Citation) -> str:
+    return item.item
+
+
+def _indexed_payloads(
+    items: list[Any],
+    *,
+    anchor_fn: Any,
+) -> dict[str, dict[str, Any]]:
     return {
-        "impact_result": None,
-        "node_results": _skipped("change_impact", "pending ADR-016-L3 change impact"),
+        anchor_fn(item): item.model_dump(mode="json", exclude_none=True)
+        for item in items
     }
+
+
+def _collection_changes(
+    *,
+    object_type: str,
+    prior: dict[str, dict[str, Any]],
+    current: dict[str, dict[str, Any]],
+) -> list[SemanticChange]:
+    changes: list[SemanticChange] = []
+    for anchor in sorted(current.keys() - prior.keys()):
+        changes.append(
+            SemanticChange(
+                object_type=object_type,
+                change_type="added",
+                anchor=anchor,
+                before=None,
+                after=current[anchor],
+                semantic_summary=f"{object_type} {anchor} added",
+                match_confidence=1.0,
+            )
+        )
+    for anchor in sorted(prior.keys() - current.keys()):
+        changes.append(
+            SemanticChange(
+                object_type=object_type,
+                change_type="removed",
+                anchor=anchor,
+                before=prior[anchor],
+                after=None,
+                semantic_summary=f"{object_type} {anchor} removed",
+                match_confidence=1.0,
+            )
+        )
+    for anchor in sorted(prior.keys() & current.keys()):
+        if prior[anchor] == current[anchor]:
+            continue
+        changes.append(
+            SemanticChange(
+                object_type=object_type,
+                change_type="modified",
+                anchor=anchor,
+                before=prior[anchor],
+                after=current[anchor],
+                semantic_summary=f"{object_type} {anchor} modified",
+                match_confidence=1.0,
+            )
+        )
+    return changes
+
+
+def _compare_extraction_payloads(
+    prior: DocumentArtifact,
+    current: DocumentArtifact,
+) -> list[SemanticChange]:
+    """Compare extraction-level payloads without LLM calls."""
+
+    return [
+        *_collection_changes(
+            object_type="risk",
+            prior=_indexed_payloads(prior.extracted_risks, anchor_fn=_risk_anchor),
+            current=_indexed_payloads(current.extracted_risks, anchor_fn=_risk_anchor),
+        ),
+        *_collection_changes(
+            object_type="wbs_activity",
+            prior=_indexed_payloads(prior.extracted_wbs, anchor_fn=_wbs_anchor),
+            current=_indexed_payloads(current.extracted_wbs, anchor_fn=_wbs_anchor),
+        ),
+        *_collection_changes(
+            object_type="budget_item",
+            prior=_indexed_payloads(prior.bom_items, anchor_fn=_budget_anchor),
+            current=_indexed_payloads(current.bom_items, anchor_fn=_budget_anchor),
+        ),
+        *_collection_changes(
+            object_type="citation",
+            prior=_indexed_payloads(prior.citations, anchor_fn=_citation_anchor),
+            current=_indexed_payloads(current.citations, anchor_fn=_citation_anchor),
+        ),
+    ]
+
+
+def _revision_uuid(value: str | None, *, label: str) -> UUID:
+    if value is None:
+        raise ValueError(f"{label} document_revision_id is required for change impact")
+    return UUID(value)
+
+
+async def change_impact(state: ProjectGraphState) -> dict[str, object]:
+    if state.get("previous_snapshot_id") is None:
+        return {
+            "impact_result": None,
+            "node_results": _skipped("change_impact", "no prior snapshot"),
+        }
+
+    repository = state.get("artifact_repository")
+    if repository is None:
+        return {
+            "impact_result": None,
+            "node_results": _skipped("change_impact", "artifact repository unavailable"),
+        }
+
+    try:
+        changes: list[SemanticChange] = []
+        from_revision_id: UUID | None = None
+        to_revision_id: UUID | None = None
+        for current in state.get("artifacts", []):
+            superseded = await repository.list_superseded_for_document(
+                project_id=state["project_id"],
+                tenant_id=state["tenant_id"],
+                document_id=UUID(current.document_id),
+            )
+            if not superseded:
+                continue
+            prior = superseded[0]
+            from_revision_id = from_revision_id or _revision_uuid(
+                prior.document_revision_id,
+                label="prior",
+            )
+            to_revision_id = to_revision_id or _revision_uuid(
+                current.document_revision_id,
+                label="current",
+            )
+            changes.extend(_compare_extraction_payloads(prior, current))
+
+        if from_revision_id is None or to_revision_id is None:
+            return {
+                "impact_result": None,
+                "node_results": _skipped("change_impact", "no superseded artifacts"),
+            }
+
+        changeset = ChangeSet(
+            changeset_id=uuid4(),
+            project_id=state["project_id"],
+            tenant_id=state["tenant_id"],
+            from_revision_id=from_revision_id,
+            to_revision_id=to_revision_id,
+            changes=changes,
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+        report = await build_change_impact_report(changeset, state["tenant_id"])
+        return {
+            "impact_result": report,
+            "node_results": _ok(
+                "change_impact",
+                {
+                    "change_count": len(report.changes),
+                    "from_revision_id": str(report.from_revision_id),
+                    "to_revision_id": str(report.to_revision_id),
+                },
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001 - ADR-013: failures are explicit.
+        return {
+            "impact_result": None,
+            "node_results": _failed("change_impact", exc),
+        }
 
 
 def health(state: ProjectGraphState) -> dict[str, object]:
@@ -472,6 +671,7 @@ __all__ = [
     "PROJECT_GRAPH_NODE_ORDER",
     "build_project_graph",
     "cross_doc_coherence",
+    "change_impact",
     "is_coherence_llm_enabled",
     "is_project_graph_enabled",
 ]

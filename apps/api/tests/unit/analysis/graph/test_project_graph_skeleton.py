@@ -142,8 +142,9 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     assert result["health_result"] is not None
     assert by_node["health"].status is NodeStatus.OK
     assert result["snapshot_id"] is None
+    assert by_node["change_impact"].status is NodeStatus.SKIPPED
+    assert "no prior snapshot" in (by_node["change_impact"].degradation_reason or "")
     for node_name in {
-        "change_impact",
         "write_snapshot",
         "alert_correlation",
         "hitl_routing",
