@@ -82,6 +82,45 @@ def test_not_applicable_carries_reason(aggregator: CategoryAggregator) -> None:
 
 
 @pytest.mark.unit
+def test_no_rule_signals_unassessed_yields_honest_null(
+    aggregator: CategoryAggregator,
+) -> None:
+    """TS-UA-COH-V2-CATAGG-001 - INV-1: missing rule assessment must not fabricate 100."""
+    cat = aggregator.aggregate(
+        category="LEGAL",
+        evidence=_bundle(count=1),
+        conflict=_no_conflict(),
+        rule_signals=[],
+        applicable=True,
+        assessed=False,
+    )
+
+    assert cat.status is CategoryStatus.INSUFFICIENT_EVIDENCE
+    assert cat.coherence_score is None
+    assert cat.rationale == "rule_assessment_unavailable"
+    assert cat.calculation_metadata["assessment_state"] == "unassessed"
+
+
+@pytest.mark.unit
+def test_no_rule_signals_assessed_clean_yields_legitimate_high_score(
+    aggregator: CategoryAggregator,
+) -> None:
+    """TS-UA-COH-V2-CATAGG-001 - Assessed clean categories may score high without findings."""
+    cat = aggregator.aggregate(
+        category="LEGAL",
+        evidence=_bundle(count=1),
+        conflict=_no_conflict(),
+        rule_signals=[],
+        applicable=True,
+        assessed=True,
+    )
+
+    assert cat.status is CategoryStatus.SCORED
+    assert cat.coherence_score == pytest.approx(100.0)
+    assert cat.calculation_metadata["assessment_state"] == "assessed_clean"
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "severity,certainty,base,expected",
     [

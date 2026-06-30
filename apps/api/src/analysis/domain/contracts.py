@@ -26,6 +26,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.analysis.domain.documentation_health import DocumentationHealthSignal
+
 # Immutable, drift-rejecting value-object config.
 _VALUE_OBJECT = ConfigDict(extra="forbid", frozen=True)
 
@@ -147,6 +149,7 @@ class DocumentArtifact(BaseModel):
     bom_items: list[BudgetItem] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
     coherence_findings: list[CoherenceFinding] = Field(default_factory=list)
+    documentation_health_signal: DocumentationHealthSignal | None = None
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     pii_redaction_count: int = Field(default=0, ge=0)
 

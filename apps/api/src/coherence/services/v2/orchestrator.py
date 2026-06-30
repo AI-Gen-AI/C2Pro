@@ -8,6 +8,7 @@ Refers to Suite ID: TS-UA-COH-V2-ORCH-001.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -30,6 +31,7 @@ class ProjectEvidenceInputs:
     project_context: dict[str, Any]
     rule_signals_by_category: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
     applicability: dict[str, tuple[bool, str | None]] = field(default_factory=dict)
+    assessment_by_category: dict[str, bool] = field(default_factory=dict)
 
 
 class CoherenceV2Orchestrator:
@@ -50,6 +52,7 @@ class CoherenceV2Orchestrator:
         project_id: UUID,
         evidence_inputs: ProjectEvidenceInputs,
     ) -> CoherenceV2Payload:
+        await asyncio.sleep(0)
         categories: list[CategoryV2] = []
         for cat in MIN_EVIDENCE_BY_CATEGORY:
             applicable, reason = evidence_inputs.applicability.get(cat, (True, None))
@@ -64,6 +67,7 @@ class CoherenceV2Orchestrator:
                     rule_signals=signals,
                     applicable=applicable,
                     applicability_reason=reason,
+                    assessed=evidence_inputs.assessment_by_category.get(cat, True),
                 )
             )
 
