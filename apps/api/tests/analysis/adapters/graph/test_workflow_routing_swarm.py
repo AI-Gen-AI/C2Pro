@@ -75,8 +75,13 @@ class TestNextAfterCritique:
     """Unit tests for the _next_after_critique routing function."""
 
     @pytest.mark.red_phase
-    def test_human_approval_required_true_returns_human_interrupt(self) -> None:
+    def test_human_approval_required_true_returns_human_interrupt(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """When human_approval_required is True, route to human_interrupt regardless of other fields."""
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         state = _make_state(
             human_approval_required=True,
             critique_notes="some notes",
@@ -86,8 +91,13 @@ class TestNextAfterCritique:
         assert _next_after_critique(state) == "human_interrupt"
 
     @pytest.mark.red_phase
-    def test_human_approval_required_overrides_contract_retry(self) -> None:
+    def test_human_approval_required_overrides_contract_retry(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """human_approval_required=True takes precedence over contract retry path."""
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
         state = _make_state(
             human_approval_required=True,
             critique_notes="critical issue",
@@ -161,6 +171,32 @@ class TestNextAfterCritique:
             doc_type="other_type",
         )
         assert _next_after_critique(state) == "wbs_extractor"
+
+    @pytest.mark.parametrize(
+        ("doc_type", "expected"),
+        [
+            ("contract", "risk_extractor"),
+            ("budget", "budget_parser"),
+            ("technical_spec", "wbs_extractor"),
+        ],
+    )
+    def test_skip_hitl_preserves_retry_branches(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        doc_type: str,
+        expected: str,
+    ) -> None:
+        """skip_hitl bypasses only HITL; automated retries still route by doc_type."""
+        monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        state = _make_state(
+            human_approval_required=True,
+            critique_notes="retry extraction",
+            retry_count=1,
+            doc_type=doc_type,
+        )
+
+        assert _next_after_critique(state) == expected
 
     @pytest.mark.red_phase
     def test_empty_critique_notes_returns_save_to_db(self) -> None:

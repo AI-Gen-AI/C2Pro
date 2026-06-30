@@ -184,7 +184,7 @@ class TestSkipHitlEnvVar:
     """The conditional edge must route past human_interrupt when
     ``C2PRO_SKIP_HITL=1`` so coherence_scorer + save_to_db actually run."""
 
-    def test_skip_hitl_env_routes_to_enrichment(
+    def test_skip_hitl_env_preserves_retry_routing(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Lazy import to pick up the monkeypatched env at module level.
@@ -200,9 +200,9 @@ class TestSkipHitlEnvVar:
             "doc_type": "contract",
         }
         next_step = _next_after_critique_v2(state)  # type: ignore[arg-type]
-        # Logical destination "stakeholder_extractor" maps to enrichment_dispatch
-        # in workflow.add_conditional_edges → eventually reaches coherence_scorer.
-        assert next_step == "stakeholder_extractor"
+        # skip_hitl bypasses only the human_interrupt pause; it must not
+        # suppress automated retry routing when retry conditions are present.
+        assert next_step == "risk_extractor"
 
     def test_default_still_routes_to_human_interrupt(
         self, monkeypatch: pytest.MonkeyPatch
