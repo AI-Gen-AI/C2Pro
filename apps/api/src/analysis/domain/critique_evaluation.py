@@ -106,7 +106,7 @@ class CritiqueEvaluationService:
         if human_approval_required and not skip_hitl:
             return "human_interrupt"
 
-        if critique_notes and 0 < retry_count <= self.max_retries and not skip_hitl:
+        if critique_notes and 0 < retry_count <= self.max_retries:
             if doc_type == "contract":
                 return "risk_extractor"
             if doc_type == "budget":
