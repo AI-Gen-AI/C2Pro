@@ -72,6 +72,27 @@ def _artifact(
     )
 
 
+def _artifact_with_payloads(
+    *,
+    document_id: UUID,
+    revision_id: UUID,
+    risks: list[RiskItem] | None = None,
+    wbs: list[WbsActivity] | None = None,
+    budget: list[BudgetItem] | None = None,
+    citations: list[Citation] | None = None,
+) -> DocumentArtifact:
+    return DocumentArtifact(
+        document_id=str(document_id),
+        document_revision_id=str(revision_id),
+        doc_type="contract",
+        document_category="LEGAL",
+        extracted_risks=risks if risks is not None else [],
+        extracted_wbs=wbs if wbs is not None else [],
+        bom_items=budget if budget is not None else [],
+        citations=citations if citations is not None else [],
+    )
+
+
 def _state(
     *,
     artifact: DocumentArtifact,
@@ -232,6 +253,197 @@ async def test_change_impact_identical_prior_yields_empty_report(
     assert isinstance(report, ChangeImpactReport)
     assert report.changes == []
     assert result["node_results"][0].status is NodeStatus.OK
+
+
+@pytest.mark.asyncio
+async def test_change_impact_ignores_reordered_lists_float_jitter_and_volatile_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UT-ADR016-L3-001: serialization noise does not produce modified changes."""
+
+    from src.analysis.adapters.graph import project_graph
+
+    document_id = uuid4()
+    prior = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[
+            BudgetItem(cost_code="B-1", name="Concrete", amount=100.0000001, currency="EUR"),
+            BudgetItem(cost_code="B-2", name="Steel", amount=200.0, currency="EUR"),
+        ],
+    )
+    current = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[
+            BudgetItem(cost_code="B-2", name="Steel", amount=200.0, currency="EUR"),
+            BudgetItem(cost_code="B-1", name="Concrete", amount=100.0000002, currency="EUR"),
+        ],
+    )
+
+    async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
+        return _report_from_changeset(changeset)
+
+    monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
+
+    result = await project_graph.change_impact(
+        _state(
+            artifact=current,
+            repo=FakeArtifactRepository([prior]),
+            previous_snapshot_id=uuid4(),
+        )
+    )
+
+    report = result["impact_result"]
+    assert isinstance(report, ChangeImpactReport)
+    assert report.changes == []
+
+
+@pytest.mark.asyncio
+async def test_change_impact_rephrased_risk_title_is_low_confidence_modified_not_churn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UT-ADR016-L3-001: fuzzy risk anchoring avoids removed+added churn."""
+
+    from src.analysis.adapters.graph import project_graph
+
+    document_id = uuid4()
+    prior = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        risks=[
+            RiskItem(
+                title="Foundation settlement risk",
+                description="Monitor settlement during excavation",
+                category="LEGAL",
+                confidence=0.9,
+            )
+        ],
+    )
+    current = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        risks=[
+            RiskItem(
+                title="Risk of foundation settling",
+                description="Monitor settlement during excavation",
+                category="LEGAL",
+                confidence=0.9,
+            )
+        ],
+    )
+
+    async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
+        return _report_from_changeset(changeset)
+
+    monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
+
+    result = await project_graph.change_impact(
+        _state(
+            artifact=current,
+            repo=FakeArtifactRepository([prior]),
+            previous_snapshot_id=uuid4(),
+        )
+    )
+
+    report = result["impact_result"]
+    assert isinstance(report, ChangeImpactReport)
+    assert len(report.changes) == 1
+    change = report.changes[0]
+    assert change.object_type == "risk"
+    assert change.change_type == "modified"
+    assert change.anchor == "Foundation settlement risk"
+    assert change.needs_review is True
+    assert 0.0 < change.match_confidence < 1.0
+
+
+@pytest.mark.asyncio
+async def test_change_impact_genuine_new_and_deleted_objects_emit_added_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UT-ADR016-L3-001: unmatched objects remain honest added/removed changes."""
+
+    from src.analysis.adapters.graph import project_graph
+
+    document_id = uuid4()
+    prior = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[BudgetItem(cost_code="B-OLD", name="Demolition", amount=50.0, currency="EUR")],
+    )
+    current = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[BudgetItem(cost_code="B-NEW", name="Landscaping", amount=75.0, currency="EUR")],
+    )
+
+    async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
+        return _report_from_changeset(changeset)
+
+    monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
+
+    result = await project_graph.change_impact(
+        _state(
+            artifact=current,
+            repo=FakeArtifactRepository([prior]),
+            previous_snapshot_id=uuid4(),
+        )
+    )
+
+    report = result["impact_result"]
+    assert isinstance(report, ChangeImpactReport)
+    assert [(change.change_type, change.anchor) for change in report.changes] == [
+        ("added", "B-NEW"),
+        ("removed", "B-OLD"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_change_impact_budget_cost_code_amount_change_is_clean_modified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TS-UT-ADR016-L3-001: stable budget cost_code anchors semantic value changes."""
+
+    from src.analysis.adapters.graph import project_graph
+
+    document_id = uuid4()
+    prior = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[BudgetItem(cost_code="B-1", name="Concrete", amount=100.0, currency="EUR")],
+    )
+    current = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        budget=[BudgetItem(cost_code="B-1", name="Concrete", amount=125.0, currency="EUR")],
+    )
+
+    async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
+        return _report_from_changeset(changeset)
+
+    monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
+
+    result = await project_graph.change_impact(
+        _state(
+            artifact=current,
+            repo=FakeArtifactRepository([prior]),
+            previous_snapshot_id=uuid4(),
+        )
+    )
+
+    report = result["impact_result"]
+    assert isinstance(report, ChangeImpactReport)
+    assert len(report.changes) == 1
+    change = report.changes[0]
+    assert change.object_type == "budget_item"
+    assert change.change_type == "modified"
+    assert change.anchor == "B-1"
+    assert change.match_confidence == pytest.approx(1.0)
+    assert change.needs_review is False
 
 
 @pytest.mark.asyncio

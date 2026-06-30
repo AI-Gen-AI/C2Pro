@@ -5,7 +5,11 @@ TS-UT-ADR017-PG-001
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from time import perf_counter
 from typing import Any
 from uuid import UUID, uuid4
@@ -296,64 +300,194 @@ def _budget_anchor(item: BudgetItem) -> str:
     return item.cost_code or item.name
 
 
+def _budget_fuzzy_allowed(item: BudgetItem) -> bool:
+    return not item.cost_code
+
+
 def _citation_anchor(item: Citation) -> str:
     return item.item
 
 
-def _indexed_payloads(
+_VOLATILE_PAYLOAD_KEYS = {
+    "id",
+    "ids",
+    "created_at",
+    "updated_at",
+    "timestamp",
+    "timestamps",
+}
+_FUZZY_MATCH_THRESHOLD = 0.6
+_NEEDS_REVIEW_CONFIDENCE = 0.9
+
+
+@dataclass(frozen=True)
+class _PayloadEntry:
+    anchor: str
+    raw_payload: dict[str, Any]
+    normalized_payload: dict[str, Any]
+    fuzzy_allowed: bool
+
+
+def _is_volatile_payload_key(key: str) -> bool:
+    normalized = key.lower()
+    return (
+        normalized in _VOLATILE_PAYLOAD_KEYS
+        or normalized.endswith("_id")
+        or normalized.endswith("_ids")
+        or normalized.endswith("_created_at")
+        or normalized.endswith("_updated_at")
+        or normalized.endswith("_timestamp")
+        or normalized.endswith("_timestamps")
+    )
+
+
+def _normalize_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _normalize_payload(nested)
+            for key, nested in sorted(value.items())
+            if not _is_volatile_payload_key(key)
+        }
+    if isinstance(value, list):
+        normalized_items = [_normalize_payload(item) for item in value]
+        return sorted(normalized_items, key=lambda item: json.dumps(item, sort_keys=True))
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
+
+
+def _payload_entries(
     items: list[Any],
     *,
-    anchor_fn: Any,
-) -> dict[str, dict[str, Any]]:
-    return {
-        anchor_fn(item): item.model_dump(mode="json", exclude_none=True)
+    anchor_fn: Callable[[Any], str],
+    fuzzy_allowed_fn: Callable[[Any], bool] | None = None,
+) -> list[_PayloadEntry]:
+    return [
+        _PayloadEntry(
+            anchor=anchor_fn(item),
+            raw_payload=item.model_dump(mode="json", exclude_none=True),
+            normalized_payload=_normalize_payload(item.model_dump(mode="json", exclude_none=True)),
+            fuzzy_allowed=fuzzy_allowed_fn(item) if fuzzy_allowed_fn is not None else False,
+        )
         for item in items
-    }
+    ]
+
+
+def _normalized_text(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def _anchor_ratio(prior: _PayloadEntry, current: _PayloadEntry) -> float:
+    prior_text = _normalized_text(prior.anchor)
+    current_text = _normalized_text(current.anchor)
+    if not prior_text or not current_text:
+        return 0.0
+    return SequenceMatcher(a=prior_text, b=current_text).ratio()
+
+
+def _paired_entries(
+    prior: list[_PayloadEntry],
+    current: list[_PayloadEntry],
+) -> tuple[
+    list[tuple[_PayloadEntry, _PayloadEntry, float, bool]],
+    list[_PayloadEntry],
+    list[_PayloadEntry],
+]:
+    matched: list[tuple[_PayloadEntry, _PayloadEntry, float, bool]] = []
+    used_prior: set[int] = set()
+    used_current: set[int] = set()
+
+    for prior_index, prior_entry in enumerate(prior):
+        for current_index, current_entry in enumerate(current):
+            if current_index in used_current or prior_entry.anchor != current_entry.anchor:
+                continue
+            matched.append((prior_entry, current_entry, 1.0, False))
+            used_prior.add(prior_index)
+            used_current.add(current_index)
+            break
+
+    candidates: list[tuple[float, int, int, _PayloadEntry, _PayloadEntry]] = []
+    for prior_index, prior_entry in enumerate(prior):
+        if prior_index in used_prior or not prior_entry.fuzzy_allowed:
+            continue
+        for current_index, current_entry in enumerate(current):
+            if current_index in used_current or not current_entry.fuzzy_allowed:
+                continue
+            confidence = _anchor_ratio(prior_entry, current_entry)
+            if confidence >= _FUZZY_MATCH_THRESHOLD:
+                candidates.append((confidence, prior_index, current_index, prior_entry, current_entry))
+
+    for confidence, prior_index, current_index, prior_entry, current_entry in sorted(
+        candidates,
+        key=lambda item: item[0],
+        reverse=True,
+    ):
+        if prior_index in used_prior or current_index in used_current:
+            continue
+        matched.append(
+            (
+                prior_entry,
+                current_entry,
+                confidence,
+                confidence < _NEEDS_REVIEW_CONFIDENCE,
+            )
+        )
+        used_prior.add(prior_index)
+        used_current.add(current_index)
+
+    unmatched_prior = [entry for index, entry in enumerate(prior) if index not in used_prior]
+    unmatched_current = [entry for index, entry in enumerate(current) if index not in used_current]
+    return matched, unmatched_prior, unmatched_current
 
 
 def _collection_changes(
     *,
     object_type: str,
-    prior: dict[str, dict[str, Any]],
-    current: dict[str, dict[str, Any]],
+    prior: list[_PayloadEntry],
+    current: list[_PayloadEntry],
 ) -> list[SemanticChange]:
     changes: list[SemanticChange] = []
-    for anchor in sorted(current.keys() - prior.keys()):
+    matched, unmatched_prior, unmatched_current = _paired_entries(prior, current)
+    for entry in sorted(unmatched_current, key=lambda item: item.anchor):
         changes.append(
             SemanticChange(
                 object_type=object_type,
                 change_type="added",
-                anchor=anchor,
+                anchor=entry.anchor,
                 before=None,
-                after=current[anchor],
-                semantic_summary=f"{object_type} {anchor} added",
+                after=entry.raw_payload,
+                semantic_summary=f"{object_type} {entry.anchor} added",
                 match_confidence=1.0,
             )
         )
-    for anchor in sorted(prior.keys() - current.keys()):
+    for entry in sorted(unmatched_prior, key=lambda item: item.anchor):
         changes.append(
             SemanticChange(
                 object_type=object_type,
                 change_type="removed",
-                anchor=anchor,
-                before=prior[anchor],
+                anchor=entry.anchor,
+                before=entry.raw_payload,
                 after=None,
-                semantic_summary=f"{object_type} {anchor} removed",
+                semantic_summary=f"{object_type} {entry.anchor} removed",
                 match_confidence=1.0,
             )
         )
-    for anchor in sorted(prior.keys() & current.keys()):
-        if prior[anchor] == current[anchor]:
+    for prior_entry, current_entry, confidence, needs_review in sorted(
+        matched,
+        key=lambda pair: pair[0].anchor,
+    ):
+        if prior_entry.normalized_payload == current_entry.normalized_payload:
             continue
         changes.append(
             SemanticChange(
                 object_type=object_type,
                 change_type="modified",
-                anchor=anchor,
-                before=prior[anchor],
-                after=current[anchor],
-                semantic_summary=f"{object_type} {anchor} modified",
-                match_confidence=1.0,
+                anchor=prior_entry.anchor,
+                before=prior_entry.raw_payload,
+                after=current_entry.raw_payload,
+                semantic_summary=f"{object_type} {prior_entry.anchor} modified",
+                match_confidence=confidence,
+                needs_review=needs_review,
             )
         )
     return changes
@@ -368,23 +502,39 @@ def _compare_extraction_payloads(
     return [
         *_collection_changes(
             object_type="risk",
-            prior=_indexed_payloads(prior.extracted_risks, anchor_fn=_risk_anchor),
-            current=_indexed_payloads(current.extracted_risks, anchor_fn=_risk_anchor),
+            prior=_payload_entries(
+                prior.extracted_risks,
+                anchor_fn=_risk_anchor,
+                fuzzy_allowed_fn=lambda _item: True,
+            ),
+            current=_payload_entries(
+                current.extracted_risks,
+                anchor_fn=_risk_anchor,
+                fuzzy_allowed_fn=lambda _item: True,
+            ),
         ),
         *_collection_changes(
             object_type="wbs_activity",
-            prior=_indexed_payloads(prior.extracted_wbs, anchor_fn=_wbs_anchor),
-            current=_indexed_payloads(current.extracted_wbs, anchor_fn=_wbs_anchor),
+            prior=_payload_entries(prior.extracted_wbs, anchor_fn=_wbs_anchor),
+            current=_payload_entries(current.extracted_wbs, anchor_fn=_wbs_anchor),
         ),
         *_collection_changes(
             object_type="budget_item",
-            prior=_indexed_payloads(prior.bom_items, anchor_fn=_budget_anchor),
-            current=_indexed_payloads(current.bom_items, anchor_fn=_budget_anchor),
+            prior=_payload_entries(
+                prior.bom_items,
+                anchor_fn=_budget_anchor,
+                fuzzy_allowed_fn=_budget_fuzzy_allowed,
+            ),
+            current=_payload_entries(
+                current.bom_items,
+                anchor_fn=_budget_anchor,
+                fuzzy_allowed_fn=_budget_fuzzy_allowed,
+            ),
         ),
         *_collection_changes(
             object_type="citation",
-            prior=_indexed_payloads(prior.citations, anchor_fn=_citation_anchor),
-            current=_indexed_payloads(current.citations, anchor_fn=_citation_anchor),
+            prior=_payload_entries(prior.citations, anchor_fn=_citation_anchor),
+            current=_payload_entries(current.citations, anchor_fn=_citation_anchor),
         ),
     ]
 
