@@ -28,10 +28,33 @@ jobs:
       run:
         working-directory: apps/web
     env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}      
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      ENVIRONMENT: test
+      DEBUG: "true"
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      REDIS_URL: redis://localhost:6379/0
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_PER_MINUTE: "100"
+      CLERK_FRONTEND_API_URL: https://clerk.c2pro.io
+      CLERK_BACKEND_API_URL: https://api.clerk.com
+      CLERK_JWKS_URL: ${{ secrets.CLERK_JWKS_URL }}
+      BCRYPT_ROUNDS: 12
+
+
+
+
 
     steps:
       - name: Checkout
