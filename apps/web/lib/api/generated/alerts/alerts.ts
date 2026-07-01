@@ -106,154 +106,76 @@ export const createAlertApiV1AlertsPost = (
   });
 };
 
-export const getCreateAlertApiV1AlertsPostQueryKey = (
-  createAlertRequest?: CreateAlertRequest,
-) => {
-  return ["POST", `/api/v1/alerts`, createAlertRequest] as const;
-};
-
-export const getCreateAlertApiV1AlertsPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+export const getCreateAlertApiV1AlertsPostMutationOptions = <
   TError = HTTPValidationError,
->(
-  createAlertRequest: CreateAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getCreateAlertApiV1AlertsPostQueryKey(createAlertRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>
-  > = ({ signal }) => createAlertApiV1AlertsPost(createAlertRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: CreateAlertRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+  TError,
+  { data: CreateAlertRequest },
+  TContext
+> => {
+  const mutationKey = ["createAlertApiV1AlertsPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+    { data: CreateAlertRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAlertApiV1AlertsPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type CreateAlertApiV1AlertsPostQueryResult = NonNullable<
+export type CreateAlertApiV1AlertsPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>
 >;
-export type CreateAlertApiV1AlertsPostQueryError = HTTPValidationError;
+export type CreateAlertApiV1AlertsPostMutationBody = CreateAlertRequest;
+export type CreateAlertApiV1AlertsPostMutationError = HTTPValidationError;
 
-export function useCreateAlertApiV1AlertsPost<
-  TData = Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-  TError = HTTPValidationError,
->(
-  createAlertRequest: CreateAlertRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-          TError,
-          Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCreateAlertApiV1AlertsPost<
-  TData = Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-  TError = HTTPValidationError,
->(
-  createAlertRequest: CreateAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-          TError,
-          Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCreateAlertApiV1AlertsPost<
-  TData = Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-  TError = HTTPValidationError,
->(
-  createAlertRequest: CreateAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Create Alert
  */
-
-export function useCreateAlertApiV1AlertsPost<
-  TData = Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+export const useCreateAlertApiV1AlertsPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  createAlertRequest: CreateAlertRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+      TError,
+      { data: CreateAlertRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getCreateAlertApiV1AlertsPostQueryOptions(
-    createAlertRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createAlertApiV1AlertsPost>>,
+  TError,
+  { data: CreateAlertRequest },
+  TContext
+> => {
+  return useMutation(
+    getCreateAlertApiV1AlertsPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * List alerts for a project.
  *
@@ -273,102 +195,206 @@ export const listProjectAlertsApiV1ProjectsProjectIdAlertsGet = (
   });
 };
 
-export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
-      >,
-      TError,
-      {
-        projectId: string;
-        params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams;
-      },
-      TContext
+export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey = (
+  projectId: string,
+  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+) => {
+  return [
+    `/api/v1/projects/${projectId}/alerts`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+        >,
+        TError,
+        TData
+      >
     >;
-  }): UseMutationOptions<
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryKey(
+      projectId,
+      params,
+    );
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>>
+  > = ({ signal }) =>
+    listProjectAlertsApiV1ProjectsProjectIdAlertsGet(projectId, params, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: projectId !== null && projectId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
     Awaited<
       ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
     >,
     TError,
-    {
-      projectId: string;
-      params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams;
-    },
-    TContext
-  > => {
-    const mutationKey = ["listProjectAlertsApiV1ProjectsProjectIdAlertsGet"];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
-      >,
-      {
-        projectId: string;
-        params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams;
-      }
-    > = (props) => {
-      const { projectId, params } = props ?? {};
-
-      return listProjectAlertsApiV1ProjectsProjectIdAlertsGet(
-        projectId,
-        params,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetMutationResult =
+export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryResult =
   NonNullable<
     Awaited<ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>>
   >;
-
-export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetMutationError =
+export type ListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryError =
   HTTPValidationError;
 
-/**
- * @summary List Project Alerts
- */
-export const useListProjectAlertsApiV1ProjectsProjectIdAlertsGet = <
+export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+  >,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  projectId: string,
+  params: undefined | ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
-      >,
-      TError,
-      {
-        projectId: string;
-        params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams;
-      },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+        >,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>>,
-  TError,
-  {
-    projectId: string;
-    params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams;
-  },
-  TContext
-> => {
-  return useMutation(
-    getListProjectAlertsApiV1ProjectsProjectIdAlertsGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary List Project Alerts
+ */
+
+export function useListProjectAlertsApiV1ProjectsProjectIdAlertsGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListProjectAlertsApiV1ProjectsProjectIdAlertsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectAlertsApiV1ProjectsProjectIdAlertsGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListProjectAlertsApiV1ProjectsProjectIdAlertsGetQueryOptions(
+      projectId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Review Alert
  */
@@ -386,179 +412,78 @@ export const reviewAlertApiV1AlertsAlertIdReviewPost = (
   });
 };
 
-export const getReviewAlertApiV1AlertsAlertIdReviewPostQueryKey = (
-  alertId: string,
-  reviewAlertRequest?: ReviewAlertRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/alerts/${alertId}/review`,
-    reviewAlertRequest,
-  ] as const;
-};
-
-export const getReviewAlertApiV1AlertsAlertIdReviewPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+export const getReviewAlertApiV1AlertsAlertIdReviewPostMutationOptions = <
   TError = HTTPValidationError,
->(
-  alertId: string,
-  reviewAlertRequest: ReviewAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getReviewAlertApiV1AlertsAlertIdReviewPostQueryKey(
-      alertId,
-      reviewAlertRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>
-  > = ({ signal }) =>
-    reviewAlertApiV1AlertsAlertIdReviewPost(
-      alertId,
-      reviewAlertRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: alertId !== null && alertId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { alertId: string; data: ReviewAlertRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+  TError,
+  { alertId: string; data: ReviewAlertRequest },
+  TContext
+> => {
+  const mutationKey = ["reviewAlertApiV1AlertsAlertIdReviewPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+    { alertId: string; data: ReviewAlertRequest }
+  > = (props) => {
+    const { alertId, data } = props ?? {};
+
+    return reviewAlertApiV1AlertsAlertIdReviewPost(alertId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type ReviewAlertApiV1AlertsAlertIdReviewPostQueryResult = NonNullable<
+export type ReviewAlertApiV1AlertsAlertIdReviewPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>
 >;
-export type ReviewAlertApiV1AlertsAlertIdReviewPostQueryError =
+export type ReviewAlertApiV1AlertsAlertIdReviewPostMutationBody =
+  ReviewAlertRequest;
+export type ReviewAlertApiV1AlertsAlertIdReviewPostMutationError =
   HTTPValidationError;
 
-export function useReviewAlertApiV1AlertsAlertIdReviewPost<
-  TData = Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  reviewAlertRequest: ReviewAlertRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-          TError,
-          Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useReviewAlertApiV1AlertsAlertIdReviewPost<
-  TData = Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  reviewAlertRequest: ReviewAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-          TError,
-          Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useReviewAlertApiV1AlertsAlertIdReviewPost<
-  TData = Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  reviewAlertRequest: ReviewAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Review Alert
  */
-
-export function useReviewAlertApiV1AlertsAlertIdReviewPost<
-  TData = Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+export const useReviewAlertApiV1AlertsAlertIdReviewPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  alertId: string,
-  reviewAlertRequest: ReviewAlertRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+      TError,
+      { alertId: string; data: ReviewAlertRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getReviewAlertApiV1AlertsAlertIdReviewPostQueryOptions(
-    alertId,
-    reviewAlertRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof reviewAlertApiV1AlertsAlertIdReviewPost>>,
+  TError,
+  { alertId: string; data: ReviewAlertRequest },
+  TContext
+> => {
+  return useMutation(
+    getReviewAlertApiV1AlertsAlertIdReviewPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * @summary Bulk Review Alerts
  */
@@ -575,156 +500,79 @@ export const bulkReviewAlertsApiV1AlertsBulkReviewPost = (
   });
 };
 
-export const getBulkReviewAlertsApiV1AlertsBulkReviewPostQueryKey = (
-  bulkReviewRequest?: BulkReviewRequest,
-) => {
-  return ["POST", `/api/v1/alerts/bulk-review`, bulkReviewRequest] as const;
-};
-
-export const getBulkReviewAlertsApiV1AlertsBulkReviewPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+export const getBulkReviewAlertsApiV1AlertsBulkReviewPostMutationOptions = <
   TError = HTTPValidationError,
->(
-  bulkReviewRequest: BulkReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getBulkReviewAlertsApiV1AlertsBulkReviewPostQueryKey(bulkReviewRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>
-  > = ({ signal }) =>
-    bulkReviewAlertsApiV1AlertsBulkReviewPost(bulkReviewRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: BulkReviewRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+  TError,
+  { data: BulkReviewRequest },
+  TContext
+> => {
+  const mutationKey = ["bulkReviewAlertsApiV1AlertsBulkReviewPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+    { data: BulkReviewRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkReviewAlertsApiV1AlertsBulkReviewPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type BulkReviewAlertsApiV1AlertsBulkReviewPostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>
->;
-export type BulkReviewAlertsApiV1AlertsBulkReviewPostQueryError =
+export type BulkReviewAlertsApiV1AlertsBulkReviewPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>
+  >;
+export type BulkReviewAlertsApiV1AlertsBulkReviewPostMutationBody =
+  BulkReviewRequest;
+export type BulkReviewAlertsApiV1AlertsBulkReviewPostMutationError =
   HTTPValidationError;
 
-export function useBulkReviewAlertsApiV1AlertsBulkReviewPost<
-  TData = Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-  TError = HTTPValidationError,
->(
-  bulkReviewRequest: BulkReviewRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-          TError,
-          Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkReviewAlertsApiV1AlertsBulkReviewPost<
-  TData = Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-  TError = HTTPValidationError,
->(
-  bulkReviewRequest: BulkReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-          TError,
-          Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkReviewAlertsApiV1AlertsBulkReviewPost<
-  TData = Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-  TError = HTTPValidationError,
->(
-  bulkReviewRequest: BulkReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Bulk Review Alerts
  */
-
-export function useBulkReviewAlertsApiV1AlertsBulkReviewPost<
-  TData = Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+export const useBulkReviewAlertsApiV1AlertsBulkReviewPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  bulkReviewRequest: BulkReviewRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+      TError,
+      { data: BulkReviewRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getBulkReviewAlertsApiV1AlertsBulkReviewPostQueryOptions(
-    bulkReviewRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof bulkReviewAlertsApiV1AlertsBulkReviewPost>>,
+  TError,
+  { data: BulkReviewRequest },
+  TContext
+> => {
+  return useMutation(
+    getBulkReviewAlertsApiV1AlertsBulkReviewPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * @summary Attach Evidence
  */
@@ -742,209 +590,79 @@ export const attachEvidenceApiV1AlertsAlertIdEvidencePost = (
   });
 };
 
-export const getAttachEvidenceApiV1AlertsAlertIdEvidencePostQueryKey = (
-  alertId: string,
-  attachEvidenceRequest?: AttachEvidenceRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/alerts/${alertId}/evidence`,
-    attachEvidenceRequest,
-  ] as const;
-};
-
-export const getAttachEvidenceApiV1AlertsAlertIdEvidencePostQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-  >,
+export const getAttachEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions = <
   TError = HTTPValidationError,
->(
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getAttachEvidenceApiV1AlertsAlertIdEvidencePostQueryKey(
-      alertId,
-      attachEvidenceRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>
-  > = ({ signal }) =>
-    attachEvidenceApiV1AlertsAlertIdEvidencePost(
-      alertId,
-      attachEvidenceRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: alertId !== null && alertId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { alertId: string; data: AttachEvidenceRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
+  TError,
+  { alertId: string; data: AttachEvidenceRequest },
+  TContext
+> => {
+  const mutationKey = ["attachEvidenceApiV1AlertsAlertIdEvidencePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
+    { alertId: string; data: AttachEvidenceRequest }
+  > = (props) => {
+    const { alertId, data } = props ?? {};
+
+    return attachEvidenceApiV1AlertsAlertIdEvidencePost(alertId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePostQueryResult =
+export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationResult =
   NonNullable<
     Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>
   >;
-export type AttachEvidenceApiV1AlertsAlertIdEvidencePostQueryError =
+export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationBody =
+  AttachEvidenceRequest;
+export type AttachEvidenceApiV1AlertsAlertIdEvidencePostMutationError =
   HTTPValidationError;
 
-export function useAttachEvidenceApiV1AlertsAlertIdEvidencePost<
-  TData = Awaited<
-    ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-  >,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useAttachEvidenceApiV1AlertsAlertIdEvidencePost<
-  TData = Awaited<
-    ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-  >,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useAttachEvidenceApiV1AlertsAlertIdEvidencePost<
-  TData = Awaited<
-    ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-  >,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Attach Evidence
  */
-
-export function useAttachEvidenceApiV1AlertsAlertIdEvidencePost<
-  TData = Awaited<
-    ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-  >,
+export const useAttachEvidenceApiV1AlertsAlertIdEvidencePost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  alertId: string,
-  attachEvidenceRequest: AttachEvidenceRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>
-        >,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
+      TError,
+      { alertId: string; data: AttachEvidenceRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getAttachEvidenceApiV1AlertsAlertIdEvidencePostQueryOptions(
-      alertId,
-      attachEvidenceRequest,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+): UseMutationResult<
+  Awaited<ReturnType<typeof attachEvidenceApiV1AlertsAlertIdEvidencePost>>,
+  TError,
+  { alertId: string; data: AttachEvidenceRequest },
+  TContext
+> => {
+  return useMutation(
+    getAttachEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Resolve Alert
  */
@@ -962,179 +680,79 @@ export const resolveAlertApiV1AlertsAlertIdResolvePost = (
   });
 };
 
-export const getResolveAlertApiV1AlertsAlertIdResolvePostQueryKey = (
-  alertId: string,
-  resolveAlertRequest?: ResolveAlertRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/alerts/${alertId}/resolve`,
-    resolveAlertRequest,
-  ] as const;
-};
-
-export const getResolveAlertApiV1AlertsAlertIdResolvePostQueryOptions = <
-  TData = Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+export const getResolveAlertApiV1AlertsAlertIdResolvePostMutationOptions = <
   TError = HTTPValidationError,
->(
-  alertId: string,
-  resolveAlertRequest: ResolveAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getResolveAlertApiV1AlertsAlertIdResolvePostQueryKey(
-      alertId,
-      resolveAlertRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>
-  > = ({ signal }) =>
-    resolveAlertApiV1AlertsAlertIdResolvePost(
-      alertId,
-      resolveAlertRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: alertId !== null && alertId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { alertId: string; data: ResolveAlertRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+  TError,
+  { alertId: string; data: ResolveAlertRequest },
+  TContext
+> => {
+  const mutationKey = ["resolveAlertApiV1AlertsAlertIdResolvePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+    { alertId: string; data: ResolveAlertRequest }
+  > = (props) => {
+    const { alertId, data } = props ?? {};
+
+    return resolveAlertApiV1AlertsAlertIdResolvePost(alertId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type ResolveAlertApiV1AlertsAlertIdResolvePostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>
->;
-export type ResolveAlertApiV1AlertsAlertIdResolvePostQueryError =
+export type ResolveAlertApiV1AlertsAlertIdResolvePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>
+  >;
+export type ResolveAlertApiV1AlertsAlertIdResolvePostMutationBody =
+  ResolveAlertRequest;
+export type ResolveAlertApiV1AlertsAlertIdResolvePostMutationError =
   HTTPValidationError;
 
-export function useResolveAlertApiV1AlertsAlertIdResolvePost<
-  TData = Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  resolveAlertRequest: ResolveAlertRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-          TError,
-          Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useResolveAlertApiV1AlertsAlertIdResolvePost<
-  TData = Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  resolveAlertRequest: ResolveAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-          TError,
-          Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useResolveAlertApiV1AlertsAlertIdResolvePost<
-  TData = Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-  TError = HTTPValidationError,
->(
-  alertId: string,
-  resolveAlertRequest: ResolveAlertRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Resolve Alert
  */
-
-export function useResolveAlertApiV1AlertsAlertIdResolvePost<
-  TData = Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+export const useResolveAlertApiV1AlertsAlertIdResolvePost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  alertId: string,
-  resolveAlertRequest: ResolveAlertRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+      TError,
+      { alertId: string; data: ResolveAlertRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getResolveAlertApiV1AlertsAlertIdResolvePostQueryOptions(
-    alertId,
-    resolveAlertRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof resolveAlertApiV1AlertsAlertIdResolvePost>>,
+  TError,
+  { alertId: string; data: ResolveAlertRequest },
+  TContext
+> => {
+  return useMutation(
+    getResolveAlertApiV1AlertsAlertIdResolvePostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * @summary Get Alert History
  */
@@ -1149,78 +767,181 @@ export const getAlertHistoryApiV1AlertsAlertIdHistoryGet = (
   });
 };
 
-export const getGetAlertHistoryApiV1AlertsAlertIdHistoryGetMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
-    TError,
-    { alertId: string },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
-  TError,
-  { alertId: string },
-  TContext
-> => {
-  const mutationKey = ["getAlertHistoryApiV1AlertsAlertIdHistoryGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
-    { alertId: string }
-  > = (props) => {
-    const { alertId } = props ?? {};
-
-    return getAlertHistoryApiV1AlertsAlertIdHistoryGet(alertId);
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryKey = (
+  alertId: string,
+) => {
+  return [`/api/v1/alerts/${alertId}/history`] as const;
 };
 
-export type GetAlertHistoryApiV1AlertsAlertIdHistoryGetMutationResult =
+export const getGetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  alertId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryKey(alertId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>
+  > = ({ signal }) =>
+    getAlertHistoryApiV1AlertsAlertIdHistoryGet(alertId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: alertId !== null && alertId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryResult =
   NonNullable<
     Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>
   >;
-
-export type GetAlertHistoryApiV1AlertsAlertIdHistoryGetMutationError =
+export type GetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryError =
   HTTPValidationError;
 
-/**
- * @summary Get Alert History
- */
-export const useGetAlertHistoryApiV1AlertsAlertIdHistoryGet = <
+export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+  >,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  alertId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  alertId: string,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
-      TError,
-      { alertId: string },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  alertId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
-  TError,
-  { alertId: string },
-  TContext
-> => {
-  return useMutation(
-    getGetAlertHistoryApiV1AlertsAlertIdHistoryGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get Alert History
+ */
+
+export function useGetAlertHistoryApiV1AlertsAlertIdHistoryGet<
+  TData = Awaited<
+    ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  alertId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAlertHistoryApiV1AlertsAlertIdHistoryGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetAlertHistoryApiV1AlertsAlertIdHistoryGetQueryOptions(
+      alertId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Bulk Delete Alerts
  */
@@ -1237,152 +958,76 @@ export const bulkDeleteAlertsApiV1AlertsBulkDeletePost = (
   });
 };
 
-export const getBulkDeleteAlertsApiV1AlertsBulkDeletePostQueryKey = (
-  bulkDeleteRequest?: BulkDeleteRequest,
-) => {
-  return ["POST", `/api/v1/alerts/bulk-delete`, bulkDeleteRequest] as const;
-};
-
-export const getBulkDeleteAlertsApiV1AlertsBulkDeletePostQueryOptions = <
-  TData = Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+export const getBulkDeleteAlertsApiV1AlertsBulkDeletePostMutationOptions = <
   TError = HTTPValidationError,
->(
-  bulkDeleteRequest: BulkDeleteRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getBulkDeleteAlertsApiV1AlertsBulkDeletePostQueryKey(bulkDeleteRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
-  > = ({ signal }) =>
-    bulkDeleteAlertsApiV1AlertsBulkDeletePost(bulkDeleteRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: BulkDeleteRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+  TError,
+  { data: BulkDeleteRequest },
+  TContext
+> => {
+  const mutationKey = ["bulkDeleteAlertsApiV1AlertsBulkDeletePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+    { data: BulkDeleteRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkDeleteAlertsApiV1AlertsBulkDeletePost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type BulkDeleteAlertsApiV1AlertsBulkDeletePostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
->;
-export type BulkDeleteAlertsApiV1AlertsBulkDeletePostQueryError =
+export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
+  >;
+export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationBody =
+  BulkDeleteRequest;
+export type BulkDeleteAlertsApiV1AlertsBulkDeletePostMutationError =
   HTTPValidationError;
 
-export function useBulkDeleteAlertsApiV1AlertsBulkDeletePost<
-  TData = Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-  TError = HTTPValidationError,
->(
-  bulkDeleteRequest: BulkDeleteRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-          TError,
-          Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkDeleteAlertsApiV1AlertsBulkDeletePost<
-  TData = Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-  TError = HTTPValidationError,
->(
-  bulkDeleteRequest: BulkDeleteRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-          TError,
-          Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkDeleteAlertsApiV1AlertsBulkDeletePost<
-  TData = Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-  TError = HTTPValidationError,
->(
-  bulkDeleteRequest: BulkDeleteRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Bulk Delete Alerts
  */
-
-export function useBulkDeleteAlertsApiV1AlertsBulkDeletePost<
-  TData = Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+export const useBulkDeleteAlertsApiV1AlertsBulkDeletePost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  bulkDeleteRequest: BulkDeleteRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+      TError,
+      { data: BulkDeleteRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getBulkDeleteAlertsApiV1AlertsBulkDeletePostQueryOptions(
-    bulkDeleteRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof bulkDeleteAlertsApiV1AlertsBulkDeletePost>>,
+  TError,
+  { data: BulkDeleteRequest },
+  TContext
+> => {
+  return useMutation(
+    getBulkDeleteAlertsApiV1AlertsBulkDeletePostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+};

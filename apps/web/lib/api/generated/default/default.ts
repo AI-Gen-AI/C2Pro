@@ -37,15 +37,38 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
-  MutationFunction,
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   QueryClient,
-  UseMutationOptions,
-  UseMutationResult,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
 import { orvalApiClient } from "../../client";
+
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 /**
  * @summary Generic Health Check
@@ -54,68 +77,120 @@ export const getApiV1Health = (signal?: AbortSignal) => {
   return orvalApiClient<void>({ url: `/api/v1/health`, method: "GET", signal });
 };
 
-export const getGetApiV1HealthMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getApiV1Health>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getApiV1Health>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getApiV1Health"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getApiV1Health>>,
-    void
-  > = () => {
-    return getApiV1Health();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetApiV1HealthQueryKey = () => {
+  return [`/api/v1/health`] as const;
 };
 
-export type GetApiV1HealthMutationResult = NonNullable<
+export const getGetApiV1HealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getApiV1Health>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof getApiV1Health>>, TError, TData>
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetApiV1HealthQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiV1Health>>> = ({
+    signal,
+  }) => getApiV1Health(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getApiV1Health>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetApiV1HealthQueryResult = NonNullable<
   Awaited<ReturnType<typeof getApiV1Health>>
 >;
+export type GetApiV1HealthQueryError = unknown;
 
-export type GetApiV1HealthMutationError = unknown;
-
-/**
- * @summary Generic Health Check
- */
-export const useGetApiV1Health = <TError = unknown, TContext = unknown>(
+export function useGetApiV1Health<
+  TData = Awaited<ReturnType<typeof getApiV1Health>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getApiV1Health>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1Health>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1Health>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1Health<
+  TData = Awaited<ReturnType<typeof getApiV1Health>>,
+  TError = unknown,
+>(
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof getApiV1Health>>,
-      TError,
-      void,
-      TContext
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getApiV1Health>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1Health>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1Health>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1Health<
+  TData = Awaited<ReturnType<typeof getApiV1Health>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getApiV1Health>>, TError, TData>
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getApiV1Health>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(getGetApiV1HealthMutationOptions(options), queryClient);
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Generic Health Check
+ */
+
+export function useGetApiV1Health<
+  TData = Awaited<ReturnType<typeof getApiV1Health>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getApiV1Health>>, TError, TData>
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetApiV1HealthQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Liveness Probe
  */
@@ -127,71 +202,140 @@ export const getApiV1HealthLive = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetApiV1HealthLiveMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getApiV1HealthLive>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getApiV1HealthLive>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getApiV1HealthLive"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getApiV1HealthLive>>,
-    void
-  > = () => {
-    return getApiV1HealthLive();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetApiV1HealthLiveQueryKey = () => {
+  return [`/api/v1/health/live`] as const;
 };
 
-export type GetApiV1HealthLiveMutationResult = NonNullable<
-  Awaited<ReturnType<typeof getApiV1HealthLive>>
->;
-
-export type GetApiV1HealthLiveMutationError = unknown;
-
-/**
- * @summary Liveness Probe
- */
-export const useGetApiV1HealthLive = <TError = unknown, TContext = unknown>(
-  options?: {
-    mutation?: UseMutationOptions<
+export const getGetApiV1HealthLiveQueryOptions = <
+  TData = Awaited<ReturnType<typeof getApiV1HealthLive>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getApiV1HealthLive>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetApiV1HealthLiveQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getApiV1HealthLive>>
+  > = ({ signal }) => getApiV1HealthLive(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getApiV1HealthLive>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetApiV1HealthLiveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getApiV1HealthLive>>
+>;
+export type GetApiV1HealthLiveQueryError = unknown;
+
+export function useGetApiV1HealthLive<
+  TData = Awaited<ReturnType<typeof getApiV1HealthLive>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthLive>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthLive>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthLive>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthLive<
+  TData = Awaited<ReturnType<typeof getApiV1HealthLive>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthLive>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthLive>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthLive>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthLive<
+  TData = Awaited<ReturnType<typeof getApiV1HealthLive>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthLive>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getApiV1HealthLive>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetApiV1HealthLiveMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Liveness Probe
+ */
+
+export function useGetApiV1HealthLive<
+  TData = Awaited<ReturnType<typeof getApiV1HealthLive>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthLive>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetApiV1HealthLiveQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Readiness Probe
  */
@@ -203,71 +347,140 @@ export const getApiV1HealthReady = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetApiV1HealthReadyMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getApiV1HealthReady>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getApiV1HealthReady>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getApiV1HealthReady"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getApiV1HealthReady>>,
-    void
-  > = () => {
-    return getApiV1HealthReady();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetApiV1HealthReadyQueryKey = () => {
+  return [`/api/v1/health/ready`] as const;
 };
 
-export type GetApiV1HealthReadyMutationResult = NonNullable<
-  Awaited<ReturnType<typeof getApiV1HealthReady>>
->;
-
-export type GetApiV1HealthReadyMutationError = unknown;
-
-/**
- * @summary Readiness Probe
- */
-export const useGetApiV1HealthReady = <TError = unknown, TContext = unknown>(
-  options?: {
-    mutation?: UseMutationOptions<
+export const getGetApiV1HealthReadyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getApiV1HealthReady>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getApiV1HealthReady>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetApiV1HealthReadyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getApiV1HealthReady>>
+  > = ({ signal }) => getApiV1HealthReady(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getApiV1HealthReady>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetApiV1HealthReadyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getApiV1HealthReady>>
+>;
+export type GetApiV1HealthReadyQueryError = unknown;
+
+export function useGetApiV1HealthReady<
+  TData = Awaited<ReturnType<typeof getApiV1HealthReady>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthReady>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthReady>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthReady>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthReady<
+  TData = Awaited<ReturnType<typeof getApiV1HealthReady>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthReady>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthReady>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthReady>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthReady<
+  TData = Awaited<ReturnType<typeof getApiV1HealthReady>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthReady>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getApiV1HealthReady>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetApiV1HealthReadyMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Readiness Probe
+ */
+
+export function useGetApiV1HealthReady<
+  TData = Awaited<ReturnType<typeof getApiV1HealthReady>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthReady>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetApiV1HealthReadyQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Circuit Breaker Status
  */
@@ -279,71 +492,137 @@ export const getApiV1HealthCircuitBreakers = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetApiV1HealthCircuitBreakersMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getApiV1HealthCircuitBreakers"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
-    void
-  > = () => {
-    return getApiV1HealthCircuitBreakers();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetApiV1HealthCircuitBreakersQueryKey = () => {
+  return [`/api/v1/health/circuit-breakers`] as const;
 };
 
-export type GetApiV1HealthCircuitBreakersMutationResult = NonNullable<
-  Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>
->;
-
-export type GetApiV1HealthCircuitBreakersMutationError = unknown;
-
-/**
- * @summary Circuit Breaker Status
- */
-export const useGetApiV1HealthCircuitBreakers = <
+export const getGetApiV1HealthCircuitBreakersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
   TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetApiV1HealthCircuitBreakersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>
+  > = ({ signal }) => getApiV1HealthCircuitBreakers(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetApiV1HealthCircuitBreakersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>
+>;
+export type GetApiV1HealthCircuitBreakersQueryError = unknown;
+
+export function useGetApiV1HealthCircuitBreakers<
+  TData = Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthCircuitBreakers<
+  TData = Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiV1HealthCircuitBreakers<
+  TData = Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetApiV1HealthCircuitBreakersMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Circuit Breaker Status
+ */
+
+export function useGetApiV1HealthCircuitBreakers<
+  TData = Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiV1HealthCircuitBreakers>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetApiV1HealthCircuitBreakersQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

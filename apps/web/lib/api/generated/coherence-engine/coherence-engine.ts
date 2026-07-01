@@ -37,17 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
-  DataTag,
-  DefinedInitialDataOptions,
-  DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
-  QueryFunction,
-  QueryKey,
-  UndefinedInitialDataOptions,
-  UseQueryOptions,
-  UseQueryResult,
+  UseMutationOptions,
+  UseMutationResult,
 } from "@tanstack/react-query";
 
 import type {
@@ -57,24 +52,6 @@ import type {
 } from "../models";
 
 import { orvalApiClient } from "../../client";
-
-const withQueryKey = <T extends object, K>(
-  query: T,
-  queryKey: K,
-): T & { queryKey: K } => {
-  const result = { queryKey } as T & { queryKey: K };
-  for (const key of Object.keys(query)) {
-    // The explicit queryKey always wins, matching the previous
-    // `{ ...query, queryKey }` spread where it was set last.
-    if (key === "queryKey") continue;
-    Object.defineProperty(result, key, {
-      enumerable: true,
-      configurable: true,
-      get: () => (query as Record<string, unknown>)[key],
-    });
-  }
-  return result;
-};
 
 /**
  * Accepts a project's context and evaluates it against a predefined set of coherence rules.
@@ -94,182 +71,80 @@ export const evaluateProjectCoherenceV0CoherenceEvaluatePost = (
   });
 };
 
-export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostQueryKey = (
-  projectContext?: ProjectContext,
-) => {
-  return ["POST", `/coherence/evaluate`, projectContext] as const;
-};
-
-export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  projectContext: ProjectContext,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-        >,
-        TError,
-        TData
-      >
+export const getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      TError,
+      { data: ProjectContext },
+      TContext
     >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getEvaluateProjectCoherenceV0CoherenceEvaluatePostQueryKey(projectContext);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>
-  > = ({ signal }) =>
-    evaluateProjectCoherenceV0CoherenceEvaluatePost(projectContext, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  }): UseMutationOptions<
     Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
+    { data: ProjectContext },
+    TContext
+  > => {
+    const mutationKey = ["evaluateProjectCoherenceV0CoherenceEvaluatePost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-export type EvaluateProjectCoherenceV0CoherenceEvaluatePostQueryResult =
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      { data: ProjectContext }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return evaluateProjectCoherenceV0CoherenceEvaluatePost(data);
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationResult =
   NonNullable<
     Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>
   >;
-export type EvaluateProjectCoherenceV0CoherenceEvaluatePostQueryError =
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationBody =
+  ProjectContext;
+export type EvaluateProjectCoherenceV0CoherenceEvaluatePostMutationError =
   void | HTTPValidationError;
 
-export function useEvaluateProjectCoherenceV0CoherenceEvaluatePost<
-  TData = Awaited<
-    ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  projectContext: ProjectContext,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useEvaluateProjectCoherenceV0CoherenceEvaluatePost<
-  TData = Awaited<
-    ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  projectContext: ProjectContext,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useEvaluateProjectCoherenceV0CoherenceEvaluatePost<
-  TData = Awaited<
-    ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  projectContext: ProjectContext,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Evaluate Project Coherence
  */
-
-export function useEvaluateProjectCoherenceV0CoherenceEvaluatePost<
-  TData = Awaited<
-    ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-  >,
+export const useEvaluateProjectCoherenceV0CoherenceEvaluatePost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  projectContext: ProjectContext,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
-        >,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>
+      >,
+      TError,
+      { data: ProjectContext },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getEvaluateProjectCoherenceV0CoherenceEvaluatePostQueryOptions(
-      projectContext,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+): UseMutationResult<
+  Awaited<ReturnType<typeof evaluateProjectCoherenceV0CoherenceEvaluatePost>>,
+  TError,
+  { data: ProjectContext },
+  TContext
+> => {
+  return useMutation(
+    getEvaluateProjectCoherenceV0CoherenceEvaluatePostMutationOptions(options),
+    queryClient,
+  );
+};

@@ -96,155 +96,77 @@ export const analyzeDocumentApiV1AnalyzePost = (
   });
 };
 
-export const getAnalyzeDocumentApiV1AnalyzePostQueryKey = (
-  analyzeRequest?: AnalyzeRequest,
-) => {
-  return ["POST", `/api/v1/analysis/analyze`, analyzeRequest] as const;
-};
-
-export const getAnalyzeDocumentApiV1AnalyzePostQueryOptions = <
-  TData = Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+export const getAnalyzeDocumentApiV1AnalyzePostMutationOptions = <
   TError = void | HTTPValidationError,
->(
-  analyzeRequest: AnalyzeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getAnalyzeDocumentApiV1AnalyzePostQueryKey(analyzeRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>
-  > = ({ signal }) => analyzeDocumentApiV1AnalyzePost(analyzeRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: AnalyzeRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+  TError,
+  { data: AnalyzeRequest },
+  TContext
+> => {
+  const mutationKey = ["analyzeDocumentApiV1AnalyzePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+    { data: AnalyzeRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return analyzeDocumentApiV1AnalyzePost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type AnalyzeDocumentApiV1AnalyzePostQueryResult = NonNullable<
+export type AnalyzeDocumentApiV1AnalyzePostMutationResult = NonNullable<
   Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>
 >;
-export type AnalyzeDocumentApiV1AnalyzePostQueryError =
+export type AnalyzeDocumentApiV1AnalyzePostMutationBody = AnalyzeRequest;
+export type AnalyzeDocumentApiV1AnalyzePostMutationError =
   void | HTTPValidationError;
 
-export function useAnalyzeDocumentApiV1AnalyzePost<
-  TData = Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-  TError = void | HTTPValidationError,
->(
-  analyzeRequest: AnalyzeRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-          TError,
-          Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useAnalyzeDocumentApiV1AnalyzePost<
-  TData = Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-  TError = void | HTTPValidationError,
->(
-  analyzeRequest: AnalyzeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-          TError,
-          Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useAnalyzeDocumentApiV1AnalyzePost<
-  TData = Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-  TError = void | HTTPValidationError,
->(
-  analyzeRequest: AnalyzeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Analyze Document
  */
-
-export function useAnalyzeDocumentApiV1AnalyzePost<
-  TData = Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+export const useAnalyzeDocumentApiV1AnalyzePost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  analyzeRequest: AnalyzeRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+      TError,
+      { data: AnalyzeRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getAnalyzeDocumentApiV1AnalyzePostQueryOptions(
-    analyzeRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeDocumentApiV1AnalyzePost>>,
+  TError,
+  { data: AnalyzeRequest },
+  TContext
+> => {
+  return useMutation(
+    getAnalyzeDocumentApiV1AnalyzePostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * SSE endpoint that streams real-time processing stage updates and completion status for a project.
  * @summary Stream Project Processing Progress
@@ -263,68 +185,81 @@ export const streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamG
     });
   };
 
-export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetMutationOptions =
-  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
+export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryKey =
+  (
+    projectId: string,
+    params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  ) => {
+    return [
+      `/api/v1/analysis/projects/${projectId}/process/stream`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    projectId: string,
+    params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryKey(
+        projectId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+        >
+      >
+    > = ({ signal }) =>
+      streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet(
+        projectId,
+        params,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
       Awaited<
         ReturnType<
           typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
         >
       >,
       TError,
-      {
-        projectId: string;
-        params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams;
-      },
-      TContext
-    >;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
-      >
-    >,
-    TError,
-    {
-      projectId: string;
-      params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams;
-    },
-    TContext
-  > => {
-    const mutationKey = [
-      "streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet",
-    ];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
-        >
-      >,
-      {
-        projectId: string;
-        params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams;
-      }
-    > = (props) => {
-      const { projectId, params } = props ?? {};
-
-      return streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet(
-        projectId,
-        params,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
   };
 
-export type StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetMutationResult =
+export type StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryResult =
   NonNullable<
     Awaited<
       ReturnType<
@@ -332,48 +267,166 @@ export type StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGe
       >
     >
   >;
-
-export type StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetMutationError =
+export type StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryError =
   void | HTTPValidationError;
 
-/**
- * @summary Stream Project Processing Progress
- */
-export const useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet =
-  <TError = void | HTTPValidationError, TContext = unknown>(
-    options?: {
-      mutation?: UseMutationOptions<
+export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet<
+  TData = Awaited<
+    ReturnType<
+      typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params:
+    | undefined
+    | StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
         Awaited<
           ReturnType<
             typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
           >
         >,
         TError,
-        {
-          projectId: string;
-          params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams;
-        },
-        TContext
-      >;
-    },
-    queryClient?: QueryClient,
-  ): UseMutationResult<
-    Awaited<
-      ReturnType<
-        typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+        TData
       >
-    >,
-    TError,
-    {
-      projectId: string;
-      params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams;
-    },
-    TContext
-  > => {
-    return useMutation(
-      getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetMutationOptions(
-        options,
-      ),
-      queryClient,
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet<
+  TData = Awaited<
+    ReturnType<
+      typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet<
+  TData = Awaited<
+    ReturnType<
+      typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Stream Project Processing Progress
+ */
+
+export function useStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet<
+  TData = Awaited<
+    ReturnType<
+      typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: StreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof streamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getStreamProjectProcessingApiV1AnalysisProjectsProjectIdProcessStreamGetQueryOptions(
+      projectId,
+      params,
+      options,
     );
-  };
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

@@ -37,12 +37,17 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
-  MutationFunction,
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   QueryClient,
-  UseMutationOptions,
-  UseMutationResult,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
@@ -51,6 +56,24 @@ import type {
 } from "../models";
 
 import { orvalApiClient } from "../../client";
+
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 /**
  * Returns coherence dashboard data for a project.
@@ -76,95 +99,217 @@ export const getCoherenceDashboardApiCoherenceDashboardProjectIdGet = (
   );
 };
 
-export const getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
+export const getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey =
+  (projectId: string) => {
+    return [`/coherence/dashboard/${projectId}`] as const;
+  };
+
+export const getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    projectId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey(
+        projectId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+        >
+      >
+    > = ({ signal }) =>
+      getCoherenceDashboardApiCoherenceDashboardProjectIdGet(projectId, signal);
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
       Awaited<
         ReturnType<
           typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
         >
       >,
       TError,
-      { projectId: string },
-      TContext
-    >;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
-    >,
-    TError,
-    { projectId: string },
-    TContext
-  > => {
-    const mutationKey = [
-      "getCoherenceDashboardApiCoherenceDashboardProjectIdGet",
-    ];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
-        >
-      >,
-      { projectId: string }
-    > = (props) => {
-      const { projectId } = props ?? {};
-
-      return getCoherenceDashboardApiCoherenceDashboardProjectIdGet(projectId);
-    };
-
-    return { mutationFn, ...mutationOptions };
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
   };
 
-export type GetCoherenceDashboardApiCoherenceDashboardProjectIdGetMutationResult =
+export type GetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryResult =
   NonNullable<
     Awaited<
       ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
     >
   >;
-
-export type GetCoherenceDashboardApiCoherenceDashboardProjectIdGetMutationError =
+export type GetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryError =
   HTTPValidationError;
 
-/**
- * @summary Get Coherence Dashboard
- */
-export const useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet = <
+export function useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
+  >,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
-        >
-      >,
-      TError,
-      { projectId: string },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet<
+  TData = Awaited<
+    ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Coherence Dashboard
+ */
+
+export function useGetCoherenceDashboardApiCoherenceDashboardProjectIdGet<
+  TData = Awaited<
     ReturnType<typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet>
   >,
-  TError,
-  { projectId: string },
-  TContext
-> => {
-  return useMutation(
-    getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetMutationOptions(
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getCoherenceDashboardApiCoherenceDashboardProjectIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryOptions(
+      projectId,
       options,
-    ),
-    queryClient,
-  );
-};
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

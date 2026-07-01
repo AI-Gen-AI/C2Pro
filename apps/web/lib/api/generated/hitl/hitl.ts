@@ -100,156 +100,78 @@ export const routeForReviewApiV1HitlRoutePost = (
   });
 };
 
-export const getRouteForReviewApiV1HitlRoutePostQueryKey = (
-  routeForReviewRequest?: RouteForReviewRequest,
-) => {
-  return ["POST", `/api/v1/hitl/route`, routeForReviewRequest] as const;
-};
-
-export const getRouteForReviewApiV1HitlRoutePostQueryOptions = <
-  TData = Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+export const getRouteForReviewApiV1HitlRoutePostMutationOptions = <
   TError = void | HTTPValidationError,
->(
-  routeForReviewRequest: RouteForReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getRouteForReviewApiV1HitlRoutePostQueryKey(routeForReviewRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>
-  > = ({ signal }) =>
-    routeForReviewApiV1HitlRoutePost(routeForReviewRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: RouteForReviewRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+  TError,
+  { data: RouteForReviewRequest },
+  TContext
+> => {
+  const mutationKey = ["routeForReviewApiV1HitlRoutePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+    { data: RouteForReviewRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return routeForReviewApiV1HitlRoutePost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type RouteForReviewApiV1HitlRoutePostQueryResult = NonNullable<
+export type RouteForReviewApiV1HitlRoutePostMutationResult = NonNullable<
   Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>
 >;
-export type RouteForReviewApiV1HitlRoutePostQueryError =
+export type RouteForReviewApiV1HitlRoutePostMutationBody =
+  RouteForReviewRequest;
+export type RouteForReviewApiV1HitlRoutePostMutationError =
   void | HTTPValidationError;
 
-export function useRouteForReviewApiV1HitlRoutePost<
-  TData = Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-  TError = void | HTTPValidationError,
->(
-  routeForReviewRequest: RouteForReviewRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-          TError,
-          Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRouteForReviewApiV1HitlRoutePost<
-  TData = Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-  TError = void | HTTPValidationError,
->(
-  routeForReviewRequest: RouteForReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-          TError,
-          Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRouteForReviewApiV1HitlRoutePost<
-  TData = Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-  TError = void | HTTPValidationError,
->(
-  routeForReviewRequest: RouteForReviewRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Route an item for HITL review
  */
-
-export function useRouteForReviewApiV1HitlRoutePost<
-  TData = Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+export const useRouteForReviewApiV1HitlRoutePost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  routeForReviewRequest: RouteForReviewRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+      TError,
+      { data: RouteForReviewRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getRouteForReviewApiV1HitlRoutePostQueryOptions(
-    routeForReviewRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof routeForReviewApiV1HitlRoutePost>>,
+  TError,
+  { data: RouteForReviewRequest },
+  TContext
+> => {
+  return useMutation(
+    getRouteForReviewApiV1HitlRoutePostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * @summary List items in the review queue
  */
@@ -265,77 +187,155 @@ export const listReviewQueueApiV1HitlQueueGet = (
   });
 };
 
-export const getListReviewQueueApiV1HitlQueueGetMutationOptions = <
-  TError = void | HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
-    TError,
-    { params?: ListReviewQueueApiV1HitlQueueGetParams },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
-  TError,
-  { params?: ListReviewQueueApiV1HitlQueueGetParams },
-  TContext
-> => {
-  const mutationKey = ["listReviewQueueApiV1HitlQueueGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
-    { params?: ListReviewQueueApiV1HitlQueueGetParams }
-  > = (props) => {
-    const { params } = props ?? {};
-
-    return listReviewQueueApiV1HitlQueueGet(params);
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getListReviewQueueApiV1HitlQueueGetQueryKey = (
+  params?: ListReviewQueueApiV1HitlQueueGetParams,
+) => {
+  return [`/api/v1/hitl/queue`, ...(params ? [params] : [])] as const;
 };
 
-export type ListReviewQueueApiV1HitlQueueGetMutationResult = NonNullable<
+export const getListReviewQueueApiV1HitlQueueGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+  TError = void | HTTPValidationError,
+>(
+  params?: ListReviewQueueApiV1HitlQueueGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListReviewQueueApiV1HitlQueueGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>
+  > = ({ signal }) => listReviewQueueApiV1HitlQueueGet(params, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListReviewQueueApiV1HitlQueueGetQueryResult = NonNullable<
   Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>
 >;
-
-export type ListReviewQueueApiV1HitlQueueGetMutationError =
+export type ListReviewQueueApiV1HitlQueueGetQueryError =
   void | HTTPValidationError;
 
-/**
- * @summary List items in the review queue
- */
-export const useListReviewQueueApiV1HitlQueueGet = <
+export function useListReviewQueueApiV1HitlQueueGet<
+  TData = Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
   TError = void | HTTPValidationError,
-  TContext = unknown,
 >(
+  params: undefined | ListReviewQueueApiV1HitlQueueGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+          TError,
+          Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListReviewQueueApiV1HitlQueueGet<
+  TData = Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+  TError = void | HTTPValidationError,
+>(
+  params?: ListReviewQueueApiV1HitlQueueGetParams,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
-      TError,
-      { params?: ListReviewQueueApiV1HitlQueueGetParams },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+          TError,
+          Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListReviewQueueApiV1HitlQueueGet<
+  TData = Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+  TError = void | HTTPValidationError,
+>(
+  params?: ListReviewQueueApiV1HitlQueueGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
-  TError,
-  { params?: ListReviewQueueApiV1HitlQueueGetParams },
-  TContext
-> => {
-  return useMutation(
-    getListReviewQueueApiV1HitlQueueGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary List items in the review queue
+ */
+
+export function useListReviewQueueApiV1HitlQueueGet<
+  TData = Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+  TError = void | HTTPValidationError,
+>(
+  params?: ListReviewQueueApiV1HitlQueueGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listReviewQueueApiV1HitlQueueGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListReviewQueueApiV1HitlQueueGetQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Get a single review item
  */
@@ -350,77 +350,160 @@ export const getReviewItemApiV1HitlQueueItemIdGet = (
   });
 };
 
-export const getGetReviewItemApiV1HitlQueueItemIdGetMutationOptions = <
-  TError = void | HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
-    TError,
-    { itemId: string },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
-  TError,
-  { itemId: string },
-  TContext
-> => {
-  const mutationKey = ["getReviewItemApiV1HitlQueueItemIdGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
-    { itemId: string }
-  > = (props) => {
-    const { itemId } = props ?? {};
-
-    return getReviewItemApiV1HitlQueueItemIdGet(itemId);
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetReviewItemApiV1HitlQueueItemIdGetQueryKey = (
+  itemId: string,
+) => {
+  return [`/api/v1/hitl/queue/${itemId}`] as const;
 };
 
-export type GetReviewItemApiV1HitlQueueItemIdGetMutationResult = NonNullable<
+export const getGetReviewItemApiV1HitlQueueItemIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+  TError = void | HTTPValidationError,
+>(
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetReviewItemApiV1HitlQueueItemIdGetQueryKey(itemId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>
+  > = ({ signal }) => getReviewItemApiV1HitlQueueItemIdGet(itemId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: itemId !== null && itemId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetReviewItemApiV1HitlQueueItemIdGetQueryResult = NonNullable<
   Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>
 >;
-
-export type GetReviewItemApiV1HitlQueueItemIdGetMutationError =
+export type GetReviewItemApiV1HitlQueueItemIdGetQueryError =
   void | HTTPValidationError;
 
-/**
- * @summary Get a single review item
- */
-export const useGetReviewItemApiV1HitlQueueItemIdGet = <
+export function useGetReviewItemApiV1HitlQueueItemIdGet<
+  TData = Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
   TError = void | HTTPValidationError,
-  TContext = unknown,
 >(
+  itemId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetReviewItemApiV1HitlQueueItemIdGet<
+  TData = Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+  TError = void | HTTPValidationError,
+>(
+  itemId: string,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
-      TError,
-      { itemId: string },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetReviewItemApiV1HitlQueueItemIdGet<
+  TData = Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+  TError = void | HTTPValidationError,
+>(
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
-  TError,
-  { itemId: string },
-  TContext
-> => {
-  return useMutation(
-    getGetReviewItemApiV1HitlQueueItemIdGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get a single review item
+ */
+
+export function useGetReviewItemApiV1HitlQueueItemIdGet<
+  TData = Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+  TError = void | HTTPValidationError,
+>(
+  itemId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReviewItemApiV1HitlQueueItemIdGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetReviewItemApiV1HitlQueueItemIdGetQueryOptions(
+    itemId,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Approve a review item
  */
@@ -438,190 +521,79 @@ export const approveItemApiV1HitlQueueItemIdApprovePost = (
   });
 };
 
-export const getApproveItemApiV1HitlQueueItemIdApprovePostQueryKey = (
-  itemId: string,
-  approveRequest?: ApproveRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/hitl/queue/${itemId}/approve`,
-    approveRequest,
-  ] as const;
-};
-
-export const getApproveItemApiV1HitlQueueItemIdApprovePostQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-  >,
+export const getApproveItemApiV1HitlQueueItemIdApprovePostMutationOptions = <
   TError = void | HTTPValidationError,
->(
-  itemId: string,
-  approveRequest: ApproveRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getApproveItemApiV1HitlQueueItemIdApprovePostQueryKey(
-      itemId,
-      approveRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>
-  > = ({ signal }) =>
-    approveItemApiV1HitlQueueItemIdApprovePost(itemId, approveRequest, signal);
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: itemId !== null && itemId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { itemId: string; data: ApproveRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
+  TError,
+  { itemId: string; data: ApproveRequest },
+  TContext
+> => {
+  const mutationKey = ["approveItemApiV1HitlQueueItemIdApprovePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
+    { itemId: string; data: ApproveRequest }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return approveItemApiV1HitlQueueItemIdApprovePost(itemId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type ApproveItemApiV1HitlQueueItemIdApprovePostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>
->;
-export type ApproveItemApiV1HitlQueueItemIdApprovePostQueryError =
+export type ApproveItemApiV1HitlQueueItemIdApprovePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>
+  >;
+export type ApproveItemApiV1HitlQueueItemIdApprovePostMutationBody =
+  ApproveRequest;
+export type ApproveItemApiV1HitlQueueItemIdApprovePostMutationError =
   void | HTTPValidationError;
 
-export function useApproveItemApiV1HitlQueueItemIdApprovePost<
-  TData = Awaited<
-    ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  approveRequest: ApproveRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-          >,
-          TError,
-          Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useApproveItemApiV1HitlQueueItemIdApprovePost<
-  TData = Awaited<
-    ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  approveRequest: ApproveRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-          >,
-          TError,
-          Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useApproveItemApiV1HitlQueueItemIdApprovePost<
-  TData = Awaited<
-    ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  approveRequest: ApproveRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Approve a review item
  */
-
-export function useApproveItemApiV1HitlQueueItemIdApprovePost<
-  TData = Awaited<
-    ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>
-  >,
+export const useApproveItemApiV1HitlQueueItemIdApprovePost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  itemId: string,
-  approveRequest: ApproveRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
+      TError,
+      { itemId: string; data: ApproveRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getApproveItemApiV1HitlQueueItemIdApprovePostQueryOptions(
-      itemId,
-      approveRequest,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+): UseMutationResult<
+  Awaited<ReturnType<typeof approveItemApiV1HitlQueueItemIdApprovePost>>,
+  TError,
+  { itemId: string; data: ApproveRequest },
+  TContext
+> => {
+  return useMutation(
+    getApproveItemApiV1HitlQueueItemIdApprovePostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Reject a review item
  */
@@ -639,172 +611,79 @@ export const rejectItemApiV1HitlQueueItemIdRejectPost = (
   });
 };
 
-export const getRejectItemApiV1HitlQueueItemIdRejectPostQueryKey = (
-  itemId: string,
-  rejectRequest?: RejectRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/hitl/queue/${itemId}/reject`,
-    rejectRequest,
-  ] as const;
-};
-
-export const getRejectItemApiV1HitlQueueItemIdRejectPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+export const getRejectItemApiV1HitlQueueItemIdRejectPostMutationOptions = <
   TError = void | HTTPValidationError,
->(
-  itemId: string,
-  rejectRequest: RejectRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getRejectItemApiV1HitlQueueItemIdRejectPostQueryKey(itemId, rejectRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>
-  > = ({ signal }) =>
-    rejectItemApiV1HitlQueueItemIdRejectPost(itemId, rejectRequest, signal);
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: itemId !== null && itemId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { itemId: string; data: RejectRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+  TError,
+  { itemId: string; data: RejectRequest },
+  TContext
+> => {
+  const mutationKey = ["rejectItemApiV1HitlQueueItemIdRejectPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+    { itemId: string; data: RejectRequest }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return rejectItemApiV1HitlQueueItemIdRejectPost(itemId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type RejectItemApiV1HitlQueueItemIdRejectPostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>
->;
-export type RejectItemApiV1HitlQueueItemIdRejectPostQueryError =
+export type RejectItemApiV1HitlQueueItemIdRejectPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>
+  >;
+export type RejectItemApiV1HitlQueueItemIdRejectPostMutationBody =
+  RejectRequest;
+export type RejectItemApiV1HitlQueueItemIdRejectPostMutationError =
   void | HTTPValidationError;
 
-export function useRejectItemApiV1HitlQueueItemIdRejectPost<
-  TData = Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  rejectRequest: RejectRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-          TError,
-          Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRejectItemApiV1HitlQueueItemIdRejectPost<
-  TData = Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  rejectRequest: RejectRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-          TError,
-          Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRejectItemApiV1HitlQueueItemIdRejectPost<
-  TData = Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  rejectRequest: RejectRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Reject a review item
  */
-
-export function useRejectItemApiV1HitlQueueItemIdRejectPost<
-  TData = Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+export const useRejectItemApiV1HitlQueueItemIdRejectPost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  itemId: string,
-  rejectRequest: RejectRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+      TError,
+      { itemId: string; data: RejectRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getRejectItemApiV1HitlQueueItemIdRejectPostQueryOptions(
-    itemId,
-    rejectRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof rejectItemApiV1HitlQueueItemIdRejectPost>>,
+  TError,
+  { itemId: string; data: RejectRequest },
+  TContext
+> => {
+  return useMutation(
+    getRejectItemApiV1HitlQueueItemIdRejectPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * @summary Release an approved item (mark as CLOSED)
  */
@@ -819,173 +698,78 @@ export const releaseItemApiV1HitlQueueItemIdReleasePost = (
   });
 };
 
-export const getReleaseItemApiV1HitlQueueItemIdReleasePostQueryKey = (
-  itemId: string,
-) => {
-  return ["POST", `/api/v1/hitl/queue/${itemId}/release`] as const;
-};
-
-export const getReleaseItemApiV1HitlQueueItemIdReleasePostQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-  >,
+export const getReleaseItemApiV1HitlQueueItemIdReleasePostMutationOptions = <
   TError = void | HTTPValidationError,
->(
-  itemId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getReleaseItemApiV1HitlQueueItemIdReleasePostQueryKey(itemId);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>
-  > = ({ signal }) =>
-    releaseItemApiV1HitlQueueItemIdReleasePost(itemId, signal);
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: itemId !== null && itemId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { itemId: string },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  const mutationKey = ["releaseItemApiV1HitlQueueItemIdReleasePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
+    { itemId: string }
+  > = (props) => {
+    const { itemId } = props ?? {};
+
+    return releaseItemApiV1HitlQueueItemIdReleasePost(itemId);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type ReleaseItemApiV1HitlQueueItemIdReleasePostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>
->;
-export type ReleaseItemApiV1HitlQueueItemIdReleasePostQueryError =
+export type ReleaseItemApiV1HitlQueueItemIdReleasePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>
+  >;
+
+export type ReleaseItemApiV1HitlQueueItemIdReleasePostMutationError =
   void | HTTPValidationError;
 
-export function useReleaseItemApiV1HitlQueueItemIdReleasePost<
-  TData = Awaited<
-    ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-          >,
-          TError,
-          Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useReleaseItemApiV1HitlQueueItemIdReleasePost<
-  TData = Awaited<
-    ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-          >,
-          TError,
-          Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useReleaseItemApiV1HitlQueueItemIdReleasePost<
-  TData = Awaited<
-    ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-  >,
-  TError = void | HTTPValidationError,
->(
-  itemId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Release an approved item (mark as CLOSED)
  */
-
-export function useReleaseItemApiV1HitlQueueItemIdReleasePost<
-  TData = Awaited<
-    ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>
-  >,
+export const useReleaseItemApiV1HitlQueueItemIdReleasePost = <
   TError = void | HTTPValidationError,
+  TContext = unknown,
 >(
-  itemId: string,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
+      TError,
+      { itemId: string },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getReleaseItemApiV1HitlQueueItemIdReleasePostQueryOptions(itemId, options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+): UseMutationResult<
+  Awaited<ReturnType<typeof releaseItemApiV1HitlQueueItemIdReleasePost>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  return useMutation(
+    getReleaseItemApiV1HitlQueueItemIdReleasePostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Check SLAs and escalate overdue items
  */
@@ -997,139 +781,71 @@ export const checkAndEscalateApiV1HitlEscalatePost = (signal?: AbortSignal) => {
   });
 };
 
-export const getCheckAndEscalateApiV1HitlEscalatePostQueryKey = () => {
-  return ["POST", `/api/v1/hitl/escalate`] as const;
-};
-
-export const getCheckAndEscalateApiV1HitlEscalatePostQueryOptions = <
-  TData = Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+export const getCheckAndEscalateApiV1HitlEscalatePostMutationOptions = <
   TError = void,
+  TContext = unknown,
 >(options?: {
-  query?: Partial<
-    UseQueryOptions<
-      Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-      TError,
-      TData
-    >
-  >;
-}) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getCheckAndEscalateApiV1HitlEscalatePostQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>
-  > = ({ signal }) => checkAndEscalateApiV1HitlEscalatePost(signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    void,
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["checkAndEscalateApiV1HitlEscalatePost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+    void
+  > = () => {
+    return checkAndEscalateApiV1HitlEscalatePost();
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type CheckAndEscalateApiV1HitlEscalatePostQueryResult = NonNullable<
+export type CheckAndEscalateApiV1HitlEscalatePostMutationResult = NonNullable<
   Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>
 >;
-export type CheckAndEscalateApiV1HitlEscalatePostQueryError = void;
 
-export function useCheckAndEscalateApiV1HitlEscalatePost<
-  TData = Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-  TError = void,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-          TError,
-          Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCheckAndEscalateApiV1HitlEscalatePost<
-  TData = Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-  TError = void,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-          TError,
-          Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCheckAndEscalateApiV1HitlEscalatePost<
-  TData = Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-  TError = void,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
+export type CheckAndEscalateApiV1HitlEscalatePostMutationError = void;
+
 /**
  * @summary Check SLAs and escalate overdue items
  */
-
-export function useCheckAndEscalateApiV1HitlEscalatePost<
-  TData = Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+export const useCheckAndEscalateApiV1HitlEscalatePost = <
   TError = void,
+  TContext = unknown,
 >(
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+      TError,
+      void,
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getCheckAndEscalateApiV1HitlEscalatePostQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+): UseMutationResult<
+  Awaited<ReturnType<typeof checkAndEscalateApiV1HitlEscalatePost>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getCheckAndEscalateApiV1HitlEscalatePostMutationOptions(options),
+    queryClient,
+  );
+};

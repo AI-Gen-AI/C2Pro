@@ -103,74 +103,142 @@ export const healthCheckApiV1ProjectsHealthGet = (signal?: AbortSignal) => {
   });
 };
 
-export const getHealthCheckApiV1ProjectsHealthGetMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["healthCheckApiV1ProjectsHealthGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
-    void
-  > = () => {
-    return healthCheckApiV1ProjectsHealthGet();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getHealthCheckApiV1ProjectsHealthGetQueryKey = () => {
+  return [`/api/v1/projects/health`] as const;
 };
 
-export type HealthCheckApiV1ProjectsHealthGetMutationResult = NonNullable<
-  Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>
->;
-
-export type HealthCheckApiV1ProjectsHealthGetMutationError = unknown;
-
-/**
- * @summary Projects Service Health Check
- */
-export const useHealthCheckApiV1ProjectsHealthGet = <
+export const getHealthCheckApiV1ProjectsHealthGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
   TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getHealthCheckApiV1ProjectsHealthGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>
+  > = ({ signal }) => healthCheckApiV1ProjectsHealthGet(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type HealthCheckApiV1ProjectsHealthGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>
+>;
+export type HealthCheckApiV1ProjectsHealthGetQueryError = unknown;
+
+export function useHealthCheckApiV1ProjectsHealthGet<
+  TData = Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+          TError,
+          Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useHealthCheckApiV1ProjectsHealthGet<
+  TData = Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+          TError,
+          Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useHealthCheckApiV1ProjectsHealthGet<
+  TData = Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getHealthCheckApiV1ProjectsHealthGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Projects Service Health Check
+ */
+
+export function useHealthCheckApiV1ProjectsHealthGet<
+  TData = Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof healthCheckApiV1ProjectsHealthGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getHealthCheckApiV1ProjectsHealthGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Return aggregate project statistics for current tenant.
  * @summary Project statistics
@@ -183,74 +251,142 @@ export const getProjectStatsApiV1ProjectsStatsGet = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetProjectStatsApiV1ProjectsStatsGetMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getProjectStatsApiV1ProjectsStatsGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
-    void
-  > = () => {
-    return getProjectStatsApiV1ProjectsStatsGet();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetProjectStatsApiV1ProjectsStatsGetQueryKey = () => {
+  return [`/api/v1/projects/stats`] as const;
 };
 
-export type GetProjectStatsApiV1ProjectsStatsGetMutationResult = NonNullable<
-  Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>
->;
-
-export type GetProjectStatsApiV1ProjectsStatsGetMutationError = unknown;
-
-/**
- * @summary Project statistics
- */
-export const useGetProjectStatsApiV1ProjectsStatsGet = <
+export const getGetProjectStatsApiV1ProjectsStatsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
   TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProjectStatsApiV1ProjectsStatsGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>
+  > = ({ signal }) => getProjectStatsApiV1ProjectsStatsGet(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetProjectStatsApiV1ProjectsStatsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>
+>;
+export type GetProjectStatsApiV1ProjectsStatsGetQueryError = unknown;
+
+export function useGetProjectStatsApiV1ProjectsStatsGet<
+  TData = Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectStatsApiV1ProjectsStatsGet<
+  TData = Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectStatsApiV1ProjectsStatsGet<
+  TData = Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetProjectStatsApiV1ProjectsStatsGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Project statistics
+ */
+
+export function useGetProjectStatsApiV1ProjectsStatsGet<
+  TData = Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectStatsApiV1ProjectsStatsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetProjectStatsApiV1ProjectsStatsGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Create a new project for the current tenant (persisted to database).
  * @summary Create Project
@@ -268,155 +404,76 @@ export const createProjectApiV1ProjectsPost = (
   });
 };
 
-export const getCreateProjectApiV1ProjectsPostQueryKey = (
-  projectCreateRequest?: ProjectCreateRequest,
-) => {
-  return ["POST", `/api/v1/projects`, projectCreateRequest] as const;
-};
-
-export const getCreateProjectApiV1ProjectsPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+export const getCreateProjectApiV1ProjectsPostMutationOptions = <
   TError = HTTPValidationError,
->(
-  projectCreateRequest: ProjectCreateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getCreateProjectApiV1ProjectsPostQueryKey(projectCreateRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>
-  > = ({ signal }) =>
-    createProjectApiV1ProjectsPost(projectCreateRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: ProjectCreateRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+  TError,
+  { data: ProjectCreateRequest },
+  TContext
+> => {
+  const mutationKey = ["createProjectApiV1ProjectsPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+    { data: ProjectCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createProjectApiV1ProjectsPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type CreateProjectApiV1ProjectsPostQueryResult = NonNullable<
+export type CreateProjectApiV1ProjectsPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>
 >;
-export type CreateProjectApiV1ProjectsPostQueryError = HTTPValidationError;
+export type CreateProjectApiV1ProjectsPostMutationBody = ProjectCreateRequest;
+export type CreateProjectApiV1ProjectsPostMutationError = HTTPValidationError;
 
-export function useCreateProjectApiV1ProjectsPost<
-  TData = Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-  TError = HTTPValidationError,
->(
-  projectCreateRequest: ProjectCreateRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-          TError,
-          Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCreateProjectApiV1ProjectsPost<
-  TData = Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-  TError = HTTPValidationError,
->(
-  projectCreateRequest: ProjectCreateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-          TError,
-          Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useCreateProjectApiV1ProjectsPost<
-  TData = Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-  TError = HTTPValidationError,
->(
-  projectCreateRequest: ProjectCreateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Create Project
  */
-
-export function useCreateProjectApiV1ProjectsPost<
-  TData = Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+export const useCreateProjectApiV1ProjectsPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectCreateRequest: ProjectCreateRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+      TError,
+      { data: ProjectCreateRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getCreateProjectApiV1ProjectsPostQueryOptions(
-    projectCreateRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createProjectApiV1ProjectsPost>>,
+  TError,
+  { data: ProjectCreateRequest },
+  TContext
+> => {
+  return useMutation(
+    getCreateProjectApiV1ProjectsPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * List all projects for the current tenant.
  *
@@ -435,76 +492,153 @@ export const listProjectsApiV1ProjectsGet = (
   });
 };
 
-export const getListProjectsApiV1ProjectsGetMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
-    TError,
-    { params?: ListProjectsApiV1ProjectsGetParams },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
-  TError,
-  { params?: ListProjectsApiV1ProjectsGetParams },
-  TContext
-> => {
-  const mutationKey = ["listProjectsApiV1ProjectsGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
-    { params?: ListProjectsApiV1ProjectsGetParams }
-  > = (props) => {
-    const { params } = props ?? {};
-
-    return listProjectsApiV1ProjectsGet(params);
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getListProjectsApiV1ProjectsGetQueryKey = (
+  params?: ListProjectsApiV1ProjectsGetParams,
+) => {
+  return [`/api/v1/projects`, ...(params ? [params] : [])] as const;
 };
 
-export type ListProjectsApiV1ProjectsGetMutationResult = NonNullable<
+export const getListProjectsApiV1ProjectsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListProjectsApiV1ProjectsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProjectsApiV1ProjectsGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>
+  > = ({ signal }) => listProjectsApiV1ProjectsGet(params, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListProjectsApiV1ProjectsGetQueryResult = NonNullable<
   Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>
 >;
+export type ListProjectsApiV1ProjectsGetQueryError = HTTPValidationError;
 
-export type ListProjectsApiV1ProjectsGetMutationError = HTTPValidationError;
-
-/**
- * @summary List Projects
- */
-export const useListProjectsApiV1ProjectsGet = <
+export function useListProjectsApiV1ProjectsGet<
+  TData = Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  params: undefined | ListProjectsApiV1ProjectsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectsApiV1ProjectsGet<
+  TData = Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListProjectsApiV1ProjectsGetParams,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
-      TError,
-      { params?: ListProjectsApiV1ProjectsGetParams },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectsApiV1ProjectsGet<
+  TData = Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListProjectsApiV1ProjectsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
-  TError,
-  { params?: ListProjectsApiV1ProjectsGetParams },
-  TContext
-> => {
-  return useMutation(
-    getListProjectsApiV1ProjectsGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary List Projects
+ */
+
+export function useListProjectsApiV1ProjectsGet<
+  TData = Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListProjectsApiV1ProjectsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProjectsApiV1ProjectsGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListProjectsApiV1ProjectsGetQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Get project by ID.
  *
@@ -522,77 +656,159 @@ export const getProjectApiV1ProjectsProjectIdGet = (
   });
 };
 
-export const getGetProjectApiV1ProjectsProjectIdGetMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
-    TError,
-    { projectId: string },
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
-  TError,
-  { projectId: string },
-  TContext
-> => {
-  const mutationKey = ["getProjectApiV1ProjectsProjectIdGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
-    { projectId: string }
-  > = (props) => {
-    const { projectId } = props ?? {};
-
-    return getProjectApiV1ProjectsProjectIdGet(projectId);
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetProjectApiV1ProjectsProjectIdGetQueryKey = (
+  projectId: string,
+) => {
+  return [`/api/v1/projects/${projectId}`] as const;
 };
 
-export type GetProjectApiV1ProjectsProjectIdGetMutationResult = NonNullable<
+export const getGetProjectApiV1ProjectsProjectIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetProjectApiV1ProjectsProjectIdGetQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>
+  > = ({ signal }) => getProjectApiV1ProjectsProjectIdGet(projectId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: projectId !== null && projectId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetProjectApiV1ProjectsProjectIdGetQueryResult = NonNullable<
   Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>
 >;
+export type GetProjectApiV1ProjectsProjectIdGetQueryError = HTTPValidationError;
 
-export type GetProjectApiV1ProjectsProjectIdGetMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Get Project
- */
-export const useGetProjectApiV1ProjectsProjectIdGet = <
+export function useGetProjectApiV1ProjectsProjectIdGet<
+  TData = Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectApiV1ProjectsProjectIdGet<
+  TData = Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
-      TError,
-      { projectId: string },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectApiV1ProjectsProjectIdGet<
+  TData = Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
-  TError,
-  { projectId: string },
-  TContext
-> => {
-  return useMutation(
-    getGetProjectApiV1ProjectsProjectIdGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get Project
+ */
+
+export function useGetProjectApiV1ProjectsProjectIdGet<
+  TData = Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProjectApiV1ProjectsProjectIdGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetProjectApiV1ProjectsProjectIdGetQueryOptions(
+    projectId,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Update an existing project (legacy PUT contract).
  * @summary Put Project
@@ -611,178 +827,78 @@ export const putProjectApiV1ProjectsProjectIdPut = (
   });
 };
 
-export const getPutProjectApiV1ProjectsProjectIdPutQueryKey = (
-  projectId: string,
-  projectUpdateRequest?: ProjectUpdateRequest,
-) => {
-  return [
-    "PUT",
-    `/api/v1/projects/${projectId}`,
-    projectUpdateRequest,
-  ] as const;
-};
-
-export const getPutProjectApiV1ProjectsProjectIdPutQueryOptions = <
-  TData = Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+export const getPutProjectApiV1ProjectsProjectIdPutMutationOptions = <
   TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getPutProjectApiV1ProjectsProjectIdPutQueryKey(
-      projectId,
-      projectUpdateRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>
-  > = ({ signal }) =>
-    putProjectApiV1ProjectsProjectIdPut(
-      projectId,
-      projectUpdateRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: projectId !== null && projectId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { projectId: string; data: ProjectUpdateRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+  TError,
+  { projectId: string; data: ProjectUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ["putProjectApiV1ProjectsProjectIdPut"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+    { projectId: string; data: ProjectUpdateRequest }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return putProjectApiV1ProjectsProjectIdPut(projectId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type PutProjectApiV1ProjectsProjectIdPutQueryResult = NonNullable<
+export type PutProjectApiV1ProjectsProjectIdPutMutationResult = NonNullable<
   Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>
 >;
-export type PutProjectApiV1ProjectsProjectIdPutQueryError = HTTPValidationError;
+export type PutProjectApiV1ProjectsProjectIdPutMutationBody =
+  ProjectUpdateRequest;
+export type PutProjectApiV1ProjectsProjectIdPutMutationError =
+  HTTPValidationError;
 
-export function usePutProjectApiV1ProjectsProjectIdPut<
-  TData = Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-          TError,
-          Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function usePutProjectApiV1ProjectsProjectIdPut<
-  TData = Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-          TError,
-          Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function usePutProjectApiV1ProjectsProjectIdPut<
-  TData = Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Put Project
  */
-
-export function usePutProjectApiV1ProjectsProjectIdPut<
-  TData = Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+export const usePutProjectApiV1ProjectsProjectIdPut = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+      TError,
+      { projectId: string; data: ProjectUpdateRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getPutProjectApiV1ProjectsProjectIdPutQueryOptions(
-    projectId,
-    projectUpdateRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof putProjectApiV1ProjectsProjectIdPut>>,
+  TError,
+  { projectId: string; data: ProjectUpdateRequest },
+  TContext
+> => {
+  return useMutation(
+    getPutProjectApiV1ProjectsProjectIdPutMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Update project.
  *
@@ -803,179 +919,79 @@ export const updateProjectApiV1ProjectsProjectIdPatch = (
   });
 };
 
-export const getUpdateProjectApiV1ProjectsProjectIdPatchQueryKey = (
-  projectId: string,
-  projectUpdateRequest?: ProjectUpdateRequest,
-) => {
-  return [
-    "PATCH",
-    `/api/v1/projects/${projectId}`,
-    projectUpdateRequest,
-  ] as const;
-};
-
-export const getUpdateProjectApiV1ProjectsProjectIdPatchQueryOptions = <
-  TData = Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+export const getUpdateProjectApiV1ProjectsProjectIdPatchMutationOptions = <
   TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getUpdateProjectApiV1ProjectsProjectIdPatchQueryKey(
-      projectId,
-      projectUpdateRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>
-  > = ({ signal }) =>
-    updateProjectApiV1ProjectsProjectIdPatch(
-      projectId,
-      projectUpdateRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: projectId !== null && projectId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { projectId: string; data: ProjectUpdateRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+  TError,
+  { projectId: string; data: ProjectUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ["updateProjectApiV1ProjectsProjectIdPatch"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+    { projectId: string; data: ProjectUpdateRequest }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return updateProjectApiV1ProjectsProjectIdPatch(projectId, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type UpdateProjectApiV1ProjectsProjectIdPatchQueryResult = NonNullable<
-  Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>
->;
-export type UpdateProjectApiV1ProjectsProjectIdPatchQueryError =
+export type UpdateProjectApiV1ProjectsProjectIdPatchMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>
+  >;
+export type UpdateProjectApiV1ProjectsProjectIdPatchMutationBody =
+  ProjectUpdateRequest;
+export type UpdateProjectApiV1ProjectsProjectIdPatchMutationError =
   HTTPValidationError;
 
-export function useUpdateProjectApiV1ProjectsProjectIdPatch<
-  TData = Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-          TError,
-          Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateProjectApiV1ProjectsProjectIdPatch<
-  TData = Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-          TError,
-          Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateProjectApiV1ProjectsProjectIdPatch<
-  TData = Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Update Project
  */
-
-export function useUpdateProjectApiV1ProjectsProjectIdPatch<
-  TData = Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+export const useUpdateProjectApiV1ProjectsProjectIdPatch = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
-  projectUpdateRequest: ProjectUpdateRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+      TError,
+      { projectId: string; data: ProjectUpdateRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getUpdateProjectApiV1ProjectsProjectIdPatchQueryOptions(
-    projectId,
-    projectUpdateRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateProjectApiV1ProjectsProjectIdPatch>>,
+  TError,
+  { projectId: string; data: ProjectUpdateRequest },
+  TContext
+> => {
+  return useMutation(
+    getUpdateProjectApiV1ProjectsProjectIdPatchMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Delete project.
  *
@@ -993,161 +1009,78 @@ export const deleteProjectApiV1ProjectsProjectIdDelete = (
   });
 };
 
-export const getDeleteProjectApiV1ProjectsProjectIdDeleteQueryKey = (
-  projectId: string,
-) => {
-  return ["DELETE", `/api/v1/projects/${projectId}`] as const;
-};
-
-export const getDeleteProjectApiV1ProjectsProjectIdDeleteQueryOptions = <
-  TData = Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+export const getDeleteProjectApiV1ProjectsProjectIdDeleteMutationOptions = <
   TError = HTTPValidationError,
->(
-  projectId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getDeleteProjectApiV1ProjectsProjectIdDeleteQueryKey(projectId);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>
-  > = ({ signal }) =>
-    deleteProjectApiV1ProjectsProjectIdDelete(projectId, signal);
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: projectId !== null && projectId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { projectId: string },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+  TError,
+  { projectId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteProjectApiV1ProjectsProjectIdDelete"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+    { projectId: string }
+  > = (props) => {
+    const { projectId } = props ?? {};
+
+    return deleteProjectApiV1ProjectsProjectIdDelete(projectId);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type DeleteProjectApiV1ProjectsProjectIdDeleteQueryResult = NonNullable<
-  Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>
->;
-export type DeleteProjectApiV1ProjectsProjectIdDeleteQueryError =
+export type DeleteProjectApiV1ProjectsProjectIdDeleteMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>
+  >;
+
+export type DeleteProjectApiV1ProjectsProjectIdDeleteMutationError =
   HTTPValidationError;
 
-export function useDeleteProjectApiV1ProjectsProjectIdDelete<
-  TData = Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-          TError,
-          Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useDeleteProjectApiV1ProjectsProjectIdDelete<
-  TData = Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-          TError,
-          Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useDeleteProjectApiV1ProjectsProjectIdDelete<
-  TData = Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Delete Project
  */
-
-export function useDeleteProjectApiV1ProjectsProjectIdDelete<
-  TData = Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+export const useDeleteProjectApiV1ProjectsProjectIdDelete = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+      TError,
+      { projectId: string },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getDeleteProjectApiV1ProjectsProjectIdDeleteQueryOptions(
-    projectId,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProjectApiV1ProjectsProjectIdDelete>>,
+  TError,
+  { projectId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteProjectApiV1ProjectsProjectIdDeleteMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Update only project status.
  * @summary Update Project Status
@@ -1165,234 +1098,110 @@ export const updateProjectStatusApiV1ProjectsProjectIdStatusPatch = (
   });
 };
 
-export const getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryKey = (
-  projectId: string,
-  params?: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
-) => {
-  return [
-    "PATCH",
-    `/api/v1/projects/${projectId}/status`,
-    ...(params ? [params] : []),
-  ] as const;
-};
-
-export const getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-    >,
-    TError = HTTPValidationError,
-  >(
-    projectId: string,
-    params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
-    options?: {
-      query?: Partial<
-        UseQueryOptions<
-          Awaited<
-            ReturnType<
-              typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-            >
-          >,
-          TError,
-          TData
-        >
-      >;
-    },
-  ) => {
-    const { query: queryOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryKey(
-        projectId,
-        params,
-      );
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-      >
-    > = ({ signal }) =>
-      updateProjectStatusApiV1ProjectsProjectIdStatusPatch(
-        projectId,
-        params,
-        signal,
-      );
-
-    return {
-      queryKey,
-      queryFn,
-      enabled: projectId !== null && projectId !== undefined,
-      ...queryOptions,
-    } as UseQueryOptions<
+export const getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
       Awaited<
         ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
       >,
       TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
+      {
+        projectId: string;
+        params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
+    >,
+    TError,
+    {
+      projectId: string;
+      params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams;
+    },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateProjectStatusApiV1ProjectsProjectIdStatusPatch",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
+      >,
+      {
+        projectId: string;
+        params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams;
+      }
+    > = (props) => {
+      const { projectId, params } = props ?? {};
+
+      return updateProjectStatusApiV1ProjectsProjectIdStatusPatch(
+        projectId,
+        params,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
   };
 
-export type UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryResult =
+export type UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchMutationResult =
   NonNullable<
     Awaited<
       ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
     >
   >;
-export type UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryError =
+
+export type UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchMutationError =
   HTTPValidationError;
 
-export function useUpdateProjectStatusApiV1ProjectsProjectIdStatusPatch<
-  TData = Awaited<
-    ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateProjectStatusApiV1ProjectsProjectIdStatusPatch<
-  TData = Awaited<
-    ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateProjectStatusApiV1ProjectsProjectIdStatusPatch<
-  TData = Awaited<
-    ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Update Project Status
  */
-
-export function useUpdateProjectStatusApiV1ProjectsProjectIdStatusPatch<
-  TData = Awaited<
-    ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
-  >,
+export const useUpdateProjectStatusApiV1ProjectsProjectIdStatusPatch = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
-  params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch
-          >
-        >,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
+      >,
+      TError,
+      {
+        projectId: string;
+        params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams;
+      },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchQueryOptions(
-      projectId,
-      params,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateProjectStatusApiV1ProjectsProjectIdStatusPatch>
+  >,
+  TError,
+  {
+    projectId: string;
+    params: UpdateProjectStatusApiV1ProjectsProjectIdStatusPatchParams;
+  },
+  TContext
+> => {
+  return useMutation(
+    getUpdateProjectStatusApiV1ProjectsProjectIdStatusPatchMutationOptions(
       options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+    ),
+    queryClient,
+  );
+};
 /**
  * Upload multiple documents for processing.
  *
@@ -1418,79 +1227,59 @@ export const bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost = (
   );
 };
 
-export const getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryKey =
-  (projectId: string, bulkDocumentRequest?: BulkDocumentRequest) => {
-    return [
-      "POST",
-      `/api/v1/projects/${projectId}/documents/bulk`,
-      bulkDocumentRequest,
-    ] as const;
-  };
-
-export const getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<
-        typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-      >
-    >,
-    TError = HTTPValidationError,
-  >(
-    projectId: string,
-    bulkDocumentRequest: BulkDocumentRequest,
-    options?: {
-      query?: Partial<
-        UseQueryOptions<
-          Awaited<
-            ReturnType<
-              typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-            >
-          >,
-          TError,
-          TData
-        >
-      >;
-    },
-  ) => {
-    const { query: queryOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryKey(
-        projectId,
-        bulkDocumentRequest,
-      );
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<
-          typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-        >
-      >
-    > = ({ signal }) =>
-      bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost(
-        projectId,
-        bulkDocumentRequest,
-        signal,
-      );
-
-    return {
-      queryKey,
-      queryFn,
-      enabled: projectId !== null && projectId !== undefined,
-      ...queryOptions,
-    } as UseQueryOptions<
+export const getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
           typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
         >
       >,
       TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
+      { projectId: string; data: BulkDocumentRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
+      >
+    >,
+    TError,
+    { projectId: string; data: BulkDocumentRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
+        >
+      >,
+      { projectId: string; data: BulkDocumentRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost(
+        projectId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
   };
 
-export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryResult =
+export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationResult =
   NonNullable<
     Awaited<
       ReturnType<
@@ -1498,168 +1287,48 @@ export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryResul
       >
     >
   >;
-export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryError =
+export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationBody =
+  BulkDocumentRequest;
+export type BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationError =
   HTTPValidationError;
 
-export function useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost<
-  TData = Awaited<
-    ReturnType<
-      typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-    >
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkDocumentRequest: BulkDocumentRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost<
-  TData = Awaited<
-    ReturnType<
-      typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-    >
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkDocumentRequest: BulkDocumentRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost<
-  TData = Awaited<
-    ReturnType<
-      typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-    >
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkDocumentRequest: BulkDocumentRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Bulk Upload Documents
  */
-
-export function useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost<
-  TData = Awaited<
+export const useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
+        >
+      >,
+      TError,
+      { projectId: string; data: BulkDocumentRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
     ReturnType<
       typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
     >
   >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkDocumentRequest: BulkDocumentRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof bulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostQueryOptions(
-      projectId,
-      bulkDocumentRequest,
+  TError,
+  { projectId: string; data: BulkDocumentRequest },
+  TContext
+> => {
+  return useMutation(
+    getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationOptions(
       options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+    ),
+    queryClient,
+  );
+};
 /**
  * Create multiple WBS items in bulk.
  *
@@ -1685,209 +1354,83 @@ export const bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost = (
   });
 };
 
-export const getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryKey = (
-  projectId: string,
-  bulkWBSRequest?: BulkWBSRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/projects/${projectId}/wbs/bulk`,
-    bulkWBSRequest,
-  ] as const;
-};
-
-export const getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-        >,
-        TError,
-        TData
-      >
+export const getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
+      >,
+      TError,
+      { projectId: string; data: BulkWBSRequest },
+      TContext
     >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryKey(
-      projectId,
-      bulkWBSRequest,
-    );
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>
-  > = ({ signal }) =>
-    bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost(
-      projectId,
-      bulkWBSRequest,
-      signal,
-    );
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: projectId !== null && projectId !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<
+  }): UseMutationOptions<
     Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
+    { projectId: string; data: BulkWBSRequest },
+    TContext
+  > => {
+    const mutationKey = ["bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
 
-export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryResult =
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
+      >,
+      { projectId: string; data: BulkWBSRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost(projectId, data);
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationResult =
   NonNullable<
     Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>
   >;
-export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryError =
+export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationBody =
+  BulkWBSRequest;
+export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationError =
   HTTPValidationError;
 
-export function useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost<
-  TData = Awaited<
-    ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost<
-  TData = Awaited<
-    ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost<
-  TData = Awaited<
-    ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Bulk Create WBS Items
  */
-
-export function useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost<
-  TData = Awaited<
-    ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-  >,
+export const useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-        >,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
+      >,
+      TError,
+      { projectId: string; data: BulkWBSRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostQueryOptions(
-      projectId,
-      bulkWBSRequest,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+): UseMutationResult<
+  Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>,
+  TError,
+  { projectId: string; data: BulkWBSRequest },
+  TContext
+> => {
+  return useMutation(
+    getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * Export complete project data in various formats.
  *
@@ -1911,216 +1454,89 @@ export const exportProjectDataApiV1ProjectsProjectIdExportPost = (
   });
 };
 
-export const getExportProjectDataApiV1ProjectsProjectIdExportPostQueryKey = (
-  projectId: string,
-  bulkExportRequest?: BulkExportRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/projects/${projectId}/export`,
-    bulkExportRequest,
-  ] as const;
-};
-
-export const getExportProjectDataApiV1ProjectsProjectIdExportPostQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-    >,
-    TError = HTTPValidationError,
-  >(
-    projectId: string,
-    bulkExportRequest: BulkExportRequest,
-    options?: {
-      query?: Partial<
-        UseQueryOptions<
-          Awaited<
-            ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-          >,
-          TError,
-          TData
-        >
-      >;
-    },
-  ) => {
-    const { query: queryOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getExportProjectDataApiV1ProjectsProjectIdExportPostQueryKey(
-        projectId,
-        bulkExportRequest,
-      );
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-      >
-    > = ({ signal }) =>
-      exportProjectDataApiV1ProjectsProjectIdExportPost(
-        projectId,
-        bulkExportRequest,
-        signal,
-      );
-
-    return {
-      queryKey,
-      queryFn,
-      enabled: projectId !== null && projectId !== undefined,
-      ...queryOptions,
-    } as UseQueryOptions<
+export const getExportProjectDataApiV1ProjectsProjectIdExportPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
       Awaited<
         ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
       >,
       TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
+      { projectId: string; data: BulkExportRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
+    >,
+    TError,
+    { projectId: string; data: BulkExportRequest },
+    TContext
+  > => {
+    const mutationKey = ["exportProjectDataApiV1ProjectsProjectIdExportPost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
+      >,
+      { projectId: string; data: BulkExportRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return exportProjectDataApiV1ProjectsProjectIdExportPost(projectId, data);
+    };
+
+    return { mutationFn, ...mutationOptions };
   };
 
-export type ExportProjectDataApiV1ProjectsProjectIdExportPostQueryResult =
+export type ExportProjectDataApiV1ProjectsProjectIdExportPostMutationResult =
   NonNullable<
     Awaited<
       ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
     >
   >;
-export type ExportProjectDataApiV1ProjectsProjectIdExportPostQueryError =
+export type ExportProjectDataApiV1ProjectsProjectIdExportPostMutationBody =
+  BulkExportRequest;
+export type ExportProjectDataApiV1ProjectsProjectIdExportPostMutationError =
   HTTPValidationError;
 
-export function useExportProjectDataApiV1ProjectsProjectIdExportPost<
-  TData = Awaited<
-    ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkExportRequest: BulkExportRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useExportProjectDataApiV1ProjectsProjectIdExportPost<
-  TData = Awaited<
-    ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkExportRequest: BulkExportRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useExportProjectDataApiV1ProjectsProjectIdExportPost<
-  TData = Awaited<
-    ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-  >,
-  TError = HTTPValidationError,
->(
-  projectId: string,
-  bulkExportRequest: BulkExportRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Export Project Data
  */
-
-export function useExportProjectDataApiV1ProjectsProjectIdExportPost<
-  TData = Awaited<
-    ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-  >,
+export const useExportProjectDataApiV1ProjectsProjectIdExportPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  projectId: string,
-  bulkExportRequest: BulkExportRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
-        >,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>
+      >,
+      TError,
+      { projectId: string; data: BulkExportRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getExportProjectDataApiV1ProjectsProjectIdExportPostQueryOptions(
-      projectId,
-      bulkExportRequest,
+): UseMutationResult<
+  Awaited<ReturnType<typeof exportProjectDataApiV1ProjectsProjectIdExportPost>>,
+  TError,
+  { projectId: string; data: BulkExportRequest },
+  TContext
+> => {
+  return useMutation(
+    getExportProjectDataApiV1ProjectsProjectIdExportPostMutationOptions(
       options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+    ),
+    queryClient,
+  );
+};
 /**
  * Returns budget information for a project.
  *
@@ -2144,79 +1560,187 @@ export const getProjectBudgetApiV1ProjectsProjectIdBudgetGet = (
   });
 };
 
-export const getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
-      >,
-      TError,
-      { projectId: string },
-      TContext
+export const getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryKey = (
+  projectId: string,
+) => {
+  return [`/api/v1/projects/${projectId}/budget`] as const;
+};
+
+export const getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+        >,
+        TError,
+        TData
+      >
     >;
-  }): UseMutationOptions<
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>>
+  > = ({ signal }) =>
+    getProjectBudgetApiV1ProjectsProjectIdBudgetGet(projectId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: projectId !== null && projectId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
     Awaited<ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>>,
     TError,
-    { projectId: string },
-    TContext
-  > => {
-    const mutationKey = ["getProjectBudgetApiV1ProjectsProjectIdBudgetGet"];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
-      >,
-      { projectId: string }
-    > = (props) => {
-      const { projectId } = props ?? {};
-
-      return getProjectBudgetApiV1ProjectsProjectIdBudgetGet(projectId);
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type GetProjectBudgetApiV1ProjectsProjectIdBudgetGetMutationResult =
+export type GetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryResult =
   NonNullable<
     Awaited<ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>>
   >;
-
-export type GetProjectBudgetApiV1ProjectsProjectIdBudgetGetMutationError =
+export type GetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryError =
   HTTPValidationError;
 
-/**
- * @summary Get Project Budget
- */
-export const useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet = <
+export function useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+  >,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  projectId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
-      >,
-      TError,
-      { projectId: string },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+        >,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>>,
-  TError,
-  { projectId: string },
-  TContext
-> => {
-  return useMutation(
-    getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get Project Budget
+ */
+
+export function useGetProjectBudgetApiV1ProjectsProjectIdBudgetGet<
+  TData = Awaited<
+    ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getProjectBudgetApiV1ProjectsProjectIdBudgetGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetProjectBudgetApiV1ProjectsProjectIdBudgetGetQueryOptions(
+      projectId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

@@ -113,154 +113,77 @@ export const registerApiV1AuthRegisterPost = (
   });
 };
 
-export const getRegisterApiV1AuthRegisterPostQueryKey = (
-  registerRequest?: RegisterRequest,
-) => {
-  return ["POST", `/api/v1/auth/register`, registerRequest] as const;
-};
-
-export const getRegisterApiV1AuthRegisterPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+export const getRegisterApiV1AuthRegisterPostMutationOptions = <
   TError = AuthErrorResponse | void,
->(
-  registerRequest: RegisterRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getRegisterApiV1AuthRegisterPostQueryKey(registerRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>
-  > = ({ signal }) => registerApiV1AuthRegisterPost(registerRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: RegisterRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+  TError,
+  { data: RegisterRequest },
+  TContext
+> => {
+  const mutationKey = ["registerApiV1AuthRegisterPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+    { data: RegisterRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerApiV1AuthRegisterPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type RegisterApiV1AuthRegisterPostQueryResult = NonNullable<
+export type RegisterApiV1AuthRegisterPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>
 >;
-export type RegisterApiV1AuthRegisterPostQueryError = AuthErrorResponse | void;
+export type RegisterApiV1AuthRegisterPostMutationBody = RegisterRequest;
+export type RegisterApiV1AuthRegisterPostMutationError =
+  AuthErrorResponse | void;
 
-export function useRegisterApiV1AuthRegisterPost<
-  TData = Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-  TError = AuthErrorResponse | void,
->(
-  registerRequest: RegisterRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-          TError,
-          Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRegisterApiV1AuthRegisterPost<
-  TData = Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-  TError = AuthErrorResponse | void,
->(
-  registerRequest: RegisterRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-          TError,
-          Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRegisterApiV1AuthRegisterPost<
-  TData = Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-  TError = AuthErrorResponse | void,
->(
-  registerRequest: RegisterRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Register new user and company
  */
-
-export function useRegisterApiV1AuthRegisterPost<
-  TData = Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+export const useRegisterApiV1AuthRegisterPost = <
   TError = AuthErrorResponse | void,
+  TContext = unknown,
 >(
-  registerRequest: RegisterRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+      TError,
+      { data: RegisterRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getRegisterApiV1AuthRegisterPostQueryOptions(
-    registerRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof registerApiV1AuthRegisterPost>>,
+  TError,
+  { data: RegisterRequest },
+  TContext
+> => {
+  return useMutation(
+    getRegisterApiV1AuthRegisterPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Authenticates a user with email and password.
  *
@@ -284,153 +207,76 @@ export const loginApiV1AuthLoginPost = (
   });
 };
 
-export const getLoginApiV1AuthLoginPostQueryKey = (
-  loginRequest?: LoginRequest,
-) => {
-  return ["POST", `/api/v1/auth/login`, loginRequest] as const;
-};
-
-export const getLoginApiV1AuthLoginPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+export const getLoginApiV1AuthLoginPostMutationOptions = <
   TError = void | AuthErrorResponse,
->(
-  loginRequest: LoginRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getLoginApiV1AuthLoginPostQueryKey(loginRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>
-  > = ({ signal }) => loginApiV1AuthLoginPost(loginRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: LoginRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+  TError,
+  { data: LoginRequest },
+  TContext
+> => {
+  const mutationKey = ["loginApiV1AuthLoginPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+    { data: LoginRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return loginApiV1AuthLoginPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type LoginApiV1AuthLoginPostQueryResult = NonNullable<
+export type LoginApiV1AuthLoginPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>
 >;
-export type LoginApiV1AuthLoginPostQueryError = void | AuthErrorResponse;
+export type LoginApiV1AuthLoginPostMutationBody = LoginRequest;
+export type LoginApiV1AuthLoginPostMutationError = void | AuthErrorResponse;
 
-export function useLoginApiV1AuthLoginPost<
-  TData = Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-  TError = void | AuthErrorResponse,
->(
-  loginRequest: LoginRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-          TError,
-          Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useLoginApiV1AuthLoginPost<
-  TData = Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-  TError = void | AuthErrorResponse,
->(
-  loginRequest: LoginRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-          TError,
-          Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useLoginApiV1AuthLoginPost<
-  TData = Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-  TError = void | AuthErrorResponse,
->(
-  loginRequest: LoginRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Login with email and password
  */
-
-export function useLoginApiV1AuthLoginPost<
-  TData = Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+export const useLoginApiV1AuthLoginPost = <
   TError = void | AuthErrorResponse,
+  TContext = unknown,
 >(
-  loginRequest: LoginRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+      TError,
+      { data: LoginRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getLoginApiV1AuthLoginPostQueryOptions(
-    loginRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+  TError,
+  { data: LoginRequest },
+  TContext
+> => {
+  return useMutation(
+    getLoginApiV1AuthLoginPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Refreshes the access token using a valid refresh token.
  *
@@ -451,158 +297,79 @@ export const refreshTokenApiV1AuthRefreshPost = (
   });
 };
 
-export const getRefreshTokenApiV1AuthRefreshPostQueryKey = (
-  refreshTokenRequest?: RefreshTokenRequest,
-) => {
-  return ["POST", `/api/v1/auth/refresh`, refreshTokenRequest] as const;
-};
-
-export const getRefreshTokenApiV1AuthRefreshPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+export const getRefreshTokenApiV1AuthRefreshPostMutationOptions = <
   TError = void | AuthErrorResponse | HTTPValidationError,
->(
-  refreshTokenRequest: RefreshTokenRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getRefreshTokenApiV1AuthRefreshPostQueryKey(refreshTokenRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>
-  > = ({ signal }) =>
-    refreshTokenApiV1AuthRefreshPost(refreshTokenRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: RefreshTokenRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+  TError,
+  { data: RefreshTokenRequest },
+  TContext
+> => {
+  const mutationKey = ["refreshTokenApiV1AuthRefreshPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+    { data: RefreshTokenRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return refreshTokenApiV1AuthRefreshPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type RefreshTokenApiV1AuthRefreshPostQueryResult = NonNullable<
+export type RefreshTokenApiV1AuthRefreshPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>
 >;
-export type RefreshTokenApiV1AuthRefreshPostQueryError =
+export type RefreshTokenApiV1AuthRefreshPostMutationBody = RefreshTokenRequest;
+export type RefreshTokenApiV1AuthRefreshPostMutationError =
   | void
   | AuthErrorResponse
   | HTTPValidationError;
 
-export function useRefreshTokenApiV1AuthRefreshPost<
-  TData = Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-  TError = void | AuthErrorResponse | HTTPValidationError,
->(
-  refreshTokenRequest: RefreshTokenRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-          TError,
-          Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRefreshTokenApiV1AuthRefreshPost<
-  TData = Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-  TError = void | AuthErrorResponse | HTTPValidationError,
->(
-  refreshTokenRequest: RefreshTokenRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-          TError,
-          Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRefreshTokenApiV1AuthRefreshPost<
-  TData = Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-  TError = void | AuthErrorResponse | HTTPValidationError,
->(
-  refreshTokenRequest: RefreshTokenRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Refresh access token
  */
-
-export function useRefreshTokenApiV1AuthRefreshPost<
-  TData = Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+export const useRefreshTokenApiV1AuthRefreshPost = <
   TError = void | AuthErrorResponse | HTTPValidationError,
+  TContext = unknown,
 >(
-  refreshTokenRequest: RefreshTokenRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+      TError,
+      { data: RefreshTokenRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getRefreshTokenApiV1AuthRefreshPostQueryOptions(
-    refreshTokenRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof refreshTokenApiV1AuthRefreshPost>>,
+  TError,
+  { data: RefreshTokenRequest },
+  TContext
+> => {
+  return useMutation(
+    getRefreshTokenApiV1AuthRefreshPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Returns information about the currently authenticated user.
  *
@@ -620,74 +387,140 @@ export const getMeApiV1AuthMeGet = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetMeApiV1AuthMeGetMutationOptions = <
-  TError = void | AuthErrorResponse,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getMeApiV1AuthMeGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
-    void
-  > = () => {
-    return getMeApiV1AuthMeGet();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetMeApiV1AuthMeGetQueryKey = () => {
+  return [`/api/v1/auth/me`] as const;
 };
 
-export type GetMeApiV1AuthMeGetMutationResult = NonNullable<
-  Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>
->;
-
-export type GetMeApiV1AuthMeGetMutationError = void | AuthErrorResponse;
-
-/**
- * @summary Get current user info
- */
-export const useGetMeApiV1AuthMeGet = <
+export const getGetMeApiV1AuthMeGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
   TError = void | AuthErrorResponse,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMeApiV1AuthMeGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>
+  > = ({ signal }) => getMeApiV1AuthMeGet(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetMeApiV1AuthMeGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>
+>;
+export type GetMeApiV1AuthMeGetQueryError = void | AuthErrorResponse;
+
+export function useGetMeApiV1AuthMeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+  TError = void | AuthErrorResponse,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+          TError,
+          Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMeApiV1AuthMeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+  TError = void | AuthErrorResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+          TError,
+          Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMeApiV1AuthMeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+  TError = void | AuthErrorResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetMeApiV1AuthMeGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get current user info
+ */
+
+export function useGetMeApiV1AuthMeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+  TError = void | AuthErrorResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getMeApiV1AuthMeGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetMeApiV1AuthMeGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Updates the profile of the currently authenticated user.
  *
@@ -707,156 +540,78 @@ export const updateMeApiV1AuthMePut = (
   });
 };
 
-export const getUpdateMeApiV1AuthMePutQueryKey = (
-  userUpdateRequest?: UserUpdateRequest,
-) => {
-  return ["PUT", `/api/v1/auth/me`, userUpdateRequest] as const;
-};
-
-export const getUpdateMeApiV1AuthMePutQueryOptions = <
-  TData = Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+export const getUpdateMeApiV1AuthMePutMutationOptions = <
   TError = AuthErrorResponse | HTTPValidationError,
->(
-  userUpdateRequest: UserUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getUpdateMeApiV1AuthMePutQueryKey(userUpdateRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>
-  > = ({ signal }) => updateMeApiV1AuthMePut(userUpdateRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: UserUpdateRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+  TError,
+  { data: UserUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ["updateMeApiV1AuthMePut"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+    { data: UserUpdateRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMeApiV1AuthMePut(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type UpdateMeApiV1AuthMePutQueryResult = NonNullable<
+export type UpdateMeApiV1AuthMePutMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>
 >;
-export type UpdateMeApiV1AuthMePutQueryError =
+export type UpdateMeApiV1AuthMePutMutationBody = UserUpdateRequest;
+export type UpdateMeApiV1AuthMePutMutationError =
   | AuthErrorResponse
   | HTTPValidationError;
 
-export function useUpdateMeApiV1AuthMePut<
-  TData = Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  userUpdateRequest: UserUpdateRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-          TError,
-          Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateMeApiV1AuthMePut<
-  TData = Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  userUpdateRequest: UserUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-          TError,
-          Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useUpdateMeApiV1AuthMePut<
-  TData = Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  userUpdateRequest: UserUpdateRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Update current user profile
  */
-
-export function useUpdateMeApiV1AuthMePut<
-  TData = Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+export const useUpdateMeApiV1AuthMePut = <
   TError = AuthErrorResponse | HTTPValidationError,
+  TContext = unknown,
 >(
-  userUpdateRequest: UserUpdateRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+      TError,
+      { data: UserUpdateRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getUpdateMeApiV1AuthMePutQueryOptions(
-    userUpdateRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateMeApiV1AuthMePut>>,
+  TError,
+  { data: UserUpdateRequest },
+  TContext
+> => {
+  return useMutation(
+    getUpdateMeApiV1AuthMePutMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+};
 /**
  * Logs out the current user.
  *
@@ -872,141 +627,74 @@ export const logoutApiV1AuthLogoutPost = (signal?: AbortSignal) => {
   });
 };
 
-export const getLogoutApiV1AuthLogoutPostQueryKey = () => {
-  return ["POST", `/api/v1/auth/logout`] as const;
-};
-
-export const getLogoutApiV1AuthLogoutPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+export const getLogoutApiV1AuthLogoutPostMutationOptions = <
   TError = AuthErrorResponse,
+  TContext = unknown,
 >(options?: {
-  query?: Partial<
-    UseQueryOptions<
-      Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-      TError,
-      TData
-    >
-  >;
-}) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getLogoutApiV1AuthLogoutPostQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>
-  > = ({ signal }) => logoutApiV1AuthLogoutPost(signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    void,
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["logoutApiV1AuthLogoutPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+    void
+  > = () => {
+    return logoutApiV1AuthLogoutPost();
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type LogoutApiV1AuthLogoutPostQueryResult = NonNullable<
+export type LogoutApiV1AuthLogoutPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>
 >;
-export type LogoutApiV1AuthLogoutPostQueryError = AuthErrorResponse;
 
-export function useLogoutApiV1AuthLogoutPost<
-  TData = Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-  TError = AuthErrorResponse,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-          TError,
-          Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useLogoutApiV1AuthLogoutPost<
-  TData = Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-  TError = AuthErrorResponse,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-          TError,
-          Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useLogoutApiV1AuthLogoutPost<
-  TData = Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-  TError = AuthErrorResponse,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
+export type LogoutApiV1AuthLogoutPostMutationError = AuthErrorResponse;
+
 /**
  * @summary Logout current user
  */
-
-export function useLogoutApiV1AuthLogoutPost<
-  TData = Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+export const useLogoutApiV1AuthLogoutPost = <
   TError = AuthErrorResponse,
+  TContext = unknown,
 >(
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+      TError,
+      void,
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getLogoutApiV1AuthLogoutPostQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
+): UseMutationResult<
+  Awaited<ReturnType<typeof logoutApiV1AuthLogoutPost>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getLogoutApiV1AuthLogoutPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * Changes the password for the currently authenticated user.
  *
@@ -1028,157 +716,77 @@ export const changePasswordApiV1AuthChangePasswordPost = (
   });
 };
 
-export const getChangePasswordApiV1AuthChangePasswordPostQueryKey = (
-  passwordChangeRequest?: PasswordChangeRequest,
-) => {
-  return [
-    "POST",
-    `/api/v1/auth/change-password`,
-    passwordChangeRequest,
-  ] as const;
-};
-
-export const getChangePasswordApiV1AuthChangePasswordPostQueryOptions = <
-  TData = Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+export const getChangePasswordApiV1AuthChangePasswordPostMutationOptions = <
   TError = AuthErrorResponse | HTTPValidationError,
->(
-  passwordChangeRequest: PasswordChangeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-) => {
-  const { query: queryOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getChangePasswordApiV1AuthChangePasswordPostQueryKey(passwordChangeRequest);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>
-  > = ({ signal }) =>
-    changePasswordApiV1AuthChangePasswordPost(passwordChangeRequest, signal);
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: PasswordChangeRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+  TError,
+  { data: PasswordChangeRequest },
+  TContext
+> => {
+  const mutationKey = ["changePasswordApiV1AuthChangePasswordPost"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+    { data: PasswordChangeRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return changePasswordApiV1AuthChangePasswordPost(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type ChangePasswordApiV1AuthChangePasswordPostQueryResult = NonNullable<
-  Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>
->;
-export type ChangePasswordApiV1AuthChangePasswordPostQueryError =
+export type ChangePasswordApiV1AuthChangePasswordPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>
+  >;
+export type ChangePasswordApiV1AuthChangePasswordPostMutationBody =
+  PasswordChangeRequest;
+export type ChangePasswordApiV1AuthChangePasswordPostMutationError =
   | AuthErrorResponse
   | HTTPValidationError;
 
-export function useChangePasswordApiV1AuthChangePasswordPost<
-  TData = Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  passwordChangeRequest: PasswordChangeRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-          TError,
-          Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useChangePasswordApiV1AuthChangePasswordPost<
-  TData = Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  passwordChangeRequest: PasswordChangeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-          TError,
-          Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useChangePasswordApiV1AuthChangePasswordPost<
-  TData = Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-  TError = AuthErrorResponse | HTTPValidationError,
->(
-  passwordChangeRequest: PasswordChangeRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Change password
  */
-
-export function useChangePasswordApiV1AuthChangePasswordPost<
-  TData = Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+export const useChangePasswordApiV1AuthChangePasswordPost = <
   TError = AuthErrorResponse | HTTPValidationError,
+  TContext = unknown,
 >(
-  passwordChangeRequest: PasswordChangeRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
-        TError,
-        TData
-      >
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+      TError,
+      { data: PasswordChangeRequest },
+      TContext
     >;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getChangePasswordApiV1AuthChangePasswordPostQueryOptions(
-    passwordChangeRequest,
-    options,
+): UseMutationResult<
+  Awaited<ReturnType<typeof changePasswordApiV1AuthChangePasswordPost>>,
+  TError,
+  { data: PasswordChangeRequest },
+  TContext
+> => {
+  return useMutation(
+    getChangePasswordApiV1AuthChangePasswordPostMutationOptions(options),
+    queryClient,
   );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+};

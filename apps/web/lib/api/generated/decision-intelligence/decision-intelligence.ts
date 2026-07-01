@@ -37,17 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
-  DataTag,
-  DefinedInitialDataOptions,
-  DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
-  QueryFunction,
-  QueryKey,
-  UndefinedInitialDataOptions,
-  UseQueryOptions,
-  UseQueryResult,
+  UseMutationOptions,
+  UseMutationResult,
 } from "@tanstack/react-query";
 
 import type {
@@ -56,24 +51,6 @@ import type {
 } from "../models";
 
 import { orvalApiClient } from "../../client";
-
-const withQueryKey = <T extends object, K>(
-  query: T,
-  queryKey: K,
-): T & { queryKey: K } => {
-  const result = { queryKey } as T & { queryKey: K };
-  for (const key of Object.keys(query)) {
-    // The explicit queryKey always wins, matching the previous
-    // `{ ...query, queryKey }` spread where it was set last.
-    if (key === "queryKey") continue;
-    Object.defineProperty(result, key, {
-      enumerable: true,
-      configurable: true,
-      get: () => (query as Record<string, unknown>)[key],
-    });
-  }
-  return result;
-};
 
 /**
  * Runs I13 orchestration and returns a final decision package when gates pass. Returns 409 when finalization is blocked by HITL/citation/sign-off policy.
@@ -92,71 +69,58 @@ export const executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost = (
   });
 };
 
-export const getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryKey =
-  (executeDecisionRequestDTO?: ExecuteDecisionRequestDTO) => {
-    return [
-      "POST",
-      `/api/v1/decision-intelligence/execute`,
-      executeDecisionRequestDTO,
-    ] as const;
-  };
-
-export const getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<
-        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-      >
-    >,
-    TError = void,
-  >(
-    executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
-    options?: {
-      query?: Partial<
-        UseQueryOptions<
-          Awaited<
-            ReturnType<
-              typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-            >
-          >,
-          TError,
-          TData
-        >
-      >;
-    },
-  ) => {
-    const { query: queryOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryKey(
-        executeDecisionRequestDTO,
-      );
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<
-          typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-        >
-      >
-    > = ({ signal }) =>
-      executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost(
-        executeDecisionRequestDTO,
-        signal,
-      );
-
-    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+export const getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions =
+  <TError = void, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
           typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
         >
       >,
       TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
+      { data: ExecuteDecisionRequestDTO },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+      >
+    >,
+    TError,
+    { data: ExecuteDecisionRequestDTO },
+    TContext
+  > => {
+    const mutationKey = [
+      "executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
+        >
+      >,
+      { data: ExecuteDecisionRequestDTO }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost(
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
   };
 
-export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryResult =
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationResult =
   NonNullable<
     Awaited<
       ReturnType<
@@ -164,159 +128,43 @@ export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQuery
       >
     >
   >;
-export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryError =
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationBody =
+  ExecuteDecisionRequestDTO;
+export type ExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationError =
   void;
 
-export function useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost<
-  TData = Awaited<
-    ReturnType<
-      typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-    >
-  >,
-  TError = void,
->(
-  executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost<
-  TData = Awaited<
-    ReturnType<
-      typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-    >
-  >,
-  TError = void,
->(
-  executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-          >
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-            >
-          >
-        >,
-        "initialData"
-      >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost<
-  TData = Awaited<
-    ReturnType<
-      typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-    >
-  >,
-  TError = void,
->(
-  executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<
-            typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-          >
-        >,
-        TError,
-        TData
-      >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Execute Decision Intelligence Flow
  */
-
-export function useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost<
-  TData = Awaited<
-    ReturnType<
-      typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
-    >
-  >,
-  TError = void,
->(
-  executeDecisionRequestDTO: ExecuteDecisionRequestDTO,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
+export const useExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePost =
+  <TError = void, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
         Awaited<
           ReturnType<
             typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
           >
         >,
         TError,
-        TData
+        { data: ExecuteDecisionRequestDTO },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof executeDecisionIntelligenceApiV1DecisionIntelligenceExecutePost
       >
-    >;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostQueryOptions(
-      executeDecisionRequestDTO,
-      options,
+    >,
+    TError,
+    { data: ExecuteDecisionRequestDTO },
+    TContext
+  > => {
+    return useMutation(
+      getExecuteDecisionIntelligenceApiV1DecisionIntelligenceExecutePostMutationOptions(
+        options,
+      ),
+      queryClient,
     );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+  };

@@ -37,12 +37,17 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
-  MutationFunction,
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   QueryClient,
-  UseMutationOptions,
-  UseMutationResult,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
@@ -55,6 +60,24 @@ import type {
 } from "../models";
 
 import { orvalApiClient } from "../../client";
+
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 /**
  * Retrieves the overall health status of the API and its dependencies, such as the database.
@@ -70,75 +93,157 @@ export const getSystemStatusApiV1ObservabilityStatusGet = (
   });
 };
 
-export const getGetSystemStatusApiV1ObservabilityStatusGetMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
-    TError,
-    void,
-    TContext
-  >;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["getSystemStatusApiV1ObservabilityStatusGet"];
-  const { mutation: mutationOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey } };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
-    void
-  > = () => {
-    return getSystemStatusApiV1ObservabilityStatusGet();
-  };
-
-  return { mutationFn, ...mutationOptions };
+export const getGetSystemStatusApiV1ObservabilityStatusGetQueryKey = () => {
+  return [`/api/v1/observability/status`] as const;
 };
 
-export type GetSystemStatusApiV1ObservabilityStatusGetMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>
-  >;
-
-export type GetSystemStatusApiV1ObservabilityStatusGetMutationError = unknown;
-
-/**
- * @summary Get system health status
- */
-export const useGetSystemStatusApiV1ObservabilityStatusGet = <
+export const getGetSystemStatusApiV1ObservabilityStatusGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+  >,
   TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
       Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
       TError,
-      void,
-      TContext
+      TData
+    >
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetSystemStatusApiV1ObservabilityStatusGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>
+  > = ({ signal }) => getSystemStatusApiV1ObservabilityStatusGet(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetSystemStatusApiV1ObservabilityStatusGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>
+>;
+export type GetSystemStatusApiV1ObservabilityStatusGetQueryError = unknown;
+
+export function useGetSystemStatusApiV1ObservabilityStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+          >,
+          TError,
+          Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetSystemStatusApiV1ObservabilityStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+          >,
+          TError,
+          Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetSystemStatusApiV1ObservabilityStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getGetSystemStatusApiV1ObservabilityStatusGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get system health status
+ */
+
+export function useGetSystemStatusApiV1ObservabilityStatusGet<
+  TData = Awaited<
+    ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getSystemStatusApiV1ObservabilityStatusGet>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetSystemStatusApiV1ObservabilityStatusGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Retrieves a list of recent coherence analysis runs with their status and key metrics.
  * @summary Get recent coherence analyses
@@ -155,82 +260,189 @@ export const getRecentAnalysesApiV1ObservabilityAnalysesGet = (
   });
 };
 
-export const getGetRecentAnalysesApiV1ObservabilityAnalysesGetMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
-      >,
-      TError,
-      { params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams },
-      TContext
+export const getGetRecentAnalysesApiV1ObservabilityAnalysesGetQueryKey = (
+  params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
+) => {
+  return [
+    `/api/v1/observability/analyses`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetRecentAnalysesApiV1ObservabilityAnalysesGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+        >,
+        TError,
+        TData
+      >
     >;
-  }): UseMutationOptions<
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetRecentAnalysesApiV1ObservabilityAnalysesGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>>
+  > = ({ signal }) =>
+    getRecentAnalysesApiV1ObservabilityAnalysesGet(params, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>>,
     TError,
-    { params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams },
-    TContext
-  > => {
-    const mutationKey = ["getRecentAnalysesApiV1ObservabilityAnalysesGet"];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
-      >,
-      { params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams }
-    > = (props) => {
-      const { params } = props ?? {};
-
-      return getRecentAnalysesApiV1ObservabilityAnalysesGet(params);
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type GetRecentAnalysesApiV1ObservabilityAnalysesGetMutationResult =
+export type GetRecentAnalysesApiV1ObservabilityAnalysesGetQueryResult =
   NonNullable<
     Awaited<ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>>
   >;
-
-export type GetRecentAnalysesApiV1ObservabilityAnalysesGetMutationError =
+export type GetRecentAnalysesApiV1ObservabilityAnalysesGetQueryError =
   HTTPValidationError;
 
-/**
- * @summary Get recent coherence analyses
- */
-export const useGetRecentAnalysesApiV1ObservabilityAnalysesGet = <
+export function useGetRecentAnalysesApiV1ObservabilityAnalysesGet<
+  TData = Awaited<
+    ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+  >,
   TError = HTTPValidationError,
-  TContext = unknown,
 >(
+  params: undefined | GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetRecentAnalysesApiV1ObservabilityAnalysesGet<
+  TData = Awaited<
+    ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
   options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
-      >,
-      TError,
-      { params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams },
-      TContext
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetRecentAnalysesApiV1ObservabilityAnalysesGet<
+  TData = Awaited<
+    ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+        >,
+        TError,
+        TData
+      >
     >;
   },
   queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>>,
-  TError,
-  { params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams },
-  TContext
-> => {
-  return useMutation(
-    getGetRecentAnalysesApiV1ObservabilityAnalysesGetMutationOptions(options),
-    queryClient,
-  );
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get recent coherence analyses
+ */
+
+export function useGetRecentAnalysesApiV1ObservabilityAnalysesGet<
+  TData = Awaited<
+    ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: GetRecentAnalysesApiV1ObservabilityAnalysesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getRecentAnalysesApiV1ObservabilityAnalysesGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetRecentAnalysesApiV1ObservabilityAnalysesGetQueryOptions(
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Refers to Suite ID: TS-E2E-PER-LRG-001.
  * @summary Get performance snapshot
@@ -246,54 +458,63 @@ export const getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSna
     );
   };
 
-export const getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetMutationOptions =
-  <TError = unknown, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
+export const getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryKey =
+  () => {
+    return [
+      `/api/v1/observability/observability/performance/snapshot`,
+    ] as const;
+  };
+
+export const getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+      >
+    >,
+    TError = unknown,
+  >(options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  }) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryKey();
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+        >
+      >
+    > = ({ signal }) =>
+      getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet(
+        signal,
+      );
+
+    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
       Awaited<
         ReturnType<
           typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
         >
       >,
       TError,
-      void,
-      TContext
-    >;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-      >
-    >,
-    TError,
-    void,
-    TContext
-  > => {
-    const mutationKey = [
-      "getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet",
-    ];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
-        >
-      >,
-      void
-    > = () => {
-      return getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet();
-    };
-
-    return { mutationFn, ...mutationOptions };
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
   };
 
-export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetMutationResult =
+export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryResult =
   NonNullable<
     Awaited<
       ReturnType<
@@ -301,45 +522,158 @@ export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnap
       >
     >
   >;
-
-export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetMutationError =
+export type GetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryError =
   unknown;
 
-/**
- * @summary Get performance snapshot
- */
-export const useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet =
-  <TError = unknown, TContext = unknown>(
-    options?: {
-      mutation?: UseMutationOptions<
+export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
         Awaited<
           ReturnType<
             typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
           >
         >,
         TError,
-        void,
-        TContext
-      >;
-    },
-    queryClient?: QueryClient,
-  ): UseMutationResult<
-    Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+        TData
       >
-    >,
-    TError,
-    void,
-    TContext
-  > => {
-    return useMutation(
-      getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetMutationOptions(
-        options,
-      ),
-      queryClient,
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get performance snapshot
+ */
+
+export function useGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetPerformanceSnapshotApiV1ObservabilityObservabilityPerformanceSnapshotGetQueryOptions(
+      options,
     );
-  };
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * Refers to Suite ID: TS-E2E-PER-LRG-001.
  * @summary Get performance snapshot
@@ -356,54 +690,59 @@ export const getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet = (
   );
 };
 
-export const getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetMutationOptions =
-  <TError = unknown, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
+export const getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryKey =
+  () => {
+    return [`/api/v1/observability/performance/snapshot`] as const;
+  };
+
+export const getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+      >
+    >,
+    TError = unknown,
+  >(options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  }) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryKey();
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+        >
+      >
+    > = ({ signal }) =>
+      getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet(signal);
+
+    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
       Awaited<
         ReturnType<
           typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
         >
       >,
       TError,
-      void,
-      TContext
-    >;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
-      >
-    >,
-    TError,
-    void,
-    TContext
-  > => {
-    const mutationKey = [
-      "getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet",
-    ];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
-        >
-      >,
-      void
-    > = () => {
-      return getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet();
-    };
-
-    return { mutationFn, ...mutationOptions };
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
   };
 
-export type GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetMutationResult =
+export type GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryResult =
   NonNullable<
     Awaited<
       ReturnType<
@@ -411,42 +750,154 @@ export type GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetMutati
       >
     >
   >;
-
-export type GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetMutationError =
+export type GetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryError =
   unknown;
 
-/**
- * @summary Get performance snapshot
- */
-export const useGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet =
-  <TError = unknown, TContext = unknown>(
-    options?: {
-      mutation?: UseMutationOptions<
+export function useGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
         Awaited<
           ReturnType<
             typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
           >
         >,
         TError,
-        void,
-        TContext
-      >;
-    },
-    queryClient?: QueryClient,
-  ): UseMutationResult<
-    Awaited<
-      ReturnType<
-        typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+        TData
       >
-    >,
-    TError,
-    void,
-    TContext
-  > => {
-    return useMutation(
-      getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetMutationOptions(
-        options,
-      ),
-      queryClient,
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get performance snapshot
+ */
+
+export function useGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+    >
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetPerformanceSnapshotApiV1ObservabilityPerformanceSnapshotGetQueryOptions(
+      options,
     );
-  };
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
