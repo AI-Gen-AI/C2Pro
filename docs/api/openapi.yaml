@@ -3044,6 +3044,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WBSItemOutput'
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
@@ -3088,6 +3090,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WBSItemOutput'
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
@@ -3130,6 +3134,8 @@ paths:
       responses:
         '204':
           description: Successful Response
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
@@ -3164,6 +3170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WBSItemOutput'
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
@@ -3208,6 +3216,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WBSItemOutput'
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:

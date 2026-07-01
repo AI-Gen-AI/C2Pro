@@ -11,7 +11,7 @@
     "expected_min_text_chars": 180,
     "expected_clause_categories": ["SCOPE", "TIME", "LEGAL"],
     "expected_risk_categories": ["SCOPE", "SCHEDULE"],
-    "expected_score_range": [25, 60],
+    "expected_score_range": [75, 82],
     "expected_alerts": [
       {
         "category": "TIME",

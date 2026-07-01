@@ -130,8 +130,8 @@ async def test_bridge_seed_promotes_legal_to_assessed_findings() -> None:
 
 
 @pytest.mark.asyncio
-async def test_without_seed_legal_stays_unassessed() -> None:
-    """Control: same payload without seeds reproduces the live-API bug."""
+async def test_without_seed_legal_is_assessed_clean_by_category_prior() -> None:
+    """Control: category routing now assesses LEGAL even without risk-signal seeds."""
     risks = _epc_risks()
     clause = Clause(
         id="contract-epc-001",
@@ -147,5 +147,6 @@ async def test_without_seed_legal_stays_unassessed() -> None:
     )
 
     by_cat = {b.category: b for b in result.category_breakdown}
-    assert by_cat["legal"].state == "unassessed"
-    assert by_cat["legal"].score is None
+    assert by_cat["legal"].state == "assessed_clean"
+    assert by_cat["legal"].score is not None
+    assert by_cat["legal"].alert_count == 0

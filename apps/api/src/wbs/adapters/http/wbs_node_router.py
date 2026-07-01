@@ -234,7 +234,11 @@ async def get_wbs_subtree(
     return [_map_node_to_output(node) for node in nodes]
 
 
-@router.get("/projects/{project_id}/nodes/{node_id}", response_model=WBSNodeOutput)
+@router.get(
+    "/projects/{project_id}/nodes/{node_id}",
+    response_model=WBSNodeOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def get_wbs_node(
     project_id: str,
     node_id: str,
@@ -355,7 +359,11 @@ async def create_wbs_node(
         )
 
 
-@router.patch("/projects/{project_id}/nodes/{node_id}", response_model=WBSNodeOutput)
+@router.patch(
+    "/projects/{project_id}/nodes/{node_id}",
+    response_model=WBSNodeOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def update_wbs_node(
     project_id: str,
     node_id: str,
@@ -415,6 +423,7 @@ async def update_wbs_node(
 @router.delete(
     "/projects/{project_id}/nodes/{node_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "Not Found"}},
 )
 async def delete_wbs_node(
     project_id: str,
@@ -451,7 +460,11 @@ async def delete_wbs_node(
         )
 
 
-@router.patch("/projects/{project_id}/nodes/{node_id}/reorder", response_model=WBSNodeOutput)
+@router.patch(
+    "/projects/{project_id}/nodes/{node_id}/reorder",
+    response_model=WBSNodeOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def reorder_wbs_node(
     project_id: str,
     node_id: str,

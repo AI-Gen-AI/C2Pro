@@ -235,6 +235,23 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
     async def stub_knowledge_graph(_state: dict[str, object]) -> dict[str, object]:
         return {"knowledge_graph_nodes": [], "knowledge_graph_edges": [], "messages": []}
 
+    async def seeded_risk_extractor(state: dict[str, object]) -> dict[str, object]:
+        return {
+            **state,
+            "extracted_risks": [
+                {
+                    "id": "risk-1",
+                    "title": "Daily penalty",
+                    "description": "Daily penalty 2% for delay.",
+                    "category": "schedule",
+                    "severity": "high",
+                    "probability": "medium",
+                    "impact": "high",
+                    "source_quote": "Daily penalty 2% for delay.",
+                }
+            ],
+        }
+
     monkeypatch.setattr(
         "src.coherence.graph.graph.evaluate_coherence_async", fake_evaluate_coherence_async
     )
@@ -248,6 +265,7 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
     monkeypatch.setattr(nodes_module, "_persist_node_error", _no_persist)
     monkeypatch.setattr(nodes_module, "get_session_with_tenant", lambda _tenant_id: _AsyncContext())
     monkeypatch.setattr(persist_module, "PersistAnalysisUseCase", _PersistUseCase)
+    monkeypatch.setattr(workflow_module, "risk_extractor_node", seeded_risk_extractor)
     monkeypatch.setattr(workflow_module, "document_ingestion_node", passthrough_document_ingestion)
     monkeypatch.setattr(workflow_module, "pii_anonymizer_node", passthrough_pii)
     monkeypatch.setattr(workflow_module, "knowledge_graph_builder_node", stub_knowledge_graph)

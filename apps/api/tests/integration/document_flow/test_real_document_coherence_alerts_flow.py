@@ -124,8 +124,10 @@ def _disable_langchain_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
 async def _exercise_real_coherence_contract(entry: dict[str, Any], fixture_path: Path) -> None:
     document_id = uuid4()
     project_id = uuid4()
+    tenant_id = uuid4()
     document = Document(
         id=document_id,
+        tenant_id=tenant_id,
         project_id=project_id,
         document_type=DocumentType.CONTRACT,
         filename=entry["filename"],
@@ -144,6 +146,7 @@ async def _exercise_real_coherence_contract(entry: dict[str, Any], fixture_path:
     state = await nodes_extended.pii_anonymizer_node(_state_from_text(parsed_text))
     domain_clauses = _extract_contract_clauses(
         document_id=document_id,
+        tenant_id=tenant_id,
         project_id=project_id,
         parsed_text=state["anonymized_text"],
     )
@@ -166,7 +169,7 @@ async def _exercise_real_coherence_contract(entry: dict[str, Any], fixture_path:
         config=EvaluationConfig(
             low_budget_mode=True,
             include_rag_similarity=False,
-            tenant_id=str(uuid4()),
+            tenant_id=str(tenant_id),
             project_id=str(project_id),
         ),
     )

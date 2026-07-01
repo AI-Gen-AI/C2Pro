@@ -88,8 +88,11 @@ def test_frontend_e2e_workflows_export_clerk_test_keys() -> None:
 
     for workflow in workflows:
         contents = workflow.read_text(encoding="utf-8")
-        assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_" in contents
-        assert "CLERK_SECRET_KEY: sk_test_" in contents
+        assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:" in contents
+        assert "CLERK_PUBLISHABLE_KEY:" in contents
+        assert "CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}" in contents
+        assert "CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}" in contents
+        assert "Skipping Clerk-backed E2E smoke tests" in contents
 
 
 def test_frontend_api_generation_check_formats_orval_output_before_diff() -> None:

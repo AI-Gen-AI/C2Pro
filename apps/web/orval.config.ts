@@ -19,8 +19,6 @@ export default defineConfig({
           name: "orvalApiClient",
         },
         query: {
-          useQuery: true,
-          useMutation: true,
           useInfinite: false,
         },
         mock: {

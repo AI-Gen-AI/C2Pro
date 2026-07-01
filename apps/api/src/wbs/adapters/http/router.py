@@ -336,6 +336,7 @@ async def get_wbs(
     "/{project_id}/wbs/items",
     response_model=WBSItemOutput,
     status_code=status.HTTP_201_CREATED,
+    responses={404: {"description": "Not Found"}},
 )
 async def create_wbs_item(
     project_id: str,
@@ -356,7 +357,11 @@ async def create_wbs_item(
         raise _handle_use_case_error(e)
 
 
-@router.patch("/{project_id}/wbs/items/{item_id}", response_model=WBSItemOutput)
+@router.patch(
+    "/{project_id}/wbs/items/{item_id}",
+    response_model=WBSItemOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def update_wbs_item(
     project_id: str,
     item_id: str,
@@ -388,7 +393,11 @@ async def update_wbs_item(
         raise _handle_use_case_error(e)
 
 
-@router.post("/{project_id}/wbs/items/{item_id}/move", response_model=WBSItemOutput)
+@router.post(
+    "/{project_id}/wbs/items/{item_id}/move",
+    response_model=WBSItemOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def move_wbs_item(
     project_id: str,
     item_id: str,
@@ -414,6 +423,7 @@ async def move_wbs_item(
 @router.delete(
     "/{project_id}/wbs/items/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "Not Found"}},
 )
 async def delete_wbs_item(
     project_id: str,
@@ -444,7 +454,11 @@ async def delete_wbs_item(
         raise _handle_use_case_error(e)
 
 
-@router.get("/{project_id}/wbs/items/{item_id}", response_model=WBSItemOutput)
+@router.get(
+    "/{project_id}/wbs/items/{item_id}",
+    response_model=WBSItemOutput,
+    responses={404: {"description": "Not Found"}},
+)
 async def get_wbs_item(
     project_id: str,
     item_id: str,
