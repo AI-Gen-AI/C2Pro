@@ -26,7 +26,7 @@ jobs:
         working-directory: apps/web
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
-      CLERK_SECRET_KEY: sk_test_mock
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
 
